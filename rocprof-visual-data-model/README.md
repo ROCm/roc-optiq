@@ -40,88 +40,8 @@ keeping multiple versions of the same structure for backward compatibility.
 The interface mathods are tested by being called from C++ code (main.cpp) and Python code (cffi_invoke.py) using CFFI. 
 cffi_build.py script is used to build cffi_lib.xxxx.pyd python module.
 Here is a block diagram of initial data model version:
-
-┌──────────────────────────────────────────────────────────────────────────────────────────┐┌──────────────────────────────────┐                                                                   
-│   Data Model (ver1)                                                                      ││ Interface( pure  C)              │                                                                   
-│                                                                                          ││                                  │                                                                   
-│ ┌──────────────────────┐                    ┌────────────────────┐                       ││ ┌─────────────────────────────┐  │                                                                   
-│ │                      │                    │                    ┼───────────┐           ││ │get_record_index_at_timestamp│  │                                                                   
-│ │     MetricRecord     │    ┌───────────────┼    EventRecord     ┼─┐         │           ││ │get_chunk_number_of_records  │  │                                                                   
-│ │                      │    │      ┌────────┼                    │ │         │           ││ │get_timestamp_at             │  │                                                                   
-│ └───┬──────┬────────┬──┘    │      │        └───┬──────────┬─────┘ │         │           ││ │get_metric_value_at          │  │                                                                   
-│     │      │        │       │      │            │          │       │         │           ││ │get_kernel_duration_at       │  │                                                                   
-│ ┌───┼──────┼────────┼──┐ ┌──┼──────┼────────────┼────┐ ┌───┼───────┼─────────┼────┐      ││ │get_kernel_type_at           │  │                                                                   
-│ │ ┌─▼──┐┌──▼─┐    ┌─▼─┐│ │┌─▼──┐ ┌─▼──┐      ┌──▼──┐ │ │ ┌─▼──┐ ┌──▼─┐     ┌─▼──┐ │      ││ │get_kernel_description_at    │  │                                                                   
-│ │ │ R1 ││ R2 │    │Rn ││ ││ R1 │ │ R2 │      │  R2 │ │ │ │ R1 │ │ R2 │     │ R1 │ │      ││ └─────────▲───────────────────┘  │                                                                   
-│ │ └────┘└────┘    └───┘│ │└─┬──┘ └─┬──┘      └──┬──┘ │ │ └─┬──┘ └─┬──┘     └──┬─┘ │      ││ ┌─────────┴──────┐               │                                                                   
-│ │                      │ │  └──────┴────────────┴────┼─┼───┴──────┴───────────┴───┼──┐ ┌─┼┼─►                │               │                                                                   
-│ │    MetricArray       │ │       EventArray          │ │       EventArray         │  │ │ ││ │  ArrayHandler  │               │                                                                   
-│ │                      │ │                           │ │                          │  │ │ ││ │                │               │                                                                   
-│ └─────────▲────────────┘ └────────────▲──────────────┘ └───────────▲──────────────┘  │ │ ││ └────────────────┘               │                                                                   
-│   ┌───────┴───────────────────────────┴────────────────────────────┴────────────┐    │ │ ││                                  │                                                                   
-│   │                              TrackArray                                     ┼────┼─┘ ││ ┌────────────────┐               │                                                                   
-│   └────────────────────────────────────────────────────┬──────┬────────────┬────┘    │   ││ │                │               │                                                                   
-│                                                        │      │            │         │ ┌─┼│─►  TrackHandler  │               │                                                                   
-│                   ┌──────────────────────────┐     ┌───┼──────┼────────────┼────┐    │ │ ││ │                │               │                                                                   
-│                   │      MetricTrack         ◄─────┼ ┌─▼──┐ ┌─▼──┐      ┌──▼─┐  ┼────┼─┘ ││ └─────────┬──────┘               │                                                                   
-│                   └──────────────────────────┘     │ │ Ch1│ │ Ch2│ ...  │ Chn│  │    │   ││           │                      │                                                                   
-│  ┌─────────────┐  ┌──────────────────────────┐     │ └────┘ └────┘      └────┘  │    │   ││ ┌─────────▼────────────────────┐ │                                                                   
-│  │ CpuTrack    ◄──┼      EventTrack          │     │                            │    │   ││ │get_track_group_name          │ │                                                                   
-│  └─────────────┘  │ ┌────┐ ┌────┐      ┌────┐◄─────┼         Track              │    │   ││ │get_track_name                │ │                                                                   
-│  ┌─────────────┐  │ │ F1 │ │ F2 │ ...  │ Fn ││     │                            │    │   ││ │is_data_type_metric           │ │                                                                   
-│  │ GpuTrack    ◄──┼ └─▲──┘ └─▲──┘      └──▲─┘│     ├────────────────────────────┤    │   ││ │is_data_type_kernel_launch    │ │                                                                   
-│  └─────────────┘  └───┼──────┼────────────┼──┘     │        unique_ptr          │    │   ││ │is_data_type_kernel_execute   │ │                                                                   
-│                       │      │            │        └────────────┬───────────────┘    │   ││ │get_track_last_acquaired_chunk│ │                                                                   
-│                     ┌─┴──────┴────────────┴──┐                  │                    │   ││ │get_track_chunk_at_time       │ │                                                                   
-│                     │                        │                  │                    │   ││ │get_flow_handler_at           │ │                                                                   
-│                     │   DataFlowRecord       ┼──────────────────┼──────────────────┐ │   ││ └──────────────────────────────┘ │                                                                   
-│                     │                        │                  │                  │ │   ││                                  │                                                                   
-│                     └────────────────────────┘                  │                  │ │   ││ ┌────────────────────────────┐   │                                                                   
-│                                                                 │                  │ │   ││ │get_flow_track_id           │   │                                                                   
-│ ┌─────────────────┐                                             │                  │ │   ││ │get_flow_endpoint_timestamp │   │                                                                   
-│ │ Potential       │                                             │                  │ │   ││ │get_flow_endpoint_info      │   │                                                                   
-│ │ serialize/      │                                             │                  │ │   ││ └────────▲───────────────────┘   │                                                                   
-│ │ deserialize     │     ┌─────┬────────┬───────────────┬────────┘                  │ │   ││          │                       │                                                                   
-│ │ functionality   │ ┌───┼─────┼────────┼───────────────┼────┐                      │ │   ││ ┌────────┴──────┐                │                                                                   
-│ │                 │ │ ┌─┴──┐ ┌┴───┐ ┌──┴──┐          ┌─┴──┐ │                      │ │   ││ │               │                │                                                                   
-│ └┬──▲─────────────┘ │ │ T1 │ │ T2 │ │ T3  │  .....   │ Tn │ │                      └─┼───┼│─►  FlowHandler  │                │                                                                   
-│  │  │               │ └────┘ └────┘ └─────┘          └────┘ │                        │   ││ │               │                │                                                                   
-│  │  │               │ ┌────┐ ┌────┐ ┌─────┐          ┌────┐ │                        │   ││ └───────────────┘                │                                                                   
-│  │  │ ┌───────────┐ │ │ S1 │ │ S2 │ │  S3 │  .....   │ Sn ◄─┼────────────────────────┘   ││ ┌───────────────┐                │                                                                   
-│  │  │ │           │ │ └─┬──┘ └──┬─┘ └───┬─┘          └─┬──┘ │                            ││ │               │                │                                                                   
-│  │  │ │std::string◄─┼───┴───────┴───────┴──────────────┘    ┼────────────────────────────┼│─► TraceHandler  │                │                                                                   
-│  │  │ │           │ │                 Trace                 │                            ││ │               │                │                                                                   
-│  │  │ └───────────┘ └───────────────────────────────────────┘                            ││ └────────┬──────┘                │                                                                   
-│  │  │                                                                       ▲            ││          │                       │                                                                   
-└──┼──┼───────────────────────────────────────────────────────────────────────┼────────────┘│ ┌────────▼───────────────────┐   │                                                                   
-   │  │                       ┌────────────────────┐                  ┌───────┼─────────┐   │ │create_trace                │   │                                                                   
-   │  │      ┌────────────┐   │                    │  ┌────────────┐  │                 │   │ │destroy_trace               │   │                                                                   
-   │  │      │Rocmprof-sys│   │                    │  │            │  │                 │   │ │bind_trace_to_database      │   │                                                                   
-   │  │      │  output    ┼───► NewSchemaDatabase  │  │ Trace.rpd  ├──► RocpdDatabase   │   │ │get_trace_min_time          │   │                                                                   
-   │  │      ├────────────┤   │                    │  ├────────────┤  │                 │   │ │get_trace_max_time          │   │                                                                   
-   │  │      └────────────┘   │                    │  └────────────┘  │                 │   │ │get_number_of_tracks        │   │                                                                   
-   │  │                       └──────────▲─────────┘                  └───────▲─────────┘   │ │delete_trace_chunks_at      │   │                                                                   
-   │  │                                  │                            ┌───────┴─────────┐   │ │get_track_at                │   │                                                                   
-   │  │                                  │                            │                 │   │ └────────────────────────────┘   │                                                                   
-   │  │                                  └────────────────────────────┼ SqliteDatabase  │   │┌────────────────────────────────┐│                                                                   
-   │  │                                                               │                 │   ││open_rocpd_database             ││                                                                   
-   │  │                       ┌────────────────────┐                  └───────▲─────────┘   ││read_trace_properties           ││                                                                   
-   │  │                       │                    │                  ┌───────┴─────────┐   ││close_rocpd_database            ││                                                                   
-   │  └───────────────────────┼  Potential FS      │                  │                 │   ││read_trace_chunk_track_by_track ││                                                                   
-   │                          │  storage database  ◄──────────────────┼    Database     │   ││read_trace_chunk_all_tracks     ││                                                                   
-   │                          │                    │                  │                 ├───┼►configure_trace_read_time_period││                                                                   
-   └──────────────────────────►                    │                  └─────────────────┘   ││add_track_to_trace_read_config  ││                                                                   
-                              └────────────────────┘    ┌─────────────┐                     │└────────────────────────────────┘│                                                                   
-                                                        │             │      python         └┬──────────┬────────────────┬─────┘                                                                   
-                                                        │cffi_build.py◄──────────────────────┘┌─────────┼────────────────┼─────┐                                                                   
-                                                        │             │                       │  Test   │                │     │                                                                   
-                                                        └──────┬──────┘                       │ ┌───────▼───────┐  ┌─────▼────┐│                                                                   
-                                                        ┌──────▼──────┐   ┌─────────────┐     │ │               │  │          ││                                                                   
-                                                        │             │   │             │     │ │cffi_invoke.py │  │ main.cpp ││                                                                   
-                                                        │cffi_lib.c   ┼───► cffi_lib.pyd◄─────┼─┼               │  │          ││                                                                   
-                                                        │             │   │             │     │ └───────────────┘  └──────────┘│                                                                   
-                                                        └─────────────┘   └─────────────┘     └────────────────────────────────┘                                                                   
-                                                                                                                                                                                                                                                                                                                      
+                                                                                                                                                                                                                                        
+![alt text](https://github.amd.com/AGS-ROCm-CI/rocprofiler-visualizer/blob/vstempen/rocprof-visual-data-model/diagram.png?raw=true)
 
 The test code implemented in main.cpp and cffi_invoke.py creates Trace and Database objects, binds them by providing set of 
 callbacks to store the records, strings, dataflow links and some miscellaneous data to the data model. 
@@ -153,7 +73,6 @@ python cffi_invoke.py [database full path]
 For windows executable, build executable project in Visual Studio, then go to build/Release folder and run executable 
 with [database full path] as a parameter
 
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 The rocpd database class has two methods to read the code. First reads time chunk per track, second reads all tracks/tables within 
 time frame. Second way is faster if we split horizontally, and actually faster overall, but it has overhead processing absolutely all 

@@ -41,7 +41,7 @@ The interface mathods are tested by being called from C++ code (main.cpp) and Py
 cffi_build.py script is used to build cffi_lib.xxxx.pyd python module.
 Here is a block diagram of initial data model version:
                                                                                                                                                                                                                                         
-![alt text](https://github.amd.com/AGS-ROCm-CI/rocprofiler-visualizer/blob/vstempen/rocprof-visual-data-model/diagram.png?raw=true)
+![alt text](https://github.amd.com/AGS-ROCm-CI/rocprofiler-visualizer/blob/vstempen/rocprof-visual-data-model/diagram.PNG)
 
 The test code implemented in main.cpp and cffi_invoke.py creates Trace and Database objects, binds them by providing set of 
 callbacks to store the records, strings, dataflow links and some miscellaneous data to the data model. 

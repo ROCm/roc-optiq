@@ -4,7 +4,7 @@ Prototyped in C++ using STL, with pure C interface compilable to Python library 
 classes are used for data records for better memory footprint. More object oriented features are used in tracks and
 chunks management.
 <br />
-Data Model includes following classes:<br />
+**Data Model includes following classes:**<br />
     MetricRecord - POD class holding metric data parameters<br />
     EventRecord - POD class holding event data parameters (indexes to string collection replaces actual strings)<br />
     TrackArray - virtual base class for MetricArray and EventArray. Reference type for data record getter interface functions.
@@ -90,7 +90,7 @@ For the whole trace data records loading takes 11 seconds using method 2<br />
 There are still room for optimization SQL queries, but probably the best would be serializing/deserializing loaded trace to/from file system. 
 This may be another test for the data model design process. 
 <br />
-Interface functions:<br />
+**Interface functions:**<br />
 <br />
 typedef void* TraceHandler;<br />
 typedef void* TrackHandler;<br />

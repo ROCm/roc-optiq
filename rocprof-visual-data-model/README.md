@@ -4,25 +4,26 @@ Prototyped in C++ using STL, with pure C interface compilable to Python library 
 classes are used for data records for better memory footprint. More object oriented features are used in tracks and
 chunks management.
 <br />
+<br />
 **Data Model includes following classes:**<br />
-    MetricRecord - POD class holding metric data parameters<br />
-    EventRecord - POD class holding event data parameters (indexes to string collection replaces actual strings)<br />
-    TrackArray - virtual base class for MetricArray and EventArray. Reference type for data record getter interface functions.
+    **MetricRecord** - POD class holding metric data parameters<br />
+    **EventRecord** - POD class holding event data parameters (indexes to string collection replaces actual strings)<br />
+    **TrackArray** - virtual base class for MetricArray and EventArray. Reference type for data record getter interface functions.
         Object of TrackArray derivatives represent a chunk entity. <br />
-    MetricArray - owner of vector<MetricRecord> array. Inherits TrackArray. <br />
-    EventArray - owner of vector<EventRecord> array. Inherits TrackArray.<br />
-    Track - virtual base class for MetricTrack, CpuTrack, GpuTrack, [more in future] classes for track and chunk management.
+    **MetricArray** - owner of vector<MetricRecord> array. Inherits TrackArray. <br />
+    **EventArray** - owner of vector<EventRecord> array. Inherits TrackArray.<br />
+    **Track** - virtual base class for MetricTrack, CpuTrack, GpuTrack, [more in future] classes for track and chunk management.
         Owner of vector<TrackArray*> array<br />
-    EventTrack - base class for CpuTrack and GpuTrack objects. Inherits Track class. Owner of map<DataFlowRecord> map array. 
+    **EventTrack** - base class for CpuTrack and GpuTrack objects. Inherits Track class. Owner of map<DataFlowRecord> map array. 
         Map array is used for faster data flow record search by 64 bit ID. <br />
-    MetricTrack - class based on Track class. Inherits Track class. Describes Metric data track object.<br />
-    CpuTrack - describes Cpu data related track object. Inherits Event Track class.<br />
-    GpuTrack - describes Gpu data related track object. Inherits Event Track class.<br />
-    DataFlowRecord - contains information about data flow endpoints. Both GPU and CPU tracks have this information. CPU for 
+    **MetricTrack** - class based on Track class. Inherits Track class. Describes Metric data track object.<br />
+    **CpuTrack** - describes Cpu data related track object. Inherits Event Track class.<br />
+    **GpuTrack** - describes Gpu data related track object. Inherits Event Track class.<br />
+    **DataFlowRecord** - contains information about data flow endpoints. Both GPU and CPU tracks have this information. CPU for 
         outgoing connection, GPU for incoming. The specifics of outgoing connection is it can be one to multiple data flow type,
         example is HipGraph object. On GPU side it's always one to one incoming flow. HipGraph on GPU side will have all neighboring 
         events from timeA to timeB pointing to the same HipGraph object. Data flow management may need further thoughts and optimization.<br />
-    Trace and TraceInternal - was separated to hide direct access to std::vector<std::unique_ptr<Track>>, which cannot be private 
+    **Trace** and **TraceInternal** - was separated to hide direct access to std::vector<std::unique_ptr<Track>>, which cannot be private 
         because it needs to accessed from static methods, which are part of binding interface between trace and database.<br />
 <br />
 Almost all the data requested by higher level algorithms will be dispatched through TrackHandler, which has knowledge about type
@@ -89,6 +90,7 @@ For the whole trace data records loading takes 11 seconds using method 2<br />
 <br />
 There are still room for optimization SQL queries, but probably the best would be serializing/deserializing loaded trace to/from file system. 
 This may be another test for the data model design process. 
+<br />
 <br />
 **Interface functions:**<br />
 <br />

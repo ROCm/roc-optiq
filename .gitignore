@@ -1,0 +1,4 @@
+sqlite3.c
+cffi_lib.c
+build/
+*.pyd

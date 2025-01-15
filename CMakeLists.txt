@@ -1,0 +1,23 @@
+cmake_minimum_required(VERSION 3.15)
+project(rocprof-visualizer)
+
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
+
+add_subdirectory(thirdparty/)
+
+add_executable(rocprof-visualizer src/app/src/rpv_trace.cpp src/app/src/rpv_trace_ui.cpp src/app/src/rpv_imgui_vulkan.cpp src/app/src/main.cpp)
+target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
+target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jsoncpp)
+target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIRS})
+target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIR})
+target_link_libraries(rocprof-visualizer PRIVATE imgui)
+target_link_libraries(rocprof-visualizer PRIVATE imgui-flame-graph)
+target_link_libraries(rocprof-visualizer PRIVATE implot)
+target_link_libraries(rocprof-visualizer PRIVATE ImGuiFileDialog)
+target_link_libraries(rocprof-visualizer PRIVATE json)
+target_link_libraries(rocprof-visualizer PRIVATE glfw)
+find_package(Vulkan REQUIRED)
+target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")

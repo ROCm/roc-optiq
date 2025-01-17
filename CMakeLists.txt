@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
 add_subdirectory(thirdparty/)
 
-add_executable(rocprof-visualizer src/app/src/rpv_trace.cpp src/app/src/rpv_trace_ui.cpp src/app/src/rpv_imgui_vulkan.cpp src/app/src/main.cpp)
+add_executable(rocprof-visualizer src/app/src/rocprofvis_trace.cpp src/app/src/rocprofvis_trace_ui.cpp src/app/src/rocprofvis_imgui_vulkan.cpp src/app/src/main.cpp)
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jsoncpp)
 target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIRS})

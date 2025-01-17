@@ -1,6 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rpv_trace.h"
+#include "rocprofvis_trace.h"
 
 #include "json.h"
 #include <iostream>
@@ -12,7 +12,7 @@
 #include "implot.h"
 #include "ImGuiFileDialog.h"
 
-static void rpv_trace_event_flame_graph_getter(float* start, float* end, ImU8* level, const char** caption, const void* data, int idx)
+static void rocprofvis_trace_event_flame_graph_getter(float* start, float* end, ImU8* level, const char** caption, const void* data, int idx)
 {
     float start_val = 0.f;
     float end_val = 0.f;
@@ -20,14 +20,14 @@ static void rpv_trace_event_flame_graph_getter(float* start, float* end, ImU8* l
     char const* label = "";
     if (data)
     {
-        std::vector<rpvTraceEvent> const* thread_data = (std::vector<rpvTraceEvent> const*)data;
+        std::vector<rocprofvis_trace_event_t> const* thread_data = (std::vector<rocprofvis_trace_event_t> const*)data;
         if (thread_data->size() > idx)
         {
-            //rpvTraceEvent const& first_event = thread_data->events[0];
-            rpvTraceEvent const& event = (*thread_data)[idx];
-            start_val = event.start_ts;// -first_event.start_ts;
-            end_val = (event.start_ts + event.duration);// -first_event.start_ts;
-            label = event.name.c_str();
+            //rocprofvis_trace_event_t const& first_event = thread_data->events[0];
+            rocprofvis_trace_event_t const& event = (*thread_data)[idx];
+            start_val = event.m_start_ts;// -first_event.start_ts;
+            end_val = (event.m_start_ts + event.m_duration);// -first_event.start_ts;
+            label = event.m_name.c_str();
         }
     }
     if (start)
@@ -40,36 +40,36 @@ static void rpv_trace_event_flame_graph_getter(float* start, float* end, ImU8* l
         *caption = label;
 }
 
-static ImPlotPoint rpv_trace_counter_plot_getter(int idx, void* user_data)
+static ImPlotPoint rocprofvis_trace_counter_plot_getter(int idx, void* user_data)
 {
     ImPlotPoint point = ImPlotPoint(0, 0);
     if (user_data)
     {
-        std::vector<rpvTraceCounter>* thread_data = (std::vector<rpvTraceCounter>*)user_data;
+        std::vector<rocprofvis_trace_counter_t>* thread_data = (std::vector<rocprofvis_trace_counter_t>*)user_data;
         if (thread_data->size() > idx)
         {
-            rpvTraceCounter const& counter = (*thread_data)[idx];
-            point.x = counter.start_ts;
-            point.y = counter.value;
+            rocprofvis_trace_counter_t const& counter = (*thread_data)[idx];
+            point.x = counter.m_start_ts;
+            point.y = counter.m_value;
         }
     }
     return point;
 }
 
-static rpvTraceData trace_object;
+static rocprofvis_trace_data_t trace_object;
 
-void rpv_trace_setup()
+void rocprofvis_trace_setup()
 {
     ImPlot::CreateContext();
 
-    trace_object.min_ts = DBL_MAX;
-    trace_object.max_ts = 0.0;
-    trace_object.is_trace_loaded = false;
+    trace_object.m_min_ts = DBL_MAX;
+    trace_object.m_max_ts = 0.0;
+    trace_object.m_is_trace_loaded = false;
 }
 
-static void rpv_trace_draw_view()
+static void rocprofvis_trace_draw_view()
 {
-    std::map<std::string, rpvTraceProcess>& trace_data = trace_object.trace_data;
+    std::map<std::string, rocprofvis_trace_process_t>& trace_data = trace_object.m_trace_data;
 
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -81,7 +81,7 @@ static void rpv_trace_draw_view()
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 #endif
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::SetNextWindowContentSize(ImVec2((trace_object.max_ts - trace_object.min_ts) / 1000.0, 0.f));
+    ImGui::SetNextWindowContentSize(ImVec2((trace_object.m_max_ts - trace_object.m_min_ts) / 1000.0, 0.f));
     ImGui::Begin("Trace", nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
 
     if (ImGui::BeginMenuBar())
@@ -109,7 +109,7 @@ static void rpv_trace_draw_view()
         ImGui::EndMenuBar();
     }
 
-    if (trace_object.is_trace_loaded)
+    if (trace_object.m_is_trace_loaded)
     {
         auto& IO = ImGui::GetIO();
         float mouse_wheel = IO.MouseWheel;
@@ -128,96 +128,96 @@ static void rpv_trace_draw_view()
 
         for (auto& process : trace_data)
         {
-            for (auto& thread : process.second.threads)
+            for (auto& thread : process.second.m_threads)
             {
-                auto& events = thread.second.events;
-                auto& counters = thread.second.counters;
+                auto& events = thread.second.m_events;
+                auto& counters = thread.second.m_counters;
                 if (events.size())
                 {
                     const char* label = "##ThreadFrameGraph";
-                    const void* data = (const void*)&thread.second.events;
+                    const void* data = (const void*)&thread.second.m_events;
                     int values_count = events.size();
                     int values_offset = 0;
                     const char* overlay_text = "";
                     float scale_min = FLT_MAX;
                     float scale_max = FLT_MAX;
-                    ImVec2 graph_size = ImVec2((trace_object.max_ts - trace_object.min_ts) / zoom_scale, 100);
+                    ImVec2 graph_size = ImVec2((trace_object.m_max_ts - trace_object.m_min_ts) / zoom_scale, 100);
 
                     if (values_count > graph_size.x)
                     {
-                        if (!thread.second.has_events_l1)
+                        if (!thread.second.m_has_events_l1)
                         {
-                            rpvTraceEvent new_event;
+                            rocprofvis_trace_event_t new_event;
                             bool is_first = true;
-                            for (auto event : thread.second.events)
+                            for (auto event : thread.second.m_events)
                             {
-                                double Gap = (event.start_ts - (new_event.duration + new_event.start_ts));
-                                double duration = ((event.start_ts + event.duration) - new_event.start_ts);
+                                double Gap = (event.m_start_ts - (new_event.m_duration + new_event.m_start_ts));
+                                double duration = ((event.m_start_ts + event.m_duration) - new_event.m_start_ts);
                                 if (!is_first && Gap < 1000.0 && duration < 1000.0)
                                 {
-                                    new_event.name.clear();
-                                    new_event.duration = duration;
+                                    new_event.m_name.clear();
+                                    new_event.m_duration = duration;
                                 }
                                 else
                                 {
                                     if (!is_first)
-                                        thread.second.events_l1.push_back(new_event);
+                                        thread.second.m_events_l1.push_back(new_event);
 
                                     new_event = event;
                                     is_first = false;
                                 }
                             }
-                            thread.second.events_l1.push_back(new_event);
-                            thread.second.has_events_l1 = true;
+                            thread.second.m_events_l1.push_back(new_event);
+                            thread.second.m_has_events_l1 = true;
                         }
-                        if (values_count > thread.second.events_l1.size())
+                        if (values_count > thread.second.m_events_l1.size())
                         {
-                            values_count = thread.second.events_l1.size();
-                            data = (const void*)&thread.second.events_l1;
+                            values_count = thread.second.m_events_l1.size();
+                            data = (const void*)&thread.second.m_events_l1;
                         }
                     }
 
-                    ImGui::LabelText("##FlameGraphLabel", "%s (%s) : %s (%s)", process.second.name.c_str(), process.first.c_str(), thread.second.name.c_str(), thread.first.c_str());
+                    ImGui::LabelText("##FlameGraphLabel", "%s (%s) : %s (%s)", process.second.m_name.c_str(), process.first.c_str(), thread.second.m_name.c_str(), thread.first.c_str());
                     ImGui::SameLine();
-                    ImGuiWidgetFlameGraph::PlotFlame(label, &rpv_trace_event_flame_graph_getter, data, values_count, values_offset, overlay_text, scale_min, scale_max, graph_size);
+                    ImGuiWidgetFlameGraph::PlotFlame(label, &rocprofvis_trace_event_flame_graph_getter, data, values_count, values_offset, overlay_text, scale_min, scale_max, graph_size);
                 }
                 else if (counters.size())
                 {
-                    ImGui::LabelText("##PlotLabel", "%s (%s) : %s (%s)", process.second.name.c_str(), process.first.c_str(), thread.second.name.c_str(), thread.first.c_str());
+                    ImGui::LabelText("##PlotLabel", "%s (%s) : %s (%s)", process.second.m_name.c_str(), process.first.c_str(), thread.second.m_name.c_str(), thread.first.c_str());
                     ImGui::SameLine();
 
-                    void* data = (void*)&thread.second.counters;
+                    void* data = (void*)&thread.second.m_counters;
                     int count = counters.size();
-                    ImVec2 graph_size = ImVec2((trace_object.max_ts - trace_object.min_ts) / zoom_scale, 300);
+                    ImVec2 graph_size = ImVec2((trace_object.m_max_ts - trace_object.m_min_ts) / zoom_scale, 300);
                     if (counters.size() > graph_size.x)
                     {
-                        if (!thread.second.has_counters_l1)
+                        if (!thread.second.m_has_counters_l1)
                         {
-                            rpvTraceCounter new_counter;
+                            rocprofvis_trace_counter_t new_counter;
                             bool is_first = true;
-                            for (auto counter : thread.second.counters)
+                            for (auto counter : thread.second.m_counters)
                             {
-                                double Gap = !is_first ? (counter.start_ts - new_counter.start_ts) : 0.0;
+                                double Gap = !is_first ? (counter.m_start_ts - new_counter.m_start_ts) : 0.0;
                                 if (!is_first && Gap < 1000.0)
                                 {
-                                    counter.value = std::min(counter.value, new_counter.value);
+                                    counter.m_value = std::min(counter.m_value, new_counter.m_value);
                                 }
                                 else
                                 {
                                     if (!is_first)
-                                        thread.second.counters_l1.push_back(new_counter);
+                                        thread.second.m_counters_l1.push_back(new_counter);
 
                                     new_counter = counter;
                                     is_first = false;
                                 }
                             }
-                            thread.second.counters_l1.push_back(new_counter);
-                            thread.second.has_counters_l1 = true;
+                            thread.second.m_counters_l1.push_back(new_counter);
+                            thread.second.m_has_counters_l1 = true;
                         }
-                        if (count > thread.second.counters_l1.size())
+                        if (count > thread.second.m_counters_l1.size())
                         {
-                            count = thread.second.counters_l1.size();
-                            data = (void*)&thread.second.counters_l1;
+                            count = thread.second.m_counters_l1.size();
+                            data = (void*)&thread.second.m_counters_l1;
                         }
                     }
 
@@ -226,7 +226,7 @@ static void rpv_trace_draw_view()
                         const char* label_id = "##ThreadCounters";
                         ImPlotLineFlags flags = ImPlotLineFlags_Shaded;
                         ImPlot::SetupAxes("x", "y");
-                        ImPlot::PlotLineG(label_id, &rpv_trace_counter_plot_getter, data, count, flags);
+                        ImPlot::PlotLineG(label_id, &rocprofvis_trace_counter_plot_getter, data, count, flags);
 
                         ImPlot::EndPlot();
                     }
@@ -239,27 +239,27 @@ static void rpv_trace_draw_view()
     ImGui::PopStyleVar(1);
 }
 
-void rpv_trace_draw()
+void rocprofvis_trace_draw()
 {
-    rpv_trace_draw_view();
+    rocprofvis_trace_draw_view();
 
     if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
-        trace_object.is_trace_loaded = false;
+        trace_object.m_is_trace_loaded = false;
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-            trace_object.loading_future = rpv_trace_async_load_json_trace(file_path, trace_object);
+            trace_object.m_loading_future = rocprofvis_trace_async_load_json_trace(file_path, trace_object);
         }
 
         ImGuiFileDialog::Instance()->Close();
     }
 
-    if (rpv_trace_is_loading(trace_object.loading_future))
+    if (rocprofvis_trace_is_loading(trace_object.m_loading_future))
     {
         static bool is_open = false;
         std::chrono::milliseconds timeout = std::chrono::milliseconds::min();
-        if (rpv_trace_is_loaded(trace_object.loading_future))
+        if (rocprofvis_trace_is_loaded(trace_object.m_loading_future))
         {
-            trace_object.is_trace_loaded = trace_object.loading_future.get();
+            trace_object.m_is_trace_loaded = trace_object.m_loading_future.get();
             is_open = false;
             ImGui::CloseCurrentPopup();
         }

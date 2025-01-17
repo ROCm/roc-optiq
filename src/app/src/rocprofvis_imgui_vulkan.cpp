@@ -1,6 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rpv_imgui_backend.h"
+#include "rocprofvis_imgui_backend.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -13,34 +13,37 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-typedef struct rpv_imgui_vk_data
+typedef struct rocprofvis_imgui_vk_data_t
 {
-    ImGui_ImplVulkanH_Window window_data;
-    VkAllocationCallbacks*   allocator         = nullptr;
-    VkInstance               instance          = VK_NULL_HANDLE;
-    VkPhysicalDevice         physical_device   = VK_NULL_HANDLE;
-    VkDevice                 device            = VK_NULL_HANDLE;
-    uint32_t                 queue_family      = (uint32_t) -1;
-    VkQueue                  queue             = VK_NULL_HANDLE;
-    VkPipelineCache          pipeline_cache    = VK_NULL_HANDLE;
-    VkDescriptorPool         descriptor_pool   = VK_NULL_HANDLE;
-    VkDebugReportCallbackEXT debug_report      = VK_NULL_HANDLE;
-    int                      min_image_count   = 2;
-    bool                     swapchain_rebuild = false;
-} rpv_imgui_vk_data;
+    ImGui_ImplVulkanH_Window m_window_data;
+    VkAllocationCallbacks*   m_allocator         = nullptr;
+    VkInstance               m_instance          = VK_NULL_HANDLE;
+    VkPhysicalDevice         m_physical_device   = VK_NULL_HANDLE;
+    VkDevice                 m_device            = VK_NULL_HANDLE;
+    uint32_t                 m_queue_family      = (uint32_t) -1;
+    VkQueue                  m_queue             = VK_NULL_HANDLE;
+    VkPipelineCache          m_pipeline_cache    = VK_NULL_HANDLE;
+    VkDescriptorPool         m_descriptor_pool   = VK_NULL_HANDLE;
+    VkDebugReportCallbackEXT m_debug_report      = VK_NULL_HANDLE;
+    int                      m_min_image_count   = 2;
+    bool                     m_swapchain_rebuild = false;
+} rocprofvis_imgui_vk_data_t;
 
 static void
-rpv_imgui_backend_vk_check_result(VkResult err)
+rocprofvis_imgui_backend_vk_check_result(VkResult err)
 {
     if(err != 0)
     {
         fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
-        if(err < 0) abort();
+        if(err < 0) 
+        {
+            abort();
+        }
     }
 }
 
 static bool
-rpv_imgui_backend_vk_success(VkResult err)
+rocprofvis_imgui_backend_vk_success(VkResult err)
 {
     if(err != 0)
     {
@@ -51,7 +54,7 @@ rpv_imgui_backend_vk_success(VkResult err)
 
 #ifdef _DEBUG
 static VKAPI_ATTR VkBool32 VKAPI_CALL
-rpv_imgui_backend_vk_debug_report(VkDebugReportFlagsEXT      flags,
+rocprofvis_imgui_backend_vk_debug_report(VkDebugReportFlagsEXT      flags,
                                   VkDebugReportObjectTypeEXT objectType, uint64_t object,
                                   size_t location, int32_t messageCode,
                                   const char* pLayerPrefix, const char* pMessage,
@@ -70,7 +73,7 @@ rpv_imgui_backend_vk_debug_report(VkDebugReportFlagsEXT      flags,
 #endif  // _DEBUG
 
 static bool
-rpv_imgui_backend_vk_has_extension(const ImVector<VkExtensionProperties>& properties,
+rocprofvis_imgui_backend_vk_has_extension(const ImVector<VkExtensionProperties>& properties,
                                    const char*                            extension)
 {
     for(const VkExtensionProperties& p : properties)
@@ -79,38 +82,38 @@ rpv_imgui_backend_vk_has_extension(const ImVector<VkExtensionProperties>& proper
 }
 
 static bool
-rpv_imgui_backend_vk_select_physical_device(rpv_imgui_vk_data* backend_data)
+rocprofvis_imgui_backend_vk_select_physical_device(rocprofvis_imgui_vk_data_t* backend_data)
 {
     bool     bOk = false;
     uint32_t gpu_count;
     VkResult err =
-        vkEnumeratePhysicalDevices(backend_data->instance, &gpu_count, nullptr);
-    if(rpv_imgui_backend_vk_success(err))
+        vkEnumeratePhysicalDevices(backend_data->m_instance, &gpu_count, nullptr);
+    if(rocprofvis_imgui_backend_vk_success(err))
     {
         IM_ASSERT(gpu_count > 0);
 
         ImVector<VkPhysicalDevice> gpus;
         gpus.resize(gpu_count);
-        err = vkEnumeratePhysicalDevices(backend_data->instance, &gpu_count, gpus.Data);
-        if(rpv_imgui_backend_vk_success(err))
+        err = vkEnumeratePhysicalDevices(backend_data->m_instance, &gpu_count, gpus.Data);
+        if(rocprofvis_imgui_backend_vk_success(err))
         {
             // Default to the first GPU
             if(gpu_count > 0)
             {
-                backend_data->physical_device = gpus[0];
+                backend_data->m_physical_device = gpus[0];
                 bOk                           = true;
             }
 
             // Then look for the first discrete GPU, this is the simplest way to handle
             // the common cases of integrated+discrete GPUs. Really we want to identify
             // which GPU is connected to the screen.
-            for(VkPhysicalDevice& device : gpus)
+            for(VkPhysicalDevice& m_device : gpus)
             {
                 VkPhysicalDeviceProperties properties;
-                vkGetPhysicalDeviceProperties(device, &properties);
+                vkGetPhysicalDeviceProperties(m_device, &properties);
                 if(properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
                 {
-                    backend_data->physical_device = device;
+                    backend_data->m_physical_device = m_device;
                     bOk                           = true;
                     break;
                 }
@@ -125,7 +128,7 @@ rpv_imgui_backend_vk_select_physical_device(rpv_imgui_vk_data* backend_data)
 }
 
 static bool
-rpv_imgui_backend_vk_setup_vulkan(rpv_imgui_vk_data*    backend_data,
+rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t*    backend_data,
                                   ImVector<const char*> instance_extensions)
 {
     bool     bResult = true;
@@ -143,16 +146,16 @@ rpv_imgui_backend_vk_setup_vulkan(rpv_imgui_vk_data*    backend_data,
         properties.resize(properties_count);
         err = vkEnumerateInstanceExtensionProperties(nullptr, &properties_count,
                                                      properties.Data);
-        bResult &= rpv_imgui_backend_vk_success(err);
+        bResult &= rocprofvis_imgui_backend_vk_success(err);
         if(bResult)
         {
             // Enable required extensions
-            if(rpv_imgui_backend_vk_has_extension(
+            if(rocprofvis_imgui_backend_vk_has_extension(
                    properties, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
                 instance_extensions.push_back(
                     VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 #ifdef VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
-            if(rpv_imgui_backend_vk_has_extension(
+            if(rocprofvis_imgui_backend_vk_has_extension(
                    properties, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME))
             {
                 instance_extensions.push_back(
@@ -172,16 +175,16 @@ rpv_imgui_backend_vk_setup_vulkan(rpv_imgui_vk_data*    backend_data,
             // Create Vulkan Instance
             create_info.enabledExtensionCount   = (uint32_t) instance_extensions.Size;
             create_info.ppEnabledExtensionNames = instance_extensions.Data;
-            err = vkCreateInstance(&create_info, backend_data->allocator,
-                                   &backend_data->instance);
-            bResult &= rpv_imgui_backend_vk_success(err);
+            err = vkCreateInstance(&create_info, backend_data->m_allocator,
+                                   &backend_data->m_instance);
+            bResult &= rocprofvis_imgui_backend_vk_success(err);
             if(bResult)
             {
                 // Setup the debug report callback
 #ifdef _DEBUG
                 auto f_vkCreateDebugReportCallbackEXT =
                     (PFN_vkCreateDebugReportCallbackEXT) vkGetInstanceProcAddr(
-                        backend_data->instance, "vkCreateDebugReportCallbackEXT");
+                        backend_data->m_instance, "vkCreateDebugReportCallbackEXT");
                 IM_ASSERT(f_vkCreateDebugReportCallbackEXT != nullptr);
                 VkDebugReportCallbackCreateInfoEXT debug_report_ci = {};
                 debug_report_ci.sType =
@@ -189,60 +192,60 @@ rpv_imgui_backend_vk_setup_vulkan(rpv_imgui_vk_data*    backend_data,
                 debug_report_ci.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT |
                                         VK_DEBUG_REPORT_WARNING_BIT_EXT |
                                         VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-                debug_report_ci.pfnCallback = rpv_imgui_backend_vk_debug_report;
+                debug_report_ci.pfnCallback = rocprofvis_imgui_backend_vk_debug_report;
                 debug_report_ci.pUserData   = nullptr;
                 err                         = f_vkCreateDebugReportCallbackEXT(
-                    backend_data->instance, &debug_report_ci, backend_data->allocator,
-                    &backend_data->debug_report);
-                bResult &= rpv_imgui_backend_vk_success(err);
+                    backend_data->m_instance, &debug_report_ci, backend_data->m_allocator,
+                    &backend_data->m_debug_report);
+                bResult &= rocprofvis_imgui_backend_vk_success(err);
 #endif
                 if(bResult)
                 {
                     // Select Physical Device (GPU)
-                    if(rpv_imgui_backend_vk_select_physical_device(backend_data))
+                    if(rocprofvis_imgui_backend_vk_select_physical_device(backend_data))
                     {
-                        // Select graphics queue family
+                        // Select graphics m_queue family
                         {
                             uint32_t count;
                             vkGetPhysicalDeviceQueueFamilyProperties(
-                                backend_data->physical_device, &count, nullptr);
+                                backend_data->m_physical_device, &count, nullptr);
                             VkQueueFamilyProperties* queues =
                                 (VkQueueFamilyProperties*) malloc(
                                     sizeof(VkQueueFamilyProperties) * count);
                             vkGetPhysicalDeviceQueueFamilyProperties(
-                                backend_data->physical_device, &count, queues);
+                                backend_data->m_physical_device, &count, queues);
                             for(uint32_t i = 0; i < count; i++)
                             {
                                 if(queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
                                 {
-                                    backend_data->queue_family = i;
+                                    backend_data->m_queue_family = i;
                                     break;
                                 }
                             }
                             free(queues);
-                            IM_ASSERT(backend_data->queue_family != (uint32_t) -1);
-                            bResult &= (backend_data->queue_family != (uint32_t) -1);
+                            IM_ASSERT(backend_data->m_queue_family != (uint32_t) -1);
+                            bResult &= (backend_data->m_queue_family != (uint32_t) -1);
                         }
 
                         if(bResult)
                         {
-                            // Create Logical Device (with 1 queue)
+                            // Create Logical Device (with 1 m_queue)
                             {
                                 ImVector<const char*> device_extensions;
                                 device_extensions.push_back("VK_KHR_swapchain");
 
-                                // Enumerate physical device extension
+                                // Enumerate physical m_device extension
                                 uint32_t                        properties_count;
                                 ImVector<VkExtensionProperties> properties;
                                 vkEnumerateDeviceExtensionProperties(
-                                    backend_data->physical_device, nullptr,
+                                    backend_data->m_physical_device, nullptr,
                                     &properties_count, nullptr);
                                 properties.resize(properties_count);
                                 vkEnumerateDeviceExtensionProperties(
-                                    backend_data->physical_device, nullptr,
+                                    backend_data->m_physical_device, nullptr,
                                     &properties_count, properties.Data);
 #ifdef VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
-                                if(rpv_imgui_backend_vk_has_extension(
+                                if(rocprofvis_imgui_backend_vk_has_extension(
                                        properties,
                                        VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME))
                                     device_extensions.push_back(
@@ -254,7 +257,7 @@ rpv_imgui_backend_vk_setup_vulkan(rpv_imgui_vk_data*    backend_data,
                                 queue_info[0].sType =
                                     VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
                                 queue_info[0].queueFamilyIndex =
-                                    backend_data->queue_family;
+                                    backend_data->m_queue_family;
                                 queue_info[0].queueCount       = 1;
                                 queue_info[0].pQueuePriorities = queue_priority;
                                 VkDeviceCreateInfo create_info = {};
@@ -267,16 +270,16 @@ rpv_imgui_backend_vk_setup_vulkan(rpv_imgui_vk_data*    backend_data,
                                 create_info.ppEnabledExtensionNames =
                                     device_extensions.Data;
                                 err = vkCreateDevice(
-                                    backend_data->physical_device, &create_info,
-                                    backend_data->allocator, &backend_data->device);
-                                bResult &= rpv_imgui_backend_vk_success(err);
+                                    backend_data->m_physical_device, &create_info,
+                                    backend_data->m_allocator, &backend_data->m_device);
+                                bResult &= rocprofvis_imgui_backend_vk_success(err);
                             }
 
                             if(bResult)
                             {
-                                vkGetDeviceQueue(backend_data->device,
-                                                 backend_data->queue_family, 0,
-                                                 &backend_data->queue);
+                                vkGetDeviceQueue(backend_data->m_device,
+                                                 backend_data->m_queue_family, 0,
+                                                 &backend_data->m_queue);
 
                                 // Create Descriptor Pool
                                 // The example only requires a single combined image
@@ -297,17 +300,17 @@ rpv_imgui_backend_vk_setup_vulkan(rpv_imgui_vk_data*    backend_data,
                                         (uint32_t) IM_ARRAYSIZE(pool_sizes);
                                     pool_info.pPoolSizes = pool_sizes;
                                     err                  = vkCreateDescriptorPool(
-                                        backend_data->device, &pool_info,
-                                        backend_data->allocator,
-                                        &backend_data->descriptor_pool);
-                                    bResult &= rpv_imgui_backend_vk_success(err);
+                                        backend_data->m_device, &pool_info,
+                                        backend_data->m_allocator,
+                                        &backend_data->m_descriptor_pool);
+                                    bResult &= rocprofvis_imgui_backend_vk_success(err);
                                 }
                             }
 
                             if(!bResult)
                             {
-                                vkDestroyDevice(backend_data->device,
-                                                backend_data->allocator);
+                                vkDestroyDevice(backend_data->m_device,
+                                                backend_data->m_allocator);
                             }
                         }
                     }
@@ -315,7 +318,7 @@ rpv_imgui_backend_vk_setup_vulkan(rpv_imgui_vk_data*    backend_data,
 
                 if(!bResult)
                 {
-                    vkDestroyInstance(backend_data->instance, backend_data->allocator);
+                    vkDestroyInstance(backend_data->m_instance, backend_data->m_allocator);
                 }
             }
         }
@@ -325,13 +328,13 @@ rpv_imgui_backend_vk_setup_vulkan(rpv_imgui_vk_data*    backend_data,
 }
 
 bool
-rpv_imgui_backend_vk_init(rpvImGuiBackend* backend, void* window)
+rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* window)
 {
     bool bOk = false;
 
-    if(backend && backend->private_data && window)
+    if(backend && backend->m_private_data && window)
     {
-        rpv_imgui_vk_data* backend_data = (rpv_imgui_vk_data*) backend->private_data;
+        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
 
         ImVector<const char*> extensions;
         uint32_t              extensions_count = 0;
@@ -341,26 +344,26 @@ rpv_imgui_backend_vk_init(rpvImGuiBackend* backend, void* window)
         {
             extensions.push_back(glfw_extensions[i]);
         }
-        if(rpv_imgui_backend_vk_setup_vulkan(backend_data, extensions))
+        if(rocprofvis_imgui_backend_vk_setup_vulkan(backend_data, extensions))
         {
             // Create Window Surface
             VkSurfaceKHR surface;
             VkResult     err =
-                glfwCreateWindowSurface(backend_data->instance, (GLFWwindow*) window,
-                                        backend_data->allocator, &surface);
-            rpv_imgui_backend_vk_check_result(err);
+                glfwCreateWindowSurface(backend_data->m_instance, (GLFWwindow*) window,
+                                        backend_data->m_allocator, &surface);
+            rocprofvis_imgui_backend_vk_check_result(err);
 
             // Create Framebuffers
             int width  = 0;
             int height = 0;
             glfwGetFramebufferSize((GLFWwindow*) window, &width, &height);
-            ImGui_ImplVulkanH_Window* wd = &backend_data->window_data;
+            ImGui_ImplVulkanH_Window* wd = &backend_data->m_window_data;
             wd->Surface                  = surface;
 
             // Check for WSI support
             VkBool32 res;
-            vkGetPhysicalDeviceSurfaceSupportKHR(backend_data->physical_device,
-                                                 backend_data->queue_family, wd->Surface,
+            vkGetPhysicalDeviceSurfaceSupportKHR(backend_data->m_physical_device,
+                                                 backend_data->m_queue_family, wd->Surface,
                                                  &res);
             if(res == VK_TRUE)
             {
@@ -372,29 +375,29 @@ rpv_imgui_backend_vk_init(rpvImGuiBackend* backend, void* window)
                 const VkColorSpaceKHR requestSurfaceColorSpace =
                     VK_COLORSPACE_SRGB_NONLINEAR_KHR;
                 wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(
-                    backend_data->physical_device, wd->Surface, requestSurfaceImageFormat,
+                    backend_data->m_physical_device, wd->Surface, requestSurfaceImageFormat,
                     (size_t) IM_ARRAYSIZE(requestSurfaceImageFormat),
                     requestSurfaceColorSpace);
 
                 // Select Present Mode
                 VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
                 wd->PresentMode                  = ImGui_ImplVulkanH_SelectPresentMode(
-                    backend_data->physical_device, wd->Surface, &present_modes[0],
+                    backend_data->m_physical_device, wd->Surface, &present_modes[0],
                     IM_ARRAYSIZE(present_modes));
 
                 // Create SwapChain, RenderPass, Framebuffer, etc.
-                IM_ASSERT(backend_data->min_image_count >= 2);
+                IM_ASSERT(backend_data->m_min_image_count >= 2);
                 ImGui_ImplVulkanH_CreateOrResizeWindow(
-                    backend_data->instance, backend_data->physical_device,
-                    backend_data->device, wd, backend_data->queue_family,
-                    backend_data->allocator, width, height,
-                    backend_data->min_image_count);
+                    backend_data->m_instance, backend_data->m_physical_device,
+                    backend_data->m_device, wd, backend_data->m_queue_family,
+                    backend_data->m_allocator, width, height,
+                    backend_data->m_min_image_count);
 
                 bOk = true;
             }
             else
             {
-                fprintf(stderr, "[vulkan] Error: no WSI support on physical device\n");
+                fprintf(stderr, "[vulkan] Error: no WSI support on physical m_device\n");
             }
         }
     }
@@ -403,31 +406,31 @@ rpv_imgui_backend_vk_init(rpvImGuiBackend* backend, void* window)
 }
 
 bool
-rpv_imgui_backend_vk_config(rpvImGuiBackend* backend, void* window)
+rocprofvis_imgui_backend_vk_config(rocprofvis_imgui_backend_t* backend, void* window)
 {
     bool bOk = false;
 
-    if(backend && backend->private_data && window)
+    if(backend && backend->m_private_data && window)
     {
-        rpv_imgui_vk_data* backend_data = (rpv_imgui_vk_data*) backend->private_data;
+        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
 
         // Setup Platform/Renderer backends
         ImGui_ImplGlfw_InitForVulkan((GLFWwindow*) window, true);
         ImGui_ImplVulkan_InitInfo init_info = {};
-        init_info.Instance                  = backend_data->instance;
-        init_info.PhysicalDevice            = backend_data->physical_device;
-        init_info.Device                    = backend_data->device;
-        init_info.QueueFamily               = backend_data->queue_family;
-        init_info.Queue                     = backend_data->queue;
-        init_info.PipelineCache             = backend_data->pipeline_cache;
-        init_info.DescriptorPool            = backend_data->descriptor_pool;
-        init_info.RenderPass                = backend_data->window_data.RenderPass;
+        init_info.Instance                  = backend_data->m_instance;
+        init_info.PhysicalDevice            = backend_data->m_physical_device;
+        init_info.Device                    = backend_data->m_device;
+        init_info.QueueFamily               = backend_data->m_queue_family;
+        init_info.Queue                     = backend_data->m_queue;
+        init_info.PipelineCache             = backend_data->m_pipeline_cache;
+        init_info.DescriptorPool            = backend_data->m_descriptor_pool;
+        init_info.RenderPass                = backend_data->m_window_data.RenderPass;
         init_info.Subpass                   = 0;
-        init_info.MinImageCount             = backend_data->min_image_count;
-        init_info.ImageCount                = backend_data->window_data.ImageCount;
+        init_info.MinImageCount             = backend_data->m_min_image_count;
+        init_info.ImageCount                = backend_data->m_window_data.ImageCount;
         init_info.MSAASamples               = VK_SAMPLE_COUNT_1_BIT;
-        init_info.Allocator                 = backend_data->allocator;
-        init_info.CheckVkResultFn           = rpv_imgui_backend_vk_check_result;
+        init_info.Allocator                 = backend_data->m_allocator;
+        init_info.CheckVkResultFn           = rocprofvis_imgui_backend_vk_check_result;
         ImGui_ImplVulkan_Init(&init_info);
 
         bOk = true;
@@ -437,33 +440,33 @@ rpv_imgui_backend_vk_config(rpvImGuiBackend* backend, void* window)
 }
 
 void
-rpv_imgui_backend_vk_update_framebuffer(rpvImGuiBackend* backend, int32_t fb_width,
+rocprofvis_imgui_backend_vk_update_framebuffer(rocprofvis_imgui_backend_t* backend, int32_t fb_width,
                                         int32_t fb_height)
 {
-    if(backend && backend->private_data)
+    if(backend && backend->m_private_data)
     {
-        rpv_imgui_vk_data* backend_data = (rpv_imgui_vk_data*) backend->private_data;
+        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
         if(fb_width > 0 && fb_height > 0 &&
-           (backend_data->swapchain_rebuild ||
-            backend_data->window_data.Width != fb_width ||
-            backend_data->window_data.Height != fb_height))
+           (backend_data->m_swapchain_rebuild ||
+            backend_data->m_window_data.Width != fb_width ||
+            backend_data->m_window_data.Height != fb_height))
         {
-            ImGui_ImplVulkan_SetMinImageCount(backend_data->min_image_count);
+            ImGui_ImplVulkan_SetMinImageCount(backend_data->m_min_image_count);
             ImGui_ImplVulkanH_CreateOrResizeWindow(
-                backend_data->instance, backend_data->physical_device,
-                backend_data->device, &backend_data->window_data,
-                backend_data->queue_family, backend_data->allocator, fb_width, fb_height,
-                backend_data->min_image_count);
-            backend_data->window_data.FrameIndex = 0;
-            backend_data->swapchain_rebuild      = false;
+                backend_data->m_instance, backend_data->m_physical_device,
+                backend_data->m_device, &backend_data->m_window_data,
+                backend_data->m_queue_family, backend_data->m_allocator, fb_width, fb_height,
+                backend_data->m_min_image_count);
+            backend_data->m_window_data.FrameIndex = 0;
+            backend_data->m_swapchain_rebuild      = false;
         }
     }
 }
 
 void
-rpv_imgui_backend_vk_new_frame(rpvImGuiBackend* backend)
+rocprofvis_imgui_backend_vk_new_frame(rocprofvis_imgui_backend_t* backend)
 {
-    if(backend && backend->private_data)
+    if(backend && backend->m_private_data)
     {
         // Start the Dear ImGui frame
         ImGui_ImplVulkan_NewFrame();
@@ -472,15 +475,15 @@ rpv_imgui_backend_vk_new_frame(rpvImGuiBackend* backend)
 }
 
 void
-rpv_imgui_backend_vk_render(rpvImGuiBackend* backend, ImDrawData* draw_data,
+rocprofvis_imgui_backend_vk_render(rocprofvis_imgui_backend_t* backend, ImDrawData* draw_data,
                             ImVec4* clear_color)
 {
-    if(backend && backend->private_data && draw_data && clear_color)
+    if(backend && backend->m_private_data && draw_data && clear_color)
     {
-        rpv_imgui_vk_data* backend_data = (rpv_imgui_vk_data*) backend->private_data;
+        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
         VkResult           err;
 
-        auto* wd = &backend_data->window_data;
+        auto* wd = &backend_data->m_window_data;
 
         wd->ClearValue.color.float32[0] = clear_color->x * clear_color->w;
         wd->ClearValue.color.float32[1] = clear_color->y * clear_color->w;
@@ -491,31 +494,31 @@ rpv_imgui_backend_vk_render(rpvImGuiBackend* backend, ImDrawData* draw_data,
             wd->FrameSemaphores[wd->SemaphoreIndex].ImageAcquiredSemaphore;
         VkSemaphore render_complete_semaphore =
             wd->FrameSemaphores[wd->SemaphoreIndex].RenderCompleteSemaphore;
-        err = vkAcquireNextImageKHR(backend_data->device, wd->Swapchain, UINT64_MAX,
+        err = vkAcquireNextImageKHR(backend_data->m_device, wd->Swapchain, UINT64_MAX,
                                     image_acquired_semaphore, VK_NULL_HANDLE,
                                     &wd->FrameIndex);
         if(err != VK_ERROR_OUT_OF_DATE_KHR && err != VK_SUBOPTIMAL_KHR)
         {
-            rpv_imgui_backend_vk_check_result(err);
+            rocprofvis_imgui_backend_vk_check_result(err);
 
             ImGui_ImplVulkanH_Frame* fd = &wd->Frames[wd->FrameIndex];
             {
                 // Deliberate infinite wait
-                err = vkWaitForFences(backend_data->device, 1, &fd->Fence, VK_TRUE,
+                err = vkWaitForFences(backend_data->m_device, 1, &fd->Fence, VK_TRUE,
                                       UINT64_MAX);
-                rpv_imgui_backend_vk_check_result(err);
+                rocprofvis_imgui_backend_vk_check_result(err);
 
-                err = vkResetFences(backend_data->device, 1, &fd->Fence);
-                rpv_imgui_backend_vk_check_result(err);
+                err = vkResetFences(backend_data->m_device, 1, &fd->Fence);
+                rocprofvis_imgui_backend_vk_check_result(err);
             }
             {
-                err = vkResetCommandPool(backend_data->device, fd->CommandPool, 0);
-                rpv_imgui_backend_vk_check_result(err);
+                err = vkResetCommandPool(backend_data->m_device, fd->CommandPool, 0);
+                rocprofvis_imgui_backend_vk_check_result(err);
                 VkCommandBufferBeginInfo info = {};
                 info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
                 info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
                 err = vkBeginCommandBuffer(fd->CommandBuffer, &info);
-                rpv_imgui_backend_vk_check_result(err);
+                rocprofvis_imgui_backend_vk_check_result(err);
             }
             {
                 VkRenderPassBeginInfo info    = {};
@@ -549,26 +552,26 @@ rpv_imgui_backend_vk_render(rpvImGuiBackend* backend, ImDrawData* draw_data,
                 info.pSignalSemaphores    = &render_complete_semaphore;
 
                 err = vkEndCommandBuffer(fd->CommandBuffer);
-                rpv_imgui_backend_vk_check_result(err);
-                err = vkQueueSubmit(backend_data->queue, 1, &info, fd->Fence);
-                rpv_imgui_backend_vk_check_result(err);
+                rocprofvis_imgui_backend_vk_check_result(err);
+                err = vkQueueSubmit(backend_data->m_queue, 1, &info, fd->Fence);
+                rocprofvis_imgui_backend_vk_check_result(err);
             }
         }
         else
         {
-            backend_data->swapchain_rebuild = true;
+            backend_data->m_swapchain_rebuild = true;
         }
     }
 }
 
 void
-rpv_imgui_backend_vk_present(rpvImGuiBackend* backend)
+rocprofvis_imgui_backend_vk_present(rocprofvis_imgui_backend_t* backend)
 {
-    if(backend && backend->private_data)
+    if(backend && backend->m_private_data)
     {
-        rpv_imgui_vk_data* backend_data = (rpv_imgui_vk_data*) backend->private_data;
-        auto*              wd           = &backend_data->window_data;
-        if(!backend_data->swapchain_rebuild)
+        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        auto*              wd           = &backend_data->m_window_data;
+        if(!backend_data->m_swapchain_rebuild)
         {
             VkSemaphore render_complete_semaphore =
                 wd->FrameSemaphores[wd->SemaphoreIndex].RenderCompleteSemaphore;
@@ -579,15 +582,15 @@ rpv_imgui_backend_vk_present(rpvImGuiBackend* backend)
             info.swapchainCount     = 1;
             info.pSwapchains        = &wd->Swapchain;
             info.pImageIndices      = &wd->FrameIndex;
-            VkResult err            = vkQueuePresentKHR(backend_data->queue, &info);
+            VkResult err            = vkQueuePresentKHR(backend_data->m_queue, &info);
             if(err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR)
             {
-                backend_data->swapchain_rebuild = true;
+                backend_data->m_swapchain_rebuild = true;
             }
             else
             {
                 // This will be an unrecoverable error
-                rpv_imgui_backend_vk_check_result(err);
+                rocprofvis_imgui_backend_vk_check_result(err);
 
                 // Now we can use the next set of semaphores
                 wd->SemaphoreIndex = (wd->SemaphoreIndex + 1) % wd->SemaphoreCount;
@@ -597,81 +600,82 @@ rpv_imgui_backend_vk_present(rpvImGuiBackend* backend)
 }
 
 void
-rpv_imgui_backend_vk_shutdown(rpvImGuiBackend* backend)
+rocprofvis_imgui_backend_vk_shutdown(rocprofvis_imgui_backend_t* backend)
 {
-    if(backend && backend->private_data)
+    if(backend && backend->m_private_data)
     {
-        rpv_imgui_vk_data* backend_data = (rpv_imgui_vk_data*) backend->private_data;
-        VkResult           err          = vkDeviceWaitIdle(backend_data->device);
-        rpv_imgui_backend_vk_check_result(err);
+        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        VkResult           err          = vkDeviceWaitIdle(backend_data->m_device);
+        rocprofvis_imgui_backend_vk_check_result(err);
         ImGui_ImplVulkan_Shutdown();
     }
 }
 
 void
-rpv_imgui_backend_vk_destroy(rpvImGuiBackend* backend)
+rocprofvis_imgui_backend_vk_destroy(rocprofvis_imgui_backend_t* backend)
 {
-    if(backend && backend->private_data)
+    if(backend && backend->m_private_data)
     {
-        rpv_imgui_vk_data* backend_data = (rpv_imgui_vk_data*) backend->private_data;
-        ImGui_ImplVulkanH_DestroyWindow(backend_data->instance, backend_data->device,
-                                        &backend_data->window_data,
-                                        backend_data->allocator);
+        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        ImGui_ImplVulkanH_DestroyWindow(backend_data->m_instance, backend_data->m_device,
+                                        &backend_data->m_window_data,
+                                        backend_data->m_allocator);
 
-        vkDestroyDescriptorPool(backend_data->device, backend_data->descriptor_pool,
-                                backend_data->allocator);
+        vkDestroyDescriptorPool(backend_data->m_device, backend_data->m_descriptor_pool,
+                                backend_data->m_allocator);
 
 #ifdef _DEBUG
         // Remove the debug report callback
         auto f_vkDestroyDebugReportCallbackEXT =
             (PFN_vkDestroyDebugReportCallbackEXT) vkGetInstanceProcAddr(
-                backend_data->instance, "vkDestroyDebugReportCallbackEXT");
+                backend_data->m_instance, "vkDestroyDebugReportCallbackEXT");
         f_vkDestroyDebugReportCallbackEXT(
-            backend_data->instance, backend_data->debug_report, backend_data->allocator);
+            backend_data->m_instance, backend_data->m_debug_report, backend_data->m_allocator);
 #endif  // _DEBUG
 
-        vkDestroyDevice(backend_data->device, backend_data->allocator);
-        vkDestroyInstance(backend_data->instance, backend_data->allocator);
+        vkDestroyDevice(backend_data->m_device, backend_data->m_allocator);
+        vkDestroyInstance(backend_data->m_instance, backend_data->m_allocator);
 
         free(backend_data);
-        memset(backend, 0, sizeof(rpvImGuiBackend));
+        memset(backend, 0, sizeof(rocprofvis_imgui_backend_t));
     }
 }
 
 bool
-rpv_imgui_backend_setup(rpvImGuiBackend* backend, GLFWwindow* window)
+rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* window)
 {
     bool bOk = false;
     if(backend)
     {
         if(glfwVulkanSupported())
         {
-            rpv_imgui_vk_data* backend_data =
-                (rpv_imgui_vk_data*) calloc(1, sizeof(rpv_imgui_vk_data));
+            rocprofvis_imgui_vk_data_t* backend_data =
+                (rocprofvis_imgui_vk_data_t*) calloc(1, sizeof(rocprofvis_imgui_vk_data_t));
             if(backend_data)
             {
-                backend_data->window_data       = ImGui_ImplVulkanH_Window();
-                backend_data->allocator         = nullptr;
-                backend_data->instance          = VK_NULL_HANDLE;
-                backend_data->physical_device   = VK_NULL_HANDLE;
-                backend_data->device            = VK_NULL_HANDLE;
-                backend_data->queue_family      = (uint32_t) -1;
-                backend_data->queue             = VK_NULL_HANDLE;
-                backend_data->pipeline_cache    = VK_NULL_HANDLE;
-                backend_data->descriptor_pool   = VK_NULL_HANDLE;
-                backend_data->debug_report      = VK_NULL_HANDLE;
-                backend_data->min_image_count   = 2;
-                backend_data->swapchain_rebuild = false;
-                backend->private_data           = backend_data;
-                backend->init                   = &rpv_imgui_backend_vk_init;
-                backend->config                 = &rpv_imgui_backend_vk_config;
-                backend->update_framebuffer     = &rpv_imgui_backend_vk_update_framebuffer;
-                backend->new_frame              = &rpv_imgui_backend_vk_new_frame;
-                backend->render                 = &rpv_imgui_backend_vk_render;
-                backend->present                = &rpv_imgui_backend_vk_present;
-                backend->shutdown               = &rpv_imgui_backend_vk_shutdown;
-                backend->destroy                = &rpv_imgui_backend_vk_destroy;
-                bOk                             = true;
+                backend_data->m_window_data       = ImGui_ImplVulkanH_Window();
+                backend_data->m_allocator         = nullptr;
+                backend_data->m_instance          = VK_NULL_HANDLE;
+                backend_data->m_physical_device   = VK_NULL_HANDLE;
+                backend_data->m_device            = VK_NULL_HANDLE;
+                backend_data->m_queue_family      = (uint32_t) -1;
+                backend_data->m_queue             = VK_NULL_HANDLE;
+                backend_data->m_pipeline_cache    = VK_NULL_HANDLE;
+                backend_data->m_descriptor_pool   = VK_NULL_HANDLE;
+                backend_data->m_debug_report      = VK_NULL_HANDLE;
+                backend_data->m_min_image_count   = 2;
+                backend_data->m_swapchain_rebuild = false;
+                backend->m_private_data             = backend_data;
+                backend->m_init                     = &rocprofvis_imgui_backend_vk_init;
+                backend->m_config                   = &rocprofvis_imgui_backend_vk_config;
+                backend->m_update_framebuffer =
+                    &rocprofvis_imgui_backend_vk_update_framebuffer;
+                backend->m_new_frame = &rocprofvis_imgui_backend_vk_new_frame;
+                backend->m_render    = &rocprofvis_imgui_backend_vk_render;
+                backend->m_present                = &rocprofvis_imgui_backend_vk_present;
+                backend->m_shutdown               = &rocprofvis_imgui_backend_vk_shutdown;
+                backend->m_destroy                = &rocprofvis_imgui_backend_vk_destroy;
+                bOk                               = true;
             }
             else
             {

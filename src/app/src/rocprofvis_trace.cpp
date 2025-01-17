@@ -24,7 +24,7 @@ std::future<bool> rocprofvis_trace_async_load_json_trace(std::string file_path, 
         if (result.first == jt::Json::Status::success)
         {
             jt::Json& trace = result.second;
-            jt::Json& trace_events = trace["trace_events"];
+            jt::Json& trace_events = trace["traceEvents"];
             auto& trace_array = trace_events.getArray();
             for (auto& trace_event : trace_array)
             {

@@ -104,6 +104,7 @@ typedef void* FlowHandler;<br />
 typedef void* RecordArrayHandler;<br />
 typedef void* DBHandler;<br />
 <br />
+'''
 TraceHandler        create_trace();                                                         // Creates trace object<br />
 int                 destroy_trace(TraceHandler);                                            // Deletes trace object with provided TraceHandler<br />
 int                 bind_trace_to_database(TraceHandler, DatabaseHandler);                  // Binds trace and database with provided TraceHandler and DatabaseHandler<br />
@@ -146,6 +147,8 @@ unsigned long long  get_chunk_memory_footprint(RecordArrayHandler);             
 unsigned int        get_string_item_count(TraceHandler);                                    // returns number of strings in string array<br />
 unsigned int        get_number_of_flow_records(TrackHandler);                               // returns number of flow records<br />
 <br />
+'''
+'''
 // database methods<br />
 void*   open_rocpd_database(const char*);                                                       // open database with given path<br />
 int     read_trace_properties(DBHandler, DBReadProgress);                                       // read trace properties<br />
@@ -157,4 +160,5 @@ void    add_track_to_trace_read_config(DBHandler, unsigned short);              
 int     read_trace_properties_async(DBHandler, DBReadProgress);                                 // asynchronously read trace properties<br />
 int     read_trace_chunk_track_by_track_async(DBHandler, DBReadProgress);                       // asynchronously read trace chuck running separate SQL query for every track<br />
 int     read_trace_chunk_all_tracks_async(DBHandler db, DBReadProgress);                        // asynchronously read trace chunk for all tracks for configured time frame<br />
+'''
                 

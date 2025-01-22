@@ -4,9 +4,10 @@ capabilities, stability, ease of use and performance.
 Oat++ framework implements set of macros and classes which makes HTTP bases clent-server
 communication transparrent for a developer. 
 
-To develop this particular test I had to
+To develop this particular test I had to:
 
 1. Implement set of classes describing Data Transfer Objects (DTO). For example:
+'''
     class TraceInfoDto : public oatpp::DTO {  
         DTO_INIT(TraceInfoDto, DTO)
 
@@ -14,6 +15,7 @@ To develop this particular test I had to
         DTO_FIELD(UInt64, maxTime, "tmax");
         DTO_FIELD(UInt16, numTracks, "trnum");  
     };
+'''
     Using DTO-related macros we can implement structure of an object we transfer 
     between client and server. Class member types may be primitive C types as well
     more complex types like Vector or List.
@@ -23,7 +25,7 @@ To develop this particular test I had to
     copy/paste number of classes.  
 2.  Implement Service class which implements all the methods needed to collect and 
     process data on server side. For example one of the Service methods:
-
+'''
         oatpp::Object<TraceInfoDto> TraceService::readTraceInfo(const oatpp::UInt64& traceHandler)
         {
             // return 404 if handler is not valid
@@ -39,10 +41,11 @@ To develop this particular test I had to
                         
             return traceInfo; //return DTO object
         }
-
+'''
 3.  Implement controller class, based on oatpp::web::server::api::ApiController,
     which contains server endpoint information and trace services class instantiated.
     Oat++ provides set of macros to add endpoints to the class:
+'''
         ENDPOINT_INFO(getTaceInfo) {
             info->summary = "Read trace metadata";
 
@@ -61,17 +64,19 @@ To develop this particular test I had to
         ENDPOINT macro provides information which HTTP method will be used, path URL, name and 
         path parameters. It also calls Service method and creates DTO response based on DTO 
         object returned by the method.
+'''
 
-4. Implemet Client class based on oatpp::web::client::ApiClient. Add API calls to the client
+4. Implement Client class based on oatpp::web::client::ApiClient. Add API calls to the client
     using API_CALL macro:
-
+'''
     API_CALL("GET", "Traces/{traceHandler}/Info", getTaceInfo, PATH(UInt64, traceHandler))
+'''
 
 5. Implement Client test class based on oatpp::test::UnitTest and override onRun() method, containing
     actuall test. The test requests ClientConnectionProvider, ContentMappers, HttpRequestExecutor and 
     creates Client object based on requested components. Then it call client API calls in order test
     is designed. Here is related to previous examples part of the test:
-
+'''
     auto traceInfoResponse = client->getTaceInfo(traceOpenDto->traceHandler);           // calling client API
     OATPP_ASSERT(traceInfoResponse->getStatusCode() == 200);                            // checking for status code
                                                                                         // converting HTTP reponse to DTO
@@ -81,6 +86,7 @@ To develop this particular test I had to
                                                                                         // use DTO class members
     std::cout << std::endl << "Trace has " << traceInfoDto->numTracks << " tracks , startTime = " 
         << traceInfoDto->minTime << ", endTime = " << traceInfoDto->maxTime << std::endl; 
+'''
 
 Here are my test results:
 
@@ -113,7 +119,7 @@ Here are my test results:
     single DTO with Vector type of every member: 
 
     The way shown in examples:
-
+'''
         class EventTrackDataDto : public oatpp::DTO {
             DTO_INIT(EventTrackDataDto, DTO)
 
@@ -137,9 +143,9 @@ Here are my test results:
             DTO_INIT(EventsDataDto, PageDto<oatpp::Object<EventTrackDataDto>>);
 
         };
-
+'''
     The way for better performance:
-    
+'''
     class EventTrackArrayDto : public oatpp::DTO {
         DTO_INIT(EventTrackArrayDto, DTO)
 
@@ -150,4 +156,4 @@ Here are my test results:
         DTO_FIELD(Vector<String>, eventDescriptions, "descrs");
         DTO_FIELD(Float32, timeSpent, "took");
     };
-
+'''

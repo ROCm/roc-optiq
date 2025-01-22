@@ -92,7 +92,7 @@ There are still room for optimization SQL queries, but probably the best would b
 This may be another test for the data model design process. 
 <br />
 <br />
-<a href="https://github.amd.com/AGS-ROCm-CI/rocprofiler-visualizer/blob/vstempen/rocprof-visual-data-model/oat/">Oat++ experiment documetation</a>
+<a href="https://github.amd.com/AGS-ROCm-CI/rocprofiler-visualizer/tree/vstempen/rocprof-visual-data-model/src/oat">Oat++ experiment documetation</a>
 <br />
 <br />
 **Interface functions:**<br />

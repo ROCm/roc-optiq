@@ -31,6 +31,12 @@ const char* arrayContextCannotBeNull = "Record array context cannot be NULL";
         return ((Trace*)trace)->bindDatabase((Database*)database); 
     }
 
+    DatabaseHandler get_database_handler(TraceHandler trace)
+    {
+        assert(trace &&  traceContextCannotBeNull);
+        return ((Trace*)trace)->getDbHandler();       
+    }
+
     unsigned long long  get_trace_min_time(TraceHandler trace)
     {
         assert(trace &&  traceContextCannotBeNull);
@@ -65,6 +71,13 @@ const char* arrayContextCannotBeNull = "Record array context cannot be NULL";
     {
          assert(trace &&  traceContextCannotBeNull);
          ((Trace*)trace)->deleteTraceChunksAt(timestamp);
+    }
+
+    int  validate_track_handler_for_trace(TraceHandler trace, TrackHandler track)
+    {
+        assert(trace &&  traceContextCannotBeNull);
+        assert(track &&  trackContextCannotBeNull);
+        return ((Trace*)trace)->validateTrackHandler(track);
     }
 
     TrackHandler   get_track_at(TraceHandler trace, unsigned int index)

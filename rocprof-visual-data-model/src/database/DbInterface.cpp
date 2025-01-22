@@ -10,11 +10,24 @@ int read_trace_properties(DBHandler db, DBReadProgress progressCallback)
     return true; 
 }
 
+int read_trace_properties_async(DBHandler db, DBReadProgress progressCallback)
+{
+    assert(db && "Database context cannot be NULL");
+    ((Database*)db)->readTracePropertiesAsync(progressCallback);
+    return true; 
+}
+
 int read_trace_chunk_track_by_track(DBHandler db,  DBReadProgress progressCallback)
 {
     assert(db && "Database context cannot be NULL");
-    ((Database*)db)->readTraceChunkTrackByTrack(progressCallback);
-    ((Database*)db)->resetReadRequest();
+    ((Database*)db)->readTraceChunkTrackByTrack(progressCallback);;
+    return true; 
+}
+
+int read_trace_chunk_track_by_track_async(DBHandler db,  DBReadProgress progressCallback)
+{
+    assert(db && "Database context cannot be NULL");
+    ((Database*)db)->readTraceChunkTrackByTrackAsync(progressCallback);
     return true; 
 }
 
@@ -22,8 +35,20 @@ int read_trace_chunk_all_tracks(DBHandler db, DBReadProgress progressCallback)
 {
     assert(db && "Database context cannot be NULL");
     ((Database*)db)->readTraceChunkAllTracks(progressCallback);
-    ((Database*)db)->resetReadRequest();
     return true; 
+}
+
+int read_trace_chunk_all_tracks_async(DBHandler db, DBReadProgress progressCallback)
+{
+    assert(db && "Database context cannot be NULL");
+    ((Database*)db)->readTraceChunkAllTracksAsync(progressCallback);
+    return true; 
+}
+
+int is_database_read_in_progress(DBHandler db)
+{
+    assert(db && "Database context cannot be NULL");
+    return ((Database*)db)->checkAsyncInProgress();
 }
 
 void*  open_rocpd_database(const char* path)

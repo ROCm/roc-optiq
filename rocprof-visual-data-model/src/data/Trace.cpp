@@ -8,6 +8,7 @@ TraceInternal::TraceInternal()
     m_minTime = std::numeric_limits<uint64_t>::max();
     m_maxTime = std::numeric_limits<uint64_t>::min();
     m_stringArrayMemoryFootprint=0;
+    m_db = nullptr;
 }
 
 uint32_t TraceInternal::addTrack(const void* handler, TrackProperties & props,  uint32_t size)
@@ -101,6 +102,7 @@ bool Trace::bindDatabase(Database* db)
     bindData.funcAddFlowRecord = addFlowRecord;
     bindData.funcSetTraceParameters = setTraceParameters;
     db->bindTrace(bindData);
+    m_db = db;
     return true;
 }
 
@@ -114,5 +116,14 @@ void   Trace::deleteTraceChunksAt(uint64_t timestamp)
             m_tracks[i].get()->deleteTraceChunk(arrayPtr);
         }
     }
+}
+
+bool  Trace::validateTrackHandler(void* handler)
+{
+    for (int i=0; i < m_tracks.size(); i++)
+    {
+        if (m_tracks[i].get() == handler) return true;
+    }
+    return false;
 }
 

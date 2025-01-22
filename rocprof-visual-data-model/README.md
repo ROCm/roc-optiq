@@ -92,6 +92,9 @@ There are still room for optimization SQL queries, but probably the best would b
 This may be another test for the data model design process. 
 <br />
 <br />
+<a href="https://github.amd.com/AGS-ROCm-CI/rocprofiler-visualizer/blob/vstempen/rocprof-visual-data-model/oat/">Oat++ experiment documetation</a>
+<br />
+<br />
 **Interface functions:**<br />
 <br />
 typedef void* TraceHandler;<br />
@@ -109,6 +112,7 @@ unsigned long long  get_trace_max_time(TraceHandler);                           
 unsigned int        get_number_of_tracks(TraceHandler);                                     // returns number of tracks in trace <br />
 void                delete_trace_chunks_at(TraceHandler, unsigned long long);               // delete trace chunks marked with timestamp <br />
 TrackHandler        get_track_at(TraceHandler, unsigned int);                               // return track handler for provided index<br />
+DatabaseHandler     get_database_handler(TraceHandler);                                     // returns database handler bound to the trace<br />
 <br />
 const char*         get_track_group_name(TrackHandler);                                     // returns name of group of tracks. Can be used for tracks grouping into a tree<br />
 const char*         get_track_name(TrackHandler);                                           // returns track name<br />
@@ -119,6 +123,7 @@ RecordArrayHandler  get_track_last_acquaired_chunk(TrackHandler);               
 RecordArrayHandler  get_track_chunk_at_time(TrackHandler, unsigned long long);              // return chunck marked with specific timestamp<br />
 FlowHandler         get_flow_handler_at(TrackHandler, unsigned long long);                  // return flow handler for specified event id<br />
 unsigned int        get_number_of_chunks(TrackHandler);                                     // return number of chunks for specified track<br />
+int                 validate_track_handler_for_trace(TraceHandler, TrackHandler);           // return true if track belongs to trace<br />
 <br />
 unsigned int        get_record_index_at_timestamp(RecordArrayHandler, unsigned long long);  // converts timestamp to index of the record in specified record array (chunk) <br />
 unsigned long long  get_chunk_number_of_records(RecordArrayHandler);                        // return number of records in a chunk<br />
@@ -149,4 +154,7 @@ int     read_trace_chunk_track_by_track(DBHandler, DBReadProgress);             
 int     read_trace_chunk_all_tracks(DBHandler db, DBReadProgress);                              // read trace chunk for all tracks for configured time frame<br />
 void    configure_trace_read_time_period(DBHandler, unsigned long long, unsigned long long);    // configure trace chunk read timeframe<br />
 void    add_track_to_trace_read_config(DBHandler, unsigned short);                              // add track to trace chunk read configuration <br />
+int     read_trace_properties_async(DBHandler, DBReadProgress);                                 // asynchronously read trace properties<br />
+int     read_trace_chunk_track_by_track_async(DBHandler, DBReadProgress);                       // asynchronously read trace chuck running separate SQL query for every track<br />
+int     read_trace_chunk_all_tracks_async(DBHandler db, DBReadProgress);                        // asynchronously read trace chunk for all tracks for configured time frame<br />
                 

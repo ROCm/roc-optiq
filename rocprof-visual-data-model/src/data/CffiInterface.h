@@ -14,6 +14,7 @@ unsigned long long  get_trace_max_time(TraceHandler);                           
 unsigned int        get_number_of_tracks(TraceHandler);                                     // returns number of tracks in trace 
 void                delete_trace_chunks_at(TraceHandler, unsigned long long);               // delete trace chunks marked with timestamp 
 TrackHandler        get_track_at(TraceHandler, unsigned int);                               // return track handler for provided index
+DatabaseHandler     get_database_handler(TraceHandler);                                     // returns database handler bound to the trace
 
 const char*         get_track_group_name(TrackHandler);                                     // returns name of group of tracks. Can be used for tracks grouping into a tree
 const char*         get_track_name(TrackHandler);                                           // returns track name
@@ -24,6 +25,7 @@ RecordArrayHandler  get_track_last_acquaired_chunk(TrackHandler);               
 RecordArrayHandler  get_track_chunk_at_time(TrackHandler, unsigned long long);              // return chunck marked with specific timestamp
 FlowHandler         get_flow_handler_at(TrackHandler, unsigned long long);                  // return flow handler for specified event id
 unsigned int        get_number_of_chunks(TrackHandler);                                     // return number of chunks for specified track
+int                 validate_track_handler_for_trace(TraceHandler, TrackHandler);           // return true if track belongs to trace
 
 unsigned int        get_record_index_at_timestamp(RecordArrayHandler, unsigned long long);  // converts timestamp to index of the record in specified record array (chunk) 
 unsigned long long  get_chunk_number_of_records(RecordArrayHandler);                        // return number of records in a chunk

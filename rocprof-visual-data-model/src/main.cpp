@@ -1,16 +1,24 @@
-#include "data/TraceInterface.h"
-#include "database/sqlite/rocpd/RocpdDatabase.h"
-#include "database/DbInterface.h"
 #include <iostream>
 #include <chrono>
 #include <iomanip>
 #include <random>
+#include <string>
+
+#include "oatpp-test/UnitTest.hpp"
+#include "oatpp/Environment.hpp"
+#include "oat/TraceControllerTest.hpp"
+
+#include "data/TraceInterface.h"
+#include "database/sqlite/rocpd/RocpdDatabase.h"
+#include "database/DbInterface.h"
 
 unsigned long long startTime;
 unsigned long long endTime;
 unsigned int startTrack;
 unsigned int endTrack;
 double totalTime;
+std::string inputFile="";
+bool oatTest = false;
 
 void db_read_progress(const int progress, const char* action)
 {
@@ -85,68 +93,120 @@ void testChunk(TraceHandler trace, DBHandler db, bool allthrough)
     delete_trace_chunks_at(trace, startTime);
 }
 
-int main(int argc, char **argv)
+bool parseArguments(int argc, char **argv)
 {
     if (argc > 1)
     {
-        std::srand(std::time(nullptr));
-        TraceHandler trace = create_trace();
-        if (trace!=nullptr)
+        for (int i=1; i < argc; i++)
         {
-            DBHandler db = open_rocpd_database(argv[1]);
-            if (db != nullptr)
+            std::string param = argv[i];
+            if (param == "-oat-test")
             {
-                if (bind_trace_to_database(trace, db))
+                oatTest = true;
+            } else
+            {
+                inputFile = param;
+            }
+        }
+        return inputFile.length() > 0;
+    }
+    return false;
+}
+
+void testDataModelLocally()
+{
+    std::srand(std::time(nullptr));
+    TraceHandler trace = create_trace();
+    if (trace != nullptr)
+    {
+        DBHandler db = open_rocpd_database(inputFile.c_str());
+        if (db != nullptr)
+        {
+            if (bind_trace_to_database(trace, db))
+            {
+                auto t0 = std::chrono::steady_clock::now();
+                if (read_trace_properties(db, db_read_progress))
                 {
-                    auto t0 = std::chrono::steady_clock::now();
-                    if (read_trace_properties(db, db_read_progress))
+                    auto t1 = std::chrono::steady_clock::now();
+                    std::chrono::duration<double> diff = t1 - t0;
+                    std::cout << std::endl << "Reading trace properties took " << diff.count() << " s" << std::endl;
+                    unsigned cont = 0;
+                    do
                     {
-                        auto t1 = std::chrono::steady_clock::now();
-                        std::chrono::duration<double> diff = t1 - t0;
-                        std::cout << std::endl << "Reading trace properties took " << diff.count() << " s" << std::endl;
-                        unsigned cont=0;
-                        do
+                        totalTime = 0;
+                        unsigned numChunksX = 1;
+                        unsigned numChunksY = 1;
+                        std::cout << "Enter amount of chunks to split trace horizontally:";
+                        std::cin >> numChunksX;
+                        std::cout << "Enter amount of chunks to split trace vertically:";
+                        std::cin >> numChunksY;
+                        for (unsigned x = 0; x < numChunksX; x++)
                         {
-                            totalTime=0;
-                            unsigned numChunksX = 1;
-                            unsigned numChunksY = 1;
-                            std::cout << "Enter amount of chunks to split trace horizontally:";
-                            std::cin >> numChunksX;
-                            std::cout << "Enter amount of chunks to split trace vertically:";
-                            std::cin >> numChunksY;
-                            for (unsigned x = 0; x < numChunksX; x++)
+                            for (unsigned y = 0; y < numChunksY; y++)
                             {
-                                for (unsigned y = 0; y < numChunksY; y++)
+                                if (generateChunkConfig(trace, db, numChunksX, numChunksY, x, y))
                                 {
-                                    if (generateChunkConfig(trace, db, numChunksX, numChunksY, x, y))
-                                    {
-                                        testChunk(trace, db, numChunksX >= numChunksY);
-                                    }
+                                    testChunk(trace, db, numChunksX >= numChunksY);
                                 }
                             }
-                            std::cout << "Reading all chunks took " << totalTime << "seconds" << std::endl;
-                            std::cout << "Enter 1 to continue and 0 to exit:";
-                            std::cin >> cont;
-                        } while (cont);
-                    }  
-                    else {
-                        std::cout << "Error : Failed to bind trace to database!" << std::endl;
-                    }
+                        }
+                        std::cout << "Reading all chunks took " << totalTime << "seconds" << std::endl;
+                        std::cout << "Enter 1 to continue and 0 to exit:";
+                        std::cin >> cont;
+                    } while (cont);
                 }
                 else {
                     std::cout << "Error : Failed to bind trace to database!" << std::endl;
                 }
-                close_rocpd_database(db);
-            } else {
-                std::cout << "Error : Failed to open database!" << std::endl;
             }
-        } else
+            else {
+                std::cout << "Error : Failed to bind trace to database!" << std::endl;
+            }
+            close_rocpd_database(db);
+        }
+        else {
+            std::cout << "Error : Failed to open database!" << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "Error : Failed to create trace!" << std::endl;
+    }
+}
+
+
+void testDataModelViaOat()
+{
+    oatpp::Environment::init();
+
+    TraceControllerTest test(inputFile);
+    test.run(1);
+
+    std::cout << "\nEnvironment:\n";
+    std::cout << "objectsCount = " << oatpp::Environment::getObjectsCount() << "\n";
+    std::cout << "objectsCreated = " << oatpp::Environment::getObjectsCreated() << "\n\n";
+
+    OATPP_ASSERT(oatpp::Environment::getObjectsCount() == 0);
+
+    oatpp::Environment::destroy();
+
+}
+
+int main(int argc, char **argv)
+{
+    if (parseArguments(argc, argv))
+    {
+        if (oatTest)
         {
-             std::cout << "Error : Failed to create trace!" << std::endl;
+            testDataModelViaOat();
+        }
+        else
+        {
+            testDataModelLocally();
         }
     } else
     {
-        std::cout << "USAGE:" << std::endl << "\ttest.exe [database]" << std::endl;
+        std::cout << "USAGE:" << std::endl << "\ttest.exe [database] [-oat-test]" << std::endl;
     }
 }
 

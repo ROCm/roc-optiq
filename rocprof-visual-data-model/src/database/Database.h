@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include "../data/TraceTypes.h"
+#include <thread>
+#include <atomic>
 
 
 typedef void (*DbReadProgress)(const int, const char*);
@@ -42,6 +44,13 @@ class Database
         void configureTraceReadTimePeriod(uint64_t startTime, uint64_t endTime);
         void addTrackToTraceReadConfig(uint16_t trackId);
         void resetReadRequest();
+        bool readTracePropertiesAsync(DbReadProgress progressCallback=nullptr);
+        bool readTraceChunkAllTracksAsync(DbReadProgress progressCallback=nullptr);
+        bool readTraceChunkTrackByTrackAsync(DbReadProgress progressCallback=nullptr);  
+        static void readTracePropertiesStatic(Database* db, DbReadProgress progressCallback);
+        static void readTraceChunkAllTracksStatic(Database* db, DbReadProgress progressCallback);
+        static void readTraceChunkTrackByTrackStatic(Database* db, DbReadProgress progressCallback);  
+        bool checkAsyncInProgress();     
 
     protected:
         DbBindSctucture m_bindData;
@@ -53,6 +62,9 @@ class Database
 
     private:
         double loadProgress;
+        std::thread m_thread;
+        std::atomic_bool m_threadResult;
+        std::atomic_bool m_threadWorking;
 
 };
 #endif //DATABASE_H

@@ -27,6 +27,7 @@ class TraceInternal{
         std::vector<std::unique_ptr<Track>> m_tracks;
         uint64_t                            m_minTime;
         uint64_t                            m_maxTime;
+        Database*                           m_db;
 
     private:
         std::vector<std::string>            m_strings;
@@ -41,6 +42,8 @@ class Trace : public TraceInternal {
         uint64_t    getMinTime() {return m_minTime;};
         uint64_t    getMaxTime() {return m_maxTime;};
         void        deleteTraceChunksAt(uint64_t timestamp);
+        Database*   getDbHandler() { return m_db; };
+        bool        validateTrackHandler(void* handler);
 
 };
 

@@ -220,38 +220,43 @@ int RocpdDatabase::callback_add_flow_info(void *data, int argc, char **argv, cha
 bool RocpdDatabase::readTraceChunkAllTracks(DbReadProgress progressCallback)
 {
     static std::stringstream query;
-    if (readConfig.endTime == 0 || readConfig.tracks.size() == 0) return false;
-    for (int i = 0; i < readConfig.tracks.size();i++) {
-        m_bindData.funcAddTrackArray(m_bindData.handler, readConfig.tracks[i] ,readConfig.startTime, readConfig.endTime);
+    while (1)
+    {
+        if (readConfig.endTime == 0 || readConfig.tracks.size() == 0) break;
+        for (int i = 0; i < readConfig.tracks.size();i++) {
+            m_bindData.funcAddTrackArray(m_bindData.handler, readConfig.tracks[i] ,readConfig.startTime, readConfig.endTime);
+        }
+        query.str("");
+        query   << "select start, (end-start), apiName_id, args_id, id, pid, tid from rocpd_api where start >= " << readConfig.startTime 
+                << " and end < " << readConfig.endTime 
+                << " ORDER BY start;";
+        showLoadProgress(1, query.str().c_str(), progressCallback);
+        if (!executeSQLQuery(query.str().c_str(), &callback_add_kernel_launch_record_all_tracks)) break;
+        query.str("");
+        query   << "select start, (end-start), opType_id, description_id, id, gpuId, queueId from rocpd_op where start >= " << readConfig.startTime 
+                << " and end < " << readConfig.endTime 
+                << " ORDER BY start;";
+        showLoadProgress(1, query.str().c_str(), progressCallback);
+        if (!executeSQLQuery(query.str().c_str(), &callback_add_kernel_execute_record_all_tracks)) break;
+        query.str("");
+        query   << "select start, value, deviceId, monitorType from rocpd_monitor where start >= " << readConfig.startTime 
+                << " and start < " << readConfig.endTime 
+                << " ORDER BY start;";
+        showLoadProgress(1, query.str().c_str(), progressCallback);
+        if (!executeSQLQuery(query.str().c_str(), &callback_add_metrics_record_all_tracks)) break;
+        resetReadRequest();
+        return true;
     }
-    query.str("");
-    query   << "select start, (end-start), apiName_id, args_id, id, pid, tid from rocpd_api where start >= " << readConfig.startTime 
-            << " and end < " << readConfig.endTime 
-            << " ORDER BY start;";
-    showLoadProgress(1, query.str().c_str(), progressCallback);
-    if (!executeSQLQuery(query.str().c_str(), &callback_add_kernel_launch_record_all_tracks)) return false;
-    query.str("");
-    query   << "select start, (end-start), opType_id, description_id, id, gpuId, queueId from rocpd_op where start >= " << readConfig.startTime 
-            << " and end < " << readConfig.endTime 
-            << " ORDER BY start;";
-    showLoadProgress(1, query.str().c_str(), progressCallback);
-    if (!executeSQLQuery(query.str().c_str(), &callback_add_kernel_execute_record_all_tracks)) return false;
-    query.str("");
-    query   << "select start, value, deviceId, monitorType from rocpd_monitor where start >= " << readConfig.startTime 
-            << " and start < " << readConfig.endTime 
-            << " ORDER BY start;";
-    showLoadProgress(1, query.str().c_str(), progressCallback);
-    if (!executeSQLQuery(query.str().c_str(), &callback_add_metrics_record_all_tracks)) return false;
-    
-
-    return true;
+    resetReadRequest();
+    return false;
 }
 
 bool RocpdDatabase::readTraceChunkTrackByTrack(DbReadProgress progressCallback)
 {
     static std::stringstream query;
     if (readConfig.endTime == 0 || readConfig.tracks.size() == 0) return false;
-    for (int i = 0; i < readConfig.tracks.size();i++) {
+    int i = 0;
+    for (i = 0; i < readConfig.tracks.size();i++) {
         trackId = readConfig.tracks[i];
         TrackProperties props = trackProps[trackId];
         m_bindData.funcAddTrackArray(m_bindData.handler, trackId, readConfig.startTime, readConfig.endTime);
@@ -264,7 +269,7 @@ bool RocpdDatabase::readTraceChunkTrackByTrack(DbReadProgress progressCallback)
                 << " and end < " << readConfig.endTime
                 << " ORDER BY start;";
             showLoadProgress(1, query.str().c_str(), progressCallback);
-            if (!executeSQLQuery(query.str().c_str(), &callback_add_kernel_launch_record)) return false;
+            if (!executeSQLQuery(query.str().c_str(), &callback_add_kernel_launch_record)) break;
         }
         else
             if (props.type == TrackType::GPU)
@@ -275,7 +280,7 @@ bool RocpdDatabase::readTraceChunkTrackByTrack(DbReadProgress progressCallback)
                     << " and end < " << readConfig.endTime
                     << " ORDER BY start;";
                 showLoadProgress(1, query.str().c_str(), progressCallback);
-                if (!executeSQLQuery(query.str().c_str(), &callback_add_kernel_execute_record)) return false;
+                if (!executeSQLQuery(query.str().c_str(), &callback_add_kernel_execute_record)) break;
             }
             else
                 if (props.type == TrackType::METRICS)
@@ -289,11 +294,12 @@ bool RocpdDatabase::readTraceChunkTrackByTrack(DbReadProgress progressCallback)
                             << " and start < " << readConfig.endTime
                             << " ORDER BY start;";
                         showLoadProgress(1, query.str().c_str(), progressCallback);
-                        if (!executeSQLQuery(query.str().c_str(), &callback_add_metrics_record)) return false;
+                        if (!executeSQLQuery(query.str().c_str(), &callback_add_metrics_record)) break;
                     }
                 }
     }
-    return true;
+    resetReadRequest();
+    return i >= readConfig.tracks.size();
 }
 
 bool RocpdDatabase::readTraceProperties(DbReadProgress progressCallback)

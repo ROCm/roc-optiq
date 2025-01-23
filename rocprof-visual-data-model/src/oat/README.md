@@ -1,10 +1,13 @@
-This experiment implemets Oat++ REST server and client test component in order to test Oat++
+This experiment implemets Oat++ REST server and client test components for testing Oat++
 capabilities, stability, ease of use and performance.
 
 Oat++ framework implements set of macros and classes which makes HTTP bases clent-server
-communication transparrent for a developer. 
+communication transparrent for a developer. It enables user to generate Web Api in 
+declarative manner. It has ready components to access SQL or MongoDb databases. Has
+a Swagger component for API documentation. Has Asynchronous API to support unlimited 
+number of connections.
 
-To develop this particular test I had to:
+To develop this test I had to:
 
 1. Implement set of classes describing Data Transfer Objects (DTO). For example:
 ```
@@ -59,12 +62,12 @@ To develop this particular test I had to:
         {
             return createDtoResponse(Status::CODE_200, m_TraceService.readTraceInfo(traceHandler));
         }
-
+```
         ENDPOINT_INFO is optional but good for describing an endpoint.
         ENDPOINT macro provides information which HTTP method will be used, path URL, name and 
         path parameters. It also calls Service method and creates DTO response based on DTO 
         object returned by the method.
-```
+
 
 4. Implement Client class based on oatpp::web::client::ApiClient. Add API calls to the client
     using API_CALL macro:
@@ -88,7 +91,7 @@ To develop this particular test I had to:
         << traceInfoDto->minTime << ", endTime = " << traceInfoDto->maxTime << std::endl; 
 ```
 
-Here are my test results:
+**Here are my test results**:
 
 1.  Capabilities - with help of provide macros, classes and examples it's pretty easy to create
     REST API and make it functional. This test does not use full set of capabilities, like asynchronous
@@ -118,7 +121,7 @@ Here are my test results:
     Oat++ examples for transfering array of structures. To improve performance, I had to send 
     single DTO with Vector type of every member: 
 
-    The way shown in examples:
+    **The way shown in examples:**
 ```
         class EventTrackDataDto : public oatpp::DTO {
             DTO_INIT(EventTrackDataDto, DTO)
@@ -144,7 +147,7 @@ Here are my test results:
 
         };
 ```
-    The way for better performance:
+    **The way for better performance:**
 ```
     class EventTrackArrayDto : public oatpp::DTO {
         DTO_INIT(EventTrackArrayDto, DTO)

@@ -102,7 +102,7 @@ To develop this test I had to:
     to complete reading data from dabase, 2. collecting data from memory and creating DTO.
     For now I'm using simple API and query a progress of data db read completion from client, in 
     order to show progress on the console screen. 
-2.  Stability - it's pretty stable, but has some issues. First, it's very susceptible to typos,
+2.  Stability - it's very stable, but has some issues. First, it's very susceptible to typos,
     due to using macros and string tags, URLs, etc, which gets parsed runtime and transparrent for 
     compiler. Second, some types do not get properly parsed by Oatpp JSON parser. One example is
     floating point. I experienced an issue when Json compiler couldn't properly parse scientific
@@ -121,7 +121,7 @@ To develop this test I had to:
     Oat++ examples for transfering array of structures. To improve performance, I had to send 
     single DTO with Vector type of every member: 
 
-    **The way shown in examples:**
+**The way shown in examples:**
 ```
         class EventTrackDataDto : public oatpp::DTO {
             DTO_INIT(EventTrackDataDto, DTO)
@@ -147,7 +147,9 @@ To develop this test I had to:
 
         };
 ```
-    **The way for better performance:**
+
+**The way for better performance:**
+
 ```
     class EventTrackArrayDto : public oatpp::DTO {
         DTO_INIT(EventTrackArrayDto, DTO)

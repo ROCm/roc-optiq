@@ -12,6 +12,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "line_chart.h"
+
+#include "main_view.h"
+
 static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
@@ -22,7 +26,11 @@ int main(int, char**)
     int resultCode = 0;
  
     glfwSetErrorCallback(glfw_error_callback);
-    
+
+
+    main_view main = main_view(); 
+ 
+
     if(glfwInit())
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -67,6 +75,31 @@ int main(int, char**)
 
                     rocprofvis_trace_draw();
 
+                    std::vector<float> lineChartData = { 0.0f, 1.0f, 2.0f,
+                                                         3.0f, 9.0f, 5.0f };
+
+                  
+                     ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+
+                     ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0),
+                                                ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+
+                     ImGui::SetNextWindowSize(
+                            ImVec2(displaySize.x * 0.8f, displaySize.y * 0.8f),
+                            ImGuiCond_Always);
+
+                     ImGuiWindowFlags windowFlags =
+                            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+
+    
+                    // Open ImGui window
+                    ImGui::Begin("Line Chart Window", nullptr, windowFlags);
+
+                     main.renderMain(); 
+                    // Close ImGui window
+                    ImGui::End();
+
+                 
                     // Rendering
                     ImGui::Render();
                     ImDrawData* draw_data = ImGui::GetDrawData();

@@ -6,11 +6,44 @@
 #include <iostream>
 #include <fstream>
 #include <future>
-
+#include "main_view.h"
 #include "imgui.h"
 #include "imgui_widget_flamegraph.h"
 #include "implot.h"
 #include "ImGuiFileDialog.h"
+
+ void
+DisableScrollWheelInImGui()
+{
+    ImGuiIO& io    = ImGui::GetIO();
+    io.MouseWheel  = 0.0f;
+    io.MouseWheelH = 0.0f;
+}
+
+struct Point
+{
+    float x;
+    float y;
+};
+
+ 
+std::vector<Point>
+extractPointsFromData(void* data)
+{
+    // Cast the void* pointer back to the original type
+    auto* counters_vector = static_cast<std::vector<rocprofvis_trace_counter_t>*>(data);
+
+    std::vector<Point> points;
+    for(const auto& counter : *counters_vector)
+    {
+        Point point;
+        point.x = counter.m_start_ts;
+        point.y = counter.m_value;
+        points.push_back(point);
+    }
+    return points;
+}
+
 
 static void rocprofvis_trace_event_flame_graph_getter(float* start, float* end, ImU8* level, const char** caption, const void* data, int idx)
 {
@@ -67,7 +100,7 @@ void rocprofvis_trace_setup()
     trace_object.m_is_trace_loaded = false;
 }
 
-static void rocprofvis_trace_draw_view()
+static void rocprofvis_trace_draw_view(main_view* main)
 {
     std::map<std::string, rocprofvis_trace_process_t>& trace_data = trace_object.m_trace_data;
 
@@ -111,137 +144,22 @@ static void rocprofvis_trace_draw_view()
 
     if (trace_object.m_is_trace_loaded)
     {
-        auto& IO = ImGui::GetIO();
-        float mouse_wheel = IO.MouseWheel;
-        static float zoom_amount = 0.f;
-        zoom_amount += mouse_wheel;
-
-        double zoom_scale = 1000.0;
-        if (zoom_amount > 0.f)
-        {
-            zoom_scale = 1000.0 * (1.0 + zoom_amount);
-        }
-        else if (zoom_amount < 0.f)
-        {
-            zoom_scale = 1000.0 / (1.0 + fabs(zoom_amount));
-        }
-
-        for (auto& process : trace_data)
-        {
-            for (auto& thread : process.second.m_threads)
-            {
-                auto& events = thread.second.m_events;
-                auto& counters = thread.second.m_counters;
-                if (events.size())
-                {
-                    const char* label = "##ThreadFrameGraph";
-                    const void* data = (const void*)&thread.second.m_events;
-                    int values_count = events.size();
-                    int values_offset = 0;
-                    const char* overlay_text = "";
-                    float scale_min = FLT_MAX;
-                    float scale_max = FLT_MAX;
-                    ImVec2 graph_size = ImVec2((trace_object.m_max_ts - trace_object.m_min_ts) / zoom_scale, 100);
-
-                    if (values_count > graph_size.x)
-                    {
-                        if (!thread.second.m_has_events_l1)
-                        {
-                            rocprofvis_trace_event_t new_event;
-                            bool is_first = true;
-                            for (auto event : thread.second.m_events)
-                            {
-                                double Gap = (event.m_start_ts - (new_event.m_duration + new_event.m_start_ts));
-                                double duration = ((event.m_start_ts + event.m_duration) - new_event.m_start_ts);
-                                if (!is_first && Gap < 1000.0 && duration < 1000.0)
-                                {
-                                    new_event.m_name.clear();
-                                    new_event.m_duration = duration;
-                                }
-                                else
-                                {
-                                    if (!is_first)
-                                        thread.second.m_events_l1.push_back(new_event);
-
-                                    new_event = event;
-                                    is_first = false;
-                                }
-                            }
-                            thread.second.m_events_l1.push_back(new_event);
-                            thread.second.m_has_events_l1 = true;
-                        }
-                        if (values_count > thread.second.m_events_l1.size())
-                        {
-                            values_count = thread.second.m_events_l1.size();
-                            data = (const void*)&thread.second.m_events_l1;
-                        }
-                    }
-
-                    ImGui::LabelText("##FlameGraphLabel", "%s (%s) : %s (%s)", process.second.m_name.c_str(), process.first.c_str(), thread.second.m_name.c_str(), thread.first.c_str());
-                    ImGui::SameLine();
-                    ImGuiWidgetFlameGraph::PlotFlame(label, &rocprofvis_trace_event_flame_graph_getter, data, values_count, values_offset, overlay_text, scale_min, scale_max, graph_size);
-                }
-                else if (counters.size())
-                {
-                    ImGui::LabelText("##PlotLabel", "%s (%s) : %s (%s)", process.second.m_name.c_str(), process.first.c_str(), thread.second.m_name.c_str(), thread.first.c_str());
-                    ImGui::SameLine();
-
-                    void* data = (void*)&thread.second.m_counters;
-                    int count = counters.size();
-                    ImVec2 graph_size = ImVec2((trace_object.m_max_ts - trace_object.m_min_ts) / zoom_scale, 300);
-                    if (counters.size() > graph_size.x)
-                    {
-                        if (!thread.second.m_has_counters_l1)
-                        {
-                            rocprofvis_trace_counter_t new_counter;
-                            bool is_first = true;
-                            for (auto counter : thread.second.m_counters)
-                            {
-                                double Gap = !is_first ? (counter.m_start_ts - new_counter.m_start_ts) : 0.0;
-                                if (!is_first && Gap < 1000.0)
-                                {
-                                    counter.m_value = std::min(counter.m_value, new_counter.m_value);
-                                }
-                                else
-                                {
-                                    if (!is_first)
-                                        thread.second.m_counters_l1.push_back(new_counter);
-
-                                    new_counter = counter;
-                                    is_first = false;
-                                }
-                            }
-                            thread.second.m_counters_l1.push_back(new_counter);
-                            thread.second.m_has_counters_l1 = true;
-                        }
-                        if (count > thread.second.m_counters_l1.size())
-                        {
-                            count = thread.second.m_counters_l1.size();
-                            data = (void*)&thread.second.m_counters_l1;
-                        }
-                    }
-
-                    if (ImPlot::BeginPlot("##PlotCounters", graph_size))
-                    {
-                        const char* label_id = "##ThreadCounters";
-                        ImPlotLineFlags flags = ImPlotLineFlags_Shaded;
-                        ImPlot::SetupAxes("x", "y");
-                        ImPlot::PlotLineG(label_id, &rocprofvis_trace_counter_plot_getter, data, count, flags);
-
-                        ImPlot::EndPlot();
-                    }
-                }
-            }
-        }
+      
+           
+       
+        // Open ImGui window
+           main->generate_graph_points(trace_data);
+ 
     }
 
     ImGui::End();
     ImGui::PopStyleVar(1);
 }
-
-void rocprofvis_trace_draw()
+ 
+ 
+void rocprofvis_trace_draw(main_view* main)
 {
-    rocprofvis_trace_draw_view();
+    rocprofvis_trace_draw_view(main);
 
     if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
         trace_object.m_is_trace_loaded = false;

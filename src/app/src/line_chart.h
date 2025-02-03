@@ -31,17 +31,15 @@ public:
     std::vector<dataPoint> data;
 
     line_chart(int id, float minValue, float maxValue, float zoom, float movement,
-               bool hasZoomHappened, float& minX, float& maxX, float& minY, float& maxY);
+               bool hasZoomHappened, float& minX, float& maxX, float& minY, float& maxY,
+               std::vector<dataPoint> data);
     ~line_chart();
-    void findMaxMin();
-    void updateMaxMin(float x);
-    void addDataPoint(float x, float y);
+      void addDataPoint(float x, float y);
     void render(); 
     ImVec2 mapToUI(dataPoint& point, ImVec2& cPosition, ImVec2& cSize, float minX,
                    float maxX, float minY, float maxY);
      
-   
-
+ 
  
 };
 

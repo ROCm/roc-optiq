@@ -5,7 +5,7 @@
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
-
+ 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
@@ -13,7 +13,7 @@
 #include <stdlib.h>
 
 #include "line_chart.h"
-
+#include "flame_chart.h"
 #include "main_view.h"
 
 static void glfw_error_callback(int error, const char* description)
@@ -28,7 +28,7 @@ int main(int, char**)
     glfwSetErrorCallback(glfw_error_callback);
 
 
-    main_view main = main_view(); 
+    main_view* main =  new main_view(); 
  
 
     if(glfwInit())
@@ -73,11 +73,8 @@ int main(int, char**)
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
 
-                    rocprofvis_trace_draw();
-
-                    std::vector<float> lineChartData = { 0.0f, 1.0f, 2.0f,
-                                                         3.0f, 9.0f, 5.0f };
-
+  
+              
                   
                      ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 
@@ -94,9 +91,19 @@ int main(int, char**)
     
                     // Open ImGui window
                     ImGui::Begin("Line Chart Window", nullptr, windowFlags);
+ 
 
-                     main.renderMain(); 
-                    // Close ImGui window
+
+                     rocprofvis_trace_draw(main);
+
+
+
+
+      
+
+        
+ 
+                     // Close ImGui window
                     ImGui::End();
 
                  

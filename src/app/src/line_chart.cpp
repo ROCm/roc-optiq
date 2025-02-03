@@ -4,7 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <string>
-template <typename T>
+ template <typename T>
 T clamp(const T& value, const T& lower, const T& upper) {
     if (value < lower) {
         return lower;
@@ -17,7 +17,7 @@ T clamp(const T& value, const T& lower, const T& upper) {
 
 line_chart::line_chart(int id, float minValue, float maxValue, float zoom, float movement,
                        bool hasZoomHappened, float& minX, float& maxX, float& minY,
-                       float& maxY)
+                       float& maxY, std::vector<dataPoint> data)
    
 {
   
@@ -34,9 +34,8 @@ line_chart::line_chart(int id, float minValue, float maxValue, float zoom, float
     this->minY = minY;
     this->maxY  = maxY;
 hasZoomHappened: false;
-    data = { { 1.0, 2.0 }, { 2.0, 3.0 }, { 3.0, 4.0 }, { 5.0, 9.0 },
-             { 6.0, 2.0 }, { 7.0, 3.0 }, { 8.0, 9.0 }, { 10.0, 9.0 } };
-}
+    this->data = data;
+ }
 
 line_chart::~line_chart() {}
 
@@ -47,15 +46,16 @@ line_chart::~line_chart() {}
 void line_chart::addDataPoint(float x, float y) {
     data.push_back({ x, y });
 }
-
-void line_chart::render() {
+ 
+    void line_chart::render() {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
+
+ 
     // Begin a new ImGui window wi
     if(ImGui::BeginChild((std::to_string(id)).c_str()), ImVec2(0, 150), true,
        window_flags)
     {
-
-   
+    
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 

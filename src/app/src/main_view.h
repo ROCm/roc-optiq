@@ -36,15 +36,20 @@ public:
     main_view();
     ~main_view();
     void                    findMaxMin();
-    void                    findMaxMinForX();
+    void                    findMaxMinFlame();
     void                    renderMain2( int count);
     void                    renderMain3(int count);
-
+    int count3; 
     void                    handleTouch();
     void                    handleVerticle();
     std::vector<dataPoint>  extractPointsFromData(void* data);
+    std::vector<rocprofvis_trace_event_t> extractFlamePoints(
+        const std::vector<rocprofvis_trace_event_t>& traceEvents);
     bool                    ranOnce;
     bool                    fullyRenderedPoints;
-};
+    bool  renderedOnce; 
+    std::map<int, std::vector<dataPoint>> lineChartPointMap;
+    std::map<int, std::vector<rocprofvis_trace_event_t>> flameChartPointMap;
+ };
 
 #endif

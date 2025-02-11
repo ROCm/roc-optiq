@@ -17,7 +17,8 @@ public:
     grid();
     ~grid();
  
-    void renderGrid();
+    void renderGrid(float minX, float maxX, float movement, float zoom,
+                    ImDrawList* drawList);
  };
 
 #endif

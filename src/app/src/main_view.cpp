@@ -6,8 +6,8 @@
 #include <string>
  #include "line_chart.h"
 #include "flame_chart.h"
- 
-
+ #include <map>
+#include "grid.h"
 template <typename T>
 T
 clamp(const T& value, const T& lower, const T& upper)
@@ -43,12 +43,17 @@ main_view::main_view()
         this->maxY            = 0.0f;
         data_arr;
         this->ranOnce = false; 
+        renderedOnce = false;
         this->fullyRenderedPoints = false; 
         flameEvent                = {
             { "Event A", 0.0, 20.0 },
             { "Event B", 20.0, 30.0 },
             { "Event C", 50.0, 25.0 },
         };
+        flameChartPointMap; 
+        count3 = 0; 
+ lineChartPointMap;  
+ flameChartPointMap;
  }
  
 void
@@ -84,33 +89,65 @@ main_view::findMaxMin()
         }
     }
 }
+
+void
+main_view::findMaxMinFlame()
+{
+    if(ranOnce == false)
+    {
+        minX    = flameEvent[0].m_start_ts;
+        maxX    = flameEvent[0].m_start_ts + flameEvent[0].m_duration;
+        ranOnce = true;
+    }
+ 
+
+    for(const auto& point : flameEvent)
+    {
+        if(point.m_start_ts < minX)
+        {
+            minX = point.m_start_ts;
+        }
+        if(point.m_start_ts + point.m_duration > maxX)
+        {
+            maxX =  point.m_start_ts + point.m_duration;
+        }
+        
+    }
+}
+
+
 main_view::~main_view() {}
 
 std::vector<dataPoint>
 main_view::extractPointsFromData(void* data)
+
+
+
+
+
 {
-    // Cast the void* pointer back to the original type
-    auto* counters_vector = static_cast<std::vector<rocprofvis_trace_counter_t>*>(data);
+     auto* counters_vector = static_cast<std::vector<rocprofvis_trace_counter_t>*>(data);
 
     std::vector<dataPoint> aggregatedPoints;
 
-    // Get screen width from ImGui
-    ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-     int    screenWidth = static_cast<int>(displaySize.x);  // Screen width in px
+     ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+     int    screenWidth = static_cast<int>(displaySize.x);   
 
-    // Adjust bin size based on zoom factor
-    float effectiveWidth = screenWidth / zoom;
+     float effectiveWidth = screenWidth / zoom;
     float binSize        = (maxX - minX) / effectiveWidth;
 
     double binSumX         = 0.0;
     double binSumY         = 0.0;
     int    binCount        = 0;
     double currentBinStart = counters_vector->at(0).m_start_ts;
- 
+    int count = 0 ; 
 
     for(const auto& counter : *counters_vector)
-    {
-        if(counter.m_start_ts < currentBinStart + binSize)
+    {   
+        if (count == 0) {
+             count = 10;
+        }
+         if(counter.m_start_ts < currentBinStart + binSize)
         {
             binSumX += counter.m_start_ts;
             binSumY += counter.m_value;
@@ -132,8 +169,7 @@ main_view::extractPointsFromData(void* data)
         }
     }
 
-    // Handle the last bin
-    if(binCount > 0)
+     if(binCount > 0)
     {
         dataPoint binnedPoint;
         binnedPoint.xValue = binSumX / binCount;
@@ -144,21 +180,62 @@ main_view::extractPointsFromData(void* data)
     return aggregatedPoints;
     }
 
-std::vector<rocprofvis_trace_event_t> extractFlamePoints(const std::vector<rocprofvis_trace_event_t>& traceEvents) {
+std::vector<rocprofvis_trace_event_t> main_view::extractFlamePoints(const std::vector<rocprofvis_trace_event_t>& traceEvents) {
+    std::vector<rocprofvis_trace_event_t> entries;
 
-    std::vector<rocprofvis_trace_event_t> entries; 
-    int                                   count = 0;
-    for (const auto& event : traceEvents){
+    ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+    int    screenWidth = static_cast<int>(displaySize.x);
 
+    float effectiveWidth = screenWidth / zoom;
+    float binSize        = ((maxX - minX) / effectiveWidth);
 
+    double binSumX         = 0.0;
+     int    binCount        = 0;
+    double currentBinStart = traceEvents[0].m_start_ts;
+    float  largestDuration = 0;
+    for(const auto& counter : traceEvents)
+    {
+        if(counter.m_start_ts < currentBinStart + binSize)
+        {
+            if (counter.m_duration > largestDuration) {
+                largestDuration = counter.m_duration; // Use the largest duration per bin. 
+            }
+            binSumX += counter.m_start_ts;
+            binCount++;
+        }
+        else
+        {
+            if(binCount > 0)
+            {
+                rocprofvis_trace_event_t binnedPoint;
+                binnedPoint.m_start_ts = binSumX / binCount;
+                binnedPoint.m_duration = largestDuration;
+                binnedPoint.m_name     = counter.m_name;
+                entries.push_back(binnedPoint);
+            }
 
-                    entries.push_back({ event.m_name, event.m_start_ts , event.m_duration });
-
-            
-                     
-     
+            //Prepare next bin. 
+            currentBinStart =
+                currentBinStart +
+                binSize *
+                    static_cast<int>((counter.m_start_ts - currentBinStart) / binSize);
+            binSumX  = counter.m_start_ts;
+            largestDuration = counter.m_duration;
+            binCount = 1;
+        }
     }
-    return entries; 
+
+    if(binCount > 0)
+    {
+        rocprofvis_trace_event_t binnedPoint;
+        binnedPoint.m_start_ts = binSumX / binCount;
+        binnedPoint.m_duration = largestDuration;
+        binnedPoint.m_name     = traceEvents.back().m_name;
+
+        entries.push_back(binnedPoint);
+    }
+
+    return entries;
 }
 
 
@@ -166,91 +243,155 @@ void
 main_view::generate_graph_points(std::map<std::string, rocprofvis_trace_process_t>& trace_data)
 
 {
-    int count2 = 0;
+    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_NoScrollWithMouse;
+
+    ImDrawList* drawList         = ImGui::GetWindowDrawList();
+    ImVec2      sPos             = ImGui::GetCursorScreenPos();
+    ImVec2      subComponentSize = ImGui::GetContentRegionAvail();
+
+
+    ImGui::Begin("Trace", nullptr,
+                 ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
+                     ImGuiWindowFlags_NoResize);
+
+    //========================This subsection is for the grid.===================================== 
+      ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+
+ 
+   
+
+    handleTouch();
+      ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                            ImVec4(1.0f, 0.0f, 0.0f, 1.0f));  // Bright red color
+    // Overlay component (renders on top, transparent to inputs)
+    ImGui::SetNextWindowSize(ImVec2(displaySize.x, displaySize.y * 0.8f + 10.0f),
+                             ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::SetNextWindowPos(ImVec2(100, 100));
+
+
+    ImGui::BeginChild("ScrollableArea", ImVec2(0, 0), true, windowFlags);
+    if(ImGui::IsWindowHovered())
+    {
+        ImVec2 mPos = ImGui::GetMousePos();
+        drawList->AddLine(ImVec2(mPos.x, sPos.y),
+                           ImVec2(mPos.x, sPos.y + subComponentSize.y),
+                           IM_COL32(0, 0, 0, 255), 2.0f);
+    }
+    
+    
+    grid g = grid();
+    
+    g.renderGrid(minX, maxX, movement, zoom, drawList);
+
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);  // Restore original style variables
+
+
+
+    
+ //==============================This subsection is for the charts.====================================== 
+    
+ 
+ 
+
+    ImGui::SetNextWindowSize(ImVec2(displaySize.x - 10.0f , displaySize.y * 0.8f),
+                             ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(100, 100));
+
+    
+    ImGui::BeginChild("ScrollableArea2", ImVec2(0, 0), true, windowFlags);
+
+   
+
+    std::map<int, std::vector<dataPoint>> pointMap;
+    int                                   count2 = 0;
     for(auto& process : trace_data)
     {
-         
-            for(auto& thread : process.second.m_threads)
+        for(auto& thread : process.second.m_threads)
+        {
+            auto& events   = thread.second.m_events;
+            auto& counters = thread.second.m_counters;
+            if(events.size())
             {
-                 
-                    auto& events   = thread.second.m_events;
-                    auto& counters = thread.second.m_counters;
-                    if(events.size()){
-                    
-                    const void* data          = (const void*) &thread.second.m_events;
-                        int         values_count  = events.size();
-                        int         values_offset = 0;
-                        const char* overlay_text  = "";
-                        float       scale_min     = FLT_MAX;
-                        float       scale_max     = FLT_MAX;
-                    
-                        
-                            if(!thread.second.m_has_events_l1)
-                            {
-                                rocprofvis_trace_event_t new_event;
-                                bool                     is_first = true;
-                                for(auto event : thread.second.m_events)
-                                {
-                                    double Gap =
-                                        (event.m_start_ts -
-                                         (new_event.m_duration + new_event.m_start_ts));
-                                    double duration =
-                                        ((event.m_start_ts + event.m_duration) -
-                                         new_event.m_start_ts);
-                                    if(!is_first && Gap < 1000.0 && duration < 1000.0)
-                                    {
-                                        new_event.m_name.clear();
-                                        new_event.m_duration = duration;
-                                    }
-                                    else
-                                    {
-                                        if(!is_first)
-                                            thread.second.m_events_l1.push_back(
-                                                new_event);
+                const void* data          = (const void*) &thread.second.m_events;
+                int         values_count  = events.size();
+                int         values_offset = 0;
+                const char* overlay_text  = "";
+                float       scale_min     = FLT_MAX;
+                float       scale_max     = FLT_MAX;
 
-                                        new_event = event;
-                                        is_first  = false;
-                                    }
-                                }
-                                thread.second.m_events_l1.push_back(new_event);
-                                thread.second.m_has_events_l1 = true;
-                            }
-                            if(values_count > thread.second.m_events_l1.size())
-                            {
-                                values_count = thread.second.m_events_l1.size();
-                                data         = (const void*) &thread.second.m_events_l1;
-                            }
-                       
-                               
-                            //put flamechart code here 
-                            flameEvent = extractFlamePoints(events);
-
-
-
-                                count2 = count2 + 1;
-
-                                renderMain3(count2);
-
-                    }
-                    
-                    
-
-                    else if(counters.size())
+                if(!thread.second.m_has_events_l1)
+                {
+                    rocprofvis_trace_event_t new_event;
+                    bool                     is_first = true;
+                    for(auto event : thread.second.m_events)
                     {
-                     void* datap = (void*) &thread.second.m_counters;
-                        int   count = counters.size();
-                        ;
-                         std::vector<dataPoint> points = extractPointsFromData(datap);
-                        data_arr                      = points;
-                        findMaxMin();
-                        count2 = count2 + 1;
+                        double Gap      = (event.m_start_ts -
+                                      (new_event.m_duration + new_event.m_start_ts));
+                        double duration = ((event.m_start_ts + event.m_duration) -
+                                           new_event.m_start_ts);
+                        if(!is_first && Gap < 1000.0 && duration < 1000.0)
+                        {
+                            new_event.m_name.clear();
+                            new_event.m_duration = duration;
+                        }
+                        else
+                        {
+                            if(!is_first) thread.second.m_events_l1.push_back(new_event);
 
-                        renderMain2(count2);
+                            new_event = event;
+                            is_first  = false;
+                        }
                     }
-                
+                    thread.second.m_events_l1.push_back(new_event);
+                    thread.second.m_has_events_l1 = true;
+                }
+                if(values_count > thread.second.m_events_l1.size())
+                {
+                    values_count = thread.second.m_events_l1.size();
+                    data         = (const void*) &thread.second.m_events_l1;
+                }
+
+                ////put flamechart code here
+                flameEvent                 = extractFlamePoints(events);
+                flameChartPointMap[count2] = flameEvent;
+
+                findMaxMinFlame();
+                renderMain3(count2);
+                count2 = count2 + 1;
             }
-        
+
+            else if(counters.size())
+            {
+                void* datap = (void*) &thread.second.m_counters;
+                int   count = counters.size();
+
+                std::vector<dataPoint> points = extractPointsFromData(datap);
+                data_arr                      = points;
+                findMaxMin();
+
+                renderMain2(count2);
+                pointMap[count2] = points;
+                count2           = count2 + 1;
+            }
+        }
     }
+    ImGui::SetItemAllowOverlap();  // Allow input to pass through to sub components. 
+ 
+
+  
+    ImGui::EndChild();
+
+
+    ImGui::End();
+    
+    renderedOnce = true; 
 }
 
 void
@@ -261,22 +402,21 @@ main_view::handleTouch() {
         float scrollWheel = ImGui::GetIO().MouseWheel;
         if(scrollWheel != 0.0f)
         {
-            // Use a factor to control the zoom speed more gradually
-            const float zoomSpeed = 0.01f;
+            float       viewWidth = (maxX - minX) / zoom;
+            const float zoomSpeed = 0.1f;
             zoom *= (scrollWheel > 0) ? (1.0f + zoomSpeed) : (1.0f - zoomSpeed);
-            zoom            = clamp(zoom, 0.001f, 1000.0f);
-            hasZoomHappened = true;
-         }
+            zoom            = clamp(zoom, 1.0f, 1000.0f);
+           }
     }
 
     // Handle Panning
     if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
-        float drag      = ImGui::GetIO().MouseDelta.x/100;
+        float drag      = ImGui::GetIO().MouseDelta.x;
         float viewWidth = (maxX - minX) / zoom;
         movement -= (drag / ImGui::GetContentRegionAvail().x) * viewWidth;
-        movement = clamp(movement, 0.0f, (maxX - minX) - viewWidth);
-    }
+       
+     }
 
  
 
@@ -287,96 +427,47 @@ main_view::renderMain2( int count2)
 {
 
 
-
-       ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-
-        ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0), ImGuiCond_Always,
-                                ImVec2(1.0f, 0.0f));
-
-        ImGui::SetNextWindowSize(ImVec2(displaySize.x * 0.8f, displaySize.y * 0.8f),
-                                 ImGuiCond_Always);
-
-        ImGuiWindowFlags windowFlags =
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollWithMouse ;
-      ImGui::BeginChild("ScrollableArea", ImVec2(0, 0), true, windowFlags);
+     
 
 
-      ImDrawList* drawList = ImGui::GetWindowDrawList();
-      ImVec2      sPos     = ImGui::GetCursorScreenPos();
-      ImVec2      subComponentSize = ImGui::GetContentRegionAvail();
- 
-      
-      if(ImGui::IsWindowHovered())
-      {
-          ImVec2 mPos = ImGui::GetMousePos();
-          drawList->AddLine(ImVec2(mPos.x, sPos.y),
-                            ImVec2(mPos.x, sPos.y + subComponentSize.y),
-                            IM_COL32(0, 0, 0, 255), 2.0f);
-      } 
-    handleTouch(); 
+     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-
- 
   
-        ImGui::BeginChild((std::to_string(count2)).c_str(), ImVec2(0, 150), true,
+        ImGui::BeginChild((std::to_string(count2)).c_str(), ImVec2(0, 150), false,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                           ImGuiWindowFlags_NoScrollWithMouse |
                           ImGuiWindowFlags_NoScrollbar);     
 
 
+  
  
-
-
-
-
          line_chart line = line_chart(count2, minValue, maxValue, zoom, movement,
                                       hasZoomHappened, minX, maxX, minY, maxY, data_arr);
         line.render();
         ImGui::EndChild();
+            ImGui::PopStyleVar();
+
         ImGui::Spacing();  // Add some spacing between boxes
  
-   
-    ImGui::SetItemAllowOverlap();  // Allow input to pass through
+   ImGui::Spacing();  // Add some spacing
 
-    ImGui::EndChild();
+        // Horizontal line at the top
+        ImGui::Separator();
+ 
 }
 
 
 void
 main_view::renderMain3(int count2)
 {
-    ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-
-    ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0), ImGuiCond_Always,
-                            ImVec2(1.0f, 0.0f));
-
-    ImGui::SetNextWindowSize(ImVec2(displaySize.x * 0.8f, displaySize.y * 0.8f),
-                             ImGuiCond_Always);
-
-    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                   ImGuiWindowFlags_NoScrollWithMouse;
-    ImGui::BeginChild("ScrollableArea", ImVec2(0, 0), true, windowFlags);
-
-    ImDrawList* drawList         = ImGui::GetWindowDrawList();
-    ImVec2      sPos             = ImGui::GetCursorScreenPos();
-    ImVec2      subComponentSize = ImGui::GetContentRegionAvail();
-
-    if(ImGui::IsWindowHovered())
-    {
-        ImVec2 mPos = ImGui::GetMousePos();
-        drawList->AddLine(ImVec2(mPos.x, sPos.y),
-                          ImVec2(mPos.x, sPos.y + subComponentSize.y),
-                          IM_COL32(0, 0, 0, 255), 2.0f);
-    }
-    handleTouch();
-
-    ImGui::BeginChild((std::to_string(count2)).c_str(), ImVec2(0, 150), true,
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::BeginChild((std::to_string(count2)).c_str(), ImVec2(0, 50), false,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                           ImGuiWindowFlags_NoScrollWithMouse |
                           ImGuiWindowFlags_NoScrollbar);
  
      
-
+    
     
 
     FlameChart flame =
@@ -389,9 +480,7 @@ main_view::renderMain3(int count2)
 
 
     ImGui::EndChild();
+    ImGui::PopStyleVar();
     ImGui::Spacing();  // Add some spacing between boxes
-
-    ImGui::SetItemAllowOverlap();  // Allow input to pass through
-
-    ImGui::EndChild();
+    ImGui::Separator();
 }

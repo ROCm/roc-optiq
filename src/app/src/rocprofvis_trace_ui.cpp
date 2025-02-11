@@ -115,7 +115,7 @@ static void rocprofvis_trace_draw_view(main_view* main)
 #endif
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::SetNextWindowContentSize(ImVec2((trace_object.m_max_ts - trace_object.m_min_ts) / 1000.0, 0.f));
-    ImGui::Begin("Trace", nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+    ImGui::Begin("Trace", nullptr, ImGuiWindowFlags_MenuBar  | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
 
     if (ImGui::BeginMenuBar())
     {
@@ -145,7 +145,7 @@ static void rocprofvis_trace_draw_view(main_view* main)
     if (trace_object.m_is_trace_loaded)
     {
       
-           
+ 
        
         // Open ImGui window
            main->generate_graph_points(trace_data);

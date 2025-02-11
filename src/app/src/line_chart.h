@@ -36,8 +36,8 @@ public:
     ~line_chart();
       void addDataPoint(float x, float y);
     void render(); 
-    ImVec2 mapToUI(dataPoint& point, ImVec2& cPosition, ImVec2& cSize, float minX,
-                   float maxX, float minY, float maxY);
+    ImVec2 mapToUI(dataPoint& point, ImVec2& cPosition, ImVec2& cSize, float scaleX,
+                   float scaleY );
      
  
  

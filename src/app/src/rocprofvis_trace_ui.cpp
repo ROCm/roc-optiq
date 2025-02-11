@@ -147,7 +147,7 @@ static void rocprofvis_trace_draw_view(main_view* main)
       
  
        
-        // Open ImGui window
+        // Open ImGui window.
            main->generate_graph_points(trace_data);
  
     }

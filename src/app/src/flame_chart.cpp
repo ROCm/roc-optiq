@@ -42,7 +42,7 @@ FlameChart::render() const
         float duration = static_cast<float>(flame.m_duration * zoom);
 
         ImVec2 startPosition = ImVec2(
-            normalized_start * 0.1f, 0);  // Scale the start time for better visualization
+            normalized_start * 0.1f, 0);  // Scale2 the start time for better visualization
         ImVec2 endPosition =
             ImVec2((normalized_start + duration) * 0.1f, 20);  // Scale and set the height
 

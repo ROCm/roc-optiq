@@ -246,34 +246,44 @@ main_view::generate_graph_points(std::map<std::string, rocprofvis_trace_process_
     ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                    ImGuiWindowFlags_NoScrollWithMouse;
 
-    ImDrawList* drawList         = ImGui::GetWindowDrawList();
-    ImVec2      sPos             = ImGui::GetCursorScreenPos();
-    ImVec2      subComponentSize = ImGui::GetContentRegionAvail();
+     
+ 
+    ImVec2      displaySizeMain      = ImGui::GetIO().DisplaySize;
 
+    ImGui::SetNextWindowSize(
+        ImVec2(displaySizeMain.x* 0.8f, displaySizeMain.y * 0.8f),
+                             ImGuiCond_Always);
 
-    ImGui::Begin("Trace", nullptr,
-                 ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
-                     ImGuiWindowFlags_NoResize);
+     if(ImGui::Begin("Main Graphs", nullptr,
+                    ImGuiWindowFlags_NoMove  |
+                        ImGuiWindowFlags_NoScrollWithMouse |
+                        ImGuiWindowFlags_HorizontalScrollbar |
+                        ImGuiWindowFlags_NoScrollbar))
+    {
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2      displaySize = ImGui::GetWindowSize();
+
+        ImVec2 sPos             = ImGui::GetCursorScreenPos();
+        ImVec2 subComponentSize = ImGui::GetContentRegionAvail();
+    
+    
+   
 
     //========================This subsection is for the grid.===================================== 
-      ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-
- 
+       
    
 
     handleTouch();
-      ImGui::PushStyleColor(ImGuiCol_WindowBg,
-                            ImVec4(1.0f, 0.0f, 0.0f, 1.0f));  // Bright red color
-    // Overlay component (renders on top, transparent to inputs)
-    ImGui::SetNextWindowSize(ImVec2(displaySize.x, displaySize.y * 0.8f + 10.0f),
+    
+    ImGui::SetNextWindowSize(ImVec2(displaySize.x + 90.0f, displaySize.y + 90.0f),
                              ImGuiCond_Always);
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::SetNextWindowPos(ImVec2(100, 100));
+   
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
 
 
     ImGui::BeginChild("ScrollableArea", ImVec2(0, 0), true, windowFlags);
+
     if(ImGui::IsWindowHovered())
     {
         ImVec2 mPos = ImGui::GetMousePos();
@@ -283,15 +293,14 @@ main_view::generate_graph_points(std::map<std::string, rocprofvis_trace_process_
     }
     
     
-    grid g = grid();
+   
     
+      grid g = grid();
+
     g.renderGrid(minX, maxX, movement, zoom, drawList);
 
-
     ImGui::EndChild();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(2);  // Restore original style variables
-
+ 
 
 
     
@@ -300,15 +309,14 @@ main_view::generate_graph_points(std::map<std::string, rocprofvis_trace_process_
  
  
 
-    ImGui::SetNextWindowSize(ImVec2(displaySize.x - 10.0f , displaySize.y * 0.8f),
+    ImGui::SetNextWindowSize(ImVec2(displaySize.x + 90.0f, displaySize.y + 60.0f),
                              ImGuiCond_Always);
-    ImGui::SetNextWindowPos(ImVec2(100, 100));
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
 
     
     ImGui::BeginChild("ScrollableArea2", ImVec2(0, 0), true, windowFlags);
 
-   
-
+    
     std::map<int, std::vector<dataPoint>> pointMap;
     int                                   count2 = 0;
     for(auto& process : trace_data)
@@ -388,7 +396,7 @@ main_view::generate_graph_points(std::map<std::string, rocprofvis_trace_process_
   
     ImGui::EndChild();
 
-
+      }
     ImGui::End();
     
     renderedOnce = true; 

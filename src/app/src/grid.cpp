@@ -51,11 +51,10 @@ grid::renderGrid(float minX, float maxX, float movement, float zoom, ImDrawList*
     {
 
  
-        for(float i = minX - movement; i < maxX + movement;
-            i += steps)
+        for(float i = minX ; i < maxX ;i += steps)
         {
             float normalized_start = (i - (minX + movement)) * scaleX;
-
+           
                 drawList->AddLine(ImVec2(normalized_start, cPosition.y),
                               ImVec2(normalized_start, cPosition.y + cSize.y),
                               IM_COL32(10, 10, 10, 255), 0.5f);

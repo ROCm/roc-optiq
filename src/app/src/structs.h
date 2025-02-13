@@ -1,13 +1,12 @@
-//This is here to stop circular dependencies 
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
-
- 
+// This is here to stop circular dependencies
+//  Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include <string>
-#include <map>
-#include <vector>
+#include "line_chart.h"
 #include <future>
+#include <map>
+#include <string>
+#include <vector>
 
 typedef struct rocprofvis_trace_event_t
 {
@@ -38,7 +37,7 @@ struct rocprofvis_trace_process_t
     std::string                                      m_name;
     std::map<std::string, rocprofvis_trace_thread_t> m_threads;
 };
-
+ 
 struct rocprofvis_trace_data_t
 {
     double                                            m_min_ts;
@@ -47,6 +46,3 @@ struct rocprofvis_trace_data_t
     bool                                              m_is_trace_loaded = false;
     std::future<bool>                                 m_loading_future;
 };
-
-
- 

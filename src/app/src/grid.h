@@ -7,18 +7,15 @@
 #    include <iostream>
 #    include <string>
 #    include <vector>
- 
 
 class grid
 {
 public:
-    
-
     grid();
     ~grid();
- 
+
     void renderGrid(float minX, float maxX, float movement, float zoom,
                     ImDrawList* drawList);
- };
+};
 
 #endif

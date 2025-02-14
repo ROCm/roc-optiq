@@ -40,8 +40,7 @@ line_chart::line_chart(int id, float minValue, float maxValue, float zoom, float
     this->maxY            = maxY;
 hasZoomHappened:
     false;
-
-    this->data = data;
+     this->data = data;
 }
 
 line_chart::~line_chart() {}

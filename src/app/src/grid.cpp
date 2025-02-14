@@ -32,13 +32,14 @@ grid::renderGrid(float minX, float maxX, float movement, float zoom, ImDrawList*
     if(ImGui::BeginChild("Grid"), ImVec2(displaySize.x, displaySize.y), true,
        window_flags)
     {
+    
         for(float i = minX; i < maxX; i += steps)
         {
             float normalized_start = (i - (minX + movement)) * scaleX;
 
             drawList->AddLine(ImVec2(normalized_start, cPosition.y),
                               ImVec2(normalized_start, cPosition.y + cSize.y),
-                              IM_COL32(10, 10, 10, 255), 0.5f);
+                              IM_COL32(51, 51, 51, 255), 0.5f);
 
             char label[32];
             snprintf(label, sizeof(label), "%.2f", i - minX);

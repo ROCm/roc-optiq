@@ -46,3 +46,9 @@ struct rocprofvis_trace_data_t
     bool                                              m_is_trace_loaded = false;
     std::future<bool>                                 m_loading_future;
 };
+
+struct rocprofvis_metadata_visualization
+{
+    std::string chart_name; 
+
+};

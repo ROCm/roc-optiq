@@ -20,7 +20,6 @@ public:
     float                                 zoom;
     float                                 movement;
     bool                                  hasZoomHappened;
-    int                                   id;
     ImVec2                                mousePosition;
     float                                 minX;
     std::vector<rocprofvis_trace_event_t> flameEvent;
@@ -31,7 +30,7 @@ public:
     bool                                  ranOnce;
     bool                                  fullyRenderedPoints;
     bool                                  renderedOnce;
-
+    float scrollPosition; 
     main_view();
     ~main_view();
 
@@ -40,11 +39,15 @@ public:
 
     void make_grid();
     void make_graph_view(std::map<std::string, rocprofvis_trace_process_t>& trace_data);
+    void make_graph_metadata_view(std::map<std::string, rocprofvis_trace_process_t>& trace_data);
 
     void                                  findMaxMin();
     void                                  findMaxMinFlame();
     void                                  renderMain2(int count);
     void                                  renderMain3(int count);
+    void renderGraphMetadata(int graphID, float size, std::string type,
+                             rocprofvis_metadata_visualization data);
+
     void                                  handleTouch();
     std::vector<dataPoint>                extractPointsFromData(void* data);
     std::vector<rocprofvis_trace_event_t> extractFlamePoints(

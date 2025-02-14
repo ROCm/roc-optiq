@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
 add_subdirectory(thirdparty/)
 
-add_executable(rocprof-visualizer src/app/src/rocprofvis_trace.cpp src/app/src/rocprofvis_trace_ui.cpp src/app/src/rocprofvis_imgui_vulkan.cpp src/app/src/main.cpp src/app/src/line_chart.cpp src/app/src/line_chart.h src/app/src/main_view.h  src/app/src/main_view.cpp src/app/src/grid.cpp src/app/src/grid.h src/app/src/structs.h src/app/src/flame_chart.cpp src/app/src/flame_chart.h)
+add_executable(rocprof-visualizer src/app/src/rocprofvis_trace.cpp src/app/src/rocprofvis_trace_ui.cpp src/app/src/rocprofvis_imgui_vulkan.cpp src/app/src/main.cpp src/app/src/line_chart.cpp src/app/src/line_chart.h src/app/src/main_view.h  src/app/src/main_view.cpp src/app/src/grid.cpp src/app/src/grid.h src/app/src/structs.h src/app/src/flame_chart.cpp src/app/src/flame_chart.h src/app/src/graph_view_metadata.h src/app/src/graph_view_metadata.cpp )
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jsoncpp)
 target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIRS})

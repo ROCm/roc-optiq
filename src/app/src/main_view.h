@@ -11,46 +11,43 @@
 #    include <string>
 #    include <vector>
 
-class main_view
+class MainView
 {
 public:
-    bool                                  viewInit;
-    float                                 minValue;
-    float                                 maxValue;
+    float                                 min_value;
+    float                                 max_value;
     float                                 zoom;
     float                                 movement;
-    bool                                  hasZoomHappened;
-    ImVec2                                mousePosition;
-    float                                 minX;
-    std::vector<rocprofvis_trace_event_t> flameEvent;
-    float                                 maxX;
-    float                                 minY;
-    float                                 maxY;
+    bool                                  has_zoom_happened;
+    float                                 min_x;
+    std::vector<rocprofvis_trace_event_t> flame_event;
+    float                                 max_x;
+    float                                 min_y;
+    float                                 max_y;
     std::vector<dataPoint>                data_arr;
-    bool                                  ranOnce;
-    bool                                  fullyRenderedPoints;
-    bool                                  renderedOnce;
-    float scrollPosition; 
-    main_view();
-    ~main_view();
+    bool                                  ran_once;
+    float                                 scroll_position;
+    MainView();
+    ~MainView();
 
-    void generate_graph_points(
+    void GenerateGraphPoints(
         std::map<std::string, rocprofvis_trace_process_t>& trace_data);
 
-    void make_grid();
-    void make_graph_view(std::map<std::string, rocprofvis_trace_process_t>& trace_data);
-    void make_graph_metadata_view(std::map<std::string, rocprofvis_trace_process_t>& trace_data);
+    void MakeGrid();
+    void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data);
+    void MakeGraphMetadataView(
+        std::map<std::string, rocprofvis_trace_process_t>& trace_data);
 
-    void                                  findMaxMin();
-    void                                  findMaxMinFlame();
-    void                                  renderMain2(int count);
-    void                                  renderMain3(int count);
-    void renderGraphMetadata(int graphID, float size, std::string type,
+    void FindMaxMin();
+    void FindMaxMinFlame();
+    void RenderLineCharts(int count);
+    void RenderFlameCharts(int count);
+    void RenderGraphMetadata(int graph_id, float size, std::string type,
                              rocprofvis_metadata_visualization data);
 
-    void                                  handleTouch();
-    std::vector<dataPoint>                extractPointsFromData(void* data);
-    std::vector<rocprofvis_trace_event_t> extractFlamePoints(
+    void                                  HandleTopSurfaceTouch();
+    std::vector<dataPoint>                ExtractPointsFromData(void* data);
+    std::vector<rocprofvis_trace_event_t> ExtractFlamePoints(
         const std::vector<rocprofvis_trace_event_t>& traceEvents);
 };
 

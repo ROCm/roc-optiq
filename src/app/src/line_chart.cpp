@@ -23,64 +23,65 @@ clamp(const T& value, const T& lower, const T& upper)
     }
 }
 
-line_chart::line_chart(int id, float minValue, float maxValue, float zoom, float movement,
-                       bool hasZoomHappened, float& minX, float& maxX, float& minY,
-                       float& maxY, std::vector<dataPoint> data)
+LineChart::LineChart(int id, float min_value, float max_value, float zoom, float movement,
+                     bool has_zoom_happened, float& min_x, float& max_x, float& min_y,
+                     float& max_y, std::vector<dataPoint> data)
 
 {
-    this->id              = id;
-    this->minValue        = minValue;
-    this->maxValue        = maxValue;
-    this->zoom            = zoom;
-    this->movement        = movement;
-    this->hasZoomHappened = hasZoomHappened;
-    this->minX            = minX;
-    this->maxX            = maxX;
-    this->minY            = minY;
-    this->maxY            = maxY;
-hasZoomHappened:
-    false;
-     this->data = data;
+    this->id                = id;
+    this->min_value         = min_value;
+    this->max_value         = max_value;
+    this->zoom              = zoom;
+    this->movement          = movement;
+    this->has_zoom_happened = has_zoom_happened;
+    this->min_x             = min_x;
+    this->max_x             = max_x;
+    this->min_y             = min_y;
+    this->max_y             = max_y;
+    has_zoom_happened       = false;
+    this->data              = data;
 }
 
-line_chart::~line_chart() {}
+LineChart::~LineChart() {}
 
 void
-line_chart::renderGrid()
+LineChart::RenderGrid()
 {}
 
 void
-line_chart::addDataPoint(float x, float y)
+LineChart::AddDataPoint(float x, float y)
 {
     data.push_back({ x, y });
 }
 
 void
-line_chart::render()
+LineChart::Render()
 {
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 
     if(ImGui::BeginChild((std::to_string(id)).c_str()), true, window_flags)
     {
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-        ImVec2 cPosition = ImGui::GetCursorScreenPos();
-        ImVec2 cSize     = ImGui::GetContentRegionAvail();
+        ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+        ImVec2 content_size     = ImGui::GetContentRegionAvail();
 
-        float vWidth = (maxX - minX) / zoom;
-        float vMinX  = minX + movement;
-        float vMaxX  = vMinX + vWidth;
-        float scaleX = cSize.x / (vMaxX - vMinX);
-        float scaleY = cSize.y / (maxY - minY);
+        float v_width = (max_x - min_x) / zoom;
+        float v_min_x  = min_x + movement;
+        float v_max_x  = v_min_x + v_width;
+        float scale_x   = content_size.x / (v_max_x - v_min_x);
+        float scale_y = content_size.y / (max_y - min_y);
 
-        drawList->AddLine(ImVec2(10, 10), ImVec2(20, 20), IM_COL32(0, 0, 0, 255), 2.0f);
+        draw_list->AddLine(ImVec2(10, 10), ImVec2(20, 20), IM_COL32(0, 0, 0, 255), 2.0f);
 
         for(int i = 1; i < data.size(); i++)
         {
-            ImVec2 point1 = mapToUI(data[i - 1], cPosition, cSize, scaleX, scaleY);
-            ImVec2 point2 = mapToUI(data[i], cPosition, cSize, scaleX, scaleY);
-            drawList->AddLine(point1, point2, IM_COL32(0, 0, 0, 255), 2.0f);
+            ImVec2 point_1 =
+                MapToUI(data[i - 1], cursor_position, content_size, scale_x, scale_y);
+            ImVec2 point_2 =
+                MapToUI(data[i], cursor_position, content_size, scale_x, scale_y);
+            draw_list->AddLine(point_1, point_2, IM_COL32(0, 0, 0, 255), 2.0f);
         }
     }
 
@@ -88,11 +89,12 @@ line_chart::render()
 }
 
 ImVec2
-line_chart::mapToUI(dataPoint& point, ImVec2& cPosition, ImVec2& cSize, float scaleX,
-                    float scaleY)
+LineChart::MapToUI(dataPoint& point, ImVec2& cursor_position, ImVec2& content_size,
+                   float scaleX,
+                   float scaleY)
 {
-    float x = (point.xValue - (minX + movement)) * scaleX;
-    float y = cPosition.y + cSize.y - (point.yValue - minY) * scaleY;
+    float x = (point.xValue - (min_x + movement)) * scaleX;
+    float y = cursor_position.y + content_size.y - (point.yValue - min_y) * scaleY;
 
     return ImVec2(x, y);
 }

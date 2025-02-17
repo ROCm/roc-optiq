@@ -5,26 +5,24 @@
 #include <string>
 #include <vector>
 
-grid::grid() {}
-
-grid::~grid() {}
+Grid::Grid() {}
+Grid::~Grid() {}
 
 void
-grid::renderGrid(float minX, float maxX, float movement, float zoom, ImDrawList* drawList)
+Grid::RenderGrid(float min_x, float max_x, float movement, float zoom, ImDrawList* draw_list)
 {
-    ImVec2 cPosition = ImGui::GetCursorScreenPos();
-    ImVec2 cSize     = ImGui::GetContentRegionAvail();
-    float  vWidth    = (maxX - minX) / zoom;
-    float  vMinX     = minX + movement;
-    float  vMaxX     = vMinX + vWidth;
-    float  scaleX    = cSize.x / (vMaxX - vMinX);
+    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+    ImVec2 content_size     = ImGui::GetContentRegionAvail();
+    float  v_width    = (max_x - min_x) / zoom;
+    float  v_min_x     = min_x + movement;
+    float  v_max_x            = v_min_x + v_width;
+    float  scale_x           = content_size.x / (v_max_x - v_min_x);
 
-    const int numMarks  = 40;
-    float     range     = (vMaxX + movement) - (vMinX + movement);
-    float     increment = range / numMarks;
-    float     actValue  = minX + movement;
-
-    float  steps       = (maxX - minX) / 50;
+    const int num_marks  = 40;
+    float     range     = (v_max_x + movement) - (v_min_x + movement);
+    float     increment  = range / num_marks;
+ 
+    float  steps       = (max_x - min_x) / 50;
     ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 
     ImGuiWindowFlags window_flags =
@@ -33,23 +31,22 @@ grid::renderGrid(float minX, float maxX, float movement, float zoom, ImDrawList*
        window_flags)
     {
     
-        for(float i = minX; i < maxX; i += steps)
+        for(float i = min_x; i < max_x; i += steps)
         {
-            float normalized_start = (i - (minX + movement)) * scaleX;
+            float normalized_start = (i - (min_x + movement)) * scale_x;
 
-            drawList->AddLine(ImVec2(normalized_start, cPosition.y),
-                              ImVec2(normalized_start, cPosition.y + cSize.y),
+            draw_list->AddLine(ImVec2(normalized_start, cursor_position.y),
+                              ImVec2(normalized_start, cursor_position.y + content_size.y),
                               IM_COL32(51, 51, 51, 255), 0.5f);
 
             char label[32];
-            snprintf(label, sizeof(label), "%.2f", i - minX);
+            snprintf(label, sizeof(label), "%.2f", i - min_x);
 
             ImVec2 labelSize = ImGui::CalcTextSize(label);
             ImVec2 labelPos  = ImVec2(normalized_start - labelSize.x / 2,
-                                      cPosition.y + cSize.y - labelSize.y - 5);
-            drawList->AddText(labelPos, IM_COL32(0, 0, 0, 255), label);
-            actValue = actValue + steps;
-        }
+                       cursor_position.y + content_size.y - labelSize.y - 5);
+            draw_list->AddText(labelPos, IM_COL32(0, 0, 0, 255), label);
+         }
     }
     ImGui::EndChild();
 }

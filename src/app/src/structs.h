@@ -52,3 +52,4 @@ struct rocprofvis_metadata_visualization
     std::string chart_name; 
 
 };
+ 

@@ -2,24 +2,23 @@
 
 #ifndef GRAPH_VIEW_METADATA_H
 #    define GRAPH_VIEW_METADATA_H
+#    include "structs.h"
 #    include <string>
-#include "structs.h"
 class GraphViewMetadata
 {
 public:
-    float size; 
-    std::string type; 
+    float                             size;
+    std::string                       type;
     rocprofvis_metadata_visualization data;
-    int                               graphID;
+    int                               graph_id;
     // Constructor
-    GraphViewMetadata(int graphID, float size, std::string type, rocprofvis_metadata_visualization data);
+    GraphViewMetadata(int graph_id, float size, std::string type,
+                      rocprofvis_metadata_visualization data);
 
     // Destructor
     ~GraphViewMetadata();
 
-    void renderData(); 
-
- 
+    void renderData();
 };
 
 #endif  // GRAPH_VIEW_METADATA_H

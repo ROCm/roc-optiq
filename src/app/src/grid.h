@@ -8,14 +8,14 @@
 #    include <string>
 #    include <vector>
 
-class grid
+class Grid
 {
 public:
-    grid();
-    ~grid();
+    Grid();
+    ~Grid();
 
-    void renderGrid(float minX, float maxX, float movement, float zoom,
-                    ImDrawList* drawList);
+    void RenderGrid(float min_x, float max_x, float movement, float zoom,
+                    ImDrawList* draw_list);
 };
 
 #endif

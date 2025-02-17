@@ -101,7 +101,7 @@ rocprofvis_trace_setup()
 }
 
 static void
-rocprofvis_trace_draw_view(main_view* main)
+rocprofvis_trace_draw_view(MainView* main)
 {
     std::map<std::string, rocprofvis_trace_process_t>& trace_data =
         trace_object.m_trace_data;
@@ -161,7 +161,7 @@ rocprofvis_trace_draw_view(main_view* main)
     if(trace_object.m_is_trace_loaded)
     {
         // Open ImGui window......
-        main->generate_graph_points(trace_data);
+        main->GenerateGraphPoints(trace_data);
     }
 
     ImGui::End();
@@ -169,7 +169,7 @@ rocprofvis_trace_draw_view(main_view* main)
 }
 
 void
-rocprofvis_trace_draw(main_view* main)
+rocprofvis_trace_draw(MainView* main)
 {
     rocprofvis_trace_draw_view(main);
 

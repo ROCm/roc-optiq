@@ -12,31 +12,30 @@ struct dataPoint
     float xValue;
     float yValue;
 };
-
-class line_chart
+class LineChart
 {
 public:
     int                    id;
-    float                  minValue;
-    float                  maxValue;
+    float                  min_value;
+    float                  max_value;
     float                  zoom;
     float                  movement;
-    bool                   hasZoomHappened;
-    float                  minX;
-    float                  maxX;
-    float                  minY;
-    float                  maxY;
+    bool                   has_zoom_happened;
+    float                  min_x;
+    float                  max_x;
+    float                  min_y;
+    float                  max_y;
     std::vector<dataPoint> data;
 
-    line_chart(int id, float minValue, float maxValue, float zoom, float movement,
-               bool hasZoomHappened, float& minX, float& maxX, float& minY, float& maxY,
-               std::vector<dataPoint> data);
-    ~line_chart();
-    void   addDataPoint(float x, float y);
-    void   render();
-    ImVec2 mapToUI(dataPoint& point, ImVec2& cPosition, ImVec2& cSize, float scaleX,
-                   float scaleY);
-    void   renderGrid();
+    LineChart(int id, float min_value, float max_value, float zoom, float movement,
+              bool has_zoom_happened, float& min_x, float& max_x, float& min_y,
+              float& max_y, std::vector<dataPoint> data);
+    ~LineChart();
+    void   AddDataPoint(float x, float y);
+    void   Render();
+    ImVec2 MapToUI(dataPoint& point, ImVec2& c_position, ImVec2& c_size, float scale_x,
+                   float scale_y);
+    void   RenderGrid();
 };
 
 #endif

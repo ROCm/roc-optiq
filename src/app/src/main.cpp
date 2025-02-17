@@ -28,7 +28,7 @@ int main(int, char**)
     glfwSetErrorCallback(glfw_error_callback);
 
 
-    main_view* main =  new main_view(); 
+    MainView* main_view =  new MainView(); 
  
 
     if(glfwInit())
@@ -94,7 +94,7 @@ int main(int, char**)
  
 
 
-                     rocprofvis_trace_draw(main);
+                     rocprofvis_trace_draw(main_view);
 
 
 

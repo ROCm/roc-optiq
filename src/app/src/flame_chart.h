@@ -9,20 +9,22 @@
 class FlameChart
 {
 public:
-    FlameChart(int count, double minValue, double maxValue, float zoom, float movement,
-               double minX, double maxX,
+    int graph_depth;
+
+    FlameChart(int count, double min_value, double max_value, float zoom, float movement,
+               double min_x, double max_x,
                const std::vector<rocprofvis_trace_event_t>& data_arr);
-    void render() const;
+    void render() ;
 
     std::vector<rocprofvis_trace_event_t> flames;
-    double                                minValue;
-    double                                maxValue;
+    double                                min_value;
+    double                                max_value;
     float                                 zoom;
     float                                 movement;
-    double                                minX;
-    double                                maxX;
+    double                                min_x;
+    double                                max_x;
     double                                min_start_time;
     int                                   count;
 };
 
-#endif   
+#endif

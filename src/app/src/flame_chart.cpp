@@ -5,7 +5,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
-FlameChart::FlameChart(int count, double min_value, double max_value, float zoom,
+FlameChart::FlameChart(int chart_id, double min_value, double max_value, float zoom,
                        float movement, double min_x, double max_x,
                        const std::vector<rocprofvis_trace_event_t>& data_arr)
 : min_value(min_value)
@@ -13,7 +13,7 @@ FlameChart::FlameChart(int count, double min_value, double max_value, float zoom
 , zoom(zoom)
 , movement(movement)
 , min_x(min_x)
-, count(count)
+, chart_id(chart_id)
 , max_x(max_x)
 , min_start_time(std::numeric_limits<double>::max())
 {
@@ -38,10 +38,10 @@ FlameChart::render()
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
     int box_at_each_level_max_depth = 1;
 
-    if(ImGui::BeginChild((std::to_string(count)).c_str()), ImVec2(0, 50), true,
+    if(ImGui::BeginChild((std::to_string(chart_id)).c_str()), ImVec2(0, 50), true,
        window_flags)
     {
-        int                  count             = 0;
+        int                  boxplot_box_id             = 0;
         float                total_width       = 0.0f;
         ImVec2               content_size      = ImGui::GetContentRegionAvail();
         float                v_width           = (max_x - min_x) / zoom;
@@ -77,7 +77,7 @@ FlameChart::render()
 
                 ImGui::GetWindowDrawList()->AddRectFilled(start_position, end_position,
                                                           IM_COL32(255, 100, 100, 255));
-                ImGui::PushID(static_cast<int>(count));
+                ImGui::PushID(static_cast<int>(boxplot_box_id));
                 ImGui::SetCursorPosX(start_position.x);
                 ImGui::SetCursorPosY(start_position.y);
                 ImGui::Button(flame.m_name.c_str(), ImVec2(duration, 20));
@@ -112,7 +112,7 @@ FlameChart::render()
 
                         ImGui::GetWindowDrawList()->AddRectFilled(
                             start_position, end_position, IM_COL32(255, 100, 100, 255));
-                        ImGui::PushID(static_cast<int>(count));
+                        ImGui::PushID(static_cast<int>(boxplot_box_id));
                         ImGui::SetCursorPosX(start_position.x);
                         ImGui::SetCursorPosY(start_position.y);
                         ImGui::Button(flame.m_name.c_str(), ImVec2(duration, 20));
@@ -146,7 +146,7 @@ FlameChart::render()
                             ImGui::GetWindowDrawList()->AddRectFilled(
                                 start_position, end_position,
                                 IM_COL32(255, 100, 100, 255));
-                            ImGui::PushID(static_cast<int>(count));
+                            ImGui::PushID(static_cast<int>(boxplot_box_id));
                             ImGui::SetCursorPosX(start_position.x);
                             ImGui::SetCursorPosY(start_position.y);
                             ImGui::Button(flame.m_name.c_str(), ImVec2(duration, 20));
@@ -175,7 +175,7 @@ FlameChart::render()
 
             // Calculate total width for the flame chart
             total_width = std::max(total_width, end_position.x);
-            count       = count + 1;
+            boxplot_box_id = boxplot_box_id + 1;
         }
     }
 

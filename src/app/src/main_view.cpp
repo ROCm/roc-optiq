@@ -99,7 +99,7 @@ MainView::MakeGraphMetadataView(
         ImGui::SetScrollY(scroll_position);
     }
 
-    int count2 = 0;
+    int metadata_id = 0;
     for(auto& process : trace_data)
     {
         for(auto& thread : process.second.m_threads)
@@ -113,9 +113,9 @@ MainView::MakeGraphMetadataView(
                 rocprofvis_metadata_visualization meta_data = {};
                 meta_data.chart_name                        = thread.first;
 
-                RenderGraphMetadata(count2, 50, "Flame", meta_data);
+                RenderGraphMetadata(metadata_id, 50, "Flame", meta_data);
 
-                count2 = count2 + 1;
+                metadata_id = metadata_id + 1;
             }
 
             else if(counters.size())
@@ -124,9 +124,9 @@ MainView::MakeGraphMetadataView(
                 rocprofvis_metadata_visualization meta_data = {};
                 meta_data.chart_name                        = thread.first;
 
-                RenderGraphMetadata(count2, 300, "Line", meta_data);
+                RenderGraphMetadata(metadata_id, 300, "Line", meta_data);
 
-                count2 = count2 + 1;
+                metadata_id = metadata_id + 1;
             }
         }
     }
@@ -159,7 +159,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
     {
         scroll_position = ImGui::GetScrollY();
     }
-    int count2 = 0;
+    int graph_id = 0;
     for(auto& process : trace_data)
     {
         for(auto& thread : process.second.m_threads)
@@ -171,11 +171,11 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 // Create FlameChart
                 flame_event = ExtractFlamePoints(events);
                 FindMaxMinFlame();
-                RenderFlameCharts(count2);
+                RenderFlameCharts(graph_id);
 
                 // Create FlameChart title and info panel
 
-                count2 = count2 + 1;
+                graph_id = graph_id + 1;
             }
 
             else if(counters.size())
@@ -188,8 +188,8 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 data_arr                      = points;
 
                 FindMaxMin();
-                RenderLineCharts(count2);
-                count2 = count2 + 1;
+                RenderLineCharts(graph_id);
+                graph_id = graph_id + 1;
             }
         }
     }
@@ -451,18 +451,18 @@ MainView::HandleTopSurfaceTouch()
 }
 
 void
-MainView::RenderLineCharts(int count2)
+MainView::RenderLineCharts(int chart_id)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-    ImGui::BeginChild((std::to_string(count2)).c_str(), ImVec2(0, 300), false,
+    ImGui::BeginChild((std::to_string(chart_id)).c_str(), ImVec2(0, 300), false,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                           ImGuiWindowFlags_NoScrollWithMouse |
                           ImGuiWindowFlags_NoScrollbar);
 
     ImGui::Text((std::to_string(max_y)).c_str());
 
-    LineChart line = LineChart(count2, min_value, max_value, zoom, movement,
+    LineChart line = LineChart(chart_id, min_value, max_value, zoom, movement,
                                has_zoom_happened, min_x, max_x, min_y, max_y, data_arr);
     line.Render();
 
@@ -481,12 +481,12 @@ MainView::RenderLineCharts(int count2)
 }
 
 void
-MainView::RenderFlameCharts(int count2)
+MainView::RenderFlameCharts(int chart_id)
 {
-    FlameChart flame = FlameChart(count2, min_value, max_value, zoom, movement, min_x,
+    FlameChart flame = FlameChart(chart_id, min_value, max_value, zoom, movement, min_x,
                                   max_x, flame_event);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::BeginChild((std::to_string(count2)).c_str(), ImVec2(0, 50), false,
+    ImGui::BeginChild((std::to_string(chart_id)).c_str(), ImVec2(0, 50), false,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                           ImGuiWindowFlags_NoScrollWithMouse |
                           ImGuiWindowFlags_NoScrollbar);

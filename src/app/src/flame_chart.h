@@ -11,7 +11,8 @@ class FlameChart
 public:
     int graph_depth;
 
-    FlameChart(int count, double min_value, double max_value, float zoom, float movement,
+    FlameChart(int chart_id, double min_value, double max_value, float zoom,
+               float movement,
                double min_x, double max_x,
                const std::vector<rocprofvis_trace_event_t>& data_arr);
     void render() ;
@@ -24,7 +25,7 @@ public:
     double                                min_x;
     double                                max_x;
     double                                min_start_time;
-    int                                   count;
+    int                                   chart_id;
 };
 
 #endif

@@ -40,8 +40,8 @@ public:
 
     void FindMaxMin();
     void FindMaxMinFlame();
-    void RenderLineCharts(int count);
-    void RenderFlameCharts(int count);
+    void RenderLineCharts(int chart_id);
+    void RenderFlameCharts(int chart_id);
     void RenderGraphMetadata(int graph_id, float size, std::string type,
                              rocprofvis_metadata_visualization data);
 

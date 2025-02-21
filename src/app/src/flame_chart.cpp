@@ -30,6 +30,34 @@ FlameChart::FlameChart(int chart_id, double min_value, double max_value, float z
         flames.insert(flames.end(), data_arr.begin(), data_arr.end());
     }
 }
+void
+FlameChart::DrawBox(ImVec2 start_position, ImVec2 end_position, int boxplot_box_id,
+                    rocprofvis_trace_event_t flame, float duration)
+{
+    ImGui::PushStyleColor(ImGuiCol_Button,
+                          ImVec4(200.0f / 255.0f, 24.0f / 255.0f, 30.0f / 255.0f,
+                                 1.0f));  // Change button color to AMD Red
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImVec4(200.0f / 255.0f, 24.0f / 255.0f, 30.0f / 255.0f,
+                                 1.0f));  // Change button hover color to AMD Red
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImVec4(200.0f / 255.0f, 24.0f / 255.0f, 30.0f / 255.0f,
+                                 1.0f));  // Change button active color to AMD Red
+ 
+
+    ImGui::PushID(static_cast<int>(boxplot_box_id));
+    ImGui::SetCursorPosX(start_position.x);
+    ImGui::SetCursorPosY(start_position.y);
+    ImGui::Button(flame.m_name.c_str(), ImVec2(duration, 40));
+    if(ImGui::IsItemHovered())
+    {
+
+        ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f", flame.m_name.c_str(),
+                          flame.m_start_ts, flame.m_duration);
+    }
+    ImGui::PopID();
+    ImGui::PopStyleColor(3);  // Restore previous colors
+}
 
 void
 FlameChart::render()
@@ -41,7 +69,7 @@ FlameChart::render()
     if(ImGui::BeginChild((std::to_string(chart_id)).c_str()), ImVec2(0, 50), true,
        window_flags)
     {
-        int                  boxplot_box_id             = 0;
+        int                  boxplot_box_id    = 0;
         float                total_width       = 0.0f;
         ImVec2               content_size      = ImGui::GetContentRegionAvail();
         float                v_width           = (max_x - min_x) / zoom;
@@ -49,7 +77,7 @@ FlameChart::render()
         float                v_max_x           = v_min_x + v_width;
         float                level             = 0;
         float                previous          = 0;
-        float                scale_x            = content_size.x / (v_max_x - v_min_x);
+        float                scale_x           = content_size.x / (v_max_x - v_min_x);
         std::map<int, float> box_at_each_level = {};
         for(const auto& flame : flames)
         {
@@ -62,10 +90,7 @@ FlameChart::render()
 
             ImVec2 start_position;
             ImVec2 end_position;
-            if(box_at_each_level_max_depth < box_at_each_level.size())
-            {
-                box_at_each_level_max_depth = box_at_each_level.size();
-            }
+        
             if(box_at_each_level.empty())
             {
                 box_at_each_level[0] = fullBoxSize;
@@ -73,21 +98,9 @@ FlameChart::render()
                     ImVec2(normalized_start,
                            0);  // Scale the start time for better visualization
                 end_position = ImVec2((normalized_start + duration),
-                                     0);  // Scale and set the height
+                                      0);  // Scale and set the height
 
-                ImGui::GetWindowDrawList()->AddRectFilled(start_position, end_position,
-                                                          IM_COL32(255, 100, 100, 255));
-                ImGui::PushID(static_cast<int>(boxplot_box_id));
-                ImGui::SetCursorPosX(start_position.x);
-                ImGui::SetCursorPosY(start_position.y);
-                ImGui::Button(flame.m_name.c_str(), ImVec2(duration, 20));
-                if(ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f",
-                                      flame.m_name.c_str(), flame.m_start_ts,
-                                      flame.m_duration);
-                }
-                ImGui::PopID();
+                DrawBox(start_position, end_position, boxplot_box_id, flame, duration);
             }
             else
             {
@@ -98,31 +111,20 @@ FlameChart::render()
                     {
                         // We know the box starts inside the duration.
                         // Create a new level.
-                        box_at_each_level[iterator->first + 20] =
+                        box_at_each_level[iterator->first + 45] =
                             fullBoxSize;  // Create new
-                                                                          // level.
+                                          // level.
                         // plot here
                         start_position = ImVec2(
                             normalized_start,
-                            iterator->first +
-                                20);  // Scale the start time for better visualization
+                            iterator->first );  // Scale the start time for better visualization
                         end_position =
                             ImVec2((normalized_start + duration),
-                                   iterator->first + 20);  // Scale and set the height
+                                   iterator->first);  // Scale and set the height
 
-                        ImGui::GetWindowDrawList()->AddRectFilled(
-                            start_position, end_position, IM_COL32(255, 100, 100, 255));
-                        ImGui::PushID(static_cast<int>(boxplot_box_id));
-                        ImGui::SetCursorPosX(start_position.x);
-                        ImGui::SetCursorPosY(start_position.y);
-                        ImGui::Button(flame.m_name.c_str(), ImVec2(duration, 20));
-                        if(ImGui::IsItemHovered())
-                        {
-                            ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f",
-                                              flame.m_name.c_str(), flame.m_start_ts,
-                                              flame.m_duration);
-                        }
-                        ImGui::PopID();
+                        DrawBox(start_position, end_position, boxplot_box_id, flame,
+                                duration);
+
                         // Plot here.
                         break;  // Exit the loop after placing the box.
                     }
@@ -141,25 +143,14 @@ FlameChart::render()
                                 normalized_start,
                                 0);  // Scale the start time for better visualization
                             end_position = ImVec2((normalized_start + duration),
-                                                 0);  // Scale and set the height
+                                                  0);  // Scale and set the height
 
-                            ImGui::GetWindowDrawList()->AddRectFilled(
-                                start_position, end_position,
-                                IM_COL32(255, 100, 100, 255));
-                            ImGui::PushID(static_cast<int>(boxplot_box_id));
-                            ImGui::SetCursorPosX(start_position.x);
-                            ImGui::SetCursorPosY(start_position.y);
-                            ImGui::Button(flame.m_name.c_str(), ImVec2(duration, 20));
-                            if(ImGui::IsItemHovered())
-                            {
-                                ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f",
-                                                  flame.m_name.c_str(), flame.m_start_ts,
-                                                  flame.m_duration);
-                            }
-                            ImGui::PopID();
+                            DrawBox(start_position, end_position, boxplot_box_id, flame,
+                                    duration);
 
                             break;  // Exit the loop after resetting.
                         }
+                      
                     }
                     ++iterator;  // Move to the next element in reverse order.
                 }
@@ -174,12 +165,11 @@ FlameChart::render()
             // drop level all the way to 0 again and plot and repeat cycle
 
             // Calculate total width for the flame chart
-            total_width = std::max(total_width, end_position.x);
+            total_width    = std::max(total_width, end_position.x);
             boxplot_box_id = boxplot_box_id + 1;
         }
     }
 
     ImGui::EndChild();
     graph_depth = box_at_each_level_max_depth;
-    std::cout << graph_depth << std::endl;
-}
+ }

@@ -42,7 +42,9 @@ MainView::MainView()
     this->scroll_position   = 0.0f;
     data_arr;
     this->ran_once = false;
-
+    this->meta_map_made = false;
+    this->meta_map = {};
+    this->user_adjusting_graph_height = false; 
     flame_event = {
         { "Event A", 0.0, 20.0 },
         { "Event B", 20.0, 30.0 },
@@ -99,36 +101,28 @@ MainView::MakeGraphMetadataView(
         ImGui::SetScrollY(scroll_position);
     }
 
-    int metadata_id = 0;
-    for(auto& process : trace_data)
+    for(const auto& pair : meta_map)
     {
-        for(auto& thread : process.second.m_threads)
+        if(pair.second.type == "flame")
+        { 
+           
+            RenderGraphMetadata(pair.first, 250, "Flame", pair.second);
+
+         }
+
+        else if(pair.second.type =="line")
         {
-            auto& events   = thread.second.m_events;
-            auto& counters = thread.second.m_counters;
+ 
+ 
+            RenderGraphMetadata(pair.first, 300, "Line", pair.second);
 
-            if(events.size())
-            {
-                // Create FlameChart
-                rocprofvis_metadata_visualization meta_data = {};
-                meta_data.chart_name                        = thread.first;
+         }
+    
 
-                RenderGraphMetadata(metadata_id, 50, "Flame", meta_data);
+ 
+ 
 
-                metadata_id = metadata_id + 1;
-            }
-
-            else if(counters.size())
-            {
-                // Linechart
-                rocprofvis_metadata_visualization meta_data = {};
-                meta_data.chart_name                        = thread.first;
-
-                RenderGraphMetadata(metadata_id, 300, "Line", meta_data);
-
-                metadata_id = metadata_id + 1;
-            }
-        }
+           
     }
 
     ImGui::EndChild();
@@ -171,9 +165,18 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 // Create FlameChart
                 flame_event = ExtractFlamePoints(events);
                 FindMaxMinFlame();
-                RenderFlameCharts(graph_id);
+                if(!meta_map_made)
+                {
+                    // Create FlameChart title and info panel
+                    meta_map_struct temp_meta_map = {};
 
-                // Create FlameChart title and info panel
+                    temp_meta_map.type       = "flame";
+                    temp_meta_map.chart_name = thread.first;
+                    temp_meta_map.size       = 250;
+
+                    meta_map[graph_id] = temp_meta_map;
+                }
+                RenderFlameCharts(graph_id);
 
                 graph_id = graph_id + 1;
             }
@@ -188,12 +191,27 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 data_arr                      = points;
 
                 FindMaxMin();
-                RenderLineCharts(graph_id);
-                graph_id = graph_id + 1;
+
+
+                if(!meta_map_made)
+                {
+
+                     meta_map_struct temp_meta_map = {};
+                    temp_meta_map.type            = "line";
+                    temp_meta_map.chart_name      = thread.first;
+                    temp_meta_map.max             = max_y;
+                    temp_meta_map.min             = min_y;
+                    temp_meta_map.size            = 300;
+                    meta_map[graph_id]            = temp_meta_map;
+                }
+                    RenderLineCharts(graph_id);
+                    graph_id = graph_id + 1;
+                
+           
             }
         }
     }
-
+    meta_map_made = true;
     ImGui::EndChild();
 }
 
@@ -381,18 +399,26 @@ MainView::GenerateGraphPoints(
     ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(display_size_main.x * 0.2f, 00));
     ImGui::SetNextWindowSize(
-        ImVec2(display_size_main.x * 0.8f, display_size_main.y * 0.8f), ImGuiCond_Always);
+        ImVec2(display_size_main.x * 0.8f, display_size_main.y ), ImGuiCond_Always);
+    ImGui::PushStyleColor(
+        ImGuiCol_WindowBg,
+        ImVec4(0.1f, 0.1f, 0.1f, 1.0f));  // Set background color to black
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // Set text color to white
 
     if(ImGui::Begin("Main Graphs", nullptr,
                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
                         ImGuiWindowFlags_HorizontalScrollbar |
                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize))
     {
-        HandleTopSurfaceTouch();
-
+ 
         MakeGrid();
 
         MakeGraphView(trace_data);
+
+
+        HandleTopSurfaceTouch();
+
 
         //// Scrubber Line
         // if(ImGui::IsMouseHoveringRect(ImVec2(display_size_main.x * 0.2f, 00),
@@ -408,10 +434,16 @@ MainView::GenerateGraphPoints(
         // }
     }
     ImGui::End();
+    ImGui::PopStyleColor(2);  // Restore previous color
 
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(
-        ImVec2(display_size_main.x * 0.2f, display_size_main.y * 0.8f), ImGuiCond_Always);
+        ImVec2(display_size_main.x * 0.2f, display_size_main.y ), ImGuiCond_Always);
+    ImGui::PushStyleColor(
+        ImGuiCol_WindowBg,
+        ImVec4(0.1f, 0.1f, 0.1f, 1.0f));  // Set background color to black
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // Set text color to white
 
     if(ImGui::Begin("Graph MetaData", nullptr,
                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
@@ -421,98 +453,149 @@ MainView::GenerateGraphPoints(
         MakeGraphMetadataView(trace_data);
     }
     ImGui::End();
+    ImGui::PopStyleColor(2);  // Restore previous color
 }
 
 void
 MainView::HandleTopSurfaceTouch()
 {
-    // Handle Zoom
-    if(ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows))
-    {
-        float scroll_wheel = ImGui::GetIO().MouseWheel;
-        if(scroll_wheel != 0.0f)
-        {
-            float       view_width = (max_x - min_x) / zoom;
-            const float zoom_speed = 0.1f;
-            zoom *= (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
-            zoom = clamp(zoom, 1.0f, 1000.0f);
-        }
-    }
 
-    // Handle Panning
-    if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+    if (user_adjusting_graph_height == false) {
+
+            // Handle Zoom
+        if(ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows))
+        {
+            float scroll_wheel = ImGui::GetIO().MouseWheel;
+            if(scroll_wheel != 0.0f)
+            {
+                float       view_width = (max_x - min_x) / zoom;
+                const float zoom_speed = 0.1f;
+                zoom *= (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
+                zoom = clamp(zoom, 1.0f, 1000.0f);
+            }
+        }
+
+        // Handle Panning
+        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        {
+            float drag       = ImGui::GetIO().MouseDelta.x;
+            float view_width = (max_x - min_x) / zoom;
+            movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+            float drag_y    = ImGui::GetIO().MouseDelta.y;
+            scroll_position = static_cast<int>(scroll_position - drag_y);
+        }
+
+
+
+    }
+ 
+}
+void 
+MainView::HandleGraphResize(int chart_id) {
+    // Create an invisible button with a larger hitbox
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 5);  // Adjust position if needed
+    ImGui::Button(std::to_string(chart_id).c_str(),
+                  ImVec2(ImGui::GetContentRegionAvail().x, 10));
+    if(ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
     {
-        float drag       = ImGui::GetIO().MouseDelta.x;
-        float view_width = (max_x - min_x) / zoom;
-        movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
-        float drag_y    = ImGui::GetIO().MouseDelta.y;
-        scroll_position = static_cast<int>(scroll_position - drag_y);
+        std::cout << "yeeeee" << std::endl;
+
+        user_adjusting_graph_height   = true;
+        ImVec2          drag_delta    = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+        meta_map_struct temp_meta_map = meta_map[chart_id];
+        temp_meta_map.size            = temp_meta_map.size + (drag_delta.y);
+        meta_map[chart_id]            = temp_meta_map;
+        ImGui::ResetMouseDragDelta();
+    }
+    else if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+    {
+        user_adjusting_graph_height = false;
     }
 }
 
 void
 MainView::RenderLineCharts(int chart_id)
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    if (meta_map_made) {
 
-    ImGui::BeginChild((std::to_string(chart_id)).c_str(), ImVec2(0, 300), false,
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+        ImGui::BeginChild(
+            (std::to_string(chart_id)).c_str(), ImVec2(0, meta_map[chart_id].size), false,
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+
+        LineChart line =
+            LineChart(chart_id, min_value, max_value, zoom, movement, has_zoom_happened,
+                      min_x, max_x, min_y, max_y, data_arr);
+        line.Render();
+
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::Spacing();
+        ImGui::Separator();
+        HandleGraphResize(chart_id);
+
+    
+     
+
+    }
+ 
+}
+
+void
+MainView::RenderFlameCharts(int chart_id)
+{
+    if (meta_map_made) {
+
+            FlameChart flame = FlameChart(chart_id, min_value, max_value, zoom, movement,
+                                      min_x, max_x, flame_event);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::BeginChild((std::to_string(chart_id)).c_str(),
+                          ImVec2(0, meta_map[chart_id].size), false,
+                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
+                              ImGuiWindowFlags_NoScrollbar);
+
+        flame.render();
+
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::Spacing();
+        ImGui::Separator();
+  
+        HandleGraphResize(chart_id);
+       
+     
+
+
+    }
+ 
+}
+
+void
+MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
+                              meta_map_struct data)
+{
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::BeginChild((std::to_string(graph_id)).c_str(), ImVec2(0, data.size), false,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                           ImGuiWindowFlags_NoScrollWithMouse |
                           ImGuiWindowFlags_NoScrollbar);
+    ImGui::Text((std::to_string(data.max)).c_str());
 
-    ImGui::Text((std::to_string(max_y)).c_str());
-
-    LineChart line = LineChart(chart_id, min_value, max_value, zoom, movement,
-                               has_zoom_happened, min_x, max_x, min_y, max_y, data_arr);
-    line.Render();
-
+    GraphViewMetadata metaData = GraphViewMetadata(graph_id, size, type, data);
+    metaData.renderData();
     ImVec2 child_window_size = ImGui::GetWindowSize();
     ImVec2 text_size         = ImGui::CalcTextSize("Bottom Left Text");
     ImGui::SetCursorPos(
         ImVec2(0, child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
 
     // Add text to the bottom left of the child component
-    ImGui::Text((std::to_string(min_y)).c_str());
-
+    ImGui::Text((std::to_string(data.min)).c_str());
     ImGui::EndChild();
     ImGui::PopStyleVar();
     ImGui::Spacing();
     ImGui::Separator();
-}
-
-void
-MainView::RenderFlameCharts(int chart_id)
-{
-    FlameChart flame = FlameChart(chart_id, min_value, max_value, zoom, movement, min_x,
-                                  max_x, flame_event);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::BeginChild((std::to_string(chart_id)).c_str(), ImVec2(0, 50), false,
-                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                          ImGuiWindowFlags_NoScrollWithMouse |
-                          ImGuiWindowFlags_NoScrollbar);
-
-    flame.render();
-
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
-    ImGui::Spacing();
-    ImGui::Separator();
-}
-
-void
-MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
-                              rocprofvis_metadata_visualization data)
-{
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::BeginChild((std::to_string(graph_id)).c_str(), ImVec2(0, size), false,
-                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                          ImGuiWindowFlags_NoScrollWithMouse |
-                          ImGuiWindowFlags_NoScrollbar);
-    GraphViewMetadata metaData = GraphViewMetadata(graph_id, size, type, data);
-    metaData.renderData();
-
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
-    ImGui::Spacing();
-    ImGui::Separator();
+    HandleGraphResize(graph_id);
 }

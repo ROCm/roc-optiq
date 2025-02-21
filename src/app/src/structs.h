@@ -47,9 +47,12 @@ struct rocprofvis_trace_data_t
     std::future<bool>                                 m_loading_future;
 };
 
-struct rocprofvis_metadata_visualization
+struct meta_map_struct
 {
-    std::string chart_name; 
-
+    float       size;
+    float       max;
+    float       min;
+    std::string type;
+    std::string chart_name;
 };
  

@@ -37,7 +37,7 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom, ImDrawLis
 
             draw_list->AddLine(ImVec2(normalized_start, cursor_position.y),
                               ImVec2(normalized_start, cursor_position.y + content_size.y),
-                              IM_COL32(51, 51, 51, 255), 0.5f);
+                IM_COL32(100, 100, 100, 128), 1.0f);
 
             char label[32];
             snprintf(label, sizeof(label), "%.2f", i - min_x);
@@ -45,7 +45,7 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom, ImDrawLis
             ImVec2 labelSize = ImGui::CalcTextSize(label);
             ImVec2 labelPos  = ImVec2(normalized_start - labelSize.x / 2,
                        cursor_position.y + content_size.y - labelSize.y - 5);
-            draw_list->AddText(labelPos, IM_COL32(0, 0, 0, 255), label);
+            draw_list->AddText(labelPos, IM_COL32(255, 255, 255, 255), label);
          }
     }
     ImGui::EndChild();

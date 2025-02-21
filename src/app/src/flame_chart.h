@@ -16,6 +16,8 @@ public:
                double min_x, double max_x,
                const std::vector<rocprofvis_trace_event_t>& data_arr);
     void render() ;
+    void DrawBox(ImVec2 start_position, ImVec2 end_position, int boxplot_box_id,
+                 rocprofvis_trace_event_t flame, float duration); 
 
     std::vector<rocprofvis_trace_event_t> flames;
     double                                min_value;

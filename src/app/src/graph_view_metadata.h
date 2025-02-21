@@ -9,11 +9,11 @@ class GraphViewMetadata
 public:
     float                             size;
     std::string                       type;
-    rocprofvis_metadata_visualization data;
+    meta_map_struct data;
     int                               graph_id;
     // Constructor
     GraphViewMetadata(int graph_id, float size, std::string type,
-                      rocprofvis_metadata_visualization data);
+                      meta_map_struct data);
 
     // Destructor
     ~GraphViewMetadata();

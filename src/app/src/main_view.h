@@ -11,6 +11,8 @@
 #    include <string>
 #    include <vector>
 
+ 
+
 class MainView
 {
 public:
@@ -27,6 +29,9 @@ public:
     std::vector<dataPoint>                data_arr;
     bool                                  ran_once;
     float                                 scroll_position;
+    bool user_adjusting_graph_height;
+    bool meta_map_made;
+    std::map < int, meta_map_struct> meta_map;
     MainView();
     ~MainView();
 
@@ -37,13 +42,13 @@ public:
     void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data);
     void MakeGraphMetadataView(
         std::map<std::string, rocprofvis_trace_process_t>& trace_data);
-
+    void HandleGraphResize(int chart_id);
     void FindMaxMin();
     void FindMaxMinFlame();
     void RenderLineCharts(int chart_id);
     void RenderFlameCharts(int chart_id);
     void RenderGraphMetadata(int graph_id, float size, std::string type,
-                             rocprofvis_metadata_visualization data);
+                             meta_map_struct data);
 
     void                                  HandleTopSurfaceTouch();
     std::vector<dataPoint>                ExtractPointsFromData(void* data);

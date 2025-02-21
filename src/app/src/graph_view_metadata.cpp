@@ -3,7 +3,7 @@
 #include <string>
 // Constructor
 GraphViewMetadata::GraphViewMetadata(int graph_id, float size, std::string type,
-                                     rocprofvis_metadata_visualization data)
+                                     meta_map_struct data)
 {
     this->size     = size;
     this->type     = type;
@@ -22,7 +22,7 @@ GraphViewMetadata::renderData()
 
     if(ImGui::BeginChild((std::to_string(graph_id)).c_str()), true, window_flags)
     {
-        ImGui::TextColored(ImVec4(0.0f, 0.0f, 0.0f, 3.0f), data.chart_name.c_str());
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 3.0f), data.chart_name.c_str());
     }
 
     ImGui::EndChild();

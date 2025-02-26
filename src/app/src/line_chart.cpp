@@ -73,7 +73,7 @@ LineChart::Render()
         float scale_x   = content_size.x / (v_max_x - v_min_x);
         float scale_y = content_size.y / (max_y - min_y);
 
-        draw_list->AddLine(ImVec2(10, 10), ImVec2(20, 20), IM_COL32(255, 255, 255, 255), 2.0f);
+        draw_list->AddLine(ImVec2(10, 10), ImVec2(20, 20), IM_COL32(0, 0, 0, 255), 2.0f);
 
         for(int i = 1; i < data.size(); i++)
         {
@@ -81,7 +81,7 @@ LineChart::Render()
                 MapToUI(data[i - 1], cursor_position, content_size, scale_x, scale_y);
             ImVec2 point_2 =
                 MapToUI(data[i], cursor_position, content_size, scale_x, scale_y);
-            draw_list->AddLine(point_1, point_2, IM_COL32(255, 255, 255, 255), 2.0f);
+            draw_list->AddLine(point_1, point_2, IM_COL32(0, 0, 0, 255), 2.0f);
         }
     }
 

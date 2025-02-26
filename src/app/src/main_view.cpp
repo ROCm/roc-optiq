@@ -386,17 +386,31 @@ MainView::GenerateGraphPoints(
     ImGui::SetNextWindowPos(ImVec2(sidebar_size, 00));
     ImGui::SetNextWindowSize(ImVec2(display_size_main.x - sidebar_size, display_size_main.y),
                              ImGuiCond_Always);
-    ImGui::PushStyleColor(
-        ImGuiCol_WindowBg,
-        ImVec4(0.1f, 0.1f, 0.1f, 1.0f));  // Set background color to black
-    ImGui::PushStyleColor(ImGuiCol_Text,
-                          ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // Set text color to white
+    
      
     if(ImGui::Begin("Main Graphs", nullptr,
                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
                         ImGuiWindowFlags_HorizontalScrollbar |
                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize))
     {
+
+
+
+
+          // Scrubber Line
+        if(ImGui::IsMouseHoveringRect(
+               ImVec2(display_size_main.x * 0.2f, 00),
+               ImVec2(display_size_main.x + display_size_main.x * 0.8f,
+                      00 + display_size_main.y * 0.8f)))
+        {
+            std::cout << "hoverd" << std::endl;
+            ImVec2 mPos = ImGui::GetMousePos();
+            draw_list->AddLine(ImVec2(mPos.x, screen_pos.y),
+                               ImVec2(mPos.x, screen_pos.y + display_size_main.y * 0.8f),
+                               IM_COL32(0, 0, 0, 255), 2.0f);
+        }
+
+
         ImVec2 subcomponent_size_main = ImGui::GetContentRegionAvail();
 
      ImGui::BeginChild(
@@ -410,30 +424,14 @@ MainView::GenerateGraphPoints(
         HandleTopSurfaceTouch();
         ImGui::EndChild();
 
-        //// Scrubber Line
-        // if(ImGui::IsMouseHoveringRect(ImVec2(display_size_main.x * 0.2f, 00),
-        //        ImVec2(display_size_main.x + display_size_main.x * 0.8f,
-        //               00 + display_size_main.y * 0.8f)))
-        //{
-        //     std::cout << "hoverd" << std::endl;
-        //     ImVec2 mPos = ImGui::GetMousePos();
-        //     draw_list->AddLine(ImVec2(mPos.x, screen_pos.y),
-        //                        ImVec2(mPos.x, screen_pos.y + display_size_main.y *
-        //                        0.8f),
-        //                       IM_COL32(0, 0, 0, 255), 2.0f);
-        // }
+       
     }
     ImGui::End();
-    ImGui::PopStyleColor(2);  // Restore previous color
-
+ 
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(sidebar_size, display_size_main.y),
                              ImGuiCond_Always);
-    ImGui::PushStyleColor(
-        ImGuiCol_WindowBg,
-        ImVec4(0.1f, 0.1f, 0.1f, 1.0f));  // Set background color to black
-    ImGui::PushStyleColor(ImGuiCol_Text,
-                          ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // Set text color to white
+   
  
     if(ImGui::Begin("Graph MetaData", nullptr,
                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
@@ -465,8 +463,7 @@ MainView::GenerateGraphPoints(
     }
     ImGui::End();
 
-    ImGui::PopStyleColor(2);  // Restore previous color
-}
+ }
 
 void
 MainView::HandleTopSurfaceTouch()

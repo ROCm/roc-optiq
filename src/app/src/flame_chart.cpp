@@ -34,15 +34,7 @@ void
 FlameChart::DrawBox(ImVec2 start_position, ImVec2 end_position, int boxplot_box_id,
                     rocprofvis_trace_event_t flame, float duration)
 {
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          ImVec4(200.0f / 255.0f, 24.0f / 255.0f, 30.0f / 255.0f,
-                                 1.0f));  // Change button color to AMD Red
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          ImVec4(200.0f / 255.0f, 24.0f / 255.0f, 30.0f / 255.0f,
-                                 1.0f));  // Change button hover color to AMD Red
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          ImVec4(200.0f / 255.0f, 24.0f / 255.0f, 30.0f / 255.0f,
-                                 1.0f));  // Change button active color to AMD Red
+ 
  
 
     ImGui::PushID(static_cast<int>(boxplot_box_id));
@@ -56,8 +48,7 @@ FlameChart::DrawBox(ImVec2 start_position, ImVec2 end_position, int boxplot_box_
                           flame.m_start_ts, flame.m_duration);
     }
     ImGui::PopID();
-    ImGui::PopStyleColor(3);  // Restore previous colors
-}
+ }
 
 void
 FlameChart::render()

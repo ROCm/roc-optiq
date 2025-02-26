@@ -29,6 +29,7 @@ public:
     std::vector<dataPoint>                data_arr;
     bool                                  ran_once;
     float                                 scroll_position;
+    float                 sidebar_size; 
     bool user_adjusting_graph_height;
     bool meta_map_made;
     std::map < int, meta_map_struct> meta_map;
@@ -43,6 +44,7 @@ public:
     void MakeGraphMetadataView(
         std::map<std::string, rocprofvis_trace_process_t>& trace_data);
     void HandleGraphResize(int chart_id);
+    void HandleSidebarResize();
     void FindMaxMin();
     void FindMaxMinFlame();
     void RenderLineCharts(int chart_id);

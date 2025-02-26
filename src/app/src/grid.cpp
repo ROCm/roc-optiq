@@ -27,6 +27,10 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom, ImDrawLis
 
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
+
+ 
+
+
     if(ImGui::BeginChild("Grid"), ImVec2(displaySize.x, displaySize.y), true,
        window_flags)
     {

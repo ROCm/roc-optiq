@@ -70,7 +70,7 @@ MainView::MakeGrid()
 
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    ImGui::BeginChild("ScrollableArea", ImVec2(0, 0), true, window_flags);
+    ImGui::BeginChild("ScrollableArea", ImVec2(0, 0), false, window_flags);
 
     Grid main_grid = Grid();
 
@@ -95,7 +95,7 @@ MainView::MakeGraphMetadataView(
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    ImGui::BeginChild("ScrollableArea2", ImVec2(0, 0), true, window_flags);
+    ImGui::BeginChild("ScrollableArea2", ImVec2(0, 0), false, window_flags);
 
     if(scroll_position != ImGui::GetScrollY())
     {
@@ -132,7 +132,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
                 
-    ImGui::BeginChild("ScrollableArea2", ImVec2(0, 0), true, window_flags);
+    ImGui::BeginChild("ScrollableArea2", ImVec2(0, 0), false, window_flags);
 
     // Prevent choppy behavior by preventing constant rerender.
     if(scroll_position != ImGui::GetScrollY())
@@ -380,7 +380,7 @@ MainView::GenerateGraphPoints(
 
 {
     ImVec2      screen_pos = ImGui::GetCursorScreenPos();
-    ImDrawList* draw_list  = ImGui::GetWindowDrawList();
+ 
 
     ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(sidebar_size, 00));
@@ -395,18 +395,18 @@ MainView::GenerateGraphPoints(
     {
 
 
-
-
-          // Scrubber Line
+          ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2  display_size_main_graphs = ImGui::GetIO().DisplaySize; 
+        // Scrubber Line
         if(ImGui::IsMouseHoveringRect(
-               ImVec2(display_size_main.x * 0.2f, 00),
-               ImVec2(display_size_main.x + display_size_main.x * 0.8f,
-                      00 + display_size_main.y * 0.8f)))
+               ImVec2(display_size_main_graphs.x * 0.2f, 00),
+               ImVec2(display_size_main_graphs.x + display_size_main_graphs.x * 0.8f,
+                      00 + display_size_main_graphs.y * 0.8f)))
         {
             std::cout << "hoverd" << std::endl;
             ImVec2 mPos = ImGui::GetMousePos();
             draw_list->AddLine(ImVec2(mPos.x, screen_pos.y),
-                               ImVec2(mPos.x, screen_pos.y + display_size_main.y * 0.8f),
+                               ImVec2(mPos.x, screen_pos.y + display_size_main_graphs.y),
                                IM_COL32(0, 0, 0, 255), 2.0f);
         }
 

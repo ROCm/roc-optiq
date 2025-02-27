@@ -24,10 +24,10 @@ int main(int, char**)
 {
     int resultCode = 0;
  
-    glfwSetErrorCallback(glfw_error_callback);
+    glfwSetErrorCallback(glfw_error_callback);   
+      
 
-
-    MainView* main_view =  new MainView(); 
+    MainView* main_view =  new MainView();   
  
 
     if(glfwInit())

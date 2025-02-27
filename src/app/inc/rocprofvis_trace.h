@@ -5,7 +5,7 @@
 #include <vector>
 #include <future>
 #include "../src/app/src/structs.h"
-#include "../src/app/src/main_view.h"
+#include "../src/app/src/rocprofvis_main_view.h"
 
 
 class MainView; 

@@ -3,7 +3,7 @@
 #ifndef MAIN_VIEW_H
 #    define MAIN_VIEW_H
 #    include "imgui.h"
-#    include "line_chart.h"
+#    include "rocprofvis_line_chart.h"
 #    include "structs.h"
 #    include <algorithm>
 #    include <iostream>

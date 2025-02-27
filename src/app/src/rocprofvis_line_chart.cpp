@@ -1,5 +1,5 @@
-#include "line_chart.h"
-#include "grid.h"
+#include "rocprofvis_line_chart.h"
+#include "rocprofvis_grid.h"
 #include "imgui.h"
 #include <algorithm>
 #include <iostream>

@@ -2,7 +2,7 @@
 //  Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include "line_chart.h"
+#include "rocprofvis_line_chart.h"
 #include <future>
 #include <map>
 #include <string>

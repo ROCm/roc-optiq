@@ -1,4 +1,4 @@
-#include "graph_view_metadata.h"
+#include "rocprofvis_graph_view_metadata.h"
 #include "structs.h"
 #include <string>
 // Constructor

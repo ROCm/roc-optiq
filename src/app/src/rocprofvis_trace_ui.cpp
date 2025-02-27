@@ -7,7 +7,7 @@
 #include "imgui_widget_flamegraph.h"
 #include "implot.h"
 #include "json.h"
-#include "main_view.h"
+#include "rocprofvis_main_view.h"
 #include <fstream>
 #include <future>
 #include <iostream>

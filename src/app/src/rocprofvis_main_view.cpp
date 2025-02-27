@@ -1,9 +1,9 @@
-#include "main_view.h"
-#include "flame_chart.h"
-#include "graph_view_metadata.h"
-#include "grid.h"
+#include "rocprofvis_main_view.h"
+#include "rocprofvis_flame_chart.h"
+#include "rocprofvis_graph_view_metadata.h"
+#include "rocprofvis_grid.h"
 #include "imgui.h"
-#include "line_chart.h"
+#include "rocprofvis_line_chart.h"
 #include <algorithm>
 #include <iostream>
 #include <map>
@@ -393,15 +393,16 @@ MainView::GenerateGraphPoints(
                         ImGuiWindowFlags_HorizontalScrollbar |
                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize))
     {
+        ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
 
 
-          ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
         ImVec2  display_size_main_graphs = ImGui::GetIO().DisplaySize; 
         // Scrubber Line
         if(ImGui::IsMouseHoveringRect(
-               ImVec2(display_size_main_graphs.x * 0.2f, 00),
-               ImVec2(display_size_main_graphs.x + display_size_main_graphs.x * 0.8f,
-                      00 + display_size_main_graphs.y * 0.8f)))
+               ImVec2(sidebar_size, 00),
+               ImVec2(display_size_main_graphs.x ,
+                      display_size_main_graphs.y )))
         {
             std::cout << "hoverd" << std::endl;
             ImVec2 mPos = ImGui::GetMousePos();

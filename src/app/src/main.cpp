@@ -12,9 +12,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "line_chart.h"
-#include "flame_chart.h"
-#include "main_view.h"
+#include "rocprofvis_line_chart.h"
+#include "rocprofvis_main_view.h"
 
 static void glfw_error_callback(int error, const char* description)
 {

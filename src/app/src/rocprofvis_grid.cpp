@@ -1,4 +1,4 @@
-#include "grid.h"
+#include "rocprofvis_grid.h"
 #include "imgui.h"
 #include <algorithm>
 #include <iostream>

@@ -20,6 +20,10 @@ public:
     float                                 max_value;
     float                                 zoom;
     float                                 movement;
+    float                                 v_width;
+    float                                 v_min_x;
+    float                                 v_max_x;
+    float                                 scale_x;
     bool                                  has_zoom_happened;
     float                                 min_x;
     std::vector<rocprofvis_trace_event_t> flame_event;
@@ -40,15 +44,16 @@ public:
         std::map<std::string, rocprofvis_trace_process_t>& trace_data);
 
     void MakeGrid();
-    void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data);
+    void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data,
+                       float                                              scale_x);
     void MakeGraphMetadataView(
         std::map<std::string, rocprofvis_trace_process_t>& trace_data);
     void HandleGraphResize(int chart_id);
     void HandleSidebarResize();
     void FindMaxMin();
     void FindMaxMinFlame();
-    void RenderLineCharts(int chart_id);
-    void RenderFlameCharts(int chart_id);
+    void RenderLineCharts(int chart_id, float scale_x);
+    void RenderFlameCharts(int chart_id, float scale_x);
     void RenderGraphMetadata(int graph_id, float size, std::string type,
                              meta_map_struct data);
 

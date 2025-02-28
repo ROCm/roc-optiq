@@ -1,8 +1,8 @@
 #include "rocprofvis_main_view.h"
+#include "imgui.h"
 #include "rocprofvis_flame_chart.h"
 #include "rocprofvis_graph_view_metadata.h"
 #include "rocprofvis_grid.h"
-#include "imgui.h"
 #include "rocprofvis_line_chart.h"
 #include <algorithm>
 #include <iostream>
@@ -40,8 +40,12 @@ MainView::MainView()
     this->min_y             = 0.0f;
     this->max_y             = 0.0f;
     this->scroll_position   = 0.0f;
+    this->v_width;
+    this->v_min_x;
+    this->v_max_x;
+    this->scale_x;
     data_arr;
-    this->sidebar_size = 500.0f;
+    this->sidebar_size                = 500.0f;
     this->ran_once                    = false;
     this->meta_map_made               = false;
     this->meta_map                    = {};
@@ -119,7 +123,7 @@ MainView::MakeGraphMetadataView(
 }
 
 void
-MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data)
+MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data, float scale_x)
 {
     /*This section makes the charts both line and flamechart are constructed here*/
 
@@ -131,7 +135,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
     ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - 60.0f),
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
-                
+
     ImGui::BeginChild("ScrollableArea2", ImVec2(0, 0), false, window_flags);
 
     // Prevent choppy behavior by preventing constant rerender.
@@ -166,7 +170,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
 
                     meta_map[graph_id] = temp_meta_map;
                 }
-                RenderFlameCharts(graph_id);
+                RenderFlameCharts(graph_id,  scale_x);
 
                 graph_id = graph_id + 1;
             }
@@ -192,11 +196,12 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                     temp_meta_map.size            = 300;
                     meta_map[graph_id]            = temp_meta_map;
                 }
-                RenderLineCharts(graph_id);
+                RenderLineCharts(graph_id,   scale_x);
                 graph_id = graph_id + 1;
             }
         }
     }
+ 
     meta_map_made = true;
     ImGui::EndChild();
 }
@@ -379,15 +384,14 @@ MainView::GenerateGraphPoints(
     std::map<std::string, rocprofvis_trace_process_t>& trace_data)
 
 {
-    ImVec2      screen_pos = ImGui::GetCursorScreenPos();
- 
+    ImVec2 screen_pos = ImGui::GetCursorScreenPos();
 
     ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(sidebar_size, 00));
-    ImGui::SetNextWindowSize(ImVec2(display_size_main.x - sidebar_size, display_size_main.y),
-                             ImGuiCond_Always);
-    
-     
+    ImGui::SetNextWindowSize(
+        ImVec2(display_size_main.x - sidebar_size, display_size_main.y),
+        ImGuiCond_Always);
+
     if(ImGui::Begin("Main Graphs", nullptr,
                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
                         ImGuiWindowFlags_HorizontalScrollbar |
@@ -395,14 +399,12 @@ MainView::GenerateGraphPoints(
     {
         ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
 
-
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImVec2  display_size_main_graphs = ImGui::GetIO().DisplaySize; 
+        ImDrawList* draw_list                = ImGui::GetWindowDrawList();
+        ImVec2      display_size_main_graphs = ImGui::GetIO().DisplaySize;
         // Scrubber Line
         if(ImGui::IsMouseHoveringRect(
                ImVec2(sidebar_size, 00),
-               ImVec2(display_size_main_graphs.x ,
-                      display_size_main_graphs.y )))
+               ImVec2(display_size_main_graphs.x, display_size_main_graphs.y)))
         {
             std::cout << "hoverd" << std::endl;
             ImVec2 mPos = ImGui::GetMousePos();
@@ -411,37 +413,36 @@ MainView::GenerateGraphPoints(
                                IM_COL32(0, 0, 0, 255), 2.0f);
         }
 
-
         ImVec2 subcomponent_size_main = ImGui::GetContentRegionAvail();
 
-     ImGui::BeginChild(
+        ImGui::BeginChild(
             "Child1", ImVec2(subcomponent_size_main.x, subcomponent_size_main.y), false,
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImVec2 content_size = ImGui::GetContentRegionAvail();
+
+        v_width = (max_x - min_x) / zoom;
+        v_min_x = min_x + movement;
+        v_max_x = v_min_x + v_width;
+        scale_x = content_size.x / (v_max_x - v_min_x);
 
         MakeGrid();
 
-        MakeGraphView(trace_data);
+        MakeGraphView(trace_data, scale_x);
 
         HandleTopSurfaceTouch();
         ImGui::EndChild();
-
-       
     }
     ImGui::End();
- 
+
     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(sidebar_size, display_size_main.y),
-                             ImGuiCond_Always);
-   
- 
+    ImGui::SetNextWindowSize(ImVec2(sidebar_size, display_size_main.y), ImGuiCond_Always);
+
     if(ImGui::Begin("Graph MetaData", nullptr,
                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
                         ImGuiWindowFlags_HorizontalScrollbar |
                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize))
     {
         ImVec2 subcomponent_size = ImGui::GetContentRegionAvail();
-
-     
 
         ImGui::BeginChild(
             "Child1", ImVec2(subcomponent_size.x - 10.0f, subcomponent_size.y), false,
@@ -450,7 +451,7 @@ MainView::GenerateGraphPoints(
         MakeGraphMetadataView(trace_data);
 
         ImGui::EndChild();
- 
+
         ImGui::SameLine();
 
         // Second child (20%)
@@ -463,8 +464,7 @@ MainView::GenerateGraphPoints(
         ImGui::EndChild();
     }
     ImGui::End();
-
- }
+}
 
 void
 MainView::HandleTopSurfaceTouch()
@@ -527,15 +527,14 @@ MainView::HandleSidebarResize()
     {
         user_adjusting_graph_height = true;
         ImVec2 drag_delta           = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
- 
+
         sidebar_size = sidebar_size + drag_delta.x;
         ImGui::ResetMouseDragDelta();
     }
-  
 }
 
 void
-MainView::RenderLineCharts(int chart_id)
+MainView::RenderLineCharts(int chart_id, float scale_x)
 {
     if(meta_map_made)
     {
@@ -548,7 +547,7 @@ MainView::RenderLineCharts(int chart_id)
 
         LineChart line =
             LineChart(chart_id, min_value, max_value, zoom, movement, has_zoom_happened,
-                      min_x, max_x, min_y, max_y, data_arr);
+                      min_x, max_x, min_y, max_y, data_arr, scale_x);
         line.Render();
 
         ImGui::EndChild();
@@ -560,18 +559,18 @@ MainView::RenderLineCharts(int chart_id)
 }
 
 void
-MainView::RenderFlameCharts(int chart_id)
+MainView::RenderFlameCharts(int chart_id, float scale_x)
 {
     if(meta_map_made)
     {
-        FlameChart flame = FlameChart(chart_id, min_value, max_value, zoom, movement,
-                                      min_x, max_x, flame_event);
+      
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
         ImGui::BeginChild((std::to_string(chart_id)).c_str(),
                           ImVec2(0, meta_map[chart_id].size), false,
-                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
-                              ImGuiWindowFlags_NoScrollbar);
-
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+        FlameChart flame = FlameChart(chart_id, min_value, max_value, zoom, movement,
+                                      min_x, max_x, flame_event, scale_x);
         flame.render();
 
         ImGui::EndChild();

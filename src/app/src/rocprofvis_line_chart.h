@@ -25,11 +25,12 @@ public:
     float                  max_x;
     float                  min_y;
     float                  max_y;
+    float scale_x;
     std::vector<dataPoint> data;
 
     LineChart(int id, float min_value, float max_value, float zoom, float movement,
               bool has_zoom_happened, float& min_x, float& max_x, float& min_y,
-              float& max_y, std::vector<dataPoint> data);
+              float& max_y, std::vector<dataPoint> data, float scale_x);
     ~LineChart();
     void   AddDataPoint(float x, float y);
     void   Render();

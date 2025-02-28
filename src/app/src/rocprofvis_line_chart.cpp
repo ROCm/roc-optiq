@@ -25,7 +25,7 @@ clamp(const T& value, const T& lower, const T& upper)
 
 LineChart::LineChart(int id, float min_value, float max_value, float zoom, float movement,
                      bool has_zoom_happened, float& min_x, float& max_x, float& min_y,
-                     float& max_y, std::vector<dataPoint> data)
+                     float& max_y, std::vector<dataPoint> data, float scale_x)
 
 {
     this->id                = id;
@@ -38,6 +38,7 @@ LineChart::LineChart(int id, float min_value, float max_value, float zoom, float
     this->max_x             = max_x;
     this->min_y             = min_y;
     this->max_y             = max_y;
+    this->scale_x = scale_x;
     has_zoom_happened       = false;
     this->data              = data;
 }
@@ -66,15 +67,13 @@ LineChart::Render()
 
         ImVec2 cursor_position = ImGui::GetCursorScreenPos();
         ImVec2 content_size     = ImGui::GetContentRegionAvail();
-
-        float v_width = (max_x - min_x) / zoom;
-        float v_min_x  = min_x + movement;
-        float v_max_x  = v_min_x + v_width;
-        float scale_x   = content_size.x / (v_max_x - v_min_x);
+ 
         float scale_y = content_size.y / (max_y - min_y);
 
-        draw_list->AddLine(ImVec2(10, 10), ImVec2(20, 20), IM_COL32(0, 0, 0, 255), 2.0f);
+ 
+ 
 
+ 
         for(int i = 1; i < data.size(); i++)
         {
             ImVec2 point_1 =

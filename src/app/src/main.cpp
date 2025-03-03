@@ -5,7 +5,7 @@
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
- 
+
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
@@ -15,31 +15,32 @@
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_main_view.h"
 
-static void glfw_error_callback(int error, const char* description)
+static void
+glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
-int main(int, char**)
+int
+main(int, char**)
 {
     int resultCode = 0;
- 
-    glfwSetErrorCallback(glfw_error_callback);   
-      
 
-    MainView* main_view =  new MainView();   
- 
+    glfwSetErrorCallback(glfw_error_callback);
+
+    MainView* main_view = new MainView();
 
     if(glfwInit())
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        GLFWwindow* window = glfwCreateWindow(1280, 720, "rocprof-visualizer", nullptr, nullptr);
+        GLFWwindow* window =
+            glfwCreateWindow(1280, 720, "rocprof-visualizer", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
         if(window && rocprofvis_imgui_backend_setup(&backend, window))
         {
             glfwShowWindow(window);
 
-            if (backend.m_init(&backend, window))
+            if(backend.m_init(&backend, window))
             {
                 IMGUI_CHECKVERSION();
                 ImGui::CreateContext();
@@ -72,44 +73,31 @@ int main(int, char**)
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
 
-  
-              
-                  
-                     ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+                    ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 
-                     ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0),
-                                                ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+                    ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0), ImGuiCond_Always,
+                                            ImVec2(1.0f, 0.0f));
 
-                     ImGui::SetNextWindowSize(
-                            ImVec2(displaySize.x * 0.8f, displaySize.y * 0.8f),
-                            ImGuiCond_Always);
+                    ImGui::SetNextWindowSize(
+                        ImVec2(displaySize.x * 0.8f, displaySize.y * 0.8f),
+                        ImGuiCond_Always);
 
-                     ImGuiWindowFlags windowFlags =
-                            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+                    ImGuiWindowFlags windowFlags =
+                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
 
-    
                     // Open ImGui window
                     ImGui::Begin("Line Chart Window", nullptr, windowFlags);
- 
 
+                    rocprofvis_trace_draw(main_view);
 
-                     rocprofvis_trace_draw(main_view);
-
-
-
-
-      
-
-        
- 
-                     // Close ImGui window
+                    // Close ImGui window
                     ImGui::End();
 
-                 
                     // Rendering
                     ImGui::Render();
-                    ImDrawData* draw_data = ImGui::GetDrawData();
-                    const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
+                    ImDrawData* draw_data    = ImGui::GetDrawData();
+                    const bool  is_minimized = (draw_data->DisplaySize.x <= 0.0f ||
+                                               draw_data->DisplaySize.y <= 0.0f);
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
@@ -130,7 +118,7 @@ int main(int, char**)
         else
         {
             fprintf(stderr, "GLFW: Failed to initialize window & graphics API\n");
-            resultCode = 1;        
+            resultCode = 1;
         }
 
         glfwTerminate();
@@ -138,7 +126,7 @@ int main(int, char**)
     else
     {
         fprintf(stderr, "GLFW: Failed to initialize GLFW\n");
-        resultCode = 1;        
+        resultCode = 1;
     }
 
     return resultCode;

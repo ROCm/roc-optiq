@@ -1,6 +1,6 @@
 #include "rocprofvis_line_chart.h"
-#include "imgui.h"
 #include "rocprofvis_grid.h"
+#include "imgui.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -24,8 +24,8 @@ clamp(const T& value, const T& lower, const T& upper)
 }
 
 LineChart::LineChart(int id, float min_value, float max_value, float zoom, float movement,
-                     float& min_x, float& max_x, float& min_y, float& max_y,
-                     std::vector<dataPoint> data, float scale_x)
+                     bool has_zoom_happened, float& min_x, float& max_x, float& min_y,
+                     float& max_y, std::vector<dataPoint> data, float scale_x)
 
 {
     this->id                = id;
@@ -33,15 +33,27 @@ LineChart::LineChart(int id, float min_value, float max_value, float zoom, float
     this->max_value         = max_value;
     this->zoom              = zoom;
     this->movement          = movement;
-     this->min_x             = min_x;
+    this->has_zoom_happened = has_zoom_happened;
+    this->min_x             = min_x;
     this->max_x             = max_x;
     this->min_y             = min_y;
     this->max_y             = max_y;
-    this->scale_x           = scale_x;
-     this->data              = data;
+    this->scale_x = scale_x;
+    has_zoom_happened       = false;
+    this->data              = data;
 }
 
 LineChart::~LineChart() {}
+
+void
+LineChart::RenderGrid()
+{}
+
+void
+LineChart::AddDataPoint(float x, float y)
+{
+    data.push_back({ x, y });
+}
 
 void
 LineChart::Render()
@@ -54,10 +66,14 @@ LineChart::Render()
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-        ImVec2 content_size    = ImGui::GetContentRegionAvail();
-
+        ImVec2 content_size     = ImGui::GetContentRegionAvail();
+ 
         float scale_y = content_size.y / (max_y - min_y);
 
+ 
+ 
+
+ 
         for(int i = 1; i < data.size(); i++)
         {
             ImVec2 point_1 =
@@ -73,7 +89,8 @@ LineChart::Render()
 
 ImVec2
 LineChart::MapToUI(dataPoint& point, ImVec2& cursor_position, ImVec2& content_size,
-                   float scaleX, float scaleY)
+                   float scaleX,
+                   float scaleY)
 {
     float x = (point.xValue - (min_x + movement)) * scaleX;
     float y = cursor_position.y + content_size.y - (point.yValue - min_y) * scaleY;

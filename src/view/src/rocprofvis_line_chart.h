@@ -20,6 +20,7 @@ public:
     float                  max_value;
     float                  zoom;
     float                  movement;
+    bool                   has_zoom_happened;
     float                  min_x;
     float                  max_x;
     float                  min_y;
@@ -27,12 +28,15 @@ public:
     float scale_x;
     std::vector<dataPoint> data;
 
-    LineChart(int id, float min_value, float max_value, float zoom, float movement, float& min_x, float& max_x, float& min_y,
+    LineChart(int id, float min_value, float max_value, float zoom, float movement,
+              bool has_zoom_happened, float& min_x, float& max_x, float& min_y,
               float& max_y, std::vector<dataPoint> data, float scale_x);
     ~LineChart();
-     void   Render();
+    void   AddDataPoint(float x, float y);
+    void   Render();
     ImVec2 MapToUI(dataPoint& point, ImVec2& c_position, ImVec2& c_size, float scale_x,
                    float scale_y);
- };
+    void   RenderGrid();
+};
 
 #endif

@@ -38,9 +38,10 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
 {
     ImGui::PushID(static_cast<int>(boxplot_box_id));
 
+    // Get the current window's draw list
+
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
-
     // Define the start and end positions for the rectangle
     ImVec2 rectMin =
         ImVec2(start_position.x,
@@ -49,14 +50,15 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
                             start_position.y + 40 +
                                 cursor_position.y);  // End position (bottom-right corner)
 
-    ImU32 rectColor = IM_COL32(0, 0, 0, 85);  // Black colored box.
+    ImU32 rectColor = IM_COL32(0, 0, 0, 85);  // Red color
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
 
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
     {
-        ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f ", flame.m_name.c_str(),
-                          flame.m_start_ts - min_x, flame.m_duration);
+        ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f ",
+                          flame.m_name.c_str(), flame.m_start_ts - min_x,
+                          flame.m_duration);
     }
 
     ImGui::PopID();
@@ -67,34 +69,47 @@ FlameChart::render()
 {
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
+    int box_at_each_level_max_depth = 1;
 
     if(ImGui::BeginChild((std::to_string(chart_id)).c_str()), ImVec2(0, 50), true,
        window_flags)
     {
-        int boxplot_box_id = 0;
+        int    boxplot_box_id = 0;
+        float  total_width    = 0.0f;
+        ImVec2 content_size   = ImGui::GetContentRegionAvail();
+        float  level          = 0;
+        float  previous       = 0;
 
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
+        std::map<int, float> box_at_each_level = {};
         for(const auto& flame : flames)
         {
             float normalized_start = (flame.m_start_ts - (min_x + movement)) * scale_x;
 
             // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
-            float normalized_end = flame.m_duration * scale_x;
-
+            float normalized_end =
+                 flame.m_duration * scale_x;
+ 
             float fullBoxSize = normalized_start + normalized_end;
 
             ImVec2 start_position;
             ImVec2 end_position;
 
-            start_position = ImVec2(normalized_start,
-                                    0);  // Scale the start time for better visualization
+         
+                box_at_each_level[0] = fullBoxSize;
+                start_position =
+                    ImVec2(normalized_start,
+                           0);  // Scale the start time for better visualization
 
-            DrawBox(start_position, boxplot_box_id, flame, normalized_end, draw_list);
-
-            boxplot_box_id = boxplot_box_id + 1;
+                DrawBox(start_position, boxplot_box_id, flame, normalized_end, draw_list);
+        
+           
+ 
+             boxplot_box_id = boxplot_box_id + 1;
         }
     }
 
     ImGui::EndChild();
+    graph_depth = box_at_each_level_max_depth;
 }

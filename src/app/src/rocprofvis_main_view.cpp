@@ -40,6 +40,7 @@ MainView::MainView()
     this->min_y             = 0.0f;
     this->max_y             = 0.0f;
     this->scroll_position   = 0.0f;
+    this->scrubber_position = 0;
     this->v_width;
     this->v_min_x;
     this->v_max_x;
@@ -166,7 +167,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
 
                     temp_meta_map.type       = "flame";
                     temp_meta_map.chart_name = thread.first;
-                    temp_meta_map.size       = 250;
+                    temp_meta_map.size       = 75;
 
                     meta_map[graph_id] = temp_meta_map;
                 }
@@ -201,7 +202,11 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
             }
         }
     }
- 
+    if(!meta_map_made)
+    {
+    scrubber_position = min_value;
+       std::cout << min_value <<std::endl;
+    }
     meta_map_made = true;
     ImGui::EndChild();
 }
@@ -406,11 +411,18 @@ MainView::GenerateGraphPoints(
                ImVec2(sidebar_size, 00),
                ImVec2(display_size_main_graphs.x, display_size_main_graphs.y)))
         {
-            std::cout << "hoverd" << std::endl;
-            ImVec2 mPos = ImGui::GetMousePos();
+             ImVec2 mPos = ImGui::GetMousePos();
             draw_list->AddLine(ImVec2(mPos.x, screen_pos.y),
                                ImVec2(mPos.x, screen_pos.y + display_size_main_graphs.y),
                                IM_COL32(0, 0, 0, 255), 2.0f);
+             // Calculate the midpoint of the line for the label position
+            ImVec2 label_pos =
+                ImVec2((mPos.x + mPos.x) / 2, (screen_pos.y + screen_pos.y) / 2);
+
+             // Draw the label
+             ImGui::SetCursorScreenPos(label_pos);
+             ImGui::Text("%f", scrubber_position);
+
         }
 
         ImVec2 subcomponent_size_main = ImGui::GetContentRegionAvail();
@@ -481,7 +493,13 @@ MainView::HandleTopSurfaceTouch()
                 const float zoom_speed = 0.1f;
                 zoom *= (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
                 zoom = clamp(zoom, 1.0f, 1000.0f);
-            }
+
+                       v_width  = (max_x - min_x) / zoom;
+                v_min_x  = min_x + movement;
+                v_max_x  = v_min_x + v_width;
+                movement        += view_width - (v_max_x - v_min_x);
+
+             }
         }
 
         // Handle Panning
@@ -490,9 +508,12 @@ MainView::HandleTopSurfaceTouch()
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (max_x - min_x) / zoom;
             movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+            scrubber_position -=
+                (drag / ImGui::GetContentRegionAvail().x)* view_width;
             float drag_y    = ImGui::GetIO().MouseDelta.y;
+
             scroll_position = static_cast<int>(scroll_position - drag_y);
-        }
+         }
     }
 }
 void

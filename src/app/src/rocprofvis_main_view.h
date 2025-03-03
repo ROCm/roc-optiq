@@ -11,8 +11,6 @@
 #    include <string>
 #    include <vector>
 
- 
-
 class MainView
 {
 public:
@@ -20,6 +18,7 @@ public:
     float                                 max_value;
     float                                 zoom;
     float                                 movement;
+    float                                 scrubber_position;
     float                                 v_width;
     float                                 v_min_x;
     float                                 v_max_x;
@@ -33,10 +32,10 @@ public:
     std::vector<dataPoint>                data_arr;
     bool                                  ran_once;
     float                                 scroll_position;
-    float                 sidebar_size; 
-    bool user_adjusting_graph_height;
-    bool meta_map_made;
-    std::map < int, meta_map_struct> meta_map;
+    float                                 sidebar_size;
+    bool                                  user_adjusting_graph_height;
+    bool                                  meta_map_made;
+    std::map<int, meta_map_struct>        meta_map;
     MainView();
     ~MainView();
 

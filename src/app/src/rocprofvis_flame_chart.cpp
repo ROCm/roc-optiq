@@ -50,15 +50,15 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
                             start_position.y + 40 +
                                 cursor_position.y);  // End position (bottom-right corner)
 
-    ImU32 rectColor = IM_COL32(0, 0, 250, 55);  // Red color
+    ImU32 rectColor = IM_COL32(0, 0, 0, 85);  // Red color
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
 
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
     {
-        ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f\nDuration2: %.2f",
+        ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f ",
                           flame.m_name.c_str(), flame.m_start_ts - min_x,
-                          flame.m_duration, duration);
+                          flame.m_duration);
     }
 
     ImGui::PopID();

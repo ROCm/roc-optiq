@@ -1,4 +1,4 @@
- //  Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+//  Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 // This is here to stop circular dependencies
 
 #pragma once
@@ -7,24 +7,25 @@
 #include <map>
 #include <string>
 #include <vector>
- template <typename T>
- T
- clamp(const T& value, const T& lower, const T& upper)
- {
-     if(value < lower)
-     {
-         return lower;
-     }
-     else if(value > upper)
-     {
-         return upper;
-     }
-     else
-     {
-         return value;
-     }
- }
- typedef struct rocprofvis_trace_event_t
+
+template <typename T>
+T
+clamp(const T& value, const T& lower, const T& upper)
+{
+    if(value < lower)
+    {
+        return lower;
+    }
+    else if(value > upper)
+    {
+        return upper;
+    }
+    else
+    {
+        return value;
+    }
+}
+typedef struct rocprofvis_trace_event_t
 {
     std::string m_name;
     double      m_start_ts;
@@ -53,7 +54,7 @@ struct rocprofvis_trace_process_t
     std::string                                      m_name;
     std::map<std::string, rocprofvis_trace_thread_t> m_threads;
 };
- 
+
 struct rocprofvis_trace_data_t
 {
     double                                            m_min_ts;
@@ -71,4 +72,3 @@ struct meta_map_struct
     std::string type;
     std::string chart_name;
 };
- 

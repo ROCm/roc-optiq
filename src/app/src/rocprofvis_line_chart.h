@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+
 struct dataPoint
 {
     float xValue;
@@ -24,15 +25,16 @@ public:
                    float scale_y);
 
 private:
-    int                    m_id;
-    float                  m_min_value;
-    float                  m_max_value;
-    float                  m_zoom;
-    float                  m_movement;
-    float                  m_min_x;
-    float                  m_max_x;
-    float                  m_min_y;
-    float                  m_max_y;
-    float                  m_scale_x;
+    float m_min_value;
+    float m_max_value;
+    float m_zoom;
+    float m_movement;
+    float m_min_x;
+    float m_max_x;
+    float m_min_y;
+    float m_max_y;
+    float m_scale_x;
+    int   m_id;
+
     std::vector<dataPoint> m_data;
 };

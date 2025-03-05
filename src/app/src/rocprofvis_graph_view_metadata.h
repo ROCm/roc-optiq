@@ -4,6 +4,7 @@
 
 #include "structs.h"
 #include <string>
+
 class GraphViewMetadata
 {
 public:
@@ -15,7 +16,8 @@ public:
 
 private:
     float           m_size;
+    int             m_graph_id;
     std::string     m_type;
     meta_map_struct m_data;
-    int             m_graph_id;
+  
 };

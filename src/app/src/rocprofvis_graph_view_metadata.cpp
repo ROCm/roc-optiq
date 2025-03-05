@@ -3,6 +3,7 @@
 #include "rocprofvis_graph_view_metadata.h"
 #include "structs.h"
 #include <string>
+
 GraphViewMetadata::GraphViewMetadata(int graph_id, float size, std::string type,
                                      meta_map_struct data)
 : m_size(size)
@@ -26,4 +27,3 @@ GraphViewMetadata::renderData()
 
     ImGui::EndChild();
 }
-

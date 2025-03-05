@@ -7,8 +7,9 @@
 #include <iostream>
 #include <limits>
 #include <map>
-FlameChart::FlameChart(int chart_id, double min_value, double max_value, float zoom,
-                       float movement, double min_x, double max_x,
+
+FlameChart::FlameChart(int chart_id, float min_value, float max_value, float zoom,
+                       float movement, float min_x, float max_x,
                        const std::vector<rocprofvis_trace_event_t>& data_arr,
                        float                                        scale_x)
 : m_min_value(min_value)
@@ -101,5 +102,3 @@ FlameChart::render()
 
     ImGui::EndChild();
 }
-
-

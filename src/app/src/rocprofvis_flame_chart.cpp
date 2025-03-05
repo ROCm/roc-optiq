@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_flame_chart.h"
 #include "imgui.h"
 #include "rocprofvis_grid.h"
@@ -9,24 +11,24 @@ FlameChart::FlameChart(int chart_id, double min_value, double max_value, float z
                        float movement, double min_x, double max_x,
                        const std::vector<rocprofvis_trace_event_t>& data_arr,
                        float                                        scale_x)
-: min_value(min_value)
-, max_value(max_value)
-, zoom(zoom)
-, movement(movement)
-, min_x(min_x)
-, chart_id(chart_id)
-, max_x(max_x)
-, scale_x(scale_x)
-, min_start_time(std::numeric_limits<double>::max())
+: m_min_value(min_value)
+, m_max_value(max_value)
+, m_zoom(zoom)
+, m_movement(movement)
+, m_min_x(min_x)
+, m_chart_id(chart_id)
+, m_max_x(max_x)
+, m_scale_x(scale_x)
+, m_min_start_time(std::numeric_limits<double>::max())
 {
     this->graph_depth = 0;
     if(!data_arr.empty())
     {
         for(const auto& event : data_arr)
         {
-            if(event.m_start_ts < min_start_time)
+            if(event.m_start_ts < m_min_start_time)
             {
-                min_start_time = event.m_start_ts;
+                m_min_start_time = event.m_start_ts;
             }
         }
         flames.insert(flames.end(), data_arr.begin(), data_arr.end());
@@ -56,7 +58,7 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
     {
         ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f ", flame.m_name.c_str(),
-                          flame.m_start_ts - min_x, flame.m_duration);
+                          flame.m_start_ts - m_min_x, flame.m_duration);
     }
 
     ImGui::PopID();
@@ -68,7 +70,7 @@ FlameChart::render()
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 
-    if(ImGui::BeginChild((std::to_string(chart_id)).c_str()), ImVec2(0, 50), true,
+    if(ImGui::BeginChild((std::to_string(m_chart_id)).c_str()), ImVec2(0, 50), true,
        window_flags)
     {
         int boxplot_box_id = 0;
@@ -77,10 +79,11 @@ FlameChart::render()
 
         for(const auto& flame : flames)
         {
-            float normalized_start = (flame.m_start_ts - (min_x + movement)) * scale_x;
+            float normalized_start =
+                (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
 
             // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
-            float normalized_end = flame.m_duration * scale_x;
+            float normalized_end = flame.m_duration * m_scale_x;
 
             float fullBoxSize = normalized_start + normalized_end;
 
@@ -98,3 +101,5 @@ FlameChart::render()
 
     ImGui::EndChild();
 }
+
+

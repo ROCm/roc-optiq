@@ -1,4 +1,5 @@
 /build
+/out
 .vs
 
 .vs/rocprofiler-visualizer/v17

@@ -2,11 +2,12 @@
 // This is here to stop circular dependencies
 
 #pragma once
-#include "rocprofvis_line_chart.h"
-#include <future>
+ #include <future>
 #include <map>
 #include <string>
 #include <vector>
+#include "../src/view/src/rocprofvis_line_chart.h"
+
 
 template <typename T>
 T

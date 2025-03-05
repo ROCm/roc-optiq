@@ -12,8 +12,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "rocprofvis_line_chart.h"
-#include "rocprofvis_main_view.h"
+#include "../src/view/src/rocprofvis_line_chart.h"
+#include "../src/view/src/rocprofvis_main_view.h"
 
 static void
 glfw_error_callback(int error, const char* description)

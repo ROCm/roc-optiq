@@ -1,41 +1,19 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#ifndef MAIN_VIEW_H
-#    define MAIN_VIEW_H
-#    include "imgui.h"
-#    include "rocprofvis_line_chart.h"
-#    include "structs.h"
-#    include <algorithm>
-#    include <iostream>
-#    include <map>
-#    include <string>
-#    include <vector>
+
+#include "imgui.h"
+#include "rocprofvis_line_chart.h"
+#include "rocprofvis_structs.h"
+#include <algorithm>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
 
 class MainView
 {
 public:
-    float                                 min_value;
-    float                                 max_value;
-    float                                 zoom;
-    float                                 movement;
-    float                                 scrubber_position;
-    float                                 v_width;
-    float                                 v_min_x;
-    float                                 v_max_x;
-    float                                 scale_x;
-    bool                                  has_zoom_happened;
-    float                                 min_x;
-    std::vector<rocprofvis_trace_event_t> flame_event;
-    float                                 max_x;
-    float                                 min_y;
-    float                                 max_y;
-    std::vector<dataPoint>                data_arr;
-    bool                                  ran_once;
-    float                                 scroll_position;
-    float                                 sidebar_size;
-    bool                                  user_adjusting_graph_height;
-    bool                                  meta_map_made;
-    std::map<int, meta_map_struct>        meta_map;
     MainView();
     ~MainView();
 
@@ -60,6 +38,30 @@ public:
     std::vector<dataPoint>                ExtractPointsFromData(void* data);
     std::vector<rocprofvis_trace_event_t> ExtractFlamePoints(
         const std::vector<rocprofvis_trace_event_t>& traceEvents);
+
+private:
+    float m_min_value;
+    float m_max_value;
+    float m_zoom;
+    float m_movement;
+    float m_scrubber_position;
+    float m_v_width;
+    float m_v_min_x;
+    float m_v_max_x;
+    float m_scale_x;
+    float m_min_x;
+    float m_scroll_position;
+    float m_sidebar_size;
+    float m_max_x;
+    float m_min_y;
+    float m_max_y;
+    bool  m_ran_once;
+    bool  m_user_adjusting_graph_height;
+    bool  m_meta_map_made;
+    bool  m_has_zoom_happened;
+
+    std::map<int, meta_map_struct>        m_meta_map;
+    std::vector<rocprofvis_trace_event_t> m_flame_event;
+    std::vector<dataPoint>                m_data_arr;
 };
 
-#endif

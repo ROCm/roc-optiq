@@ -72,3 +72,4 @@ struct meta_map_struct
     std::string type;
     std::string chart_name;
 };
+

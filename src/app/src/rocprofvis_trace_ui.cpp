@@ -210,3 +210,4 @@ rocprofvis_trace_draw(MainView* main)
         }
     }
 }
+

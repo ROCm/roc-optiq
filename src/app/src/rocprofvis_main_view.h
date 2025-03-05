@@ -64,3 +64,4 @@ private:
     std::vector<rocprofvis_trace_event_t> m_flame_event;
     std::vector<dataPoint>                m_data_arr;
 };
+

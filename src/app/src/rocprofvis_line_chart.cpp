@@ -66,3 +66,4 @@ LineChart::MapToUI(dataPoint& point, ImVec2& cursor_position, ImVec2& content_si
     return ImVec2(x, y);
 }
 
+

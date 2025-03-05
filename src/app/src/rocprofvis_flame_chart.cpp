@@ -102,3 +102,4 @@ FlameChart::render()
 
     ImGui::EndChild();
 }
+

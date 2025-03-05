@@ -236,3 +236,4 @@ rocprofvis_trace_is_loaded(std::future<bool>& future)
     std::chrono::milliseconds timeout = std::chrono::milliseconds::min();
     return (future.wait_for(timeout) == std::future_status::ready);
 }
+

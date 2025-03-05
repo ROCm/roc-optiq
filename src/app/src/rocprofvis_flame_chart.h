@@ -30,3 +30,4 @@ private:
     std::vector<rocprofvis_trace_event_t> flames;
 };
 
+

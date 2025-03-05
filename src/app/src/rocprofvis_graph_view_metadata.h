@@ -21,3 +21,4 @@ private:
     meta_map_struct m_data;
   
 };
+

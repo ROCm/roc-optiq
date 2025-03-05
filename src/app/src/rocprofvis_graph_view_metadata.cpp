@@ -27,3 +27,4 @@ GraphViewMetadata::renderData()
 
     ImGui::EndChild();
 }
+

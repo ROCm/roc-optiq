@@ -51,3 +51,4 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
     }
     ImGui::EndChild();
 }
+

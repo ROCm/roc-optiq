@@ -38,3 +38,4 @@ private:
 
     std::vector<dataPoint> m_data;
 };
+

@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_graph_view_metadata.h"
-#include "structs.h"
+#include "rocprofvis_structs.h"
 #include <string>
 
 GraphViewMetadata::GraphViewMetadata(int graph_id, float size, std::string type,

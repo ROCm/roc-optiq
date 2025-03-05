@@ -4,7 +4,7 @@
 
 #include "imgui.h"
 #include "rocprofvis_line_chart.h"
-#include "structs.h"
+#include "rocprofvis_structs.h"
 #include <algorithm>
 #include <iostream>
 #include <map>

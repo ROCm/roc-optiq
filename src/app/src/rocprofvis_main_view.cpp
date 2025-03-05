@@ -11,7 +11,7 @@
 #include <map>
 #include <string>
 #include <vector>
-#include "structs.h"
+#include "rocprofvis_structs.h"
  
 MainView::MainView()
 : m_min_value(0.0f)

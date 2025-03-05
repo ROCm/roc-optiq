@@ -7,7 +7,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include "structs.h"
+#include "rocprofvis_structs.h"
  
 
 LineChart::LineChart(int id, float min_value, float max_value, float zoom, float movement,

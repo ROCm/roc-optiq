@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "structs.h"
+#include "rocprofvis_structs.h"
 #include <string>
 
 class GraphViewMetadata

@@ -29,3 +29,4 @@ private:
     int                                   m_chart_id;
     std::vector<rocprofvis_trace_event_t> flames;
 };
+

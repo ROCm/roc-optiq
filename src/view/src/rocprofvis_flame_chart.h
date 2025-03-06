@@ -2,9 +2,15 @@
 
 #pragma once
 
+#include "imgui.h"
 #include "rocprofvis_structs.h"
 #include <string>
 #include <vector>
+
+namespace RocProfVis
+{
+namespace View
+{
 
 class FlameChart
 {
@@ -17,17 +23,19 @@ public:
                  rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list);
 
 private:
-    float                                 m_min_value;
-    float                                 m_max_value;
-    float                                 m_min_x;
-    float                                 m_max_x;
-    float                                 m_min_start_time;
-    float                                 m_zoom;
-    float                                 m_movement;
-    float                                 m_scale_x;
-    int                                   graph_depth;
-    int                                   m_chart_id;
     std::vector<rocprofvis_trace_event_t> flames;
+
+    float m_min_value;
+    float m_max_value;
+    float m_min_x;
+    float m_max_x;
+    float m_min_start_time;
+    float m_zoom;
+    float m_movement;
+    float m_scale_x;
+    int   graph_depth;
+    int   m_chart_id;
 };
 
-
+}  // namespace View
+}  // namespace RocProfVis

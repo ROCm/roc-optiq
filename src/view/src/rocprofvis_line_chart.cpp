@@ -9,10 +9,14 @@
 #include <vector>
 #include "rocprofvis_structs.h"
  
+namespace RocProfVis
+{
+namespace View
+{
 
 LineChart::LineChart(int id, float min_value, float max_value, float zoom, float movement,
                      float& min_x, float& max_x, float& min_y, float& max_y,
-                     std::vector<dataPoint> data, float scale_x)
+                     std::vector<rocprofvis_data_point_t> data, float scale_x)
 : m_id(id)
 , m_min_value(min_value)
 , m_max_value(max_value)
@@ -57,13 +61,17 @@ LineChart::Render()
 }
 
 ImVec2
-LineChart::MapToUI(dataPoint& point, ImVec2& cursor_position, ImVec2& content_size,
-                   float scaleX, float scaleY)
+LineChart::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
+                   ImVec2& content_size, float scaleX, float scaleY)
 {
     float x = (point.xValue - (m_min_x + m_movement)) * scaleX;
     float y = cursor_position.y + content_size.y - (point.yValue - m_min_y) * scaleY;
 
     return ImVec2(x, y);
 }
+
+}
+}  
+ 
 
 

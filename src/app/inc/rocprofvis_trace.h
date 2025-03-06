@@ -4,16 +4,16 @@
 #include <map>
 #include <vector>
 #include <future>
-#include "../src/view/src/rocprofvis_structs.h"
-#include "../src/view/src/rocprofvis_main_view.h"
+#include "../src/app/inc/rocprofvis_structs.h"
+#include "rocprofvis_main_view.h"
 
 
-class MainView; 
+class RocProfVis::View::MainView; 
 
 std::future<bool> rocprofvis_trace_async_load_json_trace(std::string file_path, rocprofvis_trace_data_t& trace_object);
 bool rocprofvis_trace_is_loading(std::future<bool>& future);
 bool rocprofvis_trace_is_loaded(std::future<bool>& future);
 void rocprofvis_trace_setup();
 void
-rocprofvis_trace_draw(MainView* main);      
+rocprofvis_trace_draw(RocProfVis::View::MainView* main);      
  

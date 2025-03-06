@@ -2,14 +2,19 @@
 
 #pragma once
 
+#include "../src/view/src/rocprofvis_line_chart.h"
 #include "imgui.h"
-#include "rocprofvis_line_chart.h"
 #include "rocprofvis_structs.h"
 #include <algorithm>
 #include <iostream>
 #include <map>
 #include <string>
 #include <vector>
+
+namespace RocProfVis
+{
+namespace View
+{
 
 class MainView
 {
@@ -32,14 +37,18 @@ public:
     void RenderLineCharts(int chart_id, float scale_x);
     void RenderFlameCharts(int chart_id, float scale_x);
     void RenderGraphMetadata(int graph_id, float size, std::string type,
-                             meta_map_struct data);
+                             rocprofvis_meta_map_struct_t data);
 
     void                                  HandleTopSurfaceTouch();
-    std::vector<dataPoint>                ExtractPointsFromData(void* data);
+    std::vector<rocprofvis_data_point_t>  ExtractPointsFromData(void* data);
     std::vector<rocprofvis_trace_event_t> ExtractFlamePoints(
         const std::vector<rocprofvis_trace_event_t>& traceEvents);
 
 private:
+    std::map<int, rocprofvis_meta_map_struct_t> m_meta_map;
+    std::vector<rocprofvis_trace_event_t>       m_flame_event;
+    std::vector<rocprofvis_data_point_t>        m_data_arr;
+
     float m_min_value;
     float m_max_value;
     float m_zoom;
@@ -59,9 +68,7 @@ private:
     bool  m_user_adjusting_graph_height;
     bool  m_meta_map_made;
     bool  m_has_zoom_happened;
-
-    std::map<int, meta_map_struct>        m_meta_map;
-    std::vector<rocprofvis_trace_event_t> m_flame_event;
-    std::vector<dataPoint>                m_data_arr;
 };
 
+}  // namespace View
+}  // namespace RocProfVis

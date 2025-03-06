@@ -8,6 +8,12 @@
 #include <limits>
 #include <map>
 
+namespace RocProfVis
+{
+namespace View
+{
+
+// C++ Class declarations or definitions
 FlameChart::FlameChart(int chart_id, float min_value, float max_value, float zoom,
                        float movement, float min_x, float max_x,
                        const std::vector<rocprofvis_trace_event_t>& data_arr,
@@ -103,3 +109,5 @@ FlameChart::render()
     ImGui::EndChild();
 }
 
+}  // namespace View
+}  // namespace RocProfVis

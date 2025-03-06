@@ -13,7 +13,7 @@
 #include <stdlib.h>
 
 #include "../src/view/src/rocprofvis_line_chart.h"
-#include "../src/view/src/rocprofvis_main_view.h"
+#include "rocprofvis_main_view.h"
 
 static void
 glfw_error_callback(int error, const char* description)
@@ -28,7 +28,7 @@ main(int, char**)
 
     glfwSetErrorCallback(glfw_error_callback);
 
-    MainView* main_view = new MainView();
+    RocProfVis::View::MainView* main_view = new RocProfVis::View::MainView();
 
     if(glfwInit())
     {

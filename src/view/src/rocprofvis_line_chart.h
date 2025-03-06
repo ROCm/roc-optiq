@@ -8,23 +8,34 @@
 #include <string>
 #include <vector>
 
-struct dataPoint
+struct rocprofvis_data_point_t
 {
     float xValue;
     float yValue;
 };
+
+
+
+namespace RocProfVis
+{
+namespace View
+{
+
+
 class LineChart
 {
 public:
     LineChart(int id, float min_value, float max_value, float zoom, float movement,
               float& min_x, float& max_x, float& min_y, float& max_y,
-              std::vector<dataPoint> data, float scale_x);
+              std::vector<rocprofvis_data_point_t> data, float scale_x);
     ~LineChart();
     void   Render();
-    ImVec2 MapToUI(dataPoint& point, ImVec2& c_position, ImVec2& c_size, float scale_x,
-                   float scale_y);
+    ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
+                   float scale_x, float scale_y);
 
 private:
+    std::vector<rocprofvis_data_point_t> m_data;
+
     float m_min_value;
     float m_max_value;
     float m_zoom;
@@ -35,7 +46,12 @@ private:
     float m_max_y;
     float m_scale_x;
     int   m_id;
-
-    std::vector<dataPoint> m_data;
 };
 
+
+}
+}  
+
+ 
+
+ 

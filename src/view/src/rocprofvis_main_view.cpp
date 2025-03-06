@@ -6,13 +6,18 @@
 #include "rocprofvis_graph_view_metadata.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
+#include "rocprofvis_structs.h"
 #include <algorithm>
 #include <iostream>
 #include <map>
 #include <string>
 #include <vector>
-#include "rocprofvis_structs.h"
- 
+
+namespace RocProfVis
+{
+namespace View
+{
+
 MainView::MainView()
 : m_min_value(0.0f)
 , m_max_value(0.0f)
@@ -55,7 +60,7 @@ MainView::MakeGrid()
 
     ImGui::BeginChild("Grid View", ImVec2(0, 0), false, window_flags);
 
-    Grid main_grid = Grid();
+    RocProfVis::View::Grid main_grid = RocProfVis::View::Grid();
 
     main_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
                          m_v_max_x, m_v_min_x);
@@ -143,7 +148,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 if(!m_meta_map_made)
                 {
                     // Create FlameChart title and info panel
-                    meta_map_struct temp_meta_map = {};
+                    rocprofvis_meta_map_struct_t temp_meta_map = {};
 
                     temp_meta_map.type       = "flame";
                     temp_meta_map.chart_name = thread.first;
@@ -162,20 +167,21 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 void* datap = (void*) &thread.second.m_counters;
                 int   count = counters.size();
 
-                std::vector<dataPoint> points = ExtractPointsFromData(datap);
-                m_data_arr                    = points;
+                std::vector<rocprofvis_data_point_t> points =
+                    ExtractPointsFromData(datap);
+                m_data_arr = points;
 
                 FindMaxMin();
 
                 if(!m_meta_map_made)
                 {
-                    meta_map_struct temp_meta_map = {};
-                    temp_meta_map.type            = "line";
-                    temp_meta_map.chart_name      = thread.first;
-                    temp_meta_map.max             = m_max_y;
-                    temp_meta_map.min             = m_min_y;
-                    temp_meta_map.size            = 300;
-                    m_meta_map[graph_id]          = temp_meta_map;
+                    rocprofvis_meta_map_struct_t temp_meta_map = {};
+                    temp_meta_map.type                         = "line";
+                    temp_meta_map.chart_name                   = thread.first;
+                    temp_meta_map.max                          = m_max_y;
+                    temp_meta_map.min                          = m_min_y;
+                    temp_meta_map.size                         = 300;
+                    m_meta_map[graph_id]                       = temp_meta_map;
                 }
                 RenderLineCharts(graph_id, scale_x);
                 graph_id = graph_id + 1;
@@ -244,13 +250,12 @@ MainView::FindMaxMinFlame()
     }
 }
 
-std::vector<dataPoint>
+std::vector<rocprofvis_data_point_t>
 MainView::ExtractPointsFromData(void* data)
-
 {
     auto* counters_vector = static_cast<std::vector<rocprofvis_trace_counter_t>*>(data);
 
-    std::vector<dataPoint> aggregated_points;
+    std::vector<rocprofvis_data_point_t> aggregated_points;
 
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
     int    screen_width = static_cast<int>(display_size.x);
@@ -275,7 +280,7 @@ MainView::ExtractPointsFromData(void* data)
         {
             if(bin_count > 0)
             {
-                dataPoint binned_point;
+                rocprofvis_data_point_t binned_point;
                 binned_point.xValue = bin_sum_x / bin_count;
                 binned_point.yValue = bin_sum_y / bin_count;
                 aggregated_points.push_back(binned_point);
@@ -289,7 +294,7 @@ MainView::ExtractPointsFromData(void* data)
 
     if(bin_count > 0)
     {
-        dataPoint binned_point;
+        rocprofvis_data_point_t binned_point;
         binned_point.xValue = bin_sum_x / bin_count;
         binned_point.yValue = bin_sum_y / bin_count;
         aggregated_points.push_back(binned_point);
@@ -498,10 +503,10 @@ MainView::HandleGraphResize(int chart_id)
     if(ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
     {
         m_user_adjusting_graph_height = true;
-        ImVec2          drag_delta    = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        meta_map_struct temp_meta_map = m_meta_map[chart_id];
-        temp_meta_map.size            = temp_meta_map.size + (drag_delta.y);
-        m_meta_map[chart_id]          = temp_meta_map;
+        ImVec2 drag_delta             = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+        rocprofvis_meta_map_struct_t temp_meta_map = m_meta_map[chart_id];
+        temp_meta_map.size                         = temp_meta_map.size + (drag_delta.y);
+        m_meta_map[chart_id]                       = temp_meta_map;
         ImGui::ResetMouseDragDelta();
     }
     else if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
@@ -539,9 +544,9 @@ MainView::RenderLineCharts(int chart_id, float scale_x)
                               ImGuiWindowFlags_NoScrollWithMouse |
                               ImGuiWindowFlags_NoScrollbar);
 
-        LineChart line =
-            LineChart(chart_id, m_min_value, m_max_value, m_zoom, m_movement, m_min_x,
-                      m_max_x, m_min_y, m_max_y, m_data_arr, scale_x);
+        RocProfVis::View::LineChart line = RocProfVis::View ::LineChart(
+            chart_id, m_min_value, m_max_value, m_zoom, m_movement, m_min_x, m_max_x,
+            m_min_y, m_max_y, m_data_arr, scale_x);
         line.Render();
 
         ImGui::EndChild();
@@ -563,9 +568,9 @@ MainView::RenderFlameCharts(int chart_id, float scale_x)
                           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                               ImGuiWindowFlags_NoScrollWithMouse |
                               ImGuiWindowFlags_NoScrollbar);
-        FlameChart flame =
-            FlameChart(chart_id, m_min_value, m_max_value, m_zoom, m_movement, m_min_x,
-                       m_max_x, m_flame_event, scale_x);
+        RocProfVis::View::FlameChart flame = RocProfVis::View::FlameChart(
+            chart_id, m_min_value, m_max_value, m_zoom, m_movement, m_min_x, m_max_x,
+            m_flame_event, scale_x);
         flame.render();
 
         ImGui::EndChild();
@@ -579,7 +584,7 @@ MainView::RenderFlameCharts(int chart_id, float scale_x)
 
 void
 MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
-                              meta_map_struct data)
+                              rocprofvis_meta_map_struct_t data)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::BeginChild((std::to_string(graph_id)).c_str(), ImVec2(0, data.size), false,
@@ -592,7 +597,8 @@ MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
     float  secondChildWidth = childSize.x * (1.0f - splitRatio);
     ImGui::BeginChild("MetaData Content", ImVec2(childSize.x - 50.0f, childSize.y),
                       false);
-    GraphViewMetadata metaData = GraphViewMetadata(graph_id, size, type, data);
+    RocProfVis::View::GraphViewMetadata metaData =
+        RocProfVis::View::GraphViewMetadata(graph_id, size, type, data);
     metaData.renderData();
     ImGui::EndChild();
 
@@ -618,4 +624,5 @@ MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
     HandleGraphResize(graph_id);
 }
 
-
+}  // namespace View
+}  // namespace RocProfVis

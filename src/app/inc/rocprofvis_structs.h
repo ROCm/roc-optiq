@@ -2,8 +2,7 @@
 // This is here to stop circular dependencies
 
 #pragma once
-#include "rocprofvis_line_chart.h"
-#include <future>
+ #include <future>
 #include <map>
 #include <string>
 #include <vector>
@@ -64,7 +63,7 @@ struct rocprofvis_trace_data_t
     std::future<bool>                                 m_loading_future;
 };
 
-struct meta_map_struct
+struct rocprofvis_meta_map_struct_t
 {
     float       size;
     float       max;

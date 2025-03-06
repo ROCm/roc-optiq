@@ -6,6 +6,10 @@
 #include <iostream>
 #include <string>
 #include <vector>
+namespace RocProfVis
+{
+namespace View
+{
 
 class Grid
 {
@@ -17,4 +21,5 @@ public:
                     ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x);
 };
 
-
+}  // namespace View
+}  // namespace RocProfVis

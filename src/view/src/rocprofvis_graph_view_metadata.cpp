@@ -1,11 +1,16 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_graph_view_metadata.h"
+#include "imgui.h"
 #include "rocprofvis_structs.h"
 #include <string>
+namespace RocProfVis
+{
+namespace View
+{
 
 GraphViewMetadata::GraphViewMetadata(int graph_id, float size, std::string type,
-                                     meta_map_struct data)
+                                     rocprofvis_meta_map_struct_t data)
 : m_size(size)
 , m_type(type)
 , m_data(data)
@@ -28,3 +33,5 @@ GraphViewMetadata::renderData()
     ImGui::EndChild();
 }
 
+}  // namespace View
+}  // namespace RocProfVis

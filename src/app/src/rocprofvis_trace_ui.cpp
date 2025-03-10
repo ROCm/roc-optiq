@@ -1,7 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_trace.h"
-
 #include "ImGuiFileDialog.h"
 #include "imgui.h"
 #include "imgui_widget_flamegraph.h"
@@ -210,4 +209,5 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
         }
     }
 }
+
 

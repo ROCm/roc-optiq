@@ -1,11 +1,9 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #pragma once
 
 #include "imgui.h"
-#include <algorithm>
-#include <iostream>
-#include <string>
-#include <vector>
+
 namespace RocProfVis
 {
 namespace View
@@ -23,3 +21,4 @@ public:
 
 }  // namespace View
 }  // namespace RocProfVis
+

@@ -3,12 +3,12 @@
 #include "rocprofvis_line_chart.h"
 #include "imgui.h"
 #include "rocprofvis_grid.h"
+#include "rocprofvis_structs.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
 #include <vector>
-#include "rocprofvis_structs.h"
- 
+
 namespace RocProfVis
 {
 namespace View
@@ -30,7 +30,9 @@ LineChart::LineChart(int id, float min_value, float max_value, float zoom, float
 , m_data(data)
 {}
 
-LineChart::~LineChart() {}
+LineChart::~LineChart() 
+{
+}
 
 void
 LineChart::Render()
@@ -70,8 +72,6 @@ LineChart::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
     return ImVec2(x, y);
 }
 
-}
-}  
- 
-
+}  // namespace View
+}  // namespace RocProfVis
 

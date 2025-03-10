@@ -4,6 +4,7 @@
 #include "imgui.h"
 #include "rocprofvis_structs.h"
 #include <string>
+
 namespace RocProfVis
 {
 namespace View
@@ -17,7 +18,9 @@ GraphViewMetadata::GraphViewMetadata(int graph_id, float size, std::string type,
 , m_graph_id(graph_id)
 {}
 
-GraphViewMetadata::~GraphViewMetadata() {}
+GraphViewMetadata::~GraphViewMetadata() 
+{
+}
 
 void
 GraphViewMetadata::renderData()
@@ -35,3 +38,4 @@ GraphViewMetadata::renderData()
 
 }  // namespace View
 }  // namespace RocProfVis
+

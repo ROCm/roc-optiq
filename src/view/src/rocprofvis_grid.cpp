@@ -6,13 +6,18 @@
 #include <iostream>
 #include <string>
 #include <vector>
+
 namespace RocProfVis
 {
 namespace View
 {
 
-Grid::Grid() {}
-Grid::~Grid() {}
+Grid::Grid() 
+{
+}
+Grid::~Grid()
+{
+}
 
 void
 Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
@@ -65,3 +70,4 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
 
 }  // namespace View
 }  // namespace RocProfVis
+

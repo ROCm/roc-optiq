@@ -31,6 +31,16 @@ typedef struct rocprofvis_trace_event_t
     double      m_duration;
 } rocprofvis_trace_event_t;
 
+
+
+typedef struct rocprofvis_data_point_t
+{
+    float xValue;
+    float yValue;
+} rocprofvis_data_point_t;
+
+
+
 typedef struct rocprofvis_trace_counter_t
 {
     double m_start_ts;

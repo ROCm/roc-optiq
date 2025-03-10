@@ -2,11 +2,8 @@
 
 #pragma once
 
-#include "../src/view/src/rocprofvis_line_chart.h"
 #include "imgui.h"
 #include "rocprofvis_structs.h"
-#include <algorithm>
-#include <iostream>
 #include <map>
 #include <string>
 #include <vector>
@@ -48,7 +45,6 @@ private:
     std::map<int, rocprofvis_meta_map_struct_t> m_meta_map;
     std::vector<rocprofvis_trace_event_t>       m_flame_event;
     std::vector<rocprofvis_data_point_t>        m_data_arr;
-
     float m_min_value;
     float m_max_value;
     float m_zoom;

@@ -41,7 +41,9 @@ MainView::MainView()
 , m_flame_event({})
 {}
 
-MainView::~MainView() {}
+MainView::~MainView() 
+{
+}
 
 void
 MainView::MakeGrid()
@@ -626,3 +628,4 @@ MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
 
 }  // namespace View
 }  // namespace RocProfVis
+

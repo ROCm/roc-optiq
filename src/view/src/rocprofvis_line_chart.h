@@ -3,24 +3,13 @@
 #pragma once
 
 #include "imgui.h"
-#include <algorithm>
-#include <iostream>
-#include <string>
 #include <vector>
-
-struct rocprofvis_data_point_t
-{
-    float xValue;
-    float yValue;
-};
-
-
-
+#include "rocprofvis_structs.h"
+ 
 namespace RocProfVis
 {
 namespace View
 {
-
 
 class LineChart
 {
@@ -35,7 +24,6 @@ public:
 
 private:
     std::vector<rocprofvis_data_point_t> m_data;
-
     float m_min_value;
     float m_max_value;
     float m_zoom;
@@ -48,10 +36,6 @@ private:
     int   m_id;
 };
 
+}  // namespace View
+}  // namespace RocProfVis
 
-}
-}  
-
- 
-
- 

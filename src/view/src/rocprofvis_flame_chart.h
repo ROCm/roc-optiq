@@ -4,7 +4,6 @@
 
 #include "imgui.h"
 #include "rocprofvis_structs.h"
-#include <string>
 #include <vector>
 
 namespace RocProfVis
@@ -24,7 +23,6 @@ public:
 
 private:
     std::vector<rocprofvis_trace_event_t> flames;
-
     float m_min_value;
     float m_max_value;
     float m_min_x;
@@ -39,3 +37,4 @@ private:
 
 }  // namespace View
 }  // namespace RocProfVis
+

@@ -7,8 +7,6 @@
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_structs.h"
-#include <algorithm>
-#include <iostream>
 #include <map>
 #include <string>
 #include <vector>

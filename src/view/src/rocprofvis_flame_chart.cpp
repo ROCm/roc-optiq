@@ -26,8 +26,7 @@ namespace View
 , m_scale_x(scale_x)
 , m_min_start_time(std::numeric_limits<double>::max())
 {
-    this->graph_depth = 0;
-    if(!data_arr.empty())
+     if(!data_arr.empty())
     {
         for(const auto& event : data_arr)
         {

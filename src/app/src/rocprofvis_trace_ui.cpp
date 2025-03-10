@@ -7,6 +7,7 @@
 #include "implot.h"
 #include "json.h"
 #include "rocprofvis_main_view.h"
+#include "rocprofvis_controller.h"
 #include <fstream>
 #include <future>
 #include <iostream>
@@ -178,6 +179,7 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
         if(ImGuiFileDialog::Instance()->IsOk())
         {
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+            rocprofvis_controller_t* controller = rocprofvis_controller_alloc(file_path.c_str());
             trace_object.m_loading_future =
                 rocprofvis_trace_async_load_json_trace(file_path, trace_object);
         }

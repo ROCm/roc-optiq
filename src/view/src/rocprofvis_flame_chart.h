@@ -31,7 +31,6 @@ private:
     float m_zoom;
     float m_movement;
     float m_scale_x;
-    int   graph_depth;
     int   m_chart_id;
 };
 

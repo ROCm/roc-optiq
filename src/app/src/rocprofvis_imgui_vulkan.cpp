@@ -35,7 +35,7 @@ rocprofvis_imgui_backend_vk_check_result(VkResult err)
     if(err != 0)
     {
         fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
-        if(err < 0) 
+        if(err < 0)
         {
             abort();
         }
@@ -55,10 +55,10 @@ rocprofvis_imgui_backend_vk_success(VkResult err)
 #ifdef _DEBUG
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 rocprofvis_imgui_backend_vk_debug_report(VkDebugReportFlagsEXT      flags,
-                                  VkDebugReportObjectTypeEXT objectType, uint64_t object,
-                                  size_t location, int32_t messageCode,
-                                  const char* pLayerPrefix, const char* pMessage,
-                                  void* pUserData)
+                                         VkDebugReportObjectTypeEXT objectType,
+                                         uint64_t object, size_t location,
+                                         int32_t messageCode, const char* pLayerPrefix,
+                                         const char* pMessage, void* pUserData)
 {
     (void) flags;
     (void) object;
@@ -73,8 +73,8 @@ rocprofvis_imgui_backend_vk_debug_report(VkDebugReportFlagsEXT      flags,
 #endif  // _DEBUG
 
 static bool
-rocprofvis_imgui_backend_vk_has_extension(const ImVector<VkExtensionProperties>& properties,
-                                   const char*                            extension)
+rocprofvis_imgui_backend_vk_has_extension(
+    const ImVector<VkExtensionProperties>& properties, const char* extension)
 {
     for(const VkExtensionProperties& p : properties)
         if(strcmp(p.extensionName, extension) == 0) return true;
@@ -82,7 +82,8 @@ rocprofvis_imgui_backend_vk_has_extension(const ImVector<VkExtensionProperties>&
 }
 
 static bool
-rocprofvis_imgui_backend_vk_select_physical_device(rocprofvis_imgui_vk_data_t* backend_data)
+rocprofvis_imgui_backend_vk_select_physical_device(
+    rocprofvis_imgui_vk_data_t* backend_data)
 {
     bool     bOk = false;
     uint32_t gpu_count;
@@ -101,7 +102,7 @@ rocprofvis_imgui_backend_vk_select_physical_device(rocprofvis_imgui_vk_data_t* b
             if(gpu_count > 0)
             {
                 backend_data->m_physical_device = gpus[0];
-                bOk                           = true;
+                bOk                             = true;
             }
 
             // Then look for the first discrete GPU, this is the simplest way to handle
@@ -114,7 +115,7 @@ rocprofvis_imgui_backend_vk_select_physical_device(rocprofvis_imgui_vk_data_t* b
                 if(properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
                 {
                     backend_data->m_physical_device = m_device;
-                    bOk                           = true;
+                    bOk                             = true;
                     break;
                 }
             }
@@ -128,8 +129,8 @@ rocprofvis_imgui_backend_vk_select_physical_device(rocprofvis_imgui_vk_data_t* b
 }
 
 static bool
-rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t*    backend_data,
-                                  ImVector<const char*> instance_extensions)
+rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_data,
+                                         ImVector<const char*>       instance_extensions)
 {
     bool     bResult = true;
     VkResult err;
@@ -318,7 +319,8 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t*    backend_
 
                 if(!bResult)
                 {
-                    vkDestroyInstance(backend_data->m_instance, backend_data->m_allocator);
+                    vkDestroyInstance(backend_data->m_instance,
+                                      backend_data->m_allocator);
                 }
             }
         }
@@ -334,7 +336,8 @@ rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* wind
 
     if(backend && backend->m_private_data && window)
     {
-        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        rocprofvis_imgui_vk_data_t* backend_data =
+            (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
 
         ImVector<const char*> extensions;
         uint32_t              extensions_count = 0;
@@ -363,8 +366,8 @@ rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* wind
             // Check for WSI support
             VkBool32 res;
             vkGetPhysicalDeviceSurfaceSupportKHR(backend_data->m_physical_device,
-                                                 backend_data->m_queue_family, wd->Surface,
-                                                 &res);
+                                                 backend_data->m_queue_family,
+                                                 wd->Surface, &res);
             if(res == VK_TRUE)
             {
                 // Select Surface Format
@@ -375,7 +378,8 @@ rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* wind
                 const VkColorSpaceKHR requestSurfaceColorSpace =
                     VK_COLORSPACE_SRGB_NONLINEAR_KHR;
                 wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(
-                    backend_data->m_physical_device, wd->Surface, requestSurfaceImageFormat,
+                    backend_data->m_physical_device, wd->Surface,
+                    requestSurfaceImageFormat,
                     (size_t) IM_ARRAYSIZE(requestSurfaceImageFormat),
                     requestSurfaceColorSpace);
 
@@ -412,7 +416,8 @@ rocprofvis_imgui_backend_vk_config(rocprofvis_imgui_backend_t* backend, void* wi
 
     if(backend && backend->m_private_data && window)
     {
-        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        rocprofvis_imgui_vk_data_t* backend_data =
+            (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
 
         // Setup Platform/Renderer backends
         ImGui_ImplGlfw_InitForVulkan((GLFWwindow*) window, true);
@@ -440,12 +445,13 @@ rocprofvis_imgui_backend_vk_config(rocprofvis_imgui_backend_t* backend, void* wi
 }
 
 void
-rocprofvis_imgui_backend_vk_update_framebuffer(rocprofvis_imgui_backend_t* backend, int32_t fb_width,
-                                        int32_t fb_height)
+rocprofvis_imgui_backend_vk_update_framebuffer(rocprofvis_imgui_backend_t* backend,
+                                               int32_t fb_width, int32_t fb_height)
 {
     if(backend && backend->m_private_data)
     {
-        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        rocprofvis_imgui_vk_data_t* backend_data =
+            (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
         if(fb_width > 0 && fb_height > 0 &&
            (backend_data->m_swapchain_rebuild ||
             backend_data->m_window_data.Width != fb_width ||
@@ -455,8 +461,8 @@ rocprofvis_imgui_backend_vk_update_framebuffer(rocprofvis_imgui_backend_t* backe
             ImGui_ImplVulkanH_CreateOrResizeWindow(
                 backend_data->m_instance, backend_data->m_physical_device,
                 backend_data->m_device, &backend_data->m_window_data,
-                backend_data->m_queue_family, backend_data->m_allocator, fb_width, fb_height,
-                backend_data->m_min_image_count);
+                backend_data->m_queue_family, backend_data->m_allocator, fb_width,
+                fb_height, backend_data->m_min_image_count);
             backend_data->m_window_data.FrameIndex = 0;
             backend_data->m_swapchain_rebuild      = false;
         }
@@ -475,13 +481,14 @@ rocprofvis_imgui_backend_vk_new_frame(rocprofvis_imgui_backend_t* backend)
 }
 
 void
-rocprofvis_imgui_backend_vk_render(rocprofvis_imgui_backend_t* backend, ImDrawData* draw_data,
-                            ImVec4* clear_color)
+rocprofvis_imgui_backend_vk_render(rocprofvis_imgui_backend_t* backend,
+                                   ImDrawData* draw_data, ImVec4* clear_color)
 {
     if(backend && backend->m_private_data && draw_data && clear_color)
     {
-        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
-        VkResult           err;
+        rocprofvis_imgui_vk_data_t* backend_data =
+            (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        VkResult err;
 
         auto* wd = &backend_data->m_window_data;
 
@@ -569,8 +576,9 @@ rocprofvis_imgui_backend_vk_present(rocprofvis_imgui_backend_t* backend)
 {
     if(backend && backend->m_private_data)
     {
-        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
-        auto*              wd           = &backend_data->m_window_data;
+        rocprofvis_imgui_vk_data_t* backend_data =
+            (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        auto* wd = &backend_data->m_window_data;
         if(!backend_data->m_swapchain_rebuild)
         {
             VkSemaphore render_complete_semaphore =
@@ -604,8 +612,9 @@ rocprofvis_imgui_backend_vk_shutdown(rocprofvis_imgui_backend_t* backend)
 {
     if(backend && backend->m_private_data)
     {
-        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
-        VkResult           err          = vkDeviceWaitIdle(backend_data->m_device);
+        rocprofvis_imgui_vk_data_t* backend_data =
+            (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        VkResult err = vkDeviceWaitIdle(backend_data->m_device);
         rocprofvis_imgui_backend_vk_check_result(err);
         ImGui_ImplVulkan_Shutdown();
     }
@@ -616,7 +625,8 @@ rocprofvis_imgui_backend_vk_destroy(rocprofvis_imgui_backend_t* backend)
 {
     if(backend && backend->m_private_data)
     {
-        rocprofvis_imgui_vk_data_t* backend_data = (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+        rocprofvis_imgui_vk_data_t* backend_data =
+            (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
         ImGui_ImplVulkanH_DestroyWindow(backend_data->m_instance, backend_data->m_device,
                                         &backend_data->m_window_data,
                                         backend_data->m_allocator);
@@ -629,8 +639,9 @@ rocprofvis_imgui_backend_vk_destroy(rocprofvis_imgui_backend_t* backend)
         auto f_vkDestroyDebugReportCallbackEXT =
             (PFN_vkDestroyDebugReportCallbackEXT) vkGetInstanceProcAddr(
                 backend_data->m_instance, "vkDestroyDebugReportCallbackEXT");
-        f_vkDestroyDebugReportCallbackEXT(
-            backend_data->m_instance, backend_data->m_debug_report, backend_data->m_allocator);
+        f_vkDestroyDebugReportCallbackEXT(backend_data->m_instance,
+                                          backend_data->m_debug_report,
+                                          backend_data->m_allocator);
 #endif  // _DEBUG
 
         vkDestroyDevice(backend_data->m_device, backend_data->m_allocator);
@@ -650,7 +661,8 @@ rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* 
         if(glfwVulkanSupported())
         {
             rocprofvis_imgui_vk_data_t* backend_data =
-                (rocprofvis_imgui_vk_data_t*) calloc(1, sizeof(rocprofvis_imgui_vk_data_t));
+                (rocprofvis_imgui_vk_data_t*) calloc(1,
+                                                     sizeof(rocprofvis_imgui_vk_data_t));
             if(backend_data)
             {
                 backend_data->m_window_data       = ImGui_ImplVulkanH_Window();
@@ -665,17 +677,17 @@ rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* 
                 backend_data->m_debug_report      = VK_NULL_HANDLE;
                 backend_data->m_min_image_count   = 2;
                 backend_data->m_swapchain_rebuild = false;
-                backend->m_private_data             = backend_data;
-                backend->m_init                     = &rocprofvis_imgui_backend_vk_init;
-                backend->m_config                   = &rocprofvis_imgui_backend_vk_config;
+                backend->m_private_data           = backend_data;
+                backend->m_init                   = &rocprofvis_imgui_backend_vk_init;
+                backend->m_config                 = &rocprofvis_imgui_backend_vk_config;
                 backend->m_update_framebuffer =
                     &rocprofvis_imgui_backend_vk_update_framebuffer;
                 backend->m_new_frame = &rocprofvis_imgui_backend_vk_new_frame;
                 backend->m_render    = &rocprofvis_imgui_backend_vk_render;
-                backend->m_present                = &rocprofvis_imgui_backend_vk_present;
-                backend->m_shutdown               = &rocprofvis_imgui_backend_vk_shutdown;
-                backend->m_destroy                = &rocprofvis_imgui_backend_vk_destroy;
-                bOk                               = true;
+                backend->m_present   = &rocprofvis_imgui_backend_vk_present;
+                backend->m_shutdown  = &rocprofvis_imgui_backend_vk_shutdown;
+                backend->m_destroy   = &rocprofvis_imgui_backend_vk_destroy;
+                bOk                  = true;
             }
             else
             {

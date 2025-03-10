@@ -1,0 +1,9 @@
+/build
+/out
+
+out/build/x64-Debug/
+/out/build/x64-Debug/
+
+.vs
+
+.vs/rocprofiler-visualizer/v17

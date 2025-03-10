@@ -4,7 +4,7 @@
 #include <map>
 #include <vector>
 #include <future>
-#include "../src/app/inc/rocprofvis_structs.h"
+#include "rocprofvis_structs.h"
 #include "rocprofvis_main_view.h"
 
 

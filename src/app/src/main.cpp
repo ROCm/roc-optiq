@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "../src/view/src/rocprofvis_line_chart.h"
 #include "rocprofvis_main_view.h"
 
 static void

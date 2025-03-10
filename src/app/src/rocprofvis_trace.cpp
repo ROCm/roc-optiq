@@ -1,7 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_trace.h"
-
 #include "json.h"
 #include <fstream>
 #include <iostream>
@@ -236,4 +235,3 @@ rocprofvis_trace_is_loaded(std::future<bool>& future)
     std::chrono::milliseconds timeout = std::chrono::milliseconds::min();
     return (future.wait_for(timeout) == std::future_status::ready);
 }
-

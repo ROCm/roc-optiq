@@ -629,3 +629,4 @@ MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
 }  // namespace View
 }  // namespace RocProfVis
 
+

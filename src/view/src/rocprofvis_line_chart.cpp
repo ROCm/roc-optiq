@@ -75,3 +75,4 @@ LineChart::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
 }  // namespace View
 }  // namespace RocProfVis
 
+

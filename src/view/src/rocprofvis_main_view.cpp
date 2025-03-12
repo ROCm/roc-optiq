@@ -37,11 +37,11 @@ MainView::MainView()
 , m_meta_map({})
 , m_user_adjusting_graph_height(false)
 , m_flame_event({})
+, m_previous_scroll_position(0)
+, m_show_graph_customization_window(false)
 {}
 
-MainView::~MainView() 
-{
-}
+MainView::~MainView() {}
 
 void
 MainView::MakeGrid()
@@ -66,6 +66,21 @@ MainView::MakeGrid()
                          m_v_max_x, m_v_min_x);
 
     ImGui::EndChild();
+}
+
+void
+MainView::RenderGraphCustomizationWindow(int graph_id)
+{
+    if(ImGui::Begin((std::to_string(graph_id)).c_str(), nullptr,
+                    ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("This is a popout window!");
+        if(ImGui::Button((std::to_string(graph_id)).c_str()))
+        {
+            m_show_graph_customization_window = false;
+        }
+        ImGui::End();
+    }
 }
 
 void
@@ -125,14 +140,17 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
     ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
 
     // Prevent choppy behavior by preventing constant rerender.
-    if(m_scroll_position != ImGui::GetScrollY())
+    float temp_scroll_position = ImGui::GetScrollY();
+    if(m_previous_scroll_position != temp_scroll_position)
+    {
+        m_previous_scroll_position = temp_scroll_position;
+        m_scroll_position          = temp_scroll_position;
+    }
+    else if(m_scroll_position != temp_scroll_position)
     {
         ImGui::SetScrollY(m_scroll_position);
     }
-    else
-    {
-        m_scroll_position = ImGui::GetScrollY();
-    }
+
     int graph_id = 0;
     for(auto& process : trace_data)
     {
@@ -591,15 +609,18 @@ MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                           ImGuiWindowFlags_NoScrollWithMouse |
                           ImGuiWindowFlags_NoScrollbar);
+
     ImVec2 childSize        = ImGui::GetContentRegionAvail();
     float  splitRatio       = 0.8f;
     float  firstChildWidth  = childSize.x * splitRatio;
     float  secondChildWidth = childSize.x * (1.0f - splitRatio);
+
     ImGui::BeginChild("MetaData Content", ImVec2(childSize.x - 50.0f, childSize.y),
                       false);
     RocProfVis::View::GraphViewMetadata metaData =
         RocProfVis::View::GraphViewMetadata(graph_id, size, type, data);
     metaData.renderData();
+
     ImGui::EndChild();
 
     ImGui::SameLine();
@@ -626,5 +647,3 @@ MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
 
 }  // namespace View
 }  // namespace RocProfVis
-
-

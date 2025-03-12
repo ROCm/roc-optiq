@@ -609,18 +609,18 @@ MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                           ImGuiWindowFlags_NoScrollWithMouse |
                           ImGuiWindowFlags_NoScrollbar);
+
     ImVec2 childSize        = ImGui::GetContentRegionAvail();
     float  splitRatio       = 0.8f;
     float  firstChildWidth  = childSize.x * splitRatio;
     float  secondChildWidth = childSize.x * (1.0f - splitRatio);
+
     ImGui::BeginChild("MetaData Content", ImVec2(childSize.x - 50.0f, childSize.y),
                       false);
     RocProfVis::View::GraphViewMetadata metaData =
         RocProfVis::View::GraphViewMetadata(graph_id, size, type, data);
-
-   
-
     metaData.renderData();
+
     ImGui::EndChild();
 
     ImGui::SameLine();

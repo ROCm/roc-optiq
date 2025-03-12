@@ -41,8 +41,39 @@ MainView::MainView()
 , m_show_graph_customization_window(false)
 {}
 
-MainView::~MainView() {}
+MainView::~MainView() 
+{}
+void
+MainView::MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
+{
+    ImVec2 windowPos  = ImGui::GetWindowPos();
+    ImVec2 windowSize = ImGui::GetWindowSize();
 
+    // Scrubber Line
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoScrollWithMouse;
+
+    ImVec2 display_size = ImGui::GetWindowSize();
+
+    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y), ImGuiCond_Always);
+
+    ImGui::SetCursorPos(ImVec2(0, 0));
+
+    ImGui::BeginChild("Scrubber View", ImVec2(0, 0), false, window_flags);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    if(ImGui::IsMouseHoveringRect(
+           ImVec2(m_sidebar_size, 00),
+           ImVec2(display_size_main_graphs.x, display_size_main_graphs.y)))
+    {
+        ImVec2 mPos = ImGui::GetMousePos();
+        draw_list->AddLine(ImVec2(mPos.x, screen_pos.y),
+                           ImVec2(mPos.x, screen_pos.y + display_size_main_graphs.y),
+                           IM_COL32(0, 0, 0, 255), 2.0f);
+    }
+
+    ImGui::EndChild();
+}
 void
 MainView::MakeGrid()
 {
@@ -403,18 +434,7 @@ MainView::GenerateGraphPoints(
     {
         ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
 
-        ImDrawList* draw_list                = ImGui::GetWindowDrawList();
-        ImVec2      display_size_main_graphs = ImGui::GetIO().DisplaySize;
-        // Scrubber Line
-        if(ImGui::IsMouseHoveringRect(
-               ImVec2(m_sidebar_size, 00),
-               ImVec2(display_size_main_graphs.x, display_size_main_graphs.y)))
-        {
-            ImVec2 mPos = ImGui::GetMousePos();
-            draw_list->AddLine(ImVec2(mPos.x, screen_pos.y),
-                               ImVec2(mPos.x, screen_pos.y + display_size_main_graphs.y),
-                               IM_COL32(0, 0, 0, 255), 2.0f);
-        }
+        ImVec2 display_size_main_graphs = ImGui::GetIO().DisplaySize;
 
         ImVec2 subcomponent_size_main = ImGui::GetContentRegionAvail();
 
@@ -434,6 +454,8 @@ MainView::GenerateGraphPoints(
                                   // relayed into subcomponents as needed.
 
         MakeGraphView(trace_data, m_scale_x);
+
+        MakeScrubber(display_size_main_graphs, screen_pos);
 
         ImGui::EndChild();
     }

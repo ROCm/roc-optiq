@@ -56,7 +56,7 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
                             start_position.y + 40 +
                                 cursor_position.y);  // End position (bottom-right corner)
 
-    ImU32 rectColor = IM_COL32(0, 0, 0, 85);  // Black colored box.
+    ImU32 rectColor = IM_COL32(128, 128, 128, 255);  // Black colored box.
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
 

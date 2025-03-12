@@ -422,9 +422,10 @@ MainView::GenerateGraphPoints(
     ImVec2 screen_pos = ImGui::GetCursorScreenPos();
 
     ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
-    ImGui::SetNextWindowPos(ImVec2(m_sidebar_size, 00));
+
+    ImGui::SetNextWindowPos(ImVec2(m_sidebar_size, 20.0f));
     ImGui::SetNextWindowSize(
-        ImVec2(display_size_main.x - m_sidebar_size, display_size_main.y),
+        ImVec2(display_size_main.x - m_sidebar_size, display_size_main.y - 20.0f),
         ImGuiCond_Always);
 
     if(ImGui::Begin("Main Graphs", nullptr,
@@ -460,8 +461,8 @@ MainView::GenerateGraphPoints(
         ImGui::EndChild();
     }
     ImGui::End();
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(m_sidebar_size, display_size_main.y),
+    ImGui::SetNextWindowPos(ImVec2(0, 20.0f));
+    ImGui::SetNextWindowSize(ImVec2(m_sidebar_size, display_size_main.y - 20.0f),
                              ImGuiCond_Always);
 
     if(ImGui::Begin("Graph MetaData", nullptr,

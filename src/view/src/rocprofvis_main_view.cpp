@@ -56,7 +56,7 @@ MainView::MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
-    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(display_size.x - 20.0f, display_size.y), ImGuiCond_Always);
 
     ImGui::SetCursorPos(ImVec2(0, 0));
 

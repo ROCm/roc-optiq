@@ -31,28 +31,61 @@ typedef int (*RpvSqliteExecuteQueryCallback)(void*,int,char**,char**);
 typedef struct{
     Database* db;
     Future* future;
-    rocprofvis_dm_slice_t slice;
+    rocprofvis_dm_handle_t handle;
     RpvSqliteExecuteQueryCallback callback;
     roprofvis_dm_track_category_t track_category;
     roprofvis_dm_event_operation_t event_op;
+    rocprofvis_dm_charptr_t ext_data_category;
+    rocprofvis_dm_index_t row_counter;
 } rocprofvis_db_sqlite_callback_parameters;
 
 class SqliteDatabase : public Database
 {
     public:
-        SqliteDatabase( rocprofvis_db_filename_t path,
-                        rocprofvis_db_read_progress progress_callback) : 
-                        Database(path, progress_callback), 
-                        m_db(nullptr) {};
+        SqliteDatabase( rocprofvis_db_filename_t path) : 
+                        Database(path), 
+                        m_db(nullptr),
+                        m_db_status(SQLITE_ERROR) {};
         rocprofvis_dm_result_t Open() override;
         rocprofvis_dm_result_t Close() override;
         bool IsOpen() override {return m_db != nullptr && m_db_status == SQLITE_OK;}
+        static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
+        static int CallbackTableExists(void *data, int argc, char **argv, char **azColName);
+        static int DetectTable(sqlite3 *db, const char* table);
     protected:
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query);
-        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query, RpvSqliteExecuteQueryCallback callback);
-        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query, RpvSqliteExecuteQueryCallback callback, roprofvis_dm_track_category_t track_category);
-        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query, RpvSqliteExecuteQueryCallback callback, roprofvis_dm_track_category_t track_category, rocprofvis_dm_slice_t slice);
-        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query, RpvSqliteExecuteQueryCallback callback, roprofvis_dm_track_category_t track_category, rocprofvis_dm_slice_t slice, roprofvis_dm_event_operation_t event_op);
+        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query, 
+                                                RpvSqliteExecuteQueryCallback callback);
+        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
+                                                const char* query,
+                                                rocprofvis_dm_handle_t handle, 
+                                                RpvSqliteExecuteQueryCallback callback);
+        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
+                                                const char* query, 
+                                                RpvSqliteExecuteQueryCallback callback, 
+                                                roprofvis_dm_track_category_t track_category);
+        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
+                                                const char* query, 
+                                                RpvSqliteExecuteQueryCallback callback, 
+                                                roprofvis_dm_track_category_t track_category, 
+                                                rocprofvis_dm_handle_t handle);
+        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
+                                                const char* query, 
+                                                RpvSqliteExecuteQueryCallback callback, 
+                                                roprofvis_dm_track_category_t track_category, 
+                                                rocprofvis_dm_handle_t handle, 
+                                                roprofvis_dm_event_operation_t event_op);
+        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
+                                                const char* query, 
+                                                RpvSqliteExecuteQueryCallback callback, 
+                                                rocprofvis_dm_handle_t handle, 
+                                                roprofvis_dm_event_operation_t event_op);
+        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
+                                                const char* query, 
+                                                RpvSqliteExecuteQueryCallback callback, 
+                                                rocprofvis_dm_charptr_t ext_data_category, 
+                                                rocprofvis_dm_handle_t handle, 
+                                                roprofvis_dm_event_operation_t event_op);
         
     private:       
         sqlite3 *m_db;

@@ -25,22 +25,20 @@
 
 #include "../common/CommonTypes.h"
 #include "RpvObject.h"
+#include "ExtData.h"
 #include <vector>
+#include <memory> 
 
 
 class RpvDmTrace;
 class RpvDmTrackSlice;
-
 
 /* Base class for RpvPmcTrack, RpvRegionTrack, RpvKernelTrack, etc. 
 */
 
 class RpvDmTrack : public RpvObject {
 public:
-    RpvDmTrack( RpvDmTrace* ctx,
-                rocprofvis_dm_track_params_t* params) :
-                m_ctx(ctx),
-                m_track_params(params) {};
+    RpvDmTrack( RpvDmTrace* ctx, rocprofvis_dm_track_params_t* params);
 
     rocprofvis_dm_size_t                                NumberOfSlices() { return m_slices.size(); }
     RpvDmTrace* Ctx() { return m_ctx; }
@@ -50,7 +48,7 @@ public:
     rocprofvis_dm_charptr_t                             Process() { return m_track_params->process.c_str(); }
     rocprofvis_dm_charptr_t                             SubProcess() { return m_track_params->name.c_str(); }
 
-    rocprofvis_dm_result_t                              GetSliceAtIndex(rocprofvis_dm_index_t index, rocprofvis_dm_slice_t & slice);
+    rocprofvis_dm_result_t                              GetSliceAtIndex(rocprofvis_dm_property_index_t index, rocprofvis_dm_slice_t & slice);
     rocprofvis_dm_result_t                              GetSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_slice_t & slice);
     rocprofvis_dm_result_t                              DeleteSlice(rocprofvis_dm_slice_t slice);
     rocprofvis_dm_slice_t                               AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
@@ -58,17 +56,16 @@ public:
     rocprofvis_dm_size_t                                GetMemoryFootprint();
     rocprofvis_dm_result_t                              GetExtendedInfo(rocprofvis_dm_json_blob_t & json);
 
-    rocprofvis_dm_result_t                              GetPropertyAsUint64(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) override;
-    rocprofvis_dm_result_t                              GetPropertyAsInt64(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, int64_t* value) override;
-    rocprofvis_dm_result_t                              GetPropertyAsCharPtr(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, char** value) override;
-    rocprofvis_dm_result_t                              GetPropertyAsDouble(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, double* value) override;
-    rocprofvis_dm_result_t                              GetPropertyAsHandle(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value) override;
+    rocprofvis_dm_result_t                              GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) override;
+    rocprofvis_dm_result_t                              GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value) override;
+    rocprofvis_dm_result_t                              GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value) override;
 
 private:    
 
     RpvDmTrace* m_ctx;
-    rocprofvis_dm_track_params_t* m_track_params;     // track essential parameters are shared between data model and database
-    std::vector<RpvDmTrackSlice*>                       m_slices;
+    rocprofvis_dm_track_params_t*                       m_track_params;     // track essential parameters are shared between data model and database
+    std::vector<std::unique_ptr<RpvDmTrackSlice>>       m_slices;
+    RpvDmExtData                                        m_ext_data;
 
 };
 #endif //RPV_DATAMODEL_TRACK_H

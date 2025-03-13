@@ -26,24 +26,37 @@
 #include "EventTrackSlice.h"
 
 
+RpvDmTrack::RpvDmTrack( RpvDmTrace* ctx,
+                rocprofvis_dm_track_params_t* params) :
+                m_ctx(ctx),
+                m_track_params(params) {
+                    params->extdata = &m_ext_data;
+                };
+
 rocprofvis_dm_slice_t  RpvDmTrack::AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
 {
     ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, nullptr);
     if (nullptr == m_track_params) return nullptr;
     if (m_track_params->track_category == kRocProfVisDmPmcTrack)
     {
-        RpvDmPmcTrackSlice * slice =  new RpvDmPmcTrackSlice(this, start, end);
-        if (slice != nullptr) {
-            m_slices.push_back(slice);
+        try{
+            m_slices.push_back(std::make_unique<RpvDmPmcTrackSlice>(this, start, end));
         }
-        return slice;
+        catch(std::exception ex)
+        {
+            ASSERT_ALWAYS_MSG_RETURN("Error! Falure allocating PMC track time slice!", nullptr);
+        }
+        return m_slices.back().get();
     } else
     {
-        RpvDmEventTrackSlice * slice =  new RpvDmEventTrackSlice(this, start, end);
-        if (slice != nullptr) {
-            m_slices.push_back(slice);
+        try{
+            m_slices.push_back(std::make_unique<RpvDmEventTrackSlice>(this, start, end));
         }
-        return slice;
+        catch(std::exception ex)
+        {
+            ASSERT_ALWAYS_MSG_RETURN("Error! Falure allocating event track time slice!", nullptr);
+        }
+        return m_slices.back().get();
     }
 }
 
@@ -51,9 +64,8 @@ rocprofvis_dm_result_t RpvDmTrack::DeleteSlice(rocprofvis_dm_slice_t slice)
 {
     for (int i = 0; i < m_slices.size(); i++)
     {
-        if (slice == m_slices[i])
+        if (slice == m_slices[i].get())
         {
-            delete m_slices[i];
             m_slices.erase(m_slices.begin()+i);
             return kRocProfVisDmResultSuccess;
         }
@@ -61,10 +73,10 @@ rocprofvis_dm_result_t RpvDmTrack::DeleteSlice(rocprofvis_dm_slice_t slice)
     return kRocProfVisDmResultNotLoaded;
 }
 
-rocprofvis_dm_result_t RpvDmTrack::GetSliceAtIndex(rocprofvis_dm_index_t index,  rocprofvis_dm_slice_t & slice)
+rocprofvis_dm_result_t RpvDmTrack::GetSliceAtIndex(rocprofvis_dm_property_index_t index,  rocprofvis_dm_slice_t & slice)
 {
     ASSERT_MSG_RETURN(index < m_slices.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultInvalidParameter);
-    slice = m_slices[index];
+    slice = m_slices[index].get();
     return kRocProfVisDmResultSuccess;
 }
 
@@ -74,7 +86,7 @@ rocprofvis_dm_result_t RpvDmTrack::GetSliceAtTime(rocprofvis_dm_timestamp_t star
     {
         if (start == m_slices[i]->StartTime())
         {
-            slice = m_slices[i];
+            slice = m_slices[i].get();
             return kRocProfVisDmResultSuccess;
         }
     }
@@ -86,36 +98,32 @@ rocprofvis_dm_size_t   RpvDmTrack::GetMemoryFootprint()
     rocprofvis_dm_size_t size = 0;
     for (int i = 0; i < m_slices.size(); i++)
     {
-        size+=m_slices[i]->GetMemoryFootprint();
+        size+=m_slices[i].get()->GetMemoryFootprint();
     }
     return size;
 }
 
-rocprofvis_dm_result_t RpvDmTrack::GetExtendedInfo(rocprofvis_dm_json_blob_t & json) {
-    ASSERT_MSG_RETURN(m_ctx, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-    ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-    return m_ctx->GetExtendedTrackInfo(m_track_params->track_id, json);
-}
 
-
-rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
-    
+rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+    ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
+    ASSERT_MSG_RETURN(m_track_params->extdata, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
     switch(property)
     {
-        case kRPVDMTrackCategoryEnumUInt64:
-            ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
+        case kRPVDMTrackCategoryEnumUInt64:           
             *value = Category();
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackIdUInt64:
-            ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
             *value = TrackId();
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackNodeIdUInt64:
-            ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
             *value = NodeId();
             return kRocProfVisDmResultSuccess;
         case kRPVDMTNumberOfSlicesUInt64:
             *value = NumberOfSlices();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTNumberOfExtDataRecordsUInt64:
+            *value = m_ext_data.GetNumberOfRecords();
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackMemoryFootprintUInt64:
             *value = GetMemoryFootprint();
@@ -126,20 +134,26 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_track_prop
 
 }
 
-rocprofvis_dm_result_t    RpvDmTrack::GetPropertyAsInt64(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
-}
- rocprofvis_dm_result_t   RpvDmTrack::GetPropertyAsCharPtr(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, char** value){
+
+ rocprofvis_dm_result_t   RpvDmTrack::GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value){
+    ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
+    ASSERT_MSG_RETURN(m_track_params->extdata, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
     switch(property)
     {
+
+        case kRPVDMTrackExtDataCategoryCharPtrIndexed:
+            return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataCategoryCharPtrIndexed, index, value);
+	    case kRPVDMTrackExtDataNameCharPtrIndexed:
+            return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataNameCharPtrIndexed, index, value);
+        case kRPVDMTrackExtDataValueCharPtrIndexed:
+            return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataCharPtrIndexed, index, value);
         case kRPVDMTrackInfoJsonCharPtr:
             return GetExtendedInfo(*(rocprofvis_dm_json_blob_t*)value);
         case kRPVDMTrackMainProcessNameCharPtr:
-            ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
             *value = (char*)Process();
             return kRocProfVisDmResultSuccess;
-        kRPVDMTrackSubProcessNameCharPtr:
-            ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
+        case kRPVDMTrackSubProcessNameCharPtr:
             *value = (char*)SubProcess();
             return kRocProfVisDmResultSuccess;
         default:
@@ -148,13 +162,10 @@ rocprofvis_dm_result_t    RpvDmTrack::GetPropertyAsInt64(rocprofvis_dm_track_pro
 
 }
 
-rocprofvis_dm_result_t   RpvDmTrack::GetPropertyAsDouble(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, double* value){
 
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
-
-}
-
-rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsHandle(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
+rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
+    ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
     switch(property)
     {
         case kRPVDMSliceHandleIndexed:
@@ -164,4 +175,10 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsHandle(rocprofvis_dm_track_prop
         default:
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
+}
+
+rocprofvis_dm_result_t RpvDmTrack::GetExtendedInfo(rocprofvis_dm_json_blob_t & json) {
+    ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
+    ASSERT_MSG_RETURN(m_track_params->extdata, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
+    return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataJsonBlobCharPtr, 0, (char**) & json);
 }

@@ -45,7 +45,8 @@ class RpvDmTrackSlice : public RpvObject {
         virtual rocprofvis_dm_result_t  AddRecord( rocprofvis_db_record_data_t & data) = 0;
         virtual rocprofvis_dm_size_t    GetMemoryFootprint() = 0;
         virtual rocprofvis_dm_size_t    GetNumberOfRecords() = 0;
-        virtual rocprofvis_dm_result_t  ConvertTimestampToIndex(const rocprofvis_dm_timestamp_t timestamp, rocprofvis_dm_index_t & index)=0;
+        virtual rocprofvis_dm_result_t  ConvertTimestampToIndex(const rocprofvis_dm_timestamp_t timestamp, 
+                                                                    rocprofvis_dm_index_t & index)=0;
 
         // getters
         RpvDmTrack*                     Ctx() {return m_ctx;};
@@ -53,21 +54,29 @@ class RpvDmTrackSlice : public RpvObject {
         rocprofvis_dm_timestamp_t       EndTime() {return m_end_timestamp;}
 
         // accessors
-        virtual rocprofvis_dm_result_t  GetRecordTimestampAt(const rocprofvis_dm_index_t index, rocprofvis_dm_timestamp_t & timestamp) = 0;
-        virtual rocprofvis_dm_result_t  GetRecordIdAt(const rocprofvis_dm_index_t index, rocprofvis_dm_id_t & id);
-        virtual rocprofvis_dm_result_t  GetRecordOperationAt(const rocprofvis_dm_index_t index, rocprofvis_dm_op_t & op);
-        virtual rocprofvis_dm_result_t  GetRecordValueAt(const rocprofvis_dm_index_t index, rocprofvis_dm_value_t & value);
-        virtual rocprofvis_dm_result_t  GetRecordDurationAt(const rocprofvis_dm_index_t index, rocprofvis_dm_duration_t & duration);
-        virtual rocprofvis_dm_result_t  GetRecordCategoryIndexAt(const rocprofvis_dm_index_t index, rocprofvis_dm_index_t & category_index);
-        virtual rocprofvis_dm_result_t  GetRecordSymbolIndexAt(const rocprofvis_dm_index_t index, rocprofvis_dm_index_t & symbol_index);
-        virtual rocprofvis_dm_result_t  GetRecordCategoryStringAt(const rocprofvis_dm_index_t index, rocprofvis_dm_charptr_t & category_charptr);
-        virtual rocprofvis_dm_result_t  GetRecordSymbolStringAt(const rocprofvis_dm_index_t index, rocprofvis_dm_charptr_t & symbol_charptr);
+        virtual rocprofvis_dm_result_t  GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp) = 0;
+        virtual rocprofvis_dm_result_t  GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_id_t & id);
+        virtual rocprofvis_dm_result_t  GetRecordOperationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_op_t & op);
+        virtual rocprofvis_dm_result_t  GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value);
+        virtual rocprofvis_dm_result_t  GetRecordDurationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_duration_t & duration);
+        virtual rocprofvis_dm_result_t  GetRecordCategoryIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & category_index);
+        virtual rocprofvis_dm_result_t  GetRecordSymbolIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & symbol_index);
+        virtual rocprofvis_dm_result_t  GetRecordCategoryStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & category_charptr);
+        virtual rocprofvis_dm_result_t  GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & symbol_charptr);
 
-        rocprofvis_dm_result_t          GetPropertyAsUint64(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) override;
-        rocprofvis_dm_result_t          GetPropertyAsInt64(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, int64_t* value) override;
-        rocprofvis_dm_result_t          GetPropertyAsCharPtr(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, char** value) override;
-        rocprofvis_dm_result_t          GetPropertyAsDouble(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, double* value) override;
-        rocprofvis_dm_result_t          GetPropertyAsHandle(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value) override;
+        rocprofvis_dm_result_t          GetPropertyAsUint64(rocprofvis_dm_property_t property, 
+                                                            rocprofvis_dm_property_index_t index, 
+                                                            uint64_t* value) override;
+        rocprofvis_dm_result_t          GetPropertyAsInt64(rocprofvis_dm_property_t property, 
+                                                            rocprofvis_dm_property_index_t index, 
+                                                            int64_t* value) override;
+        rocprofvis_dm_result_t          GetPropertyAsCharPtr(rocprofvis_dm_property_t property, 
+                                                            rocprofvis_dm_property_index_t index, 
+                                                            char** value) override;
+        rocprofvis_dm_result_t          GetPropertyAsDouble(rocprofvis_dm_property_t property, 
+                                                            rocprofvis_dm_property_index_t index, 
+                                                            double* value) override;
+
 
     private:
 

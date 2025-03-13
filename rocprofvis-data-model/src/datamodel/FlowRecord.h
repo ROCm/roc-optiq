@@ -20,18 +20,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef RPV_DATAMODEL_OBJECT_H
-#define RPV_DATAMODEL_OBJECT_H
+#ifndef RPV_DATAMODEL_FLOW_RECORD_H
+#define RPV_DATAMODEL_FLOW_RECORD_H
+
+/*  RpvPmcRecord is a data storage class for performance counters data
+**  It's POD (plain old data) class for memory usage optimization.
+**  PMC (Performance metric counter) event represents a point on timeline
+**  where X-dimension is timestamp anf Y-dimension is value.
+*/ 
 
 #include "../common/CommonTypes.h"
 
-class RpvObject {
-public:
-    virtual rocprofvis_dm_result_t GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value);
-    virtual rocprofvis_dm_result_t GetPropertyAsInt64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, int64_t* value);
-    virtual rocprofvis_dm_result_t GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value);
-    virtual rocprofvis_dm_result_t GetPropertyAsDouble(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, double* value);
-    virtual rocprofvis_dm_result_t GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, void** value);
+class RpvDmFlowRecord 
+{
+    public:
+        RpvDmFlowRecord(const rocprofvis_dm_timestamp_t timestamp, const rocprofvis_dm_event_id_t event_id, const rocprofvis_dm_track_id_t track_id):
+            m_timestamp(timestamp), m_event_id(event_id), m_track_id(track_id) {};
+        rocprofvis_dm_timestamp_t       Timestamp() {return m_timestamp;}
+        rocprofvis_dm_event_id_t        EventId() {return m_event_id;}
+        rocprofvis_dm_track_id_t        TrackId() {return m_track_id;}
+    private:
+        rocprofvis_dm_timestamp_t           m_timestamp;
+        rocprofvis_dm_event_id_t            m_event_id;
+        rocprofvis_dm_track_id_t            m_track_id;
 };
 
-#endif //RPV_DATAMODEL_OBJECT_H
+
+
+#endif //RPV_DATAMODEL_FLOW_RECORD_H

@@ -1,6 +1,10 @@
 #include "RocpdDatabase.h"
 #include <sstream>
 #include <cassert>
+#include <chrono>
+#include <iostream>
+#include <fstream>
+#include <algorithm>
 
 int RocpdDatabase::callback_get_min_time(void *data, int argc, char **argv, char **azColName){
     assert(argc==1 && "callback_get_min_time takes 1 arcument");
@@ -186,7 +190,7 @@ int RocpdDatabase::callback_add_strings_record(void *data, int argc, char **argv
 }
 
 int RocpdDatabase::callback_add_flow_info(void *data, int argc, char **argv, char **azColName){
-    assert(argc==8 && "callback_add_flow_info takes 2 arguments");
+    assert(argc==8 && "callback_add_flow_info takes 8 arguments");
     RocpdDatabase* db = (RocpdDatabase*)data;
     uint64_t api_id =  std::stoll( argv[0] );
     uint64_t op_id =  std::stoll( argv[1] );
@@ -213,6 +217,15 @@ int RocpdDatabase::callback_add_flow_info(void *data, int argc, char **argv, cha
         db->m_bindData.funcAddFlowRecord(db->m_bindData.handler, gpuTrack, record);
     } 
 
+    return 0;
+}
+
+int RocpdDatabase::callback_fill_flow_array(void *data, int argc, char **argv, char **azColName){
+    assert(argc==2 && "callback_add_strings_record takes 2 arguments");
+    RocpdDatabase* db = (RocpdDatabase*)data;
+    uint64_t api_id =  std::stoll( argv[0] );
+    uint64_t op_id =  std::stoll( argv[0] );
+    db->testLinkageArray.push_back(FlowPair{ api_id,op_id });
     return 0;
 }
 
@@ -302,6 +315,7 @@ bool RocpdDatabase::readTraceChunkTrackByTrack(DbReadProgress progressCallback)
     return i >= readConfig.tracks.size();
 }
 
+
 bool RocpdDatabase::readTraceProperties(DbReadProgress progressCallback)
 {
     resetLoadProgress();
@@ -324,8 +338,49 @@ bool RocpdDatabase::readTraceProperties(DbReadProgress progressCallback)
     if (!executeSQLQuery("SELECT string, GROUP_CONCAT(id) AS ids FROM rocpd_string GROUP BY string;", &callback_add_strings_record)) return false;
     showLoadProgress(1, "Loading flow linkage data", progressCallback);
     if (!executeSQLQuery("select rocpd_api_ops.api_id, rocpd_api_ops.op_id, pid, tid, gpuId, queueId, rocpd_api.start, rocpd_op.start  from rocpd_api_ops INNER JOIN rocpd_api on rocpd_api_ops.api_id = rocpd_api.id INNER JOIN rocpd_op on rocpd_api_ops.op_id = rocpd_op.id", &callback_add_flow_info)) return false;
- 
+    showLoadProgress(1, "Flow linkage data search experiment", progressCallback);
+    auto t0 = std::chrono::steady_clock::now();
+    if (!executeSQLQuery("select api_id, op_id from rocpd_api_ops;", &callback_fill_flow_array)) return false;
+    auto t1 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = t1 - t0;
     showLoadProgress(100-getLoadProgress(), "Trace properties successfully loaded", progressCallback);
+
+    std::cout << "\nTime to read " << testLinkageArray.size() << " links is " << diff.count();
+
+    const char* filename = "testLinkageArray.dat";
+
+    t0 = std::chrono::steady_clock::now();
+    std::ofstream out(filename, std::ios::binary);
+    size_t size = testLinkageArray.size();
+    out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    out.write(reinterpret_cast<const char*>(&testLinkageArray[0]), sizeof(FlowPair)*size);
+    out.close();
+    t1 = std::chrono::steady_clock::now();
+    diff = t1 - t0;
+    std::cout << "; Time to save " << testLinkageArray.size() << " links is " << diff.count();
+
+    t0 = std::chrono::steady_clock::now();
+    std::ifstream in(filename, std::ios::binary);
+    in.read(reinterpret_cast<char*>(&size), sizeof(size));
+    testLinkageArray.resize(size);
+    in.read(reinterpret_cast<char*>(&testLinkageArray[0]), sizeof(FlowPair)*size);
+    in.close();
+    t1 = std::chrono::steady_clock::now();
+    diff = t1 - t0;
+    std::cout << "; Time to load " << testLinkageArray.size() << " links is " << diff.count();
+
+    std::vector<FlowPair> subset;
+    t0 = std::chrono::steady_clock::now();
+    std::copy_if(testLinkageArray.begin(), testLinkageArray.end(), std::back_inserter(subset), [](FlowPair x) { return x.apiId == 30064812319; });
+    t1 = std::chrono::steady_clock::now();
+    diff = t1 - t0;
+    std::cout << "\nTime to search " << subset.size() << " hipgraph endpoints is " <<  diff.count();
+    subset.clear();
+    t0 = std::chrono::steady_clock::now();
+    std::copy_if(testLinkageArray.begin(), testLinkageArray.end(), std::back_inserter(subset), [](FlowPair x) { return x.apiId == 30064812318; });
+    t1 = std::chrono::steady_clock::now();
+    diff = t1 - t0;
+    std::cout << "; Time to search " << subset.size() << " regular endpoint is " <<  diff.count() << std::endl;
     return true;
 }
 

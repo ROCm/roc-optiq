@@ -21,14 +21,59 @@
 // SOFTWARE.
 
 #include "Database.h"
+#include "SqliteDb.h"
 
-rocprofvis_dm_result_t Database::BindTrace(rocprofvis_dm_db_bind_struct binding_info)
-{
+rocprofvis_db_type_t Database::Autodetect(
+                                                    rocprofvis_db_filename_t filename){
+    rocprofvis_db_type_t db_type = SqliteDatabase::Detect(filename);
+    if (db_type!=rocprofvis_db_type_t::kAutodetect)
+            return db_type;
+    return rocprofvis_db_type_t::kAutodetect;
+}
+
+
+rocprofvis_dm_result_t Database::FindTrackIdByName(
+                                                    const char* process, 
+                                                    const char* name, 
+                                                    rocprofvis_dm_track_id_t & track_id ){
+    std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator it = 
+        std::find_if(m_track_properties.begin(), m_track_properties.end(), [process, name](std::unique_ptr<rocprofvis_dm_track_params_t> & params) {
+        return  params.get()->process == process && params.get()->name == name;});
+    if (it != m_track_properties.end()) {
+        track_id = (rocprofvis_dm_track_id_t)(it - m_track_properties.begin());
+        return kRocProfVisDmResultSuccess;
+    } 
+    return kRocProfVisDmResultNotLoaded;
+}
+
+rocprofvis_dm_result_t Database::AddTrackProperties(
+                                                    rocprofvis_dm_track_params_t& props) {
+    try {
+        m_track_properties.push_back(std::make_unique<rocprofvis_dm_track_params_t>(props));
+    }
+    catch (std::exception ex)
+    {
+        ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, kRocProfVisDmResultAllocFailure);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+void  Database::ShowProgress(
+                                                    double step, 
+                                                    rocprofvis_dm_charptr_t action, 
+                                                    rocprofvis_db_status_t status, 
+                                                    Future* future){
+    future->ShowProgress(Path(), step, action, status);
+}
+
+rocprofvis_dm_result_t Database::BindTrace(
+                                                    rocprofvis_dm_db_bind_struct binding_info){
     m_binding_info = binding_info;
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(rocprofvis_db_future_t object){
+rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
+                                                    rocprofvis_db_future_t object){
     Future* future = (Future*) object;
     try {
         future->m_worker = std::thread(Database::ReadTraceMetadataStatic, this, future);
@@ -41,11 +86,11 @@ rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(rocprofvis_db_future_t 
 }
 
 rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
-                                                            rocprofvis_dm_timestamp_t start,
-                                                            rocprofvis_dm_timestamp_t end,
-                                                            rocprofvis_db_num_of_tracks_t num,
-                                                            rocprofvis_db_track_selection_t tracks,
-                                                            rocprofvis_db_future_t object){
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_db_num_of_tracks_t num,
+                                                    rocprofvis_db_track_selection_t tracks,
+                                                    rocprofvis_db_future_t object){
     Future* future = (Future*) object;
     try {
         future->m_worker = std::thread(Database::ReadTraceSliceStatic, this, start, end, num, tracks, future);
@@ -57,72 +102,76 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t  Database::ReadTraceMetadataStatic(Database* db, Future* object){
+rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
+                                                    rocprofvis_dm_event_property_type_t type,
+                                                    rocprofvis_dm_event_id_t event_id,
+                                                    rocprofvis_db_future_t object){
+    Future* future = (Future*) object;
+    try {
+        future->m_worker = std::thread(ReadEventPropertyStatic, this, type, event_id, future);
+    }
+    catch (std::exception ex)
+    {
+        ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t  Database::ExecuteQueryAsync(
+                                                    rocprofvis_dm_charptr_t query,
+                                                    rocprofvis_dm_charptr_t description,
+                                                    rocprofvis_db_future_t object){
+    Future* future = (Future*) object;
+    try {
+        future->m_worker = std::thread(ExecuteQueryStatic, this, query, description, future);
+    }
+    catch (std::exception ex)
+    {
+        ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t  Database::ReadTraceMetadataStatic(
+                                                    Database* db, 
+                                                    Future* object){
     return db->ReadTraceMetadata(object);
 }
 
-rocprofvis_dm_result_t  Database::ReadTraceSliceStatic(Database* db,
-                                                            rocprofvis_dm_timestamp_t start,
-                                                            rocprofvis_dm_timestamp_t end,
-                                                            rocprofvis_db_num_of_tracks_t num,
-                                                            rocprofvis_db_track_selection_t tracks,
-                                                            Future* object){
+rocprofvis_dm_result_t  Database::ReadTraceSliceStatic(
+                                                    Database* db,
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_db_num_of_tracks_t num,
+                                                    rocprofvis_db_track_selection_t tracks,
+                                                    Future* object){
     return db->ReadTraceSlice(start, end, num, tracks, object);
 }
 
-void Database::ShowProgress(double step, rocprofvis_dm_charptr_t action, rocprofvis_db_status_t status, rocprofvis_db_read_progress progress_callback){
-    m_progress += step; 
-    if (progress_callback) progress_callback(m_path, (int)m_progress, status, action);
+
+rocprofvis_dm_result_t   Database::ReadEventPropertyStatic(
+                                                    Database* db, 
+                                                    rocprofvis_dm_event_property_type_t type,
+                                                    rocprofvis_dm_event_id_t event_id,
+                                                    Future* object){
+    switch (type) {
+        case kRPVDMEventFlowTrace:
+            return db->ReadFlowTraceInfo(event_id,object);
+        case kRPVDMEventStackTrace:
+            return db->ReadStackTraceInfo(event_id,object);
+        case kRPVDMEventExtData:
+            return db->ReadExtEventInfo(event_id,object);           
+    }  
+    ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
 }
 
-rocprofvis_dm_result_t Database::AddTrackProperties(rocprofvis_dm_track_params_t& props) {
-    try {
-        m_track_properties.push_back(props);
-    }
-    catch (std::exception ex)
-    {
-        ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, kRocProfVisDmResultAllocFailure);
-    }
-    return kRocProfVisDmResultSuccess;
+
+
+rocprofvis_dm_result_t   Database::ExecuteQueryStatic(
+                                                    Database* db,
+                                                    rocprofvis_dm_charptr_t query,
+                                                    rocprofvis_dm_charptr_t description,
+                                                    Future* object){
+    return db->ExecuteQueryAsync(query,description,object);
 }
 
-rocprofvis_dm_result_t   Database::ReadFlowTraceInfoAsync(
-                                                        rocprofvis_dm_event_id_t event_id,
-                                                        rocprofvis_db_future_t object){
-    Future* future = (Future*) object;
-    try {
-        future->m_worker = std::thread(Database::ReadFlowTraceInfoStatic, this,  event_id, future);
-    }
-    catch (std::exception ex)
-    {
-        ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
-    }
-    return kRocProfVisDmResultSuccess;
-}
-
-rocprofvis_dm_result_t   Database::ReadStackTraceInfoAsync(
-                                                        rocprofvis_dm_event_id_t event_id,
-                                                        rocprofvis_db_future_t object){
-    Future* future = (Future*) object;
-    try {
-        future->m_worker = std::thread(Database::ReadStackTraceInfoStatic, this,  event_id, future);
-    }
-    catch (std::exception ex)
-    {
-        ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
-    }
-    return kRocProfVisDmResultSuccess;
-}
-
-rocprofvis_dm_result_t   Database::ReadFlowTraceInfoStatic(
-                                                        Database* db, 
-                                                        rocprofvis_dm_event_id_t event_id,
-                                                        Future* object){
-    return db->ReadFlowTraceInfo(event_id,object);
-}
-rocprofvis_dm_result_t   Database::ReadStackTraceInfoStatic(
-                                                        Database* db, 
-                                                        rocprofvis_dm_event_id_t event_id,
-                                                        Future* object){
-    return db->ReadStackTraceInfo(event_id,object);
-}

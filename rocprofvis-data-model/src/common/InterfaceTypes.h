@@ -38,11 +38,14 @@ typedef     rocprofvis_dm_handle_t        rocprofvis_dm_track_t;
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_slice_t;
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_flowtrace_t;
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_stacktrace_t;
+typedef     rocprofvis_dm_handle_t        rocprofvis_dm_extdata_t;
+typedef     rocprofvis_dm_handle_t        rocprofvis_dm_table_t;
+typedef     rocprofvis_dm_handle_t        rocprofvis_dm_table_row_t;
 typedef     uint32_t                      rocprofvis_dm_index_t; 
 typedef     uint64_t                      rocprofvis_dm_timestamp_t; 
 typedef     uint32_t                      rocprofvis_dm_property_t; 
 typedef     uint64_t                      rocprofvis_dm_property_index_t;
-typedef     char*                         rocprofvis_dm_json_blob_t;
+typedef     const char*                   rocprofvis_dm_json_blob_t;
 typedef     uint32_t                      rocprofvis_dm_track_id_t;
 
 
@@ -53,6 +56,7 @@ typedef     uint32_t*                     rocprofvis_db_track_selection_t;
 typedef     uint16_t                      rocprofvis_db_num_of_tracks_t;
 typedef     void*                         rocprofvis_db_future_t; 
 typedef     uint64_t                      rocprofvis_db_timeout_ms_t; 
+typedef     const char*                   rocprofvis_dm_charptr_t;
 
 
 
@@ -81,7 +85,7 @@ enum rocprofvis_dm_result_t
 };
 
 enum roprofvis_dm_track_category_t {
-    kRocProfVisDmNotTrack = 0,
+    kRocProfVisDmNotATrack = 0,
     kRocProfVisDmPmcTrack = 1,
     kRocProfVisDmRegionTrack = 2,
     kRocProfVisDmKernelTrack = 3,
@@ -98,6 +102,7 @@ enum roprofvis_dm_event_operation_t {
 };
 
 enum rocprofvis_db_type_t {
+    kAutodetect = 0, 
 	kRocpdSqlite = 1,
 	kRocprofSqlite = 2
 };
@@ -112,11 +117,14 @@ enum  rocprofvis_dm_trace_property_t {
 	kRPVDMStartTimeUInt64,
 	kRPVDMEndTimeUInt64,
 	kRPVDMNumberOfTracksUInt64,
+    kRPVDMNumberOfTablesUInt64,
     kRPVDMTraceMemoryFootprintUInt64,
-    kRPVDMTrackObjectHandleIndexed,
-	kRPVDMFlowTraceByEventIDHandle,
-	kRPVDMStackTraceByEventIDHandle,
-	kRPVDMDatabaseObjectHandle,
+    kRPVDMTrackHandleIndexed,
+	kRPVDMFlowTraceHandleByEventID,
+	kRPVDMStackTraceHandleByEventID,
+    kRPVDMExtInfoHandleByEventID,
+    kRPVDMTableHandleIndexed,
+	kRPVDMDatabaseHandle,
     kRPVDMEventInfoJsonCharPtrIndexed
 };
 
@@ -130,6 +138,10 @@ enum rocprofvis_dm_track_property_t {
     kRPVDMTrackMemoryFootprintUInt64,
 	kRPVDMSliceHandleIndexed,	
     kRPVDMSliceHandleTimed,
+    kRPVDMTNumberOfExtDataRecordsUInt64,
+    kRPVDMTrackExtDataCategoryCharPtrIndexed,
+	kRPVDMTrackExtDataNameCharPtrIndexed,
+    kRPVDMTrackExtDataValueCharPtrIndexed,
 	kRPVDMTrackInfoJsonCharPtr, 
 };
 
@@ -148,16 +160,47 @@ enum rocprofvis_dm_slice_property_t {
 
 enum rocprofvis_dm_flowtrace_property_t {
 	kRPVDMNumberOfEndpointsUInt64,
-	kRPVDMEndpointIDByIndexUInt64Indexed,
-	kRPVDMEndpointTimestampByIndexUInt64Indexed,
+    kRPVDMEndpointTrackIDUInt64Indexed,
+	kRPVDMEndpointIDUInt64Indexed,
+	kRPVDMEndpointTimestampUInt64Indexed,
 };
 
 enum rocprofvis_dm_stacktrace_property_t {
 	kRPVDMNumberOfFramesUInt64,
-	kRPVDMFrameDepthByIndexUInt32Indexed,
-    kRPVDMFrameSymStringByIndexCharPtrIndexed,
-    kRPVDMFrameLineInfoStringByIndexCharPtrIndexed,
+	kRPVDMFrameDepthUInt32Indexed,
+    kRPVDMFrameSymbolCharPtrIndexed,
+    kRPVDMFrameArgsCharPtrIndexed,
+    kRPVDMFrameCodeLineCharPtrIndexed,
 };
+
+enum rocprofvis_dm_extdata_property_t {
+    kRPVDMNumberOfExtDataRecordsUInt64,
+    kRPVDMExtDataCategoryCharPtrIndexed,
+    kRPVDMExtDataNameCharPtrIndexed,
+    kRPVDMExtDataCharPtrIndexed,
+    kRPVDMExtDataJsonBlobCharPtr
+};
+
+enum rocprofvis_dm_table_property_t {
+    kRPVDMNumberOfTableColumsUInt64,
+    kRPVDMNumberOfTableRowsUInt64,
+    kRPVDMExtTableDescriptionCharPtr,
+    kRPVDMExtTableQueryCharPtr,
+    kRPVDMExtTableColumnNameCharPtrIndexed,
+    kRPVDMExtTableRowHandleIndexed
+};
+
+enum rocprofvis_dm_table_row_property_t {
+    kRPVDMNumberOfTableRowCellsUInt64,
+    kRPVDMExtTableRowCellValueCharPtrIndexed
+};
+
+enum rocprofvis_dm_event_property_type_t {
+    kRPVDMEventFlowTrace,
+    kRPVDMEventStackTrace,
+    kRPVDMEventExtData,
+};
+
 
 
 typedef union { 
@@ -170,8 +213,8 @@ typedef union {
 
 /*******************************Callbacks******************************/
 
-typedef void ( *rocprofvis_db_read_progress)(
-		        rocprofvis_dm_charptr_t,
+typedef void ( *rocprofvis_db_progress_callback_t)(
+		        rocprofvis_db_filename_t,
                 rocprofvis_db_progress_percent_t, 
                 rocprofvis_db_status_t, 
                 rocprofvis_db_status_message_t

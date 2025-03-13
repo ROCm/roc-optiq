@@ -3,3 +3,4 @@ cffi_lib.c
 build/
 Release/
 *.pyd
+*.dat

@@ -83,3 +83,4 @@ bool Database::checkAsyncInProgress()
     }  
     return m_threadWorking;
 } 
+

@@ -162,3 +162,6 @@ To develop this test I had to:
         DTO_FIELD(Float32, timeSpent, "took");
     };
 ```
+
+To run the test, please build application as eplained in <a href="https://github.amd.com/AGS-ROCm-CI/rocprofiler-visualizer/tree/vstempen/rocprof-visual-data-model/">Data model experiment documetation</a>,
+then run ./rocprof-visual-data-model-test.exe [database file path] -oat-test

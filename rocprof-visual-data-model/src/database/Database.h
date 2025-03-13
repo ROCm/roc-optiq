@@ -50,7 +50,7 @@ class Database
         static void readTracePropertiesStatic(Database* db, DbReadProgress progressCallback);
         static void readTraceChunkAllTracksStatic(Database* db, DbReadProgress progressCallback);
         static void readTraceChunkTrackByTrackStatic(Database* db, DbReadProgress progressCallback);  
-        bool checkAsyncInProgress();     
+        bool checkAsyncInProgress();   
 
     protected:
         DbBindSctucture m_bindData;

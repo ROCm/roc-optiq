@@ -37,37 +37,37 @@ const char* arrayContextCannotBeNull = "Record array context cannot be NULL";
         return ((Trace*)trace)->getDbHandler();       
     }
 
-    unsigned long long  get_trace_min_time(TraceHandler trace)
+    uint64_t  get_trace_min_time(TraceHandler trace)
     {
         assert(trace &&  traceContextCannotBeNull);
         return ((Trace*)trace)->getMinTime();
     }
 
-    unsigned long long  get_trace_max_time(TraceHandler trace)
+    uint64_t  get_trace_max_time(TraceHandler trace)
     {
         assert(trace &&  traceContextCannotBeNull);
         return ((Trace*)trace)->getMaxTime();
     }
 
-    unsigned int  get_number_of_tracks(TraceHandler trace)
+    uint32_t  get_number_of_tracks(TraceHandler trace)
     {
         assert(trace &&  traceContextCannotBeNull);
-        return (unsigned int)((Trace*)trace)->getNumberOfTracks();
+        return (uint32_t)((Trace*)trace)->getNumberOfTracks();
     }
 
-    unsigned long long  get_string_array_memory_footprint(TraceHandler trace)
+    uint64_t  get_string_array_memory_footprint(TraceHandler trace)
     {
         assert(trace &&  traceContextCannotBeNull);
-        return (unsigned long long)((Trace*)trace)->getStringArrayMemoryFootprint();      
+        return (uint64_t)((Trace*)trace)->getStringArrayMemoryFootprint();      
     }
 
-    unsigned int  get_string_item_count(TraceHandler trace)
+    uint32_t  get_string_item_count(TraceHandler trace)
     {
         assert(trace &&  traceContextCannotBeNull);
-        return (unsigned int)((Trace*)trace)->getStringItemCount();      
+        return (uint32_t)((Trace*)trace)->getStringItemCount();      
     }
 
-    void delete_trace_chunks_at(TraceHandler trace, unsigned long long timestamp)
+    void delete_trace_chunks_at(TraceHandler trace, uint64_t timestamp)
     {
          assert(trace &&  traceContextCannotBeNull);
          ((Trace*)trace)->deleteTraceChunksAt(timestamp);
@@ -80,13 +80,13 @@ const char* arrayContextCannotBeNull = "Record array context cannot be NULL";
         return ((Trace*)trace)->validateTrackHandler(track);
     }
 
-    TrackHandler   get_track_at(TraceHandler trace, unsigned int index)
+    TrackHandler   get_track_at(TraceHandler trace, uint32_t index)
     {
         assert(trace &&  traceContextCannotBeNull);
         return ((Trace*)trace)->getTrackAt(index);
     }
   
-    unsigned long long  get_track_memory_footprint(TrackHandler track)
+    uint64_t  get_track_memory_footprint(TrackHandler track)
     {
         assert(track &&  trackContextCannotBeNull);
         return ((Track*)track)->getTrackMemoryFootprint();
@@ -122,10 +122,10 @@ const char* arrayContextCannotBeNull = "Record array context cannot be NULL";
         return ((Track*)track)->getType() == TrackType::GPU;
     }
 
-    unsigned int  get_number_of_chunks(TrackHandler track)
+    uint32_t  get_number_of_chunks(TrackHandler track)
     {
         assert(track &&  trackContextCannotBeNull);
-        return (unsigned int)((Track*)track)->getNumberOfChunks();
+        return (uint32_t)((Track*)track)->getNumberOfChunks();
     }
 
     RecordArrayHandler get_track_last_acquaired_chunk(TrackHandler track)
@@ -134,98 +134,98 @@ const char* arrayContextCannotBeNull = "Record array context cannot be NULL";
         return ((Track*)track)->getTrackLastChunk();
     }
 
-    RecordArrayHandler get_track_chunk_at_time(TrackHandler track, unsigned long long timestamp)
+    RecordArrayHandler get_track_chunk_at_time(TrackHandler track, uint64_t timestamp)
     {
         assert(track &&  trackContextCannotBeNull);
         return ((Track*)track)->getTrackArrayAtTimestamp(timestamp);
     }
 
-    unsigned int get_record_index_at_timestamp(RecordArrayHandler array, unsigned long long timestamp)
+    uint32_t get_record_index_at_timestamp(RecordArrayHandler array, uint64_t timestamp)
     {
         assert(array &&  arrayContextCannotBeNull);
         return ((TrackArray*)array)->timestampToIndex(timestamp);
     }
 
-    unsigned long long get_chunk_memory_footprint(RecordArrayHandler array)
+    uint64_t get_chunk_memory_footprint(RecordArrayHandler array)
     {
         assert(array &&  arrayContextCannotBeNull);
         return ((TrackArray*)array)->getRecordArrayMemoryFootprint();
     }
 
-    unsigned long long get_chunk_number_of_records(RecordArrayHandler array)
+    uint64_t get_chunk_number_of_records(RecordArrayHandler array)
     {
         assert(array &&  arrayContextCannotBeNull);
         return ((TrackArray*)array)->getNumberOfRecords();
     }
 
 
-    unsigned long long  get_timestamp_at(RecordArrayHandler array, unsigned int index)
+    uint64_t  get_timestamp_at(RecordArrayHandler array, uint32_t index)
     {
         assert(array &&  arrayContextCannotBeNull);
         return ((TrackArray*)array)->getRecordTimestampAt(index);     
     }
 
-    double  get_metric_value_at(RecordArrayHandler array, unsigned int index)
+    double  get_metric_value_at(RecordArrayHandler array, uint32_t index)
     {
         assert(array &&  arrayContextCannotBeNull);
         return ((TrackArray*)array)->getRecordValueAt(index);    
     }
 
-    unsigned long long  get_kernel_id_at(RecordArrayHandler array, unsigned int index)
+    uint64_t  get_kernel_id_at(RecordArrayHandler array, uint32_t index)
     {
         assert(array &&  arrayContextCannotBeNull);
         return ((TrackArray*)array)->getRecordIdAt(index);   
     }
 
-    long long  get_kernel_duration_at(RecordArrayHandler array, unsigned int index)
+    long long  get_kernel_duration_at(RecordArrayHandler array, uint32_t index)
     {
         assert(array &&  arrayContextCannotBeNull);
         return ((TrackArray*)array)->getRecordDurationAt(index);   
     }
 
-    const char*  get_kernel_type_at(RecordArrayHandler array, unsigned int index)
+    const char*  get_kernel_type_at(RecordArrayHandler array, uint32_t index)
     {
         assert(array &&  arrayContextCannotBeNull);
         return ((TrackArray*)array)->getRecordTypeNameAt(index);   
     }
 
-    const char*  get_kernel_description_at(RecordArrayHandler array, unsigned int index)
+    const char*  get_kernel_description_at(RecordArrayHandler array, uint32_t index)
     {
         assert(array &&  arrayContextCannotBeNull);
         return ((TrackArray*)array)->getRecordDescriptionAt(index);   
     }
 
-    unsigned int  get_number_of_flow_records(TrackHandler track)
+    uint32_t  get_number_of_flow_records(TrackHandler track)
     {
         assert(track && trackContextCannotBeNull);
-        return (unsigned int)((Track*)track)->getNumberOfFlowRecords();
+        return (uint32_t)((Track*)track)->getNumberOfFlowRecords();
     }
 
-    unsigned long long  get_flow_array_memory_footprint(TrackHandler track)
+    uint64_t  get_flow_array_memory_footprint(TrackHandler track)
     {
         assert(track && trackContextCannotBeNull);
         return ((Track*)track)->getFlowArrayMemoryFootprint();
     }
 
-    FlowHandler  get_flow_handler_at(TrackHandler track, unsigned long long id)
+    FlowHandler  get_flow_handler_at(TrackHandler track, uint64_t id)
     {
         assert(track && trackContextCannotBeNull);
         return ((Track*)track)->getFlowRecordAt(id);
     }
 
-    unsigned short  get_flow_endpoint_track_id(FlowHandler flow)
+    uint16_t  get_flow_endpoint_track_id(FlowHandler flow)
     {
         assert(flow && flowContextCannotBeNull);
         return ((DataFlowRecord*)flow)->getTrackId();
     }
 
-    unsigned long long get_flow_endpoint_timestamp(FlowHandler flow)
+    uint64_t get_flow_endpoint_timestamp(FlowHandler flow)
     {
         assert(flow && flowContextCannotBeNull);
         return ((DataFlowRecord*)flow)->getEndpointTimeStamp();
     }
 
-    unsigned long long get_flow_endpoint_info(FlowHandler flow)
+    uint64_t get_flow_endpoint_info(FlowHandler flow)
     {
         assert(flow && flowContextCannotBeNull);
         return ((DataFlowRecord*)flow)->getEndpointInfo().value;

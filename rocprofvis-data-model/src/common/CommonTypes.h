@@ -39,7 +39,6 @@ typedef uint32_t                          rocprofvis_dm_op_t;
 typedef int64_t                           rocprofvis_dm_duration_t;
 typedef uint64_t                          rocprofvis_dm_id_t;
 typedef double                            rocprofvis_dm_value_t;
-typedef const char*                       rocprofvis_dm_charptr_t;
 
 
 /*******************************Structures******************************/
@@ -67,6 +66,7 @@ typedef struct {
     rocprofvis_dm_string_t process;
     rocprofvis_dm_string_t name;
     roprofvis_dm_track_category_t track_category;
+    rocprofvis_dm_extdata_t extdata;
 } rocprofvis_dm_track_params_t;
 
 typedef struct {
@@ -78,15 +78,23 @@ typedef struct {
 } rocprofvis_dm_trace_params_t;
 
 typedef struct {
-    rocprofvis_dm_id_t id;
+    rocprofvis_dm_event_id_t id;
     rocprofvis_dm_timestamp_t time;
+    rocprofvis_dm_track_id_t track_id;
 }rocprofvis_db_flow_data_t;
 
 typedef struct {
     rocprofvis_dm_charptr_t symbol;
+    rocprofvis_dm_charptr_t args;
     rocprofvis_dm_charptr_t line;
     uint32_t depth;
 }rocprofvis_db_stack_data_t;
+
+typedef struct {
+    rocprofvis_dm_charptr_t category;
+    rocprofvis_dm_charptr_t name;
+    rocprofvis_dm_charptr_t data;
+}rocprofvis_db_ext_data_t;
 
 /*******************************Callbacks******************************/
 
@@ -96,7 +104,15 @@ typedef rocprofvis_dm_slice_t (*rocprofvis_dm_add_slice_func_t) (const rocprofvi
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_record_func_t) (const rocprofvis_dm_slice_t object, rocprofvis_db_record_data_t& data);
 typedef rocprofvis_dm_index_t (*rocprofvis_dm_add_string_func_t) (const rocprofvis_dm_trace_t object, const char* stringValue);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_flow_func_t) (const rocprofvis_dm_slice_t object, rocprofvis_db_flow_data_t& data);
-typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_stack_func_t) (const rocprofvis_dm_slice_t object, rocprofvis_db_stack_data_t& data);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_stack_frame_func_t) (const rocprofvis_dm_stacktrace_t object, rocprofvis_db_stack_data_t& data);
+typedef rocprofvis_dm_flowtrace_t (*rocprofvis_dm_add_flowtrace_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id);
+typedef rocprofvis_dm_stacktrace_t (*rocprofvis_dm_add_stacktrace_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id);
+typedef rocprofvis_dm_extdata_t (*rocprofvis_dm_add_extdata_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_extdata_record_func_t) (const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t& data);
+typedef rocprofvis_dm_table_t (*rocprofvis_dm_add_table_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description);
+typedef rocprofvis_dm_table_row_t (*rocprofvis_dm_add_table_row_func_t) (const rocprofvis_dm_table_t object);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t column_name);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_row_cell_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t cell_value);
 
 typedef struct 
 {
@@ -106,8 +122,17 @@ typedef struct
         rocprofvis_dm_add_slice_func_t FuncAddSlice;
         rocprofvis_dm_add_record_func_t FuncAddRecord;
         rocprofvis_dm_add_string_func_t FuncAddString;
+        rocprofvis_dm_add_flowtrace_func_t FuncAddFlowTrace;
         rocprofvis_dm_add_flow_func_t FuncAddFlow;
-        rocprofvis_dm_add_flow_func_t FuncAddStack;
+        rocprofvis_dm_add_stacktrace_func_t FuncAddStackTrace;
+        rocprofvis_dm_add_stack_frame_func_t FuncAddStackFrame;
+        rocprofvis_dm_add_extdata_func_t FuncAddExtData;
+        rocprofvis_dm_add_extdata_record_func_t FuncAddExtDataRecord;
+        rocprofvis_dm_add_table_func_t FuncAddTable;
+        rocprofvis_dm_add_table_row_func_t FuncAddTableRow;
+        rocprofvis_dm_add_table_column_func_t FuncAddTableColumn;
+        rocprofvis_dm_add_table_row_cell_func_t FuncAddTableRowCell;
+
 } rocprofvis_dm_db_bind_struct;
 
 

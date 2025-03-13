@@ -22,36 +22,37 @@
 
 #include "TrackSlice.h"
 
-rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordTimestampAt(const rocprofvis_dm_index_t index, rocprofvis_dm_timestamp_t & timestamp){
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordIdAt(const rocprofvis_dm_index_t index, rocprofvis_dm_id_t & id){
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_id_t & id){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordOperationAt(const rocprofvis_dm_index_t index, rocprofvis_dm_op_t & op){
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordOperationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_op_t & op){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordValueAt(const rocprofvis_dm_index_t index, rocprofvis_dm_value_t & value){
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordDurationAt(const rocprofvis_dm_index_t index, rocprofvis_dm_duration_t & duration){
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordDurationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_duration_t & duration){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordCategoryIndexAt(const rocprofvis_dm_index_t index, rocprofvis_dm_index_t & category_index){
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordCategoryIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & category_index){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordSymbolIndexAt(const rocprofvis_dm_index_t index, rocprofvis_dm_index_t & symbol_index){
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordSymbolIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & symbol_index){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordCategoryStringAt(const rocprofvis_dm_index_t index, rocprofvis_dm_charptr_t & category_charptr){
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordCategoryStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & category_charptr){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordSymbolStringAt(const rocprofvis_dm_index_t, rocprofvis_dm_charptr_t & symbol_charptr){
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t, rocprofvis_dm_charptr_t & symbol_charptr){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
 
 
-rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsUint64(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+    ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
         case kRPVDMRecordIndexByTimestampUInt64:
@@ -75,7 +76,8 @@ rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsUint64(rocprofvis_dm_sli
     }
 
 }
-rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsInt64(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
+rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsInt64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
+    ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
         case kRPVDMEventDurationInt64Indexed:
@@ -84,31 +86,27 @@ rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsInt64(rocprofvis_dm_slic
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
 }
- rocprofvis_dm_result_t   RpvDmTrackSlice::GetPropertyAsCharPtr(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, char** value){
+ rocprofvis_dm_result_t   RpvDmTrackSlice::GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value){
+    ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
         case kRPVDMEventTypeStringCharPtrIndexed:
             return GetRecordCategoryStringAt(index, *(rocprofvis_dm_charptr_t*)value);
-        break;
         case kRPVDMEventSymbolStringCharPtrIndexed:
             return GetRecordSymbolStringAt(index, *(rocprofvis_dm_charptr_t*)value);
-        break;
         default:
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
 
 }
-rocprofvis_dm_result_t   RpvDmTrackSlice::GetPropertyAsDouble(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, double* value){
+rocprofvis_dm_result_t   RpvDmTrackSlice::GetPropertyAsDouble(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, double* value){
+    ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
         case kRPVDMPmcValueDoubleIndexed:
             return GetRecordValueAt(index, *value);
-        break;
         default:
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
 
-}
-rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsHandle(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
 }

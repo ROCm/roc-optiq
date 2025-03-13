@@ -55,49 +55,49 @@ rocprofvis_dm_result_t RpvDmEventTrackSlice::ConvertTimestampToIndex(const rocpr
     return kRocProfVisDmResultNotLoaded;
 }
 
-rocprofvis_dm_result_t RpvDmEventTrackSlice::GetRecordTimestampAt(const rocprofvis_dm_index_t index, rocprofvis_dm_timestamp_t & timestamp){
+rocprofvis_dm_result_t RpvDmEventTrackSlice::GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     timestamp = m_samples[index].Timestamp();
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t RpvDmEventTrackSlice::GetRecordIdAt(const rocprofvis_dm_index_t index, rocprofvis_dm_id_t & id){
+rocprofvis_dm_result_t RpvDmEventTrackSlice::GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_id_t & id){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     id = m_samples[index].EventId();
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t RpvDmEventTrackSlice::GetRecordOperationAt(const rocprofvis_dm_index_t index, rocprofvis_dm_op_t & op){
+rocprofvis_dm_result_t RpvDmEventTrackSlice::GetRecordOperationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_op_t & op){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     op = m_samples[index].Operation();
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordDurationAt(const rocprofvis_dm_index_t index, rocprofvis_dm_duration_t & duration){
+rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordDurationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_duration_t & duration){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     duration = m_samples[index].Duration();
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordCategoryIndexAt(const rocprofvis_dm_index_t index, rocprofvis_dm_index_t & category_index){
+rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordCategoryIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & category_index){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     category_index = m_samples[index].CategoryIndex();
     return kRocProfVisDmResultSuccess; 
 }
 
-rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordSymbolIndexAt(const rocprofvis_dm_index_t index, rocprofvis_dm_index_t & symbol_index){
+rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordSymbolIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & symbol_index){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     symbol_index = m_samples[index].SymbolIndex();
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordCategoryStringAt(const rocprofvis_dm_index_t index, rocprofvis_dm_charptr_t & category_charptr){
+rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordCategoryStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & category_charptr){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     category_charptr = Ctx()->Ctx()->GetStringAt(m_samples[index].CategoryIndex());
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordSymbolStringAt(const rocprofvis_dm_index_t index, rocprofvis_dm_charptr_t & symbol_charptr){
+rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & symbol_charptr){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     symbol_charptr = Ctx()->Ctx()->GetSymbolAt(m_samples[index].SymbolIndex());
     return kRocProfVisDmResultSuccess;

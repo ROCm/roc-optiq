@@ -23,82 +23,18 @@
 #include "RpvObject.h"
 
 
-rocprofvis_dm_result_t RpvObject::GetPropertyAsUint64(rocprofvis_dm_trace_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
+rocprofvis_dm_result_t RpvObject::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+    ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
 }
-rocprofvis_dm_result_t RpvObject::GetPropertyAsInt64(rocprofvis_dm_trace_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
+rocprofvis_dm_result_t RpvObject::GetPropertyAsInt64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
+    ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
 }
-rocprofvis_dm_result_t RpvObject::GetPropertyAsCharPtr(rocprofvis_dm_trace_property_t property, rocprofvis_dm_property_index_t index, char** value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
+rocprofvis_dm_result_t RpvObject::GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value){
+    ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
 }
-rocprofvis_dm_result_t RpvObject::GetPropertyAsDouble(rocprofvis_dm_trace_property_t property, rocprofvis_dm_property_index_t index, double* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
+rocprofvis_dm_result_t RpvObject::GetPropertyAsDouble(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, double* value){
+    ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
 }
-rocprofvis_dm_result_t RpvObject::GetPropertyAsHandle(rocprofvis_dm_trace_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-
-rocprofvis_dm_result_t RpvObject::GetPropertyAsUint64(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsInt64(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsCharPtr(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, char** value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsDouble(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, double* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsHandle(rocprofvis_dm_track_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-
-rocprofvis_dm_result_t RpvObject::GetPropertyAsUint64(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsInt64(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsCharPtr(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, char** value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsDouble(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, double* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsHandle(rocprofvis_dm_slice_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-
-rocprofvis_dm_result_t RpvObject::GetPropertyAsUint64(rocprofvis_dm_flowtrace_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsInt64(rocprofvis_dm_flowtrace_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsCharPtr(rocprofvis_dm_flowtrace_property_t property, rocprofvis_dm_property_index_t index, char** value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsDouble(rocprofvis_dm_flowtrace_property_t property, rocprofvis_dm_property_index_t index, double* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsHandle(rocprofvis_dm_flowtrace_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-
-rocprofvis_dm_result_t RpvObject::GetPropertyAsUint64(rocprofvis_dm_stacktrace_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsInt64(rocprofvis_dm_stacktrace_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsCharPtr(rocprofvis_dm_stacktrace_property_t property, rocprofvis_dm_property_index_t index, char** value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsDouble(rocprofvis_dm_stacktrace_property_t property, rocprofvis_dm_property_index_t index, double* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
-}
-rocprofvis_dm_result_t RpvObject::GetPropertyAsHandle(rocprofvis_dm_stacktrace_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_PROPERTY, kRocProfVisDmResultUnknownError);
+rocprofvis_dm_result_t RpvObject::GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
+    ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
 }

@@ -33,9 +33,8 @@ typedef std::pair<uint64_t,uint32_t> StringPair;
 class RocpdDatabase : public SqliteDatabase
 {
 public:
-    RocpdDatabase(rocprofvis_db_filename_t path,
-        rocprofvis_db_read_progress progress_callback = nullptr) :
-        SqliteDatabase(path, progress_callback) {
+    RocpdDatabase(rocprofvis_db_filename_t path) :
+        SqliteDatabase(path) {
     };
 
     rocprofvis_dm_result_t  ReadTraceMetadata(Future* object) override;
@@ -51,7 +50,13 @@ public:
     rocprofvis_dm_result_t  ReadStackTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* object) override;
-    
+    rocprofvis_dm_result_t  ReadExtEventInfo(
+        rocprofvis_dm_event_id_t event_id, 
+        Future* object) override;
+    rocprofvis_dm_result_t  ExecuteQuery(
+        rocprofvis_dm_charptr_t query,
+        rocprofvis_dm_charptr_t description,
+        Future* future) override; 
     
     rocprofvis_dm_result_t UpdateStringMap(StringPair ids);
 
@@ -61,6 +66,10 @@ public:
     static int CallBackAddString(void *data, int argc, char **argv, char **azColName);
     static int CallbackAddEventRecord(void *data, int argc, char **argv, char **azColName);
     static int CallbackAddPmcRecord(void *data, int argc, char **argv, char **azColName);
+    static int CallbackGetFlowTrace(void *data, int argc, char **argv, char **azColName);
+    static int CallbackGetStackTrace(void *data, int argc, char **argv, char **azColName);
+    static int CallbackAddExtInfo(void *data, int argc, char **argv, char **azColName);
+    static int CallbackRunQuery(void *data, int argc, char **argv, char **azColName);
 private:
     
     StringMap m_string_map;

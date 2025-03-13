@@ -24,6 +24,33 @@
 #include <cassert>
 #include <string>
 
+extern std::string g_last_error_string;
+
+#ifdef TEST
+#include <chrono>
+
+class TimeRecorder {
+public:
+    TimeRecorder(const char* function) {
+        g_last_error_string = "Success!";
+        m_function = function;
+        m_start_time = std::chrono::steady_clock::now();
+    }
+    ~TimeRecorder() {
+        auto t = std::chrono::steady_clock::now();
+        std::chrono::duration<double> diff = t - m_start_time;
+        printf("%40s | %13.9f seconds | %s\n", m_function.c_str(), diff.count(), g_last_error_string.c_str());
+    }
+private:
+    std::chrono::time_point<std::chrono::steady_clock> m_start_time;
+    std::string m_function;
+
+};
+#define PRINT_TIME_USAGE TimeRecorder time_recorder(__FUNCTION__)
+#else
+#define PRINT_TIME_USAGE
+#endif
+
 extern const char* ERROR_INDEX_OUT_OF_RANGE;
 extern const char* ERROR_TRACE_CANNOT_BE_NULL;
 extern const char* ERROR_TRACK_CANNOT_BE_NULL;
@@ -39,7 +66,13 @@ extern const char* ERROR_MEMORY_ALLOCATION_FAILURE;
 extern const char* ERROR_VIRTUAL_METHOD_PROPERTY;
 extern const char* ERROR_INVALID_PROPERTY_GETTER;
 extern const char* ERROR_UNSUPPORTED_PROPERTY;
-extern std::string g_last_error_string;
+extern const char* ERROR_FLOW_TRACE_CANNOT_BE_NULL;
+extern const char* ERROR_STACK_TRACE_CANNOT_BE_NULL;
+extern const char* ERROR_TABLE_CANNOT_BE_NULL;
+extern const char* ERROR_TABLE_ROW_CANNOT_BE_NULL;
+extern const char* ERROR_EXT_DATA_CANNOT_BE_NULL;
+extern const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL;
+extern const char* ERROR_REFERENCE_POINTER_CANNOT_BE_NULL;
 
 #define LOG(msg) g_last_error_string=msg
 #define ADD_LOG(msg) g_last_error_string+=msg
@@ -55,5 +88,8 @@ extern std::string g_last_error_string;
 #define ASSERT_MSG_BREAK(cond, msg) assert(cond && msg); if (!(cond)) break
 
 #define ASSERT_ALWAYS_MSG_RETURN(msg, retval) assert(false && msg); g_last_error_string=msg; return retval
+
+
+
 
 #endif //RPV_DATAMODEL_ERROR_HANDLING_H

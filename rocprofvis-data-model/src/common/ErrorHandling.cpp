@@ -24,6 +24,8 @@
 
 const char* ERROR_INDEX_OUT_OF_RANGE = "Error! Index out of range!";
 const char* ERROR_TRACE_CANNOT_BE_NULL = "Error! Trace reference cannot be NULL!";
+const char* ERROR_FLOW_TRACE_CANNOT_BE_NULL = "Error! Flow trace reference cannot be NULL!";
+const char* ERROR_STACK_TRACE_CANNOT_BE_NULL = "Error! Stack trace reference cannot be NULL!";
 const char* ERROR_SLICE_CANNOT_BE_NULL = "Error! Slice reference cannot be NULL!";
 const char* ERROR_TRACE_PARAMETERS_CANNOT_BE_NULL = "Error! Trace parameters reference cannot be NULL!";
 const char* ERROR_TRACK_CANNOT_BE_NULL  = "Error! Track reference cannot be NULL!";
@@ -34,7 +36,13 @@ const char* ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH = "Error! Database query pa
 const char* ERROR_METADATA_IS_NOT_LOADED = "Error! Metadata is not yet loaded!";
 const char* ERROR_MEMORY_ALLOCATION_FAILURE = "Error! Memory allocation failure!";
 const char* ERROR_VIRTUAL_METHOD_PROPERTY = "Error! Trying get property of virtual class!";
+const char* ERROR_VIRTUAL_METHOD_CALL = "Error! Trying to call virtual method!";
 const char* ERROR_INVALID_PROPERTY_GETTER = "Error! Incorrect property getter!";
+const char* ERROR_REFERENCE_POINTER_CANNOT_BE_NULL = "Error! Reference pointer cannot be NULL!";
 const char* ERROR_UNSUPPORTED_PROPERTY = "Error! Unsupported property!";
+const char* ERROR_TABLE_CANNOT_BE_NULL = "Error! Table reference cannot be NULL!";
+const char* ERROR_TABLE_ROW_CANNOT_BE_NULL = "Error! Table row reference cannot be NULL!";
+const char* ERROR_EXT_DATA_CANNOT_BE_NULL = "Error! Extended data reference cannot be NULL!";
+const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL = "Error! SQL query parameters reference cannot be NULL!";
 
 std::string g_last_error_string;

@@ -22,19 +22,26 @@
 
 #include "Future.h"
 
-Future::Future() {
+Future::Future(rocprofvis_db_progress_callback_t progress_callback):
+                                m_progress_callback(progress_callback),
+                                m_stop(false),
+                                m_progress(0.0) {
     m_future=m_promise.get_future();
-    m_stop=false;
 }
 
-rocprofvis_dm_result_t Future::WaitForCompletion(uint32_t timeout_ms) {
+rocprofvis_dm_result_t Future::WaitForCompletion(rocprofvis_db_timeout_ms_t timeout_ms) {
     rocprofvis_dm_result_t result = kRocProfVisDmResultTimeout;
     auto status = m_future.wait_for(std::chrono::milliseconds(timeout_ms));
     if (status == std::future_status::ready) 
         result = kRocProfVisDmResultSuccess;
     m_stop = true;
     m_worker.join();
-    return m_future.get();
+    result = m_future.get();
+    m_promise = std::promise<rocprofvis_dm_result_t>();
+    m_future=m_promise.get_future();
+    m_progress=0.0;
+    m_stop=false;
+    return result;
 }
 
 rocprofvis_dm_result_t Future::SetPromise(rocprofvis_dm_result_t status) {
@@ -45,3 +52,9 @@ rocprofvis_dm_result_t Future::SetPromise(rocprofvis_dm_result_t status) {
 bool Future::Stopped() {
     return m_stop;
 }
+
+void Future::ShowProgress(rocprofvis_dm_charptr_t db_name, double step, rocprofvis_dm_charptr_t action, rocprofvis_db_status_t status){
+    m_progress += step; 
+    if (m_progress_callback) m_progress_callback(db_name, (int)m_progress, status, action);
+}
+

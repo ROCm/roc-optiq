@@ -46,8 +46,8 @@ class RpvDmPmcTrackSlice : public RpvDmTrackSlice {
         rocprofvis_dm_result_t  ConvertTimestampToIndex(const rocprofvis_dm_timestamp_t timestamp, rocprofvis_dm_index_t& index) override;
 
         // accessors
-        rocprofvis_dm_result_t  GetRecordTimestampAt(const rocprofvis_dm_index_t index, rocprofvis_dm_timestamp_t & timestamp) override;
-        rocprofvis_dm_result_t  GetRecordValueAt(const rocprofvis_dm_index_t index, rocprofvis_dm_value_t & value) override;
+        rocprofvis_dm_result_t  GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp) override;
+        rocprofvis_dm_result_t  GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value) override;
 
     private:
 

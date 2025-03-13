@@ -42,14 +42,14 @@ class RpvDmEventTrackSlice : public RpvDmTrackSlice {
         rocprofvis_dm_size_t    GetNumberOfRecords() override;
         rocprofvis_dm_result_t  ConvertTimestampToIndex(const rocprofvis_dm_timestamp_t timestamp, rocprofvis_dm_index_t & index) override;
 
-        rocprofvis_dm_result_t  GetRecordTimestampAt(const rocprofvis_dm_index_t index, rocprofvis_dm_timestamp_t & timestamp) override;
-        rocprofvis_dm_result_t  GetRecordIdAt(const rocprofvis_dm_index_t index, rocprofvis_dm_id_t & op) override;
-        rocprofvis_dm_result_t  GetRecordOperationAt(const rocprofvis_dm_index_t index, rocprofvis_dm_op_t & id) override;
-        rocprofvis_dm_result_t  GetRecordDurationAt(const rocprofvis_dm_index_t index, rocprofvis_dm_duration_t & duration) override;
-        rocprofvis_dm_result_t  GetRecordCategoryIndexAt(const rocprofvis_dm_index_t index, rocprofvis_dm_index_t & category_index) override;
-        rocprofvis_dm_result_t  GetRecordSymbolIndexAt(const rocprofvis_dm_index_t index, rocprofvis_dm_index_t & symbol_index) override;
-        rocprofvis_dm_result_t  GetRecordCategoryStringAt(const rocprofvis_dm_index_t index, rocprofvis_dm_charptr_t & category_charptr) override;
-        rocprofvis_dm_result_t  GetRecordSymbolStringAt(const rocprofvis_dm_index_t index, rocprofvis_dm_charptr_t & symbol_charptr) override;
+        rocprofvis_dm_result_t  GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp) override;
+        rocprofvis_dm_result_t  GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_id_t & op) override;
+        rocprofvis_dm_result_t  GetRecordOperationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_op_t & id) override;
+        rocprofvis_dm_result_t  GetRecordDurationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_duration_t & duration) override;
+        rocprofvis_dm_result_t  GetRecordCategoryIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & category_index) override;
+        rocprofvis_dm_result_t  GetRecordSymbolIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & symbol_index) override;
+        rocprofvis_dm_result_t  GetRecordCategoryStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & category_charptr) override;
+        rocprofvis_dm_result_t  GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & symbol_charptr) override;
 
     private:
 

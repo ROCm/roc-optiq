@@ -53,13 +53,13 @@ rocprofvis_dm_result_t RpvDmPmcTrackSlice::ConvertTimestampToIndex(const rocprof
     return kRocProfVisDmResultNotLoaded;
 }
 
-rocprofvis_dm_result_t RpvDmPmcTrackSlice::GetRecordTimestampAt(const rocprofvis_dm_index_t index, rocprofvis_dm_timestamp_t & timestamp){
+rocprofvis_dm_result_t RpvDmPmcTrackSlice::GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     timestamp = m_samples[index].Timestamp();
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t RpvDmPmcTrackSlice::GetRecordValueAt(const rocprofvis_dm_index_t index, rocprofvis_dm_value_t & value){
+rocprofvis_dm_result_t RpvDmPmcTrackSlice::GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     value = m_samples[index].Value();
     return kRocProfVisDmResultSuccess;

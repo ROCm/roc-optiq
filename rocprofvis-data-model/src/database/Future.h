@@ -30,17 +30,24 @@
 class Future
 {
     public:
-        Future();
+        Future(rocprofvis_db_progress_callback_t progress_callback = nullptr);
 
-        rocprofvis_dm_result_t WaitForCompletion(uint32_t timeout);
+        rocprofvis_db_progress_callback_t   ProgressCallback() { return m_progress_callback;}
+        double                              Progress() { return m_progress; }
+
+        rocprofvis_dm_result_t WaitForCompletion(rocprofvis_db_timeout_ms_t timeout);
 
         rocprofvis_dm_result_t SetPromise(rocprofvis_dm_result_t status);
         bool Stopped();
+
+        void ShowProgress(rocprofvis_dm_charptr_t db_name, double step, rocprofvis_dm_charptr_t action, rocprofvis_db_status_t status);
 
     private:
         std::promise<rocprofvis_dm_result_t> m_promise;
         std::future<rocprofvis_dm_result_t> m_future;
         std::atomic<bool> m_stop;
+        rocprofvis_db_progress_callback_t m_progress_callback;
+        double m_progress;
     public:
         std::thread m_worker;
 };

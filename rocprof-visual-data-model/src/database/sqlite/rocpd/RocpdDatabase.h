@@ -18,6 +18,12 @@ typedef struct
     uint64_t recordId;
 } LinkageId;
 
+typedef struct
+{
+    uint64_t apiId;
+    uint64_t opId;
+} FlowPair;
+
 typedef std::map<uint64_t, uint32_t> StringMap;
 typedef std::pair<uint64_t,uint32_t> StringPair;
 typedef std::map<uint64_t, LinkageId> LinkageMap;
@@ -47,6 +53,8 @@ class RocpdDatabase : public SqliteDatabase
         static int callback_add_metrics_record_all_tracks(void *data, int argc, char **argv, char **azColName);
         static int callback_add_strings_record(void *data, int argc, char **argv, char **azColName);
         static int callback_add_flow_info(void *data, int argc, char **argv, char **azColName);
+        
+        static int callback_fill_flow_array(void *data, int argc, char **argv, char **azColName);
 
         static const char* getRecordQuery(TrackProperties props);
         const bool convertStringId(const uint64_t dbStringId, uint32_t & stringId);
@@ -62,6 +70,7 @@ class RocpdDatabase : public SqliteDatabase
         StringMap                       stringRefs;
         std::vector<MetricName>         metricNames;
         int                             trackId;
+        std::vector<FlowPair>        testLinkageArray;
 
 
 };

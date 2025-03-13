@@ -12,26 +12,25 @@ namespace RocProfVis
 namespace View
 {
 
-Grid::Grid() 
-{
-}
-Grid::~Grid()
-{
-}
+Grid::Grid() {}
+Grid::~Grid() {}
 
 void
 Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
                  ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x)
 {
-    ImVec2        cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2        content_size    = ImGui::GetContentRegionAvail();
-    float         range           = (v_max_x + movement) - (v_min_x + movement);
-    constexpr int number_of_gridlines =
-        50;  // determines the number of gridlines in the grid.
+    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+    ImVec2 content_size    = ImGui::GetContentRegionAvail();
+    float  range           = (v_max_x + movement) - (v_min_x + movement);
+    ImVec2 displaySize     = ImGui::GetIO().DisplaySize;
+
+    int number_of_gridlines = static_cast<int>(
+        25 *
+        (displaySize.x / 2500));  // determines the number of gridlines in the grid based on resolution. 
+
     float steps =
         (max_x - min_x) /
         number_of_gridlines;  // amount the loop which generates the grid iterates by.
-    ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
@@ -39,9 +38,10 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
     if(ImGui::BeginChild("Grid"), ImVec2(displaySize.x, displaySize.y - 30.0f), true,
        window_flags)
     {
-        for(float raw_position_points_x = min_x; raw_position_points_x < max_x;
+        for(float raw_position_points_x = min_x; raw_position_points_x < max_x + steps;
             raw_position_points_x += steps)
         {
+            std::cout << displaySize.x << std::endl;
             // loop through min-max and create appropriate number of scale markers with
             // marker value printed at bottom.
             float normalized_start =
@@ -55,7 +55,7 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
                 IM_COL32(0, 0, 0, 128), 1.0f);
 
             char label[32];
-            snprintf(label, sizeof(label), "%.2f", raw_position_points_x - min_x);
+            snprintf(label, sizeof(label), "%.0f", raw_position_points_x - min_x);
             // All though the gridlines are drawn based on where they should be on the
             // scale the raw values are used to represent them.
             ImVec2 labelSize = ImGui::CalcTextSize(label);

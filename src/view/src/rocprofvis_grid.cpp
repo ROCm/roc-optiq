@@ -36,7 +36,7 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 
-    if(ImGui::BeginChild("Grid"), ImVec2(displaySize.x, displaySize.y), true,
+    if(ImGui::BeginChild("Grid"), ImVec2(displaySize.x, displaySize.y - 30.0f), true,
        window_flags)
     {
         for(float raw_position_points_x = min_x; raw_position_points_x < max_x;
@@ -51,7 +51,7 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
 
             draw_list->AddLine(
                 ImVec2(normalized_start, cursor_position.y),
-                ImVec2(normalized_start, cursor_position.y + content_size.y),
+                ImVec2(normalized_start, cursor_position.y + content_size.y - 50.0f),
                 IM_COL32(0, 0, 0, 128), 1.0f);
 
             char label[32];
@@ -64,6 +64,10 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
                        cursor_position.y + content_size.y - labelSize.y - 5);
             draw_list->AddText(labelPos, IM_COL32(0, 0, 0, 255), label);
         }
+        draw_list->AddLine(
+            ImVec2(0, cursor_position.y + content_size.y - 50.0f),
+            ImVec2(displaySize.x, cursor_position.y + content_size.y - 50.0f),
+            IM_COL32(0, 0, 0, 128), 1.0f);
     }
     ImGui::EndChild();
 }

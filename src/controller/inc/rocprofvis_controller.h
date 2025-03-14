@@ -518,10 +518,12 @@ typedef enum rocprofvis_controller_table_properties_t
 */
 typedef enum rocprofvis_controller_future_properties_t
 {
-    // Result object
+    // Result code
     kRPVControllerFutureResult = 0xB0000000,
-    // Type of result object, see rocprofvis_controller_object_type_t
-    kRPVControllerFutureType = 0xB0000001,
+    // Data object
+    kRPVControllerFutureObject = 0xB0000001,
+    // Type of object, see rocprofvis_controller_object_type_t
+    kRPVControllerFutureType = 0xB0000002,
 } rocprofvis_controller_future_properties_t;
 
 typedef uint32_t rocprofvis_property_t;
@@ -550,7 +552,16 @@ extern "C"
 * @param filename File to open.
 * @returns A valid controller, initialized to load the trace or nullptr on error.
 */
-rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename);
+rocprofvis_controller_t* rocprofvis_controller_alloc(void);
+
+/*
+* Loads the file into the controller or returns an error.
+* @param controller The controller to load into.
+* @param filename The file to load.
+* @param future The object that tells you when the file has been loaded.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_future_t* future);
 /* JSON: CreateController
 {
     file_path: String,
@@ -582,7 +593,7 @@ rocprofvis_controller_array_t* rocprofvis_controller_array_alloc(uint32_t initia
 * @param value Value to write to.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_get_uint64(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, uint64_t* value);
+rocprofvis_result_t rocprofvis_controller_get_uint64(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, uint64_t* value);
 
 /*
 * Gets the property value from the provided object or returns an error.
@@ -592,7 +603,7 @@ rocprofvis_result_t rocprofvis_controller_get_uint64(rocprofvis_handle_t* object
 * @param value Value to write to.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_get_double(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, double* value);
+rocprofvis_result_t rocprofvis_controller_get_double(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, double* value);
 
 /*
 * Gets the property value from the provided object or returns an error.
@@ -602,7 +613,7 @@ rocprofvis_result_t rocprofvis_controller_get_double(rocprofvis_handle_t* object
 * @param value Value to write to.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value);
+rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value);
 
 /*
 * Gets the property value from the provided object or returns an error.
@@ -613,7 +624,7 @@ rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object
 * @param length Pointer to integer that contains the length of the buffer or to write the length of the string to.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length);
+rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length);
 
 /*
 * Waits on the future until it is completed or an error or timeout occurs.
@@ -750,7 +761,7 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controlle
 * @param output The array to write to
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_controller_t* controller, rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, uint32_t count, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
+rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_controller_t* controller, rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, uint32_t count, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
 /* JSON: GetIndexedProperty
 {
     controller: Int,
@@ -841,7 +852,7 @@ rocprofvis_controller_flow_control_t* rocprofvis_controller_flow_control_alloc(v
 * @param value Value to write.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_set_uint64(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, uint64_t value);
+rocprofvis_result_t rocprofvis_controller_set_uint64(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, uint64_t value);
 
 /*
 * Sets the property value from the provided object or returns an error.
@@ -851,7 +862,7 @@ rocprofvis_result_t rocprofvis_controller_set_uint64(rocprofvis_handle_t* object
 * @param value Value to write.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_set_double(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, double value);
+rocprofvis_result_t rocprofvis_controller_set_double(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, double value);
 
 /*
 * Sets the property value from the provided object or returns an error.
@@ -861,7 +872,7 @@ rocprofvis_result_t rocprofvis_controller_set_double(rocprofvis_handle_t* object
 * @param value Value to write.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_set_object(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value);
+rocprofvis_result_t rocprofvis_controller_set_object(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value);
 
 /*
 * Sets the property value from the provided object or returns an error.
@@ -872,7 +883,7 @@ rocprofvis_result_t rocprofvis_controller_set_object(rocprofvis_handle_t* object
 * @param length Length of string to write.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_set_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, char* value, uint32_t length);
+rocprofvis_result_t rocprofvis_controller_set_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char* value, uint32_t length);
 
 /*
 * Frees the provided track

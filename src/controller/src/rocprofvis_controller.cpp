@@ -8,6 +8,7 @@
 #include <future>
 #include <map>
 #include <vector>
+#include <algorithm>
 
 #include "rocprofvis_trace.h"
 
@@ -22,6 +23,47 @@ class Sample;
 class Event;
 class SampleLOD;
 class EventLOD;
+
+template<typename Pointer, typename Type, unsigned Enum>
+class Reference
+{
+public:
+    Reference(Pointer* ptr)
+    : m_object(nullptr)
+    {
+        Type* t = (Type*)ptr;
+        m_object = (t && t->GetType() == Enum) ? t : nullptr; 
+    }
+
+    ~Reference()
+    {
+    }
+
+    bool IsValid(void) const
+    {
+        return m_object != nullptr;
+    }
+
+    Type* Get(void)
+    {
+        return m_object;
+    }
+
+    Type& operator*()
+    {
+        assert(m_object);
+        return *m_object;
+    }
+
+    Type* operator->()
+    {
+        assert(m_object);
+        return m_object;
+    }
+
+private:
+    Type* m_object;
+};
 
 class Data
 {
@@ -211,6 +253,11 @@ public:
     rocprofvis_controller_primitive_type_t GetType(void) const
     {
         return m_type;
+    }
+
+    void SetType(rocprofvis_controller_primitive_type_t type)
+    {
+        m_type = type;
     }
 
     rocprofvis_result_t GetObject(rocprofvis_handle_t** object)
@@ -487,15 +534,306 @@ public:
     virtual rocprofvis_controller_object_type_t GetType(void) = 0;
 
     // Handlers for getters.
-    virtual rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) = 0;
-    virtual rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) = 0;
-    virtual rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) = 0;
-    virtual rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) = 0;
+    virtual rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) = 0;
+    virtual rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) = 0;
+    virtual rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) = 0;
+    virtual rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) = 0;
 
-    virtual rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) = 0;
-    virtual rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) = 0;
-    virtual rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) = 0;
-    virtual rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) = 0;
+    virtual rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) = 0;
+    virtual rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) = 0;
+    virtual rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) = 0;
+    virtual rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) = 0;
+};
+
+class Array : public Handle
+{
+public:
+    Array() {}
+    virtual ~Array() {}
+
+    rocprofvis_controller_object_type_t GetType(void) final
+    {
+        return kRPVControllerObjectTypeArray;
+    }
+
+    // Handlers for getters.
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if (value)
+        {
+            switch (property)
+            {
+                case kRPVControllerArrayEntryIndexed:
+                {
+                    if (index < m_array.size())
+                    {
+                        result = m_array[index].GetUInt64(value);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultInvalidArgument;   
+                    }
+                    break;
+                }
+                case kRPVControllerArrayNumEntries:
+                {
+                    *value = m_array.size();
+                    result = kRocProfVisResultSuccess;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidEnum;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if (value)
+        {
+            switch (property)
+            {
+                case kRPVControllerArrayEntryIndexed:
+                {
+                    if (index < m_array.size())
+                    {
+                        result = m_array[index].GetDouble(value);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultInvalidArgument;   
+                    }
+                    break;
+                }
+                case kRPVControllerArrayNumEntries:
+                {
+                    result = kRocProfVisResultInvalidType;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidEnum;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if (value)
+        {
+            switch (property)
+            {
+                case kRPVControllerArrayEntryIndexed:
+                {
+                    if (index < m_array.size())
+                    {
+                        result = m_array[index].GetObject(value);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultInvalidArgument;   
+                    }
+                    break;
+                }
+                case kRPVControllerArrayNumEntries:
+                {
+                    result = kRocProfVisResultInvalidType;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidEnum;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if (value)
+        {
+            switch (property)
+            {
+                case kRPVControllerArrayEntryIndexed:
+                {
+                    if (index < m_array.size())
+                    {
+                        result = m_array[index].GetString(value, length);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultInvalidArgument;   
+                    }
+                    break;
+                }
+                case kRPVControllerArrayNumEntries:
+                {
+                    result = kRocProfVisResultInvalidType;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidEnum;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if (value)
+        {
+            switch (property)
+            {
+                case kRPVControllerArrayEntryIndexed:
+                {
+                    if (index < m_array.size())
+                    {
+                        result = m_array[index].SetUInt64(value);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultInvalidArgument;   
+                    }
+                    break;
+                }
+                case kRPVControllerArrayNumEntries:
+                {
+                    if (value != m_array.size())
+                    {
+                        m_array.resize(value);
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultSuccess;
+                    }
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidEnum;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultUnknownError;
+        if (value)
+        {
+            switch (property)
+            {
+                case kRPVControllerArrayEntryIndexed:
+                {
+                    if (index < m_array.size())
+                    {
+                        result = m_array[index].SetDouble(value);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultInvalidArgument;   
+                    }
+                    break;
+                }
+                case kRPVControllerArrayNumEntries:
+                {
+                    result = kRocProfVisResultReadOnlyError;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidArgument;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultUnknownError;
+        if (value)
+        {
+            switch (property)
+            {
+                case kRPVControllerArrayEntryIndexed:
+                {
+                    if (index < m_array.size())
+                    {
+                        m_array[index].SetType(kRPVControllerPrimitiveTypeObject);
+                        result = m_array[index].SetObject(value);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultInvalidArgument;   
+                    }
+                    break;
+                }
+                case kRPVControllerArrayNumEntries:
+                {
+                    result = kRocProfVisResultReadOnlyError;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidArgument;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultUnknownError;
+        if (value)
+        {
+            switch (property)
+            {
+                case kRPVControllerArrayEntryIndexed:
+                {
+                    if (index < m_array.size())
+                    {
+                        result = m_array[index].SetString(value);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultInvalidArgument;   
+                    }
+                    break;
+                }
+                case kRPVControllerArrayNumEntries:
+                {
+                    result = kRocProfVisResultReadOnlyError;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidArgument;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+private:
+    std::vector<Data> m_array;
 };
 
 class Sample : public Handle
@@ -518,7 +856,7 @@ public:
     }
 
     // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) override
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -570,7 +908,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) override
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -642,7 +980,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) override
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -689,7 +1027,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) override
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -720,7 +1058,7 @@ public:
         return result;
     }
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) override
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -754,7 +1092,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) override
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -788,7 +1126,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) override
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -834,7 +1172,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) override
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -958,7 +1296,7 @@ public:
     }
 
     // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) final
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -996,7 +1334,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) final
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
         if (value)
@@ -1058,7 +1396,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) final
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1103,12 +1441,12 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) final
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final
     {
         return Sample::GetString(property, index, value, length);
     }
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) final
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -1151,7 +1489,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) final
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -1211,7 +1549,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) final
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1256,7 +1594,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) final
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1321,7 +1659,7 @@ public:
     }
 
     // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) override
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1379,7 +1717,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) override
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1422,7 +1760,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) override
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1496,7 +1834,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) override
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1547,7 +1885,7 @@ public:
         return result;
     }
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) override
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -1610,7 +1948,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) override
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -1650,7 +1988,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) override
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1744,7 +2082,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) override
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1813,7 +2151,7 @@ public:
     }
 
     // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) final
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1847,11 +2185,11 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) final
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final
     {
         return Event::GetDouble(property, index, value);
     }
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) final
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -1892,12 +2230,12 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) final
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final
     {
         return Event::GetString(property, index, value, length);
     }
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) final
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -1931,11 +2269,11 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) final
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final
     {
         return Event::SetDouble(property, index, value);
     }
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) final
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -1974,7 +2312,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) final
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final
     {
         return Event::SetString(property, index, value, length);
     }
@@ -2031,7 +2369,7 @@ class Segment
             return *this;
         }
 
-        std::map<double, Handle*>& GetEntries()
+        std::multimap<double, Handle*>& GetEntries()
         {
             return m_entries;
         }
@@ -2047,7 +2385,7 @@ class Segment
         }
 
     private:
-        std::map<double, Handle*> m_entries;
+        std::multimap<double, Handle*> m_entries;
         bool m_valid;
     };
 
@@ -2056,7 +2394,7 @@ class Segment
         Event* new_event = new EventLOD(0, event_start, event_end);
         if (new_event)
         {
-            std::map<double, Handle*>& new_events = m_lods[lod_to_generate].GetEntries();
+            std::multimap<double, Handle*>& new_events = m_lods[lod_to_generate]->GetEntries();
             new_events.insert(std::make_pair(event_start, new_event));
         }
     }
@@ -2066,7 +2404,7 @@ class Segment
         SampleLOD* new_sample = new SampleLOD(type, 0, timestamp, samples);
         if (new_sample)
         {
-            std::map<double, Handle*>& new_samples = m_lods[lod_to_generate].GetEntries();
+            std::multimap<double, Handle*>& new_samples = m_lods[lod_to_generate]->GetEntries();
             new_samples.insert(std::make_pair(timestamp, new_sample));
         }
     }
@@ -2091,7 +2429,11 @@ public:
     }
 
     ~Segment()
-    {
+    { 
+        for (auto& pair : m_lods)
+        {
+            delete pair.second;
+        }
     }
 
     void GenerateLOD(uint32_t lod_to_generate)
@@ -2099,9 +2441,9 @@ public:
         if (lod_to_generate > 0)
         {
             uint32_t previous_lod = (uint32_t)(lod_to_generate - 1);
-            LOD lod = m_lods[previous_lod];
-            std::map<double, Handle*>& values = lod.GetEntries();
-            if (!lod.IsValid() && values.size() > 1)
+            LOD* lod = m_lods[previous_lod];
+            std::multimap<double, Handle*>& values = lod->GetEntries();
+            if(!lod->IsValid() && values.size() > 1)
             {
                 double scale = 1.0;
                 for(uint32_t i = 0; i < lod_to_generate; i++)
@@ -2199,7 +2541,7 @@ public:
                     }
                 }
 
-                lod.SetValid(true);
+                lod->SetValid(true);
             }
         }
     }
@@ -2242,14 +2584,59 @@ public:
         if (m_lods.find(0) == m_lods.end())
         {
             // LOD0 is always valid or nothing will work.
-            m_lods[0] = LOD();
-            m_lods[0].SetValid(true);
+            m_lods[0] = new LOD();
+            m_lods[0]->SetValid(true);
         }
-        m_lods[0].GetEntries().insert(std::make_pair(timestamp, event));
+        m_lods[0]->GetEntries().insert(std::make_pair(timestamp, event));
+    }
+
+    rocprofvis_result_t Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index)
+    {
+        rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+        if (m_lods.find(lod) != m_lods.end()
+           && (start <= m_start_timestamp && end >= m_end_timestamp) || (start >= m_start_timestamp && start < m_end_timestamp) || (end > m_start_timestamp && end <= m_end_timestamp))
+        {
+            auto& lod_ref = m_lods[lod];
+            auto& entries = lod_ref->GetEntries();
+            auto lower = std::lower_bound(entries.begin(), entries.end(), start, [](std::pair<double, Handle*> const& pair, double const& start) -> bool
+            {
+                double max_ts = pair.first;
+                pair.second->GetDouble(kRPVControllerEventStartTimestamp, 0, &max_ts);
+
+                bool result = max_ts < start;
+                return result;
+            });
+            auto upper = std::upper_bound(entries.begin(), entries.end(), end, [](double const& end, std::pair<double, Handle*> const& pair) -> bool
+            {
+                bool result = end <= pair.first;
+                return result;
+            });
+            while (lower != upper)
+            {
+                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, index + 1);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    result = array.SetObject(kRPVControllerArrayEntryIndexed, index++, (rocprofvis_handle_t*)lower->second);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        ++lower;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        return result;
     }
 
 private:
-    std::map<uint32_t, LOD> m_lods;
+    std::map<uint32_t, LOD*> m_lods;
     double m_start_timestamp;
     double m_end_timestamp;
     double m_min_timestamp;
@@ -2272,7 +2659,45 @@ public:
 
     virtual ~Track()
     {
+        for (auto& pair : m_segments)
+        {
+            delete pair.second;
+        }
+    }
 
+    rocprofvis_result_t Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index)
+    {
+        rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+        if((start <= m_start_timestamp && end >= m_end_timestamp) || (start >= m_start_timestamp && start < m_end_timestamp) || (end > m_start_timestamp && end <= m_end_timestamp))
+        {
+            auto lower = std::lower_bound(m_segments.begin(), m_segments.end(), std::max(m_start_timestamp, start), [](std::pair<double, Segment*> const& pair, double const& start) -> bool
+            {
+                bool result = (pair.second->GetMaxTimestamp() < start);
+                return result;
+            });
+            auto upper = std::upper_bound(m_segments.begin(), m_segments.end(), std::min(m_end_timestamp, end), [](double const& end, std::pair<double, Segment*> const& pair) -> bool
+            {
+                bool result = (end <= pair.first);
+                return result;
+            });
+            while (lower != upper)
+            {
+                result = lower->second->Fetch(lod, start, end, array, index);
+                if (result == kRocProfVisResultSuccess)
+                {
+                    ++lower;
+                }
+                else if (result == kRocProfVisResultOutOfRange)
+                {
+                    ++lower;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        return result;
     }
 
     rocprofvis_controller_object_type_t GetType(void) final
@@ -2281,7 +2706,7 @@ public:
     }
 
     // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) final
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
         if (value)
@@ -2320,7 +2745,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) final
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -2358,7 +2783,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) final
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final
     {
         assert(0);
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
@@ -2396,7 +2821,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) final
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -2435,7 +2860,7 @@ public:
         return result;
     }
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) final
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -2472,7 +2897,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) final
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         switch(property)
@@ -2505,7 +2930,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) final
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -2546,24 +2971,25 @@ public:
                             {
                                 double segment_duration = 10000.0;
                                 double relative = (timestamp - m_start_timestamp);
-                                double segment_start = m_start_timestamp + ((floor(relative / segment_duration) + 1.0) * segment_duration);m_start_timestamp;
+                                double num_segments = floor(relative / segment_duration);
+                                double segment_start = m_start_timestamp + (num_segments * segment_duration);
 
                                 if (m_segments.find(segment_start) == m_segments.end())
                                 {
                                     double segment_end = segment_start + segment_duration;
-                                    Segment segment;
-                                    segment.SetStartEndTimestamps(segment_start, segment_end);
-                                    segment.SetMinTimestamp(timestamp); 
+                                    Segment* segment = new Segment;
+                                    segment->SetStartEndTimestamps(segment_start, segment_end);
+                                    segment->SetMinTimestamp(timestamp); 
                                     if (object_type == kRPVControllerObjectTypeEvent)
                                     {
                                         property = kRPVControllerEventStartTimestamp;
                                         double end_timestamp = timestamp;
                                         object->GetDouble(kRPVControllerEventEndTimestamp, 0, &end_timestamp);
-                                        segment.SetMaxTimestamp(end_timestamp);
+                                        segment->SetMaxTimestamp(end_timestamp);
                                     }
                                     else
                                     {
-                                        segment.SetMaxTimestamp(timestamp);
+                                        segment->SetMaxTimestamp(timestamp);
                                     }
                                     m_segments.insert(std::make_pair(segment_start, segment));
                                     result = (m_segments.find(segment_start) != m_segments.end()) ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
@@ -2571,15 +2997,15 @@ public:
 
                                 if (result == kRocProfVisResultSuccess)
                                 {
-                                    Segment& segment = m_segments[segment_start];
-                                    segment.SetMinTimestamp(std::min(segment.GetMinTimestamp(), timestamp));
+                                    Segment* segment = m_segments[segment_start];
+                                    segment->SetMinTimestamp(std::min(segment->GetMinTimestamp(), timestamp));
                                     double end_timestamp = timestamp;
                                     if (object_type == kRPVControllerObjectTypeEvent)
                                     {   
                                         object->GetDouble(kRPVControllerEventEndTimestamp, 0, &end_timestamp); 
                                     }
-                                    segment.SetMaxTimestamp(std::max(segment.GetMaxTimestamp(), end_timestamp));
-                                    segment.Insert(timestamp, object);
+                                    segment->SetMaxTimestamp(std::max(segment->GetMaxTimestamp(), end_timestamp));
+                                    segment->Insert(timestamp, object);
                                 }
                             }
                             else
@@ -2609,7 +3035,7 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) final
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (value)
@@ -2647,145 +3073,10 @@ private:
     uint64_t m_id;
     uint64_t m_num_elements;
     rocprofvis_controller_track_type_t m_type;
-    std::map<double, Segment> m_segments;
+    std::map<double, Segment*> m_segments;
     double m_start_timestamp;
     double m_end_timestamp;
     std::string m_name;
-};
-
-class Timeline : public Handle
-{
-public:
-    Timeline()
-    {
-
-    }
-
-    virtual ~Timeline()
-    {
-
-    }
-
-    rocprofvis_controller_object_type_t GetType(void) final
-    {
-        return kRPVControllerObjectTypeTimeline;
-    }
-
-    // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (value)
-        {
-            switch(property)
-            {
-                case kRPVControllerTimelineNumTracks:
-                {
-                    *value = 0;
-                    result = kRocProfVisResultSuccess;
-                    break;
-                }
-                case kRPVControllerTimelineMinTimestamp:
-                case kRPVControllerTimelineMaxTimestamp:
-                case kRPVControllerTimelineTrackIndexed:
-                default:
-                {
-                    result = kRocProfVisResultNotSupported;
-                    break;
-                }
-            }
-        }
-        return result;
-    }
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (value)
-        {
-            switch(property)
-            {
-                case kRPVControllerTimelineMinTimestamp:
-                {
-                    *value = 0;
-                    result = kRocProfVisResultSuccess;
-                    break;
-                }
-                case kRPVControllerTimelineMaxTimestamp:
-                {
-                    *value = 0;
-                    result = kRocProfVisResultSuccess;
-                    break;
-                }
-                case kRPVControllerTimelineNumTracks:
-                case kRPVControllerTimelineTrackIndexed:
-                default:
-                {
-                    result = kRocProfVisResultNotSupported;
-                    break;
-                }
-            }
-        }
-        return result;
-    }
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (value)
-        {
-            switch(property)
-            {
-                case kRPVControllerTimelineTrackIndexed:
-                {
-                    *value = nullptr;
-                    result = kRocProfVisResultSuccess;
-                    break;
-                }
-                case kRPVControllerTimelineNumTracks:
-                case kRPVControllerTimelineMinTimestamp:
-                case kRPVControllerTimelineMaxTimestamp:
-                default:
-                {
-                    result = kRocProfVisResultNotSupported;
-                    break;
-                }
-            }
-        }
-        return result;
-    }
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        return result;
-    }
-
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultReadOnlyError;
-        return result;
-    }
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultReadOnlyError;
-        return result;
-    }
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultReadOnlyError;
-        return result;
-    }
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultReadOnlyError;
-        return result;
-    }
 };
 
 class Future : public Handle
@@ -2799,9 +3090,19 @@ public:
         return kRPVControllerObjectTypeFuture;
     }
 
+    void Set(std::future<rocprofvis_result_t>&& future)
+    {
+        assert(future.valid() && !m_future.valid());
+        m_future = std::move(future);
+    }
+
+    bool IsValid() const
+    {
+        return m_future.valid();
+    }
+
     rocprofvis_result_t Wait(float timeout)
     {
-        assert(0);
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
         if (timeout == FLT_MAX)
         {
@@ -2826,108 +3127,37 @@ public:
     }
 
     // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (value && (property == kRPVControllerFutureResult))
-        {
-            result = m_future.get().GetUInt64(value);
-        }
-        return result;
-    }
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (value && (property == kRPVControllerFutureResult))
-        {
-            result = m_future.get().GetDouble(value);
-        }
-        return result;
-    }
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (value && (property == kRPVControllerFutureResult))
-        {
-            result = m_future.get().GetObject(value);
-        }
-        return result;
-    }
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) final
-    {
-        assert(0);
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (property == kRPVControllerFutureResult)
-        {
-            result = m_future.get().GetString(value, length);
-        }
-        return result;
-    }
-
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) final
-    {
-        assert(0);
-        return kRocProfVisResultReadOnlyError;
-    }
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) final
-    {
-        assert(0);
-        return kRocProfVisResultReadOnlyError;
-    }
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) final
-    {
-        assert(0);
-        return kRocProfVisResultReadOnlyError;
-    }
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) final
-    {
-        assert(0);
-        return kRocProfVisResultReadOnlyError;
-    }
-private:
-    std::future<Data> m_future;
-};
-
-class Array : public Handle
-{
-public:
-    Array() {}
-    virtual ~Array() {}
-
-    rocprofvis_controller_object_type_t GetType(void) final
-    {
-        return kRPVControllerObjectTypeArray;
-    }
-
-    // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) final
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (value)
+        if (value && (property == kRPVControllerFutureResult))
         {
             switch (property)
             {
-                case kRPVControllerArrayEntryIndexed:
+                case kRPVControllerFutureResult:
                 {
-                    if (index < m_array.size())
+                    if(m_future.valid())
                     {
-                        result = m_array[index].GetUInt64(value);
+                        *value = m_future.get();
+                        result = kRocProfVisResultSuccess;
                     }
                     else
                     {
-                        result = kRocProfVisResultInvalidArgument;   
+                        result = kRocProfVisResultUnknownError;
                     }
                     break;
                 }
-                case kRPVControllerArrayNumEntries:
+                case kRPVControllerFutureType:
                 {
-                    *value = m_array.size();
+                    *value = m_object.GetType();
                     result = kRocProfVisResultSuccess;
                     break;
                 }
+                case kRPVControllerFutureObject:
+                {
+                    result = m_object.GetUInt64(value);
+                    break;
+                }
                 default:
                 {
                     result = kRocProfVisResultInvalidEnum;
@@ -2937,26 +3167,20 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) final
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (value)
+        if(value && (property == kRPVControllerFutureResult))
         {
-            switch (property)
+            switch(property)
             {
-                case kRPVControllerArrayEntryIndexed:
+                case kRPVControllerFutureObject:
                 {
-                    if (index < m_array.size())
-                    {
-                        result = m_array[index].GetDouble(value);
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultInvalidArgument;   
-                    }
+                    result = m_object.GetDouble(value);
                     break;
                 }
-                case kRPVControllerArrayNumEntries:
+                case kRPVControllerFutureResult:
+                case kRPVControllerFutureType:
                 {
                     result = kRocProfVisResultInvalidType;
                     break;
@@ -2970,26 +3194,20 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) final
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (value)
+        if(value && (property == kRPVControllerFutureResult))
         {
-            switch (property)
+            switch(property)
             {
-                case kRPVControllerArrayEntryIndexed:
+                case kRPVControllerFutureObject:
                 {
-                    if (index < m_array.size())
-                    {
-                        result = m_array[index].GetObject(value);
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultInvalidArgument;   
-                    }
+                    result = m_object.GetObject(value);
                     break;
                 }
-                case kRPVControllerArrayNumEntries:
+                case kRPVControllerFutureResult:
+                case kRPVControllerFutureType:
                 {
                     result = kRocProfVisResultInvalidType;
                     break;
@@ -3003,26 +3221,20 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) final
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (value)
+        if(value && (property == kRPVControllerFutureResult))
         {
-            switch (property)
+            switch(property)
             {
-                case kRPVControllerArrayEntryIndexed:
+                case kRPVControllerFutureObject:
                 {
-                    if (index < m_array.size())
-                    {
-                        result = m_array[index].GetString(value, length);
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultInvalidArgument;   
-                    }
+                    result = m_object.GetString(value, length);
                     break;
                 }
-                case kRPVControllerArrayNumEntries:
+                case kRPVControllerFutureResult:
+                case kRPVControllerFutureType:
                 {
                     result = kRocProfVisResultInvalidType;
                     break;
@@ -3037,255 +3249,443 @@ public:
         return result;
     }
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) final
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final
     {
-        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (value)
-        {
-            switch (property)
-            {
-                case kRPVControllerArrayEntryIndexed:
-                {
-                    if (index < m_array.size())
-                    {
-                        result = m_array[index].SetUInt64(value);
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultInvalidArgument;   
-                    }
-                    break;
-                }
-                case kRPVControllerArrayNumEntries:
-                {
-                    if (value != m_array.size())
-                    {
-                        m_array.resize(value);
-                        result = kRocProfVisResultSuccess;
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultSuccess;
-                    }
-                    break;
-                }
-                default:
-                {
-                    result = kRocProfVisResultInvalidEnum;
-                    break;
-                }
-            }
-        }
-        return result;
+        assert(0);
+        return kRocProfVisResultReadOnlyError;
     }
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) final
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final
     {
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (value)
-        {
-            switch (property)
-            {
-                case kRPVControllerArrayEntryIndexed:
-                {
-                    if (index < m_array.size())
-                    {
-                        result = m_array[index].SetDouble(value);
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultInvalidArgument;   
-                    }
-                    break;
-                }
-                case kRPVControllerArrayNumEntries:
-                {
-                    result = kRocProfVisResultReadOnlyError;
-                    break;
-                }
-                default:
-                {
-                    result = kRocProfVisResultInvalidArgument;
-                    break;
-                }
-            }
-        }
-        return result;
+        assert(0);
+        return kRocProfVisResultReadOnlyError;
     }
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) final
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final
     {
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (value)
-        {
-            switch (property)
-            {
-                case kRPVControllerArrayEntryIndexed:
-                {
-                    if (index < m_array.size())
-                    {
-                        result = m_array[index].SetObject(value);
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultInvalidArgument;   
-                    }
-                    break;
-                }
-                case kRPVControllerArrayNumEntries:
-                {
-                    result = kRocProfVisResultReadOnlyError;
-                    break;
-                }
-                default:
-                {
-                    result = kRocProfVisResultInvalidArgument;
-                    break;
-                }
-            }
-        }
-        return result;
+        assert(0);
+        return kRocProfVisResultReadOnlyError;
     }
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) final
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final
     {
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        if (value)
-        {
-            switch (property)
-            {
-                case kRPVControllerArrayEntryIndexed:
-                {
-                    if (index < m_array.size())
-                    {
-                        result = m_array[index].SetString(value);
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultInvalidArgument;   
-                    }
-                    break;
-                }
-                case kRPVControllerArrayNumEntries:
-                {
-                    result = kRocProfVisResultReadOnlyError;
-                    break;
-                }
-                default:
-                {
-                    result = kRocProfVisResultInvalidArgument;
-                    break;
-                }
-            }
-        }
-        return result;
+        assert(0);
+        return kRocProfVisResultReadOnlyError;
     }
 private:
-    std::vector<Data> m_array;
+    std::future<rocprofvis_result_t> m_future;
+    Data m_object;
 };
 
-class Trace : public Handle
+class Timeline : public Handle
 {
 public:
-    Trace() {}
-    virtual ~Trace()
+    Timeline()
+    : m_id(0)
     {
-        for (Track* track : m_tracks)
+    }
+
+    ~Timeline()
+    {
+        for(Track* track : m_tracks)
         {
             delete track;
         }
     }
 
-    bool Load(char const* const filename)
+    rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
+                                   double start, double end)
     {
-        bool bResult = false;
-        if (filename && strlen(filename))
+        rocprofvis_result_t error = kRocProfVisResultUnknownError;
+
+        future.Set(std::async(
+            std::launch::async, [&track, &array, start, end]() -> rocprofvis_result_t {
+                rocprofvis_result_t result = kRocProfVisResultUnknownError;
+                uint64_t            index  = 0;
+                result                     = track.Fetch(0, start, end, array, index);
+                return result;
+            }));
+
+        if(future.IsValid())
         {
-            rocprofvis_trace_data_t trace_object;
-            std::future<bool> future = rocprofvis_trace_async_load_json_trace(filename, trace_object);
-            if (future.valid())
-            {
-                future.wait();
-                bResult = future.get();
+            error = kRocProfVisResultSuccess;
+        }
 
-                if (bResult)
+        return error;
+    }
+
+    rocprofvis_result_t Load(char const* const               filename,
+                             RocProfVis::Controller::Future& future)
+    {
+        assert(filename && strlen(filename));
+
+        rocprofvis_result_t result   = kRocProfVisResultInvalidArgument;
+        std::string         filepath = filename;
+        future.Set(
+            std::async(std::launch::async, [this, filepath]() -> rocprofvis_result_t {
+                rocprofvis_result_t     result = kRocProfVisResultUnknownError;
+                rocprofvis_trace_data_t trace_object;
+                std::future<bool>       future = rocprofvis_trace_async_load_json_trace(
+                    filepath.c_str(), trace_object);
+                if(future.valid())
                 {
-                    uint64_t event_id = 0;
-                    uint64_t sample_id = 0;
-                    uint64_t track_id = 0;
-                    for (auto& pair : trace_object.m_trace_data)
+                    future.wait();
+                    result = future.get() ? kRocProfVisResultSuccess
+                                          : kRocProfVisResultUnknownError;
+
+                    if(result == kRocProfVisResultSuccess)
                     {
-                        std::string const& name = pair.first;
-                        auto const& data = pair.second;
-
-                        for (auto& thread : data.m_threads)
+                        uint64_t event_id  = 0;
+                        uint64_t sample_id = 0;
+                        uint64_t track_id  = 0;
+                        for(auto& pair : trace_object.m_trace_data)
                         {
-                            auto type = thread.second.m_events.size() ? kRPVControllerTrackTypeEvents : kRPVControllerTrackTypeSamples;
-                            Track* track = new Track(type);
-                            track->SetString(kRPVControllerTrackName, 0, thread.first.c_str(), thread.first.length());
-                            track->SetUInt64(kRPVControllerTrackId, 0, track_id++);
-                            switch(type)
+                            std::string const& name = pair.first;
+                            auto const&        data = pair.second;
+
+                            for(auto& thread : data.m_threads)
                             {
-                                case kRPVControllerTrackTypeEvents:
+                                auto   type  = thread.second.m_events.size()
+                                                   ? kRPVControllerTrackTypeEvents
+                                                   : kRPVControllerTrackTypeSamples;
+                                Track* track = new Track(type);
+                                track->SetString(kRPVControllerTrackName, 0,
+                                                 thread.first.c_str(),
+                                                 thread.first.length());
+                                track->SetUInt64(kRPVControllerTrackId, 0, track_id++);
+                                switch(type)
                                 {
-                                    track->SetUInt64(kRPVControllerTrackNumberOfEntries, 0, thread.second.m_events.size());
-
-                                    double min_ts = DBL_MAX;
-                                    double max_ts = DBL_MIN;
-                                    for (auto& event : thread.second.m_events)
+                                    case kRPVControllerTrackTypeEvents:
                                     {
-                                        min_ts = std::min(event.m_start_ts, min_ts);
-                                        max_ts = std::max(event.m_start_ts+event.m_duration, max_ts);
-                                    }
-                                    track->SetDouble(kRPVControllerTrackMinTimestamp, 0, min_ts);
-                                    track->SetDouble(kRPVControllerTrackMaxTimestamp, 0, max_ts);
+                                        track->SetUInt64(
+                                            kRPVControllerTrackNumberOfEntries, 0,
+                                            thread.second.m_events.size());
 
-                                    uint64_t index = 0;
-                                    for (auto& event : thread.second.m_events)
-                                    {
-                                        Event* new_event = new Event(event_id++, event.m_start_ts, event.m_start_ts+event.m_duration);
-                                        if(new_event)
+                                        double min_ts = DBL_MAX;
+                                        double max_ts = DBL_MIN;
+                                        for(auto& event : thread.second.m_events)
                                         {
-                                            new_event->SetObject(kRPVControllerEventTrack, 0, (rocprofvis_handle_t*)track);
-                                            new_event->SetString(kRPVControllerEventName, 0, event.m_name.c_str(), event.m_name.length());
-                                            track->SetObject(kRPVControllerTrackEntry, index++, (rocprofvis_handle_t*)new_event);
+                                            min_ts = std::min(event.m_start_ts, min_ts);
+                                            max_ts = std::max(event.m_start_ts +
+                                                                  event.m_duration,
+                                                              max_ts);
                                         }
-                                    }
-                                    m_tracks.push_back(track);
-                                    break;
-                                }
-                                case kRPVControllerTrackTypeSamples:
-                                {
-                                    track->SetUInt64(kRPVControllerTrackNumberOfEntries, 0, thread.second.m_events.size());
+                                        track->SetDouble(kRPVControllerTrackMinTimestamp,
+                                                         0, min_ts);
+                                        track->SetDouble(kRPVControllerTrackMaxTimestamp,
+                                                         0, max_ts);
 
-                                    double min_ts = DBL_MAX;
-                                    double max_ts = DBL_MIN;
-                                    for (auto& sample : thread.second.m_counters)
-                                    {
-                                        min_ts = std::min(min_ts, sample.m_start_ts);
-                                        max_ts = std::max(max_ts, sample.m_start_ts);
-                                    }
-                                    track->SetDouble(kRPVControllerTrackMinTimestamp, 0, min_ts);
-                                    track->SetDouble(kRPVControllerTrackMaxTimestamp, 0, max_ts);
+                                        uint64_t index = 0;
+                                        for(auto& event : thread.second.m_events)
+                                        {
+                                            Event* new_event = new Event(
+                                                event_id++, event.m_start_ts,
+                                                event.m_start_ts + event.m_duration);
+                                            if(new_event)
+                                            {
+                                                result = new_event->SetObject(
+                                                    kRPVControllerEventTrack, 0,
+                                                    (rocprofvis_handle_t*) track);
+                                                assert(result ==
+                                                       kRocProfVisResultSuccess);
 
-                                    uint64_t index = 0;
-                                    for (auto& sample : thread.second.m_counters)
-                                    {
-                                        Sample* new_sample = new Sample(kRPVControllerPrimitiveTypeDouble, sample_id++, sample.m_start_ts);
-                                        new_sample->SetObject(kRPVControllerSampleTrack, 0, (rocprofvis_handle_t*)track);
-                                        track->SetObject(kRPVControllerTrackEntry, index++, (rocprofvis_handle_t*)new_sample);
+                                                result = new_event->SetString(
+                                                    kRPVControllerEventName, 0,
+                                                    event.m_name.c_str(),
+                                                    event.m_name.length());
+                                                assert(result ==
+                                                       kRocProfVisResultSuccess);
+
+                                                result = track->SetObject(
+                                                    kRPVControllerTrackEntry, index++,
+                                                    (rocprofvis_handle_t*) new_event);
+                                                assert(result ==
+                                                       kRocProfVisResultSuccess);
+                                            }
+                                        }
+                                        m_tracks.push_back(track);
+                                        break;
                                     }
-                                    m_tracks.push_back(track);
-                                    break;
-                                }
-                                default:
-                                {
-                                    break;
+                                    case kRPVControllerTrackTypeSamples:
+                                    {
+                                        track->SetUInt64(
+                                            kRPVControllerTrackNumberOfEntries, 0,
+                                            thread.second.m_events.size());
+
+                                        double min_ts = DBL_MAX;
+                                        double max_ts = DBL_MIN;
+                                        for(auto& sample : thread.second.m_counters)
+                                        {
+                                            min_ts = std::min(min_ts, sample.m_start_ts);
+                                            max_ts = std::max(max_ts, sample.m_start_ts);
+                                        }
+                                        track->SetDouble(kRPVControllerTrackMinTimestamp,
+                                                         0, min_ts);
+                                        track->SetDouble(kRPVControllerTrackMaxTimestamp,
+                                                         0, max_ts);
+
+                                        uint64_t index = 0;
+                                        for(auto& sample : thread.second.m_counters)
+                                        {
+                                            Sample* new_sample = new Sample(
+                                                kRPVControllerPrimitiveTypeDouble,
+                                                sample_id++, sample.m_start_ts);
+                                            new_sample->SetObject(
+                                                kRPVControllerSampleTrack, 0,
+                                                (rocprofvis_handle_t*) track);
+                                            track->SetObject(
+                                                kRPVControllerTrackEntry, index++,
+                                                (rocprofvis_handle_t*) new_sample);
+                                        }
+                                        m_tracks.push_back(track);
+                                        break;
+                                    }
+                                    default:
+                                    {
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                return result;
+            }));
+
+        if(future.IsValid())
+        {
+            result = kRocProfVisResultSuccess;
+        }
+
+        return result;
+    }
+
+    rocprofvis_controller_object_type_t GetType(void) final
+    {
+        return kRPVControllerObjectTypeTimeline;
+    }
+
+    // Handlers for getters.
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,
+                                  uint64_t* value) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultUnknownError;
+        if(value)
+        {
+            switch(property)
+            {
+                case kRPVControllerTimelineId:
+                {
+                    *value = m_id;
+                    result = kRocProfVisResultSuccess;
+                    break;
+                }
+                case kRPVControllerTimelineNumTracks:
+                {
+                    *value = m_tracks.size();
+                    result = kRocProfVisResultSuccess;
+                    break;
+                }
+                case kRPVControllerTimelineMinTimestamp:
+                case kRPVControllerTimelineMaxTimestamp:
+                case kRPVControllerTimelineTrackIndexed:
+                {
+                    result = kRocProfVisResultInvalidType;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidEnum;
+                    break;
+                }
             }
         }
-        return bResult;
+        return result;
+    }
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index,
+                                  double* value) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultUnknownError;
+        if(value)
+        {
+            switch(property)
+            {
+                case kRPVControllerTimelineMinTimestamp:
+                {
+                    if(m_tracks.size())
+                    {
+                        result = m_tracks.front()->GetDouble(
+                            kRPVControllerTrackMinTimestamp, 0, value);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultOutOfRange;
+                    }
+                    break;
+                }
+                case kRPVControllerTimelineMaxTimestamp:
+                {
+                    if(m_tracks.size())
+                    {
+                        result = m_tracks.back()->GetDouble(
+                            kRPVControllerTrackMaxTimestamp, 0, value);
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultOutOfRange;
+                    }
+                    break;
+                }
+                case kRPVControllerTimelineId:
+                case kRPVControllerTimelineNumTracks:
+                case kRPVControllerTimelineTrackIndexed:
+                {
+                    result = kRocProfVisResultInvalidType;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidEnum;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index,
+                                  rocprofvis_handle_t** value) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultUnknownError;
+        if(value)
+        {
+            switch(property)
+            {
+                case kRPVControllerTimelineTrackIndexed:
+                {
+                    if (index < m_tracks.size())
+                    {
+                        *value = (rocprofvis_handle_t*) m_tracks[index];
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultOutOfRange;
+                    }
+                    break;
+                }
+                case kRPVControllerTimelineId:
+                case kRPVControllerTimelineNumTracks:
+                case kRPVControllerTimelineMinTimestamp:
+                case kRPVControllerTimelineMaxTimestamp:
+                {
+                    result = kRocProfVisResultInvalidType;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidEnum;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index,
+                                  char* value, uint32_t* length) final
+    {
+        rocprofvis_result_t result = kRocProfVisResultUnknownError;
+        if(value)
+        {
+            switch(property)
+            {
+                case kRPVControllerTimelineId:
+                case kRPVControllerTimelineNumTracks:
+                case kRPVControllerTimelineMinTimestamp:
+                case kRPVControllerTimelineMaxTimestamp:
+                case kRPVControllerTimelineTrackIndexed:
+                {
+                    result = kRocProfVisResultInvalidType;
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidEnum;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index,
+                                  uint64_t value) final
+    {
+        assert(0);
+        return kRocProfVisResultReadOnlyError;
+    }
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index,
+                                  double value) final
+    {
+        assert(0);
+        return kRocProfVisResultReadOnlyError;
+    }
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index,
+                                  rocprofvis_handle_t* value) final
+    {
+        assert(0);
+        return kRocProfVisResultReadOnlyError;
+    }
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index,
+                                  char const* value, uint32_t length) final
+    {
+        assert(0);
+        return kRocProfVisResultReadOnlyError;
+    }
+
+private:
+    uint64_t            m_id;
+    std::vector<Track*> m_tracks;
+};
+
+class Trace : public Handle
+{
+public:
+    Trace()
+    : m_id(0)
+    , m_timeline(nullptr)
+    {
+    }
+
+    virtual ~Trace()
+    {
+        delete m_timeline;
+    }
+
+    rocprofvis_result_t Load(char const* const filename, RocProfVis::Controller::Future& future)
+    {
+        assert (filename && strlen(filename));
+        
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+
+        m_timeline = new Timeline();
+        if (m_timeline)
+        {
+            result = m_timeline->Load(filename, future);
+        }
+        else
+        {
+            result = kRocProfVisResultMemoryAllocError;
+        }
+
+        return result;
+    }
+
+    rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
+                                   double start, double end)
+    {
+        rocprofvis_result_t error = kRocProfVisResultUnknownError;
+        if(m_timeline)
+        {
+            error = m_timeline->AsyncFetch(track, future, array, start, end);
+        }
+        return error;
     }
 
     rocprofvis_controller_object_type_t GetType(void) final
@@ -3294,7 +3694,7 @@ public:
     }
 
     // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t* value) final
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final
     {
         assert(0);
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
@@ -3326,14 +3726,13 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint32_t index, double* value) final
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final
     {
         assert(0);
         return kRocProfVisResultNotSupported;
     }
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value) final
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final
     {
-        assert(0);
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
         if (value)
         {
@@ -3341,18 +3740,20 @@ public:
             {
                 case kRPVControllerTimeline:
                 {
-                    *value = nullptr;
+                    *value = (rocprofvis_handle_t*)m_timeline;
                     result = kRocProfVisResultSuccess;
                     break;
                 }
                 case kRPVControllerEventTable:
                 {
+                    assert(0);
                     *value = nullptr;
                     result = kRocProfVisResultSuccess;
                     break;
                 }
                 case kRPVControllerAnalysisViewIndexed:
                 {
+                    assert(0);
                     *value = nullptr;
                     result = kRocProfVisResultSuccess;
                     break;
@@ -3368,28 +3769,28 @@ public:
         }
         return result;
     }
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length) final
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final
     {
         assert(0);
         return kRocProfVisResultNotSupported;
     }
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint32_t index, uint64_t value) final
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final
     {
         assert(0);
         return kRocProfVisResultReadOnlyError;
     }
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint32_t index, double value) final
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final
     {
         assert(0);
         return kRocProfVisResultReadOnlyError;
     }
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t* value) final
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final
     {
         assert(0);
         return kRocProfVisResultReadOnlyError;
     }
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint32_t index, char const* value, uint32_t length) final
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final
     {
         assert(0);
         return kRocProfVisResultReadOnlyError;
@@ -3397,15 +3798,22 @@ public:
 
 private:
     uint64_t m_id;
-    std::vector<Track*> m_tracks;
+    Timeline* m_timeline;
 };
 
+typedef Reference<rocprofvis_controller_t, Trace, kRPVControllerObjectTypeController> TraceRef;
+typedef Reference<rocprofvis_controller_timeline_t, Timeline, kRPVControllerObjectTypeTimeline> TimelineRef;
+typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
+typedef Reference<rocprofvis_controller_event_t, Event, kRPVControllerObjectTypeEvent> EventRef;
+typedef Reference<rocprofvis_controller_sample_t, Sample, kRPVControllerObjectTypeSample> SampleRef;
+typedef Reference<rocprofvis_controller_array_t, Array, kRPVControllerObjectTypeArray> ArrayRef;
+typedef Reference<rocprofvis_controller_future_t, Future, kRPVControllerObjectTypeFuture> FutureRef;
 }
 }
 
 extern "C"
 {
-rocprofvis_result_t rocprofvis_controller_get_uint64(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, uint64_t* value)
+rocprofvis_result_t rocprofvis_controller_get_uint64(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (object && value)
@@ -3415,7 +3823,7 @@ rocprofvis_result_t rocprofvis_controller_get_uint64(rocprofvis_handle_t* object
     }
     return result;
 }
-rocprofvis_result_t rocprofvis_controller_get_double(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, double* value)
+rocprofvis_result_t rocprofvis_controller_get_double(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, double* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (object && value)
@@ -3425,7 +3833,7 @@ rocprofvis_result_t rocprofvis_controller_get_double(rocprofvis_handle_t* object
     }
     return result;
 }
-rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, rocprofvis_handle_t** value)
+rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (object && value)
@@ -3435,7 +3843,17 @@ rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object
     }
     return result;
 }
-rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint32_t index, char* value, uint32_t* length)
+rocprofvis_result_t rocprofvis_controller_set_object(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if (object && value)
+    {
+        RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*)object;
+        result = handle->SetObject(property, index, value);
+    }
+    return result;
+}
+rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (object && value)
@@ -3445,25 +3863,28 @@ rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object
     }
     return result;
 }
-rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename)
+rocprofvis_controller_t* rocprofvis_controller_alloc()
 {
     rocprofvis_controller_t* controller = nullptr;
-    if (filename && strlen(filename) != 0)
+    RocProfVis::Controller::Trace* trace = new RocProfVis::Controller::Trace();
+    if (trace)
     {
-        RocProfVis::Controller::Trace* trace = new RocProfVis::Controller::Trace();
-        if (trace)
-        {
-            if(trace->Load(filename))
-            {
-                controller = (rocprofvis_controller_t*) trace;
-            }
-            else
-            {
-                delete trace;
-            }
-        }
+        controller = (rocprofvis_controller_t*) trace;
     }
     return controller;
+}
+rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_future_t* future)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+
+    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::FutureRef future_ref(future);
+    if(trace.IsValid() && future_ref.IsValid() && filename && strlen(filename))
+    {
+        result = trace->Load(filename, *future_ref);
+    }
+
+    return result;
 }
 rocprofvis_controller_future_t* rocprofvis_controller_future_alloc(void)
 {
@@ -3472,41 +3893,60 @@ rocprofvis_controller_future_t* rocprofvis_controller_future_alloc(void)
 }
 rocprofvis_controller_array_t* rocprofvis_controller_array_alloc(uint32_t initial_size)
 {
-    rocprofvis_controller_array_t* array = (rocprofvis_controller_array_t*)new RocProfVis::Controller::Array();
-    return array;
+    RocProfVis::Controller::Array* array = new RocProfVis::Controller::Array();
+    rocprofvis_result_t result = array->SetUInt64(kRPVControllerArrayNumEntries, 0, initial_size);
+    assert(result == kRocProfVisResultSuccess);
+    return (rocprofvis_controller_array_t*)array;
 }
 rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_future_t* object, float timeout)
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    if (object)
+    RocProfVis::Controller::FutureRef future(object);
+    if (future.IsValid())
     {
-        RocProfVis::Controller::Future* future = (RocProfVis::Controller::Future*)object;
         result = future->Wait(timeout);
     }
     return result;
 }
+
+rocprofvis_result_t rocprofvis_controller_track_fetch_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_track_t* track,
+    double start_time, double end_time, rocprofvis_controller_future_t* result,
+    rocprofvis_controller_array_t* output)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::TrackRef track_ref(track);
+    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::ArrayRef array(output);
+    if (trace.IsValid() && track_ref.IsValid() && future.IsValid() && array.IsValid())
+    {
+        error = trace->AsyncFetch(*track_ref, *future, *array, start_time, end_time);
+    }
+    return error;
+}
 void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
 {
-    if (object)
+    RocProfVis::Controller::ArrayRef array(object);
+    if (array.IsValid())
     {
-        RocProfVis::Controller::Array* array = (RocProfVis::Controller::Array*)object;
-        delete array;
+        delete array.Get();
     }
 }
 void rocprofvis_controller_future_free(rocprofvis_controller_future_t* object)
 {
-    if (object)
+    RocProfVis::Controller::FutureRef future(object);
+    if (future.IsValid())
     {
-        RocProfVis::Controller::Future* future = (RocProfVis::Controller::Future*)object;
-        delete future;
+        delete future.Get();
     }
 }
 void rocprofvis_controller_free(rocprofvis_controller_t* object)
 {
-    if (object)
+    RocProfVis::Controller::TraceRef trace(object);
+    if (trace.IsValid())
     {
-        RocProfVis::Controller::Trace* trace = (RocProfVis::Controller::Trace*)object;
-        delete trace;
+        delete trace.Get();
     }
 }
 }

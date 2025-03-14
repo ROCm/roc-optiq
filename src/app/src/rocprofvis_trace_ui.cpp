@@ -89,6 +89,10 @@ rocprofvis_trace_counter_plot_getter(int idx, void* user_data)
 }
 
 static rocprofvis_trace_data_t trace_object;
+static rocprofvis_controller_future_t* trace_future = nullptr;
+static rocprofvis_controller_t* trace_controller = nullptr;
+static rocprofvis_controller_array_t* trace_array = nullptr;
+static rocprofvis_controller_array_t* track_futures = nullptr;
 
 void
 rocprofvis_trace_setup()
@@ -179,37 +183,168 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
         if(ImGuiFileDialog::Instance()->IsOk())
         {
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-            rocprofvis_controller_t* controller = rocprofvis_controller_alloc(file_path.c_str());
-            trace_object.m_loading_future =
-                rocprofvis_trace_async_load_json_trace(file_path, trace_object);
+            trace_controller = rocprofvis_controller_alloc();
+            if (trace_controller)
+            {
+                rocprofvis_result_t result = kRocProfVisResultUnknownError;
+                trace_future = rocprofvis_controller_future_alloc();
+                if(trace_future)
+                {
+                    result = rocprofvis_controller_load_async(trace_controller, file_path.c_str(), trace_future);
+                    assert(result == kRocProfVisResultSuccess);
+
+                    if(result != kRocProfVisResultSuccess)
+                    {
+                        rocprofvis_controller_future_free(trace_future);
+                        trace_future = nullptr;
+                    }
+                }
+                if(result != kRocProfVisResultSuccess)
+                {
+                    rocprofvis_controller_free(trace_controller);
+                    trace_controller = nullptr;
+                }
+            }
         }
 
         ImGuiFileDialog::Instance()->Close();
     }
 
-    if(rocprofvis_trace_is_loading(trace_object.m_loading_future))
+    static bool is_open = false;
+    if(trace_future)
     {
-        static bool               is_open = false;
-        std::chrono::milliseconds timeout = std::chrono::milliseconds::min();
-        if(rocprofvis_trace_is_loaded(trace_object.m_loading_future))
+        rocprofvis_result_t result  = rocprofvis_controller_future_wait(trace_future, 0);
+        assert(result == kRocProfVisResultSuccess || result == kRocProfVisResultTimeout);
+        if(result == kRocProfVisResultSuccess)
         {
-            trace_object.m_is_trace_loaded = trace_object.m_loading_future.get();
-            is_open                        = false;
-            ImGui::CloseCurrentPopup();
-        }
-        else
-        {
-            if(ImGui::BeginPopupModal("Loading"))
+            uint64_t uint64_result = 0;
+            result = rocprofvis_controller_get_uint64(trace_future, kRPVControllerFutureResult, 0, &uint64_result);
+            assert(result == kRocProfVisResultSuccess && uint64_result == kRocProfVisResultSuccess);
+
+            rocprofvis_handle_t* timeline = nullptr;
+            result = rocprofvis_controller_get_object(trace_controller, kRPVControllerTimeline, 0, &timeline);
+
+            if (result == kRocProfVisResultSuccess && timeline)
             {
-                ImGui::EndPopup();
+                uint64_t num_tracks = 0;
+                result = rocprofvis_controller_get_uint64(timeline, kRPVControllerTimelineNumTracks, 0, &num_tracks);
+
+                double min_ts = 0;
+                result = rocprofvis_controller_get_double(timeline, kRPVControllerTimelineMinTimestamp, 0, &min_ts);
+
+                double max_ts = 0;
+                result = rocprofvis_controller_get_double(timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
+
+                trace_array = rocprofvis_controller_array_alloc(num_tracks);
+                track_futures = rocprofvis_controller_array_alloc(num_tracks);
+
+                for (uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
+                {
+                    rocprofvis_controller_future_t* track_future = rocprofvis_controller_future_alloc();
+                    rocprofvis_controller_array_t* track_array = rocprofvis_controller_array_alloc(32);
+                    rocprofvis_handle_t* track = nullptr;
+                    result = rocprofvis_controller_get_object(timeline, kRPVControllerTimelineTrackIndexed, i, &track);
+                    if(result == kRocProfVisResultSuccess && track && track_future && track_array)
+                    {
+                        result = rocprofvis_controller_track_fetch_async(trace_controller, track, min_ts, max_ts, track_future, track_array);
+                        if(result == kRocProfVisResultSuccess)
+                        {
+                            result = rocprofvis_controller_set_object(trace_array, kRPVControllerArrayEntryIndexed, i, track_array);
+                            assert(result == kRocProfVisResultSuccess);
+
+                            result = rocprofvis_controller_set_object(track_futures, kRPVControllerArrayEntryIndexed, i, track_future);
+                            assert(result == kRocProfVisResultSuccess);
+
+                            //result = rocprofvis_controller_future_wait(track_future, FLT_MAX);
+                            //assert(result == kRocProfVisResultSuccess);
+                        }
+                    }
+                    //if (track_future)
+                    //{
+                    //    rocprofvis_controller_future_free(track_future);
+                    //}
+                    //if(track_array)
+                    //{
+                    //    rocprofvis_controller_array_free(track_array);
+                    //}
+                }
             }
 
-            if(!is_open)
-            {
-                ImGui::OpenPopup("Loading");
-            }
+            rocprofvis_controller_future_free(trace_future);
+            trace_future = nullptr;
         }
     }
+    else if (track_futures)
+    {
+        uint64_t num_tracks = 0;
+        rocprofvis_result_t result = rocprofvis_controller_get_uint64(track_futures, kRPVControllerArrayNumEntries, 0, &num_tracks);
+        assert(result == kRocProfVisResultSuccess);
+
+        for (uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
+        {
+            rocprofvis_handle_t* future = nullptr;
+            result = rocprofvis_controller_get_object(track_futures, kRPVControllerArrayEntryIndexed, i, &future);
+            assert(result == kRocProfVisResultSuccess && future);
+
+            rocprofvis_result_t result = rocprofvis_controller_future_wait((rocprofvis_controller_future_t*)future, 0);
+            assert(result == kRocProfVisResultSuccess || result == kRocProfVisResultTimeout);
+
+            if (result != kRocProfVisResultSuccess)
+            {
+                break;
+            }
+        }
+
+        if (result != kRocProfVisResultTimeout)
+        {
+            for (uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
+            {
+                rocprofvis_handle_t* future = nullptr;
+                result = rocprofvis_controller_get_object(track_futures, kRPVControllerArrayEntryIndexed, i, &future);
+                assert(result == kRocProfVisResultSuccess && future);
+
+                rocprofvis_controller_future_free((rocprofvis_controller_future_t*)future);
+
+                if(result != kRocProfVisResultSuccess)
+                {
+                    rocprofvis_handle_t* array = nullptr;
+                    result = rocprofvis_controller_get_object(trace_array, kRPVControllerArrayEntryIndexed, i, &future);
+                    assert(result == kRocProfVisResultSuccess && array);
+
+                    rocprofvis_controller_array_free((rocprofvis_controller_array_t*)array);
+                }
+            }
+
+            rocprofvis_controller_array_free(track_futures);
+            track_futures = nullptr;
+
+            if(result != kRocProfVisResultSuccess)
+            {
+                rocprofvis_controller_array_free(trace_array);
+                trace_array = nullptr;
+            }
+        }
+
+        if(result == kRocProfVisResultSuccess)
+        {
+            trace_object.m_is_trace_loaded = true;
+            is_open                        = false;
+            // ImGui::CloseCurrentPopup();
+        }
+    }
+    /*else
+    {
+        if(ImGui::BeginPopupModal("Loading"))
+        {
+            ImGui::EndPopup();
+        }
+
+        if(!is_open)
+        {
+            ImGui::OpenPopup("Loading");
+            is_open = true;
+        }
+    }*/
 }
 
 

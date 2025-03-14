@@ -26,8 +26,7 @@ public:
     void MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos);
     void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data,
                        float                                              scale_x);
-    void MakeGraphMetadataView(
-        std::map<std::string, rocprofvis_trace_process_t>& trace_data);
+    void MakeGraphMetadataView();
     void HandleGraphResize(int chart_id);
     void HandleSidebarResize();
     void FindMaxMin();

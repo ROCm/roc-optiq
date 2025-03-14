@@ -115,8 +115,7 @@ MainView::RenderGraphCustomizationWindow(int graph_id)
 }
 
 void
-MainView::MakeGraphMetadataView(
-    std::map<std::string, rocprofvis_trace_process_t>& trace_data)
+MainView::MakeGraphMetadataView()
 {
     /*This section makes the charts both line and flamechart are constructed here*/
 
@@ -476,7 +475,7 @@ MainView::GenerateGraphPoints(
             "MetaData Content", ImVec2(subcomponent_size.x - 10.0f, subcomponent_size.y),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-        MakeGraphMetadataView(trace_data);
+        MakeGraphMetadataView();
 
         ImGui::EndChild();
 

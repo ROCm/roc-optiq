@@ -91,6 +91,7 @@ rocprofvis_trace_counter_plot_getter(int idx, void* user_data)
 static rocprofvis_trace_data_t trace_object;
 static rocprofvis_controller_future_t* trace_future = nullptr;
 static rocprofvis_controller_t* trace_controller = nullptr;
+static rocprofvis_controller_timeline_t* trace_timeline = nullptr;
 static rocprofvis_controller_array_t* trace_array = nullptr;
 static rocprofvis_controller_array_t* track_futures = nullptr;
 
@@ -165,7 +166,7 @@ rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
     if(trace_object.m_is_trace_loaded)
     {
         // Open ImGui window......
-        main->GenerateGraphPoints(trace_data);
+        main->GenerateGraphPoints(trace_timeline, trace_array);
     }
 
     ImGui::End();
@@ -221,19 +222,18 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
             result = rocprofvis_controller_get_uint64(trace_future, kRPVControllerFutureResult, 0, &uint64_result);
             assert(result == kRocProfVisResultSuccess && uint64_result == kRocProfVisResultSuccess);
 
-            rocprofvis_handle_t* timeline = nullptr;
-            result = rocprofvis_controller_get_object(trace_controller, kRPVControllerTimeline, 0, &timeline);
+            result = rocprofvis_controller_get_object(trace_controller, kRPVControllerTimeline, 0, &trace_timeline);
 
-            if (result == kRocProfVisResultSuccess && timeline)
+            if(result == kRocProfVisResultSuccess && trace_timeline)
             {
                 uint64_t num_tracks = 0;
-                result = rocprofvis_controller_get_uint64(timeline, kRPVControllerTimelineNumTracks, 0, &num_tracks);
+                result = rocprofvis_controller_get_uint64(trace_timeline, kRPVControllerTimelineNumTracks, 0, &num_tracks);
 
                 double min_ts = 0;
-                result = rocprofvis_controller_get_double(timeline, kRPVControllerTimelineMinTimestamp, 0, &min_ts);
+                result = rocprofvis_controller_get_double(trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &min_ts);
 
                 double max_ts = 0;
-                result = rocprofvis_controller_get_double(timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
+                result = rocprofvis_controller_get_double(trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
 
                 trace_array = rocprofvis_controller_array_alloc(num_tracks);
                 track_futures = rocprofvis_controller_array_alloc(num_tracks);
@@ -243,7 +243,7 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
                     rocprofvis_controller_future_t* track_future = rocprofvis_controller_future_alloc();
                     rocprofvis_controller_array_t* track_array = rocprofvis_controller_array_alloc(32);
                     rocprofvis_handle_t* track = nullptr;
-                    result = rocprofvis_controller_get_object(timeline, kRPVControllerTimelineTrackIndexed, i, &track);
+                    result = rocprofvis_controller_get_object(trace_timeline, kRPVControllerTimelineTrackIndexed, i, &track);
                     if(result == kRocProfVisResultSuccess && track && track_future && track_array)
                     {
                         result = rocprofvis_controller_track_fetch_async(trace_controller, track, min_ts, max_ts, track_future, track_array);

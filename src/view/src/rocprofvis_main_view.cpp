@@ -153,7 +153,8 @@ MainView::MakeGraphMetadataView()
 }
 
 void
-MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data,
+MainView::MakeGraphView(rocprofvis_controller_timeline_t*                  timeline,
+                        rocprofvis_controller_array_t*                     array,
                         float                                              scale_x)
 {
     /*This section makes the charts both line and flamechart are constructed here*/
@@ -181,17 +182,40 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
         ImGui::SetScrollY(m_scroll_position);
     }
 
+    uint64_t num_tracks = 0;
+    rocprofvis_result_t result = rocprofvis_controller_get_uint64(timeline, kRPVControllerTimelineNumTracks, 0, &num_tracks);
+    assert(result == kRocProfVisResultSuccess);
+
     int graph_id = 0;
-    for(auto& process : trace_data)
+    for(uint64_t i = 0; i < num_tracks; i++)
     {
-        for(auto& thread : process.second.m_threads)
+        rocprofvis_handle_t* track = nullptr;
+        result = rocprofvis_controller_get_object(timeline, kRPVControllerTimelineTrackIndexed, i, &track);
+        assert(result == kRocProfVisResultSuccess && track);
+
+        rocprofvis_controller_array_t* track_data = nullptr;
+        result = rocprofvis_controller_get_object(array, kRPVControllerArrayEntryIndexed, i, &track_data);
+        assert(result == kRocProfVisResultSuccess && track_data);
+
+        uint64_t track_type = 0;
+        result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0, &track_type);
+        assert(result == kRocProfVisResultSuccess);
+
+        uint32_t length = 0;
+        result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0, nullptr, &length);
+        assert(result == kRocProfVisResultSuccess);
+
+        char* buffer = (char*)alloca(length + 1);
+        length += 1;
+        result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0, buffer, &length);
+        assert(result == kRocProfVisResultSuccess);
+
+        switch (track_type)
         {
-            auto& events   = thread.second.m_events;
-            auto& counters = thread.second.m_counters;
-            if(events.size())
+            case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                m_flame_event = ExtractFlamePoints(events);
+                m_flame_event = ExtractFlamePoints(track_data);
                 FindMaxMinFlame();
                 if(!m_meta_map_made)
                 {
@@ -199,7 +223,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                     rocprofvis_meta_map_struct_t temp_meta_map = {};
 
                     temp_meta_map.type       = "flame";
-                    temp_meta_map.chart_name = thread.first;
+                    temp_meta_map.chart_name = buffer;
                     temp_meta_map.size       = 75;
 
                     m_meta_map[graph_id] = temp_meta_map;
@@ -207,25 +231,19 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 RenderFlameCharts(graph_id, scale_x);
 
                 graph_id = graph_id + 1;
+                break;
             }
-
-            else if(counters.size())
+            case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                void* datap = (void*) &thread.second.m_counters;
-                int   count = counters.size();
-
-                std::vector<rocprofvis_data_point_t> points =
-                    ExtractPointsFromData(datap);
-                m_data_arr = points;
-
+                m_data_arr = ExtractPointsFromData(track_data);
                 FindMaxMin();
 
                 if(!m_meta_map_made)
                 {
                     rocprofvis_meta_map_struct_t temp_meta_map = {};
                     temp_meta_map.type                         = "line";
-                    temp_meta_map.chart_name                   = thread.first;
+                    temp_meta_map.chart_name                   = buffer;
                     temp_meta_map.max                          = m_max_y;
                     temp_meta_map.min                          = m_min_y;
                     temp_meta_map.size                         = 300;
@@ -233,6 +251,11 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 }
                 RenderLineCharts(graph_id, scale_x);
                 graph_id = graph_id + 1;
+                break;
+            }
+            default:
+            {
+                break;
             }
         }
     }
@@ -299,10 +322,8 @@ MainView::FindMaxMinFlame()
 }
 
 std::vector<rocprofvis_data_point_t>
-MainView::ExtractPointsFromData(void* data)
+MainView::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
 {
-    auto* counters_vector = static_cast<std::vector<rocprofvis_trace_counter_t>*>(data);
-
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
@@ -314,10 +335,36 @@ MainView::ExtractPointsFromData(void* data)
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
     int    bin_count         = 0;
-    double current_bin_start = counters_vector->at(0).m_start_ts;
+    double current_bin_start = DBL_MAX;
 
-    for(const auto& counter : *counters_vector)
+    uint64_t count  = 0;
+    rocprofvis_result_t result = rocprofvis_controller_get_uint64(track_data, kRPVControllerArrayNumEntries, 0, &count);
+    assert(result == kRocProfVisResultSuccess);
+
+    rocprofvis_trace_counter_t counter;
+
+    for(uint64_t i = 0; i < count; i++)
     {
+        rocprofvis_controller_sample_t* sample = nullptr;
+        result = rocprofvis_controller_get_object(track_data, kRPVControllerArrayEntryIndexed, i, &sample);
+        assert(result == kRocProfVisResultSuccess && sample);
+
+        double start_ts = 0;
+        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp, 0, &start_ts);
+        assert(result == kRocProfVisResultSuccess);
+
+        double value = 0;
+        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0, &value);
+        assert(result == kRocProfVisResultSuccess);
+
+        counter.m_start_ts = start_ts;
+        counter.m_value = value;
+
+        if(i == 0)
+        {
+            current_bin_start = start_ts;
+        }
+
         if(counter.m_start_ts < current_bin_start + bin_size)
         {
             bin_sum_x += counter.m_start_ts;
@@ -352,7 +399,7 @@ MainView::ExtractPointsFromData(void* data)
 }
 
 std::vector<rocprofvis_trace_event_t>
-MainView::ExtractFlamePoints(const std::vector<rocprofvis_trace_event_t>& traceEvents)
+MainView::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
 {
     std::vector<rocprofvis_trace_event_t> entries;
 
@@ -364,10 +411,48 @@ MainView::ExtractFlamePoints(const std::vector<rocprofvis_trace_event_t>& traceE
 
     double bin_sum_x         = 0.0;
     int    bin_count         = 0;
-    double current_bin_start = traceEvents[0].m_start_ts;
+    double current_bin_start = DBL_MAX;
     float  largest_duration  = 0;
-    for(const auto& counter : traceEvents)
+
+    uint64_t count  = 0;
+    rocprofvis_result_t result = rocprofvis_controller_get_uint64(track_data, kRPVControllerArrayNumEntries, 0, &count);
+    assert(result == kRocProfVisResultSuccess);
+
+    rocprofvis_trace_event_t counter;
+
+    for(uint64_t i = 0; i < count; i++)
     {
+        rocprofvis_controller_event_t* event = nullptr;
+        result = rocprofvis_controller_get_object(track_data, kRPVControllerArrayEntryIndexed, i, &event);
+        assert(result == kRocProfVisResultSuccess && event);
+
+        double start_ts = 0;
+        result = rocprofvis_controller_get_double(event, kRPVControllerEventStartTimestamp, 0, &start_ts);
+        assert(result == kRocProfVisResultSuccess);
+
+        double end_ts = 0;
+        result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp, 0, &end_ts);
+        assert(result == kRocProfVisResultSuccess);
+
+        uint32_t length = 0;
+        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0, nullptr, &length);
+        assert(result == kRocProfVisResultSuccess);
+        
+        length += 1;
+        counter.m_name.resize(length);
+        char* buffer = const_cast<char*>(counter.m_name.c_str());
+        assert(buffer);
+        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0, buffer, &length);
+        assert(result == kRocProfVisResultSuccess);
+
+        if (i == 0)
+        {
+            current_bin_start = start_ts;
+        }
+
+        counter.m_start_ts = start_ts;
+        counter.m_duration = end_ts - start_ts;
+
         if(counter.m_start_ts < current_bin_start + bin_size)
         {
             if(counter.m_duration > largest_duration)
@@ -405,7 +490,7 @@ MainView::ExtractFlamePoints(const std::vector<rocprofvis_trace_event_t>& traceE
         rocprofvis_trace_event_t binned_point;
         binned_point.m_start_ts = bin_sum_x / bin_count;
         binned_point.m_duration = largest_duration;
-        binned_point.m_name     = traceEvents.back().m_name;
+        binned_point.m_name     = counter.m_name;
 
         entries.push_back(binned_point);
     }
@@ -414,8 +499,8 @@ MainView::ExtractFlamePoints(const std::vector<rocprofvis_trace_event_t>& traceE
 }
 
 void
-MainView::GenerateGraphPoints(
-    std::map<std::string, rocprofvis_trace_process_t>& trace_data)
+MainView::GenerateGraphPoints(rocprofvis_controller_timeline_t* object,
+                              rocprofvis_controller_array_t*    array)
 
 {
     ImVec2 screen_pos = ImGui::GetCursorScreenPos();
@@ -453,7 +538,7 @@ MainView::GenerateGraphPoints(
         HandleTopSurfaceTouch();  // Funtion enables user interactions to be captured and
                                   // relayed into subcomponents as needed.
 
-        MakeGraphView(trace_data, m_scale_x);
+        MakeGraphView(object, array, m_scale_x);
 
         MakeScrubber(display_size_main_graphs, screen_pos);
 

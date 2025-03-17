@@ -14,6 +14,8 @@
 
 #include "rocprofvis_main_view.h"
 
+void rocprofvis_trace_draw(RocProfVis::View::MainView* main);
+
 static void
 glfw_error_callback(int error, const char* description)
 {

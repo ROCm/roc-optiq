@@ -2,11 +2,20 @@
 
 #pragma once
 
+#include "../src/view/src/rocprofvis_line_chart.h"
 #include "imgui.h"
 #include "rocprofvis_structs.h"
 #include <map>
 #include <string>
 #include <vector>
+
+ 
+typedef struct rocprofvis_graph_map_t
+{
+    RocProfVis::View::LineChart* line_chart;
+
+} rocprofvis_graph_map_t;
+
 
 namespace RocProfVis
 {
@@ -47,6 +56,7 @@ private:
     std::map<int, rocprofvis_meta_map_struct_t> m_meta_map;
     std::vector<rocprofvis_trace_event_t>       m_flame_event;
     std::vector<rocprofvis_data_point_t>        m_data_arr;
+    std::map<int, rocprofvis_graph_map_t>       m_graph_map;
     float                                       m_min_value;
     float                                       m_max_value;
     float                                       m_zoom;

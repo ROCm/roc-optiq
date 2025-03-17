@@ -14,24 +14,114 @@ namespace RocProfVis
 namespace View
 {
 
-LineChart::LineChart(int id, float min_value, float max_value, float zoom, float movement,
-                     float& min_x, float& max_x, float& min_y, float& max_y,
-                     std::vector<rocprofvis_data_point_t> data, float scale_x)
+LineChart::LineChart(int id, float zoom, float movement, float& min_x, float& max_x,
+                     float scale_x, void* datap)
 : m_id(id)
-, m_min_value(min_value)
-, m_max_value(max_value)
 , m_zoom(zoom)
 , m_movement(movement)
 , m_min_x(min_x)
 , m_max_x(max_x)
-, m_min_y(min_y)
-, m_max_y(max_y)
+, m_min_y(0)
+, m_max_y(0)
 , m_scale_x(scale_x)
-, m_data(data)
+, m_data({})
+, datap(datap)
 {}
 
-LineChart::~LineChart() 
+LineChart::~LineChart() {}
+
+std::vector<rocprofvis_data_point_t>
+LineChart::ExtractPointsFromData()
 {
+    auto* counters_vector = static_cast<std::vector<rocprofvis_trace_counter_t>*>(datap);
+
+    std::vector<rocprofvis_data_point_t> aggregated_points;
+
+    ImVec2 display_size = ImGui::GetIO().DisplaySize;
+    int    screen_width = static_cast<int>(display_size.x);
+
+    float effectiveWidth = screen_width / m_zoom;
+    float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
+
+    double bin_sum_x         = 0.0;
+    double bin_sum_y         = 0.0;
+    int    bin_count         = 0;
+    double current_bin_start = counters_vector->at(0).m_start_ts;
+
+    for(const auto& counter : *counters_vector)
+    {
+        if(counter.m_start_ts < current_bin_start + bin_size)
+        {
+            bin_sum_x += counter.m_start_ts;
+            bin_sum_y += counter.m_value;
+            bin_count++;
+        }
+        else
+        {
+            if(bin_count > 0)
+            {
+                rocprofvis_data_point_t binned_point;
+                binned_point.xValue = bin_sum_x / bin_count;
+                binned_point.yValue = bin_sum_y / bin_count;
+                aggregated_points.push_back(binned_point);
+            }
+            current_bin_start += bin_size;
+            bin_sum_x = counter.m_start_ts;
+            bin_sum_y = counter.m_value;
+            bin_count = 1;
+        }
+    }
+
+    if(bin_count > 0)
+    {
+        rocprofvis_data_point_t binned_point;
+        binned_point.xValue = bin_sum_x / bin_count;
+        binned_point.yValue = bin_sum_y / bin_count;
+        aggregated_points.push_back(binned_point);
+    }
+
+    m_data = aggregated_points;
+    return aggregated_points;
+}
+
+std::tuple<float, float>
+LineChart::FindMaxMin()
+{
+    m_min_y = m_data[0].yValue;
+    m_max_y = m_data[0].yValue;
+    m_min_x = m_data[0].xValue;
+    m_max_x = m_data[0].xValue;
+
+    for(const auto& point : m_data)
+    {
+        if(point.xValue < m_min_x)
+        {
+            m_min_x = point.xValue;
+        }
+        if(point.xValue > m_max_x)
+        {
+            m_max_x = point.xValue;
+        }
+        if(point.yValue < m_min_y)
+        {
+            m_min_y = point.yValue;
+        }
+        if(point.yValue > m_max_y)
+        {
+            m_max_y = point.yValue;
+        }
+    }
+
+    return std::make_tuple(m_min_x, m_max_x);
+}
+
+void
+LineChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+                          float scale_x)
+{
+    m_zoom     = zoom;
+    m_movement = movement;
+    m_scale_x  = scale_x;
 }
 
 void
@@ -48,7 +138,7 @@ LineChart::Render()
         ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
         float scale_y = content_size.y / (m_max_y - m_min_y);
-
+        std::cout << m_data.size();
         for(int i = 1; i < m_data.size(); i++)
         {
             ImVec2 point_1 =

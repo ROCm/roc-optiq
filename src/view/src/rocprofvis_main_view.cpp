@@ -9,8 +9,8 @@
 #include "rocprofvis_structs.h"
 #include <map>
 #include <string>
+#include <tuple>
 #include <vector>
-
 namespace RocProfVis
 {
 namespace View
@@ -39,10 +39,10 @@ MainView::MainView()
 , m_flame_event({})
 , m_previous_scroll_position(0)
 , m_show_graph_customization_window(false)
+, m_graph_map({})
 {}
 
-MainView::~MainView() 
-{}
+MainView::~MainView() {}
 void
 MainView::MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
 {
@@ -56,7 +56,8 @@ MainView::MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
-    ImGui::SetNextWindowSize(ImVec2(display_size.x - 20.0f, display_size.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(display_size.x - 20.0f, display_size.y),
+                             ImGuiCond_Always);
 
     ImGui::SetCursorPos(ImVec2(0, 0));
 
@@ -216,12 +217,6 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 void* datap = (void*) &thread.second.m_counters;
                 int   count = counters.size();
 
-                std::vector<rocprofvis_data_point_t> points =
-                    ExtractPointsFromData(datap);
-                m_data_arr = points;
-
-                FindMaxMin();
-
                 if(!m_meta_map_made)
                 {
                     rocprofvis_meta_map_struct_t temp_meta_map = {};
@@ -232,7 +227,47 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                     temp_meta_map.size                         = 300;
                     m_meta_map[graph_id]                       = temp_meta_map;
                 }
-                RenderLineCharts(graph_id, scale_x);
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+                ImGui::BeginChild((std::to_string(graph_id)).c_str(),
+                                  ImVec2(0, m_meta_map[graph_id].size), false,
+                                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoScrollWithMouse |
+                                      ImGuiWindowFlags_NoScrollbar);
+
+                if(m_graph_map.find(graph_id) != m_graph_map.end())
+                {
+                    m_graph_map[graph_id].line_chart->UpdateMovement(
+                        m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
+                    m_graph_map[graph_id].line_chart->Render();
+                }
+                else
+                {
+                    RocProfVis::View::LineChart* line = new RocProfVis::View ::LineChart(
+                        graph_id, m_zoom, m_movement, m_min_x, m_max_x, m_scale_x, datap);
+                    line->ExtractPointsFromData();
+                    std::tuple<float, float> temp_min_max = line->FindMaxMin();
+                    line->Render();
+
+                    if(std::get<0>(temp_min_max) < m_min_x)
+                    {
+                        m_min_x = std::get<0>(temp_min_max);
+                    }
+                    if(std::get<1>(temp_min_max) > m_max_x)
+                    {
+                        m_max_x = std::get<1>(temp_min_max);
+                    }
+
+                    rocprofvis_graph_map_t temp;
+                    temp.line_chart       = line;
+                    m_graph_map[graph_id] = temp;
+                }
+
+                ImGui::EndChild();
+                ImGui::PopStyleVar();
+                ImGui::Spacing();
+                ImGui::Separator();
+                HandleGraphResize(graph_id);
                 graph_id = graph_id + 1;
             }
         }
@@ -244,37 +279,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
 
 void
 MainView::FindMaxMin()
-{
-    if(m_ran_once == false)
-    {
-        m_min_x    = m_data_arr[0].xValue;
-        m_max_x    = m_data_arr[0].xValue;
-        m_ran_once = true;
-    }
-
-    m_min_y = m_data_arr[0].yValue;
-    m_max_y = m_data_arr[0].yValue;
-
-    for(const auto& point : m_data_arr)
-    {
-        if(point.xValue < m_min_x)
-        {
-            m_min_x = point.xValue;
-        }
-        if(point.xValue > m_max_x)
-        {
-            m_max_x = point.xValue;
-        }
-        if(point.yValue < m_min_y)
-        {
-            m_min_y = point.yValue;
-        }
-        if(point.yValue > m_max_y)
-        {
-            m_max_y = point.yValue;
-        }
-    }
-}
+{}
 
 void
 MainView::FindMaxMinFlame()
@@ -297,59 +302,6 @@ MainView::FindMaxMinFlame()
             m_max_x = point.m_start_ts + point.m_duration;
         }
     }
-}
-
-std::vector<rocprofvis_data_point_t>
-MainView::ExtractPointsFromData(void* data)
-{
-    auto* counters_vector = static_cast<std::vector<rocprofvis_trace_counter_t>*>(data);
-
-    std::vector<rocprofvis_data_point_t> aggregated_points;
-
-    ImVec2 display_size = ImGui::GetIO().DisplaySize;
-    int    screen_width = static_cast<int>(display_size.x);
-
-    float effectiveWidth = screen_width / m_zoom;
-    float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
-
-    double bin_sum_x         = 0.0;
-    double bin_sum_y         = 0.0;
-    int    bin_count         = 0;
-    double current_bin_start = counters_vector->at(0).m_start_ts;
-
-    for(const auto& counter : *counters_vector)
-    {
-        if(counter.m_start_ts < current_bin_start + bin_size)
-        {
-            bin_sum_x += counter.m_start_ts;
-            bin_sum_y += counter.m_value;
-            bin_count++;
-        }
-        else
-        {
-            if(bin_count > 0)
-            {
-                rocprofvis_data_point_t binned_point;
-                binned_point.xValue = bin_sum_x / bin_count;
-                binned_point.yValue = bin_sum_y / bin_count;
-                aggregated_points.push_back(binned_point);
-            }
-            current_bin_start += bin_size;
-            bin_sum_x = counter.m_start_ts;
-            bin_sum_y = counter.m_value;
-            bin_count = 1;
-        }
-    }
-
-    if(bin_count > 0)
-    {
-        rocprofvis_data_point_t binned_point;
-        binned_point.xValue = bin_sum_x / bin_count;
-        binned_point.yValue = bin_sum_y / bin_count;
-        aggregated_points.push_back(binned_point);
-    }
-
-    return aggregated_points;
 }
 
 std::vector<rocprofvis_trace_event_t>
@@ -569,32 +521,6 @@ MainView::HandleSidebarResize()
 
         m_sidebar_size = m_sidebar_size + drag_delta.x;
         ImGui::ResetMouseDragDelta();
-    }
-}
-
-void
-MainView::RenderLineCharts(int chart_id, float scale_x)
-{
-    if(m_meta_map_made)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-
-        ImGui::BeginChild((std::to_string(chart_id)).c_str(),
-                          ImVec2(0, m_meta_map[chart_id].size), false,
-                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                              ImGuiWindowFlags_NoScrollWithMouse |
-                              ImGuiWindowFlags_NoScrollbar);
-
-        RocProfVis::View::LineChart line = RocProfVis::View ::LineChart(
-            chart_id, m_min_value, m_max_value, m_zoom, m_movement, m_min_x, m_max_x,
-            m_min_y, m_max_y, m_data_arr, scale_x);
-        line.Render();
-
-        ImGui::EndChild();
-        ImGui::PopStyleVar();
-        ImGui::Spacing();
-        ImGui::Separator();
-        HandleGraphResize(chart_id);
     }
 }
 

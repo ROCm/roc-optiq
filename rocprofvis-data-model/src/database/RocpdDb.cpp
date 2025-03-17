@@ -20,6 +20,7 @@
 
 #include "RocpdDb.h"
 #include <sstream>
+#include <string.h>
 
 
 rocprofvis_dm_result_t RocpdDatabase::UpdateStringMap(StringPair ids) {

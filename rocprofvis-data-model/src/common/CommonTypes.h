@@ -27,6 +27,7 @@
 
 #include "CInterfaceTypes.h"
 #include "ErrorHandling.h"
+#include <algorithm>
 
 /*******************************Types******************************/
 

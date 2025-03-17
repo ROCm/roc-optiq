@@ -49,7 +49,7 @@ typedef     uint16_t                      rocprofvis_db_num_of_tracks_t;        
 typedef     void*                         rocprofvis_db_future_t;                       // future object for asynchronous communication
 typedef     uint64_t                      rocprofvis_db_timeout_sec_t;                  // asynchronous call wait timeout (seconds)
 typedef     const char*                   rocprofvis_dm_charptr_t;                      // pointer to string
-typedef     size_t                        rocprofvis_dm_size_t;                         // size of array
+typedef     uint64_t                      rocprofvis_dm_size_t;                         // size of array
 
 
 

@@ -4,8 +4,15 @@
 #include <cstdio>
 #include <random>
 #include <vector>
+#if defined(_WIN32)
 #include <conio.h>
+#else
+#include <curses.h>
+#endif
 #include <cstdarg>
+#include <algorithm>
+#include <string.h>
+
 
 #define LIST_SIZE_LIMIT 10
 #define HEADER_LEN 100

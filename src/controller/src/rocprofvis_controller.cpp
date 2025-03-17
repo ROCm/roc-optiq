@@ -1837,49 +1837,46 @@ public:
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) override
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (value)
+        switch(property)
         {
-            switch(property)
+            case kRPVControllerEventName:
             {
-                case kRPVControllerEventName:
+                if (length && (!value || *length == 0))
                 {
-                    if (length && (*value || *length == 0))
-                    {
-                        *length = m_name.length();
-                        result = kRocProfVisResultSuccess;
-                    }
-                    else if (length && value && *length > 0)
-                    {
-                        strncpy(value, m_name.c_str(), *length);
-                        result = kRocProfVisResultSuccess;
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultInvalidArgument;
-                    }
-                    break;
+                    *length = m_name.length();
+                    result = kRocProfVisResultSuccess;
                 }
-                case kRPVControllerEventTrack:
-                case kRPVControllerEventStartTimestamp:
-                case kRPVControllerEventEndTimestamp:
-                case kRPVControllerEventId:
-                case kRPVControllerEventNumCallstackEntries:
-                case kRPVControllerEventNumInputFlowControl:
-                case kRPVControllerEventNumOutputFlowControl:
-                case kRPVControllerEventNumChildren:
-                case kRPVControllerEventInputFlowControlIndexed:
-                case kRPVControllerEventOutputFlowControlIndexed:
-                case kRPVControllerEventChildIndexed:
-                case kRPVControllerEventCallstackEntryIndexed:
+                else if (length && value && *length > 0)
                 {
-                    result = kRocProfVisResultInvalidType;
-                    break;
+                    strncpy(value, m_name.c_str(), *length);
+                    result = kRocProfVisResultSuccess;
                 }
-                default:
+                else
                 {
-                    result = kRocProfVisResultInvalidEnum;
-                    break;
+                    result = kRocProfVisResultInvalidArgument;
                 }
+                break;
+            }
+            case kRPVControllerEventTrack:
+            case kRPVControllerEventStartTimestamp:
+            case kRPVControllerEventEndTimestamp:
+            case kRPVControllerEventId:
+            case kRPVControllerEventNumCallstackEntries:
+            case kRPVControllerEventNumInputFlowControl:
+            case kRPVControllerEventNumOutputFlowControl:
+            case kRPVControllerEventNumChildren:
+            case kRPVControllerEventInputFlowControlIndexed:
+            case kRPVControllerEventOutputFlowControlIndexed:
+            case kRPVControllerEventChildIndexed:
+            case kRPVControllerEventCallstackEntryIndexed:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
             }
         }
         return result;
@@ -3856,7 +3853,7 @@ rocprofvis_result_t rocprofvis_controller_set_object(rocprofvis_handle_t* object
 rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (object && value)
+    if (object && length)
     {
         RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*)object;
         result = handle->GetString(property, index, value, length);

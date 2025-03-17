@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,21 +21,22 @@
 #ifndef RPV_DATAMODEL_TRACE_H
 #define RPV_DATAMODEL_TRACE_H
 
-#include "../common/CommonTypes.h"
-#include "RpvObject.h"
+#include "FlowTrace.h"
+#include "StackTrace.h"
+#include "TrackSlice.h"
+#include "ExtData.h"
+#include "Track.h"
+#include "Table.h"
 #include <vector> 
 #include <memory> 
 
 class RpvDatabase;
-class RpvDmTrack;
-class RpvDmFlowTrace;
-class RpvDmStackTrace;
-class RpvDmExtData;
-class RpvDmTable;
+
 
 class RpvDmTrace : public RpvObject{
     public:
         RpvDmTrace();
+        ~RpvDmTrace(){}
         rocprofvis_dm_timestamp_t                       StartTime() {return m_parameters.start_time;}
         rocprofvis_dm_timestamp_t                       EndTime() {return m_parameters.end_time;}
         rocprofvis_dm_size_t                            NumberOfTracks() {return m_tracks.size();}
@@ -58,6 +57,9 @@ class RpvDmTrace : public RpvObject{
 
         rocprofvis_dm_result_t                          GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) override;
         rocprofvis_dm_result_t                          GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value) override;
+#ifdef TEST
+        const char*                                     GetPropertySymbol(rocprofvis_dm_property_t property) override;
+#endif
 
     private:
 

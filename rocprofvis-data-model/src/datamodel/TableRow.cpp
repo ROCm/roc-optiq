@@ -46,3 +46,18 @@ rocprofvis_dm_result_t RpvDmTableRow::GetPropertyAsUint64(rocprofvis_dm_property
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
 }
+
+
+#ifdef TEST
+const char* RpvDmTableRow::GetPropertySymbol(rocprofvis_dm_property_t property) {
+    switch(property)
+    {
+        case kRPVDMNumberOfTableRowCellsUInt64:
+            return "kRPVDMNumberOfTableRowCellsUInt64";        
+        case kRPVDMExtTableRowCellValueCharPtrIndexed:
+            return "kRPVDMExtTableRowCellValueCharPtrIndexed";
+        default:
+            return "Unknown property";
+    }   
+}
+#endif

@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +46,7 @@ class RpvDmExtData : public RpvObject {
                             m_ctx(ctx),  
                             m_id(id),
                             m_json_blob("") {}; 
-
+        ~RpvDmExtData(){}
         rocprofvis_dm_result_t          AddRecord( rocprofvis_db_ext_data_t & data);
         rocprofvis_dm_size_t            GetNumberOfRecords() {return m_extdata_records.size();};
         rocprofvis_dm_size_t            GetMemoryFootprint();
@@ -65,7 +63,9 @@ class RpvDmExtData : public RpvObject {
         rocprofvis_dm_result_t          GetPropertyAsCharPtr(rocprofvis_dm_property_t property, 
                                                             rocprofvis_dm_property_index_t index, 
                                                             char** value) override;
-
+#ifdef TEST
+        const char*                     GetPropertySymbol(rocprofvis_dm_property_t property) override;
+#endif
 
     private:
 

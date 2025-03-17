@@ -18,22 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef RPV_DATAMODEL_OBJECT_H
-#define RPV_DATAMODEL_OBJECT_H
+#ifndef RPV_DATAMODEL_C_INTERFACE_H
+#define RPV_DATAMODEL_C_INTERFACE_H
 
-#include "../common/CommonTypes.h"
+/*
+* When built with CFFI, headers must not include directives.
+* This is wrapper around InterfaceType.h and must be used from C/C++ code only.
+* CFFI compiler will use InterfaceTypes.h directly.
+*/
 
-class RpvObject {
-public:
-    virtual ~RpvObject(){}
-    virtual rocprofvis_dm_result_t GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value);
-    virtual rocprofvis_dm_result_t GetPropertyAsInt64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, int64_t* value);
-    virtual rocprofvis_dm_result_t GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value);
-    virtual rocprofvis_dm_result_t GetPropertyAsDouble(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, double* value);
-    virtual rocprofvis_dm_result_t GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value);
-#ifdef TEST
-    virtual const char*            GetPropertySymbol(rocprofvis_dm_property_t property);
-#endif
-};
+#include <cstdint>
 
-#endif //RPV_DATAMODEL_OBJECT_H
+#include "InterfaceTypes.h"
+
+#endif //RPV_DATAMODEL_C_INTERFACE_H

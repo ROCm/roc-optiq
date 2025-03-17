@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,12 +19,6 @@
 // SOFTWARE.
 
 #include "Trace.h"
-#include "Track.h"
-#include "TrackSlice.h"
-#include "FlowTrace.h"
-#include "StackTrace.h"
-#include "ExtData.h"
-#include "Table.h"
 #include "TableRow.h"
 
 RpvDmTrace::RpvDmTrace()
@@ -406,6 +398,38 @@ rocprofvis_dm_result_t    RpvDmTrace::GetPropertyAsHandle(rocprofvis_dm_property
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
 }
+
+#ifdef TEST
+const char*  RpvDmTrace::GetPropertySymbol(rocprofvis_dm_property_t property) {
+    switch(property)
+    {
+        case kRPVDMStartTimeUInt64:
+            return "kRPVDMStartTimeUInt64";        
+        case kRPVDMEndTimeUInt64:
+            return "kRPVDMEndTimeUInt64";
+        case kRPVDMNumberOfTracksUInt64:
+            return "kRPVDMNumberOfTracksUInt64";
+        case kRPVDMNumberOfTablesUInt64:
+            return "kRPVDMNumberOfTablesUInt64";
+        case kRPVDMTraceMemoryFootprintUInt64:
+            return "kRPVDMTraceMemoryFootprintUInt64";
+        case kRPVDMTrackHandleIndexed:
+            return "kRPVDMTrackHandleIndexed";
+        case kRPVDMDatabaseHandle:
+            return "kRPVDMDatabaseHandle";
+        case kRPVDMFlowTraceHandleByEventID:
+            return "kRPVDMFlowTraceHandleByEventID";
+        case kRPVDMStackTraceHandleByEventID:
+            return "kRPVDMStackTraceHandleByEventID";
+        case kRPVDMExtInfoHandleByEventID:
+            return "kRPVDMExtInfoHandleByEventID";
+        case kRPVDMTableHandleIndexed:
+            return "kRPVDMTableHandleIndexed";
+        default:
+            return "Unknown property";
+    }   
+}
+#endif
 
 
 rocprofvis_dm_result_t RpvDmTrace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_extdata_t & extinfo){

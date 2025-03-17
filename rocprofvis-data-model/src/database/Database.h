@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -34,10 +32,14 @@ class Database
                     m_binding_info({0}) {
         };
 
+        virtual ~Database(){};
+
         virtual rocprofvis_dm_result_t  Open() = 0;
         virtual rocprofvis_dm_result_t  Close() = 0;
         virtual bool                    IsOpen() = 0; 
 
+
+        virtual rocprofvis_dm_size_t    GetMemoryFootprint(void) = 0; 
 
         static rocprofvis_db_type_t     Autodetect(   
                                                                 rocprofvis_db_filename_t filename);
@@ -106,7 +108,7 @@ class Database
         virtual rocprofvis_dm_result_t  ExecuteQuery(
                                                                 rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t description,
-                                                                Future* future) = 0; 
+                                                                Future* future) = 0;
     private:
         rocprofvis_dm_db_bind_struct m_binding_info;
         rocprofvis_db_filename_t m_path;

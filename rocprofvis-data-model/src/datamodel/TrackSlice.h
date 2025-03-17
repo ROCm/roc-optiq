@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +39,7 @@ class RpvDmTrackSlice : public RpvObject {
                             m_ctx(ctx), 
                             m_start_timestamp(start), 
                             m_end_timestamp(end) {}; 
-
+        virtual ~RpvDmTrackSlice() {}
         virtual rocprofvis_dm_result_t  AddRecord( rocprofvis_db_record_data_t & data) = 0;
         virtual rocprofvis_dm_size_t    GetMemoryFootprint() = 0;
         virtual rocprofvis_dm_size_t    GetNumberOfRecords() = 0;
@@ -57,6 +55,7 @@ class RpvDmTrackSlice : public RpvObject {
         virtual rocprofvis_dm_result_t  GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp) = 0;
         virtual rocprofvis_dm_result_t  GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_id_t & id);
         virtual rocprofvis_dm_result_t  GetRecordOperationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_op_t & op);
+        virtual rocprofvis_dm_result_t  GetRecordOperationStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & op);
         virtual rocprofvis_dm_result_t  GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value);
         virtual rocprofvis_dm_result_t  GetRecordDurationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_duration_t & duration);
         virtual rocprofvis_dm_result_t  GetRecordCategoryIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & category_index);
@@ -76,7 +75,9 @@ class RpvDmTrackSlice : public RpvObject {
         rocprofvis_dm_result_t          GetPropertyAsDouble(rocprofvis_dm_property_t property, 
                                                             rocprofvis_dm_property_index_t index, 
                                                             double* value) override;
-
+#ifdef TEST
+        const char*                     GetPropertySymbol(rocprofvis_dm_property_t property) override;
+#endif
 
     private:
 

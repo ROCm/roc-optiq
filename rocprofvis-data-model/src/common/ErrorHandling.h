@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,34 +21,43 @@
 #define RPV_DATAMODEL_ERROR_HANDLING_H
 #include <cassert>
 #include <string>
+#include <mutex>
 
-extern std::string g_last_error_string;
+// static methods set/get last error message
+const char * GetLastStatusMessage();
+void SetStatusMessage(const char*);
+void AddStatusMessage(const char*);
 
+// printf text colors
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[92m"
+#define ANSI_COLOR_YELLOW  "\x1b[93m"
+#define ANSI_COLOR_BLUE    "\x1b[94m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+#define ANSI_COLOR_GREY    "\x1b[90m"
+
+// compile with -DTEST for profiling interface methods performace
 #ifdef TEST
 #include <chrono>
-
 class TimeRecorder {
 public:
-    TimeRecorder(const char* function) {
-        g_last_error_string = "Success!";
-        m_function = function;
-        m_start_time = std::chrono::steady_clock::now();
-    }
-    ~TimeRecorder() {
-        auto t = std::chrono::steady_clock::now();
-        std::chrono::duration<double> diff = t - m_start_time;
-        printf("%40s | %13.9f seconds | %s\n", m_function.c_str(), diff.count(), g_last_error_string.c_str());
-    }
+    TimeRecorder(const char* function);
+    TimeRecorder(const char* function, void* handle, uint32_t property, uint64_t index);
+    ~TimeRecorder();
 private:
     std::chrono::time_point<std::chrono::steady_clock> m_start_time;
     std::string m_function;
-
 };
-#define PRINT_TIME_USAGE TimeRecorder time_recorder(__FUNCTION__)
+#define PROFILE TimeRecorder time_recorder(__FUNCTION__)
+#define PROFILE_PROP_ACCESS TimeRecorder time_recorder(__FUNCTION__, handle, property, index)
 #else
-#define PRINT_TIME_USAGE
+#define PROFILE
+#define PROFILE_PROP_ACCESS
 #endif
 
+// Error strings
 extern const char* ERROR_INDEX_OUT_OF_RANGE;
 extern const char* ERROR_TRACE_CANNOT_BE_NULL;
 extern const char* ERROR_TRACK_CANNOT_BE_NULL;
@@ -59,6 +66,7 @@ extern const char* ERROR_DATABASE_CANNOT_BE_NULL;
 extern const char* ERROR_TRACK_PARAMETERS_NOT_ASSIGNED;
 extern const char* ERROR_VIRTUAL_METHOD_CALL;
 extern const char* ERROR_FUTURE_CANNOT_BE_NULL;
+extern const char* ERROR_FUTURE_CANNOT_BE_USED;
 extern const char* ERROR_METADATA_IS_NOT_LOADED;
 extern const char* ERROR_TRACE_PARAMETERS_CANNOT_BE_NULL;
 extern const char* ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH;
@@ -74,20 +82,20 @@ extern const char* ERROR_EXT_DATA_CANNOT_BE_NULL;
 extern const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL;
 extern const char* ERROR_REFERENCE_POINTER_CANNOT_BE_NULL;
 
-#define LOG(msg) g_last_error_string=msg
-#define ADD_LOG(msg) g_last_error_string+=msg
+#define LOG(msg) SetStatusMessage(msg)
+#define ADD_LOG(msg) AddStatusMessage(msg)
 
-#define ASSERT(cond) assert(cond); (!(cond)) g_last_error_string=#cond
+#define ASSERT(cond) assert(cond); (!(cond)) SetStatusMessage(#cond)
 
-#define ASSERT_MSG(cond, msg) assert(cond && msg); if (!(cond)) g_last_error_string=msg
+#define ASSERT_MSG(cond, msg) assert(cond && msg); if (!(cond)) SetStatusMessage(msg)
 
-#define ASSERT_RETURN(cond, retval) assert(cond); if (!(cond)) { g_last_error_string=#cond; return retval;}
+#define ASSERT_RETURN(cond, retval) assert(cond); if (!(cond)) { SetStatusMessage(cond); return retval;}
     
-#define ASSERT_MSG_RETURN(cond, msg, retval) assert(cond && msg); if (!(cond)) { g_last_error_string=msg; return retval; }
+#define ASSERT_MSG_RETURN(cond, msg, retval) assert(cond && msg); if (!(cond)) { SetStatusMessage(msg); return retval; }
 
 #define ASSERT_MSG_BREAK(cond, msg) assert(cond && msg); if (!(cond)) break
 
-#define ASSERT_ALWAYS_MSG_RETURN(msg, retval) assert(false && msg); g_last_error_string=msg; return retval
+#define ASSERT_ALWAYS_MSG_RETURN(msg, retval) assert(false && msg); SetStatusMessage(msg); return retval
 
 
 

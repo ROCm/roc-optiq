@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +23,7 @@
 //AddRecord method adds an object to a m_samples
 rocprofvis_dm_result_t RpvDmPmcTrackSlice::AddRecord(rocprofvis_db_record_data_t & data){
     try{
-        m_samples.push_back(RpvDmPmcRecord(data.pmc.timestamp,data.pmc.value));
+        m_samples.push_back(std::make_unique<RpvDmPmcRecord>(data.pmc.timestamp,data.pmc.value));
     }
     catch(std::exception ex)
     {
@@ -35,7 +33,7 @@ rocprofvis_dm_result_t RpvDmPmcTrackSlice::AddRecord(rocprofvis_db_record_data_t
 }
 
 size_t RpvDmPmcTrackSlice::GetMemoryFootprint(){
-    return sizeof(std::vector<RpvDmPmcRecord>) + (sizeof(RpvDmPmcRecord) * m_samples.size());
+    return sizeof(std::vector<RpvDmPmcRecord>) + ((sizeof(RpvDmPmcRecord)+sizeof(std::unique_ptr<RpvDmPmcRecord>)) * m_samples.size());
 }
 
 size_t RpvDmPmcTrackSlice::GetNumberOfRecords(){
@@ -43,8 +41,8 @@ size_t RpvDmPmcTrackSlice::GetNumberOfRecords(){
 }
 
 rocprofvis_dm_result_t RpvDmPmcTrackSlice::ConvertTimestampToIndex(const rocprofvis_dm_timestamp_t timestamp, rocprofvis_dm_index_t & index){
-    std::vector<RpvDmPmcRecord>::iterator it = std::find_if( m_samples.begin(), m_samples.end(),
-            [&timestamp](RpvDmPmcRecord & x) { return x.Timestamp() >= timestamp;});
+    std::vector<std::unique_ptr<RpvDmPmcRecord>>::iterator it = std::find_if( m_samples.begin(), m_samples.end(),
+            [&timestamp](std::unique_ptr < RpvDmPmcRecord> & x) { return x.get()->Timestamp() >= timestamp;});
     if (it != m_samples.end())
     {
         index = (rocprofvis_dm_index_t)(it - m_samples.begin());
@@ -55,12 +53,12 @@ rocprofvis_dm_result_t RpvDmPmcTrackSlice::ConvertTimestampToIndex(const rocprof
 
 rocprofvis_dm_result_t RpvDmPmcTrackSlice::GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    timestamp = m_samples[index].Timestamp();
+    timestamp = m_samples[index].get()->Timestamp();
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t RpvDmPmcTrackSlice::GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value){
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    value = m_samples[index].Value();
+    value = m_samples[index].get()->Value();
     return kRocProfVisDmResultSuccess;
 }

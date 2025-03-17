@@ -38,3 +38,10 @@ rocprofvis_dm_result_t RpvObject::GetPropertyAsDouble(rocprofvis_dm_property_t p
 rocprofvis_dm_result_t RpvObject::GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
 }
+
+#ifdef TEST
+const char*  RpvObject::GetPropertySymbol(rocprofvis_dm_property_t property) {
+
+    return "????????";
+}
+#endif

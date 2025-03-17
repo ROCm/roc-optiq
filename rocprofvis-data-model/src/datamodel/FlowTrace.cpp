@@ -50,3 +50,22 @@ rocprofvis_dm_result_t RpvDmFlowTrace::GetPropertyAsUint64(rocprofvis_dm_propert
     }
 
 }
+
+
+#ifdef TEST
+const char*  RpvDmFlowTrace::GetPropertySymbol(rocprofvis_dm_property_t property) {
+    switch(property)
+    {
+        case kRPVDMNumberOfEndpointsUInt64:
+            return "kRPVDMNumberOfEndpointsUInt64";        
+        case kRPVDMEndpointTimestampUInt64Indexed:
+            return "kRPVDMEndpointTimestampUInt64Indexed";
+        case kRPVDMEndpointIDUInt64Indexed:
+            return "kRPVDMEndpointIDUInt64Indexed";
+        case kRPVDMEndpointTrackIDUInt64Indexed:
+            return "kRPVDMEndpointTrackIDUInt64Indexed";
+        default:
+            return "Unknown property";
+    }   
+}
+#endif

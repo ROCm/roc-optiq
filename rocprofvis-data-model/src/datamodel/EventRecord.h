@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,8 +33,7 @@ class RpvDmEventRecord
 {
     public:
         RpvDmEventRecord(
-                const roprofvis_dm_event_operation_t operation,
-                const rocprofvis_dm_id_t event_id, 
+                const rocprofvis_dm_event_id_t event_id, 
                 const rocprofvis_dm_timestamp_t timestamp, 
                 const rocprofvis_dm_duration_t duration, 
                 const rocprofvis_dm_index_t category_index, 
@@ -46,23 +43,21 @@ class RpvDmEventRecord
                 m_timestamp(timestamp), 
                 m_duration(duration), 
                 m_category_index(category_index), 
-                m_symbol_index(symbol_index),
-                m_operation((rocprofvis_dm_op_t)operation) {};
+                m_symbol_index(symbol_index) {};
 
-        const rocprofvis_dm_id_t                EventId() {return m_event_id;}
+        const rocprofvis_dm_id_t                EventId() {return m_event_id.bitfiled.event_id;}
         const rocprofvis_dm_timestamp_t         Timestamp() {return m_timestamp;}
         const rocprofvis_dm_duration_t          Duration() {return m_duration;}
         const rocprofvis_dm_index_t             CategoryIndex() {return m_category_index;}
         const rocprofvis_dm_index_t             SymbolIndex() {return m_symbol_index;}
-        const roprofvis_dm_event_operation_t    Operation() {return (roprofvis_dm_event_operation_t)m_operation;}
+        const roprofvis_dm_event_operation_t    Operation() {return (roprofvis_dm_event_operation_t)m_event_id.bitfiled.event_op;}
 
     private:
-        rocprofvis_dm_id_t              m_event_id;                     // unsigned 64-bit primary key id, used as a search key for stacktrace, flowtrace and no-essential information
-        rocprofvis_dm_timestamp_t       m_timestamp;                    // unsigned 64-bit timestamp 
+        rocprofvis_dm_event_id_t        m_event_id;                     // 60-bit event id and 4-bit operation type , used as a search key for stacktrace, flowtrace and no-essential information
+        rocprofvis_dm_timestamp_t       m_timestamp;                    // 64-bit timestamp 
         rocprofvis_dm_duration_t        m_duration;                     // signed 64-bit duration. Negative number should be invalidated by controller.
-        rocprofvis_dm_index_t           m_category_index;               // unsigned 32-bit category index. 
-        rocprofvis_dm_index_t           m_symbol_index;                 // unsigned 32-bit description index.
-        rocprofvis_dm_op_t              m_operation;                    // roprofvis_dm_event_operation_t enumeration casted to 32-bit
+        rocprofvis_dm_index_t           m_category_index;               // 32-bit category index of array of strings  
+        rocprofvis_dm_index_t           m_symbol_index;                 // 32-bit symbol index of array of strings 
 };
 
 

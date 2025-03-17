@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +19,7 @@
 // SOFTWARE.
 
 #include "ErrorHandling.h"
+#include "../datamodel/RpvObject.h"
 
 const char* ERROR_INDEX_OUT_OF_RANGE = "Error! Index out of range!";
 const char* ERROR_TRACE_CANNOT_BE_NULL = "Error! Trace reference cannot be NULL!";
@@ -32,6 +31,7 @@ const char* ERROR_TRACK_CANNOT_BE_NULL  = "Error! Track reference cannot be NULL
 const char* ERROR_DATABASE_CANNOT_BE_NULL = "Error! Database reference cannot be NULL!";
 const char* ERROR_TRACK_PARAMETERS_NOT_ASSIGNED = "Error! Trace parameters not yet assigned!";
 const char* ERROR_FUTURE_CANNOT_BE_NULL = "Error! Future reference cannot be NULL!";
+const char* ERROR_FUTURE_CANNOT_BE_USED = "Error! Future cannot be used at tis time!";
 const char* ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH = "Error! Database query parameters mismatch!";
 const char* ERROR_METADATA_IS_NOT_LOADED = "Error! Metadata is not yet loaded!";
 const char* ERROR_MEMORY_ALLOCATION_FAILURE = "Error! Memory allocation failure!";
@@ -46,3 +46,50 @@ const char* ERROR_EXT_DATA_CANNOT_BE_NULL = "Error! Extended data reference cann
 const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL = "Error! SQL query parameters reference cannot be NULL!";
 
 std::string g_last_error_string;
+std::mutex g_last_error_mutex;
+
+const char * GetLastStatusMessage() {
+    std::lock_guard<std::mutex> g(g_last_error_mutex);
+    return g_last_error_string.c_str();
+}
+void SetStatusMessage(const char* msg){
+    std::lock_guard<std::mutex> g(g_last_error_mutex);
+    g_last_error_string = msg;
+}
+
+void AddStatusMessage(const char* msg){
+    std::lock_guard<std::mutex> g(g_last_error_mutex);
+    g_last_error_string += msg;
+}
+
+#ifdef TEST
+
+TimeRecorder::TimeRecorder(const char* function) : m_function(function) {
+    SetStatusMessage("Success!");
+    m_start_time = std::chrono::steady_clock::now();
+}
+
+TimeRecorder::TimeRecorder(const char* function, void* handle, uint32_t property, uint64_t index):
+        TimeRecorder(function) {
+            if (handle!=nullptr)
+            {
+                m_function+="(";
+                m_function+=((RpvObject*)handle)->GetPropertySymbol(property);
+                m_function+=",";
+                m_function+=std::to_string(index);
+                m_function+=")";
+            }
+        }
+
+TimeRecorder::~TimeRecorder() {
+    auto t = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = t - m_start_time;
+    std::string last_msg = GetLastStatusMessage(); 
+    bool success = last_msg == "Success!";
+
+        if (success) printf(ANSI_COLOR_GREY); else printf(ANSI_COLOR_RED);
+        printf("%13.9f seconds | %s | %s \x1b[0m\n", diff.count(), m_function.c_str(), last_msg.c_str());
+   
+}
+
+#endif

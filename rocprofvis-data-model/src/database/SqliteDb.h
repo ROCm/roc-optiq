@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,6 +44,7 @@ class SqliteDatabase : public Database
                         Database(path), 
                         m_db(nullptr),
                         m_db_status(SQLITE_ERROR) {};
+        virtual ~SqliteDatabase() {Close();}
         rocprofvis_dm_result_t Open() override;
         rocprofvis_dm_result_t Close() override;
         bool IsOpen() override {return m_db != nullptr && m_db_status == SQLITE_OK;}

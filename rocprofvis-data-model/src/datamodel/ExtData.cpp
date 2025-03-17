@@ -51,7 +51,8 @@ rocprofvis_dm_result_t RpvDmExtData::MakeJsonBlob(rocprofvis_dm_charptr_t & blob
 {
     if (m_json_blob.length() == 0)
     {
-        std::stringstream json_blob("{\n");
+        std::stringstream json_blob;
+        json_blob << "{\n";
         std::string category = "";
         bool category_bracket_open = false;
         for (int i = 0; i < m_extdata_records.size(); i++)
@@ -70,12 +71,15 @@ rocprofvis_dm_result_t RpvDmExtData::MakeJsonBlob(rocprofvis_dm_charptr_t & blob
             }
             if (category.length() > 0) json_blob << "\t";
 
-            json_blob << "\t\"" << m_extdata_records[i].Name();
+            json_blob << "\t\"" << m_extdata_records[i].Name() << "\":";
             std::string data = m_extdata_records[i].Data();
             bool quatation_needed = (data.length() == 0) || (data.length() > 0 && data[0] != '{');
             if (quatation_needed) json_blob << "\"";
             json_blob << data;
-            if (quatation_needed) json_blob << "\"";
+            if (quatation_needed) json_blob << "\",\n";
+        }
+        if (category_bracket_open) {
+                json_blob << "\t}\n";
         }
         json_blob << "}";
         m_json_blob = json_blob.str().c_str();
@@ -92,7 +96,7 @@ rocprofvis_dm_result_t RpvDmExtData::MakeJsonBlob(rocprofvis_dm_charptr_t & blob
             return GetRecordCategoryAt(index, *(rocprofvis_dm_charptr_t*)value);
         case kRPVDMExtDataNameCharPtrIndexed:
             return GetRecordNameAt(index, *(rocprofvis_dm_charptr_t*)value);
-        case kRPVDMExtDataCharPtrIndexed:
+        case kRPVDMExtDataValueCharPtrIndexed:
             return GetRecordDataAt(index, *(rocprofvis_dm_charptr_t*)value);
         case kRPVDMExtDataJsonBlobCharPtr:
             return MakeJsonBlob(*(rocprofvis_dm_charptr_t*)value);
@@ -100,6 +104,26 @@ rocprofvis_dm_result_t RpvDmExtData::MakeJsonBlob(rocprofvis_dm_charptr_t & blob
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
 }
+
+#ifdef TEST
+const char*  RpvDmExtData::GetPropertySymbol(rocprofvis_dm_property_t property) {
+    switch(property)
+    {
+        case kRPVDMNumberOfExtDataRecordsUInt64:
+            return "kRPVDMNumberOfExtDataRecordsUInt64";        
+        case kRPVDMExtDataCategoryCharPtrIndexed:
+            return "kRPVDMExtDataCategoryCharPtrIndexed";
+        case kRPVDMExtDataNameCharPtrIndexed:
+            return "kRPVDMExtDataNameCharPtrIndexed";
+        case kRPVDMExtDataValueCharPtrIndexed:
+            return "kRPVDMExtDataCharPtrIndexed";
+        case kRPVDMExtDataJsonBlobCharPtr:
+            return "kRPVDMExtDataJsonBlobCharPtr";
+        default:
+            return "Unknown property";
+    }   
+}
+#endif
 
 bool RpvDmExtData::HasRecord(rocprofvis_db_ext_data_t & data)
 {

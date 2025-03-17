@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -104,6 +102,17 @@ rocprofvis_dm_size_t   RpvDmTrack::GetMemoryFootprint()
 }
 
 
+rocprofvis_dm_charptr_t  RpvDmTrack::CategoryString(){
+    switch (m_track_params->track_category){
+        case kRocProfVisDmPmcTrack: return "Counters Track";
+        case kRocProfVisDmRegionTrack: return "Launch Track";
+        case kRocProfVisDmKernelTrack: return "Dispatch Track";
+        case kRocProfVisDmSQTTTrack: return "SQTT Track";
+        case kRocProfVisDmNICTrack: return "NIC Track";
+    }
+    return "Invalid track";
+}
+
 rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
     ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
@@ -134,7 +143,6 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t
 
 }
 
-
  rocprofvis_dm_result_t   RpvDmTrack::GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value){
     ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
@@ -147,7 +155,7 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t
 	    case kRPVDMTrackExtDataNameCharPtrIndexed:
             return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataNameCharPtrIndexed, index, value);
         case kRPVDMTrackExtDataValueCharPtrIndexed:
-            return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataCharPtrIndexed, index, value);
+            return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataValueCharPtrIndexed, index, value);
         case kRPVDMTrackInfoJsonCharPtr:
             return GetExtendedInfo(*(rocprofvis_dm_json_blob_t*)value);
         case kRPVDMTrackMainProcessNameCharPtr:
@@ -155,6 +163,9 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackSubProcessNameCharPtr:
             *value = (char*)SubProcess();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackCategoryEnumCharPtr:
+            *value = (char*)CategoryString();
             return kRocProfVisDmResultSuccess;
         default:
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
@@ -182,3 +193,44 @@ rocprofvis_dm_result_t RpvDmTrack::GetExtendedInfo(rocprofvis_dm_json_blob_t & j
     ASSERT_MSG_RETURN(m_track_params->extdata, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
     return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataJsonBlobCharPtr, 0, (char**) & json);
 }
+
+
+#ifdef TEST
+const char*  RpvDmTrack::GetPropertySymbol(rocprofvis_dm_property_t property) {
+    switch(property)
+    {
+        case kRPVDMTrackCategoryEnumUInt64:
+            return "kRPVDMTrackCategoryEnumUInt64";        
+        case kRPVDMTrackIdUInt64:
+            return "kRPVDMTrackIdUInt64";
+        case kRPVDMTrackNodeIdUInt64:
+            return "kRPVDMTrackNodeIdUInt64";
+        case kRPVDMTNumberOfSlicesUInt64:
+            return "kRPVDMTNumberOfSlicesUInt64";
+        case kRPVDMTNumberOfExtDataRecordsUInt64:
+            return "kRPVDMTNumberOfExtDataRecordsUInt64";
+        case kRPVDMTrackMemoryFootprintUInt64:
+            return "kRPVDMTrackMemoryFootprintUInt64";
+        case kRPVDMTrackExtDataCategoryCharPtrIndexed:
+            return "kRPVDMTrackExtDataCategoryCharPtrIndexed";
+        case kRPVDMTrackExtDataNameCharPtrIndexed:
+            return "kRPVDMTrackExtDataNameCharPtrIndexed";
+        case kRPVDMTrackExtDataValueCharPtrIndexed:
+            return "kRPVDMTrackExtDataValueCharPtrIndexed";
+        case kRPVDMTrackInfoJsonCharPtr:
+            return "kRPVDMTrackInfoJsonCharPtr";
+        case kRPVDMTrackMainProcessNameCharPtr:
+            return "kRPVDMTrackMainProcessNameCharPtr";
+        case kRPVDMTrackSubProcessNameCharPtr:
+            return "kRPVDMTrackSubProcessNameCharPtr";
+        case kRPVDMTrackCategoryEnumCharPtr:
+            return "kRPVDMTrackCategoryEnumCharPtr";
+        case kRPVDMSliceHandleIndexed:
+            return "kRPVDMSliceHandleIndexed";
+        case kRPVDMSliceHandleTimed:
+            return "kRPVDMSliceHandleTimed";
+        default:
+            return "Unknown property";
+    }   
+}
+#endif

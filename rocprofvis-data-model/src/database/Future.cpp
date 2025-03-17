@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,33 +22,38 @@
 
 Future::Future(rocprofvis_db_progress_callback_t progress_callback):
                                 m_progress_callback(progress_callback),
-                                m_stop(false),
-                                m_progress(0.0) {
+                                m_interrupt_status(false),
+                                m_progress(0.0){
     m_future=m_promise.get_future();
+}
+
+Future::~Future(){
+    if (m_worker.joinable())
+    {
+        m_interrupt_status = true;
+        m_worker.join();
+    }
 }
 
 rocprofvis_dm_result_t Future::WaitForCompletion(rocprofvis_db_timeout_ms_t timeout_ms) {
     rocprofvis_dm_result_t result = kRocProfVisDmResultTimeout;
     auto status = m_future.wait_for(std::chrono::milliseconds(timeout_ms));
-    if (status == std::future_status::ready) 
-        result = kRocProfVisDmResultSuccess;
-    m_stop = true;
-    m_worker.join();
+    if (status != std::future_status::ready) {
+        m_interrupt_status = true;
+        LOG("Timeout expired!");
+    }
+    if (m_worker.joinable()) m_worker.join();
     result = m_future.get();
     m_promise = std::promise<rocprofvis_dm_result_t>();
     m_future=m_promise.get_future();
     m_progress=0.0;
-    m_stop=false;
+    m_interrupt_status=false;
     return result;
 }
 
 rocprofvis_dm_result_t Future::SetPromise(rocprofvis_dm_result_t status) {
     m_promise.set_value(status);
     return status;
-}
-
-bool Future::Stopped() {
-    return m_stop;
 }
 
 void Future::ShowProgress(rocprofvis_dm_charptr_t db_name, double step, rocprofvis_dm_charptr_t action, rocprofvis_db_status_t status){

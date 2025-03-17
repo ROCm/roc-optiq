@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +24,7 @@
 #include "TrackSlice.h"
 #include "EventRecord.h"
 #include <vector>
+#include <memory>
 
 /* Class for Event time slices, based on pvDmTrackSlice
 ** Overrides set of methods for accessing array of Event records 
@@ -36,7 +35,7 @@ class RpvDmEventTrackSlice : public RpvDmTrackSlice {
                                 rocprofvis_dm_timestamp_t start, 
                                 rocprofvis_dm_timestamp_t end) : 
                                 RpvDmTrackSlice(ctx, start, end) {}; 
-
+        ~RpvDmEventTrackSlice(){}
         rocprofvis_dm_result_t  AddRecord( rocprofvis_db_record_data_t & data) override;
         rocprofvis_dm_size_t    GetMemoryFootprint() override;
         rocprofvis_dm_size_t    GetNumberOfRecords() override;
@@ -45,6 +44,7 @@ class RpvDmEventTrackSlice : public RpvDmTrackSlice {
         rocprofvis_dm_result_t  GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp) override;
         rocprofvis_dm_result_t  GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_id_t & op) override;
         rocprofvis_dm_result_t  GetRecordOperationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_op_t & id) override;
+        rocprofvis_dm_result_t  GetRecordOperationStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & op) override;
         rocprofvis_dm_result_t  GetRecordDurationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_duration_t & duration) override;
         rocprofvis_dm_result_t  GetRecordCategoryIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & category_index) override;
         rocprofvis_dm_result_t  GetRecordSymbolIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & symbol_index) override;
@@ -53,7 +53,7 @@ class RpvDmEventTrackSlice : public RpvDmTrackSlice {
 
     private:
 
-        std::vector<RpvDmEventRecord>    m_samples;
+        std::vector<std::unique_ptr<RpvDmEventRecord>>    m_samples;
 };
 
 #endif //RPV_DATAMODEL_EVENT_TRACK_SLICE_H

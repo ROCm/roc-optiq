@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -37,6 +35,8 @@ public:
         SqliteDatabase(path) {
     };
 
+    ~RocpdDatabase(){};
+
     rocprofvis_dm_result_t  ReadTraceMetadata(Future* object) override;
     rocprofvis_dm_result_t  ReadTraceSlice(
         rocprofvis_dm_timestamp_t start,
@@ -57,6 +57,7 @@ public:
         rocprofvis_dm_charptr_t query,
         rocprofvis_dm_charptr_t description,
         Future* future) override; 
+    rocprofvis_dm_size_t GetMemoryFootprint(void) override;
     
     rocprofvis_dm_result_t UpdateStringMap(StringPair ids);
 

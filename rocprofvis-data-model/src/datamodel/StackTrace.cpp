@@ -46,7 +46,7 @@ rocprofvis_dm_result_t RpvDmStackTrace::GetPropertyAsUint64(rocprofvis_dm_proper
         case kRPVDMNumberOfFramesUInt64:
             *value = GetNumberOfRecords();
             return kRocProfVisDmResultSuccess;
-        case kRPVDMFrameDepthUInt32Indexed:
+        case kRPVDMFrameDepthUInt64Indexed:
             *value = 0;
             return GetRecordDepthAt(index, *(uint32_t*)value);
         default:
@@ -69,3 +69,23 @@ rocprofvis_dm_result_t RpvDmStackTrace::GetPropertyAsUint64(rocprofvis_dm_proper
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
 }
+
+#ifdef TEST
+const char*  RpvDmStackTrace::GetPropertySymbol(rocprofvis_dm_property_t property) {
+    switch(property)
+    {
+        case kRPVDMNumberOfFramesUInt64:
+            return "kRPVDMNumberOfFramesUInt64";        
+        case kRPVDMFrameDepthUInt64Indexed:
+            return "kRPVDMFrameDepthUInt64Indexed";
+        case kRPVDMFrameSymbolCharPtrIndexed:
+            return "kRPVDMFrameSymbolCharPtrIndexed";
+        case kRPVDMFrameArgsCharPtrIndexed:
+            return "kRPVDMFrameArgsCharPtrIndexed";
+        case kRPVDMFrameCodeLineCharPtrIndexed:
+            return "kRPVDMFrameCodeLineCharPtrIndexed";
+        default:
+            return "Unknown property";
+    }   
+}
+#endif

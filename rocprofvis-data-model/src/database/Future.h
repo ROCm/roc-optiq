@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,11 +24,11 @@
 #include <future>
 #include <thread>
 
-
 class Future
 {
     public:
         Future(rocprofvis_db_progress_callback_t progress_callback = nullptr);
+        ~Future();
 
         rocprofvis_db_progress_callback_t   ProgressCallback() { return m_progress_callback;}
         double                              Progress() { return m_progress; }
@@ -38,17 +36,18 @@ class Future
         rocprofvis_dm_result_t WaitForCompletion(rocprofvis_db_timeout_ms_t timeout);
 
         rocprofvis_dm_result_t SetPromise(rocprofvis_dm_result_t status);
-        bool Stopped();
+        void SetWorker(std::thread && thread) {m_worker = std::move(thread);};
+        bool IsWorking() { return m_worker.joinable();}
+        bool Interrupted() {return m_interrupt_status;};
 
         void ShowProgress(rocprofvis_dm_charptr_t db_name, double step, rocprofvis_dm_charptr_t action, rocprofvis_db_status_t status);
 
     private:
         std::promise<rocprofvis_dm_result_t> m_promise;
         std::future<rocprofvis_dm_result_t> m_future;
-        std::atomic<bool> m_stop;
+        std::atomic<bool> m_interrupt_status;
         rocprofvis_db_progress_callback_t m_progress_callback;
         double m_progress;
-    public:
         std::thread m_worker;
 };
 

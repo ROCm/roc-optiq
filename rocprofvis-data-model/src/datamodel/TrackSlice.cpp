@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -29,6 +27,9 @@ rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordIdAt(const rocprofvis_dm_proper
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
 rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordOperationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_op_t & op){
+    ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
+}
+rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordOperationStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & op){
     ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
 rocprofvis_dm_result_t RpvDmTrackSlice::GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value){
@@ -76,6 +77,38 @@ rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsUint64(rocprofvis_dm_pro
     }
 
 }
+
+#ifdef TEST
+const char*  RpvDmTrackSlice::GetPropertySymbol(rocprofvis_dm_property_t property) {
+    switch(property)
+    {
+        case kRPVDMRecordIndexByTimestampUInt64:
+            return "kRPVDMRecordIndexByTimestampUInt64";        
+        case kRPVDMNumberOfRecordsUInt64:
+            return "kRPVDMNumberOfRecordsUInt64";
+        case kRPVDMTimestampUInt64Indexed:
+            return "kRPVDMTimestampUInt64Indexed";
+        case kRPVDMEventIdUInt64Indexed:
+            return "kRPVDMEventIdUInt64Indexed";
+        case kRPVDMEventIdOperationEnumIndexed:
+            return "kRPVDMEventIdOperationEnumIndexed";
+        case kRPVDMSliceMemoryFootprintUInt64:
+            return "kRPVDMSliceMemoryFootprintUInt64";
+        case kRPVDMEventDurationInt64Indexed:
+            return "kRPVDMEventDurationInt64Indexed";
+        case kRPVDMEventTypeStringCharPtrIndexed:
+            return "kRPVDMEventTypeStringCharPtrIndexed";
+        case kRPVDMEventSymbolStringCharPtrIndexed:
+            return "kRPVDMEventSymbolStringCharPtrIndexed";
+        case kRPVDMEventIdOperationCharPtrIndexed:
+            return "kRPVDMEventIdOperationCharPtrIndexed";
+        case kRPVDMPmcValueDoubleIndexed:
+            return "kRPVDMPmcValueDoubleIndexed";
+        default:
+            return "Unknown property";
+    }   
+}
+#endif
 rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsInt64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, int64_t* value){
     ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
@@ -94,6 +127,8 @@ rocprofvis_dm_result_t    RpvDmTrackSlice::GetPropertyAsInt64(rocprofvis_dm_prop
             return GetRecordCategoryStringAt(index, *(rocprofvis_dm_charptr_t*)value);
         case kRPVDMEventSymbolStringCharPtrIndexed:
             return GetRecordSymbolStringAt(index, *(rocprofvis_dm_charptr_t*)value);
+        case kRPVDMEventIdOperationCharPtrIndexed:
+            return GetRecordOperationStringAt(index, *(rocprofvis_dm_charptr_t*)value);
         default:
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -110,3 +145,5 @@ rocprofvis_dm_result_t   RpvDmTrackSlice::GetPropertyAsDouble(rocprofvis_dm_prop
     }
 
 }
+
+

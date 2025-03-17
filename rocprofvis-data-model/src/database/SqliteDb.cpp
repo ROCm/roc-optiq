@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +35,7 @@ int SqliteDatabase::DetectTable(sqlite3 *db, const char* table){
     int rc = sqlite3_exec(db, query.str().c_str(), CallbackTableExists, db, &zErrMsg);
     sqlite3_mutex_leave(sqlite3_db_mutex(db));
     if (rc != SQLITE_OK) {
-        LOG("Detect table error "); ADD_LOG(std::to_string(rc)); ADD_LOG(":"); ADD_LOG(zErrMsg);
+        LOG("Detect table error "); ADD_LOG(std::to_string(rc).c_str()); ADD_LOG(":"); ADD_LOG(zErrMsg);
         sqlite3_free(zErrMsg);
     }
     return rc;
@@ -156,7 +154,7 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery( Future* future,
 
 rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(const char* query, rocprofvis_db_sqlite_callback_parameters * params)
 {
-    PRINT_TIME_USAGE;
+    PROFILE;
     if (IsOpen())
     {
         char *zErrMsg = 0;
@@ -165,7 +163,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(const char* query, rocpr
         sqlite3_mutex_leave(sqlite3_db_mutex(m_db));
         if( rc != SQLITE_OK ) {
             LOG("Query: "); ADD_LOG(query);
-            LOG("SQL error "); ADD_LOG(std::to_string(rc)); ADD_LOG(":");ADD_LOG(zErrMsg);
+            LOG("SQL error "); ADD_LOG(std::to_string(rc).c_str()); ADD_LOG(":");ADD_LOG(zErrMsg);
             sqlite3_free(zErrMsg);
             return kRocProfVisDmResultDbAccessFailed;
         } 

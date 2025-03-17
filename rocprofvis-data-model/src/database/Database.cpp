@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -75,8 +73,10 @@ rocprofvis_dm_result_t Database::BindTrace(
 rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
+    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
     try {
-        future->m_worker = std::thread(Database::ReadTraceMetadataStatic, this, future);
+        future->SetWorker(std::move(std::thread(Database::ReadTraceMetadataStatic, this, future)));
     }
     catch (std::exception ex)
     {
@@ -92,8 +92,10 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
                                                     rocprofvis_db_track_selection_t tracks,
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
+    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
     try {
-        future->m_worker = std::thread(Database::ReadTraceSliceStatic, this, start, end, num, tracks, future);
+        future->SetWorker(std::move(std::thread(Database::ReadTraceSliceStatic, this, start, end, num, tracks, future)));
     }
     catch (std::exception ex)
     {
@@ -107,8 +109,10 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
                                                     rocprofvis_dm_event_id_t event_id,
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
+    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
     try {
-        future->m_worker = std::thread(ReadEventPropertyStatic, this, type, event_id, future);
+        future->SetWorker(std::move(std::thread(ReadEventPropertyStatic, this, type, event_id, future)));
     }
     catch (std::exception ex)
     {
@@ -122,8 +126,10 @@ rocprofvis_dm_result_t  Database::ExecuteQueryAsync(
                                                     rocprofvis_dm_charptr_t description,
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
+    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
     try {
-        future->m_worker = std::thread(ExecuteQueryStatic, this, query, description, future);
+        future->SetWorker(std::move(std::thread(ExecuteQueryStatic, this, query, description, future)));
     }
     catch (std::exception ex)
     {
@@ -172,6 +178,6 @@ rocprofvis_dm_result_t   Database::ExecuteQueryStatic(
                                                     rocprofvis_dm_charptr_t query,
                                                     rocprofvis_dm_charptr_t description,
                                                     Future* object){
-    return db->ExecuteQueryAsync(query,description,object);
+    return db->ExecuteQuery(query,description,object);
 }
 

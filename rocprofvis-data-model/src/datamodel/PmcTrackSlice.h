@@ -1,6 +1,4 @@
-// MIT License
-//
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +25,7 @@
 #include "TrackSlice.h"
 #include "PmcRecord.h"
 #include <vector>
+#include <memory>
 
 class RpvDmTrack;
 
@@ -39,7 +38,7 @@ class RpvDmPmcTrackSlice : public RpvDmTrackSlice {
                             rocprofvis_dm_timestamp_t start, 
                             rocprofvis_dm_timestamp_t end) : 
                             RpvDmTrackSlice(ctx, start, end) {}; 
-
+        ~RpvDmPmcTrackSlice(){}
         rocprofvis_dm_result_t  AddRecord( rocprofvis_db_record_data_t & data) override;
         rocprofvis_dm_size_t    GetMemoryFootprint() override;
         rocprofvis_dm_size_t    GetNumberOfRecords() override;
@@ -51,7 +50,7 @@ class RpvDmPmcTrackSlice : public RpvDmTrackSlice {
 
     private:
 
-        std::vector<RpvDmPmcRecord>      m_samples;
+        std::vector<std::unique_ptr<RpvDmPmcRecord>>      m_samples;
 };
 
 #endif //RPV_DATAMODEL_PMC_TRACK_SLICE_H

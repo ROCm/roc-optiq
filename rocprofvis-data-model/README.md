@@ -1,29 +1,29 @@
-To build library under Windows:
-unzip src/database/sqlite3/sqlite3.zip
-mkdir build
-cd build
-cmake ..
-load rocprofvis-datamodel-lib.sln to Visual Studio 
-build
+**To build library under Windows:**<br />
+unzip src/database/sqlite3/sqlite3.zip<br />
+mkdir build<br />
+cd build<br />
+cmake ..<br />
+load rocprofvis-datamodel-lib.sln to Visual Studio <br />
+build<br />
 
-To build library under Linux:
-unzip src/database/sqlite3/sqlite3.zip
-mkdir build
-cd build
-cmake ..
-make 
+**To build library under Linux:**<br />
+unzip src/database/sqlite3/sqlite3.zip<br />
+mkdir build<br />
+cd build<br />
+cmake ..<br />
+make <br />
 
-To build library and test under Windows:
-unzip src/database/sqlite3/sqlite3.zip
-mkdir build
-cd build
-cmake -DTEST-ON ..
-load rocprofvis-datamodel-lib.sln to Visual Studio 
-build
+**To build library and test under Windows:**<br />
+unzip src/database/sqlite3/sqlite3.zip<br />
+mkdir build<br />
+cd build<br />
+cmake -DTEST-ON ..<br />
+load rocprofvis-datamodel-lib.sln to Visual Studio <br />
+build<br />
 
-To build library under Linux:
-unzip src/database/sqlite3/sqlite3.zip
-mkdir build
-cd build
-cmake -DTEST-ON ..
-make 
+**To build library under Linux:**<br />
+unzip src/database/sqlite3/sqlite3.zip<br />
+mkdir build<br />
+cd build<br />
+cmake -DTEST-ON ..<br />
+make <br />

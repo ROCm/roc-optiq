@@ -3427,6 +3427,9 @@ public:
                                             new_sample->SetObject(
                                                 kRPVControllerSampleTrack, 0,
                                                 (rocprofvis_handle_t*) track);
+                                            new_sample->SetDouble(
+                                                kRPVControllerSampleValue, 0,
+                                                sample.m_value);
                                             track->SetObject(
                                                 kRPVControllerTrackEntry, index++,
                                                 (rocprofvis_handle_t*) new_sample);

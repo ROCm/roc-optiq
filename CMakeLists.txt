@@ -30,7 +30,29 @@ target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jsoncpp)
 target_link_libraries(rocprof-visualizer-controller PRIVATE json)
 
-add_executable(rocprof-visualizer src/app/src/rocprofvis_trace_ui.cpp src/app/src/rocprofvis_imgui_vulkan.cpp src/app/src/main.cpp src/view/src/rocprofvis_line_chart.cpp src/view/src/rocprofvis_line_chart.h src/view/src/rocprofvis_main_view.cpp src/view/src/rocprofvis_grid.cpp src/view/src/rocprofvis_grid.h src/view/src/rocprofvis_flame_chart.cpp src/view/src/rocprofvis_flame_chart.h src/view/src/rocprofvis_graph_view_metadata.h src/view/src/rocprofvis_graph_view_metadata.cpp )
+# add_executable(rocprof-visualizer src/app/src/rocprofvis_trace_ui.cpp src/app/src/rocprofvis_imgui_vulkan.cpp src/app/src/main.cpp src/view/src/rocprofvis_line_chart.cpp src/view/src/rocprofvis_line_chart.h src/view/src/rocprofvis_main_view.cpp src/view/src/rocprofvis_grid.cpp src/view/src/rocprofvis_grid.h src/view/src/rocprofvis_flame_chart.cpp src/view/src/rocprofvis_flame_chart.h src/view/src/rocprofvis_graph_view_metadata.h src/view/src/rocprofvis_graph_view_metadata.cpp )
+# View related src files
+set(VIEW_FILES
+    src/view/src/rocprofvis_appwindow.cpp 
+    src/view/src/rocprofvis_appwindow.h 
+    src/view/src/rocprofvis_charts.cpp 
+    src/view/src/rocprofvis_flame_chart.cpp 
+    src/view/src/rocprofvis_grid.cpp 
+    src/view/src/rocprofvis_home_screen.cpp 
+    src/view/src/rocprofvis_line_chart.cpp 
+    src/view/src/rocprofvis_main_view.cpp 
+    src/view/src/rocprofvis_sidebar.cpp 
+    src/view/src/rocprofvis_view_module.cpp
+    src/view/src/widgets/rocprofvis_widget.cpp
+)
+
+add_executable(rocprof-visualizer 
+    src/app/src/rocprofvis_trace.cpp 
+    src/app/src/rocprofvis_trace_ui.cpp 
+    src/app/src/rocprofvis_imgui_vulkan.cpp 
+    src/app/src/main.cpp
+    ${VIEW_FILES})
+
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)

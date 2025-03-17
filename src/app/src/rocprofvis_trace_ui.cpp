@@ -107,7 +107,7 @@ rocprofvis_trace_setup()
 }
 
 static void
-rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
+rocprofvis_trace_draw_view()
 {
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -172,9 +172,9 @@ rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
 }
 
 void
-rocprofvis_trace_draw(RocProfVis::View::MainView* main)
+rocprofvis_trace_draw()
 {
-    rocprofvis_trace_draw_view(main);
+    rocprofvis_trace_draw_view();
 
     if(ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
     {

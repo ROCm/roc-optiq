@@ -24,24 +24,43 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
     float  range           = (v_max_x + movement) - (v_min_x + movement);
     ImVec2 displaySize     = ImGui::GetIO().DisplaySize;
 
-    int number_of_gridlines = static_cast<int>(
-        25 *
-        (displaySize.x / 2500));  // determines the number of gridlines in the grid based on resolution. 
-
-    float steps =
-        (max_x - min_x) /
-        number_of_gridlines;  // amount the loop which generates the grid iterates by.
+    float steps = (max_x - min_x) /
+                  (zoom * 20);  // amount the loop which generates the grid iterates by.
 
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 
-    if(ImGui::BeginChild("Grid"), ImVec2(displaySize.x, displaySize.y - 30.0f), true,
+    float temp_sidebar_size = 400.0f;  // Replace with resizeable sidebar variable.
+
+    ImGui::SetCursorPos(ImVec2(temp_sidebar_size, 0));
+
+    if(ImGui::BeginChild("Grid"),
+       ImVec2(displaySize.x - temp_sidebar_size, displaySize.y - 30.0f), true,
        window_flags)
     {
-        for(float raw_position_points_x = min_x; raw_position_points_x < max_x + steps;
+        ImVec2 child_win  = ImGui::GetWindowPos();
+        ImVec2 child_size = ImGui::GetWindowSize();
+
+        // Define the clipping rectangle to match the child window
+        ImVec2 clip_min = child_win;
+        ImVec2 clip_max = ImVec2(child_win.x + child_size.x, child_win.y + child_size.y);
+        draw_list->PushClipRect(clip_min, clip_max, true);
+         
+        float normalized_start_box = (min_x - (min_x + movement)) * scale_x;
+        draw_list->AddRectFilled(
+            ImVec2(normalized_start_box, cursor_position.y),
+            ImVec2(normalized_start_box - 500.0f, cursor_position.y + content_size.y - 50.0f),
+            IM_COL32(100, 100, 100, 100));
+
+           float normalized_start_box_end = (max_x - (min_x + movement)) * scale_x;
+        draw_list->AddRectFilled(ImVec2(normalized_start_box_end, cursor_position.y),
+                                    ImVec2(normalized_start_box_end + 500.0f,
+                                        cursor_position.y + content_size.y - 50.0f),
+                                 IM_COL32(100, 100, 100, 100));
+
+        for(float raw_position_points_x = min_x - (steps*5); raw_position_points_x < max_x + (steps*5);
             raw_position_points_x += steps)
         {
-            std::cout << displaySize.x << std::endl;
             // loop through min-max and create appropriate number of scale markers with
             // marker value printed at bottom.
             float normalized_start =
@@ -49,6 +68,8 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
                 scale_x;  // this value takes the raw value of the output and converts
                           // them into positions on the chart which is scaled by scale_x
 
+
+             
             draw_list->AddLine(
                 ImVec2(normalized_start, cursor_position.y),
                 ImVec2(normalized_start, cursor_position.y + content_size.y - 50.0f),
@@ -68,8 +89,13 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
             ImVec2(0, cursor_position.y + content_size.y - 50.0f),
             ImVec2(displaySize.x, cursor_position.y + content_size.y - 50.0f),
             IM_COL32(0, 0, 0, 128), 1.0f);
+
+        ImVec2 windowPos  = ImGui::GetWindowPos();
+        ImVec2 windowSize = ImGui::GetWindowSize();
+        float  boxWidth   = 300.0f;  // Specify the width of the box
+        draw_list->PopClipRect();
+        ImGui::EndChild();
     }
-    ImGui::EndChild();
 }
 
 }  // namespace View

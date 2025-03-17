@@ -3,12 +3,13 @@
 #include "rocprofvis_main_view.h"
 #include "imgui.h"
 #include "rocprofvis_flame_chart.h"
-#include "rocprofvis_graph_view_metadata.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_structs.h"
+#include <iostream>
 #include <map>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace RocProfVis
@@ -26,8 +27,7 @@ MainView::MainView()
 , m_min_y(0.0f)
 , m_max_y(0.0f)
 , m_scroll_position(0.0f)
-, m_scrubber_position(0.0f)
-, m_v_min_x()
+ , m_v_min_x()
 , m_v_max_x()
 , m_scale_x()
 , m_data_arr()
@@ -39,31 +39,46 @@ MainView::MainView()
 , m_flame_event({})
 , m_previous_scroll_position(0)
 , m_show_graph_customization_window(false)
+, m_graph_map({})
+, min_max_x_init(false)
+, m_is_control_held(false)
+, m_trace_data_ptr(nullptr)
 {}
 
-MainView::~MainView() 
-{}
+MainView::~MainView() {}
+
 void
-MainView::MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
+MainView::Render()
+{
+    if(m_trace_data_ptr)
+    {
+        std::map<std::string, rocprofvis_trace_process_t>& trace_data = *m_trace_data_ptr;
+        RenderGraphPoints(trace_data);
+    }
+}
+
+void
+MainView::RenderScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
 {
     ImVec2 windowPos  = ImGui::GetWindowPos();
     ImVec2 windowSize = ImGui::GetWindowSize();
 
     // Scrubber Line
-
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2 display_size = ImGui::GetWindowSize();
+    ImGui::SetNextWindowSize(ImVec2(display_size.x - 20.0f, display_size.y),
+                             ImGuiCond_Always);
 
-    ImGui::SetNextWindowSize(ImVec2(display_size.x - 20.0f, display_size.y), ImGuiCond_Always);
+    ImGui::SetCursorPos(ImVec2(400, 0));
 
-    ImGui::SetCursorPos(ImVec2(0, 0));
-
-    ImGui::BeginChild("Scrubber View", ImVec2(0, 0), false, window_flags);
+    //overlayed windows need to have fully trasparent bg otherwise they will overlay (with no alpha) over their predecessors
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0,0,0,0));  
+    ImGui::BeginChild("Scrubber View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     if(ImGui::IsMouseHoveringRect(
-           ImVec2(m_sidebar_size, 00),
+           ImVec2(m_sidebar_size, 0),
            ImVec2(display_size_main_graphs.x, display_size_main_graphs.y)))
     {
         ImVec2 mPos = ImGui::GetMousePos();
@@ -73,9 +88,17 @@ MainView::MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
+
+std::map<int, rocprofvis_graph_map_t>*
+MainView::GetGraphMap()
+{
+    return &m_graph_map;
+}
+
 void
-MainView::MakeGrid()
+MainView::RenderGrid()
 {
     /*This section makes the grid for the charts*/
 
@@ -83,20 +106,20 @@ MainView::MakeGrid()
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2      display_size = ImGui::GetWindowSize();
-    ImDrawList* draw_list    = ImGui::GetWindowDrawList();
 
     ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y), ImGuiCond_Always);
 
     ImGui::SetCursorPos(ImVec2(0, 0));
+    //overlayed windows need to have fully trasparent bg otherwise they will overlay (with no alpha) over their predecessors
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(220,0,0,0));  
 
-    ImGui::BeginChild("Grid View", ImVec2(0, 0), false, window_flags);
-
+     ImDrawList* draw_list    = ImGui::GetWindowDrawList();
     RocProfVis::View::Grid main_grid = RocProfVis::View::Grid();
 
     main_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
                          m_v_max_x, m_v_min_x);
 
-    ImGui::EndChild();
+     ImGui::PopStyleColor();
 }
 
 void
@@ -168,7 +191,11 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t*                  timel
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
 
+    //overlayed windows need to have fully trasparent bg otherwise they will overlay (with no alpha) over their predecessors
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0,0,0,0));      
     ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
+    ImGuiIO& io       = ImGui::GetIO();
+    m_is_control_held = io.KeyCtrl;
 
     // Prevent choppy behavior by preventing constant rerender.
     float temp_scroll_position = ImGui::GetScrollY();
@@ -181,6 +208,88 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t*                  timel
     {
         ImGui::SetScrollY(m_scroll_position);
     }
+    for(const auto& graph_objects : m_graph_map)
+    {
+        if(graph_objects.second.display == true)
+        {
+            if(graph_objects.second.color_by_value)
+            {
+                graph_objects.second.chart->SetColorByValue(
+                    graph_objects.second.color_by_value_digits);
+            }
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, graph_objects.second.selected);
+            ImGui::BeginChild(
+                (std::to_string(graph_objects.first)).c_str(),
+                ImVec2(0, m_graph_map[graph_objects.first].chart->ReturnSize() + 40.0f),
+                false,
+                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                    ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+
+            if(m_is_control_held)
+            {
+                ImGui::Selectable(
+                    ("Move Position " + std::to_string(graph_objects.first)).c_str(),
+                    false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+
+                if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+                {
+                    ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE", &graph_objects.second,
+                                              sizeof(graph_objects.second));
+                    ImGui::EndDragDropSource();
+                }
+                if(ImGui::BeginDragDropTarget())
+                {
+                    if(const ImGuiPayload* payload =
+                           ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
+                    {
+                        // Handle the payload (here we just print it)
+
+                        rocprofvis_graph_map_t* payload_data =
+                            (rocprofvis_graph_map_t*)
+                                payload->Data;  // incoming (being dragged)
+                        rocprofvis_graph_map_t payload_data_copy = *payload_data;
+                        int payload_position = payload_data_copy.chart->ReturnChartID();
+                        rocprofvis_graph_map_t outgoing_chart =
+                            m_graph_map[graph_objects.first];  // outgoing (getting
+                                                               // replaced)
+                        int outgoing_position = outgoing_chart.chart->ReturnChartID();
+
+                        // Change position in object itself.
+                        payload_data_copy.chart->SetID(outgoing_position);
+                        outgoing_chart.chart->SetID(payload_position);
+
+                        // Swap Positions.
+                        m_graph_map[outgoing_position] = payload_data_copy;
+                        m_graph_map[payload_position]  = outgoing_chart;
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+            }
+
+            m_graph_map[graph_objects.first].chart->UpdateMovement(
+                m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
+
+            m_graph_map[graph_objects.first].chart->Render();
+            ImGui::PopStyleColor();
+
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+
+            ImGui::Separator();
+        }
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+void
+MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data,
+                        float                                              scale_x)
+{
+    m_trace_data_ptr = &trace_data;
 
     uint64_t num_graphs = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(timeline, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
@@ -269,7 +378,6 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t*                  timel
     }
 
     m_meta_map_made = true;
-    ImGui::EndChild();
 }
 
 void
@@ -513,27 +621,20 @@ MainView::GenerateGraphPoints(rocprofvis_controller_timeline_t* object,
 {
     ImVec2 screen_pos = ImGui::GetCursorScreenPos();
 
-    ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
+    ImVec2 display_size_main = ImGui::GetWindowSize();
 
-    ImGui::SetNextWindowPos(ImVec2(m_sidebar_size, 20.0f));
-    ImGui::SetNextWindowSize(
-        ImVec2(display_size_main.x - m_sidebar_size, display_size_main.y - 20.0f),
-        ImGuiCond_Always);
 
-    if(ImGui::Begin("Main Graphs", nullptr,
-                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
-                        ImGuiWindowFlags_HorizontalScrollbar |
-                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize))
+
+    if(ImGui::BeginChild("Main Graphs"))
     {
-        ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
-
         ImVec2 display_size_main_graphs = ImGui::GetIO().DisplaySize;
 
         ImVec2 subcomponent_size_main = ImGui::GetContentRegionAvail();
 
         ImGui::BeginChild(
-            "Grid View", ImVec2(subcomponent_size_main.x, subcomponent_size_main.y),
+            "Grid View 2", ImVec2(subcomponent_size_main.x, subcomponent_size_main.y),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 
         // Scale used in all graphs computer here.
@@ -542,13 +643,18 @@ MainView::GenerateGraphPoints(rocprofvis_controller_timeline_t* object,
         m_v_max_x = m_v_min_x + m_v_width;
         m_scale_x = content_size.x / (m_v_max_x - m_v_min_x);
 
-        MakeGrid();
-        HandleTopSurfaceTouch();  // Funtion enables user interactions to be captured and
-                                  // relayed into subcomponents as needed.
+        RenderGrid();
 
         MakeGraphView(object, array, m_scale_x);
 
-        MakeScrubber(display_size_main_graphs, screen_pos);
+        ImGuiIO& io       = ImGui::GetIO();
+        m_is_control_held = io.KeyCtrl;
+        if(!m_is_control_held)
+        {
+            // Disable when user wants to reposition graphs.
+            RenderScrubber(display_size_main_graphs, screen_pos);
+            HandleTopSurfaceTouch();  // Funtion enables user interactions to be captured
+        }
 
         ImGui::EndChild();
     }
@@ -593,7 +699,7 @@ MainView::HandleTopSurfaceTouch()
     This component enables the capture of user inputs and saves them as class variable.
     Enables user interactions please dont touch.
     */
-    if(m_user_adjusting_graph_height == false)
+    if(!m_is_control_held)
     {
         // Handle Zoom
         if(ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows))
@@ -604,13 +710,12 @@ MainView::HandleTopSurfaceTouch()
                 float       view_width = (m_max_x - m_min_x) / m_zoom;
                 const float zoom_speed = 0.1f;
                 m_zoom *= (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
-                m_zoom = clamp(m_zoom, 1.0f, 1000.0f);
+                m_zoom = m_zoom;
 
                 m_v_width = (m_max_x - m_min_x) / m_zoom;
                 m_v_min_x = m_min_x + m_movement;
                 m_v_max_x = m_v_min_x + m_v_width;
-                m_movement += view_width - (m_v_max_x - m_v_min_x);
-            }
+             }
         }
 
         // Handle Panning
@@ -619,32 +724,9 @@ MainView::HandleTopSurfaceTouch()
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (m_max_x - m_min_x) / m_zoom;
             m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
-            m_scrubber_position -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
-            float drag_y = ImGui::GetIO().MouseDelta.y;
-
-            m_scroll_position = static_cast<int>(m_scroll_position - drag_y);
+             float drag_y = ImGui::GetIO().MouseDelta.y;
+             m_scroll_position = static_cast<int>(m_scroll_position - drag_y);
         }
-    }
-}
-void
-MainView::HandleGraphResize(int chart_id)
-{
-    // Create an invisible button with a more area
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 5);
-    ImGui::InvisibleButton(std::to_string(chart_id).c_str(),
-                           ImVec2(ImGui::GetContentRegionAvail().x, 10));
-    if(ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-    {
-        m_user_adjusting_graph_height = true;
-        ImVec2 drag_delta             = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        rocprofvis_meta_map_struct_t temp_meta_map = m_meta_map[chart_id];
-        temp_meta_map.size                         = temp_meta_map.size + (drag_delta.y);
-        m_meta_map[chart_id]                       = temp_meta_map;
-        ImGui::ResetMouseDragDelta();
-    }
-    else if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-    {
-        m_user_adjusting_graph_height = false;
     }
 }
 
@@ -662,102 +744,6 @@ MainView::HandleSidebarResize()
         m_sidebar_size = m_sidebar_size + drag_delta.x;
         ImGui::ResetMouseDragDelta();
     }
-}
-
-void
-MainView::RenderLineCharts(int chart_id, float scale_x)
-{
-    if(m_meta_map_made)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-
-        ImGui::BeginChild((std::to_string(chart_id)).c_str(),
-                          ImVec2(0, m_meta_map[chart_id].size), false,
-                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                              ImGuiWindowFlags_NoScrollWithMouse |
-                              ImGuiWindowFlags_NoScrollbar);
-
-        RocProfVis::View::LineChart line = RocProfVis::View ::LineChart(
-            chart_id, m_min_value, m_max_value, m_zoom, m_movement, m_min_x, m_max_x,
-            m_min_y, m_max_y, m_data_arr, scale_x);
-        line.Render();
-
-        ImGui::EndChild();
-        ImGui::PopStyleVar();
-        ImGui::Spacing();
-        ImGui::Separator();
-        HandleGraphResize(chart_id);
-    }
-}
-
-void
-MainView::RenderFlameCharts(int chart_id, float scale_x)
-{
-    if(m_meta_map_made)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::BeginChild((std::to_string(chart_id)).c_str(),
-                          ImVec2(0, m_meta_map[chart_id].size), false,
-                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                              ImGuiWindowFlags_NoScrollWithMouse |
-                              ImGuiWindowFlags_NoScrollbar);
-        RocProfVis::View::FlameChart flame = RocProfVis::View::FlameChart(
-            chart_id, m_min_value, m_max_value, m_zoom, m_movement, m_min_x, m_max_x,
-            m_flame_event, scale_x);
-        flame.render();
-
-        ImGui::EndChild();
-        ImGui::PopStyleVar();
-        ImGui::Spacing();
-        ImGui::Separator();
-
-        HandleGraphResize(chart_id);
-    }
-}
-
-void
-MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
-                              rocprofvis_meta_map_struct_t data)
-{
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::BeginChild((std::to_string(graph_id)).c_str(), ImVec2(0, data.size), false,
-                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                          ImGuiWindowFlags_NoScrollWithMouse |
-                          ImGuiWindowFlags_NoScrollbar);
-
-    ImVec2 childSize        = ImGui::GetContentRegionAvail();
-    float  splitRatio       = 0.8f;
-    float  firstChildWidth  = childSize.x * splitRatio;
-    float  secondChildWidth = childSize.x * (1.0f - splitRatio);
-
-    ImGui::BeginChild("MetaData Content", ImVec2(childSize.x - 50.0f, childSize.y),
-                      false);
-    RocProfVis::View::GraphViewMetadata metaData =
-        RocProfVis::View::GraphViewMetadata(graph_id, size, type, data);
-    metaData.renderData();
-
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-
-    ImGui::BeginChild("MetaData Scale", ImVec2(50.0f, childSize.y), false);
-
-    ImGui::Text((std::to_string(data.max)).c_str());
-
-    ImVec2 child_window_size = ImGui::GetWindowSize();
-    ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
-    ImGui::SetCursorPos(
-        ImVec2(0, child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
-
-    ImGui::Text((std::to_string(data.min)).c_str());
-
-    ImGui::EndChild();
-
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
-    ImGui::Spacing();
-    ImGui::Separator();
-    HandleGraphResize(graph_id);
 }
 
 }  // namespace View

@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "rocprofvis_main_view.h"
+#include "rocprofvis_view_module.h"
 
 void rocprofvis_trace_draw(RocProfVis::View::MainView* main);
 
@@ -28,8 +28,6 @@ main(int, char**)
     int resultCode = 0;
 
     glfwSetErrorCallback(glfw_error_callback);
-
-    RocProfVis::View::MainView* main_view = new RocProfVis::View::MainView();
 
     if(glfwInit())
     {
@@ -50,7 +48,7 @@ main(int, char**)
 
                 ImGui::StyleColorsLight();
 
-                rocprofvis_trace_setup();
+                rocprofvis_view_init();
 
                 backend.m_config(&backend, window);
 
@@ -89,8 +87,8 @@ main(int, char**)
                     // Open ImGui window
                     ImGui::Begin("Line Chart Window", nullptr, windowFlags);
 
-                    rocprofvis_trace_draw(main_view);
-
+                    rocprofvis_view_render();
+                   
                     // Close ImGui window
                     ImGui::End();
 

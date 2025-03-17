@@ -12,33 +12,80 @@ namespace RocProfVis
 {
 namespace View
 {
- FlameChart::FlameChart(int chart_id, float min_value, float max_value, float zoom,
-                       float movement, float min_x, float max_x,
-                       const std::vector<rocprofvis_trace_event_t>& data_arr,
-                       float                                        scale_x)
-: m_min_value(min_value)
-, m_max_value(max_value)
-, m_zoom(zoom)
+FlameChart::FlameChart(int chart_id, float zoom, float movement, float min_x, float max_x,
+
+                       float scale_x, std::vector<rocprofvis_trace_event_t>& raw_flame)
+: m_zoom(zoom)
 , m_movement(movement)
 , m_min_x(min_x)
 , m_chart_id(chart_id)
 , m_max_x(max_x)
 , m_scale_x(scale_x)
-, m_min_start_time(std::numeric_limits<double>::max())
-{
-     if(!data_arr.empty())
-    {
-        for(const auto& event : data_arr)
-        {
-            if(event.m_start_ts < m_min_start_time)
-            {
-                m_min_start_time = event.m_start_ts;
-            }
-        }
-        flames.insert(flames.end(), data_arr.begin(), data_arr.end());
-    }
-}
+, m_raw_flame(raw_flame)
 
+{}
+
+void
+FlameChart::ExtractFlamePoints()
+{
+    std::vector<rocprofvis_trace_event_t> entries;
+
+    ImVec2 display_size = ImGui::GetIO().DisplaySize;
+    int    screen_width = static_cast<int>(display_size.x);
+
+    float effective_width = screen_width / m_zoom;
+    float bin_size        = ((m_max_x - m_min_x) / effective_width);
+
+    double bin_sum_x         = 0.0;
+    int    bin_count         = 0;
+    double current_bin_start = m_raw_flame[0].m_start_ts;
+    float  largest_duration  = 0;
+    for(const auto& counter : m_raw_flame)
+    {
+        if(counter.m_start_ts < current_bin_start + bin_size)
+        {
+            if(counter.m_duration > largest_duration)
+            {
+                largest_duration =
+                    counter.m_duration;  // Use the largest duration per bin.
+            }
+            bin_sum_x += counter.m_start_ts;
+            bin_count++;
+        }
+        else
+        {
+            if(bin_count > 0)
+            {
+                rocprofvis_trace_event_t binned_point;
+                binned_point.m_start_ts = bin_sum_x / bin_count;
+                binned_point.m_duration = largest_duration;
+                binned_point.m_name     = counter.m_name;
+                entries.push_back(binned_point);
+            }
+
+            // Prepare next bin.
+            current_bin_start =
+                current_bin_start +
+                bin_size *
+                    static_cast<int>((counter.m_start_ts - current_bin_start) / bin_size);
+            bin_sum_x        = counter.m_start_ts;
+            largest_duration = counter.m_duration;
+            bin_count        = 1;
+        }
+    }
+
+    if(bin_count > 0)
+    {
+        rocprofvis_trace_event_t binned_point;
+        binned_point.m_start_ts = bin_sum_x / bin_count;
+        binned_point.m_duration = largest_duration;
+        binned_point.m_name     = m_raw_flame.back().m_name;
+
+        entries.push_back(binned_point);
+    }
+
+    flames = entries;
+}
 void
 FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
                     rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list)
@@ -109,5 +156,3 @@ FlameChart::render()
 
 }  // namespace View
 }  // namespace RocProfVis
-
-

@@ -138,8 +138,7 @@ LineChart::Render()
         ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
         float scale_y = content_size.y / (m_max_y - m_min_y);
-        std::cout << m_data.size();
-        for(int i = 1; i < m_data.size(); i++)
+         for(int i = 1; i < m_data.size(); i++)
         {
             ImVec2 point_1 =
                 MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);

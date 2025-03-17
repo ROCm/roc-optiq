@@ -3,6 +3,8 @@
 #pragma once
 
 #include "../src/view/src/rocprofvis_line_chart.h"
+#include "../src/view/src/rocprofvis_flame_chart.h"
+
 #include "imgui.h"
 #include "rocprofvis_structs.h"
 #include <map>
@@ -12,7 +14,12 @@
  
 typedef struct rocprofvis_graph_map_t
 {
-    RocProfVis::View::LineChart* line_chart;
+    union
+    {
+        RocProfVis::View::LineChart* line_chart;
+        RocProfVis::View::FlameChart* flame_chart;
+    } graph;
+     
 
 } rocprofvis_graph_map_t;
 
@@ -39,10 +46,8 @@ public:
         std::map<std::string, rocprofvis_trace_process_t>& trace_data);
     void HandleGraphResize(int chart_id);
     void HandleSidebarResize();
-    void FindMaxMin();
-    void FindMaxMinFlame();
-    void RenderLineCharts(int chart_id, float scale_x);
-    void RenderFlameCharts(int chart_id, float scale_x);
+     void FindMaxMinFlame();
+     void RenderFlameCharts(int chart_id, float scale_x);
     void RenderGraphMetadata(int graph_id, float size, std::string type,
                              rocprofvis_meta_map_struct_t data);
     void RenderGraphCustomizationWindow(int graph_number);

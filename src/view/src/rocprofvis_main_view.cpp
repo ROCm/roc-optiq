@@ -206,7 +206,24 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
 
                     m_meta_map[graph_id] = temp_meta_map;
                 }
-                RenderFlameCharts(graph_id, scale_x);
+
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+                ImGui::BeginChild((std::to_string(graph_id)).c_str(),
+                                  ImVec2(0, m_meta_map[graph_id].size), false,
+                                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoScrollWithMouse |
+                                      ImGuiWindowFlags_NoScrollbar);
+                RocProfVis::View::FlameChart flame = RocProfVis::View::FlameChart(
+                    graph_id, m_zoom, m_movement, m_min_x, m_max_x, scale_x, events);
+                flame.ExtractFlamePoints();
+                flame.render();
+
+                ImGui::EndChild();
+                ImGui::PopStyleVar();
+                ImGui::Spacing();
+                ImGui::Separator();
+
+                HandleGraphResize(graph_id);
 
                 graph_id = graph_id + 1;
             }
@@ -237,9 +254,9 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
 
                 if(m_graph_map.find(graph_id) != m_graph_map.end())
                 {
-                    m_graph_map[graph_id].line_chart->UpdateMovement(
+                    m_graph_map[graph_id].graph.line_chart->UpdateMovement(
                         m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
-                    m_graph_map[graph_id].line_chart->Render();
+                    m_graph_map[graph_id].graph.line_chart->Render();
                 }
                 else
                 {
@@ -259,7 +276,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                     }
 
                     rocprofvis_graph_map_t temp;
-                    temp.line_chart       = line;
+                    temp.graph.line_chart = line;
                     m_graph_map[graph_id] = temp;
                 }
 
@@ -276,10 +293,6 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
     m_meta_map_made = true;
     ImGui::EndChild();
 }
-
-void
-MainView::FindMaxMin()
-{}
 
 void
 MainView::FindMaxMinFlame()
@@ -521,31 +534,6 @@ MainView::HandleSidebarResize()
 
         m_sidebar_size = m_sidebar_size + drag_delta.x;
         ImGui::ResetMouseDragDelta();
-    }
-}
-
-void
-MainView::RenderFlameCharts(int chart_id, float scale_x)
-{
-    if(m_meta_map_made)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::BeginChild((std::to_string(chart_id)).c_str(),
-                          ImVec2(0, m_meta_map[chart_id].size), false,
-                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                              ImGuiWindowFlags_NoScrollWithMouse |
-                              ImGuiWindowFlags_NoScrollbar);
-        RocProfVis::View::FlameChart flame = RocProfVis::View::FlameChart(
-            chart_id, m_min_value, m_max_value, m_zoom, m_movement, m_min_x, m_max_x,
-            m_flame_event, scale_x);
-        flame.render();
-
-        ImGui::EndChild();
-        ImGui::PopStyleVar();
-        ImGui::Spacing();
-        ImGui::Separator();
-
-        HandleGraphResize(chart_id);
     }
 }
 

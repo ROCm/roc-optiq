@@ -40,6 +40,7 @@ MainView::MainView()
 , m_previous_scroll_position(0)
 , m_show_graph_customization_window(false)
 , m_graph_map({})
+, min_max_x_init(false)
 {}
 
 MainView::~MainView() {}
@@ -212,38 +213,48 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                       ImGuiWindowFlags_NoScrollWithMouse |
                                       ImGuiWindowFlags_NoScrollbar);
-            
+
+                if(m_meta_map_made == true)
+                {
+                    m_graph_map[graph_id].graph.flame_chart->UpdateMovement(
+                        m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
+
+                    m_graph_map[graph_id].graph.flame_chart->render();
+                }
+                else
+                {
                     RocProfVis::View::FlameChart* flame =
-                        new RocProfVis::View::FlameChart(graph_id,thread.first, m_zoom, m_movement,
-                                                         m_min_x, m_max_x, scale_x,
-                                                         events);
+                        new RocProfVis::View::FlameChart(graph_id, thread.first, m_zoom,
+                                                         m_movement, m_min_x, m_max_x,
+                                                         scale_x, events);
 
                     flame->ExtractFlamePoints();
                     std::tuple<float, float> temp_min_max_flame =
                         flame->FindMaxMinFlame();
+
                     flame->render();
-                    if(m_meta_map_made == false)
+                    if(min_max_x_init == false)
                     {
                         // Without this 0 would be lowest which is not correct behavior.
                         m_min_x = std::get<0>(temp_min_max_flame);
                         m_max_x = std::get<1>(temp_min_max_flame);
+                        min_max_x_init = true;
+
                     }
-                    else
+
+                    if(std::get<0>(temp_min_max_flame) < m_min_x)
                     {
-                        if(std::get<0>(temp_min_max_flame) < m_min_x)
-                        {
-                            m_min_x = std::get<0>(temp_min_max_flame);
-                        }
-                        if(std::get<1>(temp_min_max_flame) > m_max_x)
-                        {
-                            m_max_x = std::get<1>(temp_min_max_flame);
-                        }
+                        m_min_x = std::get<0>(temp_min_max_flame);
+                    }
+                    if(std::get<1>(temp_min_max_flame) > m_max_x)
+                    {
+                        m_max_x = std::get<1>(temp_min_max_flame);
                     }
 
                     rocprofvis_graph_map_t temp_flame;
                     temp_flame.graph.flame_chart = flame;
                     m_graph_map[graph_id]        = temp_flame;
-              
+                }
 
                 ImGui::EndChild();
                 ImGui::PopStyleVar();
@@ -288,27 +299,27 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 else
                 {
                     RocProfVis::View::LineChart* line = new RocProfVis::View ::LineChart(
-                        graph_id, thread.first, m_zoom, m_movement, m_min_x, m_max_x, m_scale_x, datap);
+                        graph_id, thread.first, m_zoom, m_movement, m_min_x, m_max_x,
+                        m_scale_x, datap);
                     line->ExtractPointsFromData();
                     std::tuple<float, float> temp_min_max = line->FindMaxMin();
                     line->Render();
 
-                    if(m_meta_map_made == false)
+                    if(min_max_x_init == false)
                     {
                         // Without this 0 would be lowest which is not correct behavior.
                         m_min_x = std::get<0>(temp_min_max);
                         m_max_x = std::get<1>(temp_min_max);
+                        min_max_x_init = true;
                     }
-                    else
+
+                    if(std::get<0>(temp_min_max) < m_min_x)
                     {
-                        if(std::get<0>(temp_min_max) < m_min_x)
-                        {
-                            m_min_x = std::get<0>(temp_min_max);
-                        }
-                        if(std::get<1>(temp_min_max) > m_max_x)
-                        {
-                            m_max_x = std::get<1>(temp_min_max);
-                        }
+                        m_min_x = std::get<0>(temp_min_max);
+                    }
+                    if(std::get<1>(temp_min_max) > m_max_x)
+                    {
+                        m_max_x = std::get<1>(temp_min_max);
                     }
 
                     rocprofvis_graph_map_t temp;

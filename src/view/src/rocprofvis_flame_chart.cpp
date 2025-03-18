@@ -44,8 +44,7 @@ FlameChart::FindMaxMinFlame()
             m_max_x = point.m_start_ts + point.m_duration;
         }
     }
-    std::cout << m_min_x << " " << m_max_x << std::endl;
-    return std::make_tuple(m_min_x, m_max_x);
+     return std::make_tuple(m_min_x, m_max_x);
 }
 void
 FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,

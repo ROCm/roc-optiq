@@ -83,6 +83,7 @@ private:
     bool                                        m_meta_map_made;
     bool                                        m_has_zoom_happened;
     bool                                        m_show_graph_customization_window;
+    bool                                        min_max_x_init;
 };
 
 }  // namespace View

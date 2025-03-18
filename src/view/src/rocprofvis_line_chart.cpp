@@ -14,8 +14,8 @@ namespace RocProfVis
 namespace View
 {
 
-LineChart::LineChart(int id, float zoom, float movement, float& min_x, float& max_x,
-                     float scale_x, void* datap)
+LineChart::LineChart(int id, std::string name, float zoom, float movement, float& min_x,
+                     float& max_x, float scale_x, void* datap)
 : m_id(id)
 , m_zoom(zoom)
 , m_movement(movement)
@@ -26,6 +26,7 @@ LineChart::LineChart(int id, float zoom, float movement, float& min_x, float& ma
 , m_scale_x(scale_x)
 , m_data({})
 , datap(datap)
+, m_name(name)
 {}
 
 LineChart::~LineChart() {}
@@ -111,6 +112,7 @@ LineChart::FindMaxMin()
             m_max_y = point.yValue;
         }
     }
+    std::cout << m_min_x << " line " << m_max_x << std::endl;
 
     return std::make_tuple(m_min_x, m_max_x);
 }
@@ -122,6 +124,8 @@ LineChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x
     m_zoom     = zoom;
     m_movement = movement;
     m_scale_x  = scale_x;
+    m_min_x    = min_x;
+    m_max_x    = max_x;
 }
 
 void
@@ -138,7 +142,7 @@ LineChart::Render()
         ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
         float scale_y = content_size.y / (m_max_y - m_min_y);
-         for(int i = 1; i < m_data.size(); i++)
+        for(int i = 1; i < m_data.size(); i++)
         {
             ImVec2 point_1 =
                 MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);

@@ -7,12 +7,14 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <string>
 
 namespace RocProfVis
 {
 namespace View
 {
-FlameChart::FlameChart(int chart_id, float zoom, float movement, float min_x, float max_x,
+FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movement,
+                       float min_x, float max_x,
 
                        float scale_x, std::vector<rocprofvis_trace_event_t>& raw_flame)
 : m_zoom(zoom)
@@ -22,9 +24,39 @@ FlameChart::FlameChart(int chart_id, float zoom, float movement, float min_x, fl
 , m_max_x(max_x)
 , m_scale_x(scale_x)
 , m_raw_flame(raw_flame)
+, m_name(name)
 
 {}
+std::tuple<float, float>
+FlameChart::FindMaxMinFlame()
+{
+    m_min_x = m_raw_flame[0].m_start_ts;
+    m_max_x = m_raw_flame[0].m_start_ts + m_raw_flame[0].m_duration;
 
+    for(const auto& point : m_raw_flame)
+    {
+        if(point.m_start_ts < m_min_x)
+        {
+            m_min_x = point.m_start_ts;
+        }
+        if(point.m_start_ts + point.m_duration > m_max_x)
+        {
+            m_max_x = point.m_start_ts + point.m_duration;
+        }
+    }
+    std::cout << m_min_x << " " << m_max_x << std::endl;
+    return std::make_tuple(m_min_x, m_max_x);
+}
+void
+FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+                           float scale_x)
+{
+    m_zoom     = zoom;
+    m_movement = movement;
+    m_scale_x  = scale_x;
+    m_min_x    = min_x;
+    m_max_x    = max_x;
+}
 void
 FlameChart::ExtractFlamePoints()
 {

@@ -41,8 +41,7 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
         for(float raw_position_points_x = min_x; raw_position_points_x < max_x + steps;
             raw_position_points_x += steps)
         {
-            std::cout << displaySize.x << std::endl;
-            // loop through min-max and create appropriate number of scale markers with
+             // loop through min-max and create appropriate number of scale markers with
             // marker value printed at bottom.
             float normalized_start =
                 (raw_position_points_x - (min_x + movement)) *

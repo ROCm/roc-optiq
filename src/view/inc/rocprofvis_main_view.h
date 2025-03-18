@@ -46,7 +46,7 @@ public:
         std::map<std::string, rocprofvis_trace_process_t>& trace_data);
     void HandleGraphResize(int chart_id);
     void HandleSidebarResize();
-     void FindMaxMinFlame();
+    void FindMaxMinFlame(std::vector<rocprofvis_trace_event_t> m_flame_event);
      void RenderFlameCharts(int chart_id, float scale_x);
     void RenderGraphMetadata(int graph_id, float size, std::string type,
                              rocprofvis_meta_map_struct_t data);

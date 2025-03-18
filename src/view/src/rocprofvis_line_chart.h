@@ -6,6 +6,7 @@
 #include "rocprofvis_structs.h"
 #include <tuple>
 #include <vector>
+#include <string>
 
 namespace RocProfVis
 {
@@ -15,7 +16,7 @@ namespace View
 class LineChart
 {
 public:
-    LineChart(int id, float zoom, float movement, float& min_x, float& max_x,
+    LineChart(int id,std::string name,  float zoom, float movement, float& min_x, float& max_x,
               float scale_x, void* datap);
     ~LineChart();
     void   Render();
@@ -28,6 +29,7 @@ public:
 
 private:
     std::vector<rocprofvis_data_point_t> m_data;
+    std::string                          m_name;
     float                                m_min_value;
     float                                m_max_value;
     float                                m_zoom;

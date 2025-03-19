@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "../src/view/src/rocprofvis_line_chart.h"
 #include "../src/view/src/rocprofvis_flame_chart.h"
+#include "../src/view/src/rocprofvis_line_chart.h"
 
 #include "imgui.h"
 #include "rocprofvis_structs.h"
@@ -11,18 +11,20 @@
 #include <string>
 #include <vector>
 
- 
 typedef struct rocprofvis_graph_map_t
 {
+    enum
+    {
+        TYPE_LINECHART,
+        TYPE_FLAMECHART
+    } graph_type;
     union
     {
-        RocProfVis::View::LineChart* line_chart;
+        RocProfVis::View::LineChart*  line_chart;
         RocProfVis::View::FlameChart* flame_chart;
     } graph;
-     
 
 } rocprofvis_graph_map_t;
-
 
 namespace RocProfVis
 {
@@ -42,12 +44,13 @@ public:
     void MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos);
     void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data,
                        float                                              scale_x);
+    void ContinueGraphView();
     void MakeGraphMetadataView(
         std::map<std::string, rocprofvis_trace_process_t>& trace_data);
     void HandleGraphResize(int chart_id);
     void HandleSidebarResize();
     void FindMaxMinFlame(std::vector<rocprofvis_trace_event_t> m_flame_event);
-     void RenderFlameCharts(int chart_id, float scale_x);
+    void RenderFlameCharts(int chart_id, float scale_x);
     void RenderGraphMetadata(int graph_id, float size, std::string type,
                              rocprofvis_meta_map_struct_t data);
     void RenderGraphCustomizationWindow(int graph_number);

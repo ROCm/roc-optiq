@@ -26,6 +26,9 @@ public:
                    float scale_x, float scale_y);
     std::vector<rocprofvis_data_point_t> ExtractPointsFromData();
     std::tuple<float, float>             FindMaxMin();
+    float ReturnSize();
+    void                                 ChangeChartID(int id);
+    int                                  ReturnChartID();
 
 private:
     std::vector<rocprofvis_data_point_t> m_data;
@@ -41,6 +44,7 @@ private:
     float                                m_scale_x;
     int                                  m_id;
     void*                                datap;
+    float                                size;
 };
 
 }  // namespace View

@@ -7,10 +7,12 @@
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_structs.h"
+#include <iostream>
 #include <map>
 #include <string>
 #include <tuple>
 #include <vector>
+
 namespace RocProfVis
 {
 namespace View
@@ -117,14 +119,10 @@ MainView::RenderGraphCustomizationWindow(int graph_id)
 }
 
 void
-MainView::MakeGraphMetadataView(
-    std::map<std::string, rocprofvis_trace_process_t>& trace_data)
+MainView::ContinueGraphView()
 {
-    /*This section makes the charts both line and flamechart are constructed here*/
-
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                    ImGuiWindowFlags_NoScrollWithMouse |
-                                    ImGuiWindowFlags_NoScrollbar;
+                                    ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
@@ -132,26 +130,93 @@ MainView::MakeGraphMetadataView(
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    ImGui::BeginChild("Graph MetaData View", ImVec2(0, 0), false, window_flags);
+    ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
 
-    if(m_scroll_position != ImGui::GetScrollY())
+    // Prevent choppy behavior by preventing constant rerender.
+    float temp_scroll_position = ImGui::GetScrollY();
+    if(m_previous_scroll_position != temp_scroll_position)
+    {
+        m_previous_scroll_position = temp_scroll_position;
+        m_scroll_position          = temp_scroll_position;
+    }
+    else if(m_scroll_position != temp_scroll_position)
     {
         ImGui::SetScrollY(m_scroll_position);
     }
-
-    for(const auto& pair : m_meta_map)
+    for(const auto& graph_objects : m_graph_map)
     {
-        if(pair.second.type == "flame")
+        ImGui::Selectable(std::to_string(graph_objects.first).c_str(), false,
+                          ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 100.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
         {
-            RenderGraphMetadata(pair.first, 250, "Flame", pair.second);
+      
+            ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE", &graph_objects.second,
+                                      sizeof(graph_objects.second));
+            ImGui::EndDragDropSource();
+        }
+        if(ImGui::BeginDragDropTarget())
+        {
+            if(const ImGuiPayload* payload =
+                   ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
+            {
+                // Handle the payload (here we just print it)
+                 rocprofvis_graph_map_t* payload_data =
+                    ( rocprofvis_graph_map_t*) payload->Data;
+                if (payload_data->graph_type == rocprofvis_graph_map_t::TYPE_FLAMECHART) {
+                     rocprofvis_graph_map_t temp_charts = m_graph_map[graph_objects.first];
+                    m_graph_map[graph_objects.first]   = *payload_data;
+                    m_graph_map[payload_data->graph.line_chart->ReturnChartID()] =
+                        temp_charts; 
+                }
+                if(payload_data->graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
+                { 
+
+                    rocprofvis_graph_map_t temp_charts = m_graph_map[graph_objects.first]; 
+                    m_graph_map[graph_objects.first] = *payload_data; 
+                     m_graph_map[payload_data->graph.line_chart->ReturnChartID()] = temp_charts; 
+
+                }
+               
+
+            }
+            ImGui::EndDragDropTarget();
         }
 
-        else if(pair.second.type == "line")
+        if(graph_objects.second.graph_type == rocprofvis_graph_map_t::TYPE_FLAMECHART)
         {
-            RenderGraphMetadata(pair.first, 300, "Line", pair.second);
+            ImGui::BeginChild(
+                (std::to_string(graph_objects.first)).c_str(),
+                ImVec2(0,
+                       m_graph_map[graph_objects.first].graph.flame_chart->ReturnSize()),
+                false,
+                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                    ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+            m_graph_map[graph_objects.first].graph.flame_chart->UpdateMovement(
+                m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
+
+            m_graph_map[graph_objects.first].graph.flame_chart->render();
         }
+        else if(graph_objects.second.graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
+        {
+            ImGui::BeginChild(
+                (std::to_string(graph_objects.first)).c_str(),
+                ImVec2(0,
+                       m_graph_map[graph_objects.first].graph.line_chart->ReturnSize()),
+                false,
+                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                    ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+            m_graph_map[graph_objects.first].graph.line_chart->UpdateMovement(
+                m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
+            m_graph_map[graph_objects.first].graph.line_chart->Render();
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::Spacing();
+        ImGui::Separator();
+        HandleGraphResize(graph_objects.first);
     }
-
     ImGui::EndChild();
 }
 
@@ -195,66 +260,43 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
             {
                 // Create FlameChart
 
-                if(!m_meta_map_made)
-                {
-                    // Create FlameChart title and info panel
-                    rocprofvis_meta_map_struct_t temp_meta_map = {};
-
-                    temp_meta_map.type       = "flame";
-                    temp_meta_map.chart_name = thread.first;
-                    temp_meta_map.size       = 75;
-
-                    m_meta_map[graph_id] = temp_meta_map;
-                }
-
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-                ImGui::BeginChild((std::to_string(graph_id)).c_str(),
-                                  ImVec2(0, m_meta_map[graph_id].size), false,
+                ImGui::BeginChild((std::to_string(graph_id)).c_str(), ImVec2(0, 75.0f),
+                                  false,
                                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                       ImGuiWindowFlags_NoScrollWithMouse |
                                       ImGuiWindowFlags_NoScrollbar);
 
-                if(m_meta_map_made == true)
+                RocProfVis::View::FlameChart* flame = new RocProfVis::View::FlameChart(
+                    graph_id, thread.first, m_zoom, m_movement, m_min_x, m_max_x, scale_x,
+                    events);
+
+                flame->ExtractFlamePoints();
+                std::tuple<float, float> temp_min_max_flame = flame->FindMaxMinFlame();
+
+                flame->render();
+                if(min_max_x_init == false)
                 {
-                    m_graph_map[graph_id].graph.flame_chart->UpdateMovement(
-                        m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
-
-                    m_graph_map[graph_id].graph.flame_chart->render();
+                    // Without this 0 would be lowest which is not correct behavior.
+                    m_min_x        = std::get<0>(temp_min_max_flame);
+                    m_max_x        = std::get<1>(temp_min_max_flame);
+                    min_max_x_init = true;
                 }
-                else
+
+                if(std::get<0>(temp_min_max_flame) < m_min_x)
                 {
-                    RocProfVis::View::FlameChart* flame =
-                        new RocProfVis::View::FlameChart(graph_id, thread.first, m_zoom,
-                                                         m_movement, m_min_x, m_max_x,
-                                                         scale_x, events);
-
-                    flame->ExtractFlamePoints();
-                    std::tuple<float, float> temp_min_max_flame =
-                        flame->FindMaxMinFlame();
-
-                    flame->render();
-                    if(min_max_x_init == false)
-                    {
-                        // Without this 0 would be lowest which is not correct behavior.
-                        m_min_x = std::get<0>(temp_min_max_flame);
-                        m_max_x = std::get<1>(temp_min_max_flame);
-                        min_max_x_init = true;
-
-                    }
-
-                    if(std::get<0>(temp_min_max_flame) < m_min_x)
-                    {
-                        m_min_x = std::get<0>(temp_min_max_flame);
-                    }
-                    if(std::get<1>(temp_min_max_flame) > m_max_x)
-                    {
-                        m_max_x = std::get<1>(temp_min_max_flame);
-                    }
-
-                    rocprofvis_graph_map_t temp_flame;
-                    temp_flame.graph.flame_chart = flame;
-                    m_graph_map[graph_id]        = temp_flame;
+                    m_min_x = std::get<0>(temp_min_max_flame);
                 }
+                if(std::get<1>(temp_min_max_flame) > m_max_x)
+                {
+                    m_max_x = std::get<1>(temp_min_max_flame);
+                }
+
+                rocprofvis_graph_map_t temp_flame;
+                temp_flame.graph.flame_chart = flame;
+                temp_flame.graph_type        = rocprofvis_graph_map_t::TYPE_FLAMECHART;
+
+                m_graph_map[graph_id] = temp_flame;
 
                 ImGui::EndChild();
                 ImGui::PopStyleVar();
@@ -272,60 +314,42 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 void* datap = (void*) &thread.second.m_counters;
                 int   count = counters.size();
 
-                if(!m_meta_map_made)
-                {
-                    rocprofvis_meta_map_struct_t temp_meta_map = {};
-                    temp_meta_map.type                         = "line";
-                    temp_meta_map.chart_name                   = thread.first;
-                    temp_meta_map.max                          = m_max_y;
-                    temp_meta_map.min                          = m_min_y;
-                    temp_meta_map.size                         = 300;
-                    m_meta_map[graph_id]                       = temp_meta_map;
-                }
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-                ImGui::BeginChild((std::to_string(graph_id)).c_str(),
-                                  ImVec2(0, m_meta_map[graph_id].size), false,
+                ImGui::BeginChild((std::to_string(graph_id)).c_str(), ImVec2(0, 300.0f),
+                                  false,
                                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                       ImGuiWindowFlags_NoScrollWithMouse |
                                       ImGuiWindowFlags_NoScrollbar);
 
-                if(m_meta_map_made == true)
+                RocProfVis::View::LineChart* line = new RocProfVis::View ::LineChart(
+                    graph_id, thread.first, m_zoom, m_movement, m_min_x, m_max_x,
+                    m_scale_x, datap);
+                line->ExtractPointsFromData();
+                std::tuple<float, float> temp_min_max = line->FindMaxMin();
+                line->Render();
+
+                if(min_max_x_init == false)
                 {
-                    m_graph_map[graph_id].graph.line_chart->UpdateMovement(
-                        m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
-                    m_graph_map[graph_id].graph.line_chart->Render();
+                    // Without this 0 would be lowest which is not correct behavior.
+                    m_min_x        = std::get<0>(temp_min_max);
+                    m_max_x        = std::get<1>(temp_min_max);
+                    min_max_x_init = true;
                 }
-                else
+
+                if(std::get<0>(temp_min_max) < m_min_x)
                 {
-                    RocProfVis::View::LineChart* line = new RocProfVis::View ::LineChart(
-                        graph_id, thread.first, m_zoom, m_movement, m_min_x, m_max_x,
-                        m_scale_x, datap);
-                    line->ExtractPointsFromData();
-                    std::tuple<float, float> temp_min_max = line->FindMaxMin();
-                    line->Render();
-
-                    if(min_max_x_init == false)
-                    {
-                        // Without this 0 would be lowest which is not correct behavior.
-                        m_min_x = std::get<0>(temp_min_max);
-                        m_max_x = std::get<1>(temp_min_max);
-                        min_max_x_init = true;
-                    }
-
-                    if(std::get<0>(temp_min_max) < m_min_x)
-                    {
-                        m_min_x = std::get<0>(temp_min_max);
-                    }
-                    if(std::get<1>(temp_min_max) > m_max_x)
-                    {
-                        m_max_x = std::get<1>(temp_min_max);
-                    }
-
-                    rocprofvis_graph_map_t temp;
-                    temp.graph.line_chart = line;
-                    m_graph_map[graph_id] = temp;
+                    m_min_x = std::get<0>(temp_min_max);
                 }
+                if(std::get<1>(temp_min_max) > m_max_x)
+                {
+                    m_max_x = std::get<1>(temp_min_max);
+                }
+
+                rocprofvis_graph_map_t temp;
+                temp.graph.line_chart = line;
+                temp.graph_type       = rocprofvis_graph_map_t::TYPE_LINECHART;
+                m_graph_map[graph_id] = temp;
 
                 ImGui::EndChild();
                 ImGui::PopStyleVar();
@@ -412,10 +436,9 @@ MainView::GenerateGraphPoints(
 
     ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
 
-    ImGui::SetNextWindowPos(ImVec2(m_sidebar_size, 20.0f));
-    ImGui::SetNextWindowSize(
-        ImVec2(display_size_main.x - m_sidebar_size, display_size_main.y - 20.0f),
-        ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(0, 20.0f));
+    ImGui::SetNextWindowSize(ImVec2(display_size_main.x, display_size_main.y - 20.0f),
+                             ImGuiCond_Always);
 
     if(ImGui::Begin("Main Graphs", nullptr,
                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
@@ -439,44 +462,20 @@ MainView::GenerateGraphPoints(
         m_v_max_x = m_v_min_x + m_v_width;
         m_scale_x = content_size.x / (m_v_max_x - m_v_min_x);
 
-        MakeGrid();
-        HandleTopSurfaceTouch();  // Funtion enables user interactions to be captured and
-                                  // relayed into subcomponents as needed.
+        // MakeGrid();
+        HandleTopSurfaceTouch();  // Funtion enables user interactions to be captured
+        // and
+        //  relayed into subcomponents as needed.
+        if(m_meta_map_made == false)
+        {
+            MakeGraphView(trace_data, m_scale_x);
+        }
+        else
+        {
+            ContinueGraphView();
+        }
 
-        MakeGraphView(trace_data, m_scale_x);
-
-        MakeScrubber(display_size_main_graphs, screen_pos);
-
-        ImGui::EndChild();
-    }
-    ImGui::End();
-    ImGui::SetNextWindowPos(ImVec2(0, 20.0f));
-    ImGui::SetNextWindowSize(ImVec2(m_sidebar_size, display_size_main.y - 20.0f),
-                             ImGuiCond_Always);
-
-    if(ImGui::Begin("Graph MetaData", nullptr,
-                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
-                        ImGuiWindowFlags_HorizontalScrollbar |
-                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize))
-    {
-        ImVec2 subcomponent_size = ImGui::GetContentRegionAvail();
-
-        ImGui::BeginChild(
-            "MetaData Content", ImVec2(subcomponent_size.x - 10.0f, subcomponent_size.y),
-            false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-        MakeGraphMetadataView(trace_data);
-
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-
-        // Second child (20%)
-        ImGui::BeginChild("Graph Scale", ImVec2(10.0f, subcomponent_size.y), false,
-                          ImGuiWindowFlags_NoScrollbar |
-                              ImGuiWindowFlags_NoScrollWithMouse);
-
-        HandleSidebarResize();
+        // MakeScrubber(display_size_main_graphs, screen_pos);
 
         ImGui::EndChild();
     }
@@ -559,51 +558,6 @@ MainView::HandleSidebarResize()
         m_sidebar_size = m_sidebar_size + drag_delta.x;
         ImGui::ResetMouseDragDelta();
     }
-}
-
-void
-MainView::RenderGraphMetadata(int graph_id, float size, std::string type,
-                              rocprofvis_meta_map_struct_t data)
-{
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::BeginChild((std::to_string(graph_id)).c_str(), ImVec2(0, data.size), false,
-                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                          ImGuiWindowFlags_NoScrollWithMouse |
-                          ImGuiWindowFlags_NoScrollbar);
-
-    ImVec2 childSize        = ImGui::GetContentRegionAvail();
-    float  splitRatio       = 0.8f;
-    float  firstChildWidth  = childSize.x * splitRatio;
-    float  secondChildWidth = childSize.x * (1.0f - splitRatio);
-
-    ImGui::BeginChild("MetaData Content", ImVec2(childSize.x - 50.0f, childSize.y),
-                      false);
-    RocProfVis::View::GraphViewMetadata metaData =
-        RocProfVis::View::GraphViewMetadata(graph_id, size, type, data);
-    metaData.renderData();
-
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-
-    ImGui::BeginChild("MetaData Scale", ImVec2(50.0f, childSize.y), false);
-
-    ImGui::Text((std::to_string(data.max)).c_str());
-
-    ImVec2 child_window_size = ImGui::GetWindowSize();
-    ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
-    ImGui::SetCursorPos(
-        ImVec2(0, child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
-
-    ImGui::Text((std::to_string(data.min)).c_str());
-
-    ImGui::EndChild();
-
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
-    ImGui::Spacing();
-    ImGui::Separator();
-    HandleGraphResize(graph_id);
 }
 
 }  // namespace View

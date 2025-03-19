@@ -25,6 +25,7 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 , m_scale_x(scale_x)
 , m_raw_flame(raw_flame)
 , m_name(name)
+, size(75)
 
 {}
 std::tuple<float, float>
@@ -56,6 +57,23 @@ FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_
     m_min_x    = min_x;
     m_max_x    = max_x;
 }
+
+float
+FlameChart::ReturnSize()
+{
+    return size;
+}
+
+void 
+FlameChart::ChangeChartID(int id) {
+    m_chart_id = id; 
+}
+
+int
+FlameChart::ReturnChartID() {
+    return m_chart_id;
+}
+
 void
 FlameChart::ExtractFlamePoints()
 {
@@ -157,7 +175,19 @@ FlameChart::render()
        window_flags)
     {
         int boxplot_box_id = 0;
+        ImVec2 parent_size    = ImGui::GetContentRegionAvail();
+        float  metadata_size  = parent_size.x * 0.2f;
+        float  graph_size     = parent_size.x * 0.8f;
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 255));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, size), false);
+        ImGui::EndChild();
+        ImGui::PopStyleColor();  // Restore the previous style color
+        ImGui::PopStyleVar(2);
 
+        ImGui::SameLine();
+        ImGui::BeginChild("Graph View", ImVec2(graph_size, size), false);
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         for(const auto& flame : flames)
@@ -180,6 +210,7 @@ FlameChart::render()
 
             boxplot_box_id = boxplot_box_id + 1;
         }
+        ImGui::EndChild();
     }
 
     ImGui::EndChild();

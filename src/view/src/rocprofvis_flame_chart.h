@@ -25,6 +25,9 @@ public:
     std::tuple<float, float> FindMaxMinFlame();
     void UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
                         float scale_x);
+    float ReturnSize();
+    int ReturnChartID(); 
+    void  ChangeChartID(int id);
 
 private:
     std::vector<rocprofvis_trace_event_t>  flames;
@@ -38,6 +41,7 @@ private:
     float                                  m_scale_x;
     int                                    m_chart_id;
     std::vector<rocprofvis_trace_event_t>& m_raw_flame;
+    float                                  size;
 };
 
 }  // namespace View

@@ -5,6 +5,7 @@
 #include "../src/view/src/rocprofvis_flame_chart.h"
 #include "../src/view/src/rocprofvis_line_chart.h"
 
+#include "../src/view/src/rocprofvis_charts.h"
 #include "imgui.h"
 #include "rocprofvis_structs.h"
 #include <map>
@@ -18,11 +19,8 @@ typedef struct rocprofvis_graph_map_t
         TYPE_LINECHART,
         TYPE_FLAMECHART
     } graph_type;
-    union
-    {
-        RocProfVis::View::LineChart*  line_chart;
-        RocProfVis::View::FlameChart* flame_chart;
-    } graph;
+
+    Charts* chart;
 
 } rocprofvis_graph_map_t;
 
@@ -87,6 +85,7 @@ private:
     bool                                        m_has_zoom_happened;
     bool                                        m_show_graph_customization_window;
     bool                                        min_max_x_init;
+    bool                                        m_is_control_held;
 };
 
 }  // namespace View

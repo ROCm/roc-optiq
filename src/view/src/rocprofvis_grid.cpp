@@ -26,7 +26,8 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
 
     int number_of_gridlines = static_cast<int>(
         25 *
-        (displaySize.x / 2500));  // determines the number of gridlines in the grid based on resolution. 
+        (displaySize.x /
+         2500));  // determines the number of gridlines in the grid based on resolution.
 
     float steps =
         (max_x - min_x) /
@@ -41,7 +42,7 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
         for(float raw_position_points_x = min_x; raw_position_points_x < max_x + steps;
             raw_position_points_x += steps)
         {
-             // loop through min-max and create appropriate number of scale markers with
+            // loop through min-max and create appropriate number of scale markers with
             // marker value printed at bottom.
             float normalized_start =
                 (raw_position_points_x - (min_x + movement)) *
@@ -67,8 +68,19 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
             ImVec2(0, cursor_position.y + content_size.y - 50.0f),
             ImVec2(displaySize.x, cursor_position.y + content_size.y - 50.0f),
             IM_COL32(0, 0, 0, 128), 1.0f);
+
+        ImVec2 windowPos  = ImGui::GetWindowPos();
+        ImVec2 windowSize = ImGui::GetWindowSize();
+        float  boxWidth   = 300.0f;  // Specify the width of the box
+
+        ImGui::SetCursorPos(ImVec2(0, 0));  // Position at the top-left corner
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImVec2(windowPos.x, windowPos.y),
+            ImVec2(windowPos.x + boxWidth, windowPos.y + windowSize.y),
+            IM_COL32(255, 255, 255, 255)  // White color
+        );
+        ImGui::EndChild();
     }
-    ImGui::EndChild();
 }
 
 }  // namespace View

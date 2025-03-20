@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include "rocprofvis_charts.h"
 
 namespace RocProfVis
 {
@@ -42,7 +43,8 @@ LineChart::ReturnChartID()
     return m_id;
 }
 void 
-LineChart::ChangeChartID(int id) {
+LineChart::SetID(int id)
+{
     m_id = id;
 }
 
@@ -153,15 +155,12 @@ LineChart::Render()
     if(ImGui::BeginChild((std::to_string(m_id)).c_str()), true, window_flags)
     {
         ImVec2 parent_size   = ImGui::GetContentRegionAvail();
-        float  metadata_size = parent_size.x * 0.2f;
-        float  graph_size    = parent_size.x* 0.8f;
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 255));
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        float  metadata_size = 300.0f;
+        float  graph_size    = parent_size.x - metadata_size;
+      
         ImGui::BeginChild("MetaData View", ImVec2(metadata_size,size), false);
         ImGui::EndChild();
-        ImGui::PopStyleColor();  // Restore the previous style color
-        ImGui::PopStyleVar(2);
+      
 
         ImGui::SameLine();
         ImGui::BeginChild("Graph View", ImVec2(graph_size, size), false);

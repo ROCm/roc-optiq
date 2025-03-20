@@ -2,6 +2,7 @@
 
 #include "rocprofvis_flame_chart.h"
 #include "imgui.h"
+#include "rocprofvis_charts.h"
 #include "rocprofvis_grid.h"
 #include <algorithm>
 #include <iostream>
@@ -45,7 +46,7 @@ FlameChart::FindMaxMinFlame()
             m_max_x = point.m_start_ts + point.m_duration;
         }
     }
-     return std::make_tuple(m_min_x, m_max_x);
+    return std::make_tuple(m_min_x, m_max_x);
 }
 void
 FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
@@ -64,13 +65,15 @@ FlameChart::ReturnSize()
     return size;
 }
 
-void 
-FlameChart::ChangeChartID(int id) {
-    m_chart_id = id; 
+void
+FlameChart::SetID(int id) 
+{
+    m_chart_id  = id;
 }
 
 int
-FlameChart::ReturnChartID() {
+FlameChart::ReturnChartID()
+{
     return m_chart_id;
 }
 
@@ -166,7 +169,7 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
 }
 
 void
-FlameChart::render()
+FlameChart::Render()
 {
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
@@ -174,17 +177,14 @@ FlameChart::render()
     if(ImGui::BeginChild((std::to_string(m_chart_id)).c_str()), ImVec2(0, 50), true,
        window_flags)
     {
-        int boxplot_box_id = 0;
+        int    boxplot_box_id = 0;
         ImVec2 parent_size    = ImGui::GetContentRegionAvail();
-        float  metadata_size  = parent_size.x * 0.2f;
-        float  graph_size     = parent_size.x * 0.8f;
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 255));
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        float  metadata_size  = 300.0f;
+        float  graph_size     = parent_size.x - metadata_size;
+       
         ImGui::BeginChild("MetaData View", ImVec2(metadata_size, size), false);
         ImGui::EndChild();
-        ImGui::PopStyleColor();  // Restore the previous style color
-        ImGui::PopStyleVar(2);
+   
 
         ImGui::SameLine();
         ImGui::BeginChild("Graph View", ImVec2(graph_size, size), false);

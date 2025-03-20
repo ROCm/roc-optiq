@@ -3,8 +3,7 @@
 #include "rocprofvis_main_view.h"
 #include "imgui.h"
 #include "rocprofvis_flame_chart.h"
-#include "rocprofvis_graph_view_metadata.h"
-#include "rocprofvis_grid.h"
+ #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_structs.h"
 #include <iostream>
@@ -146,19 +145,16 @@ MainView::ContinueGraphView()
     }
     for(const auto& graph_objects : m_graph_map)
     {
-        ImGuiIO& io         = ImGui::GetIO();
-        m_is_control_held =   io.KeyCtrl;
+        ImGuiIO& io       = ImGui::GetIO();
+        m_is_control_held = io.KeyCtrl;
 
         if(m_is_control_held)
         {
             ImGui::Selectable(
                 ("Move Position " + std::to_string(graph_objects.first)).c_str(), false,
                 ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
-
         }
 
-      
-     
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
         if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
@@ -195,19 +191,18 @@ MainView::ContinueGraphView()
 
         ImGui::BeginChild(
             (std::to_string(graph_objects.first)).c_str(),
-            ImVec2(0, m_graph_map[graph_objects.first].chart->ReturnSize()), false,
+            ImVec2(0, m_graph_map[graph_objects.first].chart->ReturnSize()+ 10.0f), false,
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                 ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
         m_graph_map[graph_objects.first].chart->UpdateMovement(
             m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
 
         m_graph_map[graph_objects.first].chart->Render();
-
-        ImGui::EndChild();
+         ImGui::EndChild();
         ImGui::PopStyleVar();
         ImGui::Spacing();
         ImGui::Separator();
-        HandleGraphResize(graph_objects.first);
+         
     }
     ImGui::EndChild();
 }
@@ -295,8 +290,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 ImGui::Spacing();
                 ImGui::Separator();
 
-                HandleGraphResize(graph_id);
-
+ 
                 graph_id = graph_id + 1;
             }
 
@@ -347,8 +341,7 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 ImGui::PopStyleVar();
                 ImGui::Spacing();
                 ImGui::Separator();
-                HandleGraphResize(graph_id);
-                graph_id = graph_id + 1;
+                 graph_id = graph_id + 1;
             }
         }
     }
@@ -356,7 +349,6 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
     m_meta_map_made = true;
     ImGui::EndChild();
 }
- 
 
 void
 MainView::GenerateGraphPoints(
@@ -394,7 +386,7 @@ MainView::GenerateGraphPoints(
         m_scale_x = content_size.x / (m_v_max_x - m_v_min_x);
 
         MakeGrid();
-         // and
+        // and
         //  relayed into subcomponents as needed.
         if(m_meta_map_made == false)
         {
@@ -405,13 +397,12 @@ MainView::GenerateGraphPoints(
             ContinueGraphView();
         }
 
-        if (!m_is_control_held) {
-            //Disable when user wants to reposition graphs.
+        if(!m_is_control_held)
+        {
+            // Disable when user wants to reposition graphs.
             MakeScrubber(display_size_main_graphs, screen_pos);
             HandleTopSurfaceTouch();  // Funtion enables user interactions to be captured
-
         }
- 
 
         ImGui::EndChild();
     }
@@ -458,27 +449,7 @@ MainView::HandleTopSurfaceTouch()
         }
     }
 }
-void
-MainView::HandleGraphResize(int chart_id)
-{
-    // Create an invisible button with a more area
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 5);
-    ImGui::InvisibleButton(std::to_string(chart_id).c_str(),
-                           ImVec2(ImGui::GetContentRegionAvail().x, 10));
-    if(ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-    {
-        m_user_adjusting_graph_height = true;
-        ImVec2 drag_delta             = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        rocprofvis_meta_map_struct_t temp_meta_map = m_meta_map[chart_id];
-        temp_meta_map.size                         = temp_meta_map.size + (drag_delta.y);
-        m_meta_map[chart_id]                       = temp_meta_map;
-        ImGui::ResetMouseDragDelta();
-    }
-    else if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-    {
-        m_user_adjusting_graph_height = false;
-    }
-}
+ 
 
 void
 MainView::HandleSidebarResize()

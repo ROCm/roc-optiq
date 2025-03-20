@@ -2,13 +2,13 @@
 
 #include "rocprofvis_line_chart.h"
 #include "imgui.h"
-#include "rocprofvis_grid.h"
+#include "rocprofvis_charts.h"
+ #include "rocprofvis_grid.h"
 #include "rocprofvis_structs.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
 #include <vector>
-#include "rocprofvis_charts.h"
 
 namespace RocProfVis
 {
@@ -33,21 +33,22 @@ LineChart::LineChart(int id, std::string name, float zoom, float movement, float
 
 LineChart::~LineChart() {}
 float
-LineChart::ReturnSize(){return size;}
-
-
+LineChart::ReturnSize()
+{
+    return size;  // Create an invisible button with a more area
+    
+}
 
 int
 LineChart::ReturnChartID()
 {
     return m_id;
 }
-void 
+void
 LineChart::SetID(int id)
 {
     m_id = id;
 }
-
 
 std::vector<rocprofvis_data_point_t>
 LineChart::ExtractPointsFromData()
@@ -157,10 +158,28 @@ LineChart::Render()
         ImVec2 parent_size   = ImGui::GetContentRegionAvail();
         float  metadata_size = 300.0f;
         float  graph_size    = parent_size.x - metadata_size;
-      
-        ImGui::BeginChild("MetaData View", ImVec2(metadata_size,size), false);
+
+        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, size), false);
+
+        ImGui::BeginChild("MetaData Content", ImVec2(metadata_size - 70.0f, size), false);
+        ImGui::Text(m_name.c_str());
         ImGui::EndChild();
-      
+
+        ImGui::SameLine();
+
+        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, size), false);
+        ImGui::Text((std::to_string(m_max_y)).c_str());
+
+        ImVec2 child_window_size = ImGui::GetWindowSize();
+        ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
+        ImGui::SetCursorPos(ImVec2(0, child_window_size.y - text_size.y -
+                                          ImGui::GetStyle().WindowPadding.y));
+
+        ImGui::Text((std::to_string(m_min_y)).c_str());
+
+        ImGui::EndChild();
+
+        ImGui::EndChild();
 
         ImGui::SameLine();
         ImGui::BeginChild("Graph View", ImVec2(graph_size, size), false);
@@ -179,10 +198,10 @@ LineChart::Render()
             draw_list->AddLine(point_1, point_2, IM_COL32(0, 0, 0, 255), 2.0f);
         }
         ImGui::EndChild();
-        
     }
 
     ImGui::EndChild();
+ 
 }
 
 ImVec2

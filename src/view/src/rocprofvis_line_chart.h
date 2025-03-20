@@ -3,11 +3,11 @@
 #pragma once
 
 #include "imgui.h"
+#include "rocprofvis_charts.h"
 #include "rocprofvis_structs.h"
+#include <string>
 #include <tuple>
 #include <vector>
-#include <string>
-#include "rocprofvis_charts.h"
 
 namespace RocProfVis
 {
@@ -17,19 +17,20 @@ namespace View
 class LineChart : public Charts
 {
 public:
-    LineChart(int id,std::string name,  float zoom, float movement, float& min_x, float& max_x,
-              float scale_x, void* datap);
+    LineChart(int id, std::string name, float zoom, float movement, float& min_x,
+              float& max_x, float scale_x, void* datap);
     ~LineChart();
-    void   Render() override;   
+    void   Render() override;
     void   UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
                           float scale_x) override;
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
     std::vector<rocprofvis_data_point_t> ExtractPointsFromData();
     std::tuple<float, float>             FindMaxMin();
-    float ReturnSize() override;
+    float                                ReturnSize() override;
     void                                 SetID(int id) override;
     int                                  ReturnChartID() override;
+    int                                  SetSize();
 
 private:
     std::vector<rocprofvis_data_point_t> m_data;

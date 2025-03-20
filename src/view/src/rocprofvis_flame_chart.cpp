@@ -66,9 +66,9 @@ FlameChart::ReturnSize()
 }
 
 void
-FlameChart::SetID(int id) 
+FlameChart::SetID(int id)
 {
-    m_chart_id  = id;
+    m_chart_id = id;
 }
 
 int
@@ -181,12 +181,8 @@ FlameChart::Render()
         ImVec2 parent_size    = ImGui::GetContentRegionAvail();
         float  metadata_size  = 300.0f;
         float  graph_size     = parent_size.x - metadata_size;
-       
-        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, size), false);
-        ImGui::EndChild();
-   
 
-        ImGui::SameLine();
+    
         ImGui::BeginChild("Graph View", ImVec2(graph_size, size), false);
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 

@@ -182,7 +182,22 @@ FlameChart::Render()
         float  metadata_size  = 300.0f;
         float  graph_size     = parent_size.x - metadata_size;
 
-    
+        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, size), false);
+
+        ImGui::BeginChild("MetaData Content", ImVec2(metadata_size - 70.0f, size), false);
+        ImGui::Text(m_name.c_str());
+        ImGui::EndChild();
+
+        ImGui::SameLine();
+
+        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, size), false);
+
+        ImGui::EndChild();
+
+        ImGui::EndChild();
+
+        ImGui::SameLine();
+
         ImGui::BeginChild("Graph View", ImVec2(graph_size, size), false);
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -208,8 +223,30 @@ FlameChart::Render()
         }
         ImGui::EndChild();
     }
+    // Controls for graph resize.
+    ImGuiIO& io              = ImGui::GetIO();
+    bool     is_control_held = io.KeyCtrl;
+    if(is_control_held)
+    {
+        ImGui::Selectable(("Move Position Line " + std::to_string(m_chart_id)).c_str(), false,
+                          ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+
+        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+        {
+            ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+            size              = size + (drag_delta.y);
+            ImGui::ResetMouseDragDelta();
+            ImGui::EndDragDropSource();
+        }
+        if(ImGui::BeginDragDropTarget())
+        {
+            ImGui::EndDragDropTarget();
+        }
+    }
 
     ImGui::EndChild();
+ 
+    
 }
 
 }  // namespace View

@@ -3,7 +3,7 @@
 #include "rocprofvis_line_chart.h"
 #include "imgui.h"
 #include "rocprofvis_charts.h"
- #include "rocprofvis_grid.h"
+#include "rocprofvis_grid.h"
 #include "rocprofvis_structs.h"
 #include <algorithm>
 #include <iostream>
@@ -36,7 +36,6 @@ float
 LineChart::ReturnSize()
 {
     return size;  // Create an invisible button with a more area
-    
 }
 
 int
@@ -193,15 +192,48 @@ LineChart::Render()
         {
             ImVec2 point_1 =
                 MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
+            if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
+                                          ImVec2(point_1.x + 10, point_1.y + 10)))
+            {
+                ImGui::BeginTooltip();
+                ImGui::Text(std::to_string(m_data[i - 1].xValue - m_min_x).c_str());
+                ImGui::EndTooltip();
+            }
             ImVec2 point_2 =
                 MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
+
             draw_list->AddLine(point_1, point_2, IM_COL32(0, 0, 0, 255), 2.0f);
         }
         ImGui::EndChild();
     }
 
+    //Controls for graph resize. 
+    ImGuiIO& io                = ImGui::GetIO();
+    bool    is_control_held = io.KeyCtrl;
+    if(is_control_held)
+    {
+        ImGui::Selectable(
+            ("Move Position Line " + std::to_string(m_id)).c_str(), false,
+            ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+
+        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+        {
+            ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+            size              = size + (drag_delta.y);
+            ImGui::ResetMouseDragDelta();
+            ImGui::EndDragDropSource();
+        }
+        if(ImGui::BeginDragDropTarget())
+        { 
+            ImGui::EndDragDropTarget();
+        }
+    }
+
     ImGui::EndChild();
+
  
+        
+   
 }
 
 ImVec2

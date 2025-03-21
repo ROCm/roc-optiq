@@ -76,7 +76,7 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
         ImGui::SetCursorPos(ImVec2(0, 0));  // Position at the top-left corner
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImVec2(windowPos.x, windowPos.y),
-            ImVec2(windowPos.x + boxWidth, windowPos.y + windowSize.y),
+            ImVec2(windowPos.x + boxWidth, windowPos.y + windowSize.y - 50.0f),
             IM_COL32(255, 255, 255, 255)  // White color
         );
         ImGui::EndChild();

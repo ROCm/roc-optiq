@@ -27,7 +27,7 @@ public:
                          float scale_x) override;
     float ReturnSize() override;
     int   ReturnChartID() override;
-    void  SetID (int id)  override ;
+    void  SetID(int id) override;
 
 private:
     std::vector<rocprofvis_trace_event_t>  flames;
@@ -42,6 +42,7 @@ private:
     int                                    m_chart_id;
     std::vector<rocprofvis_trace_event_t>& m_raw_flame;
     float                                  size;
+    float                                  m_sidebar_size;
 };
 
 }  // namespace View

@@ -10,6 +10,7 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include "../src/view/src/rocprofvis_home_screen.h"
 
 void
 DisableScrollWheelInImGui()
@@ -100,7 +101,7 @@ rocprofvis_trace_setup()
 }
 
 static void
-rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
+rocprofvis_trace_draw_view(HomeScreen* main)
 {
     std::map<std::string, rocprofvis_trace_process_t>& trace_data =
         trace_object.m_trace_data;
@@ -160,7 +161,7 @@ rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
     if(trace_object.m_is_trace_loaded)
     {
         // Open ImGui window......
-        main->GenerateGraphPoints(trace_data);
+        main->Render();
     }
 
     ImGui::End();
@@ -168,7 +169,7 @@ rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
 }
 
 void
-rocprofvis_trace_draw(RocProfVis::View::MainView* main)
+rocprofvis_trace_draw(HomeScreen* main)
 {
     rocprofvis_trace_draw_view(main);
 

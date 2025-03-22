@@ -7,6 +7,8 @@
 #include "rocprofvis_structs.h"
 #include "rocprofvis_main_view.h"
 
+#include "../src/view/src/rocprofvis_home_screen.h"
+
 
 class RocProfVis::View::MainView; 
 
@@ -15,5 +17,5 @@ bool rocprofvis_trace_is_loading(std::future<bool>& future);
 bool rocprofvis_trace_is_loaded(std::future<bool>& future);
 void rocprofvis_trace_setup();
 void
-rocprofvis_trace_draw(RocProfVis::View::MainView* main);      
+rocprofvis_trace_draw(HomeScreen* main);      
  

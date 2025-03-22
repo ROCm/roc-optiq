@@ -13,7 +13,7 @@
 #include <stdlib.h>
 
 #include "rocprofvis_main_view.h"
-
+#include "../src/view/src/rocprofvis_home_screen.h"
 static void
 glfw_error_callback(int error, const char* description)
 {
@@ -28,6 +28,8 @@ main(int, char**)
     glfwSetErrorCallback(glfw_error_callback);
 
     RocProfVis::View::MainView* main_view = new RocProfVis::View::MainView();
+
+    HomeScreen* home_screen = new HomeScreen(); 
 
     if(glfwInit())
     {
@@ -87,7 +89,9 @@ main(int, char**)
                     // Open ImGui window
                     ImGui::Begin("Line Chart Window", nullptr, windowFlags);
 
-                    rocprofvis_trace_draw(main_view);
+                    rocprofvis_trace_draw(home_screen);
+
+                   
 
                     // Close ImGui window
                     ImGui::End();

@@ -27,8 +27,7 @@ main(int, char**)
 
     glfwSetErrorCallback(glfw_error_callback);
 
-    RocProfVis::View::MainView* main_view = new RocProfVis::View::MainView();
-
+ 
     HomeScreen* home_screen = new HomeScreen(); 
 
     if(glfwInit())

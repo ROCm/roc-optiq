@@ -161,7 +161,7 @@ rocprofvis_trace_draw_view(HomeScreen* main)
     if(trace_object.m_is_trace_loaded)
     {
         // Open ImGui window......
-        main->Render();
+         main->Render(trace_data);
     }
 
     ImGui::End();

@@ -1,20 +1,20 @@
 #pragma once
 #include "rocprofvis_home_screen.h"
 #include "imgui.h"
+#include "rocprofvis_main_view.h"
 #include <iostream>
-
 HomeScreen::HomeScreen()
 : m_sidepanel_size()
 , m_main_screen_size()
 , m_analysis_screen_size()
-
 , m_view_initialized(false)
+, m_main_view(new RocProfVis::View::MainView())
 {}
 
 HomeScreen::~HomeScreen() {}
 
 void
-HomeScreen::Render()
+HomeScreen::Render(std::map<std::string, rocprofvis_trace_process_t>& trace_data)
 {
     if(!m_view_initialized)
     {
@@ -42,6 +42,8 @@ HomeScreen::Render()
             m_analysis_screen_size =
                 ImVec2(window_size.x - m_sidepanel_size.x, window_size.y * 0.7f);
         }
+
+       
     }
     ImGui::End();
     ImGui::PopStyleColor();
@@ -49,7 +51,7 @@ HomeScreen::Render()
     // Main View
     ImGui::SetNextWindowPos(ImVec2(m_sidepanel_size.x, 0));
     ImGui::SetNextWindowSize(m_main_screen_size);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0.2f, 0, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(1.00, 1.0f, 1.00, 1.0f));
     if(ImGui::Begin("Main View", nullptr))
     {
         float current_main_view_size = ImGui::GetWindowSize().x;
@@ -69,6 +71,7 @@ HomeScreen::Render()
             m_analysis_screen_size = ImVec2(m_analysis_screen_size.x,
                                             window_size.y - current_main_view_size_y);
         }
+        m_main_view->GenerateGraphPoints(trace_data);
     }
     ImGui::End();
     ImGui::PopStyleColor();

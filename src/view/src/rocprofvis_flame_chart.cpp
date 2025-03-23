@@ -27,7 +27,7 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 , m_raw_flame(raw_flame)
 , m_name(name)
 , size(75)
-
+ 
 {}
 std::tuple<float, float>
 FlameChart::FindMaxMinFlame()
@@ -59,6 +59,13 @@ FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_
     m_max_x    = max_x;
 }
 
+ 
+
+std::string
+FlameChart::GetName()
+{
+    return m_name;
+}
 float
 FlameChart::ReturnSize()
 {
@@ -228,8 +235,8 @@ FlameChart::Render()
     bool     is_control_held = io.KeyCtrl;
     if(is_control_held)
     {
-        ImGui::Selectable(("Move Position Line " + std::to_string(m_chart_id)).c_str(), false,
-                          ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+        ImGui::Selectable(("Move Position Line " + std::to_string(m_chart_id)).c_str(),
+                          false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
 
         if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
         {
@@ -245,8 +252,6 @@ FlameChart::Render()
     }
 
     ImGui::EndChild();
- 
-    
 }
 
 }  // namespace View

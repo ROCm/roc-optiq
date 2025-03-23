@@ -29,7 +29,7 @@ LineChart::LineChart(int id, std::string name, float zoom, float movement, float
 , datap(datap)
 , m_name(name)
 , size(290.0f)
-{}
+ {}
 
 LineChart::~LineChart() {}
 float
@@ -38,6 +38,11 @@ LineChart::ReturnSize()
     return size;  // Create an invisible button with a more area
 }
 
+std::string
+LineChart::GetName()
+{
+    return m_name;
+}
 int
 LineChart::ReturnChartID()
 {
@@ -48,7 +53,7 @@ LineChart::SetID(int id)
 {
     m_id = id;
 }
-
+ 
 std::vector<rocprofvis_data_point_t>
 LineChart::ExtractPointsFromData()
 {
@@ -207,14 +212,13 @@ LineChart::Render()
         ImGui::EndChild();
     }
 
-    //Controls for graph resize. 
-    ImGuiIO& io                = ImGui::GetIO();
-    bool    is_control_held = io.KeyCtrl;
+    // Controls for graph resize.
+    ImGuiIO& io              = ImGui::GetIO();
+    bool     is_control_held = io.KeyCtrl;
     if(is_control_held)
     {
-        ImGui::Selectable(
-            ("Move Position Line " + std::to_string(m_id)).c_str(), false,
-            ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+        ImGui::Selectable(("Move Position Line " + std::to_string(m_id)).c_str(), false,
+                          ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
 
         if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
         {
@@ -224,16 +228,12 @@ LineChart::Render()
             ImGui::EndDragDropSource();
         }
         if(ImGui::BeginDragDropTarget())
-        { 
+        {
             ImGui::EndDragDropTarget();
         }
     }
 
     ImGui::EndChild();
-
- 
-        
-   
 }
 
 ImVec2

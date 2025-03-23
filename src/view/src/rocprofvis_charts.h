@@ -1,5 +1,6 @@
 #pragma once
-
+#include <string>
+#include "rocprofvis_structs.h"
 class Charts
 {
 public:
@@ -10,5 +11,6 @@ public:
     virtual int   ReturnChartID()               = 0;
     virtual void  UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
                                  float scale_x) = 0;
-    
+    virtual std::string GetName() = 0; 
+     
 };

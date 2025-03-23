@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
 add_subdirectory(thirdparty/)
 
-add_executable(rocprof-visualizer src/app/src/rocprofvis_trace.cpp src/app/src/rocprofvis_trace_ui.cpp src/app/src/rocprofvis_imgui_vulkan.cpp src/app/src/main.cpp src/view/src/rocprofvis_line_chart.cpp src/view/src/rocprofvis_line_chart.h src/view/src/rocprofvis_main_view.cpp src/view/src/rocprofvis_grid.cpp src/view/src/rocprofvis_grid.h src/view/src/rocprofvis_flame_chart.cpp src/view/src/rocprofvis_flame_chart.h  src/view/src/rocprofvis_charts.cpp src/view/src/rocprofvis_charts.h src/view/src/rocprofvis_home_screen.cpp src/view/src/rocprofvis_home_screen.h)
+add_executable(rocprof-visualizer src/app/src/rocprofvis_trace.cpp src/app/src/rocprofvis_trace_ui.cpp src/app/src/rocprofvis_imgui_vulkan.cpp src/app/src/main.cpp src/view/src/rocprofvis_line_chart.cpp src/view/src/rocprofvis_line_chart.h src/view/src/rocprofvis_main_view.cpp src/view/src/rocprofvis_grid.cpp src/view/src/rocprofvis_grid.h src/view/src/rocprofvis_flame_chart.cpp src/view/src/rocprofvis_flame_chart.h  src/view/src/rocprofvis_charts.cpp src/view/src/rocprofvis_charts.h src/view/src/rocprofvis_home_screen.cpp src/view/src/rocprofvis_home_screen.h src/view/src/rocprofvis_sidebar.cpp src/view/src/rocprofvis_sidebar.h)
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jsoncpp)

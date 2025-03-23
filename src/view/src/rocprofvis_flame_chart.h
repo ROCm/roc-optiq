@@ -23,12 +23,13 @@ public:
                                      rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list);
     void                     ExtractFlamePoints();
     std::tuple<float, float> FindMaxMinFlame();
-    void  UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                         float scale_x) override;
-    float ReturnSize() override;
-    int   ReturnChartID() override;
-    void  SetID(int id) override;
-
+    void        UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+                               float scale_x) override;
+    float       ReturnSize() override;
+    int         ReturnChartID() override;
+    void        SetID(int id) override;
+    std::string GetName() override;
+ 
 private:
     std::vector<rocprofvis_trace_event_t>  flames;
     std::string                            m_name;
@@ -43,7 +44,7 @@ private:
     std::vector<rocprofvis_trace_event_t>& m_raw_flame;
     float                                  size;
     float                                  m_sidebar_size;
-};
+ };
 
 }  // namespace View
 }  // namespace RocProfVis

@@ -7,6 +7,7 @@
 #include "rocprofvis_structs.h"
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace RocProfVis
@@ -30,8 +31,9 @@ public:
     float                                ReturnSize() override;
     void                                 SetID(int id) override;
     int                                  ReturnChartID() override;
+    std::string                          GetName() override;
     int                                  SetSize();
-
+ 
 private:
     std::vector<rocprofvis_data_point_t> m_data;
     std::string                          m_name;
@@ -47,7 +49,7 @@ private:
     int                                  m_id;
     void*                                datap;
     float                                size;
-};
+ };
 
 }  // namespace View
 }  // namespace RocProfVis

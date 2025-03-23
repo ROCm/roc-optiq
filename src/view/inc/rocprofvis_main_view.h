@@ -11,7 +11,7 @@
 #include <map>
 #include <string>
 #include <vector>
-
+#include <utility>
 typedef struct rocprofvis_graph_map_t
 {
     enum
@@ -19,8 +19,12 @@ typedef struct rocprofvis_graph_map_t
         TYPE_LINECHART,
         TYPE_FLAMECHART
     } graph_type;
-
+    bool display; 
     Charts* chart;
+    ImVec4 selected; 
+    std::pair<float,float> red_range; 
+    bool color_by_value; 
+    
 
 } rocprofvis_graph_map_t;
 
@@ -37,7 +41,7 @@ public:
 
     void GenerateGraphPoints(
         std::map<std::string, rocprofvis_trace_process_t>& trace_data);
-
+    std::map<int, rocprofvis_graph_map_t>* GetGraphMap(); 
     void MakeGrid();
     void MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos);
     void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data,

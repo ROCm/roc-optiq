@@ -78,6 +78,13 @@ MainView::MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
 
     ImGui::EndChild();
 }
+
+std::map<int, rocprofvis_graph_map_t>*
+MainView::GetGraphMap()
+{
+    return &m_graph_map;
+}
+
 void
 MainView::MakeGrid()
 {
@@ -130,6 +137,9 @@ MainView::ContinueGraphView()
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
 
+    
+
+
     ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
     ImGuiIO& io       = ImGui::GetIO();
     m_is_control_held = io.KeyCtrl;
@@ -147,65 +157,75 @@ MainView::ContinueGraphView()
     }
     for(const auto& graph_objects : m_graph_map)
     {
-       
-
-        ImGui::BeginChild(
-            (std::to_string(graph_objects.first)).c_str(),
-            ImVec2(0, m_graph_map[graph_objects.first].chart->ReturnSize() + 40.0f),
-            false,
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
-
-          if(m_is_control_held)
+        if(graph_objects.second.display == true)
         {
-            ImGui::Selectable(
-                ("Move Position " + std::to_string(graph_objects.first)).c_str(), false,
-                ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
 
-            if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+
+      
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, graph_objects.second.selected);
+            ImGui::BeginChild(
+                (std::to_string(graph_objects.first)).c_str(),
+                ImVec2(0, m_graph_map[graph_objects.first].chart->ReturnSize() + 40.0f),
+                false,
+                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                    ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0,0,0,0));
+
+            if(m_is_control_held)
             {
-                ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE", &graph_objects.second,
-                                          sizeof(graph_objects.second));
-                ImGui::EndDragDropSource();
-            }
-            if(ImGui::BeginDragDropTarget())
-            {
-                if(const ImGuiPayload* payload =
-                       ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
+                ImGui::Selectable(
+                    ("Move Position " + std::to_string(graph_objects.first)).c_str(),
+                    false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+
+                if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
                 {
-                    // Handle the payload (here we just print it)
-
-                    rocprofvis_graph_map_t* payload_data =
-                        (rocprofvis_graph_map_t*)
-                            payload->Data;  // incoming (being dragged)
-                    rocprofvis_graph_map_t payload_data_copy = *payload_data;
-                    int payload_position = payload_data_copy.chart->ReturnChartID();
-                    rocprofvis_graph_map_t outgoing_chart =
-                        m_graph_map[graph_objects.first];  // outgoing (getting replaced)
-                    int outgoing_position = outgoing_chart.chart->ReturnChartID();
-
-                    // Change position in object itself.
-                    payload_data_copy.chart->SetID(outgoing_position);
-                    outgoing_chart.chart->SetID(payload_position);
-
-                    // Swap Positions.
-                    m_graph_map[outgoing_position] = payload_data_copy;
-                    m_graph_map[payload_position]  = outgoing_chart;
+                    ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE", &graph_objects.second,
+                                              sizeof(graph_objects.second));
+                    ImGui::EndDragDropSource();
                 }
-                ImGui::EndDragDropTarget();
+                if(ImGui::BeginDragDropTarget())
+                {
+                    if(const ImGuiPayload* payload =
+                           ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
+                    {
+                        // Handle the payload (here we just print it)
+
+                        rocprofvis_graph_map_t* payload_data =
+                            (rocprofvis_graph_map_t*)
+                                payload->Data;  // incoming (being dragged)
+                        rocprofvis_graph_map_t payload_data_copy = *payload_data;
+                        int payload_position = payload_data_copy.chart->ReturnChartID();
+                        rocprofvis_graph_map_t outgoing_chart =
+                            m_graph_map[graph_objects.first];  // outgoing (getting
+                                                               // replaced)
+                        int outgoing_position = outgoing_chart.chart->ReturnChartID();
+
+                        // Change position in object itself.
+                        payload_data_copy.chart->SetID(outgoing_position);
+                        outgoing_chart.chart->SetID(payload_position);
+
+                        // Swap Positions.
+                        m_graph_map[outgoing_position] = payload_data_copy;
+                        m_graph_map[payload_position]  = outgoing_chart;
+                    }
+                    ImGui::EndDragDropTarget();
+                }
             }
+
+            m_graph_map[graph_objects.first].chart->UpdateMovement(
+                m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
+
+            m_graph_map[graph_objects.first].chart->Render();
+            ImGui::PopStyleColor();
+
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+
+            ImGui::Separator();
         }
-
-        m_graph_map[graph_objects.first].chart->UpdateMovement(
-            m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
-
-        m_graph_map[graph_objects.first].chart->Render();
-
-        
-
-        ImGui::EndChild();
- 
-        ImGui::Separator();
     }
     ImGui::EndChild();
 }
@@ -285,7 +305,9 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 rocprofvis_graph_map_t temp_flame;
                 temp_flame.chart      = flame;
                 temp_flame.graph_type = rocprofvis_graph_map_t::TYPE_FLAMECHART;
-
+                temp_flame.display    = true;
+                temp_flame.selected = ImVec4(0,0,0,0); 
+                temp_flame.color_by_value = false; 
                 m_graph_map[graph_id] = temp_flame;
 
                 ImGui::EndChild();
@@ -335,8 +357,11 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 }
 
                 rocprofvis_graph_map_t temp;
-                temp.chart            = line;
-                temp.graph_type       = rocprofvis_graph_map_t::TYPE_LINECHART;
+                temp.chart      = line;
+                temp.graph_type = rocprofvis_graph_map_t::TYPE_LINECHART;
+                temp.display    = true;
+                temp.selected   = ImVec4(0, 0, 0, 0);
+                temp.color_by_value = false;
                 m_graph_map[graph_id] = temp;
 
                 ImGui::EndChild();
@@ -359,19 +384,14 @@ MainView::GenerateGraphPoints(
 {
     ImVec2 screen_pos = ImGui::GetCursorScreenPos();
 
-    ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
+    ImVec2 display_size_main = ImGui::GetWindowSize();
 
-    ImGui::SetNextWindowPos(ImVec2(0, 20.0f));
+    // ImGui::SetNextWindowPos(ImVec2(0, 20.0f));
     ImGui::SetNextWindowSize(ImVec2(display_size_main.x, display_size_main.y - 20.0f),
                              ImGuiCond_Always);
 
-    if(ImGui::Begin("Main Graphs", nullptr,
-                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
-                        ImGuiWindowFlags_HorizontalScrollbar |
-                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize))
+    if(ImGui::BeginChild("Main Graphs"))
     {
-        ImVec2 display_size_main = ImGui::GetIO().DisplaySize;
-
         ImVec2 display_size_main_graphs = ImGui::GetIO().DisplaySize;
 
         ImVec2 subcomponent_size_main = ImGui::GetContentRegionAvail();
@@ -409,7 +429,7 @@ MainView::GenerateGraphPoints(
 
         ImGui::EndChild();
     }
-    ImGui::End();
+    ImGui::EndChild();
 }
 
 void

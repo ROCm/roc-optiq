@@ -27,7 +27,8 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 , m_raw_flame(raw_flame)
 , m_name(name)
 , size(75)
- 
+, color_by_value_digits()
+
 {}
 std::tuple<float, float>
 FlameChart::FindMaxMinFlame()
@@ -59,7 +60,10 @@ FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_
     m_max_x    = max_x;
 }
 
- 
+void
+FlameChart::SetColorByValue(rocprofvis_color_by_value color_by_value_digits)
+{
+ }
 
 std::string
 FlameChart::GetName()

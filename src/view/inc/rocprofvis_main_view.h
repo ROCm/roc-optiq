@@ -12,21 +12,7 @@
 #include <string>
 #include <vector>
 #include <utility>
-typedef struct rocprofvis_graph_map_t
-{
-    enum
-    {
-        TYPE_LINECHART,
-        TYPE_FLAMECHART
-    } graph_type;
-    bool display; 
-    Charts* chart;
-    ImVec4 selected; 
-    std::pair<float,float> red_range; 
-    bool color_by_value; 
-    
-
-} rocprofvis_graph_map_t;
+ 
 
 namespace RocProfVis
 {

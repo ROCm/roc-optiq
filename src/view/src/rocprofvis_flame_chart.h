@@ -29,7 +29,8 @@ public:
     int         ReturnChartID() override;
     void        SetID(int id) override;
     std::string GetName() override;
- 
+    void        SetColorByValue(rocprofvis_color_by_value color_by_value_digits) override;  
+
 private:
     std::vector<rocprofvis_trace_event_t>  flames;
     std::string                            m_name;
@@ -44,7 +45,9 @@ private:
     std::vector<rocprofvis_trace_event_t>& m_raw_flame;
     float                                  size;
     float                                  m_sidebar_size;
- };
+    rocprofvis_color_by_value color_by_value_digits; 
+
+};
 
 }  // namespace View
 }  // namespace RocProfVis

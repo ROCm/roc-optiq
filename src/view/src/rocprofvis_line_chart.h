@@ -33,23 +33,27 @@ public:
     int                                  ReturnChartID() override;
     std::string                          GetName() override;
     int                                  SetSize();
- 
+    void SetColorByValue(rocprofvis_color_by_value color_by_value_digits) override;
+
 private:
-    std::vector<rocprofvis_data_point_t> m_data;
-    std::string                          m_name;
-    float                                m_min_value;
-    float                                m_max_value;
-    float                                m_zoom;
-    float                                m_movement;
-    float                                m_min_x;
-    float                                m_max_x;
-    float                                m_min_y;
-    float                                m_max_y;
-    float                                m_scale_x;
-    int                                  m_id;
-    void*                                datap;
-    float                                size;
- };
+    std::vector<rocprofvis_data_point_t>   m_data;
+    std::string                            m_name;
+    float                                  m_min_value;
+    float                                  m_max_value;
+    float                                  m_zoom;
+    rocprofvis_color_by_value              m_color_by_value_digits;
+    float                                  m_movement;
+    float                                  m_min_x;
+    float                                  m_max_x;
+    float                                  m_min_y;
+    float                                  m_max_y;
+    float                                  m_scale_x;
+    int                                    m_id;
+    void*                                  datap;
+    float                                  size;
+    bool                                   is_color_value_existant;
+    std::map<int, rocprofvis_graph_map_t>* tree;
+};
 
 }  // namespace View
 }  // namespace RocProfVis

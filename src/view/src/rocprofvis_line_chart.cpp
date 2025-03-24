@@ -29,7 +29,9 @@ LineChart::LineChart(int id, std::string name, float zoom, float movement, float
 , datap(datap)
 , m_name(name)
 , size(290.0f)
- {}
+, m_color_by_value_digits()
+, is_color_value_existant(false)
+{}
 
 LineChart::~LineChart() {}
 float
@@ -53,7 +55,14 @@ LineChart::SetID(int id)
 {
     m_id = id;
 }
- 
+void
+LineChart::SetColorByValue(rocprofvis_color_by_value color_by_value_digits)
+{
+    m_color_by_value_digits = color_by_value_digits;
+    std::cout << "reee" << color_by_value_digits.upper_min << std::endl;
+    is_color_value_existant = true;
+}
+
 std::vector<rocprofvis_data_point_t>
 LineChart::ExtractPointsFromData()
 {
@@ -62,7 +71,7 @@ LineChart::ExtractPointsFromData()
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
-    int    screen_width = static_cast<int>(display_size.x);
+    int    screen_width = static_cast<int>(display_size.x) * 5; // Increase point density if needed.
 
     float effectiveWidth = screen_width / m_zoom;
     float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
@@ -135,7 +144,6 @@ LineChart::FindMaxMin()
             m_max_y = point.yValue;
         }
     }
-    std::cout << m_min_x << " line " << m_max_x << std::endl;
 
     return std::make_tuple(m_min_x, m_max_x);
 }
@@ -206,8 +214,33 @@ LineChart::Render()
             }
             ImVec2 point_2 =
                 MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
-
-            draw_list->AddLine(point_1, point_2, IM_COL32(0, 0, 0, 255), 2.0f);
+            ImU32 LineColor = IM_COL32(0, 0, 0, 255);
+            if(is_color_value_existant)
+            {
+                if((m_color_by_value_digits.upper_max > m_data[i].yValue &&
+                       m_color_by_value_digits.upper_min < m_data[i].yValue) ||
+                   (m_color_by_value_digits.upper_max > m_data[i - 1].yValue &&
+                       m_color_by_value_digits.upper_min < m_data[i - 1].yValue))
+                {
+                    
+                    LineColor = IM_COL32(255, 0, 0, 255);
+                 }
+                else if((m_color_by_value_digits.middle_max > m_data[i].yValue &&
+                    m_color_by_value_digits.middle_min < m_data[i].yValue) ||
+                   (m_color_by_value_digits.middle_max > m_data[i - 1].yValue &&
+                    m_color_by_value_digits.middle_min < m_data[i - 1].yValue))
+                {
+                    LineColor = IM_COL32(255, 255, 0, 255);
+                }
+                else if((m_color_by_value_digits.lower_max > m_data[i].yValue &&
+                    m_color_by_value_digits.lower_min < m_data[i].yValue) ||
+                   (m_color_by_value_digits.lower_max > m_data[i - 1].yValue &&
+                    m_color_by_value_digits.lower_min < m_data[i - 1].yValue))
+                {
+                    LineColor = IM_COL32(0, 255, 0, 255);
+                }
+            }
+            draw_list->AddLine(point_1, point_2, LineColor, 2.0f);
         }
         ImGui::EndChild();
     }

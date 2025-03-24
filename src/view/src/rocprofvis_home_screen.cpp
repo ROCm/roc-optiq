@@ -2,8 +2,25 @@
 #include "rocprofvis_home_screen.h"
 #include "imgui.h"
 #include "rocprofvis_main_view.h"
-#include <iostream>
 #include "rocprofvis_sidebar.h"
+#include <iostream>
+
+float
+clamp(float input, float max, float min)
+{
+    if(input > max)
+    {
+        return max;
+    }
+    else if(input < min)
+    {
+        return min;
+    }
+    else
+    {
+        return input;
+    }
+}
 
 HomeScreen::HomeScreen()
 : m_sidepanel_size()
@@ -22,20 +39,22 @@ void
 HomeScreen::Render(std::map<std::string, rocprofvis_trace_process_t>& trace_data)
 {
     ImVec2 window_size = ImGui::GetIO().DisplaySize;
+    window_size.y      = window_size.y - 20.0f;
 
     if(!m_view_initialized || m_window_size_previous != window_size.x)
     {
         m_window_size_previous = window_size.x;
         ImVec2 window_size     = ImGui::GetIO().DisplaySize;
-        m_sidepanel_size       = ImVec2(window_size.x * 0.3f, window_size.y);
+        m_sidepanel_size =
+            ImVec2(clamp(window_size.x * 0.3f, 400.0f, 500.0f), window_size.y);
         m_main_screen_size =
-            ImVec2(window_size.x - m_sidepanel_size.x, window_size.y * 0.7f);
+            ImVec2(window_size.x - m_sidepanel_size.x, window_size.y * 0.8f);
         m_analysis_screen_size =
-            ImVec2(window_size.x - m_sidepanel_size.x, window_size.y * 0.7f);
+            ImVec2(window_size.x - m_sidepanel_size.x, window_size.y * 0.2f);
     }
 
     // Sidebar View
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowPos(ImVec2(0, 20));
     ImGui::SetNextWindowSize(m_sidepanel_size);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
     if(ImGui::Begin("Sidebar", nullptr))
@@ -50,9 +69,7 @@ HomeScreen::Render(std::map<std::string, rocprofvis_trace_process_t>& trace_data
                 ImVec2(window_size.x - m_sidepanel_size.x, window_size.y * 0.7f);
         }
 
-         
         m_sidebar.ConstructTree(m_graph_map);
-
     }
     ImGui::End();
     ImGui::PopStyleColor();
@@ -61,7 +78,8 @@ HomeScreen::Render(std::map<std::string, rocprofvis_trace_process_t>& trace_data
     ImGui::SetNextWindowPos(ImVec2(m_sidepanel_size.x, 0));
     ImGui::SetNextWindowSize(m_main_screen_size);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(1.00, 1.0f, 1.00, 1.0f));
-    if(ImGui::Begin("Main View", nullptr))
+    if(ImGui::Begin("Main View", nullptr,
+                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
     {
         float current_main_view_size = ImGui::GetWindowSize().x;
         if(m_main_screen_size.x != current_main_view_size)

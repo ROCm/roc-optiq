@@ -137,9 +137,6 @@ MainView::ContinueGraphView()
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    
-
-
     ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
     ImGuiIO& io       = ImGui::GetIO();
     m_is_control_held = io.KeyCtrl;
@@ -159,9 +156,13 @@ MainView::ContinueGraphView()
     {
         if(graph_objects.second.display == true)
         {
-
-
+            if(graph_objects.second.color_by_value)
+            {
       
+                graph_objects.second.chart->SetColorByValue(
+                    graph_objects.second.color_by_value_digits);
+                
+            }
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg, graph_objects.second.selected);
             ImGui::BeginChild(
@@ -171,8 +172,7 @@ MainView::ContinueGraphView()
                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                     ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
 
-
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0,0,0,0));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
 
             if(m_is_control_held)
             {
@@ -303,11 +303,13 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 }
 
                 rocprofvis_graph_map_t temp_flame;
-                temp_flame.chart      = flame;
-                temp_flame.graph_type = rocprofvis_graph_map_t::TYPE_FLAMECHART;
-                temp_flame.display    = true;
-                temp_flame.selected = ImVec4(0,0,0,0); 
-                temp_flame.color_by_value = false; 
+                temp_flame.chart          = flame;
+                temp_flame.graph_type     = rocprofvis_graph_map_t::TYPE_FLAMECHART;
+                temp_flame.display        = true;
+                temp_flame.selected       = ImVec4(0, 0, 0, 0);
+                temp_flame.color_by_value = false;
+                rocprofvis_color_by_value        temp_color = {};
+                temp_flame.color_by_value_digits = temp_color;
                 m_graph_map[graph_id] = temp_flame;
 
                 ImGui::EndChild();
@@ -357,11 +359,13 @@ MainView::MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace
                 }
 
                 rocprofvis_graph_map_t temp;
-                temp.chart      = line;
-                temp.graph_type = rocprofvis_graph_map_t::TYPE_LINECHART;
-                temp.display    = true;
-                temp.selected   = ImVec4(0, 0, 0, 0);
-                temp.color_by_value = false;
+                temp.chart            = line;
+                temp.graph_type       = rocprofvis_graph_map_t::TYPE_LINECHART;
+                temp.display          = true;
+                temp.selected         = ImVec4(0, 0, 0, 0);
+                temp.color_by_value   = false;
+                rocprofvis_color_by_value        temp_color_line = {};
+                temp.color_by_value_digits = temp_color_line;
                 m_graph_map[graph_id] = temp;
 
                 ImGui::EndChild();
@@ -387,7 +391,7 @@ MainView::GenerateGraphPoints(
     ImVec2 display_size_main = ImGui::GetWindowSize();
 
     // ImGui::SetNextWindowPos(ImVec2(0, 20.0f));
-    ImGui::SetNextWindowSize(ImVec2(display_size_main.x, display_size_main.y - 20.0f),
+    ImGui::SetNextWindowSize(ImVec2(display_size_main.x - 10.0f, display_size_main.y - 30.0f),
                              ImGuiCond_Always);
 
     if(ImGui::BeginChild("Main Graphs"))
@@ -450,7 +454,7 @@ MainView::HandleTopSurfaceTouch()
                 float       view_width = (m_max_x - m_min_x) / m_zoom;
                 const float zoom_speed = 0.1f;
                 m_zoom *= (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
-                m_zoom = clamp(m_zoom, 1.0f, 1000.0f);
+                m_zoom = m_zoom;
 
                 m_v_width = (m_max_x - m_min_x) / m_zoom;
                 m_v_min_x = m_min_x + m_movement;

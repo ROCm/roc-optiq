@@ -4,8 +4,8 @@
 #include <iostream>
 #include <map>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 SideBar::SideBar()
 : m_dropdown_select(0)
@@ -28,35 +28,54 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                                         ": " + tree_item.second.chart->GetName())
                                            .c_str()))
             {
-                tree_item.second.selected = ImVec4(0, 0, 1, 0.1);
+                tree_item.second.selected = ImVec4(0.17, 0.54, 1.0f, 0.3f);
 
                 if(ImGui::Checkbox(
-                       (" Enable/Disable Chart#" + std::to_string((tree_item.first)))
+                       (" Enable/Disable Chart #" + std::to_string((tree_item.first)))
                            .c_str(),
                        &tree_item.second.display))
                 {
                 }
-                if(ImGui::Checkbox(
-                       (" Color By Value#" + std::to_string((tree_item.first))).c_str(),
-                       &tree_item.second.display))
-
+                if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
                 {
-                    
-                }
+                    if(ImGui::Checkbox(
+                           (" Color By Value #" + std::to_string((tree_item.first)))
+                               .c_str(),
+                           &tree_item.second.color_by_value))
 
-                static float range_1 = 0.0f;
-                ImGui::Text("Interval 1");
-                ImGui::InputFloat("Min Value", &range_1); 
+                    {
+                    }
+                    if(tree_item.second.color_by_value)
+                    {
+                        ImGui::Text("Color By Value");
+                        ImGui::Spacing();
+                        ImGui::PushItemWidth(40.0f);
 
-                ImGui::SameLine();
+                        ImGui::InputFloat(
+                            "Critical Min",
+                            &tree_item.second.color_by_value_digits.upper_min);
 
-                  static float range_2 = 0.0f;
-                ImGui::Text("Interval 2");
-                ImGui::InputFloat("Max Value", &range_2); 
+                        ImGui::InputFloat(
+                            "Critical Max",
+                            &tree_item.second.color_by_value_digits.upper_max);
 
-                if (ImGui::Button("Sub")) {
-                    tree_item.second.red_range = {range_1, range_2};
-                    tree_item.second.color_by_value = true;
+                        ImGui::InputFloat(
+                            "Warning Min",
+                            &tree_item.second.color_by_value_digits.middle_min);
+
+                        ImGui::InputFloat(
+                            "Warning Max",
+                            &tree_item.second.color_by_value_digits.middle_max);
+
+                        ImGui::InputFloat(
+                            "Acceptable Min",
+                            &tree_item.second.color_by_value_digits.lower_min);
+
+                        ImGui::InputFloat(
+                            "Acceptable Max",
+                            &tree_item.second.color_by_value_digits.lower_max);
+                        ImGui::PopItemWidth();
+                    }
                 }
             }
             else

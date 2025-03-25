@@ -26,31 +26,30 @@ RpvDmTrace::RpvDmTrace()
     m_db = nullptr;
     m_parameters.start_time=0;
     m_parameters.end_time=0;
-    m_parameters.strings_offset=0;
-    m_parameters.symbols_offset=0;
     m_parameters.metadata_loaded=false;
 }
 
-rocprofvis_dm_result_t RpvDmTrace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct & bind_data)
+rocprofvis_dm_result_t RpvDmTrace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* & bind_data)
 {
     ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
      
-    bind_data.trace_object = this;
-    bind_data.trace_parameters = &m_parameters;
-    bind_data.FuncAddTrack = AddTrack;
-    bind_data.FuncAddRecord = AddRecord;
-    bind_data.FuncAddSlice = AddSlice;
-    bind_data.FuncAddString = AddString;
-    bind_data.FuncAddFlowTrace = AddFlowTrace;
-    bind_data.FuncAddFlow = AddFlow;
-    bind_data.FuncAddStackTrace = AddStackTrace;
-    bind_data.FuncAddStackFrame = AddStackFrame;
-    bind_data.FuncAddExtData = AddExtData;
-    bind_data.FuncAddExtDataRecord = AddExtDataRecord;
-    bind_data.FuncAddTable = AddTable;
-    bind_data.FuncAddTableRow = AddTableRow;
-    bind_data.FuncAddTableColumn = AddTableColumn;
-    bind_data.FuncAddTableRowCell = AddTableRowCell;
+    m_binding_info.trace_object = this;
+    m_binding_info.trace_properties = &m_parameters;
+    m_binding_info.FuncAddTrack = AddTrack;
+    m_binding_info.FuncAddRecord = AddRecord;
+    m_binding_info.FuncAddSlice = AddSlice;
+    m_binding_info.FuncAddString = AddString;
+    m_binding_info.FuncAddFlowTrace = AddFlowTrace;
+    m_binding_info.FuncAddFlow = AddFlow;
+    m_binding_info.FuncAddStackTrace = AddStackTrace;
+    m_binding_info.FuncAddStackFrame = AddStackFrame;
+    m_binding_info.FuncAddExtData = AddExtData;
+    m_binding_info.FuncAddExtDataRecord = AddExtDataRecord;
+    m_binding_info.FuncAddTable = AddTable;
+    m_binding_info.FuncAddTableRow = AddTableRow;
+    m_binding_info.FuncAddTableColumn = AddTableColumn;
+    m_binding_info.FuncAddTableRowCell = AddTableRowCell;
+    bind_data = &m_binding_info;
     m_db = db;
     return kRocProfVisDmResultSuccess;
 }
@@ -340,16 +339,9 @@ rocprofvis_dm_result_t RpvDmTrace::AddTableRowCell(const rocprofvis_dm_table_row
 
 rocprofvis_dm_charptr_t RpvDmTrace::GetStringAt(rocprofvis_dm_index_t index){
     ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, nullptr);
-    ASSERT_MSG_RETURN((index + m_parameters.strings_offset) < m_strings.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
-    return m_strings[index + m_parameters.strings_offset].c_str();
+    ASSERT_MSG_RETURN(index < m_strings.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
+    return m_strings[index].c_str();
 }
-
-rocprofvis_dm_charptr_t RpvDmTrace::GetSymbolAt(rocprofvis_dm_index_t index){
-    ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, nullptr);
-    ASSERT_MSG_RETURN((index + m_parameters.symbols_offset) < m_strings.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
-    return m_strings[index + m_parameters.symbols_offset].c_str();
-}
-
 
 rocprofvis_dm_result_t  RpvDmTrace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
     ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);

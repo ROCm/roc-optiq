@@ -23,78 +23,73 @@
 #include <string.h>
 
 
-rocprofvis_dm_result_t RocpdDatabase::UpdateStringMap(StringPair ids) {
-    try {
-        m_string_map.insert(ids);
-    } 
-    catch (std::exception ex)
-    {
-        ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE,kRocProfVisDmResultAllocFailure);
-    }
+rocprofvis_dm_result_t RocpdDatabase::RemapStringIds(rocprofvis_db_record_data_t & record)
+{
+    if (!RemapStringId(record.event.category)) return kRocProfVisDmResultNotLoaded;
+    if (!RemapStringId(record.event.symbol)) return kRocProfVisDmResultNotLoaded;
     return kRocProfVisDmResultSuccess;
 }
 
-const bool RocpdDatabase::ReIndexStringId(const uint64_t dbStringId, uint32_t& stringId)
+const bool RocpdDatabase::RemapStringId(uint64_t & id)
 {
-    StringMap::const_iterator pos = m_string_map.find(dbStringId);
+    string_index_map_t::const_iterator pos = m_string_map.find(id);
     if (pos == m_string_map.end()) return false;
-    stringId = pos->second;
+    id = pos->second;
     return true;
 }
 
 rocprofvis_dm_size_t RocpdDatabase::GetMemoryFootprint()
 {
-    rocprofvis_dm_size_t size = sizeof(RocpdDatabase);
-    size+=m_string_map.size()*sizeof(StringPair);
-    size+=NumTrackProperties()*(sizeof(rocprofvis_dm_track_params_t)+sizeof(std::unique_ptr<rocprofvis_dm_track_params_t>));
-    size+=strlen(Path());
+    rocprofvis_dm_size_t size = sizeof(RocpdDatabase)+Database::GetMemoryFootprint();
+    size+=m_string_map.size()* (sizeof(uint64_t) + sizeof(uint32_t));
+    size+=m_string_map.size() * 3 * sizeof(void*);
     return size;
 }
 
-int RocpdDatabase::CallbackGetMinTime(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
-    db->TraceParameters()->start_time = std::stoll( argv[0] ); 
-    callback_params->row_counter++;
-    return 0;
-}
-
-int RocpdDatabase::CallbackGetMaxTime(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
-    db->TraceParameters()->end_time = std::stoll( argv[0] );       
-    callback_params->row_counter++;
-    return 0;
-}
 
 int RocpdDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(argc==2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ASSERT_MSG_RETURN(argc== NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS + 1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_dm_track_params_t track_params = {0};
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
-    track_params.track_id = (rocprofvis_dm_track_id_t)db->NumTrackProperties();
-    track_params.process = argv[0];
-    track_params.name = argv[1]; 
-    track_params.track_category = callback_params->track_category;
-    track_params.node_id=0;   
-    if (kRocProfVisDmResultSuccess != db->AddTrackProperties(track_params)) return 1;
-    if (db->BindObject()->FuncAddTrack(db->BindObject()->trace_object, db->TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1;   
-    rocprofvis_db_ext_data_t record;
-    record.name = azColName[0];
-    record.data = argv[0];
-    record.category = "Properties";
-    if (db->BindObject()->FuncAddExtDataRecord(db->TrackPropertiesLast()->extdata,record) != kRocProfVisDmResultSuccess) return 1;
-    record.name = azColName[1];
-    record.data = argv[1];
-    if (db->BindObject()->FuncAddExtDataRecord(db->TrackPropertiesLast()->extdata,record) != kRocProfVisDmResultSuccess) return 1;
+    track_params.track_id = (rocprofvis_dm_track_id_t)db->NumTracks();
+    track_params.track_category = (rocprofvis_dm_track_category_t)std::stol(argv[TRACK_ID_CATEGORY]);
+    for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
+        track_params.process_tag[i] = azColName[i];
+        track_params.process_id_numeric[i] = true;
+        try {
+            track_params.process_id[i] = std::stol(argv[i]);
+        }
+        catch (std::exception ex) {
+            track_params.process_id_numeric[i] = false;
+            track_params.process_name[i] = argv[i];
+        }
+    }
+    if (!db->TrackExist(track_params, callback_params->subquery)) {
+
+        track_params.process_name[TRACK_ID_PID_OR_AGENT] = ProcessNameSuffixFor(track_params.track_category);
+        track_params.process_name[TRACK_ID_PID_OR_AGENT] += argv[TRACK_ID_PID_OR_AGENT];
+        track_params.process_name[TRACK_ID_TID_OR_QUEUE] = SubProcessNameSuffixFor(track_params.track_category);
+        track_params.process_name[TRACK_ID_TID_OR_QUEUE] += argv[TRACK_ID_TID_OR_QUEUE];
+
+        if (kRocProfVisDmResultSuccess != db->AddTrackProperties(track_params)) return 1;
+        if (db->BindObject()->FuncAddTrack(db->BindObject()->trace_object, db->TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1;  
+        if (track_params.track_category == kRocProfVisDmRegionTrack) {
+            db->CachedTables()->AddTableCell("Process", track_params.process_id[TRACK_ID_PID], azColName[TRACK_ID_PID], argv[TRACK_ID_PID]);
+            db->CachedTables()->AddTableCell("Thread", track_params.process_id[TRACK_ID_TID], azColName[TRACK_ID_TID], argv[TRACK_ID_TID]);
+            if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Process", track_params.process_id[TRACK_ID_PID]) != kRocProfVisDmResultSuccess) return 1;
+            if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Thread", track_params.process_id[TRACK_ID_TID]) != kRocProfVisDmResultSuccess) return 1;
+        } else
+        if (track_params.track_category == kRocProfVisDmKernelTrack || track_params.track_category == kRocProfVisDmPmcTrack)
+        {
+            db->CachedTables()->AddTableCell("Agent", track_params.process_id[TRACK_ID_AGENT], azColName[TRACK_ID_AGENT], argv[TRACK_ID_AGENT]);
+            db->CachedTables()->AddTableCell("Queue", track_params.process_id[TRACK_ID_QUEUE], azColName[TRACK_ID_QUEUE], argv[TRACK_ID_QUEUE]);
+            if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Agent", track_params.process_id[TRACK_ID_AGENT]) != kRocProfVisDmResultSuccess) return 1;
+            if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Queue", track_params.process_id[TRACK_ID_QUEUE]) != kRocProfVisDmResultSuccess) return 1;
+        }
+    }
     callback_params->row_counter++;
     return 0;
 }
@@ -107,69 +102,19 @@ int RocpdDatabase::CallBackAddString(void *data, int argc, char **argv, char **a
     if (callback_params->future->Interrupted()) return 1;
     std::string str = argv[0]; 
     std::stringstream ids(argv[1]);
-    uint32_t stringId = db->BindObject()->FuncAddString(db->BindObject()->trace_object, argv[0]);
-    if (stringId == INVALID_INDEX) return 1;
+    uint32_t string_id = db->BindObject()->FuncAddString(db->BindObject()->trace_object, argv[0]);
+    if (string_id == INVALID_INDEX) return 1;
     
     for (uint64_t id; ids >> id;) {   
-        if (kRocProfVisDmResultSuccess!=db->UpdateStringMap(StringPair(id,stringId))) return 1;
+        db->m_string_map[id] = string_id;
         if (ids.peek() == ',') ids.ignore();
     }
     callback_params->row_counter++;
     return 0;
 }
 
-int RocpdDatabase::CallbackAddEventRecord(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(argc==5, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    rocprofvis_db_record_data_t record;
-    if (callback_params->future->Interrupted()) return 1;
-    record.event.id.bitfiled.event_op = callback_params->event_op;
-    record.event.id.bitfiled.event_id = std::stoll(argv[4]);
-    record.event.timestamp = std::stoll( argv[0] );
-    record.event.duration = std::stoll( argv[1] );
-    if (db->ReIndexStringId(std::stoll( argv[2]), record.event.category ) &&
-        db->ReIndexStringId(std::stoll( argv[3] ), record.event.symbol ))
-    {
-        if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;  
-    } 
-    callback_params->row_counter++;
-    return 0;
-}
 
-int RocpdDatabase::CallbackAddPmcRecord(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    ASSERT_MSG_RETURN(argc==2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    rocprofvis_db_record_data_t record;
-    if (callback_params->future->Interrupted()) return 1;
-    record.pmc.timestamp = std::stoll( argv[0] );
-    record.pmc.value = std::stod( argv[1] );
-    if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
-    callback_params->row_counter++;
-    return 0;
-}
-
-int RocpdDatabase::CallbackGetFlowTrace(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    ASSERT_MSG_RETURN(argc==4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    rocprofvis_db_flow_data_t record;
-    if (callback_params->future->Interrupted()) return 1;
-    record.id.bitfiled.event_id = std::stoll( argv[0] );
-    record.id.bitfiled.event_op = callback_params->event_op;
-    record.time = std::stoll( argv[3] );
-    if (db->FindTrackIdByName(argv[1], argv[2], record.track_id) == kRocProfVisDmResultSuccess) {
-        if (db->BindObject()->FuncAddFlow(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
-    }
-    callback_params->row_counter++;
-    return 0;
-}
-
-int RocpdDatabase::CallbackGetStackTrace(void *data, int argc, char **argv, char **azColName){
+int RocpdDatabase::CallbackAddStackTrace(void *data, int argc, char **argv, char **azColName){
     ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     ASSERT_MSG_RETURN(argc==4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
@@ -185,53 +130,12 @@ int RocpdDatabase::CallbackGetStackTrace(void *data, int argc, char **argv, char
     return 0;
 }
 
-int RocpdDatabase::CallbackAddExtInfo(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    rocprofvis_db_ext_data_t record;
-    if (callback_params->future->Interrupted()) return 1;
-    record.category = callback_params->ext_data_category;
-    for (int i = 0; i < argc; i++)
-    {
-        record.name = azColName[i];
-        record.data = argv[i];
-    }
-    if (db->BindObject()->FuncAddExtDataRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
-    callback_params->row_counter++;
-    return 0;
-}
-
-int RocpdDatabase::CallbackRunQuery(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
-    if (0 == callback_params->row_counter)
-    {
-        for (int i=0; i < argc; i++)
-        {
-            if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumn(callback_params->handle,azColName[i])) return 1;
-        }
-    }
-    rocprofvis_dm_table_row_t row = db->BindObject()->FuncAddTableRow(callback_params->handle);
-    ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
-    for (int i=0; i < argc; i++)
-    {
-        if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, argv[i])) return 1;
-    }
-    callback_params->row_counter++;
-    return 0;
-}
-
 rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 {
     ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {
-        ASSERT_MSG_BREAK(BindObject()->trace_parameters, ERROR_TRACE_PARAMETERS_CANNOT_BE_NULL);
-        TraceParameters()->strings_offset=0;
-        TraceParameters()->symbols_offset=0;
+        ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
 
         ShowProgress(10, "Create CPU tracks indexes", kRPVDbBusy, future);
         ExecuteSQLQuery(future,"CREATE INDEX pid_tid_idx ON rocpd_api(pid,tid);");
@@ -243,88 +147,38 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         ExecuteSQLQuery(future,"CREATE INDEX monitorTypeIdx on rocpd_monitor(monitorType);");
 
         ShowProgress(1, "Getting minimum timestamp", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT MIN(start) FROM rocpd_api;", &CallbackGetMinTime)) break;
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT MIN(start) FROM rocpd_api;", &CallbackGetValue, TraceProperties()->start_time)) break;
 
         ShowProgress(1, "Get maximum timestamp", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "select MAX(start) from rocpd_op;", &CallbackGetMaxTime)) break;
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT MAX(end) FROM rocpd_op;", &CallbackGetValue, TraceProperties()->end_time)) break;
 
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "select DISTINCT pid, tid from rocpd_api;", &CallBackAddTrack, kRocProfVisDmRegionTrack)) break;
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
+                        "select DISTINCT 0, pid, tid, 2 as category from rocpd_api;", 
+                        "select 1 as op, start, end, apiName_id, args_id, id, 0, pid, tid from rocpd_api ",
+                        &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding GPU tracks", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "select DISTINCT gpuId, queueId from rocpd_op;", &CallBackAddTrack, kRocProfVisDmKernelTrack)) break;
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
+                        "select DISTINCT 0, gpuId, queueId, 3 as category from rocpd_op;",
+                        "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId  from rocpd_op ",
+                        &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding PMC tracks", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "select DISTINCT deviceId, monitorType from rocpd_monitor where deviceId > 0;", &CallBackAddTrack, kRocProfVisDmPmcTrack)) break;
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
+                        "select DISTINCT 0, deviceId, monitorType, 1 as category from rocpd_monitor where deviceId > 0;", 
+                        "select 0 as op, start, value, 0, 0, 0, 0, deviceId, monitorType from rocpd_monitor ",
+                        &CallBackAddTrack)) break;
 
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT string, GROUP_CONCAT(id) AS ids FROM rocpd_string GROUP BY string;", &CallBackAddString)) break;
 
-        TraceParameters()->metadata_loaded=true;
+        TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
         return future->SetPromise(kRocProfVisDmResultSuccess);
 
     }
     ShowProgress(0, "Trace metadata not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
-}
-
-rocprofvis_dm_result_t  RocpdDatabase::ReadTraceSlice( 
-                                                    rocprofvis_dm_timestamp_t start,
-                                                    rocprofvis_dm_timestamp_t end,
-                                                    rocprofvis_db_num_of_tracks_t num,
-                                                    rocprofvis_db_track_selection_t tracks,
-                                                    Future* future) {
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    while (true)
-    {
-        ASSERT_MSG_BREAK(BindObject()->trace_parameters, ERROR_TRACE_PARAMETERS_CANNOT_BE_NULL);
-        ASSERT_MSG_BREAK(BindObject()->trace_parameters->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
-        double step = 100.0/num;
-        int i=0;
-        for (; i < num; i++)
-        {
-            ASSERT_MSG_BREAK(tracks[i] < NumTrackProperties(), ERROR_INDEX_OUT_OF_RANGE);
-            rocprofvis_dm_slice_t slice = BindObject()->FuncAddSlice(BindObject()->trace_object,tracks[i],start,end);
-            ASSERT_MSG_BREAK(slice, ERROR_SLICE_CANNOT_BE_NULL);
-            std::stringstream query;
-            if (TrackPropertiesAt(tracks[i])->track_category == kRocProfVisDmRegionTrack)
-            {
-                query << "select start, (end-start), apiName_id, args_id, id from rocpd_api where pid == " << TrackPropertiesAt(tracks[i])->process
-                    << " and tid == " << TrackPropertiesAt(tracks[i])->name
-                    << " and start >= " << start
-                    << " and end < " << end
-                    << " ORDER BY start;";
-                    ShowProgress(step, query.str().c_str(),kRPVDbBusy, future);
-                    if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackAddEventRecord, kRocProfVisDmRegionTrack, slice, kRocProfVisDmOperationLaunch )) break;
-            } else
-            if (TrackPropertiesAt(tracks[i])->track_category == kRocProfVisDmKernelTrack)
-            {
-                query << "select start, (end-start), opType_id, description_id, id from rocpd_op where gpuId == " << TrackPropertiesAt(tracks[i])->process
-                    << " and queueId == " << TrackPropertiesAt(tracks[i])->name
-                    << " and start >= " << start
-                    << " and end < " << end
-                    << " ORDER BY start;";
-                    ShowProgress(step, query.str().c_str(),kRPVDbBusy, future);
-                    if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackAddEventRecord, kRocProfVisDmKernelTrack, slice, kRocProfVisDmOperationDispatch )) break;
-            } else     
-            if (TrackPropertiesAt(tracks[i])->track_category == kRocProfVisDmPmcTrack)
-            {
-                query << "select start, value from rocpd_monitor where deviceId == " << TrackPropertiesAt(tracks[i])->process
-                    << " and monitorType == \"" << TrackPropertiesAt(tracks[i])->name << "\"" 
-                    << " and start >= " << start
-                    << " and end < " << end
-                    << " ORDER BY start;";
-                    ShowProgress(step, query.str().c_str(),kRPVDbBusy, future);
-                    if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackAddPmcRecord, kRocProfVisDmPmcTrack, slice )) break;
-            }            
-        }
-
-        if (i < num) break;
-        ShowProgress(100- future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);
-        return future->SetPromise(kRocProfVisDmResultSuccess);
-    }
-    ShowProgress(0, "Not all tracks are loaded!", kRPVDbError, future );
     return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
 }
 
@@ -335,26 +189,28 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(
     ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {
+        ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+        ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_flowtrace_t flowtrace = BindObject()->FuncAddFlowTrace(BindObject()->trace_object, event_id);
-        ASSERT_MSG_RETURN(flowtrace, ERROR_FLOW_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
+        ASSERT_MSG_BREAK(flowtrace, ERROR_FLOW_TRACE_CANNOT_BE_NULL);
         std::stringstream query;
-        if (event_id.bitfiled.event_op == kRocProfVisDmOperationLaunch)
+        if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {
-            query << "select rocpd_api_ops.op_id, gpuId, queueId, rocpd_op.start from rocpd_api_ops "
+            query << "select rocpd_api_ops.api_id, 2, rocpd_api_ops.op_id, 0, gpuId, queueId, rocpd_op.start from rocpd_api_ops "
                 "INNER JOIN rocpd_api on rocpd_api_ops.api_id = rocpd_api.id "
                 "INNER JOIN rocpd_op on rocpd_api_ops.op_id = rocpd_op.id where rocpd_api_ops.api_id = ";
-            query << event_id.bitfiled.event_id;  
+            query << event_id.bitfield.event_id;  
             ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackGetFlowTrace, flowtrace, kRocProfVisDmOperationLaunch)) break;
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), flowtrace, &CallbackAddFlowTrace)) break;
         } else
-        if (event_id.bitfiled.event_op == kRocProfVisDmOperationDispatch)
+        if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
-            query << "select rocpd_api_ops.api_id, pid, tid, rocpd_api.end from rocpd_api_ops "
+            query << "select rocpd_api_ops.op_id, 1, rocpd_api_ops.api_id, 0, pid, tid, rocpd_api.end from rocpd_api_ops "
                 "INNER JOIN rocpd_api on rocpd_api_ops.api_id = rocpd_api.id "
                 "INNER JOIN rocpd_op on rocpd_api_ops.op_id = rocpd_op.id where rocpd_api_ops.op_id = ";
-            query << event_id.bitfiled.event_id << ";";  
+            query << event_id.bitfield.event_id << ";";  
             ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackGetFlowTrace, flowtrace, kRocProfVisDmOperationDispatch)) break;
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), flowtrace, &CallbackAddFlowTrace)) break;
         } else
         {
             ShowProgress(0, "Flow trace is not available for specified operation type!", kRPVDbError, future );
@@ -374,17 +230,19 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadStackTraceInfo(
     ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {
+        ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+        ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_stacktrace_t stacktrace = BindObject()->FuncAddStackTrace(BindObject()->trace_object, event_id);
-        ASSERT_MSG_RETURN(stacktrace, ERROR_STACK_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
+        ASSERT_MSG_BREAK(stacktrace, ERROR_STACK_TRACE_CANNOT_BE_NULL);
         std::stringstream query;
-        if (event_id.bitfiled.event_op == kRocProfVisDmOperationLaunch || event_id.bitfiled.event_op == kRocProfVisDmOperationMemoryAllocate)
+        if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch || event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
         {
             query << "select s2.string as hip_api, s3.string as args, s1.string as frame, sf.depth "
                      "from rocpd_stackframe sf join rocpd_string s1 on sf.name_id=s1.id join rocpd_api ap on "
                      "sf.api_ptr_id=ap.id join rocpd_string s2 on ap.apiName_id=s2.id join rocpd_string s3 on ap.args_id=s3.id where ap.id  == ";
-            query << event_id.bitfiled.event_id << ";";  
+            query << event_id.bitfield.event_id << ";";  
             ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackGetStackTrace,  stacktrace, kRocProfVisDmOperationLaunch)) break;
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), stacktrace, &CallbackAddStackTrace)) break;
         } else
         {
             ShowProgress(0, "Stack trace is not available for specified operation type!", kRPVDbError, future );
@@ -404,37 +262,39 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
     ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {
+        ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+        ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_extdata_t extdata = BindObject()->FuncAddExtData(BindObject()->trace_object, event_id);
-        ASSERT_MSG_RETURN(extdata, ERROR_EXT_DATA_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
+        ASSERT_MSG_BREAK(extdata, ERROR_EXT_DATA_CANNOT_BE_NULL);
         std::stringstream query;
-        if (event_id.bitfiled.event_op == kRocProfVisDmOperationLaunch)
+        if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {
             query << "select * from api where id == ";
-            query << event_id.bitfiled.event_id << ";";  
+            query << event_id.bitfield.event_id << ";";  
             ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackAddExtInfo, "Properties", extdata, (roprofvis_dm_event_operation_t)event_id.bitfiled.event_op)) break;
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Properties", extdata, &CallbackAddExtInfo)) break;
             query.str("");
             query << "select * from copy where id == ";
-            query << event_id.bitfiled.event_id << ";";  
+            query << event_id.bitfield.event_id << ";";  
             ShowProgress(50, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackAddExtInfo, "Copy", extdata, (roprofvis_dm_event_operation_t)event_id.bitfiled.event_op)) break;
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Copy", extdata, &CallbackAddExtInfo)) break;
         } else
-        if (event_id.bitfiled.event_op == kRocProfVisDmOperationDispatch)
+        if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
             query << "select * from op where id == ";
-            query << event_id.bitfiled.event_id << ";";  
+            query << event_id.bitfield.event_id << ";";  
             ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackAddExtInfo, "Properties", extdata, (roprofvis_dm_event_operation_t)event_id.bitfiled.event_op)) break;
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Properties", extdata, &CallbackAddExtInfo)) break;
             query.str("");
             query << "select * from copyop where id == ";
-            query << event_id.bitfiled.event_id << ";";  
+            query << event_id.bitfield.event_id << ";";  
             ShowProgress(25, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackAddExtInfo, "Copy", extdata, (roprofvis_dm_event_operation_t)event_id.bitfiled.event_op)) break;
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Copy", extdata, &CallbackAddExtInfo)) break;
             query.str("");
             query << "select * from kernel where id == ";
-            query << event_id.bitfiled.event_id << ";";  
+            query << event_id.bitfield.event_id << ";";  
             ShowProgress(50, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), &CallbackAddExtInfo, "Dispatch", extdata, (roprofvis_dm_event_operation_t)event_id.bitfiled.event_op)) break;
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Dispatch", extdata, &CallbackAddExtInfo)) break;
         } else    
         {
             ShowProgress(0, "Extended data not available for specified operation type!", kRPVDbError, future );
@@ -445,22 +305,4 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
     }
     ShowProgress(0, "Extended data  not loaded!", kRPVDbError, future );
     return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);    
-}
-
-
-rocprofvis_dm_result_t  RocpdDatabase::ExecuteQuery(
-        rocprofvis_dm_charptr_t query,
-        rocprofvis_dm_charptr_t description,
-        Future* future){
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    while (true)
-    {
-        rocprofvis_dm_table_t table = BindObject()->FuncAddTable(BindObject()->trace_object, query, description);
-        ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query, table, &CallbackRunQuery)) break;
-        ShowProgress(100, "Query successfully executed!",kRPVDbSuccess, future);
-        return future->SetPromise(kRocProfVisDmResultSuccess);
-    }
-    ShowProgress(0, "Query could not be executed!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed); 
 }

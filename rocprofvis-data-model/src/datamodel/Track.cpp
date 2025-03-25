@@ -28,6 +28,8 @@ RpvDmTrack::RpvDmTrack( RpvDmTrace* ctx,
                 rocprofvis_dm_track_params_t* params) :
                 m_ctx(ctx),
                 m_track_params(params) {
+                    rocprofvis_dm_event_id_t id = { 0 };
+                    m_ext_data = RpvDmExtData(ctx,id);
                     params->extdata = &m_ext_data;
                 };
 
@@ -140,7 +142,6 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t
         default:
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
-
 }
 
  rocprofvis_dm_result_t   RpvDmTrack::GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value){
@@ -149,7 +150,6 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t
     ASSERT_MSG_RETURN(m_track_params->extdata, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
     switch(property)
     {
-
         case kRPVDMTrackExtDataCategoryCharPtrIndexed:
             return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataCategoryCharPtrIndexed, index, value);
 	    case kRPVDMTrackExtDataNameCharPtrIndexed:
@@ -170,7 +170,6 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t
         default:
             ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
-
 }
 
 

@@ -22,6 +22,7 @@
 
 #include "CInterface.h"
 #include "../database/RocpdDb.h"
+#include "../database/RocprofDb.h"
 #include "../datamodel/Trace.h"
 
 /******************************************DATABASE INTERFACE***************************************/
@@ -62,6 +63,24 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
             ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
         }
     } else
+        if (db_type == rocprofvis_db_type_t::kRocprofSqlite)
+        {
+            try {
+                Database* db = new RocprofDatabase(filename);
+                ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, nullptr);
+                if (kRocProfVisDmResultSuccess == db->Open()) {
+                    return db;
+                }
+                else {
+                    ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database!", nullptr);
+                }
+            }
+            catch (std::exception ex)
+            {
+                ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+            }
+        }
+        else
     {
         LOG("Database type not supported!");
         return nullptr;
@@ -117,7 +136,7 @@ rocprofvis_dm_result_t rocprofvis_db_future_wait(
     Future * future = (Future*) object;
     ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
 #ifdef DEBUG
-    return future->WaitForCompletion(timeout*10000); 
+    return future->WaitForCompletion(timeout*100000); 
 #else
     return future->WaitForCompletion(timeout*1000);
 #endif                                
@@ -289,7 +308,7 @@ rocprofvis_dm_result_t rocprofvis_dm_bind_trace_to_database(   rocprofvis_dm_tra
     PROFILE;
     ASSERT_MSG_RETURN(trace, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ASSERT_MSG_RETURN(database, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    rocprofvis_dm_db_bind_struct bind_data = {0};
+    rocprofvis_dm_db_bind_struct* bind_data=nullptr;
     if  (kRocProfVisDmResultSuccess == ((RpvDmTrace*)trace)->BindDatabase(database, bind_data) && 
          kRocProfVisDmResultSuccess == ((Database*)database)->BindTrace(bind_data))
          return kRocProfVisDmResultSuccess;

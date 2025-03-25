@@ -24,30 +24,59 @@
 #include <future>
 #include <thread>
 
+// Asynchronous execution handler class
 class Future
 {
     public:
+        // Future object constructor
+        // @param progress_callback - optional progress callback pointer 
         Future(rocprofvis_db_progress_callback_t progress_callback = nullptr);
+        // Future object destructor. Takes care of joining worker thread, if joinable
         ~Future();
-
+        // @return callback method pointer
         rocprofvis_db_progress_callback_t   ProgressCallback() { return m_progress_callback;}
+        // @return current progress in percents
         double                              Progress() { return m_progress; }
-
-        rocprofvis_dm_result_t WaitForCompletion(rocprofvis_db_timeout_ms_t timeout);
-
-        rocprofvis_dm_result_t SetPromise(rocprofvis_dm_result_t status);
-        void SetWorker(std::thread && thread) {m_worker = std::move(thread);};
-        bool IsWorking() { return m_worker.joinable();}
-        bool Interrupted() {return m_interrupt_status;};
-
-        void ShowProgress(rocprofvis_dm_charptr_t db_name, double step, rocprofvis_dm_charptr_t action, rocprofvis_db_status_t status);
+        // waits for thread completion for specified number of milliseconds. If timeouts, sends command to end the thread as soon as possible.
+        // @param - timeout time in milliseconds
+        // @return status of operation
+        rocprofvis_dm_result_t              WaitForCompletion(rocprofvis_db_timeout_ms_t timeout);
+        // fills promise object with operation status
+        // @param status - status of operation
+        // @return status of operation
+        rocprofvis_dm_result_t              SetPromise(rocprofvis_dm_result_t status);
+        // moves worker thread into the class object memory.  
+        // @param thread - std::thread object allocated in caller code
+        void                                SetWorker(std::thread && thread) {m_worker = std::move(thread);};
+        // reports if thread is still working
+        // @return True is thread is still running
+        bool                                IsWorking() { return m_worker.joinable();}
+        // reports if thread was interrupted by timeout logic
+        // @return True if thread has been timeouted
+        bool                                Interrupted() {return m_interrupt_status;};
+        // calls progress callback, if provided
+        // @param db_name - path to database file
+        // @param step - progress percentage of single database operation
+        // @param action - operation description
+        // @param status - operation status
+        void                                ShowProgress(
+                                                        rocprofvis_dm_charptr_t db_name, 
+                                                        double step, 
+                                                        rocprofvis_dm_charptr_t action, 
+                                                        rocprofvis_db_status_t status);
 
     private:
+        // stdlib promise object
         std::promise<rocprofvis_dm_result_t> m_promise;
+        // stdlib future object
         std::future<rocprofvis_dm_result_t> m_future;
+        // interrupt status, gets set by timeout logic
         std::atomic<bool> m_interrupt_status;
+        // progress callback method pointer 
         rocprofvis_db_progress_callback_t m_progress_callback;
+        // progress value in percent
         double m_progress;
+        // worker thread
         std::thread m_worker;
 };
 

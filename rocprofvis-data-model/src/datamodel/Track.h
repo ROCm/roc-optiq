@@ -40,11 +40,11 @@ public:
     ~RpvDmTrack(){}
     rocprofvis_dm_size_t                                NumberOfSlices() { return m_slices.size(); }
     RpvDmTrace* Ctx() { return m_ctx; }
-    roprofvis_dm_track_category_t                       Category() { return m_track_params->track_category; }
+    rocprofvis_dm_track_category_t                       Category() { return m_track_params->track_category; }
     rocprofvis_dm_track_id_t                            TrackId() { return m_track_params->track_id; }
-    rocprofvis_dm_node_id_t                             NodeId() { return m_track_params->node_id; }
-    rocprofvis_dm_charptr_t                             Process() { return m_track_params->process.c_str(); }
-    rocprofvis_dm_charptr_t                             SubProcess() { return m_track_params->name.c_str(); }
+    rocprofvis_dm_node_id_t                             NodeId() { return m_track_params->process_id[TRACK_ID_NODE]; }
+    rocprofvis_dm_charptr_t                             Process() { return m_track_params->process_name[TRACK_ID_PID_OR_AGENT].c_str(); }
+    rocprofvis_dm_charptr_t                             SubProcess() { return m_track_params->process_name[TRACK_ID_TID_OR_QUEUE].c_str(); }
     rocprofvis_dm_charptr_t                             CategoryString();
 
     rocprofvis_dm_result_t                              GetSliceAtIndex(rocprofvis_dm_property_index_t index, rocprofvis_dm_slice_t & slice);

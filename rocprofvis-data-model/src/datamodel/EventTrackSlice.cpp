@@ -122,6 +122,6 @@ rocprofvis_dm_result_t  RpvDmEventTrackSlice::GetRecordSymbolStringAt(const rocp
     ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     ASSERT_MSG_RETURN(Ctx(), ERROR_TRACK_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
     ASSERT_MSG_RETURN(Ctx()->Ctx(), ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
-    symbol_charptr = Ctx()->Ctx()->GetSymbolAt(m_samples[index].get()->SymbolIndex());
+    symbol_charptr = Ctx()->Ctx()->GetStringAt(m_samples[index].get()->SymbolIndex());
     return kRocProfVisDmResultSuccess;
 }

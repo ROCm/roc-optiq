@@ -42,8 +42,9 @@ class RpvDmTrace : public RpvObject{
         rocprofvis_dm_size_t                            NumberOfTracks() {return m_tracks.size();}
         rocprofvis_dm_size_t                            NumberOfTables() {return m_tables.size();}
         rocprofvis_dm_database_t                        Database() { return m_db; }
+        rocprofvis_dm_db_bind_struct*                   BindingInfo() {return &m_binding_info;}
 
-        rocprofvis_dm_result_t                          BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct & bind_data);
+        rocprofvis_dm_result_t                          BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* &bind_data);
         rocprofvis_dm_result_t                          DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
         rocprofvis_dm_result_t                          DeleteAllSlices();
         rocprofvis_dm_result_t                          DeleteEventPropertyFor(rocprofvis_dm_event_property_type_t type, rocprofvis_dm_event_id_t event_id);
@@ -53,7 +54,6 @@ class RpvDmTrace : public RpvObject{
 
 
         rocprofvis_dm_charptr_t                         GetStringAt(rocprofvis_dm_index_t index);
-        rocprofvis_dm_charptr_t                         GetSymbolAt(rocprofvis_dm_index_t index);
 
         rocprofvis_dm_result_t                          GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) override;
         rocprofvis_dm_result_t                          GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value) override;
@@ -86,6 +86,7 @@ class RpvDmTrace : public RpvObject{
         static rocprofvis_dm_result_t                   AddTableRowCell(const rocprofvis_dm_table_row_t object, rocprofvis_dm_charptr_t cell_value);
 
         rocprofvis_dm_trace_params_t                    m_parameters;
+        rocprofvis_dm_db_bind_struct                    m_binding_info;
         rocprofvis_dm_database_t                        m_db;
         std::vector<std::unique_ptr<RpvDmTrack>>        m_tracks;
         std::vector<std::unique_ptr<RpvDmFlowTrace>>    m_flow_traces;

@@ -18,58 +18,48 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef RPV_ROCPD_DATABASE_H
-#define RPV_ROCPD_DATABASE_H
+#ifndef RPV_ROCPROF_DATABASE_H
+#define RPV_ROCPROF_DATABASE_H
 
 #include "ProfileDb.h"
 
-#include <map>
 
-// type of map array for string indexes remapping
-typedef std::map<uint64_t, uint32_t> string_index_map_t;
-
-// class for reading old schema Rocpd database
-class RocpdDatabase : public ProfileDatabase
+class RocprofDatabase : public ProfileDatabase
 {
 public:
-    // class constructor
-    // @param path - database file path
-    RocpdDatabase(rocprofvis_db_filename_t path) :
-        ProfileDatabase(path) {}
-    // class destructor, not really required, unless declared as virtual
-    ~RocpdDatabase()override{};
+    RocprofDatabase(rocprofvis_db_filename_t path) :
+        ProfileDatabase(path) {
+    };
+
     // worker method to read trace metadata
     // @param object - future object providing asynchronous execution mechanism 
     // @return status of operation
     rocprofvis_dm_result_t  ReadTraceMetadata(
-                                                Future* object) override;
+                                        Future* object) override;
+
     // worker method to read flow trace info
     // @param event_id - 60-bit event id and 4-bit operation type  
     // @param object - future object providing asynchronous execution mechanism 
     // @return status of operation
     rocprofvis_dm_result_t  ReadFlowTraceInfo(
-                                                rocprofvis_dm_event_id_t event_id,
-                                                Future* object) override;
+                                        rocprofvis_dm_event_id_t event_id,
+                                        Future* object) override;
     // worker method to read stack trace info
     // @param event_id - 60-bit event id and 4-bit operation type  
     // @param object - future object providing asynchronous execution mechanism 
     // @return status of operation
     rocprofvis_dm_result_t  ReadStackTraceInfo(
-                                                rocprofvis_dm_event_id_t event_id,
-                                                Future* object) override;
+                                        rocprofvis_dm_event_id_t event_id,
+                                        Future* object) override;
     // worker method to read extended info
     // @param event_id - 60-bit event id and 4-bit operation type  
     // @param object - future object providing asynchronous execution mechanism 
     // @return status of operation
     rocprofvis_dm_result_t  ReadExtEventInfo(
-        rocprofvis_dm_event_id_t event_id, 
-        Future* object) override;
-    
-    // get class memory usage
-    // @return size of memory used by the class
-    rocprofvis_dm_size_t GetMemoryFootprint(void) override;
+                                        rocprofvis_dm_event_id_t event_id, 
+                                        Future* object) override;
 
-    
+
 private:
     // sqlite3_exec callback to process track information query and add track object to RpvDmTrace container
     // @param data - pointer to callback caller argument
@@ -85,40 +75,16 @@ private:
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
     static int CallBackAddString(void *data, int argc, char **argv, char **azColName);
-    // sqlite3_exec callback to process event information query and add event object to time slice container
+    // sqlite3_exec callback to cache specified tables data
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
     // @param argv - pointer to row values
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
-    static int CallbackAddEventRecord(void *data, int argc, char **argv, char **azColName);
-    // sqlite3_exec callback to process performance counters information query and add pmc object to time slice container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackAddPmcRecord(void *data, int argc, char **argv, char **azColName);
-    // sqlite3_exec callback to process stack trace information query and add stack trace object to RpvDmStackTrace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackAddStackTrace(void *data, int argc, char **argv, char **azColName);
-
-    // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
-    string_index_map_t m_string_map;
-
-    // method to remap string IDs. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
+    static int CallbackCacheTable(void *data, int argc, char **argv, char **azColName);
+    // method to remap string IDs. Main reason for remapping is having strings and kernel symbol names in one array 
     // @param record - event record structure
     // @return status of operation
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_record_data_t & record) override;
-
-    // method to remap single string ID. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
-    // @param id - string id to be remapped
-    // @return True if remapped
-    const bool RemapStringId(uint64_t & id);
-
 };
-#endif //RPV_ROCPD_DATABASE_H
+#endif //RPV_ROCPROF_DATABASE_H

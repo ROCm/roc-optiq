@@ -1,4 +1,5 @@
 #include "ExtData.h"
+#include "Trace.h"
 #include <sstream>
 
 rocprofvis_dm_size_t  RpvDmExtData::GetMemoryFootprint(){
@@ -24,8 +25,14 @@ rocprofvis_dm_result_t RpvDmExtData::GetRecordNameAt(const rocprofvis_dm_propert
 
 rocprofvis_dm_result_t RpvDmExtData::GetRecordDataAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t &data){
     ASSERT_MSG_RETURN(index < m_extdata_records.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    data = m_extdata_records[index].Data();
-    return kRocProfVisDmResultSuccess;
+    if (m_id.value != 0) {
+        data = m_extdata_records[index].Data();
+        return kRocProfVisDmResultSuccess;
+    }
+    else
+    {
+        return m_ctx->BindingInfo()->FuncFindCachedTableValue(m_ctx->Database(), m_extdata_records[index].Category(), *(rocprofvis_dm_id_t*)m_extdata_records[index].Data(), m_extdata_records[index].Name(), &data);
+    }
 }
 
 rocprofvis_dm_result_t RpvDmExtData::GetRecordCategoryAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t& category) {
@@ -72,11 +79,23 @@ rocprofvis_dm_result_t RpvDmExtData::MakeJsonBlob(rocprofvis_dm_charptr_t & blob
             if (category.length() > 0) json_blob << "\t";
 
             json_blob << "\t\"" << m_extdata_records[i].Name() << "\":";
-            std::string data = m_extdata_records[i].Data();
-            bool quatation_needed = (data.length() == 0) || (data.length() > 0 && data[0] != '{');
+            rocprofvis_dm_charptr_t cdata;
+            std::string data="";
+            if (kRocProfVisDmResultSuccess == GetRecordDataAt(i,cdata)) data = cdata;
+            bool numeric = !data.empty();
+            if (numeric)
+            {
+                try {
+                    std::stoll(data.c_str());
+                }
+                catch (std::exception& e) {
+                    numeric = false;
+                }
+            }
+            bool quatation_needed =  !(numeric || data.empty() || data.at(0) =='{');
             if (quatation_needed) json_blob << "\"";
             json_blob << data;
-            if (quatation_needed) json_blob << "\",\n";
+            if (quatation_needed) json_blob << "\",\n"; else json_blob << "\n";
         }
         if (category_bracket_open) {
                 json_blob << "\t}\n";

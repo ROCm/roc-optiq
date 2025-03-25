@@ -45,12 +45,12 @@ class RpvDmEventRecord
                 m_category_index(category_index), 
                 m_symbol_index(symbol_index) {};
 
-        const rocprofvis_dm_id_t                EventId() {return m_event_id.bitfiled.event_id;}
+        const rocprofvis_dm_id_t                EventId() {return m_event_id.bitfield.event_id;}
         const rocprofvis_dm_timestamp_t         Timestamp() {return m_timestamp;}
         const rocprofvis_dm_duration_t          Duration() {return m_duration;}
         const rocprofvis_dm_index_t             CategoryIndex() {return m_category_index;}
         const rocprofvis_dm_index_t             SymbolIndex() {return m_symbol_index;}
-        const roprofvis_dm_event_operation_t    Operation() {return (roprofvis_dm_event_operation_t)m_event_id.bitfiled.event_op;}
+        const rocprofvis_dm_event_operation_t    Operation() {return (rocprofvis_dm_event_operation_t)m_event_id.bitfield.event_op;}
 
     private:
         rocprofvis_dm_event_id_t        m_event_id;                     // 60-bit event id and 4-bit operation type , used as a search key for stacktrace, flowtrace and no-essential information

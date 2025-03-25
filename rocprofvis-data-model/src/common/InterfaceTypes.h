@@ -74,17 +74,17 @@ typedef enum rocprofvis_dm_result_t
     kRocProfVisDmResultDbAccessFailed = 6,
     // Operation failed due to invalid property 
     kRocProfVisDmResultInvalidProperty = 7,
-    // Operation failed due to unsuported property 
+    // Operation failed due to unsupported property 
     kRocProfVisDmResultNotSupported = 8,
     // Operation failed due to busy status of resource 
     kRocProfVisDmResultResourceBusy = 8,
 } rocprofvis_dm_result_t;
 
 // Track category
-typedef enum roprofvis_dm_track_category_t {
+typedef enum rocprofvis_dm_track_category_t {
     // Object is not track
     kRocProfVisDmNotATrack = 0,
-    // Object is PMC track (performance cpunters track)
+    // Object is PMC track (performance counters track)
     kRocProfVisDmPmcTrack = 1,
     // Object is region track (HIP calls)
     kRocProfVisDmRegionTrack = 2,
@@ -94,10 +94,10 @@ typedef enum roprofvis_dm_track_category_t {
     kRocProfVisDmSQTTTrack = 4,
     // Object is NIC track
     kRocProfVisDmNICTrack = 5
-} roprofvis_dm_track_category_t;
+} rocprofvis_dm_track_category_t;
 
 //Event operation
-typedef enum roprofvis_dm_event_operation_t {
+typedef enum rocprofvis_dm_event_operation_t {
     // Event of unknown operation type
     kRocProfVisDmOperationNoOp = 0,
     // Launch event
@@ -108,7 +108,7 @@ typedef enum roprofvis_dm_event_operation_t {
     kRocProfVisDmOperationMemoryAllocate = 3,
     // Memory copy event
     kRocProfVisDmOperationMemoryCopy = 4
-} roprofvis_dm_event_operation_t;
+} rocprofvis_dm_event_operation_t;
 
 // Database type
 typedef enum rocprofvis_db_type_t {
@@ -294,7 +294,7 @@ typedef union {
         uint64_t    event_id:60;
         // Event operation type
         uint64_t    event_op:4;
-    } bitfiled;
+    } bitfield;
     uint64_t        value;
 } rocprofvis_dm_event_id_t;
 

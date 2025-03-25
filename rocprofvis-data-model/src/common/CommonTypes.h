@@ -28,17 +28,20 @@
 #include "CInterfaceTypes.h"
 #include "ErrorHandling.h"
 #include <algorithm>
+#include <vector>
 
 /*******************************Types******************************/
 
 
 typedef uint32_t                          rocprofvis_dm_node_id_t;
+typedef uint32_t                          rocprofvis_dm_process_id_t;
+typedef uint64_t                          rocprofvis_dm_stream_id_t;
 typedef std::string                       rocprofvis_dm_string_t;
 typedef uint32_t                          rocprofvis_dm_op_t;
 typedef int64_t                           rocprofvis_dm_duration_t;
 typedef uint64_t                          rocprofvis_dm_id_t;
 typedef double                            rocprofvis_dm_value_t;
-typedef uint64_t                          rocprofvis_db_timeout_ms_t;                    // asynchronous call wait timeout (milliseconds)
+typedef uint64_t                          rocprofvis_db_timeout_ms_t;                    // asynchronous call wait timeout (milliseconds)                           
 
 
 /*******************************Structures******************************/
@@ -50,8 +53,8 @@ typedef union{
         rocprofvis_dm_event_id_t id;                // 60-bit event id and 4-bit operation type
         rocprofvis_dm_timestamp_t timestamp;        // 64-bit timestamp 
         rocprofvis_dm_duration_t duration;          // signed 64-bit duration. Negative number should be invalidated by controller.
-        rocprofvis_dm_index_t category;             // 32-bit category index of array of strings 
-        rocprofvis_dm_index_t symbol;               // 32-bit symbol index of array of strings 
+        rocprofvis_dm_id_t category;                // 32-bit category index of array of strings 
+        rocprofvis_dm_id_t symbol;                  // 32-bit symbol index of array of strings 
     } event;
     struct pmc_record_t
     {
@@ -61,21 +64,39 @@ typedef union{
 } rocprofvis_db_record_data_t;
 
 // rocprofvis_dm_track_params_t contains track parameters and shared between data model and database. Physically located in database object.
+#define NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS 3
+#define TRACK_ID_NODE 0
+#define TRACK_ID_PID 1
+#define TRACK_ID_AGENT 1
+#define TRACK_ID_PID_OR_AGENT 1
+#define TRACK_ID_TID 2
+#define TRACK_ID_QUEUE 2
+#define TRACK_ID_TID_OR_QUEUE 2
+#define TRACK_ID_COUNTER 3
+#define TRACK_ID_CATEGORY 3
 typedef struct {
-    rocprofvis_dm_track_id_t track_id;              // 32-bit track id
-    rocprofvis_dm_node_id_t node_id;                // 32-bit node id
-    rocprofvis_dm_string_t process;                 // proces name string
-    rocprofvis_dm_string_t name;                    // sub-process name string
-    roprofvis_dm_track_category_t track_category;   // track category enumeration (PMC, Region, Kernel, SQQT, NIC, etc)
-    rocprofvis_dm_extdata_t extdata;                // handle of extended data object              
+    // 32-bit track id
+    rocprofvis_dm_track_id_t track_id;   
+    // 32-bit process IDs
+    rocprofvis_dm_process_id_t process_id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];  
+    // database column name for process id
+    rocprofvis_dm_string_t process_tag[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS]; 
+    // process name string
+    rocprofvis_dm_string_t process_name[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+    // is identifier numeric or string
+    bool process_id_numeric[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+    // SQL query to get data for this track, may have multiple sub-queries
+    std::vector<rocprofvis_dm_string_t> query;  
+    // track category enumeration (PMC, Region, Kernel, SQQT, NIC, etc)
+    rocprofvis_dm_track_category_t track_category;   
+    // handle of extended data object  
+    rocprofvis_dm_extdata_t extdata;  
 } rocprofvis_dm_track_params_t;
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model and database. Physically located in trace object and referenced by a pointer in binding structure.
 typedef struct {
     rocprofvis_dm_timestamp_t start_time;           // trace start time
     rocprofvis_dm_timestamp_t end_time;             // trace end time
-    rocprofvis_dm_index_t strings_offset;           // first general string index in string array
-    rocprofvis_dm_index_t symbols_offset;           // first kernel symbol index in string array 
     bool metadata_loaded;                           // status of metadata being fully loaded
 } rocprofvis_dm_trace_params_t;
 
@@ -105,7 +126,8 @@ typedef struct {
 
 
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_track_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_track_params_t * params);
-typedef rocprofvis_dm_slice_t (*rocprofvis_dm_add_slice_func_t) (const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
+typedef rocprofvis_dm_slice_t (*rocprofvis_dm_add_slice_func_t) (const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, 
+                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_record_func_t) (const rocprofvis_dm_slice_t object, rocprofvis_db_record_data_t& data);
 typedef rocprofvis_dm_index_t (*rocprofvis_dm_add_string_func_t) (const rocprofvis_dm_trace_t object, const char* stringValue);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_flow_func_t) (const rocprofvis_dm_slice_t object, rocprofvis_db_flow_data_t& data);
@@ -118,11 +140,13 @@ typedef rocprofvis_dm_table_t (*rocprofvis_dm_add_table_func_t) (const rocprofvi
 typedef rocprofvis_dm_table_row_t (*rocprofvis_dm_add_table_row_func_t) (const rocprofvis_dm_table_t object);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t column_name);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_row_cell_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t cell_value);
+typedef rocprofvis_dm_result_t (*rocprofvis_db_find_cached_table_value_func_t) (const rocprofvis_dm_database_t object, rocprofvis_dm_charptr_t table, 
+                                                                                const rocprofvis_dm_id_t id, rocprofvis_dm_charptr_t column, rocprofvis_dm_charptr_t* value);
 
 typedef struct 
 {
         rocprofvis_dm_trace_t trace_object;                             // trace handle
-        rocprofvis_dm_trace_params_t * trace_parameters;                // pointer to trace parameters structure located in Trace object
+        rocprofvis_dm_trace_params_t * trace_properties;                // pointer to trace parameters structure located in Trace object
         rocprofvis_dm_add_track_func_t FuncAddTrack;                    // Called by database query callback to add track item to a list of tracks located in trace object 
         rocprofvis_dm_add_slice_func_t FuncAddSlice;                    // Called by database query to add a time slice to a track object 
         rocprofvis_dm_add_record_func_t FuncAddRecord;                  // Called by database query callback to add a record to time slice
@@ -137,6 +161,7 @@ typedef struct
         rocprofvis_dm_add_table_row_func_t FuncAddTableRow;             // Called by database query callback to add new row to a table object
         rocprofvis_dm_add_table_column_func_t FuncAddTableColumn;       // Called by database query callback to add new column name to a table object
         rocprofvis_dm_add_table_row_cell_func_t FuncAddTableRowCell;    // Called by database query callback to add new cell to a table row
+        rocprofvis_db_find_cached_table_value_func_t FuncFindCachedTableValue; // Get value from tables cached in database component (tables like rocpd_node, rocpd_process, rocpd_thread, rocpd_agent, rocpd_queue, rocpd_stream, etc. )
 
 } rocprofvis_dm_db_bind_struct;
 

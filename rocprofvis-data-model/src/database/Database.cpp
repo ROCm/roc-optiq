@@ -19,24 +19,25 @@
 // SOFTWARE.
 
 #include "Database.h"
-#include "SqliteDb.h"
+#include "ProfileDb.h"
 
 rocprofvis_db_type_t Database::Autodetect(
                                                     rocprofvis_db_filename_t filename){
-    rocprofvis_db_type_t db_type = SqliteDatabase::Detect(filename);
+    rocprofvis_db_type_t db_type = ProfileDatabase::Detect(filename);
     if (db_type!=rocprofvis_db_type_t::kAutodetect)
             return db_type;
     return rocprofvis_db_type_t::kAutodetect;
 }
 
 
-rocprofvis_dm_result_t Database::FindTrackIdByName(
-                                                    const char* process, 
-                                                    const char* name, 
+rocprofvis_dm_result_t Database::FindTrackId(
+                                                    uint32_t node_id,
+                                                    uint32_t process_id, 
+                                                    uint32_t subprocess_id,
                                                     rocprofvis_dm_track_id_t & track_id ){
     std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator it = 
-        std::find_if(m_track_properties.begin(), m_track_properties.end(), [process, name](std::unique_ptr<rocprofvis_dm_track_params_t> & params) {
-        return  params.get()->process == process && params.get()->name == name;});
+        std::find_if(m_track_properties.begin(), m_track_properties.end(), [node_id, process_id, subprocess_id](std::unique_ptr<rocprofvis_dm_track_params_t> & params) {
+        return  params.get()->process_id[TRACK_ID_NODE] == node_id && params.get()->process_id[TRACK_ID_PID_OR_AGENT] == process_id && params.get()->process_id[TRACK_ID_TID_OR_QUEUE] == subprocess_id; });
     if (it != m_track_properties.end()) {
         track_id = (rocprofvis_dm_track_id_t)(it - m_track_properties.begin());
         return kRocProfVisDmResultSuccess;
@@ -65,8 +66,9 @@ void  Database::ShowProgress(
 }
 
 rocprofvis_dm_result_t Database::BindTrace(
-                                                    rocprofvis_dm_db_bind_struct binding_info){
+                                                    rocprofvis_dm_db_bind_struct * binding_info){
     m_binding_info = binding_info;
+    m_binding_info->FuncFindCachedTableValue = FindCachedTableValue;
     return kRocProfVisDmResultSuccess;
 }
 
@@ -181,3 +183,104 @@ rocprofvis_dm_result_t   Database::ExecuteQueryStatic(
     return db->ExecuteQuery(query,description,object);
 }
 
+const char* Database::ProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
+    switch(category){
+        case kRocProfVisDmPmcTrack:
+        case kRocProfVisDmKernelTrack:
+            return "GPU:";
+        case kRocProfVisDmRegionTrack:
+            return "PID:";
+    }
+    return "";
+}
+
+const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
+    switch(category){
+        case kRocProfVisDmPmcTrack:
+        case kRocProfVisDmKernelTrack:
+            return "Queue:";
+        case kRocProfVisDmRegionTrack:
+            return "TID:";
+    }
+    return "";
+}
+
+rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(Database * db, const char* table_name, uint64_t instance_id ){
+    uint64_t id_to_str_conv_array[2] = { 0 };
+    id_to_str_conv_array[0] = instance_id;
+    rocprofvis_dm_track_params_t* track_properties = db->TrackPropertiesLast();
+    auto m = references[table_name][instance_id];
+    for(std::map<std::string,std::string>::iterator it = m.begin(); it != m.end(); ++it) {
+        rocprofvis_db_ext_data_t record;
+        record.name = it->first.c_str();
+        record.data = (rocprofvis_dm_charptr_t)id_to_str_conv_array;
+        record.category = table_name;
+        rocprofvis_dm_result_t result = db->BindObject()->FuncAddExtDataRecord(track_properties->extdata, record);
+        if (result != kRocProfVisDmResultSuccess) return result;
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+
+rocprofvis_dm_result_t   Database::FindCachedTableValue(  
+                                                        const rocprofvis_dm_database_t object, 
+                                                        rocprofvis_dm_charptr_t table, 
+                                                        const rocprofvis_dm_id_t id, 
+                                                        rocprofvis_dm_charptr_t column,
+                                                        rocprofvis_dm_charptr_t* value){
+    Database* db = (Database*) object;
+    *value = db->CachedTables()->GetTableCell(table, id, column); 
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_size_t DatabaseCache::GetMemoryFootprint()
+{
+    size_t size = 0;
+    for (std::map<std::string, table_map_t>::iterator it = references.begin(); it != references.end(); ++it) {
+        size+=sizeof(std::string);
+        size+=sizeof(table_map_t);
+        size+=3 * sizeof(void*);
+        size+=it->first.length();
+        for (std::map<uint64_t, table_dict_t>::iterator it1 = it->second.begin(); it1 != it->second.end(); ++it1) {
+            size += sizeof(uint64_t);
+            size += sizeof(table_dict_t);
+            size += 3 * sizeof(void*);
+            for (std::map<std::string, std::string>::iterator it2 = it1->second.begin(); it2 != it1->second.end(); ++it2) {
+                size += sizeof(std::string) * 2;
+                size += 3 * sizeof(void*);
+                size += it2->first.length();
+                size += it2->second.length();
+            }
+        }
+    }
+    return size;
+}
+
+rocprofvis_dm_size_t Database::GetMemoryFootprint()
+{
+    rocprofvis_dm_size_t size = m_cached_tables.GetMemoryFootprint();
+    size+=NumTracks()*(sizeof(rocprofvis_dm_track_params_t)+sizeof(std::unique_ptr<rocprofvis_dm_track_params_t>));
+    size+=strlen(Path());
+    return size;
+}
+
+
+bool Database::TrackExist( rocprofvis_dm_track_params_t & newprops, rocprofvis_dm_charptr_t newquery){
+    std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator it = 
+        std::find_if(TrackPropertiesBegin(), TrackPropertiesEnd(), [newprops] (std::unique_ptr<rocprofvis_dm_track_params_t> & params) {
+        return  params.get()->track_category == newprops.track_category &&
+                params.get()->process_id[TRACK_ID_NODE] == newprops.process_id[TRACK_ID_NODE] && 
+                params.get()->process_id[TRACK_ID_PID_OR_AGENT] == newprops.process_id[TRACK_ID_PID_OR_AGENT] && 
+                params.get()->process_id[TRACK_ID_TID_OR_QUEUE] == newprops.process_id[TRACK_ID_TID_OR_QUEUE]; });
+    if (it != TrackPropertiesEnd()) {
+            std::vector<rocprofvis_dm_string_t>::iterator s = 
+            std::find_if(it->get()->query.begin(), it->get()->query.end(), [newquery] (rocprofvis_dm_string_t & str) {
+                return str == newquery;});
+            if (s == it->get()->query.end()) {
+                it->get()->query.push_back(newquery);
+            }
+        return true;
+    } 
+    newprops.query.push_back(newquery);
+    return false;    
+}

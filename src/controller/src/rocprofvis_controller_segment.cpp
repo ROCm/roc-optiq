@@ -117,6 +117,29 @@ Segment::~Segment()
     }
 }
 
+static void AddSamples(std::vector<Sample*>& samples, Sample* sample, uint64_t lod)
+{
+    if (lod != 0)
+    {
+        uint64_t children = 0;
+        rocprofvis_result_t result = sample->GetUInt64(kRPVControllerSampleNumChildren, 0, &children);
+        assert(result == kRocProfVisResultSuccess);
+        assert(children > 0);
+        for(uint64_t i = 0; i < children; i++)
+        {
+            rocprofvis_handle_t* child = nullptr;
+            result = sample->GetObject(kRPVControllerSampleChildIndex, i, &child);
+            assert(result == kRocProfVisResultSuccess);
+            assert(child);
+            samples.push_back((Sample*)child);
+        }
+    }
+    else
+    {
+        samples.push_back(sample);
+    }
+}
+
 void Segment::GenerateLOD(uint32_t lod_to_generate)
 {
     if (lod_to_generate > 0)
@@ -219,7 +242,7 @@ void Segment::GenerateLOD(uint32_t lod_to_generate)
                                 if(sample_start >= min_ts && sample_start <= max_ts)
                                 {
                                     // Merge into the current sample
-                                    samples.push_back(sample);
+                                    AddSamples(samples, sample, previous_lod);
                                 }
                                 else
                                 {
@@ -245,7 +268,7 @@ void Segment::GenerateLOD(uint32_t lod_to_generate)
                                     } while(sample_start < min_ts);
 
                                     samples.clear();
-                                    samples.push_back(sample);
+                                    AddSamples(samples, sample, previous_lod);
                                 }
                             }
                         }

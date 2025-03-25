@@ -4,7 +4,6 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
-#include <vector>
 
 namespace RocProfVis
 {
@@ -12,25 +11,17 @@ namespace Controller
 {
 
 class Array;
-class Future;
 class Track;
-class Graph;
-class Timeline;
+class Segment;
 
-class Trace : public Handle
+class Graph : public Handle
 {
 public:
-    Trace();
+    Graph(rocprofvis_controller_graph_type_t type);
 
-    virtual ~Trace();
+    virtual ~Graph();
 
-    rocprofvis_result_t Load(char const* const filename, Future& future);
-
-    rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
-                                   double start, double end);
-
-    rocprofvis_result_t AsyncFetch(Graph& graph, Future& future, Array& array,
-                                   double start, double end, uint32_t pixels);
+    rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index);
 
     rocprofvis_controller_object_type_t GetType(void) final;
 
@@ -46,9 +37,9 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
 private:
-    std::vector<Track*> m_tracks;
     uint64_t m_id;
-    Timeline* m_timeline;
+    Track* m_track;
+    rocprofvis_controller_graph_type_t m_type;
 };
 
 }

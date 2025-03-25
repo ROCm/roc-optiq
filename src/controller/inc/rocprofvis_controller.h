@@ -104,6 +104,10 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerNumNodes = 0x00000005,
     // Indexed nodes
     kRPVControllerNodeIndexed = 0x00000006,
+    // Number of tracks in the trace
+    kRPVControllerNumTracks = 0x00000007,
+    // Indexed tracks
+    kRPVControllerTrackIndexed = 0x00000008,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {
@@ -124,14 +128,14 @@ typedef enum rocprofvis_controller_timeline_properties_t
 {
     // Timeline ID
     kRPVControllerTimelineId = 0x10000000,
-    // Number of tracks in the timeline view
-    kRPVControllerTimelineNumTracks = 0x10000001,
+    // Number of graphs in the timeline view
+    kRPVControllerTimelineNumGraphs = 0x10000001,
     // Start timestamp in the view
     kRPVControllerTimelineMinTimestamp = 0x10000002,
     // Final timestamp in the view
     kRPVControllerTimelineMaxTimestamp = 0x10000003,
-    // Indexed tracks
-    kRPVControllerTimelineTrackIndexed = 0x10000004,
+    // Indexed graphs
+    kRPVControllerTimelineGraphIndexed = 0x10000004,
 } rocprofvis_controller_timeline_properties_t;
 /* JSON: RPVTimeline
 {
@@ -225,28 +229,26 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackId = 0x30000000,
     // Track type, see rocprofvis_controller_track_type_t.
     kRPVControllerTrackType = 0x30000001,
-    // Graph for this track
-    kRPVControllerTrackGraph = 0x30000002,
     // Start timestamp for the track
-    kRPVControllerTrackMinTimestamp = 0x30000003,
+    kRPVControllerTrackMinTimestamp = 0x30000002,
     // Final timestamp for the track
-    kRPVControllerTrackMaxTimestamp = 0x30000004,
+    kRPVControllerTrackMaxTimestamp = 0x30000003,
     // Number of entries in the track
-    kRPVControllerTrackNumberOfEntries = 0x30000005,
+    kRPVControllerTrackNumberOfEntries = 0x30000004,
     // Entries are actually loaded via an async call to prepare for RPC
-    kRPVControllerTrackEntry = 0x30000006,
+    kRPVControllerTrackEntry = 0x30000005,
     // Name
-    kRPVControllerTrackName = 0x30000007,
+    kRPVControllerTrackName = 0x30000006,
     // Description
-    kRPVControllerTrackDescription = 0x30000008,
+    kRPVControllerTrackDescription = 0x30000007,
     // Min value for sample tracks
-    kRPVControllerTrackMinValue = 0x30000009,
+    kRPVControllerTrackMinValue = 0x30000008,
     // Max value for sample tracks
-    kRPVControllerTrackMaxValue = 0x3000000A,
+    kRPVControllerTrackMaxValue = 0x30000009,
     // The node that the track belongs to
-    kRPVControllerTrackNode = 0x3000000B,
+    kRPVControllerTrackNode = 0x3000000A,
     // The processor that the track belongs to
-    kRPVControllerTrackProcessor = 0x3000000C,
+    kRPVControllerTrackProcessor = 0x3000000B,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {
@@ -254,7 +256,6 @@ typedef enum rocprofvis_controller_track_properties_t
     min_timestamp: Double,
     max_timestamp: Double,
     num_entries: Int,
-    graph: RPVGraph,
     node: RPVNode,
     processor: RPVProcessor,
     -> entries: Array[RPVSample/RPVEvent], -> Definitely should not always be loaded. Need an API to load them in an array.

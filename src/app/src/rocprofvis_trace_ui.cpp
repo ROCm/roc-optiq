@@ -92,8 +92,8 @@ static rocprofvis_trace_data_t trace_object;
 static rocprofvis_controller_future_t* trace_future = nullptr;
 static rocprofvis_controller_t* trace_controller = nullptr;
 static rocprofvis_controller_timeline_t* trace_timeline = nullptr;
-static rocprofvis_controller_array_t* trace_array = nullptr;
-static rocprofvis_controller_array_t* track_futures = nullptr;
+static rocprofvis_controller_array_t* graph_data_array = nullptr;
+static rocprofvis_controller_array_t* graph_futures = nullptr;
 
 void
 rocprofvis_trace_setup()
@@ -166,7 +166,7 @@ rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
     if(trace_object.m_is_trace_loaded)
     {
         // Open ImGui window......
-        main->GenerateGraphPoints(trace_timeline, trace_array);
+        main->GenerateGraphPoints(trace_timeline, graph_data_array);
     }
 
     ImGui::End();
@@ -226,8 +226,8 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
 
             if(result == kRocProfVisResultSuccess && trace_timeline)
             {
-                uint64_t num_tracks = 0;
-                result = rocprofvis_controller_get_uint64(trace_timeline, kRPVControllerTimelineNumTracks, 0, &num_tracks);
+                uint64_t num_graphs = 0;
+                result = rocprofvis_controller_get_uint64(trace_timeline, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
 
                 double min_ts = 0;
                 result = rocprofvis_controller_get_double(trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &min_ts);
@@ -235,37 +235,45 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
                 double max_ts = 0;
                 result = rocprofvis_controller_get_double(trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
 
-                trace_array = rocprofvis_controller_array_alloc(num_tracks);
-                track_futures = rocprofvis_controller_array_alloc(num_tracks);
+                graph_data_array   = rocprofvis_controller_array_alloc(num_graphs);
+                graph_futures = rocprofvis_controller_array_alloc(num_graphs);
 
-                for (uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
+                for (uint32_t i = 0; i < num_graphs && result == kRocProfVisResultSuccess; i++)
                 {
-                    rocprofvis_controller_future_t* track_future = rocprofvis_controller_future_alloc();
-                    rocprofvis_controller_array_t* track_array = rocprofvis_controller_array_alloc(32);
-                    rocprofvis_handle_t* track = nullptr;
-                    result = rocprofvis_controller_get_object(trace_timeline, kRPVControllerTimelineTrackIndexed, i, &track);
-                    if(result == kRocProfVisResultSuccess && track && track_future && track_array)
+                    rocprofvis_controller_future_t* graph_future = rocprofvis_controller_future_alloc();
+                    rocprofvis_controller_array_t* graph_array = rocprofvis_controller_array_alloc(32);
+                    rocprofvis_handle_t* graph = nullptr;
+                    result = rocprofvis_controller_get_object(trace_timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
+                    if(result == kRocProfVisResultSuccess && graph && graph_future && graph_array)
                     {
-                        result = rocprofvis_controller_track_fetch_async(trace_controller, track, min_ts, max_ts, track_future, track_array);
-                        if(result == kRocProfVisResultSuccess)
+                        rocprofvis_handle_t* track = nullptr;
+                        result = rocprofvis_controller_get_object(graph, kRPVControllerGraphTrack, 0, &track);
+                        if (result == kRocProfVisResultSuccess)
                         {
-                            result = rocprofvis_controller_set_object(trace_array, kRPVControllerArrayEntryIndexed, i, track_array);
-                            assert(result == kRocProfVisResultSuccess);
+                            result = rocprofvis_controller_graph_fetch_async(trace_controller, graph, min_ts, max_ts, 1000, graph_future, graph_array);
+                            // result = rocprofvis_controller_track_fetch_async(trace_controller, track, min_ts, max_ts, graph_future, graph_array);
+                            if(result == kRocProfVisResultSuccess)
+                            {
+                                // rocprofvis_controller_future_wait(graph_future, FLT_MAX);
 
-                            result = rocprofvis_controller_set_object(track_futures, kRPVControllerArrayEntryIndexed, i, track_future);
-                            assert(result == kRocProfVisResultSuccess);
+                                result = rocprofvis_controller_set_object(graph_data_array, kRPVControllerArrayEntryIndexed, i, graph_array);
+                                assert(result == kRocProfVisResultSuccess);
 
-                            //result = rocprofvis_controller_future_wait(track_future, FLT_MAX);
-                            //assert(result == kRocProfVisResultSuccess);
+                                result = rocprofvis_controller_set_object(graph_futures, kRPVControllerArrayEntryIndexed, i, graph_future);
+                                assert(result == kRocProfVisResultSuccess);
+
+                                //result = rocprofvis_controller_future_wait(graph_future, FLT_MAX);
+                                //assert(result == kRocProfVisResultSuccess);
+                            }
                         }
                     }
-                    //if (track_future)
+                    //if (graph_future)
                     //{
-                    //    rocprofvis_controller_future_free(track_future);
+                    //    rocprofvis_controller_future_free(graph_future);
                     //}
-                    //if(track_array)
+                    //if(graph_array)
                     //{
-                    //    rocprofvis_controller_array_free(track_array);
+                    //    rocprofvis_controller_array_free(graph_array);
                     //}
                 }
             }
@@ -274,16 +282,16 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
             trace_future = nullptr;
         }
     }
-    else if (track_futures)
+    else if (graph_futures)
     {
         uint64_t num_tracks = 0;
-        rocprofvis_result_t result = rocprofvis_controller_get_uint64(track_futures, kRPVControllerArrayNumEntries, 0, &num_tracks);
+        rocprofvis_result_t result = rocprofvis_controller_get_uint64(graph_futures, kRPVControllerArrayNumEntries, 0, &num_tracks);
         assert(result == kRocProfVisResultSuccess);
 
         for (uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
         {
             rocprofvis_handle_t* future = nullptr;
-            result = rocprofvis_controller_get_object(track_futures, kRPVControllerArrayEntryIndexed, i, &future);
+            result = rocprofvis_controller_get_object(graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
             assert(result == kRocProfVisResultSuccess && future);
 
             rocprofvis_result_t result = rocprofvis_controller_future_wait((rocprofvis_controller_future_t*)future, 0);
@@ -300,7 +308,7 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
             for (uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
             {
                 rocprofvis_handle_t* future = nullptr;
-                result = rocprofvis_controller_get_object(track_futures, kRPVControllerArrayEntryIndexed, i, &future);
+                result = rocprofvis_controller_get_object(graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
                 assert(result == kRocProfVisResultSuccess && future);
 
                 rocprofvis_controller_future_free((rocprofvis_controller_future_t*)future);
@@ -308,20 +316,20 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
                 if(result != kRocProfVisResultSuccess)
                 {
                     rocprofvis_handle_t* array = nullptr;
-                    result = rocprofvis_controller_get_object(trace_array, kRPVControllerArrayEntryIndexed, i, &future);
+                    result = rocprofvis_controller_get_object(graph_data_array, kRPVControllerArrayEntryIndexed, i, &future);
                     assert(result == kRocProfVisResultSuccess && array);
 
                     rocprofvis_controller_array_free((rocprofvis_controller_array_t*)array);
                 }
             }
 
-            rocprofvis_controller_array_free(track_futures);
-            track_futures = nullptr;
+            rocprofvis_controller_array_free(graph_futures);
+            graph_futures = nullptr;
 
             if(result != kRocProfVisResultSuccess)
             {
-                rocprofvis_controller_array_free(trace_array);
-                trace_array = nullptr;
+                rocprofvis_controller_array_free(graph_data_array);
+                graph_data_array = nullptr;
             }
         }
 

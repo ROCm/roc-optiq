@@ -2,6 +2,8 @@
 
 #include "rocprofvis_controller_sample_lod.h"
 
+#include <cassert>
+
 namespace RocProfVis
 {
 namespace Controller
@@ -9,6 +11,7 @@ namespace Controller
 
 void SampleLOD::CalculateChildValues(void)
 {
+    assert(m_children.size() > 0);
     m_child_min                 = DBL_MAX;
     m_child_max                 = DBL_MIN;
     m_child_mean                = 0;
@@ -45,10 +48,14 @@ void SampleLOD::CalculateChildValues(void)
     }
     else
     {
-        m_child_median =
-            (values[num_children / 2] + values[(num_children / 2) + 1]) / 2;
+        uint64_t lower = std::max(num_children / 2, 1llu) - 1;
+        uint64_t upper = std::min(num_children / 2, values.size() - 1);
+
+        m_child_median = (values[lower] + values[upper]) / 2;
     }
     m_child_mean /= entries;
+    auto result = SetDouble(kRPVControllerSampleValue, 0, m_child_mean);
+    assert(result == kRocProfVisResultSuccess);
 }
 
 SampleLOD::SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)

@@ -121,108 +121,156 @@ void Segment::GenerateLOD(uint32_t lod_to_generate)
 {
     if (lod_to_generate > 0)
     {
-        uint32_t previous_lod = (uint32_t)(lod_to_generate - 1);
-        LOD* lod = m_lods[previous_lod];
-        std::multimap<double, Handle*>& values = lod->GetEntries();
-        if(!lod->IsValid() && values.size() > 1)
+        LOD* lod = m_lods[lod_to_generate];
+        if(!lod || !lod->IsValid())
         {
-            double scale = 1.0;
-            for(uint32_t i = 0; i < lod_to_generate; i++)
+            if (!lod)
             {
-                scale *= 1000.0;
+                lod = new LOD();
+                assert(lod);
+                m_lods[lod_to_generate] = lod;
             }
-            double min_ts = m_min_timestamp;
-            double max_ts = m_min_timestamp + scale;
-            if (m_type = kRPVControllerTrackTypeEvents)
+            uint32_t previous_lod                  = (uint32_t) (lod_to_generate - 1);
+            LOD*     prev_lod                      = m_lods[previous_lod];
+            std::multimap<double, Handle*>& values = prev_lod->GetEntries();
+            if(prev_lod->IsValid() && values.size() > 1)
             {
-                std::vector<Event*> events;
-                for(auto& pair : values)
+                double scale = 1.0;
+                for(uint32_t i = 0; i < lod_to_generate; i++)
                 {
-                    Event* event = (Event*)pair.second;
-                    if (event)
+                    scale *= 10.0;
+                }
+                double min_ts = m_min_timestamp;
+                double max_ts = m_min_timestamp + scale;
+                if(m_type == kRPVControllerTrackTypeEvents)
+                {
+                    std::vector<Event*> events;
+                    for(auto& pair : values)
                     {
-                        double event_start = pair.first;
-                        double event_end = 0.0;
-                        if (event->GetDouble(kRPVControllerEventEndTimestamp, 0, &event_end) == kRocProfVisResultSuccess)
+                        Event* event = (Event*) pair.second;
+                        if(event)
                         {
-                            if ((event_start >= min_ts && event_start <= max_ts)
-                            && (event_end >= min_ts && event_end <= max_ts))
+                            double event_start = pair.first;
+                            double event_end   = 0.0;
+                            if(event->GetDouble(kRPVControllerEventEndTimestamp, 0,
+                                                &event_end) == kRocProfVisResultSuccess)
                             {
-                                // Merge into the current event
-                                events.push_back(event);
-                            }
-                            else
-                            {
-                                // We assume that the events are ordered by time, so this must at least end after the current event
-                                assert(event_end > max_ts);
-
-                                // Generate the stub event for any populated events.
-                                if ((events.front()->GetDouble(kRPVControllerEventStartTimestamp, 0, &event_start) == kRocProfVisResultSuccess)
-                                && (events.back()->GetDouble(kRPVControllerEventEndTimestamp, 0, &event_end) == kRocProfVisResultSuccess))
+                                if((event_start >= min_ts && event_start <= max_ts) &&
+                                   (event_end >= min_ts && event_end <= max_ts))
                                 {
-                                    GenerateEventLOD(events, event_start, event_end, lod_to_generate);
+                                    // Merge into the current event
+                                    events.push_back(event);
                                 }
+                                else
+                                {
+                                    // We assume that the events are ordered by time, so
+                                    // this must at least end after the current event
+                                    assert(event_end > max_ts);
 
-                                // Create a new event & increment the search
-                                min_ts = std::min(min_ts + scale, m_max_timestamp);
-                                max_ts = std::min(max_ts + scale, m_max_timestamp);
-                                events.clear();
-                                events.push_back(event);
+                                    // Generate the stub event for any populated events.
+                                    if(events.size() && ((events.front()->GetDouble(
+                                            kRPVControllerEventStartTimestamp, 0,
+                                            &event_start) == kRocProfVisResultSuccess) &&
+                                       (events.back()->GetDouble(
+                                            kRPVControllerEventEndTimestamp, 0,
+                                            &event_end) == kRocProfVisResultSuccess)))
+                                    {
+                                        GenerateEventLOD(events, event_start, event_end,
+                                                         lod_to_generate);
+                                    }
+
+                                    // Create a new event & increment the search
+                                    min_ts = pair.first;
+                                    max_ts = std::min(pair.first + scale, m_max_timestamp);
+
+                                    events.clear();
+                                    events.push_back(event);
+                                }
                             }
                         }
                     }
-                }
-                
-                if (events.size())
-                {
-                    double event_start = 0.0;
-                    double event_end = 0.0;
-                    if ((events.front()->GetDouble(kRPVControllerEventStartTimestamp, 0, &event_start) == kRocProfVisResultSuccess)
-                    && (events.back()->GetDouble(kRPVControllerEventEndTimestamp, 0, &event_end) == kRocProfVisResultSuccess))
+
+                    if(events.size())
                     {
-                        GenerateEventLOD(events, event_start, event_end, lod_to_generate);
-                    }
-                }
-            }
-            else
-            {
-                std::vector<Sample*> samples;
-                for(auto& pair : values)
-                {
-                    Sample* sample = (Sample*)pair.second;
-                    if (sample)
-                    {
-                        double sample_start = pair.first;
+                        double event_start = 0.0;
+                        double event_end   = 0.0;
+                        if((events.front()->GetDouble(kRPVControllerEventStartTimestamp,
+                                                      0, &event_start) ==
+                            kRocProfVisResultSuccess) &&
+                           (events.back()->GetDouble(kRPVControllerEventEndTimestamp, 0,
+                                                     &event_end) ==
+                            kRocProfVisResultSuccess))
                         {
-                            if (sample_start >= min_ts && sample_start <= max_ts)
-                            {
-                                // Merge into the current sample
-                                samples.push_back(sample);
-                            }
-                            else
-                            {
-                                // We assume that the events are ordered by time, so this must at least end after the current sample
-                                assert(sample_start > max_ts);
-
-                                // Generate the stub event for any populated events.
-                                uint64_t type = 0;
-                                if (sample->GetUInt64(kRPVControllerSampleType, 0, &type) == kRocProfVisResultSuccess)
-                                {
-                                    GenerateSampleLOD(samples, (rocprofvis_controller_primitive_type_t)type, sample_start, lod_to_generate);
-                                }
-
-                                // Create a new sample & increment the search
-                                min_ts = std::min(min_ts + scale, m_max_timestamp);
-                                max_ts = std::min(max_ts + scale, m_max_timestamp);
-                                samples.clear();
-                                samples.push_back(sample);
-                            }
+                            GenerateEventLOD(events, event_start, event_end,
+                                             lod_to_generate);
                         }
                     }
                 }
-            }
+                else
+                {
+                    std::vector<Sample*> samples;
+                    for(auto& pair : values)
+                    {
+                        Sample* sample = (Sample*) pair.second;
+                        if(sample)
+                        {
+                            double sample_start = pair.first;
+                            {
+                                if(sample_start >= min_ts && sample_start <= max_ts)
+                                {
+                                    // Merge into the current sample
+                                    samples.push_back(sample);
+                                }
+                                else
+                                {
+                                    // We assume that the events are ordered by time, so
+                                    // this must at least end after the current sample
+                                    assert(sample_start > max_ts);
 
-            lod->SetValid(true);
+                                    // Generate the stub event for any populated events.
+                                    uint64_t type = 0;
+                                    if((samples.size() > 0) && (sample->GetUInt64(kRPVControllerSampleType, 0, &type) == kRocProfVisResultSuccess))
+                                    {
+                                        GenerateSampleLOD(
+                                            samples,
+                                            (rocprofvis_controller_primitive_type_t) type,
+                                            sample_start, lod_to_generate);
+                                    }
+
+                                    // Create a new event & increment the search
+                                    do
+                                    {
+                                        min_ts = std::min(min_ts + scale, m_max_timestamp);
+                                        max_ts = std::min(max_ts + scale, m_max_timestamp);
+                                    } while(sample_start < min_ts);
+
+                                    samples.clear();
+                                    samples.push_back(sample);
+                                }
+                            }
+                        }
+                    }
+
+                    if(samples.size())
+                    {
+                        uint64_t type         = 0;
+                        double   sample_start = 0.0;
+                        if((samples.front()->GetDouble(kRPVControllerSampleTimestamp,
+                                                       0, &sample_start) ==
+                            kRocProfVisResultSuccess) &&
+                           (samples.front()->GetUInt64(kRPVControllerSampleType, 0,
+                                                       &type) ==
+                            kRocProfVisResultSuccess))
+                        {
+                            GenerateSampleLOD(
+                                samples, (rocprofvis_controller_primitive_type_t) type,
+                                sample_start, lod_to_generate);
+                        }
+                    }
+                }
+
+                lod->SetValid(true);
+            }
         }
     }
 }
@@ -274,42 +322,65 @@ void Segment::Insert(double timestamp, Handle* event)
 rocprofvis_result_t Segment::Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
-    if (m_lods.find(lod) != m_lods.end()
-        && (start <= m_start_timestamp && end >= m_end_timestamp) || (start >= m_start_timestamp && start < m_end_timestamp) || (end > m_start_timestamp && end <= m_end_timestamp))
+    if ((start <= m_start_timestamp && end >= m_end_timestamp) || (start >= m_start_timestamp && start < m_end_timestamp) || (end > m_start_timestamp && end <= m_end_timestamp))
     {
-        auto& lod_ref = m_lods[lod];
-        auto& entries = lod_ref->GetEntries();
-        auto lower = std::lower_bound(entries.begin(), entries.end(), start, [](std::pair<double, Handle*> const& pair, double const& start) -> bool
+        if(m_lods.find(0) != m_lods.end())
         {
-            double max_ts = pair.first;
-            pair.second->GetDouble(kRPVControllerEventStartTimestamp, 0, &max_ts);
-
-            bool result = max_ts < start;
-            return result;
-        });
-        auto upper = std::upper_bound(entries.begin(), entries.end(), end, [](double const& end, std::pair<double, Handle*> const& pair) -> bool
-        {
-            bool result = end <= pair.first;
-            return result;
-        });
-        while (lower != upper)
-        {
-            result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, index + 1);
-            if(result == kRocProfVisResultSuccess)
+            for(uint32_t i = 1; i <= lod; i++)
             {
-                result = array.SetObject(kRPVControllerArrayEntryIndexed, index++, (rocprofvis_handle_t*)lower->second);
+                if(m_lods.find(i) == m_lods.end() || m_lods[i] == nullptr ||
+                    m_lods[i]->IsValid())
+                {
+                    GenerateLOD(i);
+                }
+            }
+
+            uint32_t i = lod;
+            while(i)
+            {
+                if(m_lods.find(i) != m_lods.end() && m_lods[i] != nullptr &&
+                    m_lods[i]->IsValid())
+                {
+                    break;
+                }
+                i--;
+            }
+    
+            auto& lod_ref = m_lods[i];
+            auto& entries = lod_ref->GetEntries();
+            rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type = kRPVControllerTrackTypeEvents) ? kRPVControllerEventStartTimestamp : kRPVControllerSampleTimestamp);
+            auto lower = std::lower_bound(entries.begin(), entries.end(), start, [property](std::pair<double, Handle*> const& pair, double const& start) -> bool
+            {
+                double max_ts = pair.first;
+                pair.second->GetDouble(property, 0, &max_ts);
+
+                bool result = max_ts < start;
+                return result;
+            });
+            auto upper = std::upper_bound(entries.begin(), entries.end(), end, [](double const& end, std::pair<double, Handle*> const& pair) -> bool
+            {
+                bool result = end <= pair.first;
+                return result;
+            });
+            while (lower != upper)
+            {
+                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, index + 1);
                 if(result == kRocProfVisResultSuccess)
                 {
-                    ++lower;
+                    result = array.SetObject(kRPVControllerArrayEntryIndexed, index++, (rocprofvis_handle_t*)lower->second);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        ++lower;
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
                 else
                 {
                     break;
                 }
-            }
-            else
-            {
-                break;
             }
         }
     }

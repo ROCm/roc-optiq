@@ -13,6 +13,7 @@ namespace Controller
 
 class Array;
 class Future;
+class Graph;
 class Track;
 
 class Timeline : public Handle
@@ -25,7 +26,8 @@ public:
     rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
                                    double start, double end);
 
-    rocprofvis_result_t Load(char const* const filename, Future& future);
+    rocprofvis_result_t AsyncFetch(Graph& track, Future& future, Array& array,
+                                   double start, double end, uint32_t pixels);
 
     rocprofvis_controller_object_type_t GetType(void) final;
 
@@ -50,7 +52,9 @@ public:
 
 private:
     uint64_t            m_id;
-    std::vector<Track*> m_tracks;
+    std::vector<Graph*> m_graphs;
+    double m_min_ts;
+    double m_max_ts;
 };
 
 }

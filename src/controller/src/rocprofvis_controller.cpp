@@ -13,6 +13,7 @@
 #include "rocprofvis_controller_timeline.h"
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_controller_future.h"
+#include "rocprofvis_controller_graph.h"
 
 #include "rocprofvis_trace.h"
 
@@ -29,6 +30,7 @@ typedef Reference<rocprofvis_controller_event_t, Event, kRPVControllerObjectType
 typedef Reference<rocprofvis_controller_sample_t, Sample, kRPVControllerObjectTypeSample> SampleRef;
 typedef Reference<rocprofvis_controller_array_t, Array, kRPVControllerObjectTypeArray> ArrayRef;
 typedef Reference<rocprofvis_controller_future_t, Future, kRPVControllerObjectTypeFuture> FutureRef;
+typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectTypeGraph> GraphRef;
 }
 }
 
@@ -143,6 +145,22 @@ rocprofvis_result_t rocprofvis_controller_track_fetch_async(
     if (trace.IsValid() && track_ref.IsValid() && future.IsValid() && array.IsValid())
     {
         error = trace->AsyncFetch(*track_ref, *future, *array, start_time, end_time);
+    }
+    return error;
+}
+rocprofvis_result_t rocprofvis_controller_graph_fetch_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_graph_t* graph,
+    double start_time, double end_time, uint32_t x_resolution,
+    rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output)
+{
+    rocprofvis_result_t               error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::TraceRef  trace(controller);
+    RocProfVis::Controller::GraphRef  graph_ref(graph);
+    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::ArrayRef  array(output);
+    if(trace.IsValid() && graph_ref.IsValid() && future.IsValid() && array.IsValid())
+    {
+        error = trace->AsyncFetch(*graph_ref, *future, *array, start_time, end_time, x_resolution);
     }
     return error;
 }

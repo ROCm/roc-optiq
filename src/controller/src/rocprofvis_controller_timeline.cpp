@@ -5,6 +5,8 @@
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_graph.h"
+#include "rocprofvis_controller_reference.h"
 
 #include "rocprofvis_trace.h"
 
@@ -15,17 +17,44 @@ namespace RocProfVis
 namespace Controller
 {
 
+typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectTypeGraph> GraphRef;
+
 Timeline::Timeline()
 : m_id(0)
+, m_min_ts(DBL_MAX)
+, m_max_ts(DBL_MIN)
 {
 }
 
 Timeline::~Timeline()
 {
-    for(Track* track : m_tracks)
+    for(Graph* graph : m_graphs)
     {
-        delete track;
+        delete graph;
     }
+}
+
+rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& array,
+                                double start, double end, uint32_t pixels)
+{
+    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+
+    future.Set(std::async(
+        std::launch::async, [&graph, &array, start, end, pixels]() -> rocprofvis_result_t {
+            rocprofvis_result_t result = kRocProfVisResultUnknownError;
+            uint64_t            index  = 0;
+            result                     = graph.Fetch(pixels, start, end, array, index);
+            assert(result == kRocProfVisResultSuccess || result == kRocProfVisResultOutOfRange);
+            return result;
+        }));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+    assert(error == kRocProfVisResultSuccess);
+
+    return error;
 }
 
 rocprofvis_result_t Timeline::AsyncFetch(Track& track, Future& future, Array& array,
@@ -49,154 +78,6 @@ rocprofvis_result_t Timeline::AsyncFetch(Track& track, Future& future, Array& ar
     return error;
 }
 
-rocprofvis_result_t Timeline::Load(char const* const filename, Future& future)
-{
-    assert(filename && strlen(filename));
-
-    rocprofvis_result_t result   = kRocProfVisResultInvalidArgument;
-    std::string         filepath = filename;
-    future.Set(
-        std::async(std::launch::async, [this, filepath]() -> rocprofvis_result_t {
-            rocprofvis_result_t     result = kRocProfVisResultUnknownError;
-            rocprofvis_trace_data_t trace_object;
-            std::future<bool>       future = rocprofvis_trace_async_load_json_trace(
-                filepath.c_str(), trace_object);
-            if(future.valid())
-            {
-                future.wait();
-                result = future.get() ? kRocProfVisResultSuccess
-                                        : kRocProfVisResultUnknownError;
-
-                if(result == kRocProfVisResultSuccess)
-                {
-                    uint64_t event_id  = 0;
-                    uint64_t sample_id = 0;
-                    uint64_t track_id  = 0;
-                    for(auto& pair : trace_object.m_trace_data)
-                    {
-                        std::string const& name = pair.first;
-                        auto const&        data = pair.second;
-
-                        for(auto& thread : data.m_threads)
-                        {
-                            auto   type  = thread.second.m_events.size()
-                                                ? kRPVControllerTrackTypeEvents
-                                                : kRPVControllerTrackTypeSamples;
-                            Track* track = new Track(type);
-                            track->SetString(kRPVControllerTrackName, 0,
-                                                thread.first.c_str(),
-                                                thread.first.length());
-                            track->SetUInt64(kRPVControllerTrackId, 0, track_id++);
-                            switch(type)
-                            {
-                                case kRPVControllerTrackTypeEvents:
-                                {
-                                    track->SetUInt64(
-                                        kRPVControllerTrackNumberOfEntries, 0,
-                                        thread.second.m_events.size());
-
-                                    double min_ts = DBL_MAX;
-                                    double max_ts = DBL_MIN;
-                                    for(auto& event : thread.second.m_events)
-                                    {
-                                        min_ts = std::min(event.m_start_ts, min_ts);
-                                        max_ts = std::max(event.m_start_ts +
-                                                                event.m_duration,
-                                                            max_ts);
-                                    }
-                                    track->SetDouble(kRPVControllerTrackMinTimestamp,
-                                                        0, min_ts);
-                                    track->SetDouble(kRPVControllerTrackMaxTimestamp,
-                                                        0, max_ts);
-
-                                    uint64_t index = 0;
-                                    for(auto& event : thread.second.m_events)
-                                    {
-                                        Event* new_event = new Event(
-                                            event_id++, event.m_start_ts,
-                                            event.m_start_ts + event.m_duration);
-                                        if(new_event)
-                                        {
-                                            result = new_event->SetObject(
-                                                kRPVControllerEventTrack, 0,
-                                                (rocprofvis_handle_t*) track);
-                                            assert(result ==
-                                                    kRocProfVisResultSuccess);
-
-                                            result = new_event->SetString(
-                                                kRPVControllerEventName, 0,
-                                                event.m_name.c_str(),
-                                                event.m_name.length());
-                                            assert(result ==
-                                                    kRocProfVisResultSuccess);
-
-                                            result = track->SetObject(
-                                                kRPVControllerTrackEntry, index++,
-                                                (rocprofvis_handle_t*) new_event);
-                                            assert(result ==
-                                                    kRocProfVisResultSuccess);
-                                        }
-                                    }
-                                    m_tracks.push_back(track);
-                                    break;
-                                }
-                                case kRPVControllerTrackTypeSamples:
-                                {
-                                    track->SetUInt64(
-                                        kRPVControllerTrackNumberOfEntries, 0,
-                                        thread.second.m_events.size());
-
-                                    double min_ts = DBL_MAX;
-                                    double max_ts = DBL_MIN;
-                                    for(auto& sample : thread.second.m_counters)
-                                    {
-                                        min_ts = std::min(min_ts, sample.m_start_ts);
-                                        max_ts = std::max(max_ts, sample.m_start_ts);
-                                    }
-                                    track->SetDouble(kRPVControllerTrackMinTimestamp,
-                                                        0, min_ts);
-                                    track->SetDouble(kRPVControllerTrackMaxTimestamp,
-                                                        0, max_ts);
-
-                                    uint64_t index = 0;
-                                    for(auto& sample : thread.second.m_counters)
-                                    {
-                                        Sample* new_sample = new Sample(
-                                            kRPVControllerPrimitiveTypeDouble,
-                                            sample_id++, sample.m_start_ts);
-                                        new_sample->SetObject(
-                                            kRPVControllerSampleTrack, 0,
-                                            (rocprofvis_handle_t*) track);
-                                        new_sample->SetDouble(
-                                            kRPVControllerSampleValue, 0,
-                                            sample.m_value);
-                                        track->SetObject(
-                                            kRPVControllerTrackEntry, index++,
-                                            (rocprofvis_handle_t*) new_sample);
-                                    }
-                                    m_tracks.push_back(track);
-                                    break;
-                                }
-                                default:
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return result;
-        }));
-
-    if(future.IsValid())
-    {
-        result = kRocProfVisResultSuccess;
-    }
-
-    return result;
-}
-
 rocprofvis_controller_object_type_t Timeline::GetType(void) 
 {
     return kRPVControllerObjectTypeTimeline;
@@ -216,15 +97,15 @@ rocprofvis_result_t Timeline::GetUInt64(rocprofvis_property_t property, uint64_t
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerTimelineNumTracks:
+            case kRPVControllerTimelineNumGraphs:
             {
-                *value = m_tracks.size();
+                *value = m_graphs.size();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTimelineMinTimestamp:
             case kRPVControllerTimelineMaxTimestamp:
-            case kRPVControllerTimelineTrackIndexed:
+            case kRPVControllerTimelineGraphIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -248,10 +129,10 @@ rocprofvis_result_t Timeline::GetDouble(rocprofvis_property_t property, uint64_t
         {
             case kRPVControllerTimelineMinTimestamp:
             {
-                if(m_tracks.size())
+                if(m_graphs.size())
                 {
-                    result = m_tracks.front()->GetDouble(
-                        kRPVControllerTrackMinTimestamp, 0, value);
+                    *value = m_min_ts;
+                    result = kRocProfVisResultSuccess;
                 }
                 else
                 {
@@ -261,10 +142,10 @@ rocprofvis_result_t Timeline::GetDouble(rocprofvis_property_t property, uint64_t
             }
             case kRPVControllerTimelineMaxTimestamp:
             {
-                if(m_tracks.size())
+                if(m_graphs.size())
                 {
-                    result = m_tracks.back()->GetDouble(
-                        kRPVControllerTrackMaxTimestamp, 0, value);
+                    *value = m_max_ts;
+                    result = kRocProfVisResultSuccess;
                 }
                 else
                 {
@@ -273,8 +154,8 @@ rocprofvis_result_t Timeline::GetDouble(rocprofvis_property_t property, uint64_t
                 break;
             }
             case kRPVControllerTimelineId:
-            case kRPVControllerTimelineNumTracks:
-            case kRPVControllerTimelineTrackIndexed:
+            case kRPVControllerTimelineNumGraphs:
+            case kRPVControllerTimelineGraphIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -296,11 +177,11 @@ rocprofvis_result_t Timeline::GetObject(rocprofvis_property_t property, uint64_t
     {
         switch(property)
         {
-            case kRPVControllerTimelineTrackIndexed:
+            case kRPVControllerTimelineGraphIndexed:
             {
-                if(index < m_tracks.size())
+                if(index < m_graphs.size())
                 {
-                    *value = (rocprofvis_handle_t*) m_tracks[index];
+                    *value = (rocprofvis_handle_t*) m_graphs[index];
                     result = kRocProfVisResultSuccess;
                 }
                 else
@@ -310,7 +191,7 @@ rocprofvis_result_t Timeline::GetObject(rocprofvis_property_t property, uint64_t
                 break;
             }
             case kRPVControllerTimelineId:
-            case kRPVControllerTimelineNumTracks:
+            case kRPVControllerTimelineNumGraphs:
             case kRPVControllerTimelineMinTimestamp:
             case kRPVControllerTimelineMaxTimestamp:
             {
@@ -335,10 +216,10 @@ rocprofvis_result_t Timeline::GetString(rocprofvis_property_t property, uint64_t
         switch(property)
         {
             case kRPVControllerTimelineId:
-            case kRPVControllerTimelineNumTracks:
+            case kRPVControllerTimelineNumGraphs:
             case kRPVControllerTimelineMinTimestamp:
             case kRPVControllerTimelineMaxTimestamp:
-            case kRPVControllerTimelineTrackIndexed:
+            case kRPVControllerTimelineGraphIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -356,8 +237,47 @@ rocprofvis_result_t Timeline::GetString(rocprofvis_property_t property, uint64_t
 rocprofvis_result_t Timeline::SetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t value) 
 {
-    assert(0);
-    return kRocProfVisResultReadOnlyError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerTimelineId:
+        {
+            m_id = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerTimelineNumGraphs:
+        {
+            if(m_graphs.size() != value)
+            {
+                for (uint32_t i = value; i < m_graphs.size(); i++)
+                {
+                    delete m_graphs[i];
+                    m_graphs[i] = nullptr;
+                }
+                m_graphs.resize(value);
+                result = (m_graphs.size() == value) ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
+            }
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerTimelineMinTimestamp:
+        case kRPVControllerTimelineMaxTimestamp:
+        case kRPVControllerTimelineGraphIndexed:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
 }
 rocprofvis_result_t Timeline::SetDouble(rocprofvis_property_t property, uint64_t index,
                                 double value) 
@@ -368,8 +288,54 @@ rocprofvis_result_t Timeline::SetDouble(rocprofvis_property_t property, uint64_t
 rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t index,
                                 rocprofvis_handle_t* value) 
 {
-    assert(0);
-    return kRocProfVisResultReadOnlyError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    GraphRef graph(value);
+    if(graph.IsValid())
+    {
+        switch(property)
+        {
+            case kRPVControllerTimelineGraphIndexed:
+            {
+                if(index < m_graphs.size())
+                {
+                    m_graphs[index] = graph.Get();
+                    result = kRocProfVisResultSuccess;
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        double min_ts = 0;
+                        double max_ts = 0;
+                        result = graph.Get()->GetDouble(kRPVControllerGraphStartTimestamp,
+                                                        0, &min_ts);
+                        assert(result == kRocProfVisResultSuccess);
+                        result = graph.Get()->GetDouble(kRPVControllerGraphEndTimestamp,
+                                                        0, &max_ts);
+                        assert(result == kRocProfVisResultSuccess);
+                        m_min_ts = std::min(min_ts, m_min_ts);
+                        m_max_ts = std::max(max_ts, m_max_ts);
+                    }
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerTimelineId:
+            case kRPVControllerTimelineNumGraphs:
+            case kRPVControllerTimelineMinTimestamp:
+            case kRPVControllerTimelineMaxTimestamp:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
 }
 rocprofvis_result_t Timeline::SetString(rocprofvis_property_t property, uint64_t index,
                                 char const* value, uint32_t length) 

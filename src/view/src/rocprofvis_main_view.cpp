@@ -182,80 +182,88 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t*                  timel
         ImGui::SetScrollY(m_scroll_position);
     }
 
-    uint64_t num_tracks = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_uint64(timeline, kRPVControllerTimelineNumTracks, 0, &num_tracks);
+    uint64_t num_graphs = 0;
+    rocprofvis_result_t result = rocprofvis_controller_get_uint64(timeline, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
     assert(result == kRocProfVisResultSuccess);
 
     int graph_id = 0;
-    for(uint64_t i = 0; i < num_tracks; i++)
+    for(uint64_t i = 0; i < num_graphs; i++)
     {
+        rocprofvis_handle_t* graph = nullptr;
+        result = rocprofvis_controller_get_object(timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
+        assert(result == kRocProfVisResultSuccess && graph);
+
         rocprofvis_handle_t* track = nullptr;
-        result = rocprofvis_controller_get_object(timeline, kRPVControllerTimelineTrackIndexed, i, &track);
+        result = rocprofvis_controller_get_object(graph, kRPVControllerGraphTrack, 0, &track);
         assert(result == kRocProfVisResultSuccess && track);
 
         rocprofvis_controller_array_t* track_data = nullptr;
         result = rocprofvis_controller_get_object(array, kRPVControllerArrayEntryIndexed, i, &track_data);
-        assert(result == kRocProfVisResultSuccess && track_data);
-
-        uint64_t track_type = 0;
-        result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0, &track_type);
-        assert(result == kRocProfVisResultSuccess);
-
-        uint32_t length = 0;
-        result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0, nullptr, &length);
-        assert(result == kRocProfVisResultSuccess);
-
-        char* buffer = (char*)alloca(length + 1);
-        length += 1;
-        result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0, buffer, &length);
-        assert(result == kRocProfVisResultSuccess);
-
-        switch (track_type)
+        if(result == kRocProfVisResultSuccess && track_data)
         {
-            case kRPVControllerTrackTypeEvents:
+            uint64_t track_type = 0;
+            result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
+                                                      &track_type);
+            assert(result == kRocProfVisResultSuccess);
+
+            uint32_t length = 0;
+            result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
+                                                      nullptr, &length);
+            assert(result == kRocProfVisResultSuccess);
+
+            char* buffer = (char*) alloca(length + 1);
+            length += 1;
+            result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
+                                                      buffer, &length);
+            assert(result == kRocProfVisResultSuccess);
+
+            switch(track_type)
             {
-                // Create FlameChart
-                m_flame_event = ExtractFlamePoints(track_data);
-                FindMaxMinFlame();
-                if(!m_meta_map_made)
+                case kRPVControllerTrackTypeEvents:
                 {
-                    // Create FlameChart title and info panel
-                    rocprofvis_meta_map_struct_t temp_meta_map = {};
+                    // Create FlameChart
+                    m_flame_event = ExtractFlamePoints(track_data);
+                    FindMaxMinFlame();
+                    if(!m_meta_map_made)
+                    {
+                        // Create FlameChart title and info panel
+                        rocprofvis_meta_map_struct_t temp_meta_map = {};
 
-                    temp_meta_map.type       = "flame";
-                    temp_meta_map.chart_name = buffer;
-                    temp_meta_map.size       = 75;
+                        temp_meta_map.type       = "flame";
+                        temp_meta_map.chart_name = buffer;
+                        temp_meta_map.size       = 75;
 
-                    m_meta_map[graph_id] = temp_meta_map;
+                        m_meta_map[graph_id] = temp_meta_map;
+                    }
+                    RenderFlameCharts(graph_id, scale_x);
+
+                    graph_id = graph_id + 1;
+                    break;
                 }
-                RenderFlameCharts(graph_id, scale_x);
-
-                graph_id = graph_id + 1;
-                break;
-            }
-            case kRPVControllerTrackTypeSamples:
-            {
-                // Linechart
-                m_data_arr = ExtractPointsFromData(track_data);
-                FindMaxMin();
-
-                if(!m_meta_map_made)
+                case kRPVControllerTrackTypeSamples:
                 {
-                    rocprofvis_meta_map_struct_t temp_meta_map = {};
-                    temp_meta_map.type                         = "line";
-                    temp_meta_map.chart_name                   = buffer;
-                    temp_meta_map.max                          = m_max_y;
-                    temp_meta_map.min                          = m_min_y;
-                    temp_meta_map.size                         = 300;
-                    m_meta_map[graph_id]                       = temp_meta_map;
+                    // Linechart
+                    m_data_arr = ExtractPointsFromData(track_data);
+                    FindMaxMin();
+
+                    if(!m_meta_map_made)
+                    {
+                        rocprofvis_meta_map_struct_t temp_meta_map = {};
+                        temp_meta_map.type                         = "line";
+                        temp_meta_map.chart_name                   = buffer;
+                        temp_meta_map.max                          = m_max_y;
+                        temp_meta_map.min                          = m_min_y;
+                        temp_meta_map.size                         = 300;
+                        m_meta_map[graph_id]                       = temp_meta_map;
+                    }
+                    RenderLineCharts(graph_id, scale_x);
+                    graph_id = graph_id + 1;
+                    break;
                 }
-                RenderLineCharts(graph_id, scale_x);
-                graph_id = graph_id + 1;
-                break;
-            }
-            default:
-            {
-                break;
+                default:
+                {
+                    break;
+                }
             }
         }
     }

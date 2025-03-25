@@ -93,7 +93,6 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerTrackGraph:
             case kRPVControllerTrackMinTimestamp:
             case kRPVControllerTrackMaxTimestamp:
             case kRPVControllerTrackEntry:
@@ -129,7 +128,6 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackId:
             case kRPVControllerTrackType:
             case kRPVControllerTrackNumberOfEntries:
-            case kRPVControllerTrackGraph:
             case kRPVControllerTrackEntry:
             case kRPVControllerTrackName:
             {
@@ -153,12 +151,6 @@ rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
-            case kRPVControllerTrackGraph:
-            {
-                *value = nullptr;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
             case kRPVControllerTrackEntry:
             {
                 result = kRocProfVisResultNotSupported;
@@ -207,7 +199,6 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackId:
         case kRPVControllerTrackType:
         case kRPVControllerTrackNumberOfEntries:
-        case kRPVControllerTrackGraph:
         case kRPVControllerTrackEntry:
         {
             result = kRocProfVisResultInvalidType;
@@ -244,7 +235,6 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerTrackMinTimestamp:
         case kRPVControllerTrackMaxTimestamp:
-        case kRPVControllerTrackGraph:
         case kRPVControllerTrackEntry:
         case kRPVControllerTrackName:
         {
@@ -274,7 +264,6 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
             m_end_timestamp = value;
             break;
         }
-        case kRPVControllerTrackGraph:
         case kRPVControllerTrackEntry:
         case kRPVControllerTrackId:
         case kRPVControllerTrackType:
@@ -299,12 +288,6 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
-            case kRPVControllerTrackGraph:
-            {
-                assert(0);
-                result = kRocProfVisResultUnknownError;
-                break;
-            }
             case kRPVControllerTrackEntry:
             {
                 // Start & end timestamps must be configured
@@ -339,7 +322,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                             if (m_segments.find(segment_start) == m_segments.end())
                             {
                                 double segment_end = segment_start + segment_duration;
-                                Segment* segment = new Segment;
+                                Segment* segment = new Segment(m_type);
                                 segment->SetStartEndTimestamps(segment_start, segment_end);
                                 segment->SetMinTimestamp(timestamp); 
                                 if (object_type == kRPVControllerObjectTypeEvent)
@@ -415,7 +398,6 @@ rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackId:
             case kRPVControllerTrackType:
             case kRPVControllerTrackNumberOfEntries:
-            case kRPVControllerTrackGraph:
             case kRPVControllerTrackEntry:
             {
                 result = kRocProfVisResultInvalidType;

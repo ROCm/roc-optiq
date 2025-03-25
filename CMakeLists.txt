@@ -14,6 +14,7 @@ add_library(rocprof-visualizer-controller STATIC
     src/controller/src/rocprofvis_controller_event.cpp
     src/controller/src/rocprofvis_controller_event_lod.cpp
     src/controller/src/rocprofvis_controller_future.cpp
+    src/controller/src/rocprofvis_controller_graph.cpp
     src/controller/src/rocprofvis_controller_sample.cpp
     src/controller/src/rocprofvis_controller_sample_lod.cpp
     src/controller/src/rocprofvis_controller_segment.cpp

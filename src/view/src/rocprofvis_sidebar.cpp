@@ -24,6 +24,11 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
     {
         for(auto& tree_item : *tree)
         {
+            ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+
             if(ImGui::CollapsingHeader(("Chart # " + std::to_string(tree_item.first) +
                                         ": " + tree_item.second.chart->GetName())
                                            .c_str()))
@@ -82,6 +87,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
             {
                 tree_item.second.selected = ImVec4(0, 0, 0, 0);
             }
+            ImGui::PopStyleColor(3);
         }
     }
 }

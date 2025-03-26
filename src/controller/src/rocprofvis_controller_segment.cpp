@@ -140,6 +140,29 @@ static void AddSamples(std::vector<Sample*>& samples, Sample* sample, uint64_t l
     }
 }
 
+static void AddEvents(std::vector<Event*>& events, Event* event, uint64_t lod)
+{
+    if (lod != 0)
+    {
+        uint64_t children = 0;
+        rocprofvis_result_t result = event->GetUInt64(kRPVControllerEventNumChildren, 0, &children);
+        assert(result == kRocProfVisResultSuccess);
+        assert(children > 0);
+        for(uint64_t i = 0; i < children; i++)
+        {
+            rocprofvis_handle_t* child = nullptr;
+            result = event->GetObject(kRPVControllerEventChildIndexed, i, &child);
+            assert(result == kRocProfVisResultSuccess);
+            assert(child);
+            events.push_back((Event*)child);
+        }
+    }
+    else
+    {
+        events.push_back(event);
+    }
+}
+
 void Segment::GenerateLOD(uint32_t lod_to_generate)
 {
     if (lod_to_generate > 0)
@@ -182,7 +205,7 @@ void Segment::GenerateLOD(uint32_t lod_to_generate)
                                    (event_end >= min_ts && event_end <= max_ts))
                                 {
                                     // Merge into the current event
-                                    events.push_back(event);
+                                    AddEvents(events, event, previous_lod);
                                 }
                                 else
                                 {
@@ -207,7 +230,7 @@ void Segment::GenerateLOD(uint32_t lod_to_generate)
                                     max_ts = std::min(pair.first + scale, m_max_timestamp);
 
                                     events.clear();
-                                    events.push_back(event);
+                                    AddEvents(events, event, previous_lod);
                                 }
                             }
                         }

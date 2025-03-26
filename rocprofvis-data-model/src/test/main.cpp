@@ -14,7 +14,7 @@
 #include <string.h>
 
 
-#define LIST_SIZE_LIMIT 100
+#define LIST_SIZE_LIMIT 2
 #define HEADER_LEN 100
 
 std::string g_input_file="";

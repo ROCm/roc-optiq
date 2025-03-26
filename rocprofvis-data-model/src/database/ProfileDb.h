@@ -33,7 +33,7 @@ class ProfileDatabase : public SqliteDatabase
         ProfileDatabase( rocprofvis_db_filename_t path) : 
                         SqliteDatabase(path), 
                         m_symbols_offset(0){};
-        // ProfileDatabase destructor, must be defined as virtual to deleted derived classes 
+        // ProfileDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~ProfileDatabase() {}
         // worker method to read time slice
         // @param start - start timestamp of time slice 

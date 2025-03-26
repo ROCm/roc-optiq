@@ -37,36 +37,6 @@ rocprofvis_db_type_t Database::Autodetect(
 }
 
 
-rocprofvis_dm_result_t Database::FindTrackId(
-                                                    uint32_t node_id,
-                                                    uint32_t process_id, 
-                                                    uint32_t subprocess_id,
-                                                    rocprofvis_dm_track_id_t & track_id ){
-    std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator it = 
-        std::find_if(m_track_properties.begin(), m_track_properties.end(), [node_id, process_id, subprocess_id](std::unique_ptr<rocprofvis_dm_track_params_t> & params) {
-        return  params.get()->process_id[TRACK_ID_NODE] == node_id && params.get()->process_id[TRACK_ID_PID_OR_AGENT] == process_id && params.get()->process_id[TRACK_ID_TID_OR_QUEUE] == subprocess_id; });
-    if (it != m_track_properties.end()) {
-        track_id = (rocprofvis_dm_track_id_t)(it - m_track_properties.begin());
-        return kRocProfVisDmResultSuccess;
-    } 
-    return kRocProfVisDmResultNotLoaded;
-}
-
-rocprofvis_dm_result_t Database::FindTrackId(
-                                                    uint32_t node_id,
-                                                    uint32_t process_id,
-                                                    const char* subprocess_name,
-                                                    rocprofvis_dm_track_id_t& track_id) {
-    std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator it =
-        std::find_if(m_track_properties.begin(), m_track_properties.end(), [node_id, process_id, subprocess_name](std::unique_ptr<rocprofvis_dm_track_params_t>& params) {
-        return  params.get()->process_id[TRACK_ID_NODE] == node_id && params.get()->process_id[TRACK_ID_PID_OR_AGENT] == process_id && params.get()->process_name[TRACK_ID_TID_OR_QUEUE] == subprocess_name; });
-    if (it != m_track_properties.end()) {
-        track_id = (rocprofvis_dm_track_id_t)(it - m_track_properties.begin());
-        return kRocProfVisDmResultSuccess;
-    }
-    return kRocProfVisDmResultNotLoaded;
-}
-
 rocprofvis_dm_result_t Database::AddTrackProperties(
                                                     rocprofvis_dm_track_params_t& props) {
     try {

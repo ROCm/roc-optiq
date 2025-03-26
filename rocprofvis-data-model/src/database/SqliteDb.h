@@ -52,7 +52,7 @@ class SqliteDatabase : public Database
                         Database(path), 
                         m_db(nullptr),
                         m_db_status(SQLITE_ERROR) {};
-        // SqliteDatabase destructor, must be defined as virtual to deleted derived classes 
+        // SqliteDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~SqliteDatabase() {Close();}
         // Method to open sqlite database
         // @return status of operation

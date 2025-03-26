@@ -24,6 +24,29 @@
 
 
 
+rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
+                                                    const char* node,
+                                                    const char* process,
+                                                    const char* subprocess,
+                                                    rocprofvis_dm_op_t operation,
+                                                    rocprofvis_dm_track_id_t& track_id) {
+    
+
+    auto it_node = find_track_map.find(std::stol(node));
+    if (it_node!=find_track_map.end()){
+        auto it_process = it_node->second.find(std::stol(process));
+        if (it_process!=it_node->second.end()){
+            auto it_subprocess = it_process->second.find(std::stol(subprocess));
+            if (it_subprocess!=it_process->second.end()){
+                track_id = it_subprocess->second;
+                return kRocProfVisDmResultSuccess;
+            }
+        }
+    }
+    return kRocProfVisDmResultNotLoaded;
+   
+}
+
 rocprofvis_dm_result_t RocprofDatabase::RemapStringIds(rocprofvis_db_record_data_t & record)
 {
     if(record.event.id.bitfield.event_op==kRocProfVisDmOperationDispatch)
@@ -50,7 +73,9 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **
             track_params.process_name[i] = argv[i];
         }        
     }
+    
     if (!db->TrackExist(track_params, callback_params->subquery)){
+        db->find_track_map[track_params.process_id[TRACK_ID_NODE]][track_params.process_id[TRACK_ID_PID_OR_AGENT]][track_params.process_id[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
         if (track_params.track_category == kRocProfVisDmRegionTrack) {
             track_params.process_name[TRACK_ID_PID] = ProcessNameSuffixFor(track_params.track_category);
             track_params.process_name[TRACK_ID_PID] += argv[TRACK_ID_PID];

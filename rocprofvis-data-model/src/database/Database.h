@@ -71,7 +71,7 @@ class Database
                     m_path(path),
                     m_binding_info(nullptr) {
         };
-        // Database destructor, must be defined as virtual to deleted derived classes 
+        // Database destructor, must be defined as virtual to free resources of derived classes 
         virtual ~Database(){};
 
         // Method to open database, must be overriden by derived classes
@@ -309,26 +309,6 @@ class Database
         bool                            TrackExist(
                                                                 rocprofvis_dm_track_params_t & newprops, 
                                                                 rocprofvis_dm_charptr_t newquery);
-        // finds and returns track id by 3 input parameters (node id, pid and tid) or (node id, agent id, queue id) 
-        // @param node_id - node id
-        // @param process_id - process id 
-        // @param sub_process_id - sub-process id  
-        // @return status of operation
-        rocprofvis_dm_result_t          FindTrackId(
-                                                                uint32_t node_id,
-                                                                uint32_t process_id, 
-                                                                uint32_t sub_process_id, 
-                                                                rocprofvis_dm_track_id_t & track_id );
-        // finds and returns track id by 3 input parameters  (node id, agent id, metric name) 
-        // @param node_id - node id
-        // @param process_id - process id 
-        // @param sub_process_name - metric name
-        // @return status of operation
-        rocprofvis_dm_result_t          FindTrackId(
-                                                                uint32_t node_id,
-                                                                uint32_t process_id,
-                                                                const char* subprocess_name,
-                                                                rocprofvis_dm_track_id_t& track_id);
         // calls Future object callback method, if provided. The callback method is optionally provided by caller in order to display or save current database progress.
         // @param step - approximate percentage of single database operation
         // @param action - database operation description
@@ -358,6 +338,18 @@ class Database
         // @param s - string to check
         // @return True if number
         static bool IsNumber(const std::string& s);
+        // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
+        // @param node_id - node id
+        // @param process_id - process id 
+        // @param sub_process_name - metric name
+        // @param operation - operation of event that requesting track id
+        // @return status of operation
+        virtual rocprofvis_dm_result_t          FindTrackId(
+                                                                const char* node,
+                                                                const char* process,
+                                                                const char* subprocess,
+                                                                rocprofvis_dm_op_t operation,
+                                                                rocprofvis_dm_track_id_t& track_id)=0;
 
     public:
         // declare DatabaseCache as friend class, for having access to protected members

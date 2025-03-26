@@ -62,25 +62,22 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, char** argv, cha
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
+    rocprofvis_dm_track_id_t track_id;
     rocprofvis_db_record_data_t record;
     record.event.id.bitfield.event_op = std::stol(argv[0]);
-    if (record.event.id.bitfield.event_op > 0) {       
-        record.event.id.bitfield.event_id = std::stoll(argv[5]);
-        record.event.timestamp = std::stoll(argv[1]);
-        record.event.duration = std::stoll(argv[2]) - record.event.timestamp;
-        record.event.category = std::stoll(argv[3]);
-        record.event.symbol = std::stoll(argv[4]);
-        if (kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
-    }
-    else {
-        record.pmc.timestamp = std::stoll(argv[1]);
-        record.pmc.value = std::stod(argv[2]);
-    }
-
-    rocprofvis_dm_track_id_t track_id;
-    rocprofvis_dm_result_t result = (Database::IsNumber(argv[8]) ? db->FindTrackId(std::stol(argv[6]), std::stol(argv[7]), std::stol(argv[8]), track_id) :
-        db->FindTrackId(std::stol(argv[6]), std::stol(argv[7]), argv[8], track_id));
-    if (result == kRocProfVisDmResultSuccess) {
+    if (db->FindTrackId(argv[6], argv[7], argv[8], record.event.id.bitfield.event_op, track_id) == kRocProfVisDmResultSuccess) {
+        if (record.event.id.bitfield.event_op > 0) {       
+            record.event.id.bitfield.event_id = std::stoll(argv[5]);
+            record.event.timestamp = std::stoll(argv[1]);
+            record.event.duration = std::stoll(argv[2]) - record.event.timestamp;
+            record.event.category = std::stoll(argv[3]);
+            record.event.symbol = std::stoll(argv[4]);
+            if (kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
+        }
+        else {
+            record.pmc.timestamp = std::stoll(argv[1]);
+            record.pmc.value = std::stod(argv[2]);
+        }
         if (db->BindObject()->FuncAddRecord((*(slice_array_t*)callback_params->handle)[track_id], record) != kRocProfVisDmResultSuccess) return 1;
     }
     callback_params->row_counter++;
@@ -92,12 +89,12 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, char **argv, cha
     ASSERT_MSG_RETURN(argc==7, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
-    rocprofvis_db_flow_data_t record;
     if (callback_params->future->Interrupted()) return 1;
-    record.id.bitfield.event_id = std::stoll( argv[2] );
+    rocprofvis_db_flow_data_t record;
     record.id.bitfield.event_op = std::stoll( argv[1] );
-    record.time = std::stoll( argv[6] );
-    if (db->FindTrackId(std::stol(argv[3]), std::stol(argv[4]), std::stol(argv[5]), record.track_id) == kRocProfVisDmResultSuccess) {
+    if (db->FindTrackId(argv[3], argv[4], argv[5], record.id.bitfield.event_op, record.track_id) == kRocProfVisDmResultSuccess) {
+        record.id.bitfield.event_id = std::stoll( argv[2] );
+        record.time = std::stoll( argv[6] );
         if (db->BindObject()->FuncAddFlow(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     }
     callback_params->row_counter++;

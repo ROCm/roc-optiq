@@ -25,12 +25,21 @@
 
 #include <map>
 
-// type of map array for string indexes remapping
-typedef std::map<uint64_t, uint32_t> string_index_map_t;
 
 // class for reading old schema Rocpd database
 class RocpdDatabase : public ProfileDatabase
 {
+    // type of map array for string indexes remapping
+    typedef std::map<uint64_t, uint32_t> string_index_map_t;
+
+    // map array for fast non-PMC track ID search
+    typedef std::map<uint32_t, uint32_t> sub_process_map_t;
+    typedef std::map<uint32_t, sub_process_map_t> track_find_map_t;
+
+    // map array for fast PMC track ID search
+    typedef std::map<std::string, uint32_t> sub_process_map_pmc_t;
+    typedef std::map<uint32_t, sub_process_map_pmc_t> track_find_pmc_map_t;
+    
 public:
     // class constructor
     // @param path - database file path
@@ -115,10 +124,27 @@ private:
     // @return status of operation
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_record_data_t & record) override;
 
+    // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
+    // @param node_id - node id
+    // @param process_id - process id 
+    // @param sub_process_name - metric name
+    // @param operation - operation of event that requesting track id
+    // @return status of operation
+    rocprofvis_dm_result_t          FindTrackId(
+                                                        const char* node,
+                                                        const char* process,
+                                                        const char* subprocess,
+                                                        rocprofvis_dm_op_t operation,
+                                                        rocprofvis_dm_track_id_t& track_id) override;
+
     // method to remap single string ID. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     // @param id - string id to be remapped
     // @return True if remapped
     const bool RemapStringId(uint64_t & id);
+
+    private:
+        track_find_map_t find_track_map;
+        track_find_pmc_map_t find_track_pmc_map;
 
 };
 #endif //RPV_ROCPD_DATABASE_H

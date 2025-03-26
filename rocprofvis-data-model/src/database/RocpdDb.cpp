@@ -23,6 +23,38 @@
 #include <string.h>
 
 
+
+rocprofvis_dm_result_t RocpdDatabase::FindTrackId(
+                                                    const char* node,
+                                                    const char* process,
+                                                    const char* subprocess,
+                                                    rocprofvis_dm_op_t operation,    
+                                                    rocprofvis_dm_track_id_t& track_id) {
+    if (operation > 0)
+    {
+        auto it1 = find_track_map.find(std::stol(process));
+        if (it1!=find_track_map.end()){
+            auto it2 = it1->second.find(std::stol(subprocess));
+            if (it2!=it1->second.end()){
+                track_id = it2->second;
+                return kRocProfVisDmResultSuccess;
+            }
+        }
+        return kRocProfVisDmResultNotLoaded;
+    } else
+    {
+        auto it1 = find_track_pmc_map.find(std::stol(process));
+        if (it1!=find_track_pmc_map.end()){
+            auto it2 = it1->second.find(subprocess);
+            if (it2!=it1->second.end()){
+                track_id = it2->second;
+                return kRocProfVisDmResultSuccess;
+            }
+        }
+        return kRocProfVisDmResultNotLoaded;
+    }
+}
+
 rocprofvis_dm_result_t RocpdDatabase::RemapStringIds(rocprofvis_db_record_data_t & record)
 {
     if (!RemapStringId(record.event.category)) return kRocProfVisDmResultNotLoaded;
@@ -71,11 +103,16 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **az
 
         track_params.process_name[TRACK_ID_PID_OR_AGENT] = ProcessNameSuffixFor(track_params.track_category);
         track_params.process_name[TRACK_ID_PID_OR_AGENT] += argv[TRACK_ID_PID_OR_AGENT];
-        track_params.process_name[TRACK_ID_TID_OR_QUEUE] = "";
+
         if (track_params.track_category != kRocProfVisDmPmcTrack){
             track_params.process_name[TRACK_ID_TID_OR_QUEUE] = SubProcessNameSuffixFor(track_params.track_category);
+            track_params.process_name[TRACK_ID_TID_OR_QUEUE] += argv[TRACK_ID_TID_OR_QUEUE];
+            db->find_track_map[track_params.process_id[TRACK_ID_PID_OR_AGENT]][track_params.process_id[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
+        } else
+        {
+            track_params.process_name[TRACK_ID_TID_OR_QUEUE] = argv[TRACK_ID_TID_OR_QUEUE];
+            db->find_track_pmc_map[track_params.process_id[TRACK_ID_PID_OR_AGENT]][track_params.process_name[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
         }
-        track_params.process_name[TRACK_ID_TID_OR_QUEUE] += argv[TRACK_ID_TID_OR_QUEUE];
 
         if (kRocProfVisDmResultSuccess != db->AddTrackProperties(track_params)) return 1;
         if (db->BindObject()->FuncAddTrack(db->BindObject()->trace_object, db->TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1;  

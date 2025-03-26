@@ -21,6 +21,7 @@
 #include "Database.h"
 #include "ProfileDb.h"
 #include <sstream>
+#include <cstring>
 
 bool Database::IsNumber(const std::string& s) {
     std::istringstream iss(s);

@@ -319,6 +319,16 @@ class Database
                                                                 uint32_t process_id, 
                                                                 uint32_t sub_process_id, 
                                                                 rocprofvis_dm_track_id_t & track_id );
+        // finds and returns track id by 3 input parameters  (node id, agent id, metric name) 
+        // @param node_id - node id
+        // @param process_id - process id 
+        // @param sub_process_name - metric name
+        // @return status of operation
+        rocprofvis_dm_result_t          FindTrackId(
+                                                                uint32_t node_id,
+                                                                uint32_t process_id,
+                                                                const char* subprocess_name,
+                                                                rocprofvis_dm_track_id_t& track_id);
         // calls Future object callback method, if provided. The callback method is optionally provided by caller in order to display or save current database progress.
         // @param step - approximate percentage of single database operation
         // @param action - database operation description
@@ -344,6 +354,10 @@ class Database
         // @return track sub-process name suffix  ('TID', 'Queue')  
         static const char*              SubProcessNameSuffixFor(
                                                                 rocprofvis_dm_track_category_t category);
+        // check if string is number
+        // @param s - string to check
+        // @return True if number
+        static bool IsNumber(const std::string& s);
 
     public:
         // declare DatabaseCache as friend class, for having access to protected members

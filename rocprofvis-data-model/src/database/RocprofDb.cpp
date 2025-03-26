@@ -43,15 +43,12 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **
     track_params.track_category = (rocprofvis_dm_track_category_t)std::stol(argv[TRACK_ID_CATEGORY]);
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
         track_params.process_tag[i] = azColName[i];
-        track_params.process_id_numeric[i] = true;
-        try {
+        track_params.process_id_numeric[i] = Database::IsNumber(argv[i]);
+        if (track_params.process_id_numeric[i]) {
             track_params.process_id[i] = std::stol(argv[i]);
-        }
-        catch (std::exception ex) {
-            track_params.process_id_numeric[i] = false;
+        } else {
             track_params.process_name[i] = argv[i];
-        }
-        
+        }        
     }
     if (!db->TrackExist(track_params, callback_params->subquery)){
         if (track_params.track_category == kRocProfVisDmRegionTrack) {

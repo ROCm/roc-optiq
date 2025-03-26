@@ -21,23 +21,29 @@
 #ifndef RPV_DATAMODEL_PMC_RECORD_H
 #define RPV_DATAMODEL_PMC_RECORD_H
 
+#include "../common/CommonTypes.h"
+
 /*  RpvPmcRecord is a data storage class for performance counters data
 **  It's POD (plain old data) class for memory usage optimization.
 **  PMC (Performance metric counter) event represents a point on timeline
 **  where X-dimension is timestamp anf Y-dimension is value.
 */ 
-
-#include "../common/CommonTypes.h"
-
 class RpvDmPmcRecord 
 {
     public:
+        // RpvDmPmcRecord class constructor
+        // @param timestamp - PMC sample timestamp
+        // @param value - PMC sample value
         RpvDmPmcRecord(const rocprofvis_dm_timestamp_t timestamp, const rocprofvis_dm_value_t value):
             m_timestamp(timestamp), m_value(value) {};
+        // Returns PMC sample timestamp
         const rocprofvis_dm_timestamp_t     Timestamp() {return m_timestamp;}
+        // Returns PMC sample value
         const rocprofvis_dm_value_t         Value() {return m_value;}
     private:
+        // PMC sample timestamp
         rocprofvis_dm_timestamp_t           m_timestamp;
+        // PMC sample value
         rocprofvis_dm_value_t               m_value;
 };
 

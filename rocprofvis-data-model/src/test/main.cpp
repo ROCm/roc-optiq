@@ -14,7 +14,7 @@
 #include <string.h>
 
 
-#define LIST_SIZE_LIMIT 10
+#define LIST_SIZE_LIMIT 100
 #define HEADER_LEN 100
 
 std::string g_input_file="";
@@ -140,14 +140,21 @@ bool ParseArguments(int argc, char **argv)
 
 bool NextTest(const char* message)
 {
-    char ch;
-    printf("\x1b[0m%s:", message);
-    while (true) {
-        ch = getch();
-        if (ch == 27 || ch == 13) break;
+    if (0)
+    {
+        char ch;
+        printf("\x1b[0m%s:", message);
+        while (true) {
+            ch = getch();
+            if (ch == 27 || ch == 13) break;
+        }
+        printf("\n");
+        return ch == 13;
     }
-    printf("\n");
-    return ch == 13;
+    else
+    {
+        return true;
+    }
 }
 
 int main(int argc, char** argv)
@@ -202,10 +209,10 @@ int main(int argc, char** argv)
                                 PrintHeader("Read time slice");
                                 if (kRocProfVisDmResultSuccess == rocprofvis_db_read_trace_slice_async(db, start_time, end_time, num_tracks, tracks_selection, object2wait))
                                 {
-                                    if (kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object2wait, 10))
+                                    if (kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object2wait, 20))
                                     {
                                         CheckMemoryFootprint(trace);
-                                        PrintHeader("Timeslice content, up to %d records", LIST_SIZE_LIMIT);
+                                        PrintHeader("Time slice content, up to %d records", LIST_SIZE_LIMIT);
                                         int first_track = std::rand() % num_tracks;
                                         for (int i=first_track; (i < num_tracks) && (i < first_track+ LIST_SIZE_LIMIT); i++)
                                         {
@@ -218,7 +225,7 @@ int main(int argc, char** argv)
                                             uint64_t id = rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackIdUInt64, 0);
                                             uint64_t node_id = rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackNodeIdUInt64, 0);
                                             uint64_t memory_usage = rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackMemoryFootprintUInt64, 0);
-                                            uint64_t num_ext_data = rocprofvis_dm_get_property_as_uint64(track, kRPVDMTNumberOfExtDataRecordsUInt64, 0);
+                                            uint64_t num_ext_data = rocprofvis_dm_get_property_as_uint64(track, kRPVDMNumberOfTrackExtDataRecordsUInt64, 0);
                                             PrintHeader("Track id=%lld node=%lld category=%s process=%s subprocess=%s", id, node_id, track_category_name, track_process_name, track_sub_process_name);
                                             if (!NextTest("Press Entre to run test for this track, Esc to continue?")) continue;
                                             printf(ANSI_COLOR_CYAN "\t%s : %s : %lld\n", "Properties", "Memory usage", memory_usage);
@@ -357,7 +364,7 @@ int main(int argc, char** argv)
                             if (nullptr != table) {
                                 char* table_description = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableDescriptionCharPtr, 0);
                                 char* table_query = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableQueryCharPtr, 0);
-                                uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableColumsUInt64, 0);
+                                uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableColumnsUInt64, 0);
                                 uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableRowsUInt64, 0);
                                 printf("\x1b[0m%s - %s\n", table_description, table_query);
                                 std::vector<std::string> columns;

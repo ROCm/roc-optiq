@@ -147,7 +147,7 @@ const char*  RpvDmExtData::GetPropertySymbol(rocprofvis_dm_property_t property) 
 bool RpvDmExtData::HasRecord(rocprofvis_db_ext_data_t & data)
 {
     auto it = find_if(m_extdata_records.begin(), m_extdata_records.end(), [&](RpvDmExtDataRecord & ext){
-        return ext.Compare(data.category, data.name);
+        return ext.Equal(data.category, data.name);
     });
     return it != m_extdata_records.end();
 }

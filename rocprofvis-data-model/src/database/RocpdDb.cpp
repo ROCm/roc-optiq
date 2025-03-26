@@ -71,7 +71,10 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **az
 
         track_params.process_name[TRACK_ID_PID_OR_AGENT] = ProcessNameSuffixFor(track_params.track_category);
         track_params.process_name[TRACK_ID_PID_OR_AGENT] += argv[TRACK_ID_PID_OR_AGENT];
-        track_params.process_name[TRACK_ID_TID_OR_QUEUE] = SubProcessNameSuffixFor(track_params.track_category);
+        track_params.process_name[TRACK_ID_TID_OR_QUEUE] = "";
+        if (track_params.track_category != kRocProfVisDmPmcTrack){
+            track_params.process_name[TRACK_ID_TID_OR_QUEUE] = SubProcessNameSuffixFor(track_params.track_category);
+        }
         track_params.process_name[TRACK_ID_TID_OR_QUEUE] += argv[TRACK_ID_TID_OR_QUEUE];
 
         if (kRocProfVisDmResultSuccess != db->AddTrackProperties(track_params)) return 1;

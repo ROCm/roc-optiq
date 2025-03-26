@@ -21,26 +21,36 @@
 #ifndef RPV_DATAMODEL_EXT_DATA_RECORD_H
 #define RPV_DATAMODEL_EXT_DATA_RECORD_H
 
-/*  RpvPmcRecord is a data storage class for performance counters data
-**  It's POD (plain old data) class for memory usage optimization.
-**  PMC (Performance metric counter) event represents a point on timeline
-**  where X-dimension is timestamp anf Y-dimension is value.
-*/ 
-
 #include "../common/CommonTypes.h"
 
+// RpvDmExtDataRecord is a data storage class for extended data parameters
 class RpvDmExtDataRecord 
 {
     public:
+        // RpvDmExtDataRecord class constructor
+        // @param category - extended data category string
+        // @param name - extended data name string
+        // @param data - extended data string
         RpvDmExtDataRecord(rocprofvis_dm_charptr_t category, rocprofvis_dm_charptr_t name, rocprofvis_dm_charptr_t data):
             m_category(category), m_name(name), m_data(data) {};
+        // Returns pointer to extended data category string 
         rocprofvis_dm_charptr_t        Category() {return m_category.c_str();}
+        // Returns pointer to extended data name string 
         rocprofvis_dm_charptr_t        Name() {return m_name.c_str();}
-        bool                           Compare(rocprofvis_dm_charptr_t category, rocprofvis_dm_charptr_t name) {return (m_category.compare(category) == 0) && (m_name.compare(name) == 0);}
+        // Returns pointer to extended data string 
         rocprofvis_dm_charptr_t        Data() {return m_data.c_str();}
+        // Checks if category and name tags are equal to the ones stored in record
+        // @param category - pointer to category string to compare
+        // @param name - pointer to name string to compare
+        // @return True if equal
+        bool                           Equal(rocprofvis_dm_charptr_t category, rocprofvis_dm_charptr_t name) {return (m_category.compare(category) == 0) && (m_name.compare(name) == 0);}
+
     private:
+        // category string object
         rocprofvis_dm_string_t              m_category;
+        // name string object
         rocprofvis_dm_string_t              m_name;
+        // data string object
         rocprofvis_dm_string_t              m_data;
 };
 

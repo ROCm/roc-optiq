@@ -21,28 +21,32 @@
 #ifndef RPV_DATAMODEL_FLOW_RECORD_H
 #define RPV_DATAMODEL_FLOW_RECORD_H
 
-/*  RpvPmcRecord is a data storage class for performance counters data
-**  It's POD (plain old data) class for memory usage optimization.
-**  PMC (Performance metric counter) event represents a point on timeline
-**  where X-dimension is timestamp anf Y-dimension is value.
-*/ 
-
 #include "../common/CommonTypes.h"
 
+// RpvDmFlowRecord  is a data storage class for flow trace parameters
 class RpvDmFlowRecord 
 {
     public:
+        // RpvDmFlowRecord class constructor. Object stores data flow endpoint parameters
+        // @param timestamp - endpoint timestamp
+        // @param event_id - endpoint 60-bit event id and 4-bit operation type
+        // @param track_id - endpoint track id
         RpvDmFlowRecord(const rocprofvis_dm_timestamp_t timestamp, const rocprofvis_dm_event_id_t event_id, const rocprofvis_dm_track_id_t track_id):
             m_timestamp(timestamp), m_event_id(event_id), m_track_id(track_id) {};
+        // Returns endpoint timestamp
         rocprofvis_dm_timestamp_t       Timestamp() {return m_timestamp;}
+        // Returns endpoint event id (60-bit event id and 4-bit operation type)
         rocprofvis_dm_event_id_t        EventId() {return m_event_id;}
+        // Returns endpoint track id
         rocprofvis_dm_track_id_t        TrackId() {return m_track_id;}
     private:
+        // endpoint timestamp
         rocprofvis_dm_timestamp_t           m_timestamp;
+        // endpoint 60-bit event id and 4-bit operation type
         rocprofvis_dm_event_id_t            m_event_id;
+        // endpoint track id
         rocprofvis_dm_track_id_t            m_track_id;
 };
-
 
 
 #endif //RPV_DATAMODEL_FLOW_RECORD_H

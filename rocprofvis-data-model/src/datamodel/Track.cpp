@@ -130,10 +130,10 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t
         case kRPVDMTrackNodeIdUInt64:
             *value = NodeId();
             return kRocProfVisDmResultSuccess;
-        case kRPVDMTNumberOfSlicesUInt64:
+        case kRPVDMNumberOfSlicesUInt64:
             *value = NumberOfSlices();
             return kRocProfVisDmResultSuccess;
-        case kRPVDMTNumberOfExtDataRecordsUInt64:
+        case kRPVDMNumberOfTrackExtDataRecordsUInt64:
             *value = m_ext_data.GetNumberOfRecords();
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackMemoryFootprintUInt64:
@@ -157,7 +157,7 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsUint64(rocprofvis_dm_property_t
         case kRPVDMTrackExtDataValueCharPtrIndexed:
             return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataValueCharPtrIndexed, index, value);
         case kRPVDMTrackInfoJsonCharPtr:
-            return GetExtendedInfo(*(rocprofvis_dm_json_blob_t*)value);
+            return GetExtendedInfoAsJsonBlob(*(rocprofvis_dm_json_blob_t*)value);
         case kRPVDMTrackMainProcessNameCharPtr:
             *value = (char*)Process();
             return kRocProfVisDmResultSuccess;
@@ -187,7 +187,7 @@ rocprofvis_dm_result_t  RpvDmTrack::GetPropertyAsHandle(rocprofvis_dm_property_t
     }
 }
 
-rocprofvis_dm_result_t RpvDmTrack::GetExtendedInfo(rocprofvis_dm_json_blob_t & json) {
+rocprofvis_dm_result_t RpvDmTrack::GetExtendedInfoAsJsonBlob(rocprofvis_dm_json_blob_t & json) {
     ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
     ASSERT_MSG_RETURN(m_track_params->extdata, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
     return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataJsonBlobCharPtr, 0, (char**) & json);
@@ -204,10 +204,10 @@ const char*  RpvDmTrack::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMTrackIdUInt64";
         case kRPVDMTrackNodeIdUInt64:
             return "kRPVDMTrackNodeIdUInt64";
-        case kRPVDMTNumberOfSlicesUInt64:
-            return "kRPVDMTNumberOfSlicesUInt64";
-        case kRPVDMTNumberOfExtDataRecordsUInt64:
-            return "kRPVDMTNumberOfExtDataRecordsUInt64";
+        case kRPVDMNumberOfSlicesUInt64:
+            return "kRPVDMNumberOfSlicesUInt64";
+        case kRPVDMNumberOfTrackExtDataRecordsUInt64:
+            return "kRPVDMNumberOfTrackExtDataRecordsUInt64";
         case kRPVDMTrackMemoryFootprintUInt64:
             return "kRPVDMTrackMemoryFootprintUInt64";
         case kRPVDMTrackExtDataCategoryCharPtrIndexed:

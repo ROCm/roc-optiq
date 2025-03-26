@@ -76,9 +76,11 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, char** argv, cha
         record.pmc.timestamp = std::stoll(argv[1]);
         record.pmc.value = std::stod(argv[2]);
     }
+
     rocprofvis_dm_track_id_t track_id;
-    if (db->FindTrackId(std::stol(argv[6]), std::stol(argv[7]), std::stol(argv[8]), track_id) == kRocProfVisDmResultSuccess)
-    {
+    rocprofvis_dm_result_t result = (Database::IsNumber(argv[8]) ? db->FindTrackId(std::stol(argv[6]), std::stol(argv[7]), std::stol(argv[8]), track_id) :
+        db->FindTrackId(std::stol(argv[6]), std::stol(argv[7]), argv[8], track_id));
+    if (result == kRocProfVisDmResultSuccess) {
         if (db->BindObject()->FuncAddRecord((*(slice_array_t*)callback_params->handle)[track_id], record) != kRocProfVisDmResultSuccess) return 1;
     }
     callback_params->row_counter++;

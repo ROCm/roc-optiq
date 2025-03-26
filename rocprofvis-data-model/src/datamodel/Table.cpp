@@ -47,7 +47,7 @@ rocprofvis_dm_result_t RpvDmTable::GetPropertyAsUint64(rocprofvis_dm_property_t 
     ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
-        case kRPVDMNumberOfTableColumsUInt64:
+        case kRPVDMNumberOfTableColumnsUInt64:
             *value = GetNumberOfColumns();
             return kRocProfVisDmResultSuccess;
         case kRPVDMNumberOfTableRowsUInt64:
@@ -90,8 +90,8 @@ rocprofvis_dm_result_t  RpvDmTable::GetPropertyAsHandle(rocprofvis_dm_property_t
 const char*  RpvDmTable::GetPropertySymbol(rocprofvis_dm_property_t property) {
     switch(property)
     {
-        case kRPVDMNumberOfTableColumsUInt64:
-            return "kRPVDMNumberOfTableColumsUInt64";        
+        case kRPVDMNumberOfTableColumnsUInt64:
+            return "kRPVDMNumberOfTableColumnsUInt64";        
         case kRPVDMNumberOfTableRowsUInt64:
             return "kRPVDMNumberOfTableRowsUInt64";
         case kRPVDMExtTableColumnNameCharPtrIndexed:

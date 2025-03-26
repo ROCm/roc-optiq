@@ -112,7 +112,7 @@ typedef enum rocprofvis_dm_event_operation_t {
 
 // Database type
 typedef enum rocprofvis_db_type_t {
-    // input file autodetection
+    // input file auto-detection
     kAutodetect = 0, 
     // old schema Rocpd database
 	kRocpdSqlite = 1,
@@ -168,7 +168,7 @@ typedef enum rocprofvis_dm_track_property_t {
     // Track sub process string (TID, QueueID, PMC name)
     kRPVDMTrackSubProcessNameCharPtr,
     // Number of slices in the track
-    kRPVDMTNumberOfSlicesUInt64,
+    kRPVDMNumberOfSlicesUInt64,
     // Track memory footprint
     kRPVDMTrackMemoryFootprintUInt64,
     // Slice handle by specified index
@@ -176,7 +176,7 @@ typedef enum rocprofvis_dm_track_property_t {
     // Slice handle by specified time
     kRPVDMSliceHandleTimed,
     // Number of extended data records
-    kRPVDMTNumberOfExtDataRecordsUInt64,
+    kRPVDMNumberOfTrackExtDataRecordsUInt64,
     // Extended data category by specified index
     kRPVDMTrackExtDataCategoryCharPtrIndexed,
     // Extended data name by specified index
@@ -191,7 +191,7 @@ typedef enum rocprofvis_dm_track_property_t {
 typedef enum rocprofvis_dm_slice_property_t {
     // Convert timestamp to an index
 	kRPVDMRecordIndexByTimestampUInt64,
-    // Sice memory footprint
+    // Slice memory footprint
     kRPVDMSliceMemoryFootprintUInt64,
     // Number of records
 	kRPVDMNumberOfRecordsUInt64,
@@ -256,7 +256,7 @@ typedef enum rocprofvis_dm_extdata_property_t {
 // Table object properties
 typedef enum rocprofvis_dm_table_property_t {
     // Number of columns
-    kRPVDMNumberOfTableColumsUInt64,
+    kRPVDMNumberOfTableColumnsUInt64,
     // Number of rows
     kRPVDMNumberOfTableRowsUInt64,
     // Table description string

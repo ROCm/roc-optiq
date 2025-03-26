@@ -70,7 +70,7 @@ rocprofvis_controller_object_type_t Track::GetType(void)
 
 rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
         switch(property)
@@ -97,9 +97,13 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackMaxTimestamp:
             case kRPVControllerTrackEntry:
             case kRPVControllerTrackName:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
             default:
             {
-                result = kRocProfVisResultNotSupported;
+                result = kRocProfVisResultInvalidEnum;
                 break;
             }
         }
@@ -145,7 +149,7 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
         switch(property)

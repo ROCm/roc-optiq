@@ -14,7 +14,7 @@ namespace Controller
 class EventLOD : public Event
 {
 public:
-    EventLOD(uint64_t id, double start_ts, double end_ts);
+    EventLOD(uint64_t id, double start_ts, double end_ts, std::vector<Event*>& events);
 
     virtual ~EventLOD();
 

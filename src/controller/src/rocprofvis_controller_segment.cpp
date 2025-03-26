@@ -73,7 +73,7 @@ bool Segment::LOD::IsValid() const
 
 void Segment::GenerateEventLOD(std::vector<Event*>& events, double event_start, double event_end, uint32_t lod_to_generate)
 {
-    Event* new_event = new EventLOD(0, event_start, event_end);
+    Event* new_event = new EventLOD(0, event_start, event_end, events);
     if (new_event)
     {
         std::multimap<double, Handle*>& new_events = m_lods[lod_to_generate]->GetEntries();

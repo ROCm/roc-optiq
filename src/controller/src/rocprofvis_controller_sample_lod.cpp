@@ -137,7 +137,7 @@ rocprofvis_result_t SampleLOD::GetUInt64(rocprofvis_property_t property, uint64_
 rocprofvis_result_t SampleLOD::GetDouble(rocprofvis_property_t property, uint64_t index,
                                 double* value) 
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
         switch(property)

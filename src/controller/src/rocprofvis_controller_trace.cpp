@@ -365,8 +365,7 @@ rocprofvis_controller_object_type_t Trace::GetType(void)
 
 rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
 {
-    assert(0);
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
         switch (property)
@@ -379,6 +378,7 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerNumAnalysisView:
             {
+                assert(0);
                 *value = 0;
                 result = kRocProfVisResultSuccess;
                 break;
@@ -395,9 +395,13 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackIndexed:
             case kRPVControllerEventTable:
             case kRPVControllerAnalysisViewIndexed:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
             default:
             {
-                result = kRocProfVisResultNotSupported;
+                result = kRocProfVisResultInvalidEnum;
                 break;
             }
         }
@@ -406,12 +410,33 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) 
 {
-    assert(0);
-    return kRocProfVisResultNotSupported;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerId:
+        case kRPVControllerNumAnalysisView:
+        case kRPVControllerNumTracks:
+        case kRPVControllerNumNodes:
+        case kRPVControllerNodeIndexed:
+        case kRPVControllerTimeline:
+        case kRPVControllerTrackIndexed:
+        case kRPVControllerEventTable:
+        case kRPVControllerAnalysisViewIndexed:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
 }
 rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) 
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
         switch (property)
@@ -454,9 +479,13 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerNumTracks:
             case kRPVControllerId:
             case kRPVControllerNumAnalysisView:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
             default:
             {
-                result = kRocProfVisResultNotSupported;
+                result = kRocProfVisResultInvalidEnum;
                 break;
             }
         }
@@ -465,8 +494,29 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
 {
-    assert(0);
-    return kRocProfVisResultNotSupported;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerId:
+        case kRPVControllerNumAnalysisView:
+        case kRPVControllerNumTracks:
+        case kRPVControllerNumNodes:
+        case kRPVControllerNodeIndexed:
+        case kRPVControllerTimeline:
+        case kRPVControllerTrackIndexed:
+        case kRPVControllerEventTable:
+        case kRPVControllerAnalysisViewIndexed:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
 }
 
 rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) 
@@ -526,8 +576,29 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t index, double value) 
 {
-    assert(0);
-    return kRocProfVisResultReadOnlyError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerId:
+        case kRPVControllerNumAnalysisView:
+        case kRPVControllerNumTracks:
+        case kRPVControllerNumNodes:
+        case kRPVControllerNodeIndexed:
+        case kRPVControllerTimeline:
+        case kRPVControllerTrackIndexed:
+        case kRPVControllerEventTable:
+        case kRPVControllerAnalysisViewIndexed:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
 }
 
 rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) 
@@ -596,8 +667,29 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) 
 {
-    assert(0);
-    return kRocProfVisResultReadOnlyError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerId:
+        case kRPVControllerNumAnalysisView:
+        case kRPVControllerNumTracks:
+        case kRPVControllerNumNodes:
+        case kRPVControllerNodeIndexed:
+        case kRPVControllerTimeline:
+        case kRPVControllerTrackIndexed:
+        case kRPVControllerEventTable:
+        case kRPVControllerAnalysisViewIndexed:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
 }
 
 }

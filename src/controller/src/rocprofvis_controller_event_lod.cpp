@@ -10,9 +10,10 @@ namespace Controller
 
 typedef Reference<rocprofvis_controller_event_t, Event, kRPVControllerObjectTypeEvent> EventRef;
 
-EventLOD::EventLOD(uint64_t id, double start_ts, double end_ts)
+EventLOD::EventLOD(uint64_t id, double start_ts, double end_ts, std::vector<Event*>& events)
 : Event(id, start_ts, end_ts)
 {
+    m_children = events;
 }
 
 EventLOD::~EventLOD()

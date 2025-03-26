@@ -174,7 +174,7 @@ rocprofvis_result_t Array::SetUInt64(rocprofvis_property_t property, uint64_t in
                 }
                 else
                 {
-                    result = kRocProfVisResultInvalidArgument;
+                    result = kRocProfVisResultOutOfRange;
                 }
                 break;
             }
@@ -183,7 +183,7 @@ rocprofvis_result_t Array::SetUInt64(rocprofvis_property_t property, uint64_t in
                 if(value != m_array.size())
                 {
                     m_array.resize(value);
-                    result = kRocProfVisResultSuccess;
+                    result = m_array.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
                 }
                 else
                 {
@@ -203,7 +203,7 @@ rocprofvis_result_t Array::SetUInt64(rocprofvis_property_t property, uint64_t in
 rocprofvis_result_t Array::SetDouble(rocprofvis_property_t property, uint64_t index,
                                 double value) 
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
         switch(property)
@@ -216,18 +216,18 @@ rocprofvis_result_t Array::SetDouble(rocprofvis_property_t property, uint64_t in
                 }
                 else
                 {
-                    result = kRocProfVisResultInvalidArgument;
+                    result = kRocProfVisResultOutOfRange;
                 }
                 break;
             }
             case kRPVControllerArrayNumEntries:
             {
-                result = kRocProfVisResultReadOnlyError;
+                result = kRocProfVisResultInvalidType;
                 break;
             }
             default:
             {
-                result = kRocProfVisResultInvalidArgument;
+                result = kRocProfVisResultInvalidEnum;
                 break;
             }
         }
@@ -237,7 +237,7 @@ rocprofvis_result_t Array::SetDouble(rocprofvis_property_t property, uint64_t in
 rocprofvis_result_t Array::SetObject(rocprofvis_property_t property, uint64_t index,
                                 rocprofvis_handle_t* value) 
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
         switch(property)
@@ -251,18 +251,18 @@ rocprofvis_result_t Array::SetObject(rocprofvis_property_t property, uint64_t in
                 }
                 else
                 {
-                    result = kRocProfVisResultInvalidArgument;
+                    result = kRocProfVisResultOutOfRange;
                 }
                 break;
             }
             case kRPVControllerArrayNumEntries:
             {
-                result = kRocProfVisResultReadOnlyError;
+                result = kRocProfVisResultInvalidType;
                 break;
             }
             default:
             {
-                result = kRocProfVisResultInvalidArgument;
+                result = kRocProfVisResultInvalidEnum;
                 break;
             }
         }
@@ -272,7 +272,7 @@ rocprofvis_result_t Array::SetObject(rocprofvis_property_t property, uint64_t in
 rocprofvis_result_t Array::SetString(rocprofvis_property_t property, uint64_t index,
                                 char const* value, uint32_t length) 
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
         switch(property)
@@ -285,18 +285,18 @@ rocprofvis_result_t Array::SetString(rocprofvis_property_t property, uint64_t in
                 }
                 else
                 {
-                    result = kRocProfVisResultInvalidArgument;
+                    result = kRocProfVisResultOutOfRange;
                 }
                 break;
             }
             case kRPVControllerArrayNumEntries:
             {
-                result = kRocProfVisResultReadOnlyError;
+                result = kRocProfVisResultInvalidType;
                 break;
             }
             default:
             {
-                result = kRocProfVisResultInvalidArgument;
+                result = kRocProfVisResultInvalidEnum;
                 break;
             }
         }

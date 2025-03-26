@@ -1,6 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_track.h"
+#include "rocprofvis_controller_reference.h"
 
 #include <cassert>
 
@@ -8,6 +10,8 @@ namespace RocProfVis
 {
 namespace Controller
 {
+
+typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 
 Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
 : m_data(type)
@@ -315,15 +319,11 @@ rocprofvis_result_t Sample::SetObject(rocprofvis_property_t property, uint64_t i
         {
             case kRPVControllerSampleTrack:
             {
-                Handle* handle = (Handle*) value;
-                if(handle->GetType() == kRPVControllerObjectTypeTrack)
+                TrackRef track_ref(value);
+                if(track_ref.IsValid())
                 {
-                    m_track = (Track*) value;
+                    m_track = track_ref.Get();
                     result  = kRocProfVisResultSuccess;
-                }
-                else
-                {
-                    result = kRocProfVisResultInvalidType;
                 }
                 break;
             }

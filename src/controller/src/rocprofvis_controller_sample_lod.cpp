@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_sample_lod.h"
+#include "rocprofvis_controller_reference.h"
 
 #include <cassert>
 
@@ -8,6 +9,8 @@ namespace RocProfVis
 {
 namespace Controller
 {
+
+typedef Reference<rocprofvis_controller_sample_t, Sample, kRPVControllerObjectTypeSample> SampleRef;
 
 void SampleLOD::CalculateChildValues(void)
 {
@@ -26,10 +29,10 @@ void SampleLOD::CalculateChildValues(void)
         {
             double timestamp = 0;
             double value     = 0;
-            if(sample->GetDouble(kRPVControllerSampleTimestamp, 0, &timestamp) ==
-                    kRocProfVisResultSuccess &&
-                sample->GetDouble(kRPVControllerSampleValue, 0, &value) ==
-                    kRocProfVisResultSuccess)
+            rocprofvis_result_t result = sample->GetDouble( kRPVControllerSampleTimestamp, 0, &timestamp);
+            assert(result == kRocProfVisResultSuccess);
+            result = sample->GetDouble(kRPVControllerSampleValue, 0, &value);
+            assert(result == kRocProfVisResultSuccess);
             {
                 m_child_min_timestamp = std::min(m_child_min_timestamp, timestamp);
                 m_child_max_timestamp = std::max(m_child_max_timestamp, timestamp);
@@ -363,8 +366,12 @@ rocprofvis_result_t SampleLOD::SetObject(rocprofvis_property_t property, uint64_
             {
                 if(index < m_children.size())
                 {
-                    m_children[index] = (Sample*) value;
-                    result            = kRocProfVisResultSuccess;
+                    SampleRef sample_ref(value);
+                    if(sample_ref.IsValid())
+                    {
+                        m_children[index] = sample_ref.Get();
+                        result            = kRocProfVisResultSuccess;
+                    }
                 }
                 else
                 {

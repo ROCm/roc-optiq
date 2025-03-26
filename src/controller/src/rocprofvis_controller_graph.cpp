@@ -2,12 +2,17 @@
 
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_track.h"
+#include "rocprofvis_controller_reference.h"
 #include <cassert>
 
 namespace RocProfVis
 {
 namespace Controller
 {
+
+constexpr double kGraphScaleFactor = 10.0;
+
+typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 
 Graph::Graph(rocprofvis_controller_graph_type_t type, uint64_t id)
 : m_id(id)
@@ -27,9 +32,9 @@ rocprofvis_result_t Graph::Fetch(uint32_t pixels, double start, double end, Arra
     {
         uint32_t lod      = 0;
         double   duration = (end - start);
-        while(duration > (pixels * 10.0))
+        while(duration > (pixels * kGraphScaleFactor))
         {
-            duration /= 10.0;
+            duration /= kGraphScaleFactor;
             lod++;
         }
         result = m_track->Fetch(lod, start, end, array, index);
@@ -187,20 +192,16 @@ rocprofvis_result_t Graph::SetUInt64(rocprofvis_property_t property, uint64_t in
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerGraphId:
-        {
-            result = kRocProfVisResultReadOnlyError;
-            break;
-        }
         case kRPVControllerGraphType:
         {
             m_type = (rocprofvis_controller_graph_type_t)value;
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerGraphId:
         case kRPVControllerGraphNumEntries:
         {
-            result = m_track ? m_track->SetUInt64(kRPVControllerTrackNumberOfEntries, index, value) : kRocProfVisResultUnknownError;
+            result = kRocProfVisResultReadOnlyError;
             break;
         }
         case kRPVControllerGraphTrack:
@@ -225,13 +226,9 @@ rocprofvis_result_t Graph::SetDouble(rocprofvis_property_t property, uint64_t in
     switch(property)
     {
         case kRPVControllerGraphStartTimestamp:
-        {
-            result = m_track ? m_track->SetDouble(kRPVControllerTrackMinTimestamp, index, value) : kRocProfVisResultUnknownError;
-            break;
-        }
         case kRPVControllerGraphEndTimestamp:
         {
-            result = m_track ? m_track->SetDouble(kRPVControllerTrackMaxTimestamp, index, value) : kRocProfVisResultUnknownError;
+            result = kRocProfVisResultReadOnlyError;
             break;
         }
         case kRPVControllerGraphId:
@@ -260,8 +257,12 @@ rocprofvis_result_t Graph::SetObject(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerGraphTrack:
             {
-                m_track = (Track*)value;
-                result = kRocProfVisResultSuccess;
+                TrackRef track_ref(value);
+                if(track_ref.IsValid())
+                {
+                    m_track = track_ref.Get();
+                    result  = kRocProfVisResultSuccess;
+                }
                 break;
             }
             case kRPVControllerGraphId:

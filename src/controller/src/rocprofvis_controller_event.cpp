@@ -1,11 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_event.h"
+#include "rocprofvis_controller_track.h"
+#include "rocprofvis_controller_reference.h"
 
 namespace RocProfVis
 {
 namespace Controller
 {
+
+typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 
 Event::Event(uint64_t id, double start_ts, double end_ts)
 : m_id(id)
@@ -358,15 +362,11 @@ rocprofvis_result_t Event::SetObject(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerEventTrack:
             {
-                Handle* handle = (Handle*)value;
-                if (handle->GetType() == kRPVControllerObjectTypeTrack)
+                TrackRef track_ref(value);
+                if(track_ref.IsValid())
                 {
-                    m_track = (Track*)value;
+                    m_track = track_ref.Get();
                     result = kRocProfVisResultSuccess;
-                }
-                else
-                {
-                    result = kRocProfVisResultInvalidType;
                 }
                 break;
             }

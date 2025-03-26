@@ -282,57 +282,72 @@ rocprofvis_result_t Timeline::SetUInt64(rocprofvis_property_t property, uint64_t
 rocprofvis_result_t Timeline::SetDouble(rocprofvis_property_t property, uint64_t index,
                                 double value) 
 {
-    assert(0);
-    return kRocProfVisResultReadOnlyError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerTimelineGraphIndexed:
+        case kRPVControllerTimelineId:
+        case kRPVControllerTimelineNumGraphs:
+        case kRPVControllerTimelineMinTimestamp:
+        case kRPVControllerTimelineMaxTimestamp:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
 }
 rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t index,
                                 rocprofvis_handle_t* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    GraphRef graph(value);
-    if(graph.IsValid())
+    switch(property)
     {
-        switch(property)
+        case kRPVControllerTimelineGraphIndexed:
         {
-            case kRPVControllerTimelineGraphIndexed:
+            GraphRef graph(value);
+            if(graph.IsValid())
             {
                 if(index < m_graphs.size())
                 {
-                    m_graphs[index] = graph.Get();
-                    result = kRocProfVisResultSuccess;
-                    if(result == kRocProfVisResultSuccess)
+                    double min_ts = 0;
+                    double max_ts = 0;
+                    if((graph.Get()->GetDouble(kRPVControllerGraphStartTimestamp, 0,
+                                               &min_ts) == kRocProfVisResultSuccess) &&
+                       (graph.Get()->GetDouble(kRPVControllerGraphEndTimestamp, 0,
+                                               &max_ts) == kRocProfVisResultSuccess))
                     {
-                        double min_ts = 0;
-                        double max_ts = 0;
-                        result = graph.Get()->GetDouble(kRPVControllerGraphStartTimestamp,
-                                                        0, &min_ts);
-                        assert(result == kRocProfVisResultSuccess);
-                        result = graph.Get()->GetDouble(kRPVControllerGraphEndTimestamp,
-                                                        0, &max_ts);
-                        assert(result == kRocProfVisResultSuccess);
                         m_min_ts = std::min(min_ts, m_min_ts);
                         m_max_ts = std::max(max_ts, m_max_ts);
+
+                        m_graphs[index] = graph.Get();
+                        result          = kRocProfVisResultSuccess;
                     }
                 }
-                else
-                {
-                    result = kRocProfVisResultOutOfRange;
-                }
-                break;
             }
-            case kRPVControllerTimelineId:
-            case kRPVControllerTimelineNumGraphs:
-            case kRPVControllerTimelineMinTimestamp:
-            case kRPVControllerTimelineMaxTimestamp:
+            else
             {
-                result = kRocProfVisResultInvalidType;
-                break;
+                result = kRocProfVisResultOutOfRange;
             }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
+            break;
+        }
+        case kRPVControllerTimelineId:
+        case kRPVControllerTimelineNumGraphs:
+        case kRPVControllerTimelineMinTimestamp:
+        case kRPVControllerTimelineMaxTimestamp:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
         }
     }
     return result;
@@ -340,8 +355,25 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
 rocprofvis_result_t Timeline::SetString(rocprofvis_property_t property, uint64_t index,
                                 char const* value, uint32_t length) 
 {
-    assert(0);
-    return kRocProfVisResultReadOnlyError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerTimelineGraphIndexed:
+        case kRPVControllerTimelineId:
+        case kRPVControllerTimelineNumGraphs:
+        case kRPVControllerTimelineMinTimestamp:
+        case kRPVControllerTimelineMaxTimestamp:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
 }
 
 }

@@ -1,11 +1,14 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_event_lod.h"
+#include "rocprofvis_controller_reference.h"
 
 namespace RocProfVis
 {
 namespace Controller
 {
+
+typedef Reference<rocprofvis_controller_event_t, Event, kRPVControllerObjectTypeEvent> EventRef;
 
 EventLOD::EventLOD(uint64_t id, double start_ts, double end_ts)
 : Event(id, start_ts, end_ts)
@@ -157,12 +160,14 @@ rocprofvis_result_t EventLOD::SetObject(rocprofvis_property_t property, uint64_t
     {
         case kRPVControllerEventChildIndexed:
         {
-            Handle* handle = (Handle*) value;
-            if(index < m_children.size() &&
-                (handle->GetType() == kRPVControllerObjectTypeEvent))
+            if(index < m_children.size())
             {
-                m_children[index] = (Event*) value;
-                result            = kRocProfVisResultSuccess;
+                EventRef event_ref(value);
+                if(event_ref.IsValid())
+                {
+                    m_children[index] = event_ref.Get();
+                    result            = kRocProfVisResultSuccess;
+                }
             }
             else
             {

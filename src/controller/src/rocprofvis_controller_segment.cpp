@@ -360,6 +360,7 @@ void Segment::Insert(double timestamp, Handle* event)
     {
         // LOD0 is always valid or nothing will work.
         m_lods[0] = new LOD();
+        assert(m_lods[0]);
         m_lods[0]->SetValid(true);
     }
     m_lods[0]->GetEntries().insert(std::make_pair(timestamp, event));

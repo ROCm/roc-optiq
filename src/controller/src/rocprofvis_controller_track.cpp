@@ -10,8 +10,8 @@ namespace RocProfVis
 namespace Controller
 {
 
-Track::Track(rocprofvis_controller_track_type_t type)
-: m_id(0)
+Track::Track(rocprofvis_controller_track_type_t type, uint64_t id)
+: m_id(id)
 , m_num_elements(0)
 , m_type(type)
 , m_start_timestamp(DBL_MIN)

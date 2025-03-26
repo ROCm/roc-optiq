@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_reference.h"
+#include "rocprofvis_controller_id.h"
 
 #include "rocprofvis_trace.h"
 
@@ -19,8 +20,8 @@ namespace Controller
 
 typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectTypeGraph> GraphRef;
 
-Timeline::Timeline()
-: m_id(0)
+Timeline::Timeline(uint64_t id)
+: m_id(id)
 , m_min_ts(DBL_MAX)
 , m_max_ts(DBL_MIN)
 {

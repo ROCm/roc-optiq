@@ -17,7 +17,7 @@ class Segment;
 class Graph : public Handle
 {
 public:
-    Graph(rocprofvis_controller_graph_type_t type);
+    Graph(rocprofvis_controller_graph_type_t type, uint64_t id);
 
     virtual ~Graph();
 

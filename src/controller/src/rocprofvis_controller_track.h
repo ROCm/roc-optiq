@@ -18,7 +18,7 @@ class Array;
 class Track : public Handle
 {
 public:
-    Track(rocprofvis_controller_track_type_t type);
+    Track(rocprofvis_controller_track_type_t type, uint64_t id);
 
     virtual ~Track();
 

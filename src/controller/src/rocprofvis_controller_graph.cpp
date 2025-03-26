@@ -9,8 +9,8 @@ namespace RocProfVis
 namespace Controller
 {
 
-Graph::Graph(rocprofvis_controller_graph_type_t type)
-: m_id(0)
+Graph::Graph(rocprofvis_controller_graph_type_t type, uint64_t id)
+: m_id(id)
 , m_track(nullptr)
 , m_type(type)
 {

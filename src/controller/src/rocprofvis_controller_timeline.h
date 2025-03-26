@@ -19,7 +19,7 @@ class Track;
 class Timeline : public Handle
 {
 public:
-    Timeline();
+    Timeline(uint64_t id);
 
     ~Timeline();
 

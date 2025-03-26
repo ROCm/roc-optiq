@@ -8,6 +8,7 @@
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_graph.h"
+#include "rocprofvis_controller_id.h"
 
 #include "rocprofvis_trace.h"
 
@@ -18,11 +19,13 @@ namespace RocProfVis
 namespace Controller
 {
 
+static IdGenerator<Trace> s_trace_id;
+
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 typedef Reference<rocprofvis_controller_timeline_t, Timeline, kRPVControllerObjectTypeTimeline> TimelineRef;
 
 Trace::Trace()
-: m_id(0)
+: m_id(s_trace_id.GetNextId())
 , m_timeline(nullptr)
 {
 }
@@ -46,7 +49,7 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
         std::async(std::launch::async, [this, filepath]() -> rocprofvis_result_t
         {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            m_timeline = new Timeline();
+            m_timeline = new Timeline(0);
             if(m_timeline)
             {
                 rocprofvis_trace_data_t trace_object;
@@ -62,6 +65,7 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
                         uint64_t event_id  = 0;
                         uint64_t sample_id = 0;
                         uint64_t track_id  = 0;
+                        uint64_t graph_id  = 0;
                         for(auto& pair : trace_object.m_trace_data)
                         {
                             std::string const& name = pair.first;
@@ -73,14 +77,12 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
                                                    ? kRPVControllerTrackTypeEvents
                                                    : kRPVControllerTrackTypeSamples;
                                 Graph* graph = nullptr;
-                                Track* track = new Track(type);
+                                Track* track = new Track(type, track_id++);
                                 if(track)
                                 {
                                     track->SetString(kRPVControllerTrackName, 0,
                                                      thread.first.c_str(),
                                                      thread.first.length());
-                                    track->SetUInt64(kRPVControllerTrackId, 0,
-                                                     track_id++);
                                     switch(type)
                                     {
                                         case kRPVControllerTrackTypeEvents:
@@ -148,7 +150,8 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
                                                 if(m_tracks.size() == (index + 1))
                                                 {
                                                     graph = new Graph(
-                                                        kRPVControllerGraphTypeFlame);
+                                                        kRPVControllerGraphTypeFlame,
+                                                        graph_id++);
                                                     if(graph)
                                                     {
                                                         result = graph->SetObject(
@@ -248,7 +251,8 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
                                                 if(m_tracks.size() == (index + 1))
                                                 {
                                                     graph = new Graph(
-                                                        kRPVControllerGraphTypeLine);
+                                                        kRPVControllerGraphTypeLine,
+                                                        graph_id++);
                                                     if(graph)
                                                     {
                                                         result = graph->SetObject(

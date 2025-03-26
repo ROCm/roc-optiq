@@ -189,8 +189,7 @@ rocprofvis_result_t Graph::SetUInt64(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerGraphId:
         {
-            m_id = value;
-            result = kRocProfVisResultSuccess;
+            result = kRocProfVisResultReadOnlyError;
             break;
         }
         case kRPVControllerGraphType:

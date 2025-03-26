@@ -476,8 +476,7 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerId:
         {
-            m_id = value;
-            result = kRocProfVisResultSuccess;
+            result = kRocProfVisResultReadOnlyError;
             break;
         }
         case kRPVControllerNumTracks:

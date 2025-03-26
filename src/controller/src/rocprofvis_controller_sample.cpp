@@ -243,6 +243,10 @@ rocprofvis_result_t Sample::SetUInt64(rocprofvis_property_t property, uint64_t i
             break;
         }
         case kRPVControllerSampleId:
+        {
+            result = kRocProfVisResultReadOnlyError;
+            break;
+        }
         case kRPVControllerSampleType:
         case kRPVControllerSampleNumChildren:
         case kRPVControllerSampleChildIndex:

@@ -243,8 +243,7 @@ rocprofvis_result_t Timeline::SetUInt64(rocprofvis_property_t property, uint64_t
     {
         case kRPVControllerTimelineId:
         {
-            m_id = value;
-            result = kRocProfVisResultSuccess;
+            result = kRocProfVisResultReadOnlyError;
             break;
         }
         case kRPVControllerTimelineNumGraphs:

@@ -220,7 +220,7 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerTrackId:
         {
-            m_id = value;
+            result = kRocProfVisResultReadOnlyError;
             break;
         }
         case kRPVControllerTrackType:

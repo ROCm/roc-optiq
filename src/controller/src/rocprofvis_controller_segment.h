@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_handle.h"
 #include <map>
 #include <vector>
+#include <memory>
 
 namespace RocProfVis
 {
@@ -74,7 +75,7 @@ public:
     rocprofvis_result_t Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index);
 
 private:
-    std::map<uint32_t, LOD*> m_lods;
+    std::map<uint32_t, std::unique_ptr<LOD>> m_lods;
     double m_start_timestamp;
     double m_end_timestamp;
     double m_min_timestamp;

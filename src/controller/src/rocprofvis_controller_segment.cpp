@@ -111,10 +111,6 @@ Segment::Segment(rocprofvis_controller_track_type_t type)
 
 Segment::~Segment()
 { 
-    for (auto& pair : m_lods)
-    {
-        delete pair.second;
-    }
 }
 
 static void AddSamples(std::vector<Sample*>& samples, Sample* sample, uint64_t lod)
@@ -167,17 +163,19 @@ void Segment::GenerateLOD(uint32_t lod_to_generate)
 {
     if (lod_to_generate > 0)
     {
-        LOD* lod = m_lods[lod_to_generate];
-        if(!lod || !lod->IsValid())
         {
-            if (!lod)
+            std::unique_ptr<LOD>& lod = m_lods[lod_to_generate];
+            if(!lod)
             {
-                lod = new LOD();
-                assert(lod);
-                m_lods[lod_to_generate] = lod;
+                m_lods[lod_to_generate] = std::make_unique<LOD>();
             }
+        }
+        std::unique_ptr<LOD>& lod = m_lods[lod_to_generate];
+        assert(lod);
+        if(!lod->IsValid())
+        {
             uint32_t previous_lod                  = (uint32_t) (lod_to_generate - 1);
-            LOD*     prev_lod                      = m_lods[previous_lod];
+            std::unique_ptr<LOD>& prev_lod         = m_lods[previous_lod];
             std::multimap<double, Handle*>& values = prev_lod->GetEntries();
             if(prev_lod->IsValid() && values.size() > 1)
             {
@@ -359,7 +357,7 @@ void Segment::Insert(double timestamp, Handle* event)
     if (m_lods.find(0) == m_lods.end())
     {
         // LOD0 is always valid or nothing will work.
-        m_lods[0] = new LOD();
+        m_lods[0] = std::make_unique<LOD>();
         assert(m_lods[0]);
         m_lods[0]->SetValid(true);
     }

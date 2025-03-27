@@ -40,12 +40,12 @@ make <br />
 
 Database interface
 ---
-```
+
   **Opens database of provided path and type**
-       kAutodetect = 0,
- 	    kRocpdSqlite = 1, 
- 	    kRocprofSqlite = 2 
-```  
+    kAutodetect = 0,<br />
+ 	kRocpdSqlite = 1, <br />
+ 	kRocprofSqlite = 2 <br />
+  
   `param` filename path of the database file <br />
   `param` type  type enumeration, kAutodetect for automatic detection  <br />
   `return` handler to database object <br />
@@ -59,6 +59,7 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
 
 ---
 
+
   **Calculates size of memory used by database object**
   
   `param` database database handle<br />
@@ -71,6 +72,7 @@ rocprofvis_dm_size_t rocprofvis_db_get_memory_footprint(
 
 ---
 
+
   **Allocates future object, to be used for asynchronous operations**
   
   `param` callback callback method to report current database request progress and status. May be useful for command line tools and scripts
@@ -79,17 +81,17 @@ rocprofvis_dm_size_t rocprofvis_db_get_memory_footprint(
 ```  
 rocprofvis_db_future_t rocprofvis_db_future_alloc(
                                     rocprofvis_db_progress_callback_t );
-``` 
+```
 
 ---
 
-```  
+  
   **Waits until asynchronous operation is completed or timeout expires**
-```  
+  
   `param` object future handle allocated by rocprofvis_db_future_alloc<br />
   `param` timeout timeout in seconds for the asynchronous call to expire<br />
   `return` status of operation<br />
-```  
+  
   
 ```  
 rocprofvis_dm_result_t rocprofvis_db_future_wait(
@@ -98,10 +100,9 @@ rocprofvis_dm_result_t rocprofvis_db_future_wait(
 ```  
 
 ---
-
-```  
+  
   **Frees future object**
-```  
+  
   
   `param` object future handle allocated by rocprofvis_db_future_alloc
   
@@ -110,11 +111,9 @@ void rocprofvis_db_future_free(rocprofvis_db_future_t);
 ```
 
 ---
-
-```  
+  
   **Asynchronous call to read data model metadata** 
-               (static objects residing in trace class memory until trace is deleted)
-```  
+               (static objects residing in trace class memory until trace is deleted)  
   
   `param` database database handle
   `param` object future handle allocated by rocprofvis_db_future_alloc
@@ -128,9 +127,8 @@ rocprofvis_dm_result_t rocprofvis_db_read_metadata_async(
 
 ---
 
-```  
   **Asynchronous call to read time slice of records for provided time frame and tracks selection**
-```  
+  
  
   `param` database database handle
   `param` start beginning of the time slice
@@ -154,10 +152,8 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
 ```  
 
 ---
-
-```  
-  **Asynchronous call to read event property of specific type**
-```  
+  
+  **Asynchronous call to read event property of specific type**  
  
   `param` database database handle
   `param` type type of property:
@@ -180,10 +176,8 @@ rocprofvis_dm_result_t  rocprofvis_db_read_event_property_async(
 ```  
 
 ---
-
-```  
-  **Asynchronous call to read a table result of specified SQL query**
-```  
+  
+  **Asynchronous call to read a table result of specified SQL query**  
  
   `param` database database handle
   `param` query SQL query string
@@ -202,17 +196,15 @@ rocprofvis_dm_result_t  rocprofvis_db_execute_query_async(
                                     rocprofvis_db_future_t);
 ```  
 
-#Data model interface
+Data model interface
 ---
 
-```  
-  **Create trace object**
-```  
+  
+  **Create trace object**  
  
   `return` trace object handle
  
-  `note` trace object needs to bound to a database and database interface methods should be
-        called to fill trace with data, starting with rocprofvis_db_read_metadata_async
+  `note` trace object needs to bound to a database and database interface methods should be called to fill trace with data, starting with rocprofvis_db_read_metadata_async
 
 ```  
 rocprofvis_dm_trace_t   rocprofvis_dm_create_trace(void); 
@@ -220,9 +212,7 @@ rocprofvis_dm_trace_t   rocprofvis_dm_create_trace(void);
 
 ---
 
-```  
-  **Deleting trace and all its resources including bound database**
-```  
+  **Deleting trace and all its resources including bound database**  
  
   `param` trace trace object handle
  
@@ -235,9 +225,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_trace(
 
 ---
 
-```  
-  **Binds trace to database**
-```  
+  **Binds trace to database**  
  
   `param` trace trace object handle created with rocprofvis_dm_create_trace()
   `param` database database object handle created with rocprofvis_db_open_database()
@@ -251,8 +239,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_bind_trace_to_database(
 ```  
 
 ---
-
-```  
+ 
   **Delete time slice with specified start and end timestamps**
  
   `param` trace trace object handle created with rocprofvis_dm_create_trace()
@@ -269,13 +256,10 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_time_slice(
 ```  
 
 ---
-
-```  
-  **Delete all time slices**
-```  
+  
+  **Delete all time slices**  
  
   `param` trace trace object handle created with rocprofvis_dm_create_trace()
- 
   `return` status of operation
  
 ```  
@@ -285,9 +269,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_all_time_slices(
 
 ---
 
-```  
-  **Delete event property object of specified type**
-```  
+  **Delete event property object of specified type**  
  
   `param` trace trace object handle created with rocprofvis_dm_create_trace()
   `param` type type of property
@@ -307,9 +289,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_event_property_for(
 
 ---
 
-```  
-  **Delete all event property objects of specified type**
-```  
+  **Delete all event property objects of specified type**  
  
   `param` trace trace object handle created with rocprofvis_dm_create_trace()
   `param` type type of property
@@ -327,10 +307,8 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_all_event_properties_for(
 
 ---
 
-```  
   **Delete a table by specified table index**
-         Table is created when executed SQL query using rocprofvis_db_execute_query_async method
-```  
+        Table is created when executed SQL query using rocprofvis_db_execute_query_async method  
  
   `param` trace trace object handle created with rocprofvis_dm_create_trace()
   `param` index index of a table. Number of existing tables can queried by reading Trace object property kRPVDMNumberOfTablesUInt64
@@ -345,13 +323,10 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_table_at(
 
 ---
 
-```  
   **Delete all tables**
-         Tables are created when executed SQL queries using rocprofvis_db_execute_query_async method
-```  
+         Tables are created when executed SQL queries using rocprofvis_db_execute_query_async method  
  
   `param` trace trace object handle created with rocprofvis_dm_create_trace()
- 
   `return` status of operation
  
 ```  
@@ -359,7 +334,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_all_tables(
                                     rocprofvis_dm_trace_t);  
 ```  
 
-#Universal property getters
+Universal property getters
 ---
 
  There are 10 property getter methods. Two methods to get property of each type:
@@ -369,15 +344,12 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_all_tables(
  In second case if operation fails, 0 or nullptr will be returned.
 
 ---
-
-``` 
-  **Return property value as uint64**
-```  
+ 
+  **Return property value as uint64**  
  
   `param` handle any object handle
   `param` property enumeration of properties for specified handle type
   `param` index index of any indexed property
- 
   `return` uint64_t value
  
 ```  
@@ -388,15 +360,12 @@ uint64_t  rocprofvis_dm_get_property_as_uint64(
 ``` 
 
 ---
-
-```  
-  **Return property value as int64**
-```  
+  
+  **Return property value as int64**  
  
   `param` handle any object handle
   `param` property enumeration of properties for specified handle type
   `param` index index of any indexed property
- 
   `return` int64_t value
  
 ```  
@@ -408,14 +377,11 @@ int64_t   rocprofvis_dm_get_property_as_int64(
 
 ---
 
-```  
-  **Return property value as double**
-```  
+  **Return property value as double**  
  
   `param` handle any object handle
   `param` property enumeration of properties for specified handle type
   `param` index index of any indexed property
- 
   `return` double value
  
 ```  
@@ -426,15 +392,12 @@ double  rocprofvis_dm_get_property_as_double(
 ```  
 
 ---
-
-```  
-  **Return property value as char**
-```  
+  
+  **Return property value as char**  
  
   `param` handle any object handle
   `param` property enumeration of properties for specified handle type
   `param` index index of any indexed property
- 
   `return` char value
  
 ```  
@@ -446,14 +409,11 @@ char   rocprofvis_dm_get_property_as_charptr(
 
 ---
 
-```  
-  **Return property value as rocprofvis_dm_handle_t**
-```  
+  **Return property value as rocprofvis_dm_handle_t**  
  
   `param` handle any object handle
   `param` property enumeration of properties for specified handle type
   `param` index index of any indexed property
- 
   `return` rocprofvis_dm_handle_t value
  
 

@@ -20,11 +20,14 @@ add_library(rocprof-visualizer-controller STATIC
     src/controller/src/rocprofvis_controller_segment.cpp
     src/controller/src/rocprofvis_controller_timeline.cpp
     src/controller/src/rocprofvis_controller_trace.cpp
+    src/controller/src/rocprofvis_controller_json_trace.cpp
     src/controller/src/rocprofvis_controller_track.cpp
     src/controller/src/rocprofvis_controller.cpp
 )
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
+target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jsoncpp)
+target_link_libraries(rocprof-visualizer-controller PRIVATE json)
 
 add_executable(rocprof-visualizer src/app/src/rocprofvis_trace.cpp src/app/src/rocprofvis_trace_ui.cpp src/app/src/rocprofvis_imgui_vulkan.cpp src/app/src/main.cpp src/view/src/rocprofvis_line_chart.cpp src/view/src/rocprofvis_line_chart.h src/view/src/rocprofvis_main_view.cpp src/view/src/rocprofvis_grid.cpp src/view/src/rocprofvis_grid.h src/view/src/rocprofvis_flame_chart.cpp src/view/src/rocprofvis_flame_chart.h src/view/src/rocprofvis_graph_view_metadata.h src/view/src/rocprofvis_graph_view_metadata.cpp )
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)

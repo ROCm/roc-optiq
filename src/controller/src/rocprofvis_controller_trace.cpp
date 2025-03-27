@@ -9,8 +9,7 @@
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_id.h"
-
-#include "rocprofvis_trace.h"
+#include "rocprofvis_controller_json_trace.h"
 
 #include <cassert>
 
@@ -52,8 +51,8 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
             m_timeline = new Timeline(0);
             if(m_timeline)
             {
-                rocprofvis_trace_data_t trace_object;
-                std::future<bool> future = rocprofvis_trace_async_load_json_trace( filepath.c_str(), trace_object);
+                rocprofvis_controller_json_trace_data_t trace_object;
+                std::future<bool> future = rocprofvis_controller_json_trace_async_load( filepath.c_str(), trace_object);
                 if(future.valid())
                 {
                     future.wait();

@@ -8,8 +8,7 @@
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_id.h"
-
-#include "rocprofvis_trace.h"
+#include "rocprofvis_controller_json_trace.h"
 
 #include <cassert>
 

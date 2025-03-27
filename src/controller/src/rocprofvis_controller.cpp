@@ -14,8 +14,7 @@
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_graph.h"
-
-#include "rocprofvis_trace.h"
+#include "rocprofvis_controller_json_trace.h"
 
 #include <cassert>
 

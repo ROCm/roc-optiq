@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_handle.h"
 #include <map>
 #include <string>
+#include <memory>
 
 namespace RocProfVis
 {
@@ -41,7 +42,7 @@ private:
     uint64_t m_id;
     uint64_t m_num_elements;
     rocprofvis_controller_track_type_t m_type;
-    std::map<double, Segment*> m_segments;
+    std::map<double, std::unique_ptr<Segment>> m_segments;
     double m_start_timestamp;
     double m_end_timestamp;
     std::string m_name;

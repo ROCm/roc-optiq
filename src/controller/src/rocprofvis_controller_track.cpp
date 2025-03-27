@@ -22,10 +22,6 @@ Track::Track(rocprofvis_controller_track_type_t type, uint64_t id)
 
 Track::~Track()
 {
-    for (auto& pair : m_segments)
-    {
-        delete pair.second;
-    }
 }
 
 rocprofvis_result_t Track::Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index)
@@ -33,12 +29,12 @@ rocprofvis_result_t Track::Fetch(uint32_t lod, double start, double end, Array& 
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if((start <= m_start_timestamp && end >= m_end_timestamp) || (start >= m_start_timestamp && start < m_end_timestamp) || (end > m_start_timestamp && end <= m_end_timestamp))
     {
-        auto lower = std::lower_bound(m_segments.begin(), m_segments.end(), std::max(m_start_timestamp, start), [](std::pair<double, Segment*> const& pair, double const& start) -> bool
+        auto lower = std::lower_bound(m_segments.begin(), m_segments.end(), std::max(m_start_timestamp, start), [](std::pair<const double, std::unique_ptr<Segment>> const& pair, double const& start) -> bool
         {
             bool result = (pair.second->GetMaxTimestamp() < start);
             return result;
         });
-        auto upper = std::upper_bound(m_segments.begin(), m_segments.end(), std::min(m_end_timestamp, end), [](double const& end, std::pair<double, Segment*> const& pair) -> bool
+        auto upper = std::upper_bound(m_segments.begin(), m_segments.end(), std::min(m_end_timestamp, end), [](double const& end, std::pair<const double, std::unique_ptr<Segment>> const& pair) -> bool
         {
             bool result = (end <= pair.first);
             return result;
@@ -325,7 +321,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                             if (m_segments.find(segment_start) == m_segments.end())
                             {
                                 double segment_end = segment_start + segment_duration;
-                                Segment* segment = new Segment(m_type);
+                                std::unique_ptr<Segment> segment = std::make_unique<Segment>(m_type);
                                 segment->SetStartEndTimestamps(segment_start, segment_end);
                                 segment->SetMinTimestamp(timestamp); 
                                 if (object_type == kRPVControllerObjectTypeEvent)
@@ -339,13 +335,13 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                 {
                                     segment->SetMaxTimestamp(timestamp);
                                 }
-                                m_segments.insert(std::make_pair(segment_start, segment));
+                                m_segments.insert(std::make_pair(segment_start, std::move(segment)));
                                 result = (m_segments.find(segment_start) != m_segments.end()) ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
                             }
 
                             if (result == kRocProfVisResultSuccess)
                             {
-                                Segment* segment = m_segments[segment_start];
+                                std::unique_ptr<Segment>& segment = m_segments[segment_start];
                                 segment->SetMinTimestamp(std::min(segment->GetMinTimestamp(), timestamp));
                                 double end_timestamp = timestamp;
                                 if (object_type == kRPVControllerObjectTypeEvent)

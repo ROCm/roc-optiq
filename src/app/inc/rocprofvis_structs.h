@@ -2,7 +2,8 @@
 // This is here to stop circular dependencies
 
 #pragma once
- #include <future>
+
+#include <future>
 #include <map>
 #include <string>
 #include <vector>
@@ -62,15 +63,6 @@ struct rocprofvis_trace_process_t
 {
     std::string                                      m_name;
     std::map<std::string, rocprofvis_trace_thread_t> m_threads;
-};
-
-struct rocprofvis_trace_data_t
-{
-    double                                            m_min_ts;
-    double                                            m_max_ts;
-    std::map<std::string, rocprofvis_trace_process_t> m_trace_data;
-    bool                                              m_is_trace_loaded = false;
-    std::future<bool>                                 m_loading_future;
 };
 
 struct rocprofvis_meta_map_struct_t

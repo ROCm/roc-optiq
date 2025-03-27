@@ -1,11 +1,10 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_trace.h"
+#include "rocprofvis_structs.h"
 #include "ImGuiFileDialog.h"
 #include "imgui.h"
 #include "imgui_widget_flamegraph.h"
 #include "implot.h"
-#include "json.h"
 #include "rocprofvis_main_view.h"
 #include "rocprofvis_controller.h"
 #include <fstream>
@@ -88,29 +87,29 @@ rocprofvis_trace_counter_plot_getter(int idx, void* user_data)
     return point;
 }
 
-static rocprofvis_trace_data_t trace_object;
 static rocprofvis_controller_future_t* trace_future = nullptr;
 static rocprofvis_controller_t* trace_controller = nullptr;
 static rocprofvis_controller_timeline_t* trace_timeline = nullptr;
 static rocprofvis_controller_array_t* graph_data_array = nullptr;
 static rocprofvis_controller_array_t* graph_futures = nullptr;
 
+static double s_min_ts = DBL_MAX;
+static double s_max_ts = 0.0;
+static bool s_is_trace_loaded = false;
+
 void
 rocprofvis_trace_setup()
 {
     ImPlot::CreateContext();
 
-    trace_object.m_min_ts          = DBL_MAX;
-    trace_object.m_max_ts          = 0.0;
-    trace_object.m_is_trace_loaded = false;
+    s_min_ts          = DBL_MAX;
+    s_max_ts          = 0.0;
+    s_is_trace_loaded = false;
 }
 
 static void
 rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
 {
-    std::map<std::string, rocprofvis_trace_process_t>& trace_data =
-        trace_object.m_trace_data;
-
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->GetWorkPos());
@@ -122,7 +121,7 @@ rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
 #endif
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::SetNextWindowContentSize(
-        ImVec2((trace_object.m_max_ts - trace_object.m_min_ts) / 1000.0, 0.f));
+        ImVec2((s_max_ts - s_min_ts) / 1000.0, 0.f));
     ImGui::Begin("Trace", nullptr,
                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
                      ImGuiWindowFlags_NoResize);
@@ -163,7 +162,7 @@ rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
         ImGui::EndMenuBar();
     }
 
-    if(trace_object.m_is_trace_loaded)
+    if(s_is_trace_loaded)
     {
         // Open ImGui window......
         main->GenerateGraphPoints(trace_timeline, graph_data_array);
@@ -180,7 +179,7 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
 
     if(ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
     {
-        trace_object.m_is_trace_loaded = false;
+        s_is_trace_loaded = false;
         if(ImGuiFileDialog::Instance()->IsOk())
         {
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
@@ -354,13 +353,13 @@ rocprofvis_trace_draw(RocProfVis::View::MainView* main)
 
             if(result == kRocProfVisResultSuccess)
             {
-                trace_object.m_is_trace_loaded = true;
+                s_is_trace_loaded = true;
                 is_open                        = false;
                 ImGui::CloseCurrentPopup();
             }
         }
 
-        if(!trace_object.m_is_trace_loaded)
+        if(!s_is_trace_loaded)
         {
             if(ImGui::BeginPopupModal("Loading"))
             {

@@ -7,3 +7,4 @@ out/build/x64-Debug/
 .vs
 
 .vs/rocprofiler-visualizer/v17
+sqlite3.c

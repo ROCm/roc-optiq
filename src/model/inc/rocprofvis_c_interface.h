@@ -31,10 +31,14 @@
 
 #include "rocprofvis_c_interface_types.h"
 
+#ifdef __cplusplus
 extern "C"
 {
+#endif
  #include "rocprofvis_interface.h" 
+#ifdef __cplusplus
 }
+#endif
 
 /***********************************Universal property getters**************************************
 *

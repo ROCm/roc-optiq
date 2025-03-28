@@ -36,7 +36,7 @@ make <br />
 **To build CFFI library:**<br />
 **Build C clibrary first**, then<br />
 cd build
-python ../python/cffi_build.py<br />
+python ../python/rocprofvis_cffi_build.py<br />
 <br />
 
 

@@ -3,7 +3,6 @@
 #include "rocprofvis_structs.h"
 #include "ImGuiFileDialog.h"
 #include "imgui.h"
-#include "imgui_widget_flamegraph.h"
 #include "implot.h"
 #include "rocprofvis_main_view.h"
 #include "rocprofvis_controller.h"

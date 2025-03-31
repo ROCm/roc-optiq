@@ -17,13 +17,6 @@ target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backen
 target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIRS})
 target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIR})
 
-add_library(imgui-flame-graph STATIC
-    imgui-flame-graph/imgui_widget_flamegraph.cpp
-)
-target_compile_definitions(imgui-flame-graph PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
-target_include_directories(imgui-flame-graph PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
-target_include_directories(imgui-flame-graph PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui-flame-graph)
-
 add_library(implot STATIC
     implot/implot.cpp
     implot/implot_items.cpp

@@ -11,6 +11,7 @@
 #include "rocprofvis_controller_json_trace.h"
 
 #include <cassert>
+#include <cfloat>
 
 namespace RocProfVis
 {

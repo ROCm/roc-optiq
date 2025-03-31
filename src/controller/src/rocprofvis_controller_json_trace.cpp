@@ -5,6 +5,7 @@
 #include "json.h"
 #include <fstream>
 #include <iostream>
+#include <cfloat>
 
 std::future<bool>
 rocprofvis_controller_json_trace_async_load(std::string              file_path,

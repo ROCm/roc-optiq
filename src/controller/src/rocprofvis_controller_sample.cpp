@@ -4,8 +4,6 @@
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_reference.h"
 
-#include <cassert>
-
 namespace RocProfVis
 {
 namespace Controller

@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include <cassert>
-
 namespace RocProfVis
 {
 namespace Controller

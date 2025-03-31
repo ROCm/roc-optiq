@@ -7,6 +7,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
 add_subdirectory(thirdparty/)
+add_subdirectory(src/model/)
 
 add_library(rocprof-visualizer-controller STATIC
     src/controller/src/rocprofvis_controller_array.cpp
@@ -35,11 +36,13 @@ target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
 target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIR})
+target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 target_link_libraries(rocprof-visualizer PRIVATE imgui)
 target_link_libraries(rocprof-visualizer PRIVATE imgui-flame-graph)
 target_link_libraries(rocprof-visualizer PRIVATE implot)
 target_link_libraries(rocprof-visualizer PRIVATE ImGuiFileDialog)
 target_link_libraries(rocprof-visualizer PRIVATE glfw)
 target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-controller)
+target_link_libraries(rocprof-visualizer PRIVATE datamodel)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")

@@ -3,6 +3,7 @@
 #include "rocprofvis_controller_future.h"
 
 #include <cassert>
+#include <cfloat>
 
 namespace RocProfVis
 {

@@ -4,6 +4,8 @@
 #include "rocprofvis_controller_reference.h"
 
 #include <cassert>
+#include <cfloat>
+#include <cmath>
 
 namespace RocProfVis
 {
@@ -51,7 +53,7 @@ void SampleLOD::CalculateChildValues(void)
     }
     else
     {
-        uint64_t lower = std::max(num_children / 2, 1llu) - 1;
+        uint64_t lower = std::max(num_children / 2, (uint64_t)1) - 1;
         uint64_t upper = std::min(num_children / 2, values.size() - 1);
 
         m_child_median = (values[lower] + values[upper]) / 2;

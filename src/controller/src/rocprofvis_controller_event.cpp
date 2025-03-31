@@ -3,6 +3,7 @@
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_reference.h"
+#include <cstring>
 
 namespace RocProfVis
 {

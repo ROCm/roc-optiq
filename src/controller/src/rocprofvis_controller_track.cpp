@@ -4,6 +4,9 @@
 
 #include <cassert>
 #include <algorithm>
+#include <cfloat>
+#include <cstring>
+#include <cmath>
 
 namespace RocProfVis
 {

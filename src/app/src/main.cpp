@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_imgui_backend.h"
-#include "rocprofvis_trace.h"
+#include "rocprofvis_trace_ui.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -13,6 +13,8 @@
 #include <stdlib.h>
 
 #include "rocprofvis_main_view.h"
+
+void rocprofvis_trace_draw(RocProfVis::View::MainView* main);
 
 static void
 glfw_error_callback(int error, const char* description)

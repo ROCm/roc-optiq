@@ -3,6 +3,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "rocprofvis_controller.h"
 #include "rocprofvis_structs.h"
 #include <map>
 #include <string>
@@ -19,15 +20,15 @@ public:
     MainView();
     ~MainView();
 
-    void GenerateGraphPoints(
-        std::map<std::string, rocprofvis_trace_process_t>& trace_data);
+    void GenerateGraphPoints(rocprofvis_controller_timeline_t* object,
+                             rocprofvis_controller_array_t*    array);
 
     void MakeGrid();
     void MakeScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos);
-    void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data,
+    void MakeGraphView(rocprofvis_controller_timeline_t*                  object,
+                       rocprofvis_controller_array_t*                     array,
                        float                                              scale_x);
-    void MakeGraphMetadataView(
-        std::map<std::string, rocprofvis_trace_process_t>& trace_data);
+    void MakeGraphMetadataView();
     void HandleGraphResize(int chart_id);
     void HandleSidebarResize();
     void FindMaxMin();
@@ -39,9 +40,8 @@ public:
     void RenderGraphCustomizationWindow(int graph_number);
 
     void                                  HandleTopSurfaceTouch();
-    std::vector<rocprofvis_data_point_t>  ExtractPointsFromData(void* data);
-    std::vector<rocprofvis_trace_event_t> ExtractFlamePoints(
-        const std::vector<rocprofvis_trace_event_t>& traceEvents);
+    std::vector<rocprofvis_data_point_t>  ExtractPointsFromData(rocprofvis_controller_array_t* track_data);
+    std::vector<rocprofvis_trace_event_t> ExtractFlamePoints(rocprofvis_controller_array_t* track_data);
 
 private:
     std::map<int, rocprofvis_meta_map_struct_t> m_meta_map;

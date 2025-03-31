@@ -1,0 +1,23 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
+#pragma once
+
+#include <stdint.h>
+
+typedef uint32_t rocprofvis_property_t;
+typedef struct rocprofvis_handle_t rocprofvis_handle_t;
+typedef rocprofvis_handle_t rocprofvis_controller_t;
+typedef rocprofvis_handle_t rocprofvis_controller_timeline_t;
+typedef rocprofvis_handle_t rocprofvis_controller_view_t;
+typedef rocprofvis_handle_t rocprofvis_controller_track_t;
+typedef rocprofvis_handle_t rocprofvis_controller_graph_t;
+typedef rocprofvis_handle_t rocprofvis_controller_table_t;
+typedef rocprofvis_handle_t rocprofvis_controller_sample_t;
+typedef rocprofvis_handle_t rocprofvis_controller_event_t;
+typedef rocprofvis_handle_t rocprofvis_controller_flow_control_t;
+typedef rocprofvis_handle_t rocprofvis_controller_callstack_t;
+typedef rocprofvis_handle_t rocprofvis_controller_future_t;
+typedef rocprofvis_handle_t rocprofvis_controller_array_t;
+typedef rocprofvis_handle_t rocprofvis_controller_analysis_args_t;
+typedef rocprofvis_handle_t rocprofvis_controller_node_t;
+typedef rocprofvis_handle_t rocprofvis_controller_processor_t;

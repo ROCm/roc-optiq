@@ -5,6 +5,8 @@
 #include "rocprofvis_charts.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_structs.h"
+#include "rocprofvis_controller.h"
+
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -64,15 +66,12 @@ LineChart::SetColorByValue(rocprofvis_color_by_value color_by_value_digits)
 }
 
 std::vector<rocprofvis_data_point_t>
-LineChart::ExtractPointsFromData()
+LineChart::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
 {
-    auto* counters_vector = static_cast<std::vector<rocprofvis_trace_counter_t>*>(datap);
-
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
-    int    screen_width =
-        static_cast<int>(display_size.x) * 5;  // Increase point density if needed.
+    int    screen_width = static_cast<int>(display_size.x);
 
     float effectiveWidth = screen_width / m_zoom;
     float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
@@ -80,10 +79,40 @@ LineChart::ExtractPointsFromData()
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
     int    bin_count         = 0;
-    double current_bin_start = counters_vector->at(0).m_start_ts;
+    double current_bin_start = DBL_MAX;
 
-    for(const auto& counter : *counters_vector)
+    uint64_t            count  = 0;
+    rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+        track_data, kRPVControllerArrayNumEntries, 0, &count);
+    assert(result == kRocProfVisResultSuccess);
+
+    rocprofvis_trace_counter_t counter;
+
+    for(uint64_t i = 0; i < count; i++)
     {
+        rocprofvis_controller_sample_t* sample = nullptr;
+        result                                 = rocprofvis_controller_get_object(
+            track_data, kRPVControllerArrayEntryIndexed, i, &sample);
+        assert(result == kRocProfVisResultSuccess && sample);
+
+        double start_ts = 0;
+        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
+                                                  0, &start_ts);
+        assert(result == kRocProfVisResultSuccess);
+
+        double value = 0;
+        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
+                                                  &value);
+        assert(result == kRocProfVisResultSuccess);
+
+        counter.m_start_ts = start_ts;
+        counter.m_value    = value;
+
+        if(i == 0)
+        {
+            current_bin_start = start_ts;
+        }
+
         if(counter.m_start_ts < current_bin_start + bin_size)
         {
             bin_sum_x += counter.m_start_ts;

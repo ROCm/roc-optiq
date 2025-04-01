@@ -4,6 +4,7 @@
 #include "imgui.h"
 #include "rocprofvis_charts.h"
 #include "rocprofvis_grid.h"
+#include "rocprofvis_controller.h"
 #include <algorithm>
 #include <iostream>
 #include <limits>
@@ -24,19 +25,22 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 , m_chart_id(chart_id)
 , m_max_x(max_x)
 , m_scale_x(scale_x)
-, m_raw_flame(raw_flame)
+//, m_raw_flame(raw_flame)
 , m_name(name)
 , size(75)
 , color_by_value_digits()
-
 {}
+
 std::tuple<float, float>
 FlameChart::FindMaxMinFlame()
 {
-    m_min_x = m_raw_flame[0].m_start_ts;
-    m_max_x = m_raw_flame[0].m_start_ts + m_raw_flame[0].m_duration;
+    // m_min_x = m_raw_flame[0].m_start_ts;
+    // m_max_x = m_raw_flame[0].m_start_ts + m_raw_flame[0].m_duration;
 
-    for(const auto& point : m_raw_flame)
+    m_min_x = flames[0].m_start_ts;
+    m_max_x = flames[0].m_start_ts + flames[0].m_duration;
+
+    for(const auto& point : flames)
     {
         if(point.m_start_ts < m_min_x)
         {
@@ -49,6 +53,7 @@ FlameChart::FindMaxMinFlame()
     }
     return std::make_tuple(m_min_x, m_max_x);
 }
+
 void
 FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
                            float scale_x)
@@ -88,8 +93,8 @@ FlameChart::ReturnChartID()
     return m_chart_id;
 }
 
-void
-FlameChart::ExtractFlamePoints()
+void 
+FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
 {
     std::vector<rocprofvis_trace_event_t> entries;
 
@@ -101,10 +106,48 @@ FlameChart::ExtractFlamePoints()
 
     double bin_sum_x         = 0.0;
     int    bin_count         = 0;
-    double current_bin_start = m_raw_flame[0].m_start_ts;
+    double current_bin_start = DBL_MAX;
     float  largest_duration  = 0;
-    for(const auto& counter : m_raw_flame)
+
+    uint64_t count  = 0;
+    rocprofvis_result_t result = rocprofvis_controller_get_uint64(track_data, kRPVControllerArrayNumEntries, 0, &count);
+    assert(result == kRocProfVisResultSuccess);
+
+    rocprofvis_trace_event_t counter;
+
+    for(uint64_t i = 0; i < count; i++)
     {
+        rocprofvis_controller_event_t* event = nullptr;
+        result = rocprofvis_controller_get_object(track_data, kRPVControllerArrayEntryIndexed, i, &event);
+        assert(result == kRocProfVisResultSuccess && event);
+
+        double start_ts = 0;
+        result = rocprofvis_controller_get_double(event, kRPVControllerEventStartTimestamp, 0, &start_ts);
+        assert(result == kRocProfVisResultSuccess);
+
+        double end_ts = 0;
+        result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp, 0, &end_ts);
+        assert(result == kRocProfVisResultSuccess);
+
+        uint32_t length = 0;
+        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0, nullptr, &length);
+        assert(result == kRocProfVisResultSuccess);
+        
+        length += 1;
+        counter.m_name.resize(length);
+        char* buffer = const_cast<char*>(counter.m_name.c_str());
+        assert(buffer);
+        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0, buffer, &length);
+        assert(result == kRocProfVisResultSuccess);
+
+        if (i == 0)
+        {
+            current_bin_start = start_ts;
+        }
+
+        counter.m_start_ts = start_ts;
+        counter.m_duration = end_ts - start_ts;
+
         if(counter.m_start_ts < current_bin_start + bin_size)
         {
             if(counter.m_duration > largest_duration)
@@ -142,13 +185,15 @@ FlameChart::ExtractFlamePoints()
         rocprofvis_trace_event_t binned_point;
         binned_point.m_start_ts = bin_sum_x / bin_count;
         binned_point.m_duration = largest_duration;
-        binned_point.m_name     = m_raw_flame.back().m_name;
+        binned_point.m_name     = counter.m_name;
 
         entries.push_back(binned_point);
     }
 
     flames = entries;
+    ///return entries;
 }
+
 void
 FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
                     rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list)

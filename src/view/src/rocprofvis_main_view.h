@@ -8,6 +8,7 @@
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_structs.h"
 #include "widgets/rocprofvis_widget.h"
+#include "rocprofvis_controller_types.h"
 #include <map>
 #include <string>
 #include <utility>
@@ -26,12 +27,16 @@ public:
 
     virtual void Render();
     void         SetData(std::map<std::string, rocprofvis_trace_process_t>& trace_data);
-    void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data,
-                       float                                              scale_x);
+    // void MakeGraphView(std::map<std::string, rocprofvis_trace_process_t>& trace_data,
+    //                    float                                              scale_x);
+
+    void MakeGraphView(rocprofvis_controller_timeline_t* timeline,
+                        rocprofvis_controller_array_t* array, float scale_x);
+
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
 
 private:
-    void RenderGraphPoints(std::map<std::string, rocprofvis_trace_process_t>& trace_data);
+    void RenderGraphPoints();//std::map<std::string, rocprofvis_trace_process_t>& trace_data);
     void RenderGrid();
     void RenderScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos);
     void RenderGraphView();
@@ -58,6 +63,7 @@ private:
     float                                              m_max_value;
     float                                              m_zoom;
     float                                              m_movement;
+    float                                              m_scrubber_position;
     float                                              m_v_width;
     float                                              m_v_min_x;
     float                                              m_v_max_x;

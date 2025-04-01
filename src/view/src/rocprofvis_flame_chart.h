@@ -4,6 +4,8 @@
 #include "imgui.h"
 #include "rocprofvis_charts.h"
 #include "rocprofvis_structs.h"
+#include "rocprofvis_controller_types.h"
+
 #include <string>
 #include <vector>
 
@@ -18,10 +20,11 @@ public:
     FlameChart(int chart_id, std::string name, float zoom, float movement, float min_x,
                float max_x, float scale_x,
                std::vector<rocprofvis_trace_event_t>& raw_flame);
-    void                     Render() override;
-    void                     DrawBox(ImVec2 start_position, int boxplot_box_id,
-                                     rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list);
-    void                     ExtractFlamePoints();
+    void Render() override;
+    void DrawBox(ImVec2 start_position, int boxplot_box_id,
+                 rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list);
+    void ExtractFlamePoints(rocprofvis_controller_array_t* track_data);
+
     std::tuple<float, float> FindMaxMinFlame();
     void        UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
                                float scale_x) override;
@@ -29,7 +32,7 @@ public:
     int         ReturnChartID() override;
     void        SetID(int id) override;
     std::string GetName() override;
-    void        SetColorByValue(rocprofvis_color_by_value color_by_value_digits) override;  
+    void        SetColorByValue(rocprofvis_color_by_value color_by_value_digits) override;
 
 private:
     std::vector<rocprofvis_trace_event_t>  flames;
@@ -42,11 +45,10 @@ private:
     float                                  m_movement;
     float                                  m_scale_x;
     int                                    m_chart_id;
-    std::vector<rocprofvis_trace_event_t>& m_raw_flame;
+    //std::vector<rocprofvis_trace_event_t>& m_raw_flame;
     float                                  size;
     float                                  m_sidebar_size;
-    rocprofvis_color_by_value color_by_value_digits; 
-
+    rocprofvis_color_by_value              color_by_value_digits;
 };
 
 }  // namespace View

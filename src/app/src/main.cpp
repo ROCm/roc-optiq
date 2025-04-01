@@ -14,7 +14,7 @@
 
 #include "rocprofvis_view_module.h"
 
-void rocprofvis_trace_draw(RocProfVis::View::MainView* main);
+//void rocprofvis_trace_draw(RocProfVis::View::MainView* main);
 
 static void
 glfw_error_callback(int error, const char* description)
@@ -71,7 +71,7 @@ main(int, char**)
 
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
-
+/*
                     ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 
                     ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0), ImGuiCond_Always,
@@ -86,11 +86,11 @@ main(int, char**)
 
                     // Open ImGui window
                     ImGui::Begin("Line Chart Window", nullptr, windowFlags);
-
+*/
                     rocprofvis_view_render();
                    
                     // Close ImGui window
-                    ImGui::End();
+  //                  ImGui::End();
 
                     // Rendering
                     ImGui::Render();

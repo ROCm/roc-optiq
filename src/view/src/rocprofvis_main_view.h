@@ -58,6 +58,7 @@ private:
     float                                       m_scale_x;
     float                                       m_min_x;
     float                                       m_original_v_max_x;
+    bool                                        m_capture_og_v_max_x;
     float                                       m_scroll_position;
     float                                       m_max_x;
     float                                       m_min_y;

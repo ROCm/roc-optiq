@@ -29,17 +29,18 @@ MainView::MainView()
 , m_max_y(FLT_MIN)
 , m_scroll_position(0.0f)
 , m_scrubber_position(0.0f)
-, m_v_min_x()
-, m_v_max_x()
-, m_scale_x()
+, m_v_min_x(0.0f)
+, m_v_max_x(0.0f)
+, m_scale_x(0.0f)
 , m_meta_map_made(false)
 , m_meta_map({})
 , m_user_adjusting_graph_height(false)
-, m_previous_scroll_position(0)
+, m_previous_scroll_position(0.0f)
 , m_show_graph_customization_window(false)
 , m_graph_map({})
 , m_is_control_held(false)
-, m_original_v_max_x(-100)
+, m_original_v_max_x(0.0f)
+, m_capture_og_v_max_x(true)
 {}
 
 MainView::~MainView() { DestroyGraphs(); }
@@ -47,19 +48,21 @@ MainView::~MainView() { DestroyGraphs(); }
 void
 MainView::ResetView()
 {
-    m_min_value         = 0.0f;
-    m_max_value         = 0.0f;
-    m_zoom              = 1.0f;
-    m_movement          = 0.0f;
-    m_min_x             = FLT_MAX;
-    m_max_x             = FLT_MIN;
-    m_min_y             = FLT_MAX;
-    m_max_y             = FLT_MIN;
-    m_scroll_position   = 0.0f;
-    m_scrubber_position = 0.0f;
-    m_v_min_x           = 0.0f;
-    m_v_max_x           = 0.0f;
-    m_scale_x           = 0.0f;
+    m_min_value          = 0.0f;
+    m_max_value          = 0.0f;
+    m_zoom               = 1.0f;
+    m_movement           = 0.0f;
+    m_min_x              = FLT_MAX;
+    m_max_x              = FLT_MIN;
+    m_min_y              = FLT_MAX;
+    m_max_y              = FLT_MIN;
+    m_scroll_position    = 0.0f;
+    m_scrubber_position  = 0.0f;
+    m_v_min_x            = 0.0f;
+    m_v_max_x            = 0.0f;
+    m_scale_x            = 0.0f;
+    m_original_v_max_x   = 0.0f;
+    m_capture_og_v_max_x = true;
 }
 
 void
@@ -422,15 +425,16 @@ MainView::RenderGraphPoints()
 
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 
-        // Scale used in all graphs computer here.
+        // Scale used in all graphs computed here.
         m_v_width = (m_max_x - m_min_x) / m_zoom;
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
         m_scale_x = content_size.x / (m_v_max_x - m_v_min_x);
 
-        if(m_original_v_max_x == -100)
+        if(m_capture_og_v_max_x)
         {
-            m_original_v_max_x = m_v_max_x;  // Used to set bounds
+            m_original_v_max_x   = m_v_max_x;  // Used to set bounds
+            m_capture_og_v_max_x = false;
         }
 
         RenderGrid();

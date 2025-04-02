@@ -1,6 +1,5 @@
 #pragma once
 #include "rocprofvis_structs.h"
-#include <string>
 
 class Charts
 {

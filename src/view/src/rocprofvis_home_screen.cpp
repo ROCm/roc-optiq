@@ -3,26 +3,8 @@
 #include "imgui.h"
 #include "rocprofvis_main_view.h"
 #include "rocprofvis_sidebar.h"
-#include <iostream>
 
 using namespace RocProfVis::View;
-
-float
-clamp(float input, float max, float min)
-{
-    if(input > max)
-    {
-        return max;
-    }
-    else if(input < min)
-    {
-        return min;
-    }
-    else
-    {
-        return input;
-    }
-}
 
 HomeScreen::HomeScreen()
 : m_main_view(nullptr)

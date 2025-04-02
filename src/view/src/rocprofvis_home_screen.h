@@ -1,5 +1,6 @@
 #pragma once
 #include "imgui.h"
+#include "rocprofvis_controller_types.h"
 #include "rocprofvis_main_view.h"
 #include "rocprofvis_sidebar.h"
 #include "widgets/rocprofvis_widget.h"

@@ -1,15 +1,10 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_appwindow.h"
-
 #include "ImGuiFileDialog.h"
 #include "imgui.h"
 #include "implot.h"
-
 #include "rocprofvis_controller.h"
-#include <fstream>
-#include <future>
-#include <iostream>
 
 using namespace RocProfVis::View;
 
@@ -146,8 +141,6 @@ AppWindow::Render()
     if(ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
     {
         m_is_trace_loaded = false;
-        std::cout << "This happened" << std::endl;
-
         if(ImGuiFileDialog::Instance()->IsOk())
         {
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();

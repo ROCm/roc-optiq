@@ -14,7 +14,7 @@
 
 #include "rocprofvis_view_module.h"
 
-//void rocprofvis_trace_draw(RocProfVis::View::MainView* main);
+// void rocprofvis_trace_draw(RocProfVis::View::MainView* main);
 
 static void
 glfw_error_callback(int error, const char* description)
@@ -71,26 +71,28 @@ main(int, char**)
 
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
-/*
-                    ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+                    /*
+                                        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 
-                    ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0), ImGuiCond_Always,
-                                            ImVec2(1.0f, 0.0f));
+                                        ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0),
+                       ImGuiCond_Always, ImVec2(1.0f, 0.0f));
 
-                    ImGui::SetNextWindowSize(
-                        ImVec2(displaySize.x * 0.8f, displaySize.y * 0.8f),
-                        ImGuiCond_Always);
+                                        ImGui::SetNextWindowSize(
+                                            ImVec2(displaySize.x * 0.8f, displaySize.y *
+                       0.8f), ImGuiCond_Always);
 
-                    ImGuiWindowFlags windowFlags =
-                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+                                        ImGuiWindowFlags windowFlags =
+                                            ImGuiWindowFlags_NoMove |
+                       ImGuiWindowFlags_NoResize;
 
-                    // Open ImGui window
-                    ImGui::Begin("Line Chart Window", nullptr, windowFlags);
-*/
+                                        // Open ImGui window
+                                        ImGui::Begin("Line Chart Window", nullptr,
+                       windowFlags);
+                    */
                     rocprofvis_view_render();
-                   
+
                     // Close ImGui window
-  //                  ImGui::End();
+                    //                  ImGui::End();
 
                     // Rendering
                     ImGui::Render();
@@ -130,4 +132,3 @@ main(int, char**)
 
     return resultCode;
 }
-

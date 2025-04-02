@@ -72,32 +72,32 @@ MainView::Render()
 }
 
 void
-MainView::RenderScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
+MainView::RenderScrubber(ImVec2 screen_pos)
 {
-    ImVec2 windowPos  = ImGui::GetWindowPos();
-    ImVec2 windowSize = ImGui::GetWindowSize();
-
     // Scrubber Line
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2 display_size = ImGui::GetWindowSize();
-    ImGui::SetNextWindowSize(ImVec2(display_size.x - 20.0f, display_size.y),
+    ImGui::SetNextWindowSize(ImVec2(display_size.x - 20, display_size.y),
                              ImGuiCond_Always);
 
-    ImGui::SetCursorPos(ImVec2(400, 0));
+    ImGui::SetCursorPos(ImVec2(400, 0));  // Sidebar size will be universal next PR.
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+
     ImGui::BeginChild("Scrubber View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
     if(ImGui::IsMouseHoveringRect(
-           ImVec2(0, 0), ImVec2(display_size_main_graphs.x, display_size_main_graphs.y)))
+           ImVec2(0, 0), ImVec2(display_size.x + 400,
+                                display_size.y)))  // 400 to account for sidebar size
     {
         ImVec2 mPos = ImGui::GetMousePos();
         draw_list->AddLine(ImVec2(mPos.x, screen_pos.y),
-                           ImVec2(mPos.x, screen_pos.y + display_size_main_graphs.y),
+                           ImVec2(mPos.x, screen_pos.y + display_size.y),
                            IM_COL32(0, 0, 0, 255), 2.0f);
     }
 
@@ -124,8 +124,7 @@ MainView::RenderGrid()
     ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y), ImGuiCond_Always);
 
     ImGui::SetCursorPos(ImVec2(0, 0));
-    // overlayed windows need to have fully trasparent bg otherwise they will overlay
-    // (with no alpha) over their predecessors
+   
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(220, 0, 0, 0));
 
     ImDrawList*            draw_list = ImGui::GetWindowDrawList();
@@ -412,21 +411,17 @@ MainView::RenderGraphPoints()
 
     if(ImGui::BeginChild("Main Graphs"))
     {
-        ImVec2 display_size_main_graphs = ImGui::GetIO().DisplaySize;
-
-        ImVec2 subcomponent_size_main = ImGui::GetContentRegionAvail();
+        ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
         ImGui::BeginChild(
             "Grid View 2", ImVec2(subcomponent_size_main.x, subcomponent_size_main.y),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-        ImVec2 content_size = ImGui::GetContentRegionAvail();
-
         // Scale used in all graphs computer here.
         m_v_width = (m_max_x - m_min_x) / m_zoom;
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
-        m_scale_x = content_size.x / (m_v_max_x - m_v_min_x);
+        m_scale_x = subcomponent_size_main.x / (m_v_max_x - m_v_min_x);
 
         if(m_original_v_max_x == -100)
         {
@@ -445,7 +440,7 @@ MainView::RenderGraphPoints()
         if(!m_is_control_held)
         {
             // Disable when user wants to reposition graphs.
-            RenderScrubber(display_size_main_graphs, screen_pos);
+            RenderScrubber(screen_pos);
             HandleTopSurfaceTouch();  // Funtion enables user interactions to be captured
         }
 
@@ -484,6 +479,10 @@ MainView::HandleTopSurfaceTouch()
         // Handle Panning
         if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
+            float drag_y = ImGui::GetIO().MouseDelta.y;
+
+            m_scroll_position = static_cast<int>(m_scroll_position - drag_y);
+
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (m_max_x - m_min_x) / m_zoom;
             if((10000 * ((m_min_x / m_v_min_x) - 1)) > 1.6 * (1 / (m_scale_x * 1000)))
@@ -506,9 +505,6 @@ MainView::HandleTopSurfaceTouch()
             {
                 m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
             }
-            float drag_y = ImGui::GetIO().MouseDelta.y;
-
-            m_scroll_position = static_cast<int>(m_scroll_position - drag_y);
         }
     }
 }

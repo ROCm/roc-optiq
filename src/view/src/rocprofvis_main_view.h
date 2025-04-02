@@ -28,7 +28,6 @@ public:
     virtual void Render();
     void         MakeGraphView(rocprofvis_controller_timeline_t* timeline,
                                rocprofvis_controller_array_t* array, float scale_x);
-
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
 
 private:
@@ -36,7 +35,7 @@ private:
     void DestroyGraphs();
     void RenderGraphPoints();
     void RenderGrid();
-    void RenderScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos);
+    void RenderScrubber(ImVec2 screen_pos);
     void RenderGraphView();
     void HandleGraphResize(int chart_id);
     void FindMaxMinFlame(std::vector<rocprofvis_trace_event_t> m_flame_event);

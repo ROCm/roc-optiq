@@ -27,7 +27,7 @@ HomeScreen::HomeScreen()
 
     LayoutItem traceArea;
     traceArea.m_item = std::make_shared<VSplitContainer>(top, bottom);
-    //traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
+    // traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
 
     m_container = std::make_shared<HSplitContainer>(left, traceArea);
     m_container->SetMinRightWidth(400);

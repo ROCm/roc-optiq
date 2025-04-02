@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_sidebar.h"
 #include "imgui.h"
 #include "rocprofvis_structs.h"
@@ -10,12 +12,15 @@
 using namespace RocProfVis::View;
 
 SideBar::SideBar()
-: m_dropdown_select(0), m_graph_map(nullptr)
+: m_dropdown_select(0)
+, m_graph_map(nullptr)
 {}
 
 SideBar::~SideBar() {}
 
-void SideBar::SetGraphMap(std::map<int, rocprofvis_graph_map_t>* graph_map) {
+void
+SideBar::SetGraphMap(std::map<int, rocprofvis_graph_map_t>* graph_map)
+{
     m_graph_map = graph_map;
 }
 
@@ -28,7 +33,8 @@ SideBar::Render()
 void
 SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 {
-    if(!tree) {
+    if(!tree)
+    {
         std::cout << "No graph tree!! " << std::endl;
         return;
     }
@@ -68,7 +74,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                         ImGui::Text("Color By Value");
                         ImGui::Spacing();
                         ImGui::PushItemWidth(40.0f);
-                        //Use this menu to expand user options in the future
+                        // Use this menu to expand user options in the future
                         ImGui::InputFloat(
                             "Region of Interest Min",
                             &tree_item.second.color_by_value_digits.interest_1_min);
@@ -77,7 +83,6 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                             "Region of Interest Max",
                             &tree_item.second.color_by_value_digits.interest_1_max);
 
-                     
                         ImGui::PopItemWidth();
                     }
                 }

@@ -32,8 +32,10 @@ AppWindow::AppWindow()
 , m_graph_futures(nullptr)
 {}
 
-AppWindow::~AppWindow() {
-    if(m_trace_controller) {
+AppWindow::~AppWindow()
+{
+    if(m_trace_controller)
+    {
         rocprofvis_controller_free(m_trace_controller);
         m_trace_controller = nullptr;
     }
@@ -61,8 +63,9 @@ AppWindow::Init()
 void
 AppWindow::handleOpenFile(std::string& file_path)
 {
-    //only one controller at time
-    if(m_trace_controller) {
+    // only one controller at time
+    if(m_trace_controller)
+    {
         rocprofvis_controller_free(m_trace_controller);
         m_trace_controller = nullptr;
     }
@@ -333,3 +336,4 @@ AppWindow::Render()
         }
     }
 }
+

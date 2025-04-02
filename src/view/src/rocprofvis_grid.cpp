@@ -63,6 +63,7 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
         {
             // loop through min-max and create appropriate number of scale markers with
             // marker value printed at bottom.
+
             float normalized_start =
                 (raw_position_points_x - (min_x + movement)) *
                 scale_x;  // this value takes the raw value of the output and converts

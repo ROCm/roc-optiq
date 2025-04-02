@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #pragma once
 #include "imgui.h"
 #include "rocprofvis_main_view.h"

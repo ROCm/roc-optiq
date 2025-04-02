@@ -186,7 +186,7 @@ LineChart::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float k
     // Calculate x for the given y
     double x = (known_y - b) / m;
 
-     return x;
+    return x;
 }
 
 void
@@ -260,7 +260,7 @@ LineChart::Render()
             {
                 // Code below enables user to define problematic regions in LineChart.
                 // Add to struct if more regions needed.
-        
+
                 bool point_1_in =
                     (m_color_by_value_digits.interest_1_max > m_data[i - 1].yValue &&
                      m_color_by_value_digits.interest_1_min < m_data[i - 1].yValue);

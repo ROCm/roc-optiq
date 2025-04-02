@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_appwindow.h"
 
 #include "ImGuiFileDialog.h"
@@ -11,10 +13,13 @@
 
 using namespace RocProfVis::View;
 
-AppWindow * AppWindow::m_instance = nullptr;
+AppWindow* AppWindow::m_instance = nullptr;
 
-AppWindow* AppWindow::getInstance() {
-    if(!m_instance) {
+AppWindow*
+AppWindow::getInstance()
+{
+    if(!m_instance)
+    {
         m_instance = new AppWindow();
     }
 
@@ -22,9 +27,14 @@ AppWindow* AppWindow::getInstance() {
 }
 
 AppWindow::AppWindow()
-: data_changed(false)
-, is_loading_trace(false)
+: m_data_changed(false)
+, m_is_loading_trace(false)
 , m_is_trace_loaded(false)
+, m_trace_future(nullptr)
+, m_trace_controller(nullptr)
+, m_trace_timeline(nullptr)
+, m_graph_data_array(nullptr)
+, m_graph_futures(nullptr)
 {}
 
 AppWindow::~AppWindow() {}
@@ -34,45 +44,44 @@ AppWindow::Init()
 {
     ImPlot::CreateContext();
 
-    // trace_object.m_min_ts          = DBL_MAX;
-    // trace_object.m_max_ts          = 0.0;
-    // trace_object.m_is_trace_loaded = false;
-
     LayoutItem statusBarItem(-1, 30.0f);
     statusBarItem.m_item = std::make_shared<RocWidget>();
     LayoutItem mainAreaItem(-1, -30.0f);
-    home_screen       = std::make_shared<HomeScreen>();
-    mainAreaItem.m_item = home_screen;
+    m_home_screen       = std::make_shared<HomeScreen>();
+    mainAreaItem.m_item = m_home_screen;
 
     std::vector<LayoutItem> layoutItems;
     layoutItems.push_back(mainAreaItem);
     layoutItems.push_back(statusBarItem);
-    main_view = std::make_shared<VFixedContainer>(layoutItems);
+    m_main_view = std::make_shared<VFixedContainer>(layoutItems);
 
     return true;
 }
 
-void AppWindow::handleOpenFile(std::string &file_path) {
-    trace_controller = rocprofvis_controller_alloc();
-    if (trace_controller)
+void
+AppWindow::handleOpenFile(std::string& file_path)
+{
+    m_trace_controller = rocprofvis_controller_alloc();
+    if(m_trace_controller)
     {
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        trace_future = rocprofvis_controller_future_alloc();
-        if(trace_future)
+        m_trace_future             = rocprofvis_controller_future_alloc();
+        if(m_trace_future)
         {
-            result = rocprofvis_controller_load_async(trace_controller, file_path.c_str(), trace_future);
+            result = rocprofvis_controller_load_async(m_trace_controller,
+                                                      file_path.c_str(), m_trace_future);
             assert(result == kRocProfVisResultSuccess);
 
             if(result != kRocProfVisResultSuccess)
             {
-                rocprofvis_controller_future_free(trace_future);
-                trace_future = nullptr;
+                rocprofvis_controller_future_free(m_trace_future);
+                m_trace_future = nullptr;
             }
         }
         if(result != kRocProfVisResultSuccess)
         {
-            rocprofvis_controller_free(trace_controller);
-            trace_controller = nullptr;
+            rocprofvis_controller_free(m_trace_controller);
+            m_trace_controller = nullptr;
         }
     }
 }
@@ -80,14 +89,10 @@ void AppWindow::handleOpenFile(std::string &file_path) {
 void
 AppWindow::Render()
 {
-    // std::map<std::string, rocprofvis_trace_process_t>& trace_data =
-    //     trace_object.m_trace_data;
-
-    if(home_screen && data_changed)
+    if(m_home_screen && m_data_changed)
     {
-        //home_screen->SetData(trace_data);
-        home_screen->SetData(trace_timeline, graph_data_array);
-        data_changed = false;
+        m_home_screen->SetData(m_trace_timeline, m_graph_data_array);
+        m_data_changed = false;
     }
 
 #ifdef IMGUI_HAS_VIEWPORT
@@ -99,10 +104,11 @@ AppWindow::Render()
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 #endif
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));   // Controls spacing between items
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0)); // X, Y padding
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(0, 0));  // Controls spacing between items
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));  // X, Y padding
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    
+
     ImGui::Begin("Main Window", nullptr,
                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
                      ImGuiWindowFlags_NoResize);
@@ -127,9 +133,9 @@ AppWindow::Render()
     if(m_is_trace_loaded)
     {
         // Show home screen
-        if(main_view)
+        if(m_main_view)
         {
-            main_view->Render();
+            m_main_view->Render();
         }
     }
 
@@ -145,50 +151,51 @@ AppWindow::Render()
         if(ImGuiFileDialog::Instance()->IsOk())
         {
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-            
+
             handleOpenFile(file_path);
-            is_loading_trace = true;
+            m_is_loading_trace = true;
         }
 
         ImGuiFileDialog::Instance()->Close();
     }
 
-    //load data
-    if(trace_future || graph_futures)
+    // load data
+    if(m_trace_future || m_graph_futures)
     {
-        if(trace_future)
+        if(m_trace_future)
         {
             rocprofvis_result_t result =
-                rocprofvis_controller_future_wait(trace_future, 0);
+                rocprofvis_controller_future_wait(m_trace_future, 0);
             assert(result == kRocProfVisResultSuccess ||
                    result == kRocProfVisResultTimeout);
             if(result == kRocProfVisResultSuccess)
             {
                 uint64_t uint64_result = 0;
                 result                 = rocprofvis_controller_get_uint64(
-                    trace_future, kRPVControllerFutureResult, 0, &uint64_result);
+                    m_trace_future, kRPVControllerFutureResult, 0, &uint64_result);
                 assert(result == kRocProfVisResultSuccess &&
                        uint64_result == kRocProfVisResultSuccess);
 
                 result = rocprofvis_controller_get_object(
-                    trace_controller, kRPVControllerTimeline, 0, &trace_timeline);
+                    m_trace_controller, kRPVControllerTimeline, 0, &m_trace_timeline);
 
-                if(result == kRocProfVisResultSuccess && trace_timeline)
+                if(result == kRocProfVisResultSuccess && m_trace_timeline)
                 {
                     uint64_t num_graphs = 0;
                     result              = rocprofvis_controller_get_uint64(
-                        trace_timeline, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
+                        m_trace_timeline, kRPVControllerTimelineNumGraphs, 0,
+                        &num_graphs);
 
                     double min_ts = 0;
                     result        = rocprofvis_controller_get_double(
-                        trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &min_ts);
+                        m_trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &min_ts);
 
                     double max_ts = 0;
                     result        = rocprofvis_controller_get_double(
-                        trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
+                        m_trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
 
-                    graph_data_array = rocprofvis_controller_array_alloc(num_graphs);
-                    graph_futures    = rocprofvis_controller_array_alloc(num_graphs);
+                    m_graph_data_array = rocprofvis_controller_array_alloc(num_graphs);
+                    m_graph_futures    = rocprofvis_controller_array_alloc(num_graphs);
 
                     for(uint32_t i = 0;
                         i < num_graphs && result == kRocProfVisResultSuccess; i++)
@@ -199,7 +206,7 @@ AppWindow::Render()
                             rocprofvis_controller_array_alloc(32);
                         rocprofvis_handle_t* graph = nullptr;
                         result                     = rocprofvis_controller_get_object(
-                            trace_timeline, kRPVControllerTimelineGraphIndexed, i,
+                            m_trace_timeline, kRPVControllerTimelineGraphIndexed, i,
                             &graph);
                         if(result == kRocProfVisResultSuccess && graph && graph_future &&
                            graph_array)
@@ -210,18 +217,18 @@ AppWindow::Render()
                             if(result == kRocProfVisResultSuccess)
                             {
                                 result = rocprofvis_controller_graph_fetch_async(
-                                    trace_controller, graph, min_ts, max_ts, 1000,
+                                    m_trace_controller, graph, min_ts, max_ts, 1000,
                                     graph_future, graph_array);
                                 if(result == kRocProfVisResultSuccess)
                                 {
                                     result = rocprofvis_controller_set_object(
-                                        graph_data_array, kRPVControllerArrayEntryIndexed,
-                                        i, graph_array);
+                                        m_graph_data_array,
+                                        kRPVControllerArrayEntryIndexed, i, graph_array);
                                     assert(result == kRocProfVisResultSuccess);
 
                                     result = rocprofvis_controller_set_object(
-                                        graph_futures, kRPVControllerArrayEntryIndexed, i,
-                                        graph_future);
+                                        m_graph_futures, kRPVControllerArrayEntryIndexed,
+                                        i, graph_future);
                                     assert(result == kRocProfVisResultSuccess);
                                 }
                             }
@@ -229,22 +236,22 @@ AppWindow::Render()
                     }
                 }
 
-                rocprofvis_controller_future_free(trace_future);
-                trace_future = nullptr;
+                rocprofvis_controller_future_free(m_trace_future);
+                m_trace_future = nullptr;
             }
         }
-        else if(graph_futures)
+        else if(m_graph_futures)
         {
             uint64_t            num_tracks = 0;
             rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
-                graph_futures, kRPVControllerArrayNumEntries, 0, &num_tracks);
+                m_graph_futures, kRPVControllerArrayNumEntries, 0, &num_tracks);
             assert(result == kRocProfVisResultSuccess);
 
             for(uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
             {
                 rocprofvis_handle_t* future = nullptr;
                 result                      = rocprofvis_controller_get_object(
-                    graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
+                    m_graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
                 assert(result == kRocProfVisResultSuccess && future);
 
                 rocprofvis_result_t result = rocprofvis_controller_future_wait(
@@ -265,7 +272,7 @@ AppWindow::Render()
                 {
                     rocprofvis_handle_t* future = nullptr;
                     result                      = rocprofvis_controller_get_object(
-                        graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
+                        m_graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
                     assert(result == kRocProfVisResultSuccess && future);
 
                     rocprofvis_controller_future_free(
@@ -275,7 +282,7 @@ AppWindow::Render()
                     {
                         rocprofvis_handle_t* array = nullptr;
                         result                     = rocprofvis_controller_get_object(
-                            graph_data_array, kRPVControllerArrayEntryIndexed, i,
+                            m_graph_data_array, kRPVControllerArrayEntryIndexed, i,
                             &future);
                         assert(result == kRocProfVisResultSuccess && array);
 
@@ -284,21 +291,21 @@ AppWindow::Render()
                     }
                 }
 
-                rocprofvis_controller_array_free(graph_futures);
-                graph_futures = nullptr;
+                rocprofvis_controller_array_free(m_graph_futures);
+                m_graph_futures = nullptr;
 
                 if(result != kRocProfVisResultSuccess)
                 {
-                    rocprofvis_controller_array_free(graph_data_array);
-                    graph_data_array = nullptr;
+                    rocprofvis_controller_array_free(m_graph_data_array);
+                    m_graph_data_array = nullptr;
                 }
             }
 
             if(result == kRocProfVisResultSuccess)
             {
-                is_loading_trace = false;
-                m_is_trace_loaded = true;
-                data_changed = true;
+                m_is_loading_trace = false;
+                m_is_trace_loaded  = true;
+                m_data_changed     = true;
                 ImGui::CloseCurrentPopup();
             }
         }
@@ -311,13 +318,11 @@ AppWindow::Render()
                 ImGui::EndPopup();
             }
 
-            if(is_loading_trace)
+            if(m_is_loading_trace)
             {
                 ImGui::SetNextWindowSize(ImVec2(300, 200));
                 ImGui::OpenPopup("Loading");
-                //is_open = true;
             }
-        }        
+        }
     }
-
 }

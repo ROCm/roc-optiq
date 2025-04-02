@@ -2,8 +2,6 @@
 
 #include "rocprofvis_flame_chart.h"
 #include "imgui.h"
-#include "rocprofvis_charts.h"
-#include "rocprofvis_grid.h"
 #include "rocprofvis_controller.h"
 #include <algorithm>
 #include <iostream>
@@ -16,16 +14,13 @@ namespace RocProfVis
 namespace View
 {
 FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movement,
-                       float min_x, float max_x,
-
-                       float scale_x, std::vector<rocprofvis_trace_event_t>& raw_flame)
+                       float min_x, float max_x, float scale_x)
 : m_zoom(zoom)
 , m_movement(movement)
 , m_min_x(min_x)
 , m_chart_id(chart_id)
 , m_max_x(max_x)
 , m_scale_x(scale_x)
-//, m_raw_flame(raw_flame)
 , m_name(name)
 , size(75)
 , color_by_value_digits()
@@ -34,9 +29,6 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 std::tuple<float, float>
 FlameChart::FindMaxMinFlame()
 {
-    // m_min_x = m_raw_flame[0].m_start_ts;
-    // m_max_x = m_raw_flame[0].m_start_ts + m_raw_flame[0].m_duration;
-
     m_min_x = flames[0].m_start_ts;
     m_max_x = flames[0].m_start_ts + flames[0].m_duration;
 
@@ -66,9 +58,8 @@ FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_
 }
 
 void
-FlameChart::SetColorByValue(rocprofvis_color_by_value color_by_value_digits)
-{
- }
+FlameChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
+{}
 
 std::string
 FlameChart::GetName()
@@ -93,7 +84,7 @@ FlameChart::ReturnChartID()
     return m_chart_id;
 }
 
-void 
+void
 FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
 {
     std::vector<rocprofvis_trace_event_t> entries;
@@ -109,8 +100,9 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
     double current_bin_start = DBL_MAX;
     float  largest_duration  = 0;
 
-    uint64_t count  = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_uint64(track_data, kRPVControllerArrayNumEntries, 0, &count);
+    uint64_t            count  = 0;
+    rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+        track_data, kRPVControllerArrayNumEntries, 0, &count);
     assert(result == kRocProfVisResultSuccess);
 
     rocprofvis_trace_event_t counter;
@@ -118,29 +110,34 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_event_t* event = nullptr;
-        result = rocprofvis_controller_get_object(track_data, kRPVControllerArrayEntryIndexed, i, &event);
+        result                               = rocprofvis_controller_get_object(
+            track_data, kRPVControllerArrayEntryIndexed, i, &event);
         assert(result == kRocProfVisResultSuccess && event);
 
         double start_ts = 0;
-        result = rocprofvis_controller_get_double(event, kRPVControllerEventStartTimestamp, 0, &start_ts);
+        result          = rocprofvis_controller_get_double(
+            event, kRPVControllerEventStartTimestamp, 0, &start_ts);
         assert(result == kRocProfVisResultSuccess);
 
         double end_ts = 0;
-        result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp, 0, &end_ts);
+        result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp,
+                                                  0, &end_ts);
         assert(result == kRocProfVisResultSuccess);
 
         uint32_t length = 0;
-        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0, nullptr, &length);
+        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
+                                                  nullptr, &length);
         assert(result == kRocProfVisResultSuccess);
-        
+
         length += 1;
         counter.m_name.resize(length);
         char* buffer = const_cast<char*>(counter.m_name.c_str());
         assert(buffer);
-        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0, buffer, &length);
+        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
+                                                  buffer, &length);
         assert(result == kRocProfVisResultSuccess);
 
-        if (i == 0)
+        if(i == 0)
         {
             current_bin_start = start_ts;
         }
@@ -191,7 +188,6 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
     }
 
     flames = entries;
-    ///return entries;
 }
 
 void

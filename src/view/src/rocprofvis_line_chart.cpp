@@ -2,9 +2,6 @@
 
 #include "rocprofvis_line_chart.h"
 #include "imgui.h"
-#include "rocprofvis_charts.h"
-#include "rocprofvis_grid.h"
-#include "rocprofvis_structs.h"
 #include "rocprofvis_controller.h"
 
 #include <algorithm>
@@ -59,7 +56,7 @@ LineChart::SetID(int id)
     m_id = id;
 }
 void
-LineChart::SetColorByValue(rocprofvis_color_by_value color_by_value_digits)
+LineChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {
     m_color_by_value_digits = color_by_value_digits;
     is_color_value_existant = true;

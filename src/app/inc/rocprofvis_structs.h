@@ -16,12 +16,12 @@ typedef struct rocprofvis_trace_event_t
     double      m_duration;
 } rocprofvis_trace_event_t;
 
-typedef struct rocprofvis_color_by_value
+typedef struct rocprofvis_color_by_value_t
 {
     float interest_1_max;
     float interest_1_min;
    
-} rocprofvis_color_by_value;
+} rocprofvis_color_by_value_t;
 
 typedef struct rocprofvis_data_point_t
 {
@@ -41,7 +41,7 @@ typedef struct rocprofvis_graph_map_t
     ImVec4  selected;
 
     bool                      color_by_value;
-    rocprofvis_color_by_value color_by_value_digits;
+    rocprofvis_color_by_value_t color_by_value_digits;
 
 } rocprofvis_graph_map_t;
 

@@ -27,7 +27,6 @@ clamp(float input, float max, float min)
 HomeScreen::HomeScreen()
 : m_main_view(nullptr)
 , m_sidebar(nullptr)
-//, m_trace_data_ptr(nullptr)
 , m_graph_data_array_ptr(nullptr)
 , m_trace_timeline_ptr(nullptr)
 {
@@ -56,20 +55,6 @@ HomeScreen::HomeScreen()
 
 HomeScreen::~HomeScreen() {}
 
-// void
-// HomeScreen::SetData(std::map<std::string, rocprofvis_trace_process_t>& trace_data)
-// {
-//     m_trace_data_ptr = &trace_data;
-//     if(m_main_view)
-//     {
-//         m_main_view->MakeGraphView(trace_data, 1);
-//         if(m_sidebar)
-//         {
-//             m_sidebar->SetGraphMap(m_main_view->GetGraphMap());
-//         }
-//     }
-// }
-
 void
 HomeScreen::SetData(rocprofvis_controller_timeline_t* trace_timeline,
                     rocprofvis_controller_array_t*    graph_data_array)
@@ -89,7 +74,6 @@ HomeScreen::SetData(rocprofvis_controller_timeline_t* trace_timeline,
 void
 HomeScreen::Render()
 {
-    //if(m_trace_data_ptr)
     if(m_trace_timeline_ptr && m_graph_data_array_ptr)
     {
         if(m_container)

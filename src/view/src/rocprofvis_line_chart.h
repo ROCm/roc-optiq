@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "imgui.h"
 #include "rocprofvis_charts.h"
 #include "rocprofvis_structs.h"
 #include "rocprofvis_controller_types.h"
@@ -35,7 +34,7 @@ public:
     int                      ReturnChartID() override;
     std::string              GetName() override;
     int                      SetSize();
-    void  SetColorByValue(rocprofvis_color_by_value color_by_value_digits) override;
+    void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
     float CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
 
 private:
@@ -44,7 +43,7 @@ private:
     float                                  m_min_value;
     float                                  m_max_value;
     float                                  m_zoom;
-    rocprofvis_color_by_value              m_color_by_value_digits;
+    rocprofvis_color_by_value_t              m_color_by_value_digits;
     float                                  m_movement;
     float                                  m_min_x;
     float                                  m_max_x;

@@ -16,7 +16,22 @@ namespace RocProfVis
 {
 namespace View
 {
-
+float
+clamp(float min, float max, float value)
+{
+    if(value < min)
+    {
+        return min;
+    }
+    else if(value > max)
+    {
+        return max;
+    }
+    else
+    {
+        return value;
+    }
+}
 MainView::MainView()
 : m_min_value(0.0f)
 , m_max_value(0.0f)
@@ -40,6 +55,7 @@ MainView::MainView()
 , m_graph_map({})
 , min_max_x_init(false)
 , m_is_control_held(false)
+, m_original_v_max_x(-100)
 {}
 
 MainView::~MainView() {}
@@ -325,8 +341,8 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
                     temp_flame.selected       = ImVec4(0, 0, 0, 0);
                     temp_flame.color_by_value = false;
                     rocprofvis_color_by_value_t temp_color = {};
-                    temp_flame.color_by_value_digits     = temp_color;
-                    m_graph_map[graph_id]                = temp_flame;
+                    temp_flame.color_by_value_digits       = temp_color;
+                    m_graph_map[graph_id]                  = temp_flame;
 
                     graph_id = graph_id + 1;
 
@@ -370,8 +386,8 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
                     temp.selected       = ImVec4(0, 0, 0, 0);
                     temp.color_by_value = false;
                     rocprofvis_color_by_value_t temp_color_line = {};
-                    temp.color_by_value_digits                = temp_color_line;
-                    m_graph_map[graph_id]                     = temp;
+                    temp.color_by_value_digits                  = temp_color_line;
+                    m_graph_map[graph_id]                       = temp;
 
                     graph_id = graph_id + 1;
                     break;
@@ -410,6 +426,11 @@ MainView::RenderGraphPoints()
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
         m_scale_x = content_size.x / (m_v_max_x - m_v_min_x);
+
+        if(m_original_v_max_x == -100)
+        {
+            m_original_v_max_x = m_v_max_x;  // Used to set bounds
+        }
 
         RenderGrid();
 
@@ -451,7 +472,8 @@ MainView::HandleTopSurfaceTouch()
                 const float zoom_speed = 0.1f;
                 m_zoom *= (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
                 m_zoom = m_zoom;
-
+                m_zoom = clamp(0.9, 200, m_zoom);
+                m_movement += m_v_width - ((m_max_x - m_min_x) / m_zoom);
                 m_v_width = (m_max_x - m_min_x) / m_zoom;
                 m_v_min_x = m_min_x + m_movement;
                 m_v_max_x = m_v_min_x + m_v_width;
@@ -463,8 +485,26 @@ MainView::HandleTopSurfaceTouch()
         {
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (m_max_x - m_min_x) / m_zoom;
-            m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
-            m_scrubber_position -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+            if((10000 * ((m_min_x / m_v_min_x) - 1)) > 1.6 * (1 / (m_scale_x * 1000)))
+            {
+                if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
+                {
+                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                }
+            }
+            else if((100000 * ((m_original_v_max_x / m_v_max_x) - 1)) <
+                    1.6 * (1 / (m_scale_x * 1000)))
+            {
+                ////THIS ONE IS STILL PROBLEMATIC.
+                if((drag / ImGui::GetContentRegionAvail().x) * view_width > 0)
+                {
+                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                }
+            }
+            else
+            {
+                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+            }
             float drag_y = ImGui::GetIO().MouseDelta.y;
 
             m_scroll_position = static_cast<int>(m_scroll_position - drag_y);

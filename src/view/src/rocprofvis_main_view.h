@@ -56,6 +56,7 @@ private:
     float                                       m_v_max_x;
     float                                       m_scale_x;
     float                                       m_min_x;
+    float                                       m_original_v_max_x;
     float                                       m_scroll_position;
     float                                       m_sidebar_size;
     float                                       m_max_x;

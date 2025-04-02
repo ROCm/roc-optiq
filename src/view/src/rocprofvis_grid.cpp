@@ -45,21 +45,21 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
         ImVec2 clip_min = child_win;
         ImVec2 clip_max = ImVec2(child_win.x + child_size.x, child_win.y + child_size.y);
         draw_list->PushClipRect(clip_min, clip_max, true);
-         
-        float normalized_start_box = (min_x - (min_x + movement)) * scale_x;
-        draw_list->AddRectFilled(
-            ImVec2(normalized_start_box, cursor_position.y),
-            ImVec2(normalized_start_box - 500.0f, cursor_position.y + content_size.y - 50.0f),
-            IM_COL32(100, 100, 100, 100));
 
-           float normalized_start_box_end = (max_x - (min_x + movement)) * scale_x;
-        draw_list->AddRectFilled(ImVec2(normalized_start_box_end, cursor_position.y),
-                                    ImVec2(normalized_start_box_end + 500.0f,
+        float normalized_start_box = (min_x - (min_x + movement)) * scale_x;
+        draw_list->AddRectFilled(ImVec2(normalized_start_box, cursor_position.y),
+                                 ImVec2(normalized_start_box - 1500.0f,
                                         cursor_position.y + content_size.y - 50.0f),
                                  IM_COL32(100, 100, 100, 100));
 
-        for(float raw_position_points_x = min_x - (steps*5); raw_position_points_x < max_x + (steps*5);
-            raw_position_points_x += steps)
+        float normalized_start_box_end = (max_x - (min_x + movement)) * scale_x;
+        draw_list->AddRectFilled(ImVec2(normalized_start_box_end, cursor_position.y),
+                                 ImVec2(normalized_start_box_end + 1500.0f,
+                                        cursor_position.y + content_size.y - 50.0f),
+                                 IM_COL32(100, 100, 100, 100));
+
+        for(float raw_position_points_x = min_x - (steps * 5);
+            raw_position_points_x < max_x + (steps * 5); raw_position_points_x += steps)
         {
             // loop through min-max and create appropriate number of scale markers with
             // marker value printed at bottom.
@@ -68,8 +68,6 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
                 scale_x;  // this value takes the raw value of the output and converts
                           // them into positions on the chart which is scaled by scale_x
 
-
-             
             draw_list->AddLine(
                 ImVec2(normalized_start, cursor_position.y),
                 ImVec2(normalized_start, cursor_position.y + content_size.y - 50.0f),

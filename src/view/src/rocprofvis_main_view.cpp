@@ -28,6 +28,7 @@ MainView::MainView()
 , m_min_y(FLT_MAX)
 , m_max_y(FLT_MIN)
 , m_scroll_position(0.0f)
+, m_content_max_y_scoll(0.0f)
 , m_scrubber_position(0.0f)
 , m_v_min_x(0.0f)
 , m_v_max_x(0.0f)
@@ -172,6 +173,7 @@ MainView::RenderGraphView()
     ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
     ImGuiIO& io       = ImGui::GetIO();
     m_is_control_held = io.KeyCtrl;
+    m_content_max_y_scoll = ImGui::GetScrollMaxY();
 
     // Prevent choppy behavior by preventing constant rerender.
     float temp_scroll_position = ImGui::GetScrollY();
@@ -257,6 +259,7 @@ MainView::RenderGraphView()
             ImGui::Separator();
         }
     }
+
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
@@ -484,8 +487,7 @@ MainView::HandleTopSurfaceTouch()
         if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
             float drag_y = ImGui::GetIO().MouseDelta.y;
-
-            m_scroll_position = static_cast<int>(m_scroll_position - drag_y);
+            m_scroll_position = clamp(m_scroll_position - drag_y, 0.0f, m_content_max_y_scoll);
 
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (m_max_x - m_min_x) / m_zoom;

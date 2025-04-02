@@ -336,4 +336,3 @@ AppWindow::Render()
         }
     }
 }
-

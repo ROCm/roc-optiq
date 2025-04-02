@@ -6,6 +6,7 @@
 #include "rocprofvis_flame_chart.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
+#include "rocprofvis_utils.h"
 #include <iostream>
 #include <map>
 #include <string>
@@ -16,49 +17,50 @@ namespace RocProfVis
 {
 namespace View
 {
-float
-clamp(float min, float max, float value)
-{
-    if(value < min)
-    {
-        return min;
-    }
-    else if(value > max)
-    {
-        return max;
-    }
-    else
-    {
-        return value;
-    }
-}
+
 MainView::MainView()
 : m_min_value(0.0f)
 , m_max_value(0.0f)
 , m_zoom(1.0f)
 , m_movement(0.0f)
-, m_min_x(0.0f)
-, m_max_x(0.0f)  // use FLT_MAX and FLT_MIN?
-, m_min_y(0.0f)
-, m_max_y(0.0f)
+, m_min_x(FLT_MAX)
+, m_max_x(FLT_MIN)
+, m_min_y(FLT_MAX)
+, m_max_y(FLT_MIN)
 , m_scroll_position(0.0f)
 , m_scrubber_position(0.0f)
 , m_v_min_x()
 , m_v_max_x()
 , m_scale_x()
-, m_sidebar_size(500.f)
 , m_meta_map_made(false)
 , m_meta_map({})
 , m_user_adjusting_graph_height(false)
 , m_previous_scroll_position(0)
 , m_show_graph_customization_window(false)
 , m_graph_map({})
-, min_max_x_init(false)
 , m_is_control_held(false)
 , m_original_v_max_x(-100)
 {}
 
-MainView::~MainView() {}
+MainView::~MainView() { DestroyGraphs(); }
+
+void
+MainView::ResetView()
+{
+    m_min_value         = 0.0f;
+    m_max_value         = 0.0f;
+    m_zoom              = 1.0f;
+    m_movement          = 0.0f;
+    m_min_x             = FLT_MAX;
+    m_max_x             = FLT_MIN;
+    m_min_y             = FLT_MAX;
+    m_max_y             = FLT_MIN;
+    m_scroll_position   = 0.0f;
+    m_scrubber_position = 0.0f;
+    m_v_min_x           = 0.0f;
+    m_v_max_x           = 0.0f;
+    m_scale_x           = 0.0f;
+}
 
 void
 MainView::Render()
@@ -91,8 +93,7 @@ MainView::RenderScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos)
     ImGui::BeginChild("Scrubber View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     if(ImGui::IsMouseHoveringRect(
-           ImVec2(m_sidebar_size, 0),
-           ImVec2(display_size_main_graphs.x, display_size_main_graphs.y)))
+           ImVec2(0, 0), ImVec2(display_size_main_graphs.x, display_size_main_graphs.y)))
     {
         ImVec2 mPos = ImGui::GetMousePos();
         draw_list->AddLine(ImVec2(mPos.x, screen_pos.y),
@@ -259,9 +260,28 @@ MainView::RenderGraphView()
 }
 
 void
+MainView::DestroyGraphs()
+{
+    for(const auto& graph_object : m_graph_map)
+    {
+        if(graph_object.second.chart)
+        {
+            delete graph_object.second.chart;
+        }
+    }
+
+    m_graph_map.clear();
+    m_meta_map_made = false;
+}
+
+void
 MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
                         rocprofvis_controller_array_t* array, float scale_x)
 {
+    // Destroy any existing data
+    DestroyGraphs();
+    ResetView();
+
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t            num_graphs = 0;
     rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
@@ -317,14 +337,6 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
                     std::tuple<float, float> temp_min_max_flame =
                         flame->FindMaxMinFlame();
 
-                    if(min_max_x_init == false)
-                    {
-                        // Without this 0 would be lowest which is not correct behavior.
-                        m_min_x        = std::get<0>(temp_min_max_flame);
-                        m_max_x        = std::get<1>(temp_min_max_flame);
-                        min_max_x_init = true;
-                    }
-
                     if(std::get<0>(temp_min_max_flame) < m_min_x)
                     {
                         m_min_x = std::get<0>(temp_min_max_flame);
@@ -353,22 +365,11 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
                     // Linechart
                     std::string name = buffer;
 
-                    void* datap = nullptr;
-
-                    RocProfVis::View::LineChart* line = new RocProfVis::View ::LineChart(
-                        graph_id, name, m_zoom, m_movement, m_min_x, m_max_x, m_scale_x,
-                        datap);
+                    RocProfVis::View::LineChart* line = new RocProfVis::View::LineChart(
+                        graph_id, name, m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
 
                     line->ExtractPointsFromData(track_data);
                     std::tuple<float, float> temp_min_max = line->FindMaxMin();
-
-                    if(min_max_x_init == false)
-                    {
-                        // Without this 0 would be lowest which is not correct behavior.
-                        m_min_x        = std::get<0>(temp_min_max);
-                        m_max_x        = std::get<1>(temp_min_max);
-                        min_max_x_init = true;
-                    }
 
                     if(std::get<0>(temp_min_max) < m_min_x)
                     {
@@ -472,7 +473,7 @@ MainView::HandleTopSurfaceTouch()
                 const float zoom_speed = 0.1f;
                 m_zoom *= (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
                 m_zoom = m_zoom;
-                m_zoom = clamp(0.9, 200, m_zoom);
+                m_zoom = clamp(m_zoom, 0.9f, 200.0f);
                 m_movement += m_v_width - ((m_max_x - m_min_x) / m_zoom);
                 m_v_width = (m_max_x - m_min_x) / m_zoom;
                 m_v_min_x = m_min_x + m_movement;
@@ -509,22 +510,6 @@ MainView::HandleTopSurfaceTouch()
 
             m_scroll_position = static_cast<int>(m_scroll_position - drag_y);
         }
-    }
-}
-
-void
-MainView::HandleSidebarResize()
-{
-    // Create an invisible button with a more area
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 5);
-    ImGui::InvisibleButton("Resize Bar", ImVec2(10, ImGui::GetContentRegionAvail().y));
-    if(ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-    {
-        m_user_adjusting_graph_height = true;
-        ImVec2 drag_delta             = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-
-        m_sidebar_size = m_sidebar_size + drag_delta.x;
-        ImGui::ResetMouseDragDelta();
     }
 }
 

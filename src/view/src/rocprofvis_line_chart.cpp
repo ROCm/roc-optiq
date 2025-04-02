@@ -16,7 +16,7 @@ namespace View
 {
 
 LineChart::LineChart(int id, std::string name, float zoom, float movement, float& min_x,
-                     float& max_x, float scale_x, void* datap)
+                     float& max_x, float scale_x)
 : m_id(id)
 , m_zoom(zoom)
 , m_movement(movement)
@@ -26,7 +26,6 @@ LineChart::LineChart(int id, std::string name, float zoom, float movement, float
 , m_max_y(0)
 , m_scale_x(scale_x)
 , m_data({})
-, datap(datap)
 , m_name(name)
 , size(290.0f)
 , m_color_by_value_digits()

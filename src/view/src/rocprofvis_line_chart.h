@@ -19,7 +19,7 @@ class LineChart : public Charts
 {
 public:
     LineChart(int id, std::string name, float zoom, float movement, float& min_x,
-              float& max_x, float scale_x, void* datap);
+              float& max_x, float scale_x);
     ~LineChart();
     void   Render() override;
     void   UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
@@ -51,7 +51,6 @@ private:
     float                                  m_max_y;
     float                                  m_scale_x;
     int                                    m_id;
-    void*                                  datap;
     float                                  size;
     bool                                   is_color_value_existant;
     std::map<int, rocprofvis_graph_map_t>* tree;

@@ -32,7 +32,12 @@ AppWindow::AppWindow()
 , m_graph_futures(nullptr)
 {}
 
-AppWindow::~AppWindow() {}
+AppWindow::~AppWindow() {
+    if(m_trace_controller) {
+        rocprofvis_controller_free(m_trace_controller);
+        m_trace_controller = nullptr;
+    }
+}
 
 bool
 AppWindow::Init()
@@ -56,6 +61,12 @@ AppWindow::Init()
 void
 AppWindow::handleOpenFile(std::string& file_path)
 {
+    //only one controller at time
+    if(m_trace_controller) {
+        rocprofvis_controller_free(m_trace_controller);
+        m_trace_controller = nullptr;
+    }
+
     m_trace_controller = rocprofvis_controller_alloc();
     if(m_trace_controller)
     {
@@ -88,6 +99,9 @@ AppWindow::Render()
     {
         m_home_screen->SetData(m_trace_timeline, m_graph_data_array);
         m_data_changed = false;
+
+        rocprofvis_controller_array_free(m_graph_data_array);
+        m_graph_data_array = nullptr;
     }
 
 #ifdef IMGUI_HAS_VIEWPORT

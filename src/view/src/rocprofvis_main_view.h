@@ -32,12 +32,13 @@ public:
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
 
 private:
+    void ResetView();
+    void DestroyGraphs();
     void RenderGraphPoints();
     void RenderGrid();
     void RenderScrubber(ImVec2 display_size_main_graphs, ImVec2 screen_pos);
     void RenderGraphView();
     void HandleGraphResize(int chart_id);
-    void HandleSidebarResize();
     void FindMaxMinFlame(std::vector<rocprofvis_trace_event_t> m_flame_event);
     void RenderFlameCharts(int chart_id, float scale_x);
     void RenderGraphCustomizationWindow(int graph_number);
@@ -58,7 +59,6 @@ private:
     float                                       m_min_x;
     float                                       m_original_v_max_x;
     float                                       m_scroll_position;
-    float                                       m_sidebar_size;
     float                                       m_max_x;
     float                                       m_min_y;
     float                                       m_max_y;
@@ -67,7 +67,6 @@ private:
     bool                                        m_meta_map_made;
     bool                                        m_has_zoom_happened;
     bool                                        m_show_graph_customization_window;
-    bool                                        min_max_x_init;
     bool                                        m_is_control_held;
 };
 

@@ -5,13 +5,14 @@
 #include "imgui.h"
 #include "implot.h"
 #include "rocprofvis_controller.h"
+#include "widgets/rocprofvis_debug_window.h"
 
 using namespace RocProfVis::View;
 
 AppWindow* AppWindow::m_instance = nullptr;
 
 AppWindow*
-AppWindow::getInstance()
+AppWindow::GetInstance()
 {
     if(!m_instance)
     {
@@ -30,6 +31,7 @@ AppWindow::AppWindow()
 , m_trace_timeline(nullptr)
 , m_graph_data_array(nullptr)
 , m_graph_futures(nullptr)
+, m_show_debug_widow(false)
 {}
 
 AppWindow::~AppWindow()
@@ -98,6 +100,8 @@ AppWindow::HandleOpenFile(std::string& file_path)
 void
 AppWindow::Render()
 {
+    DebugWindow::GetInstance()->Reset();
+
     if(m_home_screen && m_data_changed)
     {
         m_home_screen->SetData(m_trace_timeline, m_graph_data_array);
@@ -335,4 +339,23 @@ AppWindow::Render()
             }
         }
     }
+
+    RenderDebugOuput();
+}
+
+
+void AppWindow::RenderDebugOuput() {
+    if(m_show_debug_widow) {
+        DebugWindow::GetInstance()->Render();
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (ImGui::IsKeyPressed(ImGuiKey_D)) {
+        m_show_debug_widow = !m_show_debug_widow;
+        
+        if(m_show_debug_widow) {
+            ImGui::SetWindowFocus("Debug Window");
+        }
+    }
+    
 }

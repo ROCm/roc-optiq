@@ -14,16 +14,17 @@ namespace View
 class AppWindow : public RocWidget
 {
 public:
-    static AppWindow* getInstance();
+    static AppWindow* GetInstance();
     ~AppWindow();
 
     bool         Init();
     virtual void Render();
-
+    
 private:
     AppWindow();
     
     void HandleOpenFile(std::string& file_path);
+    void RenderDebugOuput();
 
     static AppWindow* m_instance;
 
@@ -32,6 +33,8 @@ private:
     bool                        m_is_loading_trace;
     bool                        m_data_changed;
     bool                        m_is_trace_loaded;
+
+    bool m_show_debug_widow;
 
     rocprofvis_controller_future_t*   m_trace_future;
     rocprofvis_controller_t*          m_trace_controller;

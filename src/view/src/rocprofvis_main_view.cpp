@@ -40,6 +40,7 @@ MainView::MainView()
 , m_show_graph_customization_window(false)
 , m_graph_map({})
 , m_is_control_held(false)
+, m_can_drag_to_pan(false)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
 {}

@@ -6,7 +6,7 @@
 using namespace RocProfVis::View;
 
 bool rocprofvis_view_init() {
-    bool result = AppWindow::getInstance()->Init();
+    bool result = AppWindow::GetInstance()->Init();
     if(!result) {
         //log message
     }
@@ -14,5 +14,5 @@ bool rocprofvis_view_init() {
 }
 
 void rocprofvis_view_render() {
-    AppWindow::getInstance()->Render();
+    AppWindow::GetInstance()->Render();
 }

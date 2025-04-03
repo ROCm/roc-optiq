@@ -465,9 +465,15 @@ MainView::HandleTopSurfaceTouch()
     */
     if(!m_is_control_held)
     {
-        // Handle Zoom
-        if(ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows))
+
+        ImVec2 container_pos = ImGui::GetWindowPos();
+        ImVec2 container_size = ImGui::GetWindowSize();
+        
+        bool is_mouse_inside = ImGui::IsMouseHoveringRect(container_pos, ImVec2(container_pos.x + container_size.x, container_pos.y + container_size.y));
+        
+        if(is_mouse_inside)
         {
+            // Handle Zoom
             float scroll_wheel = ImGui::GetIO().MouseWheel;
             if(scroll_wheel != 0.0f)
             {
@@ -481,10 +487,20 @@ MainView::HandleTopSurfaceTouch()
                 m_v_min_x = m_min_x + m_movement;
                 m_v_max_x = m_v_min_x + m_v_width;
             }
+
+            // Detect drag start
+            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                m_can_drag_to_pan = true;
+            }
+
+        }
+
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            m_can_drag_to_pan = false;
         }
 
         // Handle Panning
-        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
             float drag_y = ImGui::GetIO().MouseDelta.y;
             m_scroll_position = clamp(m_scroll_position - drag_y, 0.0f, m_content_max_y_scoll);

@@ -83,10 +83,11 @@ MainView::RenderScrubber(ImVec2 screen_pos)
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2 display_size = ImGui::GetWindowSize();
-    ImGui::SetNextWindowSize(ImVec2(display_size.x - 20, display_size.y),
+    float scrollbar_width = ImGui::GetStyle().ScrollbarSize;
+    const float sidebar_offset = 400.0f;
+    ImGui::SetNextWindowSize(ImVec2(display_size.x - scrollbar_width - sidebar_offset, display_size.y),
                              ImGuiCond_Always);
-
-    ImGui::SetCursorPos(ImVec2(400, 0));  // Sidebar size will be universal next PR.
+    ImGui::SetCursorPos(ImVec2(sidebar_offset, 0));  // Sidebar size will be universal next PR.
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
@@ -162,7 +163,6 @@ MainView::RenderGraphView()
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2 display_size = ImGui::GetWindowSize();
-
     ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - 60.0f),
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));

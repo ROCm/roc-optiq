@@ -61,7 +61,7 @@ AppWindow::Init()
 }
 
 void
-AppWindow::handleOpenFile(std::string& file_path)
+AppWindow::HandleOpenFile(std::string& file_path)
 {
     // only one controller at time
     if(m_trace_controller)
@@ -123,7 +123,7 @@ AppWindow::Render()
 
     ImGui::Begin("Main Window", nullptr,
                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
-                     ImGuiWindowFlags_NoResize);
+                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
     if(ImGui::BeginMenuBar())
     {
@@ -162,7 +162,7 @@ AppWindow::Render()
         {
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
 
-            handleOpenFile(file_path);
+            HandleOpenFile(file_path);
             m_is_loading_trace = true;
         }
 

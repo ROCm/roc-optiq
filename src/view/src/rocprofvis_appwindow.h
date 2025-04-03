@@ -23,7 +23,7 @@ public:
 private:
     AppWindow();
     
-    void handleOpenFile(std::string& file_path);
+    void HandleOpenFile(std::string& file_path);
 
     static AppWindow* m_instance;
 

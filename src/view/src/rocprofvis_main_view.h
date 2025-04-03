@@ -69,6 +69,7 @@ private:
     bool                                        m_has_zoom_happened;
     bool                                        m_show_graph_customization_window;
     bool                                        m_is_control_held;
+    bool                                        m_can_drag_to_pan;
 };
 
 }  // namespace View

@@ -1,30 +1,14 @@
 //  Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
-// This is here to stop circular dependencies
 
 #pragma once
-
 #include <future>
 #include <map>
 #include <string>
 #include <vector>
+#include "imgui.h"
 
-template <typename T>
-T
-clamp(const T& value, const T& lower, const T& upper)
-{
-    if(value < lower)
-    {
-        return lower;
-    }
-    else if(value > upper)
-    {
-        return upper;
-    }
-    else
-    {
-        return value;
-    }
-}
+class Charts;
+
 typedef struct rocprofvis_trace_event_t
 {
     std::string m_name;
@@ -32,7 +16,12 @@ typedef struct rocprofvis_trace_event_t
     double      m_duration;
 } rocprofvis_trace_event_t;
 
-
+typedef struct rocprofvis_color_by_value_t
+{
+    float interest_1_max;
+    float interest_1_min;
+   
+} rocprofvis_color_by_value_t;
 
 typedef struct rocprofvis_data_point_t
 {
@@ -40,7 +29,21 @@ typedef struct rocprofvis_data_point_t
     float yValue;
 } rocprofvis_data_point_t;
 
+typedef struct rocprofvis_graph_map_t
+{
+    enum
+    {
+        TYPE_LINECHART,
+        TYPE_FLAMECHART
+    } graph_type;
+    bool    display;
+    Charts* chart;
+    ImVec4  selected;
 
+    bool                      color_by_value;
+    rocprofvis_color_by_value_t color_by_value_digits;
+
+} rocprofvis_graph_map_t;
 
 typedef struct rocprofvis_trace_counter_t
 {
@@ -73,4 +76,3 @@ struct rocprofvis_meta_map_struct_t
     std::string type;
     std::string chart_name;
 };
-

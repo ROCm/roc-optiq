@@ -4,7 +4,6 @@
 #include "ImGuiFileDialog.h"
 #include "imgui.h"
 #include "implot.h"
-#include "rocprofvis_main_view.h"
 #include "rocprofvis_controller.h"
 #include <fstream>
 #include <future>
@@ -107,7 +106,7 @@ rocprofvis_trace_setup()
 }
 
 static void
-rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
+rocprofvis_trace_draw_view()
 {
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -164,7 +163,7 @@ rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
     if(s_is_trace_loaded)
     {
         // Open ImGui window......
-        main->GenerateGraphPoints(trace_timeline, graph_data_array);
+        //main->GenerateGraphPoints(trace_timeline, graph_data_array);
     }
 
     ImGui::End();
@@ -172,9 +171,9 @@ rocprofvis_trace_draw_view(RocProfVis::View::MainView* main)
 }
 
 void
-rocprofvis_trace_draw(RocProfVis::View::MainView* main)
+rocprofvis_trace_draw()
 {
-    rocprofvis_trace_draw_view(main);
+    rocprofvis_trace_draw_view();
 
     if(ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
     {

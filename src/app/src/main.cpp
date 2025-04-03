@@ -12,9 +12,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "rocprofvis_main_view.h"
+#include "rocprofvis_view_module.h"
 
-void rocprofvis_trace_draw(RocProfVis::View::MainView* main);
+// void rocprofvis_trace_draw(RocProfVis::View::MainView* main);
 
 static void
 glfw_error_callback(int error, const char* description)
@@ -28,8 +28,6 @@ main(int, char**)
     int resultCode = 0;
 
     glfwSetErrorCallback(glfw_error_callback);
-
-    RocProfVis::View::MainView* main_view = new RocProfVis::View::MainView();
 
     if(glfwInit())
     {
@@ -50,7 +48,7 @@ main(int, char**)
 
                 ImGui::StyleColorsLight();
 
-                rocprofvis_trace_setup();
+                rocprofvis_view_init();
 
                 backend.m_config(&backend, window);
 
@@ -73,26 +71,28 @@ main(int, char**)
 
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
+                    /*
+                                        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 
-                    ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+                                        ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0),
+                       ImGuiCond_Always, ImVec2(1.0f, 0.0f));
 
-                    ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0), ImGuiCond_Always,
-                                            ImVec2(1.0f, 0.0f));
+                                        ImGui::SetNextWindowSize(
+                                            ImVec2(displaySize.x * 0.8f, displaySize.y *
+                       0.8f), ImGuiCond_Always);
 
-                    ImGui::SetNextWindowSize(
-                        ImVec2(displaySize.x * 0.8f, displaySize.y * 0.8f),
-                        ImGuiCond_Always);
+                                        ImGuiWindowFlags windowFlags =
+                                            ImGuiWindowFlags_NoMove |
+                       ImGuiWindowFlags_NoResize;
 
-                    ImGuiWindowFlags windowFlags =
-                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
-
-                    // Open ImGui window
-                    ImGui::Begin("Line Chart Window", nullptr, windowFlags);
-
-                    rocprofvis_trace_draw(main_view);
+                                        // Open ImGui window
+                                        ImGui::Begin("Line Chart Window", nullptr,
+                       windowFlags);
+                    */
+                    rocprofvis_view_render();
 
                     // Close ImGui window
-                    ImGui::End();
+                    //                  ImGui::End();
 
                     // Rendering
                     ImGui::Render();
@@ -132,4 +132,3 @@ main(int, char**)
 
     return resultCode;
 }
-

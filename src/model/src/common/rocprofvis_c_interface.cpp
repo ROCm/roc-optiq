@@ -137,9 +137,9 @@ rocprofvis_dm_result_t rocprofvis_db_future_wait(
     RocProfVis::DataModel::Future * future = (RocProfVis::DataModel::Future*) object;
     ASSERT_MSG_RETURN(future, RocProfVis::DataModel::ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
 #ifdef DEBUG
-    return future->WaitForCompletion(timeout*100000); 
+    return future->WaitForCompletion(timeout == UINT64_MAX ? timeout : timeout * 100000);
 #else
-    return future->WaitForCompletion(timeout*1000);
+    return future->WaitForCompletion(timeout == UINT64_MAX ? timeout : timeout * 1000);
 #endif                                
 }
 

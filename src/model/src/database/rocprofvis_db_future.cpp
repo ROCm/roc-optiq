@@ -42,7 +42,16 @@ Future::~Future(){
 
 rocprofvis_dm_result_t Future::WaitForCompletion(rocprofvis_db_timeout_ms_t timeout_ms) {
     rocprofvis_dm_result_t result = kRocProfVisDmResultTimeout;
-    auto status = m_future.wait_for(std::chrono::milliseconds(timeout_ms));
+    std::future_status     status;
+    if(timeout_ms == UINT64_MAX)
+    {
+        m_future.wait();
+        status = std::future_status::ready;
+    }
+    else
+    {
+        status = m_future.wait_for(std::chrono::milliseconds(timeout_ms));
+    }
     if (status != std::future_status::ready) {
         m_interrupt_status = true;
         LOG("Timeout expired!");

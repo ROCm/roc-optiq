@@ -14,14 +14,22 @@ typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectType
 
 Event::Event(uint64_t id, double start_ts, double end_ts)
 : m_id(id)
+, m_track(nullptr)
 , m_start_timestamp(start_ts)
 , m_end_timestamp(end_ts)
+, m_name("")
+, m_category("")
 {
 }
 
 Event::~Event()
-{
-
+{ 
+#ifdef JSON_SUPPORT
+    if (m_track && m_track->GetDmHandle() == nullptr && strlen(m_name) > 0)
+    {
+        free((char*)m_name);
+    }
+#endif
 }
 
 rocprofvis_controller_object_type_t Event::GetType(void) 
@@ -44,19 +52,22 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerEventNumCallstackEntries:
             {
-                *value = m_callstack.size();
+                // todo : direct data model access
+                *value = 0;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventNumInputFlowControl:
             {
-                *value = m_input_flow_control.size();
+                // todo : direct data model access
+                *value = 0;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventNumOutputFlowControl:
             {
-                *value = m_output_flow_control.size();
+                // todo : direct data model access
+                *value = 0;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -145,41 +156,21 @@ rocprofvis_result_t Event::GetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerEventInputFlowControlIndexed:
             {
-                if (index < m_input_flow_control.size())
-                {
-                    *value = (rocprofvis_handle_t*)m_input_flow_control[index];
-                    result = kRocProfVisResultSuccess;
-                }
-                else
-                {
-                    result = kRocProfVisResultOutOfRange;
-                }
+                // todo : direct data model access
+                result = kRocProfVisResultOutOfRange;
                 break;
             }
             case kRPVControllerEventOutputFlowControlIndexed:
             {
-                if (index < m_output_flow_control.size())
-                {
-                    *value = (rocprofvis_handle_t*)m_output_flow_control[index];
-                    result = kRocProfVisResultSuccess;
-                }
-                else
-                {
-                    result = kRocProfVisResultOutOfRange;
-                }
+                // todo : direct data model access
+                result = kRocProfVisResultOutOfRange;
                 break;
             }
             case kRPVControllerEventCallstackEntryIndexed:
             {
-                if (index < m_callstack.size())
-                {
-                    *value = (rocprofvis_handle_t*)m_callstack[index];
-                    result = kRocProfVisResultSuccess;
-                }
-                else
-                {
-                    result = kRocProfVisResultOutOfRange;
-                }
+                // todo : direct data model access
+                result = kRocProfVisResultOutOfRange;
+
                 break;
             }
             case kRPVControllerEventStartTimestamp:
@@ -213,12 +204,34 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
         {
             if (length && (!value || *length == 0))
             {
-                *length = m_name.length();
+                *length = strlen(m_name) + strlen(m_category)+1;
                 result = kRocProfVisResultSuccess;
             }
             else if (length && value && *length > 0)
             {
-                strncpy(value, m_name.c_str(), *length);
+                std::string full_name = m_category;
+                full_name += " ";
+                full_name += m_name; 
+                strncpy(value, full_name.c_str(), *length);
+       
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultInvalidArgument;
+            }
+            break;
+        }
+        case kRPVControllerEventCategory:
+        {
+            if (length && (!value || *length == 0))
+            {
+                *length = strlen(m_category);
+                result = kRocProfVisResultSuccess;
+            }
+            else if (length && value && *length > 0)
+            {
+                strncpy(value, m_category, *length);
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -264,29 +277,17 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerEventNumCallstackEntries:
         {
-            if (value != m_callstack.size())
-            {
-                m_callstack.resize(value);
-            }
-            result = kRocProfVisResultSuccess;
+            result = kRocProfVisResultInvalidType;
             break;
         }
         case kRPVControllerEventNumInputFlowControl:
         {
-            if (value != m_input_flow_control.size())
-            {
-                m_input_flow_control.resize(value);
-            }
-            result = kRocProfVisResultSuccess;
+            result = kRocProfVisResultInvalidType;
             break;
         }
         case kRPVControllerEventNumOutputFlowControl:
         {
-            if (value != m_output_flow_control.size())
-            {
-                m_output_flow_control.resize(value);
-            }
-            result = kRocProfVisResultSuccess;
+            result = kRocProfVisResultInvalidType;
             break;
         }
         case kRPVControllerEventNumChildren:
@@ -373,53 +374,17 @@ rocprofvis_result_t Event::SetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerEventInputFlowControlIndexed:
             {
-                Handle* handle = (Handle*)value;
-                if (handle->GetType() == kRPVControllerObjectTypeFlowControl)
-                {
-                    if (index < m_input_flow_control.size())
-                    {
-                        m_input_flow_control[index] = (FlowControl*)value;
-                        result = kRocProfVisResultSuccess;
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultOutOfRange;
-                    }
-                }
+                result = kRocProfVisResultInvalidType;
                 break;
             }
             case kRPVControllerEventOutputFlowControlIndexed:
             {
-                Handle* handle = (Handle*)value;
-                if (handle->GetType() == kRPVControllerObjectTypeFlowControl)
-                {
-                    if (index < m_output_flow_control.size())
-                    {
-                        m_output_flow_control[index] = (FlowControl*)value;
-                        result = kRocProfVisResultSuccess;
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultOutOfRange;
-                    }
-                }
+                result = kRocProfVisResultInvalidType;
                 break;
             }
             case kRPVControllerEventCallstackEntryIndexed:
             {
-                Handle* handle = (Handle*)value;
-                if (handle->GetType() == kRPVControllerObjectTypeCallstack)
-                {
-                    if (index < m_callstack.size())
-                    {
-                        m_callstack[index] = (Callstack*)value;
-                        result = kRocProfVisResultSuccess;
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultOutOfRange;
-                    }
-                }
+                result = kRocProfVisResultInvalidType;
                 break;
             }
             case kRPVControllerEventStartTimestamp:
@@ -453,7 +418,30 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerEventName:
             {
-                m_name = value;
+#ifdef JSON_SUPPORT
+                if(m_track && m_track->GetDmHandle()==nullptr)
+                {
+                    if(length > 0)
+                    {
+                        char* name = (char*) calloc(length + 1, 1);
+                        if(name)
+                        {
+                            strcpy(name, value);
+                            m_name = name;
+                        }
+                    }
+                }
+                else
+#endif
+                {
+                    m_name = value;
+                }
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerEventCategory:
+            {
+                m_category = value;
                 result = kRocProfVisResultSuccess;
                 break;
             }

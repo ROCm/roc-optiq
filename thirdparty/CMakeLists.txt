@@ -32,7 +32,26 @@ target_compile_definitions(ImGuiFileDialog PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiFileDialog)
 
-add_subdirectory(jsoncpp/)
+if(JSON_SUPPORT) 
+# Add double-conversion library
+add_library(double-conversion STATIC
+    jsoncpp/double-conversion/bignum.cc
+    jsoncpp/double-conversion/bignum-dtoa.cc
+    jsoncpp/double-conversion/cached-powers.cc
+    jsoncpp/double-conversion/double-to-string.cc
+    jsoncpp/double-conversion/fast-dtoa.cc
+    jsoncpp/double-conversion/fixed-dtoa.cc
+    jsoncpp/double-conversion/string-to-double.cc
+    jsoncpp/double-conversion/strtod.cc
+)
+target_include_directories(double-conversion PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp)
+
+# Main JSON library
+add_library(json STATIC
+    jsoncpp/json.cpp
+)
+target_link_libraries(json PRIVATE double-conversion)
+endif(JSON_SUPPORT) 
 
 set(GLFW_DIR glfw/)
 option(GLFW_BUILD_EXAMPLES "Build the GLFW example programs" OFF)

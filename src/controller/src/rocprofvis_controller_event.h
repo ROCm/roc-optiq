@@ -41,10 +41,8 @@ private:
     uint64_t m_id;
     double m_start_timestamp;
     double m_end_timestamp;
-    std::string m_name;
-    std::vector<Callstack*> m_callstack;
-    std::vector<FlowControl*> m_input_flow_control;
-    std::vector<FlowControl*> m_output_flow_control;
+    const char* m_name;
+    const char* m_category;
 };
 
 }

@@ -137,8 +137,13 @@ AppWindow::Render()
             {
                 IGFD::FileDialogConfig config;
                 config.path = ".";
+                std::string supported_extensions = ".db,.rpd";
+#ifdef JSON_SUPPORT
+                supported_extensions += ",.json";
+#endif
                 ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File",
-                                                        ".json", config);
+                                                        supported_extensions.c_str(),
+                                                        config);
             }
             ImGui::EndMenu();
         }

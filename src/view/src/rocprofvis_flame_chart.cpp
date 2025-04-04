@@ -13,8 +13,8 @@ namespace RocProfVis
 {
 namespace View
 {
-FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movement,
-                       float min_x, float max_x, float scale_x)
+FlameChart::FlameChart(int chart_id, std::string name, double zoom, double movement,
+                       double min_x, double max_x, double scale_x)
 : m_zoom(zoom)
 , m_movement(movement)
 , m_min_x(min_x)
@@ -26,7 +26,7 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 , color_by_value_digits()
 {}
 
-std::tuple<float, float>
+std::tuple<double, double>
 FlameChart::FindMaxMinFlame()
 {
     m_min_x = flames[0].m_start_ts;
@@ -47,8 +47,8 @@ FlameChart::FindMaxMinFlame()
 }
 
 void
-FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                           float scale_x)
+FlameChart::UpdateMovement(double zoom, double movement, double& min_x, double& max_x,
+                           double scale_x)
 {
     m_zoom     = zoom;
     m_movement = movement;
@@ -66,7 +66,7 @@ FlameChart::GetName()
 {
     return m_name;
 }
-float
+double
 FlameChart::ReturnSize()
 {
     return size;
@@ -92,13 +92,13 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
     int    screen_width = static_cast<int>(display_size.x);
 
-    float effective_width = screen_width / m_zoom;
-    float bin_size        = ((m_max_x - m_min_x) / effective_width);
+    double effective_width = screen_width / m_zoom;
+    double bin_size        = ((m_max_x - m_min_x) / effective_width);
 
     double bin_sum_x         = 0.0;
     int    bin_count         = 0;
     double current_bin_start = DBL_MAX;
-    float  largest_duration  = 0;
+    double  largest_duration  = 0;
 
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
@@ -192,7 +192,7 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
 
 void
 FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
-                    rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list)
+                    rocprofvis_trace_event_t flame, double duration, ImDrawList* draw_list)
 {
     ImGui::PushID(static_cast<int>(boxplot_box_id));
 
@@ -231,8 +231,8 @@ FlameChart::Render()
     {
         int    boxplot_box_id = 0;
         ImVec2 parent_size    = ImGui::GetContentRegionAvail();
-        float  metadata_size  = 400.0f;
-        float  graph_size     = parent_size.x - metadata_size;
+        double  metadata_size  = 400.0f;
+        double  graph_size     = parent_size.x - metadata_size;
 
         ImGui::BeginChild("MetaData View", ImVec2(metadata_size, size), false);
 
@@ -255,13 +255,13 @@ FlameChart::Render()
 
         for(const auto& flame : flames)
         {
-            float normalized_start =
+            double normalized_start =
                 (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
 
-            // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
-            float normalized_end = flame.m_duration * m_scale_x;
+            // double duration = static_cast<double>(flame.m_duration * zoom) * scale_x;
+            double normalized_end = flame.m_duration * m_scale_x;
 
-            float fullBoxSize = normalized_start + normalized_end;
+            double fullBoxSize = normalized_start + normalized_end;
 
             ImVec2 start_position;
             ImVec2 end_position;

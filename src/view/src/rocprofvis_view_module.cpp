@@ -16,3 +16,7 @@ bool rocprofvis_view_init() {
 void rocprofvis_view_render() {
     AppWindow::GetInstance()->Render();
 }
+
+void rocprofvis_view_destroy(){
+    delete AppWindow::GetInstance();
+}

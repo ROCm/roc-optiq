@@ -106,6 +106,8 @@ main(int, char**)
                     }
                 }
 
+                rocprofvis_view_destroy();
+
                 backend.m_shutdown(&backend);
 
                 ImGui_ImplGlfw_Shutdown();

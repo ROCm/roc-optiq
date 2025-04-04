@@ -15,8 +15,8 @@ namespace RocProfVis
 namespace View
 {
 
-LineChart::LineChart(int id, std::string name, float zoom, float movement, float& min_x,
-                     float& max_x, float scale_x)
+LineChart::LineChart(int id, std::string name, double zoom, double movement, double& min_x,
+                     double& max_x, double scale_x)
 : m_id(id)
 , m_zoom(zoom)
 , m_movement(movement)
@@ -33,7 +33,7 @@ LineChart::LineChart(int id, std::string name, float zoom, float movement, float
 {}
 
 LineChart::~LineChart() {}
-float
+double
 LineChart::ReturnSize()
 {
     return size;  // Create an invisible button with a more area
@@ -69,8 +69,8 @@ LineChart::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
     int    screen_width = static_cast<int>(display_size.x);
 
-    float effectiveWidth = screen_width / m_zoom;
-    float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
+    double effectiveWidth = screen_width / m_zoom;
+    double bin_size       = (m_max_x - m_min_x) / effectiveWidth;
 
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
@@ -143,7 +143,7 @@ LineChart::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     return aggregated_points;
 }
 
-std::tuple<float, float>
+std::tuple<double, double>
 LineChart::FindMaxMin()
 {
     m_min_y = m_data[0].yValue;
@@ -174,8 +174,8 @@ LineChart::FindMaxMin()
     return std::make_tuple(m_min_x, m_max_x);
 }
 
-float
-LineChart::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float known_y)
+double
+LineChart::CalculateMissingX(double x_1, double y_1, double x_2, double y_2, double known_y)
 {
     // Calculate slope (m)
     double m = (y_2 - y_1) / (x_2 - x_1);
@@ -190,8 +190,8 @@ LineChart::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float k
 }
 
 void
-LineChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                          float scale_x)
+LineChart::UpdateMovement(double zoom, double movement, double& min_x, double& max_x,
+                          double scale_x)
 {
     m_zoom     = zoom;
     m_movement = movement;
@@ -209,8 +209,8 @@ LineChart::Render()
     if(ImGui::BeginChild((std::to_string(m_id)).c_str()), true, window_flags)
     {
         ImVec2 parent_size   = ImGui::GetContentRegionAvail();
-        float  metadata_size = 400.0f;
-        float  graph_size    = parent_size.x - metadata_size;
+        double  metadata_size = 400.0f;
+        double  graph_size    = parent_size.x - metadata_size;
 
         ImGui::BeginChild("MetaData View", ImVec2(metadata_size, size), false);
 
@@ -241,7 +241,7 @@ LineChart::Render()
         ImVec2 cursor_position = ImGui::GetCursorScreenPos();
         ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
-        float scale_y = content_size.y / (m_max_y - m_min_y);
+        double scale_y = content_size.y / (m_max_y - m_min_y);
         for(int i = 1; i < m_data.size(); i++)
         {
             ImVec2 point_1 =
@@ -277,10 +277,10 @@ LineChart::Render()
                 {
                     if(m_color_by_value_digits.interest_1_max < m_data[i - 1].yValue)
                     {
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
@@ -291,10 +291,10 @@ LineChart::Render()
                     }
                     else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].yValue)
                     {
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
@@ -310,10 +310,10 @@ LineChart::Render()
                     {
                         // if greater than upper max.
 
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
@@ -324,10 +324,10 @@ LineChart::Render()
                     }
                     else if(m_color_by_value_digits.interest_1_min > m_data[i].yValue)
                     {
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
@@ -369,10 +369,10 @@ LineChart::Render()
 
 ImVec2
 LineChart::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
-                   ImVec2& content_size, float scaleX, float scaleY)
+                   ImVec2& content_size, double scaleX, double scaleY)
 {
-    float x = (point.xValue - (m_min_x + m_movement)) * scaleX;
-    float y = cursor_position.y + content_size.y - (point.yValue - m_min_y) * scaleY;
+    double x = (point.xValue - (m_min_x + m_movement)) * scaleX;
+    double y = cursor_position.y + content_size.y - (point.yValue - m_min_y) * scaleY;
 
     return ImVec2(x, y);
 }

@@ -19,8 +19,8 @@ DisableScrollWheelInImGui()
 
 struct Point
 {
-    float x;
-    float y;
+    double x;
+    double y;
 };
 
 std::vector<Point>
@@ -41,11 +41,11 @@ extractPointsFromData(void* data)
 }
 
 static void
-rocprofvis_trace_event_flame_graph_getter(float* start, float* end, ImU8* level,
+rocprofvis_trace_event_flame_graph_getter(double* start, double* end, ImU8* level,
                                           const char** caption, const void* data, int idx)
 {
-    float       start_val = 0.f;
-    float       end_val   = 0.f;
+    double       start_val = 0.f;
+    double       end_val   = 0.f;
     ImU8        out_level = 0;
     char const* label     = "";
     if(data)

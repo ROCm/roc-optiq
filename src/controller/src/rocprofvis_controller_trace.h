@@ -4,6 +4,7 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
+#include "rocprofvis_c_interface.h"
 #include <vector>
 
 namespace RocProfVis
@@ -49,6 +50,13 @@ private:
     std::vector<Track*> m_tracks;
     uint64_t m_id;
     Timeline* m_timeline;
+    rocprofvis_dm_trace_t m_dm_handle;
+
+private:
+#ifdef JSON_SUPPORT
+    rocprofvis_result_t LoadJson(char const* const filename);
+#endif
+    rocprofvis_result_t LoadRocpd(char const* const filename);
 };
 
 }

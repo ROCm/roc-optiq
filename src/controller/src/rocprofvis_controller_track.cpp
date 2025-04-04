@@ -13,18 +13,24 @@ namespace RocProfVis
 namespace Controller
 {
 
-Track::Track(rocprofvis_controller_track_type_t type, uint64_t id)
+Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle)
 : m_id(id)
 , m_num_elements(0)
 , m_type(type)
 , m_start_timestamp(DBL_MIN)
 , m_end_timestamp(DBL_MAX)
+, m_dm_handle(dm_handle)
 {
 
 }
 
 Track::~Track()
 {
+}
+
+rocprofvis_dm_track_t Track::GetDmHandle(void){
+    
+    return m_dm_handle;
 }
 
 rocprofvis_result_t Track::Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index)

@@ -5,6 +5,7 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_segment.h"
 #include "rocprofvis_controller_handle.h"
+#include "rocprofvis_c_interface.h"
 #include <map>
 #include <string>
 #include <memory>
@@ -19,13 +20,14 @@ class Array;
 class Track : public Handle
 {
 public:
-    Track(rocprofvis_controller_track_type_t type, uint64_t id);
+    Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle);
 
     virtual ~Track();
 
     rocprofvis_result_t Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index);
 
     rocprofvis_controller_object_type_t GetType(void) final;
+    rocprofvis_dm_track_t GetDmHandle(void);
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -46,6 +48,7 @@ private:
     double m_start_timestamp;
     double m_end_timestamp;
     std::string m_name;
+    rocprofvis_dm_track_t m_dm_handle;
 };
 
 }

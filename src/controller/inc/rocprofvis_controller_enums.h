@@ -398,6 +398,8 @@ typedef enum rocprofvis_controller_event_properties_t
     kRPVControllerEventChildIndexed = 0x7000000B,
     // Notionally indexed callstack entries
     kRPVControllerEventCallstackEntryIndexed = 0x7000000C,
+    // Category for the event
+    kRPVControllerEventCategory = 0x7000000D,
 } rocprofvis_controller_event_properties_t;
 /* JSON: RPVEvent
 {

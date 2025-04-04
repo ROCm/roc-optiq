@@ -9,7 +9,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 add_subdirectory(thirdparty/)
 add_subdirectory(src/model/)
 
-add_library(rocprof-visualizer-controller STATIC
+set(rocprofvis_source_files)
+list(APPEND rocprofvis_source_files
     src/controller/src/rocprofvis_controller_array.cpp
     src/controller/src/rocprofvis_controller_data.cpp
     src/controller/src/rocprofvis_controller_event.cpp
@@ -21,14 +22,26 @@ add_library(rocprof-visualizer-controller STATIC
     src/controller/src/rocprofvis_controller_segment.cpp
     src/controller/src/rocprofvis_controller_timeline.cpp
     src/controller/src/rocprofvis_controller_trace.cpp
-    src/controller/src/rocprofvis_controller_json_trace.cpp
     src/controller/src/rocprofvis_controller_track.cpp
     src/controller/src/rocprofvis_controller.cpp
 )
+if(JSON_SUPPORT) 
+list(APPEND rocprofvis_source_files
+    src/controller/src/rocprofvis_controller_json_trace.cpp
+)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_SUPPORT")
+endif(JSON_SUPPORT)
+
+add_library(rocprof-visualizer-controller STATIC ${rocprofvis_source_files})
+    
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
+
+if(JSON_SUPPORT) 
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jsoncpp)
 target_link_libraries(rocprof-visualizer-controller PRIVATE json)
+endif(JSON_SUPPORT)
 
 # View related src files
 set(VIEW_FILES

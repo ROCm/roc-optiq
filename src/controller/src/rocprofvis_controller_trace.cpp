@@ -319,7 +319,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                        rocprofvis_db_read_metadata_async(db, object2wait))
                     {
                         if(kRocProfVisDmResultSuccess ==
-                           rocprofvis_db_future_wait(object2wait, 10))
+                           rocprofvis_db_future_wait(object2wait, UINT64_MAX))
                         {
                             rocprofvis_dm_timestamp_t     start_time;
                             rocprofvis_dm_timestamp_t     end_time;
@@ -394,7 +394,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                        &tracks_selection[0], object2wait))
                                 {
                                     if(kRocProfVisDmResultSuccess ==
-                                       rocprofvis_db_future_wait(object2wait, 60))
+                                       rocprofvis_db_future_wait(object2wait, UINT64_MAX))
                                     {
                                         uint64_t graph_id = 0;
                                         for(Track* track : m_tracks)

@@ -39,11 +39,15 @@ add_library(rocprof-visualizer-controller STATIC ${rocprofvis_source_files})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
+target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
 
 if(JSON_SUPPORT) 
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jsoncpp)
 target_link_libraries(rocprof-visualizer-controller PRIVATE json)
 endif(JSON_SUPPORT)
+
+target_link_libraries(rocprof-visualizer-controller PRIVATE rocprofvis-core)
+target_link_libraries(rocprof-visualizer-controller PRIVATE spdlog)
 
 # View related src files
 set(VIEW_FILES

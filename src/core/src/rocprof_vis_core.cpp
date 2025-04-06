@@ -38,6 +38,9 @@ extern "C"
             auto new_logger = std::make_shared<spdlog::logger>(std::move(std::string("rocprofvis-log")), sinks.begin(), sinks.end());
             new_logger->set_level(spdlog::level::debug);
             spdlog::details::registry::instance().initialize_logger(new_logger);
+
+            spdlog::set_default_logger(new_logger);
+            spdlog::set_level(spdlog::level::debug);
         }
     }
 

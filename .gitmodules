@@ -13,3 +13,6 @@
 [submodule "thirdparty/implot"]
 	path = thirdparty/implot
 	url = https://github.com/epezent/implot.git
+[submodule "thirdparty/spdlog"]
+	path = thirdparty/spdlog
+	url = https://github.com/gabime/spdlog.git

@@ -9,6 +9,7 @@ set(JSON_SUPPORT ON)
 
 add_subdirectory(thirdparty/)
 add_subdirectory(src/model/)
+add_subdirectory(src/core)
 
 set(rocprofvis_source_files)
 list(APPEND rocprofvis_source_files
@@ -78,5 +79,7 @@ target_link_libraries(rocprof-visualizer PRIVATE ImGuiFileDialog)
 target_link_libraries(rocprof-visualizer PRIVATE glfw)
 target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-controller)
 target_link_libraries(rocprof-visualizer PRIVATE datamodel)
+target_link_libraries(rocprof-visualizer PRIVATE rocprofvis-core)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
+

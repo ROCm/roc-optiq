@@ -24,7 +24,7 @@ DebugWindow::DebugWindow() {}
 void
 DebugWindow::Render()
 {
-    rocprofvis_core_get_log_entries(1000, (void*) this, &DebugWindow::Process);
+    rocprofvis_core_get_log_entries((void*) this, &DebugWindow::Process);
     ImGui::Begin("Debug Window", nullptr, ImGuiWindowFlags_None);
     for(const std::string& message : m_debug_messages)
     {

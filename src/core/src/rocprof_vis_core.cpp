@@ -12,7 +12,63 @@
 #include "spdlog/sinks/wincolor_sink.h"
 #endif
 
-static std::weak_ptr<spdlog::sinks::ringbuffer_sink_mt> g_rpv_log_ringbuffer;
+#include "spdlog/details/circular_q.h"
+#include "spdlog/details/log_msg_buffer.h"
+#include "spdlog/details/null_mutex.h"
+#include "spdlog/sinks/base_sink.h"
+
+#include <mutex>
+#include <string>
+#include <vector>
+
+namespace RocProfVis {
+namespace Core {
+
+template <typename Mutex>
+class BufferSink final : public spdlog::sinks::base_sink<Mutex>
+{
+public:
+    explicit BufferSink() {}
+
+    std::vector<spdlog::details::log_msg_buffer> Raw()
+    {
+        std::lock_guard<Mutex> lock(spdlog::sinks::base_sink<Mutex>::mutex_);
+        std::vector<spdlog::details::log_msg_buffer> output = m_elements;
+        m_elements.clear();
+        return output;
+    }
+
+    std::vector<std::string> Formatted()
+    {
+        std::lock_guard<Mutex> lock(base_sink<Mutex>::mutex_);
+        std::vector<std::string> ret;
+        ret.reserve(m_elements.size());
+        for (auto& entry : m_elements)
+        {
+            spdlog::memory_buf_t formatted;
+            spdlog::sinks::base_sink<Mutex>::formatter_->format(entry, formatted);
+            ret.push_back(SPDLOG_BUF_TO_STRING(formatted));
+        }
+        m_elements.clear();
+        return ret;
+    }
+
+protected:
+    void sink_it_(const spdlog::details::log_msg &msg) override
+    {
+        m_elements.push_back(spdlog::details::log_msg_buffer{msg});
+    }
+    void flush_() override {}
+
+private:
+    std::vector<spdlog::details::log_msg_buffer> m_elements;
+};
+
+using BufferSinkMT = BufferSink<std::mutex>;
+}
+}
+
+static std::weak_ptr<RocProfVis::Core::BufferSinkMT> g_rpv_log_ringbuffer;
 
 extern "C"
 {
@@ -29,7 +85,7 @@ extern "C"
             file_sink->set_level(spdlog::level::debug);
             sinks.push_back(file_sink);
 
-            auto buffer_sink = std::make_shared<spdlog::sinks::ringbuffer_sink_mt>(1000);
+            auto buffer_sink = std::make_shared<RocProfVis::Core::BufferSinkMT>();
             buffer_sink->set_level(spdlog::level::debug);
             sinks.push_back(buffer_sink);
 
@@ -59,12 +115,12 @@ extern "C"
         }
     }
 
-    void rocprofvis_core_get_log_entries(uint32_t num, void* user_ptr, rocprofvis_core_process_log_t handler)
+    void rocprofvis_core_get_log_entries(void* user_ptr, rocprofvis_core_process_log_t handler)
     {
         auto sink = g_rpv_log_ringbuffer.lock();
-        if(num && handler && sink)
+        if(handler && sink)
         {
-            auto array = sink->last_formatted(num);
+            auto array = sink->Formatted();
             for (auto entry : array)
             {
                 handler(user_ptr, entry.c_str());

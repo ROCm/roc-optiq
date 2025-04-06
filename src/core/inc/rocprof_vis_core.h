@@ -13,7 +13,7 @@ extern "C"
 
     void rocprofvis_core_enable_log(void);
 
-    void rocprofvis_core_get_log_entries(uint32_t num, void* user_ptr, rocprofvis_core_process_log_t handler);
+    void rocprofvis_core_get_log_entries(void* user_ptr, rocprofvis_core_process_log_t handler);
 
 #ifdef __cplusplus
 }

@@ -22,6 +22,7 @@ public:
 
 private:
     DebugWindow();
+    static void Process(void* user_ptr, char const* log);
 
     static DebugWindow* s_instance;
     std::vector<std::string> m_debug_messages;

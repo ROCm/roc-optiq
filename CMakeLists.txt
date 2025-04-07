@@ -46,7 +46,7 @@ target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT
 target_link_libraries(rocprof-visualizer-controller PRIVATE json)
 endif(JSON_SUPPORT)
 
-target_link_libraries(rocprof-visualizer-controller PRIVATE rocprofvis-core)
+target_link_libraries(rocprof-visualizer-controller PRIVATE rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer-controller PRIVATE spdlog)
 
 # View related src files
@@ -84,7 +84,7 @@ target_link_libraries(rocprof-visualizer PRIVATE ImGuiFileDialog)
 target_link_libraries(rocprof-visualizer PRIVATE glfw)
 target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-controller)
 target_link_libraries(rocprof-visualizer PRIVATE datamodel)
-target_link_libraries(rocprof-visualizer PRIVATE rocprofvis-core)
+target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer PRIVATE spdlog)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")

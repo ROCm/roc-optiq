@@ -42,6 +42,8 @@ typedef struct{
     RpvSqliteExecuteQueryCallback callback;
     // row counter to determine index of a row and number of processed rows
     rocprofvis_dm_index_t row_counter;
+    // pointer to query string, convenient for multiuse callback debugging
+    rocprofvis_dm_charptr_t query;
     // multi-use string  
     rocprofvis_dm_charptr_t subquery;
 } rocprofvis_db_sqlite_callback_parameters;

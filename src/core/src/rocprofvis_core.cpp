@@ -1,6 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprof_vis_core.h"
+#include "rocprofvis_core.h"
 
 #include <vector>
 

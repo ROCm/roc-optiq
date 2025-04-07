@@ -2,7 +2,7 @@
 
 #include "rocprofvis_imgui_backend.h"
 #include "rocprofvis_trace_ui.h"
-#include "rocprof_vis_core.h"
+#include "rocprofvis_core.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"

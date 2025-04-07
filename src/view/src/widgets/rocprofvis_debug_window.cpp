@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_debug_window.h"
-#include "rocprof_vis_core.h"
+#include "rocprofvis_core.h"
 #include "imgui.h"
 
 using namespace RocProfVis::View;

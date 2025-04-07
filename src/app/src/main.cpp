@@ -2,6 +2,7 @@
 
 #include "rocprofvis_imgui_backend.h"
 #include "rocprofvis_trace_ui.h"
+#include "rocprofvis_core.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -26,6 +27,8 @@ int
 main(int, char**)
 {
     int resultCode = 0;
+
+    rocprofvis_core_enable_log();
 
     glfwSetErrorCallback(glfw_error_callback);
 

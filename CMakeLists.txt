@@ -9,6 +9,7 @@ set(JSON_SUPPORT ON)
 
 add_subdirectory(thirdparty/)
 add_subdirectory(src/model/)
+add_subdirectory(src/core)
 
 set(rocprofvis_source_files)
 list(APPEND rocprofvis_source_files
@@ -38,11 +39,15 @@ add_library(rocprof-visualizer-controller STATIC ${rocprofvis_source_files})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
+target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
 
 if(JSON_SUPPORT) 
 target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jsoncpp)
 target_link_libraries(rocprof-visualizer-controller PRIVATE json)
 endif(JSON_SUPPORT)
+
+target_link_libraries(rocprof-visualizer-controller PRIVATE rocprof-visualizer-core)
+target_link_libraries(rocprof-visualizer-controller PRIVATE spdlog)
 
 # View related src files
 set(VIEW_FILES
@@ -72,11 +77,15 @@ target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
 target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
+target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
 target_link_libraries(rocprof-visualizer PRIVATE imgui)
 target_link_libraries(rocprof-visualizer PRIVATE implot)
 target_link_libraries(rocprof-visualizer PRIVATE ImGuiFileDialog)
 target_link_libraries(rocprof-visualizer PRIVATE glfw)
 target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-controller)
 target_link_libraries(rocprof-visualizer PRIVATE datamodel)
+target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-core)
+target_link_libraries(rocprof-visualizer PRIVATE spdlog)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
+

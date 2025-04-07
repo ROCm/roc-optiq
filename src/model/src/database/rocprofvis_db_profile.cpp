@@ -153,9 +153,11 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
             std::string q = props->query[j]; 
             std::string tuple = "(";
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process_tag[k] != "0") {
+                if (props->process_tag[k] != "const") {
                     if (tuple.length() > 1) tuple += ",";
+                    tuple += "coalesce(";
                     tuple += props->process_tag[k];
+                    tuple += ",0)";
                 }
             }
             tuple += ")";
@@ -164,7 +166,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
             q += " IN (";
             tuple = "(";
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process_tag[k] != "0") {
+                if (props->process_tag[k] != "const") {
                     if (tuple.length() > 1) tuple += ",";
                     std::string id = props->process_id_numeric[k] ? std::to_string(props->process_id[k]) : std::string("'") + props->process_name[k] + "'";
                     tuple += id;
@@ -264,12 +266,12 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename){
     sqlite3 *db;
     if( sqlite3_open(filename, &db) != SQLITE_OK) return rocprofvis_db_type_t::kAutodetect;
 
-    if (DetectTable(db, "_rocpd_region") == SQLITE_OK) {
+    if (DetectTable(db, "rocpd_event") == SQLITE_OK) {
         sqlite3_close(db);
         return rocprofvis_db_type_t::kRocprofSqlite;
     }
 
-    if (DetectTable(db, "rocpd_api") == SQLITE_OK) {
+    if (DetectTable(db, "api") == SQLITE_OK) {
         sqlite3_close(db);
         return rocprofvis_db_type_t::kRocpdSqlite;
     }

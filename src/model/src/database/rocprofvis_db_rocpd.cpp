@@ -197,19 +197,19 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                        "select DISTINCT 0, pid, tid, 2 as category from rocpd_api;", 
+                        "select DISTINCT 0 as const, pid, tid, 2 as category from rocpd_api;", 
                         "select 1 as op, start, end, apiName_id, args_id, id, 0, pid, tid from rocpd_api ",
                         &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding GPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                        "select DISTINCT 0, gpuId, queueId, 3 as category from rocpd_op;",
+                        "select DISTINCT 0 as const, gpuId, queueId, 3 as category from rocpd_op;",
                         "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId  from rocpd_op ",
                         &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding PMC tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                        "select DISTINCT 0, deviceId, monitorType, 1 as category from rocpd_monitor where deviceId > 0;", 
+                        "select DISTINCT 0 as const, deviceId, monitorType, 1 as category from rocpd_monitor where deviceId > 0;", 
                         "select 0 as op, start, value, 0, 0, 0, 0, deviceId, monitorType from rocpd_monitor ",
                         &CallBackAddTrack)) break;
 

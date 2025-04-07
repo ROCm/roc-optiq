@@ -53,6 +53,7 @@ rocprofvis_dm_result_t Future::WaitForCompletion(rocprofvis_db_timeout_ms_t time
         status = m_future.wait_for(std::chrono::milliseconds(timeout_ms));
     }
     if (status != std::future_status::ready) {
+        if(timeout_ms == 0) return result;
         m_interrupt_status = true;
         LOG("Timeout expired!");
     }

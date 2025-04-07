@@ -33,7 +33,7 @@
 
 
 typedef uint32_t                          rocprofvis_dm_node_id_t;
-typedef uint32_t                          rocprofvis_dm_process_id_t;
+typedef uint64_t                          rocprofvis_dm_process_id_t;
 typedef uint64_t                          rocprofvis_dm_stream_id_t;
 typedef std::string                       rocprofvis_dm_string_t;
 typedef uint32_t                          rocprofvis_dm_op_t;

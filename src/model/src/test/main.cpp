@@ -188,7 +188,7 @@ int main(int argc, char** argv)
 
                             start_time = rocprofvis_dm_get_property_as_uint64(trace, kRPVDMStartTimeUInt64, 0);
                             end_time = rocprofvis_dm_get_property_as_uint64(trace, kRPVDMEndTimeUInt64, 0);
-                            printf(ANSI_COLOR_GREEN "Trace start time=%ld, end time = %ld\n", start_time, end_time);
+                            printf(ANSI_COLOR_GREEN "Trace start time=%lld, end time = %lld\n", start_time, end_time);
                             num_tracks = (rocprofvis_db_num_of_tracks_t)rocprofvis_dm_get_property_as_uint64(trace, kRPVDMNumberOfTracksUInt64, 0);
                             for (int i = 0; i < num_tracks; i++)
                             {

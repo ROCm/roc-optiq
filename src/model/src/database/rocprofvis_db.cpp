@@ -266,10 +266,25 @@ rocprofvis_dm_size_t Database::GetMemoryFootprint()
 bool Database::TrackExist( rocprofvis_dm_track_params_t & newprops, rocprofvis_dm_charptr_t newquery){
     std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator it = 
         std::find_if(TrackPropertiesBegin(), TrackPropertiesEnd(), [newprops] (std::unique_ptr<rocprofvis_dm_track_params_t> & params) {
-        return  params.get()->track_category == newprops.track_category &&
-                params.get()->process_id[TRACK_ID_NODE] == newprops.process_id[TRACK_ID_NODE] && 
-                params.get()->process_id[TRACK_ID_PID_OR_AGENT] == newprops.process_id[TRACK_ID_PID_OR_AGENT] && 
-                params.get()->process_id[TRACK_ID_TID_OR_QUEUE] == newprops.process_id[TRACK_ID_TID_OR_QUEUE]; });
+                if(params.get()->track_category == newprops.track_category)
+                {
+                    for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++)
+                    {
+                        if(newprops.process_id_numeric[i])
+                        {
+                            if(params.get()->process_id[i] != newprops.process_id[i])
+                                return false;
+                        }
+                        else
+                        {
+                            if(params.get()->process_name[i] != newprops.process_name[i])
+                                return false;
+                        }
+                    }
+                    return true;
+                }
+                return false;
+        });
     if (it != TrackPropertiesEnd()) {
             std::vector<rocprofvis_dm_string_t>::iterator s = 
             std::find_if(it->get()->query.begin(), it->get()->query.end(), [newquery] (rocprofvis_dm_string_t & str) {

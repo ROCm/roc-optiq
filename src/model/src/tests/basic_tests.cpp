@@ -3,6 +3,7 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_error_handling.h"
+#include "rocprofvis_db_future.h"
 #include <iostream>
 #include <cstdio>
 #include <random>
@@ -65,7 +66,7 @@ void CheckMemoryFootprint(rocprofvis_dm_trace_t trace)
         }
     }
 
-    printf("\x1b[0mTotal memory utilization so far = %ld\n",memory_used);
+    printf("\x1b[0mTotal memory utilization so far = %lld\n",memory_used);
 }
 
 #define LIST_SIZE_LIMIT 2
@@ -107,7 +108,6 @@ void GenerateRandomSlice(   rocprofvis_dm_trace_t trace,
                             rocprofvis_dm_timestamp_t & end_time)
 {
     static std::vector<uint32_t> v;
-    static std::vector<uint32_t> s;
     uint64_t num_tracks = rocprofvis_dm_get_property_as_uint64(trace, kRPVDMNumberOfTracksUInt64, 0);
     if (g_all_tracks) {
         for (int i = 0; i < num_tracks; i++) {
@@ -238,7 +238,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
 
             printf(
                 ANSI_COLOR_CYAN
-                "Track id=%ld node=%ld category=%s process=%s subprocess=%s\n",
+                "Track id=%lld node=%lld category=%s process=%s subprocess=%s\n",
                 rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackIdUInt64, 0),
                 rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackNodeIdUInt64, 0),
                 rocprofvis_dm_get_property_as_charptr(track,
@@ -250,17 +250,84 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
         }
     }
 
+    SECTION("Whole Trace Read")
+    {
+        double   whole_trace_readtime = 0;
+        uint32_t total_num_rows       = 0;
+        uint32_t total_num_tracks     = num_tracks;
+        GenerateRandomSlice(m_trace, num_tracks, tracks_selection, start_time, end_time);
+        for(int i = 0; i < total_num_tracks; i++)
+        {
+            rocprofvis_dm_track_t track = rocprofvis_dm_get_property_as_handle(
+                m_trace, kRPVDMTrackHandleIndexed, i);
+            REQUIRE(track != nullptr);
+
+            bool load_slice = false;
+            for(int j = 0; j < num_tracks; j++)
+            {
+                if(tracks_selection[j] == i)
+                {
+                    load_slice = true;
+                    break;
+                }
+            }
+            if(load_slice)
+            {
+                PrintHeader("Allocate future");
+                rocprofvis_db_future_t object2wait =
+                    rocprofvis_db_future_alloc(db_progress);
+                REQUIRE(nullptr != object2wait);
+
+                auto t1               = std::chrono::steady_clock::now();
+                auto read_slice_issue = rocprofvis_db_read_trace_slice_async(
+                    m_db, start_time, end_time, 1, (uint32_t*) &i, object2wait);
+                REQUIRE(kRocProfVisDmResultSuccess == read_slice_issue);
+                if(kRocProfVisDmResultSuccess == read_slice_issue)
+                {
+                    auto read_wait = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+                    REQUIRE(kRocProfVisDmResultSuccess == read_wait);
+                    if(kRocProfVisDmResultSuccess == read_wait)
+                    {
+                        auto t2 = std::chrono::steady_clock::now();
+                        std::chrono::duration<double> diff = t2 - t1;
+                        whole_trace_readtime += diff.count();
+                        uint32_t num_rows = ((RocProfVis::DataModel::Future*) object2wait)
+                                                ->GetProcessedRowsCount();
+                        total_num_rows += num_rows;
+                        rocprofvis_dm_slice_t slice =
+                            rocprofvis_dm_get_property_as_handle(
+                                track, kRPVDMSliceHandleTimed, start_time);
+                        REQUIRE(slice);
+                        uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
+                            slice, kRPVDMNumberOfRecordsUInt64, 0);
+                        printf(ANSI_COLOR_MAGENTA
+                               "Track %d has %lld records, read time - %13.9f, number of "
+                               "rows processed = %ld\n" ANSI_COLOR_RESET,
+                               i, num_records, diff.count(), num_rows);
+                        rocprofvis_dm_delete_all_time_slices(m_trace);
+                    }
+                }
+
+                PrintHeader("Free future");
+                rocprofvis_db_future_free(object2wait);
+            }
+        }
+
+        printf(ANSI_COLOR_MAGENTA "Whole trace read time - %13.9f,  number of rows "
+                                  "processed = %ld\n" ANSI_COLOR_RESET,
+               whole_trace_readtime, total_num_rows);
+    }
+
     SECTION("Read Random Slice Data")
     {
-        GenerateRandomSlice(m_trace, num_tracks, tracks_selection, start_time, end_time);
-
         if(num_tracks > 0)
         {
             rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(db_progress);
             REQUIRE(nullptr != object2wait);
 
             // Read time slice a process data
-            PrintHeader("Read time slice");
+            PrintHeader("Read time slice for all tracks");
+            auto t1                = std::chrono::steady_clock::now();
             auto read_slice_result = rocprofvis_db_read_trace_slice_async(
                 m_db, start_time, end_time, num_tracks, tracks_selection, object2wait);
             REQUIRE(kRocProfVisDmResultSuccess == read_slice_result);
@@ -271,6 +338,13 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                 REQUIRE(kRocProfVisDmResultSuccess == slice_wait_result);
                 if(kRocProfVisDmResultSuccess == slice_wait_result)
                 {
+                    auto                          t2   = std::chrono::steady_clock::now();
+                    std::chrono::duration<double> diff = t2 - t1;
+                    uint32_t num_rows = ((RocProfVis::DataModel::Future*) object2wait)
+                                            ->GetProcessedRowsCount();
+                    printf(ANSI_COLOR_MAGENTA "Whole trace read time - %13.9f, number of "
+                                              "rows processed = %ld\n" ANSI_COLOR_RESET,
+                           diff.count(), num_rows);
                     CheckMemoryFootprint(m_trace);
                     PrintHeader("Time slice content, up to %d records", LIST_SIZE_LIMIT);
                     int first_track = std::rand() % num_tracks;
@@ -312,7 +386,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                             id, node_id, track_category_name, track_process_name,
                             track_sub_process_name);
 
-                        printf(ANSI_COLOR_CYAN "\t%s : %s : %ld\n", "Properties",
+                        printf(ANSI_COLOR_CYAN "\t%s : %s : %lld\n", "Properties",
                                "Memory usage", memory_usage);
                         for(int i = 0; i < num_ext_data; i++)
                         {
@@ -338,8 +412,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                         {
                             uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
                                 slice, kRPVDMNumberOfRecordsUInt64, 0);
-                            printf(ANSI_COLOR_BLUE "Time slice for time%ld - %ld for "
-                                                   "track %d [%s:%s:%s] has%ld records\n",
+                            printf(ANSI_COLOR_BLUE "Time slice for time%lld - %lld for "
+                                                   "track %d [%s:%s:%s] has%lld records\n",
                                    start_time, end_time, tracks_selection[i],
                                    track_category_name, track_process_name,
                                    track_sub_process_name, num_records);
@@ -363,7 +437,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                     {
                                         printf(ANSI_COLOR_RED
                                                "Record %d has invalid duration "
-                                               "%ld\n" ANSI_COLOR_RESET,
+                                               "%lld\n" ANSI_COLOR_RESET,
                                                j, duration);
                                     }
                                     uint64_t id = rocprofvis_dm_get_property_as_uint64(
@@ -384,7 +458,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                     REQUIRE(type_str);
                                     REQUIRE(symbol_str);
                                     printf(ANSI_COLOR_BLUE
-                                           "Record id=%ld, timestamp=%ld, op=%ld, "
+                                           "Record id=%lld, timestamp=%lld, op=%lld, "
                                            "op_str=%s, type=%s, symbol=%s\n",
                                            id, timestamp, op, op_str, type_str,
                                            symbol_str);
@@ -392,7 +466,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                     rocprofvis_dm_event_id_t event_id = { id, op };
                                     PrintHeader("Testing multithreaded access to "
                                                 "database retrieving flow, stack and "
-                                                "extended data for event id = %ld",
+                                                "extended data for event id = %lld",
                                                 event_id.bitfield.event_id);
                                     rocprofvis_db_future_t object2wait4flowtrace =
                                         rocprofvis_db_future_alloc(db_progress);
@@ -446,7 +520,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                     flowtrace,
                                                     kRPVDMNumberOfEndpointsUInt64, 0);
                                             printf(ANSI_COLOR_MAGENTA
-                                                   "Event has %ld data flow link:\n",
+                                                   "Event has %lld data flow link:\n",
                                                    num_endpoints);
                                             for(int k = 0; k < num_endpoints; k++)
                                             {
@@ -466,8 +540,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                         kRPVDMEndpointTimestampUInt64Indexed,
                                                         k);
                                                 printf(ANSI_COLOR_MAGENTA
-                                                       "\tEndpoint %d at track=%ld, "
-                                                       "event_id=%ld, timestamp=%ld\n",
+                                                       "\tEndpoint %d at track=%lld, "
+                                                       "event_id=%lld, timestamp=%lld\n",
                                                        k, track_id,
                                                        event_id.bitfield.event_id,
                                                        event_timestamp);
@@ -499,7 +573,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                     stacktrace,
                                                     kRPVDMNumberOfFramesUInt64, 0);
                                             printf(ANSI_COLOR_MAGENTA
-                                                   "Event has %ld stack frames:\n",
+                                                   "Event has %lld stack frames:\n",
                                                    num_frames);
                                             for(int k = 0; k < num_frames; k++)
                                             {
@@ -525,7 +599,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                 REQUIRE(frame_args);
                                                 REQUIRE(frame_code);
                                                 printf(ANSI_COLOR_MAGENTA
-                                                       "\tFrame %d : depth=%ld, "
+                                                       "\tFrame %d : depth=%lld, "
                                                        "symbol=%s, args=%s, code=%s \n",
                                                        k, frame_depth, frame_symbol,
                                                        frame_args, frame_code);
@@ -558,7 +632,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                     kRPVDMNumberOfExtDataRecordsUInt64,
                                                     0);
                                             printf(ANSI_COLOR_MAGENTA
-                                                   "Event has %ld extended data "
+                                                   "Event has %lld extended data "
                                                    "properties:\n",
                                                    num_records);
                                             for(int k = 0; k < num_records; k++)
@@ -606,7 +680,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                     double value = rocprofvis_dm_get_property_as_double(
                                         slice, kRPVDMPmcValueDoubleIndexed, j);
                                     printf(ANSI_COLOR_BLUE
-                                           "Record timestamp=%ld, value=%g\n",
+                                           "Record timestamp=%lld, value=%g\n",
                                            timestamp, value);
                                 }
                             }
@@ -614,7 +688,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                         else
                         {
                             printf(ANSI_COLOR_RED
-                                   "No time slice at %ld loaded for track %d\n",
+                                   "No time slice at %lld loaded for track %d\n",
                                    start_time, tracks_selection[i]);
                         }
                     }

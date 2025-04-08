@@ -43,7 +43,7 @@ int ProfileDatabase::CallbackAddEventRecord(void *data, int argc, char **argv, c
     
     if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;  
  
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 
@@ -57,7 +57,7 @@ int ProfileDatabase::CallbackAddPmcRecord(void *data, int argc, char **argv, cha
     record.pmc.timestamp = std::stoll( argv[1] );
     record.pmc.value = std::stod( argv[2] );
     if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 
@@ -85,7 +85,7 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, char** argv, cha
         }
         if (db->BindObject()->FuncAddRecord((*(slice_array_t*)callback_params->handle)[track_id], record) != kRocProfVisDmResultSuccess) return 1;
     }
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 
@@ -102,7 +102,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, char **argv, cha
         record.time = std::stoll( argv[6] );
         if (db->BindObject()->FuncAddFlow(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     }
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 
@@ -121,7 +121,7 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, char** argv, char*
             if (db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) != kRocProfVisDmResultSuccess) return 1;
         }
     }  
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 
@@ -155,9 +155,9 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
                 if (props->process_tag[k] != "const") {
                     if (tuple.length() > 1) tuple += ",";
-                    tuple += "coalesce(";
+                    if(props->process_id_numeric[k]) tuple += "coalesce(";
                     tuple += props->process_tag[k];
-                    tuple += ",0)";
+                    if(props->process_id_numeric[k]) tuple += ",0)";
                 }
             }
             tuple += ")";

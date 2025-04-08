@@ -133,7 +133,7 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **az
             if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Queue", track_params.process_id[TRACK_ID_QUEUE]) != kRocProfVisDmResultSuccess) return 1;
         }
     }
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 
@@ -152,7 +152,7 @@ int RocpdDatabase::CallBackAddString(void *data, int argc, char **argv, char **a
         db->m_string_map[id] = string_id;
         if (ids.peek() == ',') ids.ignore();
     }
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 
@@ -169,7 +169,7 @@ int RocpdDatabase::CallbackAddStackTrace(void *data, int argc, char **argv, char
     record.line = argv[2];
     record.depth = std::stol( argv[3] );
     if (db->BindObject()->FuncAddStackFrame(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 

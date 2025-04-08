@@ -119,7 +119,7 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **
             }
         }
     }
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 
@@ -130,7 +130,7 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, char **argv, char *
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
     uint32_t stringId = db->BindObject()->FuncAddString(db->BindObject()->trace_object, argv[0]);
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 
@@ -145,7 +145,7 @@ int RocprofDatabase::CallbackCacheTable(void *data, int argc, char **argv, char 
     {
         ref_tables->AddTableCell(callback_params->subquery, id, azColName[i], argv[i]);
     }
-    callback_params->row_counter++;
+    callback_params->future->CountThisRow();
     return 0;
 }
 

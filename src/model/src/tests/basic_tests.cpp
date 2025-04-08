@@ -1,10 +1,6 @@
 
 // Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-// main() provided by linkage to Catch2WithMain
-
-#include <catch2/catch_test_macros.hpp>
-
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_error_handling.h"
 #include <iostream>
@@ -20,9 +16,42 @@
 #include <algorithm>
 #include <string.h>
 
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_session.hpp>
+
+#include <iostream>
+
 std::string g_input_file="C:\\Users\\msattert\\Downloads\\trace.rpd";
 bool        g_all_tracks=true;
 bool        g_full_range=true;
+
+int main(int argc, char** argv)
+{
+  Catch::Session session;
+
+  using namespace Catch::Clara;
+  auto cli
+    = session.cli()
+    | Opt( g_input_file, "input_file" )
+         ["--input_file"]
+         ("Path to input file")
+    | Opt( g_all_tracks, "all_tracks" )
+         ["--all_tracks"]
+         ("Whether to load/query all tracks or only some")
+    | Opt( g_full_range, "full_range" )
+         ["--full_range"]
+         ("Whether to load/query the full trace range or only a segment");
+
+  // Now pass the new composite back to Catch2 so it uses that
+  session.cli( cli );
+
+  // Let Catch2 (using Clara) parse the command line
+  int returnCode = session.applyCommandLine( argc, argv );
+  if( returnCode != 0 ) // Indicates a command line error
+      return returnCode;
+
+  return session.run();
+}
 
 void CheckMemoryFootprint(rocprofvis_dm_trace_t trace)
 {

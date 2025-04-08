@@ -28,7 +28,8 @@ namespace DataModel
 Future::Future(rocprofvis_db_progress_callback_t progress_callback):
                                 m_progress_callback(progress_callback),
                                 m_interrupt_status(false),
-                                m_progress(0.0){
+                                m_progress(0.0),
+                                m_processed_rows(0){
     m_future=m_promise.get_future();
 }
 
@@ -43,6 +44,7 @@ Future::~Future(){
 rocprofvis_dm_result_t Future::WaitForCompletion(rocprofvis_db_timeout_ms_t timeout_ms) {
     rocprofvis_dm_result_t result = kRocProfVisDmResultTimeout;
     std::future_status     status;
+    m_processed_rows = 0;
     if(timeout_ms == UINT64_MAX)
     {
         m_future.wait();

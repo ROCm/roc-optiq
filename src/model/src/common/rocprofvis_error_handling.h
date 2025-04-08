@@ -23,6 +23,7 @@
 #include <cassert>
 #include <string>
 #include <mutex>
+#include <chrono>
 
 namespace RocProfVis
 {
@@ -46,7 +47,7 @@ void AddStatusMessage(const char*);
 
 // compile with -DTEST for profiling interface methods performace
 #ifdef TEST
-#include <chrono>
+
 class TimeRecorder {
 public:
     TimeRecorder(const char* function);

@@ -69,6 +69,11 @@ class Future
                                                         double step, 
                                                         rocprofvis_dm_charptr_t action, 
                                                         rocprofvis_db_status_t status);
+        // increases processed rows counter
+        // the row counter is used for testing (data integrity validation) and detecting first row
+        void 								CountThisRow() { m_processed_rows++; }
+        // returns processed rows counter
+        uint32_t 							GetProcessedRowsCount() { return m_processed_rows; }
 
     private:
         // stdlib promise object
@@ -83,6 +88,8 @@ class Future
         double m_progress;
         // worker thread
         std::thread m_worker;
+        // number of rows processed by query
+        uint32_t m_processed_rows;
 };
 
 }  // namespace DataModel

@@ -22,9 +22,9 @@
 
 #include <iostream>
 
-std::string g_input_file="C:\\Users\\msattert\\Downloads\\trace.rpd";
-bool        g_all_tracks=true;
-bool        g_full_range=true;
+std::string g_input_file="../../../sample/trace_70b_1024_32.rpd";
+bool        g_all_tracks=false;
+bool        g_full_range=false;
 
 int main(int argc, char** argv)
 {

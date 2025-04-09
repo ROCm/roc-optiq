@@ -24,13 +24,13 @@ public:
     void ExtractFlamePoints(rocprofvis_controller_array_t* track_data);
 
     std::tuple<float, float> FindMaxMinFlame();
-    void        UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                               float scale_x) override;
-    float       ReturnSize() override;
-    int         ReturnChartID() override;
-    void        SetID(int id) override;
-    std::string GetName() override;
-    void        SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
+    void         UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+                                float scale_x) override;
+    float        GetTrackHeight() override;
+    int          ReturnChartID() override;
+    void         SetID(int id) override;
+    std::string& GetName() override;
+    void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
 
 private:
     std::vector<rocprofvis_trace_event_t> flames;
@@ -43,9 +43,9 @@ private:
     float                                 m_movement;
     float                                 m_scale_x;
     int                                   m_chart_id;
-    float                                 size;
+    float                                 m_track_height;
     float                                 m_sidebar_size;
-    rocprofvis_color_by_value_t             color_by_value_digits;
+    rocprofvis_color_by_value_t           m_is_color_value_existant;
 };
 
 }  // namespace View

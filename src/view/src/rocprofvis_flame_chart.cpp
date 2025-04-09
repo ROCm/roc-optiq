@@ -22,8 +22,8 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 , m_max_x(max_x)
 , m_scale_x(scale_x)
 , m_name(name)
-, size(75)
-, color_by_value_digits()
+, m_track_height(75)
+, m_is_color_value_existant()
 {}
 
 std::tuple<float, float>
@@ -61,15 +61,15 @@ void
 FlameChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {}
 
-std::string
+std::string&
 FlameChart::GetName()
 {
     return m_name;
 }
 float
-FlameChart::ReturnSize()
+FlameChart::GetTrackHeight()
 {
-    return size;
+    return m_track_height;
 }
 
 void
@@ -234,15 +234,16 @@ FlameChart::Render()
         float  metadata_size  = 400.0f;
         float  graph_size     = parent_size.x - metadata_size;
 
-        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, size), false);
+        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, m_track_height), false);
 
-        ImGui::BeginChild("MetaData Content", ImVec2(metadata_size - 70.0f, size), false);
+        ImGui::BeginChild("MetaData Content",
+                          ImVec2(metadata_size - 70.0f, m_track_height), false);
         ImGui::Text(m_name.c_str());
         ImGui::EndChild();
 
         ImGui::SameLine();
 
-        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, size), false);
+        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
 
         ImGui::EndChild();
 
@@ -250,7 +251,7 @@ FlameChart::Render()
 
         ImGui::SameLine();
 
-        ImGui::BeginChild("Graph View", ImVec2(graph_size, size), false);
+        ImGui::BeginChild("Graph View", ImVec2(graph_size, m_track_height), false);
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         for(const auto& flame : flames)
@@ -286,7 +287,7 @@ FlameChart::Render()
         if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
         {
             ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-            size              = size + (drag_delta.y);
+            m_track_height    = m_track_height + (drag_delta.y);
             ImGui::ResetMouseDragDelta();
             ImGui::EndDragDropSource();
         }

@@ -6,6 +6,7 @@
 #include "rocprofvis_flame_chart.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
+#include "rocprofvis_boxplot.h"
 #include "rocprofvis_utils.h"
 #include <iostream>
 #include <map>
@@ -371,7 +372,7 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
                     // Linechart
                     std::string name = buffer;
 
-                    RocProfVis::View::LineChart* line = new RocProfVis::View::LineChart(
+                    RocProfVis::View::BoxPlot* line = new RocProfVis::View::BoxPlot(
                         graph_id, name, m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
 
                     line->ExtractPointsFromData(track_data);

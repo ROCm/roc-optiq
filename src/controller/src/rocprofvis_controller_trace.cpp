@@ -611,7 +611,10 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             }
 
                                             Graph* graph = new Graph(
-                                                kRPVControllerGraphTypeLine, graph_id++);
+                                                (dm_track_type == kRocProfVisDmPmcTrack)
+                                                    ? kRPVControllerGraphTypeLine
+                                                    : kRPVControllerGraphTypeFlame,
+                                                graph_id++);
                                             if(graph)
                                             {
                                                 result = graph->SetObject(

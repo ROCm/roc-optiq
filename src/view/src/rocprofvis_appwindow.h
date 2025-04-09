@@ -5,6 +5,7 @@
 #include "widgets/rocprofvis_widget.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_home_screen.h"
+#include "rocprofvis_data_provider.h"
 
 namespace RocProfVis
 {
@@ -41,6 +42,8 @@ private:
     rocprofvis_controller_timeline_t* m_trace_timeline;
     rocprofvis_controller_array_t*    m_graph_data_array;
     rocprofvis_controller_array_t*    m_graph_futures;
+
+    DataProvider m_data_provider;
 };
 
 }  // namespace View

@@ -19,31 +19,44 @@ DebugWindow::GetInstance()
     return s_instance;
 }
 
-DebugWindow::DebugWindow() {}
+DebugWindow::DebugWindow(): m_persitent_debug_messages(500) {}
 
 void
 DebugWindow::Render()
 {
     rocprofvis_core_get_log_entries((void*) this, &DebugWindow::Process);
     ImGui::Begin("Debug Window", nullptr, ImGuiWindowFlags_None);
-    for(const std::string& message : m_debug_messages)
+    for(const std::string& message: m_persitent_debug_messages.GetContainer() ) {
+        ImGui::Text(message.c_str());
+    }
+    
+    ImGui::Separator();
+    
+    for(const std::string& message : m_transient_debug_messages)
     {
         ImGui::Text(message.c_str());
-        //ImGui::NewLine();
     }
+
+
     ImGui::End();
 }
 
 void
 DebugWindow::AddDebugMessage(const std::string& message)
 {
-    m_debug_messages.push_back(message);
+    m_transient_debug_messages.push_back(message);
+}
+
+void
+DebugWindow::AddPersitentDebugMessage(const std::string& message)
+{
+    m_persitent_debug_messages.Push(message);
 }
 
 void
 DebugWindow::Reset()
 {
-    m_debug_messages.clear();
+    m_transient_debug_messages.clear();
 }
 
 void
@@ -52,6 +65,6 @@ DebugWindow::Process(void* user_ptr, char const* log)
     DebugWindow* self = (DebugWindow*) user_ptr;
     if (self && log)
     {
-        self->AddDebugMessage(log);
+        self->AddPersitentDebugMessage(log);
     }
 }

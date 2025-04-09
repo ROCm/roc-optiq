@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "rocprofvis_controller.h"
+#include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
 
 using namespace RocProfVis::View;
@@ -101,6 +102,7 @@ void
 AppWindow::Render()
 {
     DebugWindow::GetInstance()->Reset();
+    m_data_provider.Update();
 
     if(m_home_screen && m_data_changed)
     {
@@ -136,7 +138,7 @@ AppWindow::Render()
             if(ImGui::MenuItem("Open", "CTRL+O"))
             {
                 IGFD::FileDialogConfig config;
-                config.path = ".";
+                config.path                      = ".";
                 std::string supported_extensions = ".db,.rpd";
 #ifdef JSON_SUPPORT
                 supported_extensions += ",.json";
@@ -144,6 +146,18 @@ AppWindow::Render()
                 ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File",
                                                         supported_extensions.c_str(),
                                                         config);
+            }
+
+            if(ImGui::MenuItem("Test Provider", "CTRL+T"))
+            {
+                IGFD::FileDialogConfig config;
+                config.path                      = ".";
+                std::string supported_extensions = ".db,.rpd";
+#ifdef JSON_SUPPORT
+                supported_extensions += ",.json";
+#endif
+                ImGuiFileDialog::Instance()->OpenDialog(
+                    "DebugFile", "Choose File", supported_extensions.c_str(), config);
             }
             ImGui::EndMenu();
         }
@@ -172,7 +186,21 @@ AppWindow::Render()
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
 
             HandleOpenFile(file_path);
+            spdlog::info("Opening file: {}", file_path);
             m_is_loading_trace = true;
+        }
+
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    if(ImGuiFileDialog::Instance()->Display("DebugFile"))
+    {
+        if(ImGuiFileDialog::Instance()->IsOk())
+        {
+            std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+            m_data_provider.FetchTrace(file_path);
+            spdlog::info("Opening file: {}", file_path);
         }
 
         ImGuiFileDialog::Instance()->Close();
@@ -345,22 +373,56 @@ AppWindow::Render()
         }
     }
 
+    ImGuiIO& io = ImGui::GetIO();
+    if(ImGui::IsKeyPressed(ImGuiKey_1))
+    {
+        m_data_provider.FetchTrack(1, m_data_provider.GetStartTime(),
+                                   m_data_provider.GetEndTime(), 1000, 0);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_2))
+    {
+        m_data_provider.FetchTrack(10, m_data_provider.GetStartTime(),
+                                   m_data_provider.GetEndTime(), 1000, 0);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_3))
+    {
+        m_data_provider.FreeTrack(1);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_4))
+    {
+        m_data_provider.FreeTrack(10);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_5))
+    {
+        m_data_provider.DumpTrack(1);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_6))
+    {
+        m_data_provider.DumpTrack(10);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_0))
+    {
+        m_data_provider.DumpMetaData();
+    }
     RenderDebugOuput();
 }
 
-
-void AppWindow::RenderDebugOuput() {
-    if(m_show_debug_widow) {
+void
+AppWindow::RenderDebugOuput()
+{
+    if(m_show_debug_widow)
+    {
         DebugWindow::GetInstance()->Render();
     }
 
     ImGuiIO& io = ImGui::GetIO();
-    if (ImGui::IsKeyPressed(ImGuiKey_D)) {
+    if(ImGui::IsKeyPressed(ImGuiKey_D))
+    {
         m_show_debug_widow = !m_show_debug_widow;
-        
-        if(m_show_debug_widow) {
+
+        if(m_show_debug_widow)
+        {
             ImGui::SetWindowFocus("Debug Window");
         }
     }
-    
 }

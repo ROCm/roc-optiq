@@ -61,6 +61,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_main_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp
+    src/view/src/rocprofvis_data_provider.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
 )

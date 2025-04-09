@@ -1,11 +1,11 @@
 //  Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
+#include "imgui.h"
 #include <future>
 #include <map>
 #include <string>
 #include <vector>
-#include "imgui.h"
 
 class Charts;
 
@@ -20,7 +20,7 @@ typedef struct rocprofvis_color_by_value_t
 {
     float interest_1_max;
     float interest_1_min;
-   
+
 } rocprofvis_color_by_value_t;
 
 typedef struct rocprofvis_data_point_t
@@ -40,7 +40,7 @@ typedef struct rocprofvis_graph_map_t
     Charts* chart;
     ImVec4  selected;
 
-    bool                      color_by_value;
+    bool                        color_by_value;
     bool                        make_boxplot;
     rocprofvis_color_by_value_t color_by_value_digits;
 

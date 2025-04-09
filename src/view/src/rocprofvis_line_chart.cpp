@@ -57,7 +57,7 @@ LineChart::SetID(int id)
 void
 LineChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {
-    m_color_by_value_digits = color_by_value_digits;
+    m_color_by_value_digits   = color_by_value_digits;
     m_is_color_value_existant = true;
 }
 

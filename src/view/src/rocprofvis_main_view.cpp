@@ -2,11 +2,11 @@
 
 #include "rocprofvis_main_view.h"
 #include "imgui.h"
+#include "rocprofvis_boxplot.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_flame_chart.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
-#include "rocprofvis_boxplot.h"
 #include "rocprofvis_utils.h"
 #include <iostream>
 #include <map>
@@ -84,12 +84,14 @@ MainView::RenderScrubber(ImVec2 screen_pos)
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
-    ImVec2 display_size = ImGui::GetWindowSize();
-    float scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    const float sidebar_offset = 400.0f;
-    ImGui::SetNextWindowSize(ImVec2(display_size.x - scrollbar_width - sidebar_offset, display_size.y),
-                             ImGuiCond_Always);
-    ImGui::SetCursorPos(ImVec2(sidebar_offset, 0));  // Sidebar size will be universal next PR.
+    ImVec2      display_size    = ImGui::GetWindowSize();
+    float       scrollbar_width = ImGui::GetStyle().ScrollbarSize;
+    const float sidebar_offset  = 400.0f;
+    ImGui::SetNextWindowSize(
+        ImVec2(display_size.x - scrollbar_width - sidebar_offset, display_size.y),
+        ImGuiCond_Always);
+    ImGui::SetCursorPos(
+        ImVec2(sidebar_offset, 0));  // Sidebar size will be universal next PR.
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
@@ -131,7 +133,7 @@ MainView::RenderGrid()
     ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y), ImGuiCond_Always);
 
     ImGui::SetCursorPos(ImVec2(0, 0));
-   
+
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(220, 0, 0, 0));
 
     ImDrawList*            draw_list = ImGui::GetWindowDrawList();
@@ -173,8 +175,8 @@ MainView::RenderGraphView()
     // (with no alpha) over their predecessors
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
     ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
-    ImGuiIO& io       = ImGui::GetIO();
-    m_is_control_held = io.KeyCtrl;
+    ImGuiIO& io           = ImGui::GetIO();
+    m_is_control_held     = io.KeyCtrl;
     m_content_max_y_scoll = ImGui::GetScrollMaxY();
 
     // Prevent choppy behavior by preventing constant rerender.
@@ -468,12 +470,13 @@ MainView::HandleTopSurfaceTouch()
     */
     if(!m_is_control_held)
     {
-
-        ImVec2 container_pos = ImGui::GetWindowPos();
+        ImVec2 container_pos  = ImGui::GetWindowPos();
         ImVec2 container_size = ImGui::GetWindowSize();
-        
-        bool is_mouse_inside = ImGui::IsMouseHoveringRect(container_pos, ImVec2(container_pos.x + container_size.x, container_pos.y + container_size.y));
-        
+
+        bool is_mouse_inside = ImGui::IsMouseHoveringRect(
+            container_pos, ImVec2(container_pos.x + container_size.x,
+                                  container_pos.y + container_size.y));
+
         if(is_mouse_inside)
         {
             // Handle Zoom
@@ -492,13 +495,14 @@ MainView::HandleTopSurfaceTouch()
             }
 
             // Detect drag start
-            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            {
                 m_can_drag_to_pan = true;
             }
-
         }
 
-        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        {
             m_can_drag_to_pan = false;
         }
 
@@ -506,7 +510,8 @@ MainView::HandleTopSurfaceTouch()
         if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
             float drag_y = ImGui::GetIO().MouseDelta.y;
-            m_scroll_position = clamp(m_scroll_position - drag_y, 0.0f, m_content_max_y_scoll);
+            m_scroll_position =
+                clamp(m_scroll_position - drag_y, 0.0f, m_content_max_y_scoll);
 
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (m_max_x - m_min_x) / m_zoom;

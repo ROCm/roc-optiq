@@ -9,7 +9,6 @@ set(JSON_SUPPORT ON)
 
 add_subdirectory(thirdparty/)
 add_subdirectory(src/model/)
-add_subdirectory(src/core)
 
 set(rocprofvis_source_files)
 list(APPEND rocprofvis_source_files

@@ -4,6 +4,7 @@
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_error_handling.h"
 #include "rocprofvis_db_future.h"
+#include "rocprofvis_core.h"
 #include <iostream>
 #include <cstdio>
 #include <random>
@@ -28,6 +29,7 @@ bool        g_full_range=false;
 
 int main(int argc, char** argv)
 {
+  rocprofvis_core_enable_log();
   Catch::Session session;
 
   using namespace Catch::Clara;
@@ -66,7 +68,7 @@ void CheckMemoryFootprint(rocprofvis_dm_trace_t trace)
         }
     }
 
-    printf("\x1b[0mTotal memory utilization so far = %lld\n",memory_used);
+    spdlog::info("\x1b[0mTotal memory utilization so far = {}", memory_used);
 }
 
 #define LIST_SIZE_LIMIT 2
@@ -82,7 +84,8 @@ void PrintHeader(const char* fmt, ...) {
     size_t text_len = strlen(buffer);
     if (HEADER_LEN > text_len)
         header.assign((HEADER_LEN - text_len) / 2, '*');
-    printf("\x1b[0m%s%s%s\n", header.c_str(), buffer, header.c_str());
+
+    spdlog::info("\x1b[0m{0}{1}{2}", header, std::string(buffer), header);
 }
 
 void db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status, rocprofvis_db_status_message_t msg)
@@ -98,7 +101,7 @@ void db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_progress_percen
             str = " BUSY ";
         }
 
-    printf("%s[%s] %d%% - %s - %s\n",color, db_name, progress, str, msg);
+    spdlog::info("{0}[{1}] {2} - {3} - {4}", color, db_name, progress, str, msg);
 }
 
 void GenerateRandomSlice(   rocprofvis_dm_trace_t trace, 
@@ -143,9 +146,9 @@ void GenerateRandomSlice(   rocprofvis_dm_trace_t trace,
         end_time = start_time +  pie2 * tenth_time;
     }
     PrintHeader("Testing slice for %ld ns and %ld tracks", end_time - start_time, count);
-    printf("Track indexes:\n");
-    for (int i=0; i < count; i++) printf("%d,",tracks[i]);
-    printf("]\n");
+    spdlog::info("Track indexes: [");
+    for (int i=0; i < count; i++) spdlog::info("{}", tracks[i]);
+    spdlog::info("]");
 }
 
 TEST_CASE( "Future Initialisation", "[require]" ) {
@@ -216,7 +219,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
         start_time =
             rocprofvis_dm_get_property_as_uint64(m_trace, kRPVDMStartTimeUInt64, 0);
         end_time = rocprofvis_dm_get_property_as_uint64(m_trace, kRPVDMEndTimeUInt64, 0);
-        printf(ANSI_COLOR_GREEN "Trace start time=%lld, end time = %lld\n", start_time,
+        spdlog::info(ANSI_COLOR_GREEN "Trace start time={0}, end time = {1}", start_time,
                end_time);
         num_tracks = (rocprofvis_db_num_of_tracks_t) rocprofvis_dm_get_property_as_uint64(
             m_trace, kRPVDMNumberOfTracksUInt64, 0);
@@ -236,9 +239,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
             REQUIRE(process);
             REQUIRE(subname);
 
-            printf(
-                ANSI_COLOR_CYAN
-                "Track id=%lld node=%lld category=%s process=%s subprocess=%s\n",
+            spdlog::info(ANSI_COLOR_CYAN 
+                "Track id={0} node={1} category={2} process={3} subprocess={4}",
                 rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackIdUInt64, 0),
                 rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackNodeIdUInt64, 0),
                 rocprofvis_dm_get_property_as_charptr(track,
@@ -300,9 +302,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                         REQUIRE(slice);
                         uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
                             slice, kRPVDMNumberOfRecordsUInt64, 0);
-                        printf(ANSI_COLOR_MAGENTA
-                               "Track %d has %lld records, read time - %13.9f, number of "
-                               "rows processed = %ld\n" ANSI_COLOR_RESET,
+                        spdlog::info(ANSI_COLOR_MAGENTA "Track {0} has {1} records, read time - {2:13.9f}, number of "
+                               "rows processed = {3}" ANSI_COLOR_RESET,
                                i, num_records, diff.count(), num_rows);
                         rocprofvis_dm_delete_all_time_slices(m_trace);
                     }
@@ -313,8 +314,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
             }
         }
 
-        printf(ANSI_COLOR_MAGENTA "Whole trace read time - %13.9f,  number of rows "
-                                  "processed = %ld\n" ANSI_COLOR_RESET,
+        spdlog::info(ANSI_COLOR_MAGENTA "Whole trace read time - {0:13.9f},  number of rows "
+                                  "processed = {1}" ANSI_COLOR_RESET,
                whole_trace_readtime, total_num_rows);
     }
 
@@ -342,8 +343,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                     std::chrono::duration<double> diff = t2 - t1;
                     uint32_t num_rows = ((RocProfVis::DataModel::Future*) object2wait)
                                             ->GetProcessedRowsCount();
-                    printf(ANSI_COLOR_MAGENTA "Whole trace read time - %13.9f, number of "
-                                              "rows processed = %ld\n" ANSI_COLOR_RESET,
+                    spdlog::info(ANSI_COLOR_MAGENTA "Whole trace read time - {0:13.9f}, number of "
+                                              "rows processed = {1}" ANSI_COLOR_RESET,
                            diff.count(), num_rows);
                     CheckMemoryFootprint(m_trace);
                     PrintHeader("Time slice content, up to %d records", LIST_SIZE_LIMIT);
@@ -386,7 +387,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                             id, node_id, track_category_name, track_process_name,
                             track_sub_process_name);
 
-                        printf(ANSI_COLOR_CYAN "\t%s : %s : %lld\n", "Properties",
+                        spdlog::info(ANSI_COLOR_CYAN "\t{0} : {1} : {2}", "Properties",
                                "Memory usage", memory_usage);
                         for(int i = 0; i < num_ext_data; i++)
                         {
@@ -400,20 +401,20 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                             REQUIRE(ext_data_category);
                             REQUIRE(ext_data_name);
                             REQUIRE(ext_data_value);
-                            printf(ANSI_COLOR_CYAN "\t%s : %s : %s\n", ext_data_category,
+                            spdlog::info(ANSI_COLOR_CYAN "\t{0} : {1} : {2}", ext_data_category,
                                    ext_data_name, ext_data_value);
                         }
                         char* ext_data_json = rocprofvis_dm_get_property_as_charptr(
                             track, kRPVDMTrackInfoJsonCharPtr, 0);
                         REQUIRE(ext_data_json);
-                        printf(ANSI_COLOR_CYAN "Extended data as JSON:\n%s\n",
+                        spdlog::info(ANSI_COLOR_CYAN "Extended data as JSON:\n{}",
                                ext_data_json);
                         if(nullptr != slice)
                         {
                             uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
                                 slice, kRPVDMNumberOfRecordsUInt64, 0);
-                            printf(ANSI_COLOR_BLUE "Time slice for time%lld - %lld for "
-                                                   "track %d [%s:%s:%s] has%lld records\n",
+                            spdlog::info(ANSI_COLOR_BLUE "Time slice for time {0} - {1} for "
+                                                   "track {2} [{3}:{4}:{5}] has {6} records",
                                    start_time, end_time, tracks_selection[i],
                                    track_category_name, track_process_name,
                                    track_sub_process_name, num_records);
@@ -435,9 +436,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                             slice, kRPVDMEventDurationInt64Indexed, j);
                                     if(duration < 0)
                                     {
-                                        printf(ANSI_COLOR_RED
-                                               "Record %d has invalid duration "
-                                               "%lld\n" ANSI_COLOR_RESET,
+                                        spdlog::info(ANSI_COLOR_RED "Record {0} has invalid duration "
+                                               "{1}" ANSI_COLOR_RESET,
                                                j, duration);
                                     }
                                     uint64_t id = rocprofvis_dm_get_property_as_uint64(
@@ -457,9 +457,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                     REQUIRE(op_str);
                                     REQUIRE(type_str);
                                     REQUIRE(symbol_str);
-                                    printf(ANSI_COLOR_BLUE
-                                           "Record id=%lld, timestamp=%lld, op=%lld, "
-                                           "op_str=%s, type=%s, symbol=%s\n",
+                                    spdlog::info(ANSI_COLOR_BLUE "Record id={0}, timestamp={1}, op={2}, "
+                                           "op_str={3}, type={4}, symbol={5}",
                                            id, timestamp, op, op_str, type_str,
                                            symbol_str);
 
@@ -519,8 +518,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                 rocprofvis_dm_get_property_as_uint64(
                                                     flowtrace,
                                                     kRPVDMNumberOfEndpointsUInt64, 0);
-                                            printf(ANSI_COLOR_MAGENTA
-                                                   "Event has %lld data flow link:\n",
+                                            spdlog::info(ANSI_COLOR_MAGENTA "Event has {0} data flow link:",
                                                    num_endpoints);
                                             for(int k = 0; k < num_endpoints; k++)
                                             {
@@ -539,11 +537,12 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                         flowtrace,
                                                         kRPVDMEndpointTimestampUInt64Indexed,
                                                         k);
-                                                printf(ANSI_COLOR_MAGENTA
-                                                       "\tEndpoint %d at track=%lld, "
-                                                       "event_id=%lld, timestamp=%lld\n",
-                                                       k, track_id,
-                                                       event_id.bitfield.event_id,
+                                                uint64_t event_id_num =
+                                                    event_id.bitfield.event_id;
+                                                spdlog::info(ANSI_COLOR_MAGENTA 
+                                                    "\tEndpoint {0} at track={1}, "
+                                                    "event_id={2}, timestamp={3}",
+                                                       k, track_id, event_id_num,
                                                        event_timestamp);
                                             }
                                             rocprofvis_dm_delete_event_property_for(
@@ -572,8 +571,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                 rocprofvis_dm_get_property_as_uint64(
                                                     stacktrace,
                                                     kRPVDMNumberOfFramesUInt64, 0);
-                                            printf(ANSI_COLOR_MAGENTA
-                                                   "Event has %lld stack frames:\n",
+                                            spdlog::info(ANSI_COLOR_MAGENTA "Event has {} stack frames:",
                                                    num_frames);
                                             for(int k = 0; k < num_frames; k++)
                                             {
@@ -598,9 +596,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                 REQUIRE(frame_symbol);
                                                 REQUIRE(frame_args);
                                                 REQUIRE(frame_code);
-                                                printf(ANSI_COLOR_MAGENTA
-                                                       "\tFrame %d : depth=%lld, "
-                                                       "symbol=%s, args=%s, code=%s \n",
+                                                spdlog::info(ANSI_COLOR_MAGENTA "\tFrame {0} : depth={1}, "
+                                                       "symbol={2}, args={3}, code={4} \n",
                                                        k, frame_depth, frame_symbol,
                                                        frame_args, frame_code);
                                             }
@@ -631,9 +628,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                     extdata,
                                                     kRPVDMNumberOfExtDataRecordsUInt64,
                                                     0);
-                                            printf(ANSI_COLOR_MAGENTA
-                                                   "Event has %lld extended data "
-                                                   "properties:\n",
+                                            spdlog::info(ANSI_COLOR_MAGENTA "Event has {} extended data "
+                                                   "properties:",
                                                    num_records);
                                             for(int k = 0; k < num_records; k++)
                                             {
@@ -655,9 +651,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                 REQUIRE(data_category);
                                                 REQUIRE(data_name);
                                                 REQUIRE(data_value);
-                                                printf(ANSI_COLOR_MAGENTA
-                                                       "\tItem %d : category=%s, "
-                                                       "name=%s, value=%s \n",
+                                                spdlog::info(ANSI_COLOR_MAGENTA "\tItem {0} : category={1}, "
+                                                       "name={2}, value={3} \n",
                                                        k, data_category, data_name,
                                                        data_value);
                                             }
@@ -666,7 +661,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                     extdata, kRPVDMExtDataJsonBlobCharPtr,
                                                     0);
                                             REQUIRE(data_json_blob);
-                                            printf("\x1b[35mExtended data as JSON:\n%s\n",
+                                            spdlog::info(
+                                                "\x1b[35mExtended data as JSON:\n{}",
                                                    data_json_blob);
                                             rocprofvis_dm_delete_event_property_for(
                                                 m_trace, kRPVDMEventExtData, event_id);
@@ -679,16 +675,14 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                 {
                                     double value = rocprofvis_dm_get_property_as_double(
                                         slice, kRPVDMPmcValueDoubleIndexed, j);
-                                    printf(ANSI_COLOR_BLUE
-                                           "Record timestamp=%lld, value=%g\n",
+                                    spdlog::info(ANSI_COLOR_BLUE "Record timestamp={0}, value={1}\n",
                                            timestamp, value);
                                 }
                             }
                         }
                         else
                         {
-                            printf(ANSI_COLOR_RED
-                                   "No time slice at %lld loaded for track %d\n",
+                            spdlog::info(ANSI_COLOR_RED "No time slice at {0} loaded for track {1}",
                                    start_time, tracks_selection[i]);
                         }
                     }
@@ -738,20 +732,30 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                             table, kRPVDMNumberOfTableColumnsUInt64, 0);
                         uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(
                             table, kRPVDMNumberOfTableRowsUInt64, 0);
-                        printf("\x1b[0m%s - %s\n", table_description, table_query);
-                        std::vector<std::string> columns;
-                        for(int i = 0; i < num_columns; i++)
+
+#define MULTI_LINE_LOG_START auto multi_line_log = fmt::memory_buffer()
+#define MULTI_LINE_LOG(format, ...) fmt::format_to(std::back_inserter(multi_line_log), format, __VA_ARGS__)
+#define MULTI_LINE_LOG_ARGS "{:.{}}",multi_line_log.data(),multi_line_log.size()
+ 
                         {
-                            columns.push_back(rocprofvis_dm_get_property_as_charptr(
-                                table, kRPVDMExtTableColumnNameCharPtrIndexed, i));
+                            spdlog::info("\x1b[0m{0} - {1}", table_description,
+                                           table_query);
+                            MULTI_LINE_LOG_START;
+                            std::vector<std::string> columns;
+                            for(int i = 0; i < num_columns; i++)
+                            {
+                                columns.push_back(rocprofvis_dm_get_property_as_charptr(
+                                    table, kRPVDMExtTableColumnNameCharPtrIndexed, i));
+                            }
+                            for(int i = 0; i < num_columns; i++)
+                            {
+                                MULTI_LINE_LOG(" {0:20s} |", columns[i].c_str());
+                            }
+                            spdlog::info(MULTI_LINE_LOG_ARGS);
                         }
-                        for(int i = 0; i < num_columns; i++)
-                        {
-                            printf(" %20s |", columns[i].c_str());
-                        }
-                        printf("\n");
                         for(int i = 0; i < num_rows; i++)
                         {
+                            MULTI_LINE_LOG_START;
                             rocprofvis_dm_table_row_t table_row =
                                 rocprofvis_dm_get_property_as_handle(
                                     table, kRPVDMExtTableRowHandleIndexed, i);
@@ -773,18 +777,20 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                     }
                                     for(int j = 0; j < num_cells; j++)
                                     {
-                                        printf("%20s", row[j].substr(0, 20).c_str());
+                                        MULTI_LINE_LOG("{0:20s}",
+                                                     row[j].substr(0, 20).c_str());
                                     }
                                 }
                                 else
                                 {
-                                    printf("\x1b[31mError! Number of colums does nt "
-                                           "match number of cells in row %d\n",
+                                    MULTI_LINE_LOG(
+                                        "\x1b[31mError! Number of colums does nt "
+                                           "match number of cells in row {}\n",
                                            i);
                                     break;
                                 }
                             }
-                            printf("\n");
+                            spdlog::info(MULTI_LINE_LOG_ARGS);
                         }
                         rocprofvis_dm_delete_all_tables(m_trace);
                     }

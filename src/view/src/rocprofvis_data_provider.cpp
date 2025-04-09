@@ -15,8 +15,6 @@ DataProvider::DataProvider()
 
 DataProvider::~DataProvider()
 {
-    FreeAllTracks();
-    FreeRequests();
     CloseController();
 }
 
@@ -37,6 +35,13 @@ DataProvider::CloseController()
     {
         m_trace_timeline = nullptr;
     }
+
+    FreeAllTracks();
+    FreeRequests();
+    m_state = ProviderState::kInit;
+    m_num_graphs = 0;
+    m_min_ts     = 0;
+    m_max_ts     = 0; 
 }
 
 void
@@ -92,7 +97,7 @@ DataProvider::GetEndTime()
 bool
 DataProvider::FetchTrace(const std::string& file_path)
 {
-    if(m_state != ProviderState::kInit)
+    if(m_state == ProviderState::kLoading || m_state == ProviderState::kError)
     {
         spdlog::debug("Cannot fetch, provider busy or error, state: {}",
                       static_cast<int>(m_state));
@@ -100,8 +105,6 @@ DataProvider::FetchTrace(const std::string& file_path)
     }
 
     // free any previously acquired resources
-    FreeAllTracks();
-    FreeRequests();
     CloseController();
 
     m_trace_controller = rocprofvis_controller_alloc();

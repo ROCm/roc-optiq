@@ -113,6 +113,18 @@ public:
     */
     double GetEndTime();
 
+    /*
+    * Get access to the raw track data.  The returned pointer should only be
+    * considered valid until the next call to Update() or any of the memory 
+    * freeing functions and FetchTrace() or CloseController().
+    * @param index: The index of the track data to fetch.
+    * @return: Pointer to the raw track data 
+    * or null if data for this track has not been fetched.
+    */
+    const RawTrackData* GetRawTrackData(uint64_t index);
+
+    const track_info_t* GetTrackInfo(uint64_t index);
+
 private:
     void HandleLoadTrace();
     void HandleLoadTrackMetaData();

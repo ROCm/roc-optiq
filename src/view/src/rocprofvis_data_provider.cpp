@@ -13,10 +13,7 @@ DataProvider::DataProvider()
 , m_trace_timeline(nullptr)
 {}
 
-DataProvider::~DataProvider()
-{
-    CloseController();
-}
+DataProvider::~DataProvider() { CloseController(); }
 
 void
 DataProvider::CloseController()
@@ -38,10 +35,10 @@ DataProvider::CloseController()
 
     FreeAllTracks();
     FreeRequests();
-    m_state = ProviderState::kInit;
+    m_state      = ProviderState::kInit;
     m_num_graphs = 0;
     m_min_ts     = 0;
-    m_max_ts     = 0; 
+    m_max_ts     = 0;
 }
 
 void
@@ -293,43 +290,70 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
         return false;
     }
 
-    auto it = m_requests.find(index);
-    // only allow load if a request for this index (track) is not pending
-    if(it == m_requests.end())
+    if(index < m_track_metadata.size())
     {
-        rocprofvis_handle_t* graph_future = rocprofvis_controller_future_alloc();
-        rocprofvis_controller_array_t* graph_array =
-            rocprofvis_controller_array_alloc(32);
-        rocprofvis_handle_t* graph_obj = nullptr;
-
-        rocprofvis_result_t result = rocprofvis_controller_get_object(
-            m_trace_timeline, kRPVControllerTimelineGraphIndexed, index, &graph_obj);
-
-        if(result == kRocProfVisResultSuccess && graph_obj && graph_future && graph_array)
+        auto it = m_requests.find(index);
+        // only allow load if a request for this index (track) is not pending
+        if(it == m_requests.end())
         {
-            result = rocprofvis_controller_graph_fetch_async(
-                m_trace_controller, graph_obj, start_ts, end_ts, horz_pixel_range,
-                graph_future, graph_array);
+            rocprofvis_handle_t* graph_future = rocprofvis_controller_future_alloc();
+            rocprofvis_controller_array_t* graph_array =
+                rocprofvis_controller_array_alloc(32);
+            rocprofvis_handle_t* graph_obj = nullptr;
+
+            rocprofvis_result_t result = rocprofvis_controller_get_object(
+                m_trace_timeline, kRPVControllerTimelineGraphIndexed, index, &graph_obj);
+
+            if(result == kRocProfVisResultSuccess && graph_obj && graph_future &&
+               graph_array)
+            {
+                result = rocprofvis_controller_graph_fetch_async(
+                    m_trace_controller, graph_obj, start_ts, end_ts, horz_pixel_range,
+                    graph_future, graph_array);
+
+                assert(result == kRocProfVisResultSuccess);
+            }
+
+            data_req_info_t request_info;
+            request_info.graph_array   = graph_array;
+            request_info.graph_future  = graph_future;
+            request_info.graph_obj     = graph_obj;
+            request_info.index         = index;
+            request_info.loading_state = ProviderState::kLoading;
+
+            m_requests.emplace(request_info.index, request_info);
+
+            spdlog::debug("Fetching track data {}", index);
+            return true;
         }
-
-        data_req_info_t request_info;
-        request_info.graph_array   = graph_array;
-        request_info.graph_future  = graph_future;
-        request_info.graph_obj     = graph_obj;
-        request_info.index         = index;
-        request_info.loading_state = ProviderState::kLoading;
-
-        m_requests.emplace(request_info.index, request_info);
-
-        spdlog::debug("Fetching track data {}", index);
-        return true;
+        else
+        {
+            // request for item already exists
+            spdlog::debug("Request for this track, index {}, is already pending", index);
+            return false;
+        }
     }
     else
     {
-        // request for item already exists
-        spdlog::debug("Request for this track, index {}, is already pending", index);
+        spdlog::debug("Cannot fetch Track index {} is out of range", index);
         return false;
     }
+}
+
+const RawTrackData*
+DataProvider::GetRawTrackData(uint64_t index)
+{
+    return m_raw_trackdata[index];
+}
+
+const track_info_t*
+DataProvider::GetTrackInfo(uint64_t index)
+{
+    if(index < m_track_metadata.size())
+    {
+        return &m_track_metadata[index];
+    }
+    return nullptr;
 }
 
 bool
@@ -467,7 +491,7 @@ DataProvider::HandleLoadGraphs()
                 req.graph_future  = nullptr;
                 req.loading_state = ProviderState::kReady;
                 ProcessRequest(req);
-                //remove request from processing container
+                // remove request from processing container
                 it = m_requests.erase(it);
             }
             else
@@ -507,8 +531,8 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 
     spdlog::debug("{} Graph item count {} min ts {} max ts {}", req.index, item_count,
                   min_ts, max_ts);
-                  
-    //use the track type to determine what type of data is present in the graph array
+
+    // use the track type to determine what type of data is present in the graph array
     assert(req.index < m_track_metadata.size());
     switch(m_track_metadata[req.index].track_type)
     {

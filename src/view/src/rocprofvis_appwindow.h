@@ -44,6 +44,7 @@ private:
     rocprofvis_controller_array_t*    m_graph_futures;
 
     DataProvider m_data_provider;
+    bool m_show_provider_test_widow;
 };
 
 }  // namespace View

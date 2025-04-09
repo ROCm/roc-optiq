@@ -10,6 +10,10 @@
 
 using namespace RocProfVis::View;
 
+// For testing DataProvider
+void
+RenderProviderTest(DataProvider& provider);
+
 AppWindow* AppWindow::m_instance = nullptr;
 
 AppWindow*
@@ -33,6 +37,7 @@ AppWindow::AppWindow()
 , m_graph_data_array(nullptr)
 , m_graph_futures(nullptr)
 , m_show_debug_widow(false)
+, m_show_provider_test_widow(false)
 {}
 
 AppWindow::~AppWindow()
@@ -201,6 +206,8 @@ AppWindow::Render()
 
             m_data_provider.FetchTrace(file_path);
             spdlog::info("Opening file: {}", file_path);
+
+            m_show_provider_test_widow = true;
         }
 
         ImGuiFileDialog::Instance()->Close();
@@ -373,38 +380,57 @@ AppWindow::Render()
         }
     }
 
-    ImGuiIO& io = ImGui::GetIO();
-    if(ImGui::IsKeyPressed(ImGuiKey_1))
-    {
-        m_data_provider.FetchTrack(1, m_data_provider.GetStartTime(),
-                                   m_data_provider.GetEndTime(), 1000, 0);
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_2))
-    {
-        m_data_provider.FetchTrack(10, m_data_provider.GetStartTime(),
-                                   m_data_provider.GetEndTime(), 1000, 0);
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_3))
-    {
-        m_data_provider.FreeTrack(1);
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_4))
-    {
-        m_data_provider.FreeTrack(10);
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_5))
-    {
-        m_data_provider.DumpTrack(1);
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_6))
-    {
-        m_data_provider.DumpTrack(10);
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_0))
-    {
-        m_data_provider.DumpMetaData();
-    }
     RenderDebugOuput();
+    if(m_show_provider_test_widow)
+    {
+        RenderProviderTest(m_data_provider);
+    }
+}
+
+void
+RenderProviderTest(DataProvider& provider)
+{
+    ImGui::Begin("Data Provider Test Window", nullptr, ImGuiWindowFlags_None);
+
+    static char buffer[10] = "";  // Buffer to hold the user input
+
+    // Callback function to filter non-numeric characters
+    auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
+        if(data->EventChar < '0' || data->EventChar > '9')
+        {
+            // Allow backspace
+            if(data->EventChar != '\b')
+            {
+                return 1;  // Block non-numeric characters
+            }
+        }
+        return 0;  // Allow numeric characters
+    };
+
+    // InputText with numeric filtering
+    ImGui::InputText("Track index", buffer, IM_ARRAYSIZE(buffer),
+                     ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
+
+    int index = std::atoi(buffer);
+
+    if(ImGui::Button("Fetch"))
+    {
+        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
+                            0);
+    }
+    if(ImGui::Button("Delete"))
+    {
+        provider.FreeTrack(index);
+    }
+    if(ImGui::Button("Print"))
+    {
+        provider.DumpTrack(index);
+    }
+    if(ImGui::Button("Print Track List"))
+    {
+        provider.DumpMetaData();
+    }
+    ImGui::End();
 }
 
 void

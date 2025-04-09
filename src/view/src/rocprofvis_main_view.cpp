@@ -201,7 +201,8 @@ MainView::RenderGraphView()
             ImGui::PushStyleColor(ImGuiCol_ChildBg, graph_objects.second.selected);
             ImGui::BeginChild(
                 (std::to_string(graph_objects.first)).c_str(),
-                ImVec2(0, m_graph_map[graph_objects.first].chart->ReturnSize() + 40.0f),
+                ImVec2(0,
+                       m_graph_map[graph_objects.first].chart->GetTrackHeight() + 40.0f),
                 false,
                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                     ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
@@ -372,7 +373,7 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
                     // Linechart
                     std::string name = buffer;
 
-                    RocProfVis::View::BoxPlot* line = new RocProfVis::View::BoxPlot(
+                    RocProfVis::View::LineChart* line = new RocProfVis::View::LineChart(
                         graph_id, name, m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
 
                     line->ExtractPointsFromData(track_data);

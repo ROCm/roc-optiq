@@ -29,10 +29,10 @@ public:
     std::vector<rocprofvis_data_point_t> BoxPlot::ExtractPointsFromData(
         rocprofvis_controller_array_t* track_data);
     std::tuple<float, float> FindMaxMin();
-    float                    ReturnSize() override;
+    float                     GetTrackHeight() override;
     void                     SetID(int id) override;
     int                      ReturnChartID() override;
-    std::string              GetName() override;
+    std::string&              GetName() override;
     int                      SetSize();
     void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
     float CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
@@ -51,10 +51,9 @@ private:
     float                                  m_max_y;
     float                                  m_scale_x;
     int                                    m_id;
-    float                                  size;
-    bool                                   is_color_value_existant;
-    std::map<int, rocprofvis_graph_map_t>* tree;
-};
+    float                                  m_track_height;
+    bool                                   m_is_color_value_existant;
+ };
 
 }  // namespace View
 }  // namespace RocProfVis

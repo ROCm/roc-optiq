@@ -73,7 +73,6 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                                        &tree_item.second.make_boxplot))
 
                     {
-                        std::cout << "I convert to boxplot" << std::endl;
                     }
                     if(tree_item.second.color_by_value)
                     {

@@ -26,19 +26,19 @@ BoxPlot::BoxPlot(int id, std::string name, float zoom, float movement, float& mi
 , m_scale_x(scale_x)
 , m_data({})
 , m_name(name)
-, size(290.0f)
+, m_track_height(290.0f)
 , m_color_by_value_digits()
-, is_color_value_existant(false)
+, m_is_color_value_existant(false)
 {}
 
 BoxPlot::~BoxPlot() {}
 float
-BoxPlot::ReturnSize()
+BoxPlot::GetTrackHeight()
 {
-    return size;  // Create an invisible button with a more area
+    return m_track_height;  // Create an invisible button with a more area
 }
 
-std::string
+std::string&
 BoxPlot::GetName()
 {
     return m_name;
@@ -57,7 +57,7 @@ void
 BoxPlot::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {
     m_color_by_value_digits = color_by_value_digits;
-    is_color_value_existant = true;
+    m_is_color_value_existant = true;
 }
 
 std::vector<rocprofvis_data_point_t>
@@ -211,15 +211,17 @@ BoxPlot::Render()
         float  metadata_size = 400.0f;
         float  graph_size    = parent_size.x - metadata_size;
 
-        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, size), false);
+        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, m_track_height), false);
 
-        ImGui::BeginChild("MetaData Content", ImVec2(metadata_size - 70.0f, size), false);
+        ImGui::BeginChild("MetaData Content",
+                          ImVec2(metadata_size - 70.0f, m_track_height),
+                          false);
         ImGui::Text(m_name.c_str());
         ImGui::EndChild();
 
         ImGui::SameLine();
 
-        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, size), false);
+        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
         ImGui::Text((std::to_string(m_max_y)).c_str());
 
         ImVec2 child_window_size = ImGui::GetWindowSize();
@@ -234,7 +236,7 @@ BoxPlot::Render()
         ImGui::EndChild();
 
         ImGui::SameLine();
-        ImGui::BeginChild("Graph View", ImVec2(graph_size, size), false);
+        ImGui::BeginChild("Graph View", ImVec2(graph_size, m_track_height), false);
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         ImVec2 cursor_position = ImGui::GetCursorScreenPos();
@@ -278,7 +280,7 @@ BoxPlot::Render()
         if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
         {
             ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-            size              = size + (drag_delta.y);
+            m_track_height    = m_track_height + (drag_delta.y);
             ImGui::ResetMouseDragDelta();
             ImGui::EndDragDropSource();
         }

@@ -98,8 +98,10 @@ The rocprofiler-visualizer project is part of the broader ROCm software stack an
 - Namespaces may be used to limit scope.
 - The 'using' keyword must not be present in a header file.
 - #include directives must not appear within the body of a namespace.
-- Do not use an anonymous namespace.
-- There should be only one namespace per file. If multiple namespaces are needed the file should be split.
+- Avoid using anonymous namespaces.
+- There should be only one namespace hierarchy per file. If multiple namespace hierarchies are needed the file should be split.
+- Use namespaces of the form 'namespace RocProfVis { namespace ModuleName {} }'.
+- Within namespaces private struct/typedef/enum declarations that are not exported from a module may omit the 'rocprofvis_' prefix.
 
 ### Preprocessor
 
@@ -112,24 +114,30 @@ The rocprofiler-visualizer project is part of the broader ROCm software stack an
 
 ### Naming
 
-| Construct                     | Format                                | Example               |
-| ----------------------------- | ------------------------------------- | --------------------- |
-| Class Names                   | UpperCamelCase                        | MyClass               |
-| Interface Class Names         | I + UpperCamelCase                    | IMyInterface          |
-| Class Method Names	        | UpperCamelCase                        | MyMemberFunction      |
-| Static Class Member Names	    | s_ + lower_case_with_underscores      | s_my_static_variable  |
-| Non-static Class Member Names	| m_ + lower_case_with_underscores      | m_my_member_variable  |
-| Struct Names	                | lower_case_with_underscores + _t      | my_struct_type_t      |
-| Namespace Names	            | lower_case_with_underscores           | my_namespace          |
-| Typedefs/Aliases	            | lower_case_with_underscores + _t      | my_typedef_t          |
-| Enumerations	                | lower_case_with_underscores + _t      | my_enum_t             |
-| Enumeration Values	        | k + UpperCamelCase                    | kMyEnumValue          |
-| Const Variables	            | UPPER_CASE_WITH_UNDERSCORES           | MY_CONST_VALUE        |
-| Global Variables	            | g_ + lower_case_with_underscores      | g_my_global_variable  |
-| TLS Variables	                | tls_ + lower_case_with_underscores    | tls_my_tls_variable   |
-| Non-const Variables	        | lower_case_with_underscores           | my_non_const_variable |
-| Non-member Function Names	    | lower_case_with_underscores           | my_free_function      |
-| All function parameters	    | lower_case_with_underscores           | my_function_parameter |
+| Construct                     | Format                                             | Example                       |
+| ----------------------------- | -------------------------------------------------- | ----------------------------- |
+| File Names                    | rocprofvis_ + module + lower_case_with_underscores | rocprofvis_controller.h       |
+| Macros/Defines	            | ROCPROFVIS_ + UPPER_CASE_WITH_UNDERSCORES          | ROCPROFVIS_MY_CONST_VALUE     |
+| Namespace Names	            | UpperCamelCase                                     | MyNamespace                   |
+| Class Names                   | UpperCamelCase                                     | MyClass                       |
+| Interface Class Names         | I + UpperCamelCase                                 | IMyInterface                  |
+| Class Method Names	        | UpperCamelCase                                     | MyMemberFunction              |
+| Static Class Member Names	    | s_ + lower_case_with_underscores                   | s_my_static_variable          |
+| Non-static Class Member Names	| m_ + lower_case_with_underscores                   | m_my_member_variable          |
+| Public Struct Names	        | rocprofvis_ + lower_case_with_underscores + _t     | rocprofvis_my_struct_type_t   |
+| Struct Names in Namespaces	| lower_case_with_underscores + _t                   | my_struct_type_t              |
+| Non-static Struct Member Names| lower_case_with_underscores                        | my_member_variable            |
+| Public Typedefs/Aliases	    | rocprofvis_ + lower_case_with_underscores + _t     | rocprofvis_ + my_typedef_t    |
+| Public Enumerations	        | rocprofvis_ + lower_case_with_underscores + _t     | rocprofvis_ + my_enum_t       |
+| Typedefs/Aliases in Namespaces| lower_case_with_underscores + _t                   | my_typedef_t                  |
+| Enumerations in Namespaces	| lower_case_with_underscores + _t                   | my_enum_t                     |
+| Enumeration Values	        | k + UpperCamelCase                                 | kMyEnumValue                  |
+| Const Variables	            | UPPER_CASE_WITH_UNDERSCORES                        | MY_CONST_VALUE                |
+| Global Variables	            | g_ + lower_case_with_underscores                   | g_my_global_variable          |
+| TLS Variables	                | tls_ + lower_case_with_underscores                 | tls_my_tls_variable           |
+| Non-const Variables	        | lower_case_with_underscores                        | my_non_const_variable         |
+| Non-member Function Names	    | lower_case_with_underscores                        | my_free_function              |
+| All function parameters	    | lower_case_with_underscores                        | my_function_parameter         |
 
 ### Files
 

@@ -1,73 +1,10 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_controller.h"
+
 #include "spdlog/spdlog.h"
 #include <cassert>
 
 using namespace RocProfVis::View;
-
-RawTrackData::RawTrackData(rocprofvis_controller_track_type_t track_type, uint64_t index,
-                           double start_ts, double end_ts)
-: m_track_type(track_type)
-, m_index(index)
-, m_start_ts(start_ts)
-, m_end_ts(end_ts)
-{}
-
-RawTrackData::~RawTrackData() {}
-
-rocprofvis_controller_track_type_t
-RawTrackData::GetType()
-{
-    return m_track_type;
-}
-
-double
-RawTrackData::GetStartTs()
-{
-    return m_start_ts;
-}
-double
-RawTrackData::GetEndTs()
-{
-    return m_end_ts;
-}
-uint64_t
-RawTrackData::GetIndex()
-{
-    return m_index;
-}
-
-RawTrackSampleData::RawTrackSampleData(uint64_t count,uint64_t index,
-    double start_ts, double end_ts)
-: RawTrackData(kRPVControllerTrackTypeSamples, index, start_ts, end_ts)
-{
-    m_data.reserve(count);
-}
-
-RawTrackSampleData::~RawTrackSampleData() { m_data.clear(); }
-
-std::vector<rocprofvis_trace_counter_t>&
-RawTrackSampleData::GetData()
-{
-    return m_data;
-}
-
-RawTrackEventData::RawTrackEventData(uint64_t count, uint64_t index,
-    double start_ts, double end_ts)
-: RawTrackData(kRPVControllerTrackTypeEvents, index, start_ts, end_ts)
-{
-    m_data.reserve(count);
-}
-
-RawTrackEventData::~RawTrackEventData() { m_data.clear(); }
-
-std::vector<rocprofvis_trace_event_t>&
-RawTrackEventData::GetData()
-{
-    return m_data;
-}
-
-//----------------------------------------------------------------------------
 
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
@@ -443,7 +380,7 @@ DataProvider::DumpTrack(uint64_t index)
                         dynamic_cast<RawTrackSampleData*>(m_raw_trackdata[index]);
                     if(track)
                     {
-                        std::vector<rocprofvis_trace_counter_t>& buffer =
+                        const std::vector<rocprofvis_trace_counter_t>& buffer =
                             track->GetData();
                         int64_t i = 0;
                         for(const auto item : buffer)
@@ -466,8 +403,9 @@ DataProvider::DumpTrack(uint64_t index)
                         dynamic_cast<RawTrackEventData*>(m_raw_trackdata[index]);
                     if(track)
                     {
-                        std::vector<rocprofvis_trace_event_t>& buffer = track->GetData();
-                        int64_t                                i      = 0;
+                        const std::vector<rocprofvis_trace_event_t>& buffer =
+                            track->GetData();
+                        int64_t i = 0;
                         for(const auto item : buffer)
                         {
                             spdlog::debug(
@@ -594,14 +532,15 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 
 void
 DataProvider::CreateRawSampleData(uint64_t                       index,
-                                  rocprofvis_controller_array_t* track_data, double min_ts, double max_ts)
+                                  rocprofvis_controller_array_t* track_data,
+                                  double min_ts, double max_ts)
 {
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
     assert(result == kRocProfVisResultSuccess);
 
-    RawTrackSampleData* raw_sample_data = new RawTrackSampleData(count, index, min_ts, max_ts);
+    RawTrackSampleData* raw_sample_data = new RawTrackSampleData(index, min_ts, max_ts);
     spdlog::debug("Create sample track data at index {} with {} entries", index, count);
 
     if(m_raw_trackdata[index])
@@ -612,7 +551,10 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
     }
     m_raw_trackdata[index] = raw_sample_data;
 
-    std::vector<rocprofvis_trace_counter_t>& buffer = raw_sample_data->GetData();
+    // std::vector<rocprofvis_trace_counter_t>& buffer = raw_sample_data->GetData();
+
+    std::vector<rocprofvis_trace_counter_t> buffer;
+    buffer.reserve(count);
 
     rocprofvis_trace_counter_t counter;
 
@@ -639,18 +581,22 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
         // spdlog::debug("{},{}", counter.m_start_ts, counter.m_value);
         buffer.push_back(counter);
     }
+
+    raw_sample_data->SetData(std::move(buffer));
+    m_raw_trackdata[index] = raw_sample_data;
 }
 
 void
 DataProvider::CreateRawFlameData(uint64_t                       index,
-                                 rocprofvis_controller_array_t* track_data, double min_ts, double max_ts)
+                                 rocprofvis_controller_array_t* track_data, double min_ts,
+                                 double max_ts)
 {
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
     assert(result == kRocProfVisResultSuccess);
 
-    RawTrackEventData* raw_event_data = new RawTrackEventData(count, index, min_ts, max_ts);
+    RawTrackEventData* raw_event_data = new RawTrackEventData(index, min_ts, max_ts);
     spdlog::debug("Create event track data at index {} with {} entries", index, count);
 
     if(m_raw_trackdata[index])
@@ -659,8 +605,10 @@ DataProvider::CreateRawFlameData(uint64_t                       index,
         m_raw_trackdata[index] = nullptr;
         spdlog::debug("replacing existing track data at index {}", index);
     }
-    m_raw_trackdata[index]                        = raw_event_data;
-    std::vector<rocprofvis_trace_event_t>& buffer = raw_event_data->GetData();
+
+    // std::vector<rocprofvis_trace_event_t>& buffer = raw_event_data->GetData();
+    std::vector<rocprofvis_trace_event_t> buffer;
+    buffer.reserve(count);
 
     rocprofvis_trace_event_t counter;
 
@@ -701,4 +649,7 @@ DataProvider::CreateRawFlameData(uint64_t                       index,
 
         buffer.push_back(counter);
     }
+
+    raw_event_data->SetData(std::move(buffer));
+    m_raw_trackdata[index] = raw_event_data;
 }

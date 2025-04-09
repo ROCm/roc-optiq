@@ -3,6 +3,7 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_structs.h"
+#include "rocprofvis_raw_track_data.h"
 
 #include <string>
 #include <unordered_map>
@@ -40,59 +41,43 @@ typedef struct data_req_info_t
     ProviderState                   loading_state;
 } data_req_info_t;
 
-class RawTrackData
-{
-public:
-    RawTrackData(rocprofvis_controller_track_type_t track_type, uint64_t index,
-                 double start_ts, double end_ts);
-    virtual ~RawTrackData() = 0;
-    rocprofvis_controller_track_type_t GetType();
-    double                             GetStartTs();
-    double                             GetEndTs();
-    uint64_t                           GetIndex();
-
-protected:
-    rocprofvis_controller_track_type_t m_track_type;
-
-    double m_start_ts;  // starting time stamp of track data
-    double m_end_ts;    // ending time stamp of track data
-
-    uint64_t m_index;  // index of the track
-};
-
-class RawTrackSampleData : public RawTrackData
-{
-public:
-    RawTrackSampleData(uint64_t count, uint64_t index, double start_ts, double end_ts);
-    virtual ~RawTrackSampleData();
-    std::vector<rocprofvis_trace_counter_t>& GetData();
-
-private:
-    std::vector<rocprofvis_trace_counter_t> m_data;
-};
-
-class RawTrackEventData : public RawTrackData
-{
-public:
-    RawTrackEventData(uint64_t count, uint64_t index, double start_ts, double end_ts);
-    virtual ~RawTrackEventData();
-    std::vector<rocprofvis_trace_event_t>& GetData();
-
-private:
-    std::vector<rocprofvis_trace_event_t> m_data;
-};
-
 class DataProvider
 {
 public:
     DataProvider();
     ~DataProvider();
 
+    /*
+    *   Close the controller.
+    */
     void CloseController();
+
+    /*
+    *   Free all requests. This does not cancel the requests on the controller end._yn
+    */
     void FreeRequests();
+    
+    /*
+    *   Free all track data
+    */
     void FreeAllTracks();
 
+    /*
+    * Opens a trace file and loads the data into the controller.
+    * Any previous data will be cleared.
+    * @param file_path: The path to the trace file to load.
+    * 
+    */
     bool FetchTrace(const std::string& file_path);
+
+    /*
+    * Fetches a track from the controller. Stores the data in a raw track buffer.
+    * @param index: The index of the track to select
+    * @param start_ts: The start timestamp of the track
+    * @param end_ts: The end timestamp of the track
+    * @param horz_pixel_range: The horizontal pixel range of the view
+    * @param lod: The level of detail to use
+    */
     bool FetchTrack(uint64_t index, double start_ts, double end_ts, int horz_pixel_range,
                     int lod);
 

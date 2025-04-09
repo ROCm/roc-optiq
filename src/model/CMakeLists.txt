@@ -43,3 +43,11 @@ file(GLOB MAIN_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/test/*.cpp
 add_library(${PROJECT_NAME} ${DATAMODEL_SRC} ${DATABASE_SRC} ${DATABASE_SRC} ${COMMON_SRC} ${SQLITE3_SRC} )
 add_executable(${PROJECT_NAME}-test ${MAIN_SRC} )
 target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
+
+add_subdirectory(../../thirdparty/catch2 thirdparty/catch2)
+
+add_executable(${PROJECT_NAME}-basic-tests src/tests/basic_tests.cpp)
+target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE ${PROJECT_NAME})
+target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE Catch2::Catch2WithMain)
+add_test(NAME ${PROJECT_NAME}-basic-tests COMMAND ${PROJECT_NAME}-basic-tests)
+set_tests_properties(${PROJECT_NAME}-basic-tests PROPERTIES RUN_SERIAL ON)

@@ -294,7 +294,7 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
     }
 
     auto it = m_requests.find(index);
-    // only allow load if a request for this index (track) has not been issued yet
+    // only allow load if a request for this index (track) is not pending
     if(it == m_requests.end())
     {
         rocprofvis_handle_t* graph_future = rocprofvis_controller_future_alloc();
@@ -461,12 +461,13 @@ DataProvider::HandleLoadGraphs()
                    result == kRocProfVisResultTimeout);
 
             // this graph is ready
-            if(result != kRocProfVisResultTimeout)
+            if(result == kRocProfVisResultSuccess)
             {
                 rocprofvis_controller_future_free(req.graph_future);
                 req.graph_future  = nullptr;
                 req.loading_state = ProviderState::kReady;
                 ProcessRequest(req);
+                //remove request from processing container
                 it = m_requests.erase(it);
             }
             else
@@ -506,15 +507,17 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 
     spdlog::debug("{} Graph item count {} min ts {} max ts {}", req.index, item_count,
                   min_ts, max_ts);
-
-    switch(graph_type)
+                  
+    //use the track type to determine what type of data is present in the graph array
+    assert(req.index < m_track_metadata.size());
+    switch(m_track_metadata[req.index].track_type)
     {
-        case kRPVControllerGraphTypeFlame:  // kRPVControllerTrackTypeEvents:
+        case kRPVControllerTrackTypeEvents:
         {
-            CreateRawFlameData(req.index, req.graph_array, min_ts, max_ts);
+            CreateRawEventData(req.index, req.graph_array, min_ts, max_ts);
             break;
         }
-        case kRPVControllerGraphTypeLine:
+        case kRPVControllerTrackTypeSamples:
         {
             CreateRawSampleData(req.index, req.graph_array, min_ts, max_ts);
             break;
@@ -554,12 +557,10 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
     }
     m_raw_trackdata[index] = raw_sample_data;
 
-    // std::vector<rocprofvis_trace_counter_t>& buffer = raw_sample_data->GetData();
-
     std::vector<rocprofvis_trace_counter_t> buffer;
     buffer.reserve(count);
 
-    rocprofvis_trace_counter_t counter;
+    rocprofvis_trace_counter_t trace_counter;
 
     for(uint64_t i = 0; i < count; i++)
     {
@@ -578,11 +579,10 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
                                                   &value);
         assert(result == kRocProfVisResultSuccess);
 
-        counter.m_start_ts = start_ts;
-        counter.m_value    = value;
+        trace_counter.m_start_ts = start_ts;
+        trace_counter.m_value    = value;
 
-        // spdlog::debug("{},{}", counter.m_start_ts, counter.m_value);
-        buffer.push_back(counter);
+        buffer.push_back(trace_counter);
     }
 
     raw_sample_data->SetData(std::move(buffer));
@@ -590,7 +590,7 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
 }
 
 void
-DataProvider::CreateRawFlameData(uint64_t                       index,
+DataProvider::CreateRawEventData(uint64_t                       index,
                                  rocprofvis_controller_array_t* track_data, double min_ts,
                                  double max_ts)
 {
@@ -609,11 +609,10 @@ DataProvider::CreateRawFlameData(uint64_t                       index,
         spdlog::debug("replacing existing track data at index {}", index);
     }
 
-    // std::vector<rocprofvis_trace_event_t>& buffer = raw_event_data->GetData();
     std::vector<rocprofvis_trace_event_t> buffer;
     buffer.reserve(count);
 
-    rocprofvis_trace_event_t counter;
+    rocprofvis_trace_event_t trace_event;
 
     for(uint64_t i = 0; i < count; i++)
     {
@@ -626,13 +625,13 @@ DataProvider::CreateRawFlameData(uint64_t                       index,
         result          = rocprofvis_controller_get_double(
             event, kRPVControllerEventStartTimestamp, 0, &start_ts);
         assert(result == kRocProfVisResultSuccess);
-        counter.m_start_ts = start_ts;
+        trace_event.m_start_ts = start_ts;
 
         double end_ts = 0;
         result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp,
                                                   0, &end_ts);
         assert(result == kRocProfVisResultSuccess);
-        counter.m_duration = end_ts - start_ts;
+        trace_event.m_duration = end_ts - start_ts;
 
         // get event name
         uint32_t length = 0;
@@ -645,12 +644,9 @@ DataProvider::CreateRawFlameData(uint64_t                       index,
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   str_buffer, &length);
         assert(result == kRocProfVisResultSuccess);
-        counter.m_name = std::string(str_buffer);
+        trace_event.m_name = std::string(str_buffer);
 
-        // spdlog::debug("{},{},{}", counter.m_name, counter.m_start_ts,
-        // counter.m_duration);
-
-        buffer.push_back(counter);
+        buffer.push_back(trace_event);
     }
 
     raw_event_data->SetData(std::move(buffer));

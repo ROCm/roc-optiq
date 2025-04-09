@@ -119,7 +119,7 @@ private:
     void HandleLoadGraphs();
 
     void ProcessRequest(data_req_info_t& req);
-    void CreateRawFlameData(uint64_t index, rocprofvis_controller_array_t* track_data,
+    void CreateRawEventData(uint64_t index, rocprofvis_controller_array_t* track_data,
                             double min_ts, double max_ts);
     void CreateRawSampleData(uint64_t index, rocprofvis_controller_array_t* track_data,
                              double min_ts, double max_ts);

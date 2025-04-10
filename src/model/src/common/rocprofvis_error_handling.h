@@ -22,8 +22,6 @@
 
 #include "rocprofvis_core_assert.h"
 #include <string>
-#include <mutex>
-#include <chrono>
 
 namespace RocProfVis
 {
@@ -39,25 +37,6 @@ namespace DataModel
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 #define ANSI_COLOR_GREY    "\x1b[90m"
-
-// compile with -DTEST for profiling interface methods performace
-#ifdef TEST
-
-class TimeRecorder {
-public:
-    TimeRecorder(const char* function);
-    TimeRecorder(const char* function, void* handle, uint32_t property, uint64_t index);
-    ~TimeRecorder();
-private:
-    std::chrono::time_point<std::chrono::steady_clock> m_start_time;
-    std::string m_function;
-};
-#define PROFILE RocProfVis::DataModel::TimeRecorder time_recorder(__FUNCTION__)
-#define PROFILE_PROP_ACCESS RocProfVis::DataModel::TimeRecorder time_recorder(__FUNCTION__, handle, property, index)
-#else
-#define PROFILE
-#define PROFILE_PROP_ACCESS
-#endif
 
 // Error strings
 extern const char* ERROR_INDEX_OUT_OF_RANGE;

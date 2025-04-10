@@ -21,9 +21,16 @@
 
 
 #include "rocprofvis_c_interface.h"
+#include "rocprofvis_core_profile.h"
 #include "rocprofvis_db_rocpd.h"
 #include "rocprofvis_db_rocprof.h"
 #include "rocprofvis_dm_trace.h"
+
+#ifdef TEST
+#define ROCPROFVIS_DM_PROPSYMBOL(handle, property) ((RocProfVis::DataModel::DmBase*)handle)->GetPropertySymbol(property)
+#else
+#define ROCPROFVIS_DM_PROPSYMBOL(handle, property) 
+#endif
 
 
 /******************************************DATABASE INTERFACE***************************************/
@@ -483,7 +490,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_uint64(
                                         rocprofvis_dm_property_t property,
                                         rocprofvis_dm_property_index_t index,
                                         uint64_t* value){
-    PROFILE_PROP_ACCESS;
+    PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsUint64(property, index, value);
 }                                      
 
@@ -503,7 +510,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_int64(
                                         rocprofvis_dm_property_t property,
                                         rocprofvis_dm_property_index_t index,
                                         int64_t* value){
-    PROFILE_PROP_ACCESS;
+    PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsInt64(property, index, value);
 }                                      
 
@@ -523,7 +530,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_double(
                                         rocprofvis_dm_property_t property,
                                         rocprofvis_dm_property_index_t index,
                                         double* value){
-    PROFILE_PROP_ACCESS;
+    PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsDouble(property, index, value);
 }                                       
 
@@ -543,7 +550,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_charptr(
                                         rocprofvis_dm_property_t property,
                                         rocprofvis_dm_property_index_t index,
                                         char** value){
-    PROFILE_PROP_ACCESS;
+    PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsCharPtr(property, index, value);
 }                                       
 
@@ -563,7 +570,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_handle(
                                         rocprofvis_dm_property_t property,
                                         rocprofvis_dm_property_index_t index,
                                         rocprofvis_dm_handle_t* value){
-    PROFILE_PROP_ACCESS;
+    PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsHandle(property, index, value);
 }  
 

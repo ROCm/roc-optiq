@@ -19,7 +19,6 @@
 // SOFTWARE.
 
 #include "rocprofvis_error_handling.h"
-#include "rocprofvis_dm_base.h"
 
 namespace RocProfVis
 {
@@ -49,32 +48,6 @@ const char* ERROR_TABLE_CANNOT_BE_NULL = "Error! Table reference cannot be NULL!
 const char* ERROR_TABLE_ROW_CANNOT_BE_NULL = "Error! Table row reference cannot be NULL!";
 const char* ERROR_EXT_DATA_CANNOT_BE_NULL = "Error! Extended data reference cannot be NULL!";
 const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL = "Error! SQL query parameters reference cannot be NULL!";
-
-#ifdef TEST
-
-TimeRecorder::TimeRecorder(const char* function) : m_function(function) {
-    m_start_time = std::chrono::steady_clock::now();
-}
-
-TimeRecorder::TimeRecorder(const char* function, void* handle, uint32_t property, uint64_t index):
-        TimeRecorder(function) {
-            if (handle!=nullptr)
-            {
-                m_function+="(";
-                m_function+=((DmBase*)handle)->GetPropertySymbol(property);
-                m_function+=",";
-                m_function+=std::to_string(index);
-                m_function+=")";
-            }
-        }
-
-TimeRecorder::~TimeRecorder() {
-    auto t = std::chrono::steady_clock::now();
-    std::chrono::duration<double> diff = t - m_start_time;
-    spdlog::info("{0:13.9f} seconds | {1} | {2}", diff.count(), m_function.c_str(), last_msg.c_str());   
-}
-
-#endif
 
 }  // namespace DataModel
 }  // namespace RocProfVis

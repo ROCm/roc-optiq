@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include "rocprofvis_db_sqlite.h"
+#include "rocprofvis_core_profile.h"
 #include <sstream>
 
 namespace RocProfVis

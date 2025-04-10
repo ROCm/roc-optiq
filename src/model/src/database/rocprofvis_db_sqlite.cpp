@@ -27,17 +27,17 @@ namespace DataModel
 {
 
 int SqliteDatabase::CallbackGetValue(void* data, int argc, char** argv, char** azColName){
-    ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     std::string * string_ptr = (rocprofvis_dm_string_t*)callback_params->handle;
-    ASSERT_MSG_RETURN(string_ptr, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(string_ptr, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     *string_ptr = argv[0];
     return 0;
 } 
 
 int SqliteDatabase::CallbackRunQuery(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     SqliteDatabase* db = (SqliteDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
@@ -49,7 +49,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, char **argv, char **a
         }
     }
     rocprofvis_dm_table_row_t row = db->BindObject()->FuncAddTableRow(callback_params->handle);
-    ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
     for (int i=0; i < argc; i++)
     {
         if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, argv[i])) return 1;

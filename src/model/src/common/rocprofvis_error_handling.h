@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include <cassert>
+#include "rocprofvis_core_assert.h"
 #include <string>
 #include <mutex>
 #include <chrono>
@@ -91,18 +91,6 @@ extern const char* ERROR_REFERENCE_POINTER_CANNOT_BE_NULL;
 
 #define LOG(msg) RocProfVis::DataModel::SetStatusMessage(msg)
 #define ADD_LOG(msg) RocProfVis::DataModel::AddStatusMessage(msg)
-
-#define ASSERT(cond) assert(cond); (!(cond)) RocProfVis::DataModel::SetStatusMessage(#cond)
-
-#define ASSERT_MSG(cond, msg) assert(cond && msg); if (!(cond)) RocProfVis::DataModel::SetStatusMessage(msg)
-
-#define ASSERT_RETURN(cond, retval) assert(cond); if (!(cond)) { RocProfVis::DataModel::SetStatusMessage(cond); return retval;}
-    
-#define ASSERT_MSG_RETURN(cond, msg, retval) assert(cond && msg); if (!(cond)) { RocProfVis::DataModel::SetStatusMessage(msg); return retval; }
-
-#define ASSERT_MSG_BREAK(cond, msg) assert(cond && msg); if (!(cond)) break
-
-#define ASSERT_ALWAYS_MSG_RETURN(msg, retval) assert(false && msg); RocProfVis::DataModel::SetStatusMessage(msg); return retval
 
 }  // namespace DataModel
 }  // namespace RocProfVis

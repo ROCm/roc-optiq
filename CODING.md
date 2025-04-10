@@ -130,8 +130,8 @@ The rocprofiler-visualizer project is part of the broader ROCm software stack an
 | Public Typedefs/Aliases	    | rocprofvis_ + lower_case_with_underscores + _t     | rocprofvis_ + my_typedef_t    |
 | Public Enumerations	        | rocprofvis_ + lower_case_with_underscores + _t     | rocprofvis_ + my_enum_t       |
 | Typedefs/Aliases in Namespaces| lower_case_with_underscores + _t                   | my_typedef_t                  |
-| Enumerations in Namespaces	| lower_case_with_underscores + _t                   | my_enum_t                     |
-| Enumeration Values	        | k + UpperCamelCase                                 | kMyEnumValue                  |
+| Enum Class                  	| UpperCamelCase                                     | MyEnum                        |
+| Enum Class Values	            | k + UpperCamelCase                                 | kMyEnumValue                  |
 | Const Variables	            | UPPER_CASE_WITH_UNDERSCORES                        | MY_CONST_VALUE                |
 | Global Variables	            | g_ + lower_case_with_underscores                   | g_my_global_variable          |
 | TLS Variables	                | tls_ + lower_case_with_underscores                 | tls_my_tls_variable           |

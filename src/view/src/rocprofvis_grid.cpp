@@ -12,8 +12,16 @@ namespace RocProfVis
 namespace View
 {
 
-Grid::Grid() {}
+Grid::Grid()
+: m_cursor_position(0.0f)
+{}
 Grid::~Grid() {}
+
+float
+Grid::GetCursorPosition()
+{
+    return m_cursor_position;
+}
 
 void
 Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
@@ -69,10 +77,30 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
                 scale_x;  // this value takes the raw value of the output and converts
                           // them into positions on the chart which is scaled by scale_x
 
-            draw_list->AddLine(
+            float normalized_end =
+                ((raw_position_points_x + steps) - (min_x + movement)) *
+                scale_x;  // this value takes the raw value of the output and converts
+                          // them into positions on the chart which is scaled by scale_x
+
+            draw_list->AddRect(
                 ImVec2(normalized_start, cursor_position.y),
-                ImVec2(normalized_start, cursor_position.y + content_size.y - 50.0f),
+                ImVec2(normalized_end, cursor_position.y + content_size.y - 50.0f),
                 IM_COL32(0, 0, 0, 128), 1.0f);
+
+            // If user hover over grid block.
+            if(ImGui::IsMouseHoveringRect(
+                   ImVec2(normalized_start, cursor_position.y),
+                   ImVec2(normalized_end, cursor_position.y + content_size.y - 50.0f)))
+            {
+                ImVec2 mouse_position = ImGui::GetMousePos();
+
+                ImVec2 relativeMousePos = ImVec2(mouse_position.x - normalized_start,
+                                                 mouse_position.y - cursor_position.y);
+                m_cursor_position =
+                    (raw_position_points_x - min_x) +
+                    ((relativeMousePos.x / (normalized_end - normalized_start)) *
+                     (steps));
+            }
 
             char label[32];
             snprintf(label, sizeof(label), "%.0f", raw_position_points_x - min_x);

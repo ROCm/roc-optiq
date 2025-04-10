@@ -44,10 +44,14 @@ MainView::MainView()
 , m_can_drag_to_pan(false)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
-, m_grid(nullptr)
+, m_grid(new RocProfVis::View::Grid())
 {}
 
-MainView::~MainView() { DestroyGraphs(); }
+MainView::~MainView()
+{
+    DestroyGraphs();
+    delete m_grid;
+}
 
 void
 MainView::ResetView()
@@ -154,9 +158,6 @@ MainView::RenderGrid()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(220, 0, 0, 0));
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-    // Convert this to render only.
-    m_grid = new RocProfVis::View::Grid();
 
     m_grid->RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
                        m_v_max_x, m_v_min_x);

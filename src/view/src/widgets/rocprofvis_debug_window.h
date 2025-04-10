@@ -27,9 +27,20 @@ private:
     DebugWindow();
     static void Process(void* user_ptr, char const* log);
 
+    void RenderNav();
+    void RenderPersitent();
+    void RenderTransient();
+
     static DebugWindow*         s_instance;
     std::vector<std::string>    m_transient_debug_messages;
     CircularBuffer<std::string> m_persitent_debug_messages;
+
+    std::shared_ptr<VFixedContainer> m_main_container;
+    std::shared_ptr<VSplitContainer> m_v_spilt_container;
+    std::shared_ptr<HSplitContainer> m_h_spilt_container;
+
+    std::string m_split_button_label;
+    bool m_do_h_split;
 };
 
 }  // namespace View

@@ -88,7 +88,7 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
         }
         else
     {
-        LOG("Database type not supported!");
+        spdlog::debug("Database type not supported!");
         return nullptr;
     }                                  
 }

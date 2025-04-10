@@ -30,11 +30,6 @@ namespace RocProfVis
 namespace DataModel
 {
 
-// static methods set/get last error message
-const char * GetLastStatusMessage();
-void SetStatusMessage(const char*);
-void AddStatusMessage(const char*);
-
 // printf text colors
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[92m"
@@ -88,9 +83,6 @@ extern const char* ERROR_TABLE_ROW_CANNOT_BE_NULL;
 extern const char* ERROR_EXT_DATA_CANNOT_BE_NULL;
 extern const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL;
 extern const char* ERROR_REFERENCE_POINTER_CANNOT_BE_NULL;
-
-#define LOG(msg) RocProfVis::DataModel::SetStatusMessage(msg)
-#define ADD_LOG(msg) RocProfVis::DataModel::AddStatusMessage(msg)
 
 }  // namespace DataModel
 }  // namespace RocProfVis

@@ -73,7 +73,7 @@ int SqliteDatabase::DetectTable(sqlite3 *db, const char* table){
     int rc = sqlite3_exec(db, query.str().c_str(), CallbackTableExists, db, &zErrMsg);
     sqlite3_mutex_leave(sqlite3_db_mutex(db));
     if (rc != SQLITE_OK) {
-        LOG("Detect table error "); ADD_LOG(std::to_string(rc).c_str()); ADD_LOG(":"); ADD_LOG(zErrMsg);
+        spdlog::debug("Detect table error "); spdlog::debug(std::to_string(rc).c_str()); spdlog::debug(":"); spdlog::debug(zErrMsg);
         sqlite3_free(zErrMsg);
     }
     return rc;
@@ -83,8 +83,8 @@ int SqliteDatabase::DetectTable(sqlite3 *db, const char* table){
 rocprofvis_dm_result_t SqliteDatabase::Open()
 {
     if( (m_db_status = sqlite3_open(Path(), &m_db)) != SQLITE_OK) {
-        LOG("Can't open database:");
-        ADD_LOG(sqlite3_errmsg(m_db));
+        spdlog::debug("Can't open database:");
+        spdlog::debug(sqlite3_errmsg(m_db));
         return kRocProfVisDmResultDbAccessFailed;
     }
     return kRocProfVisDmResultSuccess;
@@ -96,8 +96,8 @@ rocprofvis_dm_result_t SqliteDatabase::Close()
     {
         if( sqlite3_close(m_db) != SQLITE_OK ) {
 
-            LOG("Can't close database:");
-            ADD_LOG(sqlite3_errmsg(m_db));
+            spdlog::debug("Can't close database:");
+            spdlog::debug(sqlite3_errmsg(m_db));
             return kRocProfVisDmResultDbAccessFailed;
         }
         return kRocProfVisDmResultSuccess;
@@ -185,8 +185,8 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(const char* query, rocpr
         int rc = sqlite3_exec(m_db, query, params->callback, params, &zErrMsg);
         sqlite3_mutex_leave(sqlite3_db_mutex(m_db));
         if( rc != SQLITE_OK ) {
-            LOG("Query: "); ADD_LOG(query);
-            LOG("SQL error "); ADD_LOG(std::to_string(rc).c_str()); ADD_LOG(":");ADD_LOG(zErrMsg);
+            spdlog::debug("Query: "); spdlog::debug(query);
+            spdlog::debug("SQL error "); spdlog::debug(std::to_string(rc).c_str()); spdlog::debug(":"); spdlog::debug(zErrMsg);
             sqlite3_free(zErrMsg);
             return kRocProfVisDmResultDbAccessFailed;
         } 

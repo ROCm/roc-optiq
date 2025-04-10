@@ -50,27 +50,9 @@ const char* ERROR_TABLE_ROW_CANNOT_BE_NULL = "Error! Table row reference cannot 
 const char* ERROR_EXT_DATA_CANNOT_BE_NULL = "Error! Extended data reference cannot be NULL!";
 const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL = "Error! SQL query parameters reference cannot be NULL!";
 
-std::string g_last_error_string;
-std::mutex g_last_error_mutex;
-
-const char * GetLastStatusMessage() {
-    std::lock_guard<std::mutex> g(g_last_error_mutex);
-    return g_last_error_string.c_str();
-}
-void SetStatusMessage(const char* msg){
-    std::lock_guard<std::mutex> g(g_last_error_mutex);
-    g_last_error_string = msg;
-}
-
-void AddStatusMessage(const char* msg){
-    std::lock_guard<std::mutex> g(g_last_error_mutex);
-    g_last_error_string += msg;
-}
-
 #ifdef TEST
 
 TimeRecorder::TimeRecorder(const char* function) : m_function(function) {
-    SetStatusMessage("Success!");
     m_start_time = std::chrono::steady_clock::now();
 }
 
@@ -89,12 +71,7 @@ TimeRecorder::TimeRecorder(const char* function, void* handle, uint32_t property
 TimeRecorder::~TimeRecorder() {
     auto t = std::chrono::steady_clock::now();
     std::chrono::duration<double> diff = t - m_start_time;
-    std::string last_msg = GetLastStatusMessage(); 
-    bool success = last_msg == "Success!";
-
-        if (success) printf(ANSI_COLOR_GREY); else printf(ANSI_COLOR_RED);
-        printf("%13.9f seconds | %s | %s \x1b[0m\n", diff.count(), m_function.c_str(), last_msg.c_str());
-   
+    spdlog::info("{0:13.9f} seconds | {1} | {2}", diff.count(), m_function.c_str(), last_msg.c_str());   
 }
 
 #endif

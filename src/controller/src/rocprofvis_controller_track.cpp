@@ -1,8 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_track.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <algorithm>
 #include <cfloat>
 #include <cstring>
@@ -299,7 +299,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackEntry:
             {
                 // Start & end timestamps must be configured
-                assert(m_start_timestamp >= 0.0 && m_start_timestamp < m_end_timestamp);
+                ROCPROFVIS_ASSERT(m_start_timestamp >= 0.0 && m_start_timestamp < m_end_timestamp);
 
                 Handle* object = (Handle*)value;
                 auto object_type = object->GetType();

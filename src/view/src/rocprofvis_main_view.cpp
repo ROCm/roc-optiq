@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_main_view.h"
+#include "rocprofvis_core_assert.h"
 #include "imgui.h"
 #include "rocprofvis_boxplot.h"
 #include "rocprofvis_controller.h"
@@ -316,7 +317,7 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
     uint64_t            num_graphs = 0;
     rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
         timeline, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     int graph_id = 0;
     for(uint64_t i = 0; i < num_graphs; i++)
@@ -324,12 +325,12 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
         rocprofvis_handle_t* graph = nullptr;
         result                     = rocprofvis_controller_get_object(
             timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
-        assert(result == kRocProfVisResultSuccess && graph);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && graph);
 
         rocprofvis_handle_t* track = nullptr;
         result =
             rocprofvis_controller_get_object(graph, kRPVControllerGraphTrack, 0, &track);
-        assert(result == kRocProfVisResultSuccess && track);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && track);
 
         rocprofvis_controller_array_t* track_data = nullptr;
         result = rocprofvis_controller_get_object(array, kRPVControllerArrayEntryIndexed,
@@ -339,18 +340,18 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
             uint64_t track_type = 0;
             result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
                                                       &track_type);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             uint32_t length = 0;
             result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
                                                       nullptr, &length);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             char* buffer = (char*) alloca(length + 1);
             length += 1;
             result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
                                                       buffer, &length);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             switch(track_type)
             {

@@ -44,6 +44,15 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Event);
+                *value += strlen(m_name) + 1;
+                *value += strlen(m_category) + 1;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerEventId:
             {
                 *value = m_id;

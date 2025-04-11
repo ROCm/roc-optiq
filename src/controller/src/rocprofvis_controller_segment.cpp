@@ -432,5 +432,66 @@ rocprofvis_result_t Segment::Fetch(uint32_t lod, double start, double end, Array
     return result;
 }
 
+
+
+rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            {
+                *value = 0;
+                result = kRocProfVisResultSuccess;
+
+                for (auto& pair : m_lods)
+                {
+                    *value += sizeof(pair);
+                    *value += sizeof(LOD);
+                    for (auto& entry : pair.second->GetEntries())
+                    {
+                        *value += sizeof(entry);
+                        uint64_t entry_size = 0;
+                        result = entry.second->GetUInt64(property, 0, &entry_size);
+                        if (result == kRocProfVisResultSuccess)
+                        {
+                            *value += entry_size;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
+                break;
+            }
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = 0;
+                result = kRocProfVisResultSuccess;
+
+                for(auto& pair : m_lods)
+                {
+                    *value += sizeof(pair);
+                    *value += sizeof(LOD);
+                    for(auto& entry : pair.second->GetEntries())
+                    {
+                        *value += sizeof(entry);
+                    }
+                }
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
 }
 }

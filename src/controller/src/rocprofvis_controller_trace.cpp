@@ -757,6 +757,37 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
     {
         switch (property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            {
+                *value = sizeof(Trace);
+                *value += m_tracks.size() * sizeof(Track*);
+                result = kRocProfVisResultSuccess;
+                for(auto& track : m_tracks)
+                {
+                    uint64_t entry_size = 0;
+                    result = track->GetUInt64(property, 0, &entry_size);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        *value += entry_size;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                if (result == kRocProfVisResultSuccess)
+                {
+                    result = m_timeline->GetUInt64(property, 0, value);
+                }
+                break;
+            }
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Trace);
+                *value += m_tracks.size() * sizeof(Track*);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerId:
             {
                 *value = m_id;

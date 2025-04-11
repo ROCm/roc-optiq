@@ -23,6 +23,10 @@
 
 #include <iostream>
 
+#define MULTI_LINE_LOG_START auto multi_line_log = fmt::memory_buffer()
+#define MULTI_LINE_LOG(format, ...) fmt::format_to(std::back_inserter(multi_line_log), format, __VA_ARGS__)
+#define MULTI_LINE_LOG_ARGS "{:.{}}",multi_line_log.data(),multi_line_log.size()
+ 
 std::string g_input_file="../../../sample/trace_70b_1024_32.rpd";
 bool        g_all_tracks=false;
 bool        g_full_range=false;
@@ -733,10 +737,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                         uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(
                             table, kRPVDMNumberOfTableRowsUInt64, 0);
 
-#define MULTI_LINE_LOG_START auto multi_line_log = fmt::memory_buffer()
-#define MULTI_LINE_LOG(format, ...) fmt::format_to(std::back_inserter(multi_line_log), format, __VA_ARGS__)
-#define MULTI_LINE_LOG_ARGS "{:.{}}",multi_line_log.data(),multi_line_log.size()
- 
                         {
                             spdlog::info("\x1b[0m{0} - {1}", table_description,
                                            table_query);

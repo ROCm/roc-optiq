@@ -1,6 +1,9 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
+
+#include "imgui.h"
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,6 +20,8 @@ public:
     virtual void Render();
 
     std::string GenUniqueName(std::string name);
+protected:
+    std::string m_widget_name;
 };
 
 class LayoutItem
@@ -26,13 +31,29 @@ public:
     LayoutItem(float w, float h);
 
     std::shared_ptr<RocWidget> m_item;  // Widget that this item will render
-    std::string                m_name;  // name to use when creating ImGUI element
-
     float m_height;
     float m_width;
 
     int32_t m_bg_color;
+
+    ImVec2 m_item_spacing;
+    ImVec2 m_window_padding;
+
+    ImGuiChildFlags m_child_window_flags;
 };
+
+class RocCustomWidget : public RocWidget
+{
+public:
+    RocCustomWidget(const std::function<void()>& callback);
+
+	virtual void Render();
+    void SetCallback(const std::function<void()>& callback);
+
+private:
+	std::function<void()> m_callback;
+};
+
 
 class VFixedContainer : public RocWidget
 {
@@ -41,6 +62,9 @@ public:
     VFixedContainer(std::vector<LayoutItem>& items);
     // Todo, add, insert, remove operations
     // ex: void AddItem(LayoutItem &item);
+
+    bool SetAt(int index, const LayoutItem &item);
+    size_t ItemCount();
 
     virtual void Render();
 
@@ -57,6 +81,7 @@ public:
     void         SetLeft(const LayoutItem& l);
     void         setRight(const LayoutItem& r);
 
+    void SetSplit(float ratio);
     void SetMinLeftWidth(float width);
     void SetMinRightWidth(float width);
 
@@ -72,6 +97,9 @@ private:
     std::string m_left_name;
     std::string m_right_name;
     std::string m_handle_name;
+
+    float m_split_ratio;
+    bool m_dirty;
 };
 
 class VSplitContainer : public RocWidget
@@ -84,6 +112,7 @@ public:
     void SetTop(const LayoutItem& t);
     void SetBottom(const LayoutItem& b);
 
+    void SetSplit(float ratio);
     void SetMinTopHeight(float height);
     void SetMinBottomHeight(float height);
 
@@ -95,6 +124,9 @@ private:
     LayoutItem m_top;
     LayoutItem m_bottom;
     float      m_resize_grip_size;
+
+    float m_split_ratio;
+    bool m_dirty;
 };
 
 }  // namespace View

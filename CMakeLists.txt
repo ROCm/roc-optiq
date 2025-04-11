@@ -58,7 +58,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_grid.cpp 
     src/view/src/rocprofvis_home_screen.cpp 
     src/view/src/rocprofvis_line_chart.cpp 
-src/view/src/rocprofvis_boxplot.cpp 
+    src/view/src/rocprofvis_boxplot.cpp 
     src/view/src/rocprofvis_main_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp

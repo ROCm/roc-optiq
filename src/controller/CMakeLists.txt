@@ -37,7 +37,6 @@ add_library(rocprof-visualizer-controller ${rocprofvis_controller_source_files})
 file(GLOB COMMON_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 add_subdirectory(../../thirdparty thirdparty)
-add_subdirectory(../core core)
 add_subdirectory(../model model)
 
 if(JSON_SUPPORT) 

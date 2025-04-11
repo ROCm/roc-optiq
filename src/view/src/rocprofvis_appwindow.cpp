@@ -5,9 +5,14 @@
 #include "imgui.h"
 #include "implot.h"
 #include "rocprofvis_controller.h"
+#include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
 
 using namespace RocProfVis::View;
+
+// For testing DataProvider
+void
+RenderProviderTest(DataProvider& provider);
 
 AppWindow* AppWindow::m_instance = nullptr;
 
@@ -32,6 +37,7 @@ AppWindow::AppWindow()
 , m_graph_data_array(nullptr)
 , m_graph_futures(nullptr)
 , m_show_debug_widow(false)
+, m_show_provider_test_widow(false)
 {}
 
 AppWindow::~AppWindow()
@@ -100,7 +106,8 @@ AppWindow::HandleOpenFile(std::string& file_path)
 void
 AppWindow::Render()
 {
-    DebugWindow::GetInstance()->Reset();
+    DebugWindow::GetInstance()->ClearTransient();
+    m_data_provider.Update();
 
     if(m_home_screen && m_data_changed)
     {
@@ -136,7 +143,7 @@ AppWindow::Render()
             if(ImGui::MenuItem("Open", "CTRL+O"))
             {
                 IGFD::FileDialogConfig config;
-                config.path = ".";
+                config.path                      = ".";
                 std::string supported_extensions = ".db,.rpd";
 #ifdef JSON_SUPPORT
                 supported_extensions += ",.json";
@@ -144,6 +151,18 @@ AppWindow::Render()
                 ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File",
                                                         supported_extensions.c_str(),
                                                         config);
+            }
+
+            if(ImGui::MenuItem("Test Provider", "CTRL+T"))
+            {
+                IGFD::FileDialogConfig config;
+                config.path                      = ".";
+                std::string supported_extensions = ".db,.rpd";
+#ifdef JSON_SUPPORT
+                supported_extensions += ",.json";
+#endif
+                ImGuiFileDialog::Instance()->OpenDialog(
+                    "DebugFile", "Choose File", supported_extensions.c_str(), config);
             }
             ImGui::EndMenu();
         }
@@ -172,7 +191,23 @@ AppWindow::Render()
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
 
             HandleOpenFile(file_path);
+            spdlog::info("Opening file: {}", file_path);
             m_is_loading_trace = true;
+        }
+
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    if(ImGuiFileDialog::Instance()->Display("DebugFile"))
+    {
+        if(ImGuiFileDialog::Instance()->IsOk())
+        {
+            std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+            m_data_provider.FetchTrace(file_path);
+            spdlog::info("Opening file: {}", file_path);
+
+            m_show_provider_test_widow = true;
         }
 
         ImGuiFileDialog::Instance()->Close();
@@ -346,21 +381,74 @@ AppWindow::Render()
     }
 
     RenderDebugOuput();
+    if(m_show_provider_test_widow)
+    {
+        RenderProviderTest(m_data_provider);
+    }
 }
 
+void
+RenderProviderTest(DataProvider& provider)
+{
+    ImGui::Begin("Data Provider Test Window", nullptr, ImGuiWindowFlags_None);
 
-void AppWindow::RenderDebugOuput() {
-    if(m_show_debug_widow) {
+    static char buffer[10] = "";  // Buffer to hold the user input
+
+    // Callback function to filter non-numeric characters
+    auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
+        if(data->EventChar < '0' || data->EventChar > '9')
+        {
+            // Allow backspace
+            if(data->EventChar != '\b')
+            {
+                return 1;  // Block non-numeric characters
+            }
+        }
+        return 0;  // Allow numeric characters
+    };
+
+    // InputText with numeric filtering
+    ImGui::InputText("Track index", buffer, IM_ARRAYSIZE(buffer),
+                     ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
+
+    int index = std::atoi(buffer);
+
+    if(ImGui::Button("Fetch"))
+    {
+        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
+                            0);
+    }
+    if(ImGui::Button("Delete"))
+    {
+        provider.FreeTrack(index);
+    }
+    if(ImGui::Button("Print"))
+    {
+        provider.DumpTrack(index);
+    }
+    if(ImGui::Button("Print Track List"))
+    {
+        provider.DumpMetaData();
+    }
+    ImGui::End();
+}
+
+void
+AppWindow::RenderDebugOuput()
+{
+    if(m_show_debug_widow)
+    {
         DebugWindow::GetInstance()->Render();
     }
 
     ImGuiIO& io = ImGui::GetIO();
-    if (ImGui::IsKeyPressed(ImGuiKey_D)) {
+    if(ImGui::IsKeyPressed(ImGuiKey_D))
+    {
         m_show_debug_widow = !m_show_debug_widow;
-        
-        if(m_show_debug_widow) {
+
+        if(m_show_debug_widow)
+        {
             ImGui::SetWindowFocus("Debug Window");
         }
     }
-    
 }

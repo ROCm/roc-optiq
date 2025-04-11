@@ -15,11 +15,13 @@ public:
     Grid();
     ~Grid();
 
-    void RenderGrid(float min_x, float max_x, float movement, float zoom,
-                    ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x);
+    void  RenderGrid(float min_x, float max_x, float movement, float zoom,
+                     ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x);
+    float GetCursorPosition();
+
+private:
+    float m_cursor_position;
 };
 
 }  // namespace View
 }  // namespace RocProfVis
-
-

@@ -745,6 +745,18 @@ rocprofvis_result_t Trace::AsyncFetch(Graph& graph, Future& future, Array& array
     return error;
 }
 
+rocprofvis_result_t
+Trace::AsyncFetch(Event& event, Future& future, Array& array,
+                  rocprofvis_property_t property)
+{
+    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+    if(m_timeline)
+    {
+        error = m_timeline->AsyncFetch(event, future, array, property, m_dm_handle);
+    }
+    return error;
+}
+
 rocprofvis_controller_object_type_t Trace::GetType(void) 
 {
     return kRPVControllerObjectTypeController;

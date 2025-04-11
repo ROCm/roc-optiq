@@ -4,6 +4,7 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
+#include "rocprofvis_c_interface.h"
 #include <vector>
 
 namespace RocProfVis
@@ -15,6 +16,7 @@ class Array;
 class Future;
 class Graph;
 class Track;
+class Event;
 
 class Timeline : public Handle
 {
@@ -28,6 +30,10 @@ public:
 
     rocprofvis_result_t AsyncFetch(Graph& track, Future& future, Array& array,
                                    double start, double end, uint32_t pixels);
+
+    rocprofvis_result_t Timeline::AsyncFetch(Event& event, Future& future, Array& array,
+                                             rocprofvis_property_t property,
+                                             rocprofvis_dm_trace_t dm_handle);
 
     rocprofvis_controller_object_type_t GetType(void) final;
 

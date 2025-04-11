@@ -745,6 +745,27 @@ rocprofvis_result_t Trace::AsyncFetch(Graph& graph, Future& future, Array& array
     return error;
 }
 
+rocprofvis_result_t
+Trace::AsyncFetch(Event& event, Future& future, Array& array,
+                  rocprofvis_property_t property)
+{
+    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    future.Set(std::async(std::launch::async,
+                   [&event, &array, property, dm_handle]() -> rocprofvis_result_t {
+                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
+                              result = event.Fetch(property, array, dm_handle);
+                              return result;
+                          }));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
+
 rocprofvis_controller_object_type_t Trace::GetType(void) 
 {
     return kRPVControllerObjectTypeController;

@@ -164,6 +164,24 @@ rocprofvis_result_t rocprofvis_controller_graph_fetch_async(
     }
     return error;
 }
+
+rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
+    rocprofvis_controller_t* controller, rocprofvis_handle_t* object,
+    rocprofvis_property_t property, uint64_t index, uint32_t count,
+    rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::EventRef  event_ref(object);
+    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::ArrayRef  array(output);
+    if(trace.IsValid() && event_ref.IsValid() && future.IsValid() && array.IsValid())
+    {
+        error = trace->AsyncFetch(*event_ref, *future, *array, property);
+    }
+    return error;
+}
+
 void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
 {
     RocProfVis::Controller::ArrayRef array(object);

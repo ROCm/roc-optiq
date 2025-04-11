@@ -13,6 +13,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "rocprofvis_grid.h"
 
 namespace RocProfVis
 {
@@ -46,6 +47,7 @@ private:
 private:
     std::map<int, rocprofvis_meta_map_struct_t> m_meta_map;
     std::map<int, rocprofvis_graph_map_t>       m_graph_map;
+    RocProfVis::View::Grid*                      m_grid; 
     float                                       m_min_value;
     float                                       m_max_value;
     float                                       m_zoom;
@@ -70,6 +72,7 @@ private:
     bool                                        m_show_graph_customization_window;
     bool                                        m_is_control_held;
     bool                                        m_can_drag_to_pan;
+
 };
 
 }  // namespace View

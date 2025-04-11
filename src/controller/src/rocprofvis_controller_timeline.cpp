@@ -79,31 +79,6 @@ rocprofvis_result_t Timeline::AsyncFetch(Track& track, Future& future, Array& ar
     return error;
 }
 
-
-rocprofvis_result_t
-Timeline::AsyncFetch(Event& event, Future& future, Array& array,
-                     rocprofvis_property_t property,
-                     rocprofvis_dm_trace_t dm_handle)
-{
-    rocprofvis_result_t error = kRocProfVisResultUnknownError;
-
-    future.Set(std::async(std::launch::async,
-                          [&event, &array, property, dm_handle]() -> rocprofvis_result_t {
-                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                              result = event.Fetch(property, array, dm_handle);
-                              return result;
-                          }));
-
-    if(future.IsValid())
-    {
-        error = kRocProfVisResultSuccess;
-    }
-
-    return error;
-}
-
-
-
 rocprofvis_controller_object_type_t Timeline::GetType(void) 
 {
     return kRPVControllerObjectTypeTimeline;

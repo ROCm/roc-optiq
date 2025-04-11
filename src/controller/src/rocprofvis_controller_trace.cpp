@@ -750,10 +750,19 @@ Trace::AsyncFetch(Event& event, Future& future, Array& array,
                   rocprofvis_property_t property)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
-    if(m_timeline)
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    future.Set(std::async(std::launch::async,
+                   [&event, &array, property, dm_handle]() -> rocprofvis_result_t {
+                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
+                              result = event.Fetch(property, array, dm_handle);
+                              return result;
+                          }));
+
+    if(future.IsValid())
     {
-        error = m_timeline->AsyncFetch(event, future, array, property, m_dm_handle);
+        error = kRocProfVisResultSuccess;
     }
+
     return error;
 }
 

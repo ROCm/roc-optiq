@@ -4,7 +4,6 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
-#include "rocprofvis_c_interface.h"
 #include <vector>
 
 namespace RocProfVis
@@ -16,7 +15,6 @@ class Array;
 class Future;
 class Graph;
 class Track;
-class Event;
 
 class Timeline : public Handle
 {

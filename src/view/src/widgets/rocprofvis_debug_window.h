@@ -21,8 +21,10 @@ public:
     void         AddDebugMessage(const std::string& message);
     void         AddPersitentDebugMessage(const std::string& message);
 
-    void Reset();
-
+    void ClearTransient();
+    void SetMaxMessageCount(int count);
+    void ClearPersitent();
+    
 private:
     DebugWindow();
     static void Process(void* user_ptr, char const* log);

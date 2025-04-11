@@ -106,7 +106,7 @@ AppWindow::HandleOpenFile(std::string& file_path)
 void
 AppWindow::Render()
 {
-    DebugWindow::GetInstance()->Reset();
+    DebugWindow::GetInstance()->ClearTransient();
     m_data_provider.Update();
 
     if(m_home_screen && m_data_changed)

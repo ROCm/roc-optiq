@@ -24,6 +24,10 @@ class CircularBuffer {
 public:
     CircularBuffer(size_t capacity) : m_max_capacity(capacity) {}
 
+    void Clear() {
+        m_buffer.clear();
+    }
+    
     void Push(const T& item) {
         if (m_buffer.size() == m_max_capacity) {
             m_buffer.pop_front(); // Remove the oldest item
@@ -46,6 +50,16 @@ public:
     bool IsEmpty() const {
         return m_buffer.empty();
     }
+
+    // Resize the buffer
+    void Resize(size_t new_capacity) {
+        m_max_capacity = new_capacity;
+
+        // If the new capacity is smaller, remove the oldest items
+        while (m_buffer.size() > m_max_capacity) {
+            m_buffer.pop_front();
+        }
+    }    
 
     const std::deque<T> & GetContainer() {
         return m_buffer;

@@ -27,6 +27,7 @@ DebugWindow::DebugWindow()
     LayoutItem nav_bar(0, 30.0f);
     nav_bar.m_item = std::make_shared<RocCustomWidget>([this]() { this->RenderNav(); });
     nav_bar.m_window_padding = ImVec2(10, 2);
+    nav_bar.m_item_spacing = ImVec2(4,4);
     nav_bar.m_bg_color       = ImColor(228, 228, 228, 255);
 
     LayoutItem content(0, 0.0f);
@@ -100,6 +101,13 @@ DebugWindow::RenderNav()
         }
         m_main_container->SetAt(1, tmp);
     }
+    
+    ImGui::SameLine();
+
+    if(ImGui::Button("Clear Log"))
+    {
+        ClearPersitent();
+    }
 }
 
 void
@@ -112,6 +120,7 @@ DebugWindow::RenderPersitent()
         ImGui::Text(message.c_str());
     }
 }
+
 void
 DebugWindow::RenderTransient()
 {
@@ -152,9 +161,21 @@ DebugWindow::AddPersitentDebugMessage(const std::string& message)
 }
 
 void
-DebugWindow::Reset()
+DebugWindow::ClearTransient()
 {
     m_transient_debug_messages.clear();
+}
+
+void
+DebugWindow::SetMaxMessageCount(int count)
+{
+    m_persitent_debug_messages.Resize(count);
+}
+
+void
+DebugWindow::ClearPersitent()
+{
+    m_persitent_debug_messages.Clear();
 }
 
 void

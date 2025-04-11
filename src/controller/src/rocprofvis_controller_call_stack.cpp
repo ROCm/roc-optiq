@@ -34,6 +34,39 @@ rocprofvis_result_t CallStack::GetUInt64(rocprofvis_property_t property, uint64_
     {
         switch(property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                uint64_t sym_size = 0;
+                uint64_t args_size = 0;
+                uint64_t line_size = 0;
+                
+                *value = sizeof(CallStack);
+                result = kRocProfVisResultSuccess;
+
+                if (result == kRocProfVisResultSuccess)
+                {
+                    result = m_symbol.GetUInt64(&sym_size);
+                }
+                
+                if (result == kRocProfVisResultSuccess)
+                {
+                    result = m_args.GetUInt64(&args_size);
+                }
+                
+                if (result == kRocProfVisResultSuccess)
+                {
+                    result = m_line.GetUInt64(&line_size);
+                }
+
+                if (result == kRocProfVisResultSuccess)
+                {
+                    *value += sym_size;
+                    *value += args_size;
+                    *value += line_size;
+                }
+                break;
+            }
             case kRPVControllerCallstackFunction:
             case kRPVControllerCallstackArguments:
             case kRPVControllerCallstackFile:

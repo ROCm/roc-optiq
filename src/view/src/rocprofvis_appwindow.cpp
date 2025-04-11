@@ -41,6 +41,7 @@ AppWindow::DestroyInstance()
 AppWindow::AppWindow()
 : m_show_debug_widow(false)
 , m_show_provider_test_widow(false)
+, m_show_compute_view(false)
 {}
 
 AppWindow::~AppWindow() {}
@@ -61,6 +62,8 @@ AppWindow::Init()
     layout_items.push_back(status_bar_item);
     m_main_view = std::make_shared<VFixedContainer>(layout_items);
 
+    m_compute_root = std::make_shared<ComputeRoot>();
+
     return true;
 }
 
@@ -74,6 +77,11 @@ AppWindow::Update()
     if(m_home_screen)
     {
         m_home_screen->Update();
+    }
+
+    if (m_compute_root && m_show_compute_view)
+    {
+        m_compute_root->Update();
     }
 }
 
@@ -129,12 +137,16 @@ AppWindow::Render()
             }
             ImGui::EndMenu();
         }
-
+        ImGui::Checkbox("Compute Mode", &m_show_compute_view);
         ImGui::EndMenuBar();
     }
 
     // Show main view container
-    if(m_main_view)
+    if (m_compute_root && m_show_compute_view)
+    {
+        m_compute_root->Render();
+    }
+    else if (m_main_view)
     {
         m_main_view->Render();
     }

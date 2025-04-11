@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "rocprofvis_compute_root.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_home_screen.h"
@@ -37,6 +38,8 @@ private:
     bool         m_show_debug_widow;
     DataProvider m_data_provider;
     bool         m_show_provider_test_widow;
+    std::shared_ptr<ComputeRoot> m_compute_root;
+    bool                         m_show_compute_view;
 };
 
 }  // namespace View

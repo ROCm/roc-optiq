@@ -44,9 +44,14 @@ MainView::MainView()
 , m_can_drag_to_pan(false)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
+, m_grid(new RocProfVis::View::Grid())
 {}
 
-MainView::~MainView() { DestroyGraphs(); }
+MainView::~MainView()
+{
+    DestroyGraphs();
+    delete m_grid;
+}
 
 void
 MainView::ResetView()
@@ -98,15 +103,31 @@ MainView::RenderScrubber(ImVec2 screen_pos)
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
 
     ImGui::BeginChild("Scrubber View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImDrawList* draw_list      = ImGui::GetWindowDrawList();
+    float       window_size    = ImGui::GetContentRegionAvail().x;
+    float       mouse_relative = window_size - ImGui::GetMousePos().x;
 
+    ImVec2 window_position = ImGui::GetWindowPos();
+    ImVec2 mouse_position  = ImGui::GetMousePos();
+
+    ImVec2 relativeMousePos = ImVec2(mouse_position.x - window_position.x,
+                                     mouse_position.y - window_position.y);
     if(ImGui::IsMouseHoveringRect(
            ImVec2(0, 0), ImVec2(display_size.x + 400,
                                 display_size.y)))  // 400 to account for sidebar size
     {
-        ImVec2 mPos = ImGui::GetMousePos();
-        draw_list->AddLine(ImVec2(mPos.x, screen_pos.y),
-                           ImVec2(mPos.x, screen_pos.y + display_size.y),
+        ImVec2 mouse_position = ImGui::GetMousePos();
+
+        char text[20];
+        sprintf(text, "%.0f", m_grid->GetCursorPosition());
+        ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18);
+
+        ImVec2 rect_pos =
+            ImVec2(mouse_position.x + 50, screen_pos.y + display_size.y - 5);
+        draw_list->AddRectFilled(text_pos, rect_pos, IM_COL32(0, 0, 0, 255));
+        draw_list->AddText(text_pos, IM_COL32(255, 255, 255, 255), text);
+        draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
+                           ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18),
                            IM_COL32(0, 0, 0, 255), 2.0f);
     }
 
@@ -136,11 +157,10 @@ MainView::RenderGrid()
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(220, 0, 0, 0));
 
-    ImDrawList*            draw_list = ImGui::GetWindowDrawList();
-    RocProfVis::View::Grid main_grid = RocProfVis::View::Grid();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    main_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
-                         m_v_max_x, m_v_min_x);
+    m_grid->RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
+                       m_v_max_x, m_v_min_x);
 
     ImGui::PopStyleColor();
 }
@@ -410,6 +430,7 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
             }
         }
     }
+
     m_meta_map_made = true;
 }
 
@@ -428,11 +449,13 @@ MainView::RenderGraphPoints()
             "Grid View 2", ImVec2(subcomponent_size_main.x, subcomponent_size_main.y),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
+        ImVec2 graph_view_size = ImGui::GetContentRegionAvail();
+
         // Scale used in all graphs computer here.
         m_v_width = (m_max_x - m_min_x) / m_zoom;
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
-        m_scale_x = subcomponent_size_main.x / (m_v_max_x - m_v_min_x);
+        m_scale_x = graph_view_size.x / (m_v_max_x - m_v_min_x);
 
         if(m_capture_og_v_max_x)
         {
@@ -517,6 +540,7 @@ MainView::HandleTopSurfaceTouch()
             float view_width = (m_max_x - m_min_x) / m_zoom;
             if((10000 * ((m_min_x / m_v_min_x) - 1)) > 1.6 * (1 / (m_scale_x * 1000)))
             {
+                // Left side
                 if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
                 {
                     m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
@@ -525,7 +549,7 @@ MainView::HandleTopSurfaceTouch()
             else if((100000 * ((m_original_v_max_x / m_v_max_x) - 1)) <
                     1.6 * (1 / (m_scale_x * 1000)))
             {
-                ////THIS ONE IS STILL PROBLEMATIC.
+                // Right side
                 if((drag / ImGui::GetContentRegionAvail().x) * view_width > 0)
                 {
                     m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;

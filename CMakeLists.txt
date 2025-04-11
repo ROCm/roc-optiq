@@ -11,7 +11,6 @@ option(JSON_SUPPORT "Build with support for JSON traces" ON)
 add_subdirectory(src/controller)
 
 set(rocprofvis_source_files)
-
 if(JSON_SUPPORT) 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_SUPPORT")
 endif(JSON_SUPPORT)

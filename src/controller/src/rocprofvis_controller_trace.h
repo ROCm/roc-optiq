@@ -17,6 +17,7 @@ class Future;
 class Track;
 class Graph;
 class Timeline;
+class Event;
 
 class Trace : public Handle
 {
@@ -32,6 +33,9 @@ public:
 
     rocprofvis_result_t AsyncFetch(Graph& graph, Future& future, Array& array,
                                    double start, double end, uint32_t pixels);
+
+    rocprofvis_result_t AsyncFetch(Event& event, Future& future, Array& array,
+                                   rocprofvis_property_t property);
 
     rocprofvis_controller_object_type_t GetType(void) final;
 

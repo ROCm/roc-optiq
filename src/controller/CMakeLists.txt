@@ -20,6 +20,9 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_trace.cpp
     src/rocprofvis_controller_track.cpp
     src/rocprofvis_controller.cpp
+    src/rocprofvis_controller_flow_control.cpp
+    src/rocprofvis_controller_call_stack.cpp
+    src/rocprofvis_controller_ext_data.cpp
 )
 
 if(JSON_SUPPORT) 

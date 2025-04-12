@@ -32,6 +32,17 @@ typedef enum rocprofvis_result_t
 } rocprofvis_result_t;
 
 /*
+* Common object properties
+*/
+typedef enum rocprofvis_common_property_t
+{
+    // Total memory usage for the object - including any owned sub-objects
+    kRPVControllerCommonMemoryUsageInclusive = 0xFFFF0000,
+    // Memory usage strictly for the object alone - excluding any owned sub-objects
+    kRPVControllerCommonMemoryUsageExclusive = 0xFFFF0001,
+} rocprofvis_common_property_t;
+
+/*
 * Object types
 */
 typedef enum rocprofvis_controller_object_type_t

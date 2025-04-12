@@ -92,6 +92,33 @@ rocprofvis_result_t Timeline::GetUInt64(rocprofvis_property_t property, uint64_t
     {
         switch(property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            {
+                *value = sizeof(Timeline);
+                *value += m_graphs.size() * sizeof(Graph*);
+                result = kRocProfVisResultSuccess;
+                for (auto& graph : m_graphs)
+                {
+                    uint64_t entry_size = 0;
+                    result = graph->GetUInt64(property, 0, &entry_size);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        *value += entry_size;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                break;
+            }
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Timeline);
+                *value += m_graphs.size() * sizeof(Graph*);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerTimelineId:
             {
                 *value = m_id;

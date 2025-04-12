@@ -56,6 +56,8 @@ public:
 
     rocprofvis_result_t SetDouble(double value);
 
+    rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
+
 private:
     rocprofvis_controller_primitive_type_t m_type;
     union

@@ -34,6 +34,39 @@ rocprofvis_result_t ExtData::GetUInt64(rocprofvis_property_t property, uint64_t 
     {
         switch(property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                uint64_t cat_size = 0;
+                uint64_t name_size = 0;
+                uint64_t value_size = 0;
+                
+                *value = sizeof(ExtData);
+                result = kRocProfVisResultSuccess;
+
+                if (result == kRocProfVisResultSuccess)
+                {
+                    result = m_category.GetUInt64(&cat_size);
+                }
+                
+                if (result == kRocProfVisResultSuccess)
+                {
+                    result = m_name.GetUInt64(&name_size);
+                }
+                
+                if (result == kRocProfVisResultSuccess)
+                {
+                    result = m_value.GetUInt64(&value_size);
+                }
+
+                if (result == kRocProfVisResultSuccess)
+                {
+                    *value += cat_size;
+                    *value += name_size;
+                    *value += value_size;
+                }
+                break;
+            }
             case kRPVControllerExtDataCategory:
             case kRPVControllerExtDataName:
             case kRPVControllerExtDataValue:

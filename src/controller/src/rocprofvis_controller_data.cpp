@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_data.h"
+#include "rocprofvis_controller_handle.h"
 #include "rocprofvis_core_assert.h"
 
 #include <cstdlib>
@@ -338,6 +339,43 @@ rocprofvis_result_t Data::SetString(char const* string)
         {
             result = kRocProfVisResultInvalidEnum;
             break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Data::GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            {
+                *value = 0;
+                result = kRocProfVisResultSuccess;
+                if(m_type == kRPVControllerPrimitiveTypeObject)
+                {
+                    result = ((Handle*)m_object)->GetUInt64((rocprofvis_property_t)property, 0, value);
+                }
+                if(result == kRocProfVisResultSuccess)
+                {
+                    *value += sizeof(Data);
+                }
+                break;
+            }
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Data);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
         }
     }
     return result;

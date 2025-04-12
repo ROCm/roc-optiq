@@ -66,6 +66,13 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
     {
         switch (property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Future);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerFutureResult:
             {
                 if(m_future.valid())

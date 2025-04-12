@@ -35,6 +35,13 @@ rocprofvis_result_t FlowControl::GetUInt64(rocprofvis_property_t property, uint6
     {
         switch(property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(FlowControl);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerFlowControltId:
             {
                 *value = m_id;

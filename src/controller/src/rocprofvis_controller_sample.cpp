@@ -35,6 +35,13 @@ rocprofvis_result_t Sample::GetUInt64(rocprofvis_property_t property, uint64_t i
     {
         switch(property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Sample);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerSampleId:
             {
                 *value = m_id;

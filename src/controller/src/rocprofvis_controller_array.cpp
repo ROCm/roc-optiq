@@ -28,6 +28,26 @@ rocprofvis_result_t Array::GetUInt64(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Array);
+                result = kRocProfVisResultSuccess;
+                for(auto& it : m_array)
+                {
+                    uint64_t entry_size = 0;
+                    result = it.GetMemoryUsage(&entry_size, (rocprofvis_common_property_t)property);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        *value += entry_size;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                break;
+            }
             case kRPVControllerArrayEntryIndexed:
             {
                 if(index < m_array.size())

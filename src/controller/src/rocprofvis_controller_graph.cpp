@@ -55,6 +55,13 @@ rocprofvis_result_t Graph::GetUInt64(rocprofvis_property_t property, uint64_t in
     {
         switch (property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Graph);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerGraphId:
             {
                 *value = m_id;

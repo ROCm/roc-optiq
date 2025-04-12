@@ -74,6 +74,8 @@ public:
 
     rocprofvis_result_t Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index);
 
+    rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
+
 private:
     std::map<uint32_t, std::unique_ptr<LOD>> m_lods;
     double m_start_timestamp;

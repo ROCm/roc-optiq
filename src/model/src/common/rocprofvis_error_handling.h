@@ -20,20 +20,13 @@
 
 #pragma once
 
-#include <cassert>
+#include "rocprofvis_core_assert.h"
 #include <string>
-#include <mutex>
-#include <chrono>
 
 namespace RocProfVis
 {
 namespace DataModel
 {
-
-// static methods set/get last error message
-const char * GetLastStatusMessage();
-void SetStatusMessage(const char*);
-void AddStatusMessage(const char*);
 
 // printf text colors
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -44,25 +37,6 @@ void AddStatusMessage(const char*);
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 #define ANSI_COLOR_GREY    "\x1b[90m"
-
-// compile with -DTEST for profiling interface methods performace
-#ifdef TEST
-
-class TimeRecorder {
-public:
-    TimeRecorder(const char* function);
-    TimeRecorder(const char* function, void* handle, uint32_t property, uint64_t index);
-    ~TimeRecorder();
-private:
-    std::chrono::time_point<std::chrono::steady_clock> m_start_time;
-    std::string m_function;
-};
-#define PROFILE RocProfVis::DataModel::TimeRecorder time_recorder(__FUNCTION__)
-#define PROFILE_PROP_ACCESS RocProfVis::DataModel::TimeRecorder time_recorder(__FUNCTION__, handle, property, index)
-#else
-#define PROFILE
-#define PROFILE_PROP_ACCESS
-#endif
 
 // Error strings
 extern const char* ERROR_INDEX_OUT_OF_RANGE;
@@ -88,21 +62,6 @@ extern const char* ERROR_TABLE_ROW_CANNOT_BE_NULL;
 extern const char* ERROR_EXT_DATA_CANNOT_BE_NULL;
 extern const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL;
 extern const char* ERROR_REFERENCE_POINTER_CANNOT_BE_NULL;
-
-#define LOG(msg) RocProfVis::DataModel::SetStatusMessage(msg)
-#define ADD_LOG(msg) RocProfVis::DataModel::AddStatusMessage(msg)
-
-#define ASSERT(cond) assert(cond); (!(cond)) RocProfVis::DataModel::SetStatusMessage(#cond)
-
-#define ASSERT_MSG(cond, msg) assert(cond && msg); if (!(cond)) RocProfVis::DataModel::SetStatusMessage(msg)
-
-#define ASSERT_RETURN(cond, retval) assert(cond); if (!(cond)) { RocProfVis::DataModel::SetStatusMessage(cond); return retval;}
-    
-#define ASSERT_MSG_RETURN(cond, msg, retval) assert(cond && msg); if (!(cond)) { RocProfVis::DataModel::SetStatusMessage(msg); return retval; }
-
-#define ASSERT_MSG_BREAK(cond, msg) assert(cond && msg); if (!(cond)) break
-
-#define ASSERT_ALWAYS_MSG_RETURN(msg, retval) assert(false && msg); RocProfVis::DataModel::SetStatusMessage(msg); return retval
 
 }  // namespace DataModel
 }  // namespace RocProfVis

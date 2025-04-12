@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_core_assert.h"
 #include <fstream>
 #include <future>
 #include <iostream>
@@ -189,7 +190,7 @@ rocprofvis_trace_draw()
                 if(trace_future)
                 {
                     result = rocprofvis_controller_load_async(trace_controller, file_path.c_str(), trace_future);
-                    assert(result == kRocProfVisResultSuccess);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
                     if(result != kRocProfVisResultSuccess)
                     {
@@ -215,14 +216,14 @@ rocprofvis_trace_draw()
         {
             rocprofvis_result_t result =
                 rocprofvis_controller_future_wait(trace_future, 0);
-            assert(result == kRocProfVisResultSuccess ||
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
                    result == kRocProfVisResultTimeout);
             if(result == kRocProfVisResultSuccess)
             {
                 uint64_t uint64_result = 0;
                 result                 = rocprofvis_controller_get_uint64(
                     trace_future, kRPVControllerFutureResult, 0, &uint64_result);
-                assert(result == kRocProfVisResultSuccess &&
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
                        uint64_result == kRocProfVisResultSuccess);
 
                 result = rocprofvis_controller_get_object(
@@ -272,12 +273,12 @@ rocprofvis_trace_draw()
                                     result = rocprofvis_controller_set_object(
                                         graph_data_array, kRPVControllerArrayEntryIndexed,
                                         i, graph_array);
-                                    assert(result == kRocProfVisResultSuccess);
+                                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
                                     result = rocprofvis_controller_set_object(
                                         graph_futures, kRPVControllerArrayEntryIndexed, i,
                                         graph_future);
-                                    assert(result == kRocProfVisResultSuccess);
+                                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                                 }
                             }
                         }
@@ -293,18 +294,18 @@ rocprofvis_trace_draw()
             uint64_t            num_tracks = 0;
             rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
                 graph_futures, kRPVControllerArrayNumEntries, 0, &num_tracks);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             for(uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
             {
                 rocprofvis_handle_t* future = nullptr;
                 result                      = rocprofvis_controller_get_object(
                     graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
-                assert(result == kRocProfVisResultSuccess && future);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && future);
 
                 rocprofvis_result_t result = rocprofvis_controller_future_wait(
                     (rocprofvis_controller_future_t*) future, 0);
-                assert(result == kRocProfVisResultSuccess ||
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
                        result == kRocProfVisResultTimeout);
 
                 if(result != kRocProfVisResultSuccess)
@@ -321,7 +322,7 @@ rocprofvis_trace_draw()
                     rocprofvis_handle_t* future = nullptr;
                     result                      = rocprofvis_controller_get_object(
                         graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
-                    assert(result == kRocProfVisResultSuccess && future);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && future);
 
                     rocprofvis_controller_future_free(
                         (rocprofvis_controller_future_t*) future);
@@ -332,7 +333,7 @@ rocprofvis_trace_draw()
                         result                     = rocprofvis_controller_get_object(
                             graph_data_array, kRPVControllerArrayEntryIndexed, i,
                             &future);
-                        assert(result == kRocProfVisResultSuccess && array);
+                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && array);
 
                         rocprofvis_controller_array_free(
                             (rocprofvis_controller_array_t*) array);

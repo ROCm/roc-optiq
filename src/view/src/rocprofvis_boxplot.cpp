@@ -3,6 +3,7 @@
 #include "rocprofvis_boxplot.h"
 #include "imgui.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_core_assert.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -79,7 +80,7 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     rocprofvis_trace_counter_t counter;
 
@@ -88,17 +89,17 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
         rocprofvis_controller_sample_t* sample = nullptr;
         result                                 = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &sample);
-        assert(result == kRocProfVisResultSuccess && sample);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
 
         double start_ts = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
                                                   0, &start_ts);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         double value = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
                                                   &value);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         counter.m_start_ts = start_ts;
         counter.m_value    = value;

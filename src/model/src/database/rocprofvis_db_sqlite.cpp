@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include "rocprofvis_db_sqlite.h"
+#include "rocprofvis_core_profile.h"
 #include <sstream>
 
 namespace RocProfVis
@@ -27,17 +28,17 @@ namespace DataModel
 {
 
 int SqliteDatabase::CallbackGetValue(void* data, int argc, char** argv, char** azColName){
-    ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     std::string * string_ptr = (rocprofvis_dm_string_t*)callback_params->handle;
-    ASSERT_MSG_RETURN(string_ptr, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(string_ptr, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     *string_ptr = argv[0];
     return 0;
 } 
 
 int SqliteDatabase::CallbackRunQuery(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     SqliteDatabase* db = (SqliteDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
@@ -49,7 +50,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, char **argv, char **a
         }
     }
     rocprofvis_dm_table_row_t row = db->BindObject()->FuncAddTableRow(callback_params->handle);
-    ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
     for (int i=0; i < argc; i++)
     {
         if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, argv[i])) return 1;
@@ -73,7 +74,7 @@ int SqliteDatabase::DetectTable(sqlite3 *db, const char* table){
     int rc = sqlite3_exec(db, query.str().c_str(), CallbackTableExists, db, &zErrMsg);
     sqlite3_mutex_leave(sqlite3_db_mutex(db));
     if (rc != SQLITE_OK) {
-        LOG("Detect table error "); ADD_LOG(std::to_string(rc).c_str()); ADD_LOG(":"); ADD_LOG(zErrMsg);
+        spdlog::debug("Detect table error "); spdlog::debug(std::to_string(rc).c_str()); spdlog::debug(":"); spdlog::debug(zErrMsg);
         sqlite3_free(zErrMsg);
     }
     return rc;
@@ -83,8 +84,8 @@ int SqliteDatabase::DetectTable(sqlite3 *db, const char* table){
 rocprofvis_dm_result_t SqliteDatabase::Open()
 {
     if( (m_db_status = sqlite3_open(Path(), &m_db)) != SQLITE_OK) {
-        LOG("Can't open database:");
-        ADD_LOG(sqlite3_errmsg(m_db));
+        spdlog::debug("Can't open database:");
+        spdlog::debug(sqlite3_errmsg(m_db));
         return kRocProfVisDmResultDbAccessFailed;
     }
     return kRocProfVisDmResultSuccess;
@@ -96,8 +97,8 @@ rocprofvis_dm_result_t SqliteDatabase::Close()
     {
         if( sqlite3_close(m_db) != SQLITE_OK ) {
 
-            LOG("Can't close database:");
-            ADD_LOG(sqlite3_errmsg(m_db));
+            spdlog::debug("Can't close database:");
+            spdlog::debug(sqlite3_errmsg(m_db));
             return kRocProfVisDmResultDbAccessFailed;
         }
         return kRocProfVisDmResultSuccess;
@@ -185,8 +186,8 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(const char* query, rocpr
         int rc = sqlite3_exec(m_db, query, params->callback, params, &zErrMsg);
         sqlite3_mutex_leave(sqlite3_db_mutex(m_db));
         if( rc != SQLITE_OK ) {
-            LOG("Query: "); ADD_LOG(query);
-            LOG("SQL error "); ADD_LOG(std::to_string(rc).c_str()); ADD_LOG(":");ADD_LOG(zErrMsg);
+            spdlog::debug("Query: "); spdlog::debug(query);
+            spdlog::debug("SQL error "); spdlog::debug(std::to_string(rc).c_str()); spdlog::debug(":"); spdlog::debug(zErrMsg);
             sqlite3_free(zErrMsg);
             return kRocProfVisDmResultDbAccessFailed;
         } 

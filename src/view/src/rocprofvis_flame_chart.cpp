@@ -3,6 +3,7 @@
 #include "rocprofvis_flame_chart.h"
 #include "imgui.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_core_assert.h"
 #include <algorithm>
 #include <iostream>
 #include <limits>
@@ -103,7 +104,7 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     rocprofvis_trace_event_t counter;
 
@@ -112,30 +113,30 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
         rocprofvis_controller_event_t* event = nullptr;
         result                               = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &event);
-        assert(result == kRocProfVisResultSuccess && event);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
 
         double start_ts = 0;
         result          = rocprofvis_controller_get_double(
             event, kRPVControllerEventStartTimestamp, 0, &start_ts);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         double end_ts = 0;
         result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp,
                                                   0, &end_ts);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         uint32_t length = 0;
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   nullptr, &length);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         length += 1;
         counter.m_name.resize(length);
         char* buffer = const_cast<char*>(counter.m_name.c_str());
-        assert(buffer);
+        ROCPROFVIS_ASSERT(buffer);
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   buffer, &length);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         if(i == 0)
         {

@@ -9,8 +9,8 @@
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <cfloat>
 
 namespace RocProfVis
@@ -45,7 +45,7 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
             result                     = graph.Fetch(pixels, start, end, array, index);
-            assert(result == kRocProfVisResultSuccess || result == kRocProfVisResultOutOfRange);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess || result == kRocProfVisResultOutOfRange);
             return result;
         }));
 
@@ -53,7 +53,7 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
     {
         error = kRocProfVisResultSuccess;
     }
-    assert(error == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(error == kRocProfVisResultSuccess);
 
     return error;
 }

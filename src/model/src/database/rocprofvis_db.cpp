@@ -50,7 +50,7 @@ rocprofvis_dm_result_t Database::AddTrackProperties(
     }
     catch (std::exception ex)
     {
-        ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, kRocProfVisDmResultAllocFailure);
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, kRocProfVisDmResultAllocFailure);
     }
     return kRocProfVisDmResultSuccess;
 }
@@ -73,14 +73,14 @@ rocprofvis_dm_result_t Database::BindTrace(
 rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
     try {
         future->SetWorker(std::move(std::thread(Database::ReadTraceMetadataStatic, this, future)));
     }
     catch (std::exception ex)
     {
-        ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
 }
@@ -92,14 +92,14 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
                                                     rocprofvis_db_track_selection_t tracks,
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
     try {
         future->SetWorker(std::move(std::thread(Database::ReadTraceSliceStatic, this, start, end, num, tracks, future)));
     }
     catch (std::exception ex)
     {
-        ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
 }
@@ -109,14 +109,14 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
                                                     rocprofvis_dm_event_id_t event_id,
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
     try {
         future->SetWorker(std::move(std::thread(ReadEventPropertyStatic, this, type, event_id, future)));
     }
     catch (std::exception ex)
     {
-        ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
 }
@@ -126,14 +126,14 @@ rocprofvis_dm_result_t  Database::ExecuteQueryAsync(
                                                     rocprofvis_dm_charptr_t description,
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
     try {
         future->SetWorker(std::move(std::thread(ExecuteQueryStatic, this, query, description, future)));
     }
     catch (std::exception ex)
     {
-        ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
 }
@@ -168,7 +168,7 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyStatic(
         case kRPVDMEventExtData:
             return db->ReadExtEventInfo(event_id,object);           
     }  
-    ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
+    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
 }
 
 

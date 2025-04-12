@@ -44,13 +44,13 @@ rocprofvis_dm_result_t  ExtData::AddRecord( rocprofvis_db_ext_data_t & data){
 }
 
 rocprofvis_dm_result_t ExtData::GetRecordNameAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & name){
-    ASSERT_MSG_RETURN(index < m_extdata_records.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_extdata_records.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     name = m_extdata_records[index].Name();
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t ExtData::GetRecordDataAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t &data){
-    ASSERT_MSG_RETURN(index < m_extdata_records.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_extdata_records.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     if (m_id.value != 0) {
         data = m_extdata_records[index].Data();
         return kRocProfVisDmResultSuccess;
@@ -65,20 +65,20 @@ rocprofvis_dm_result_t ExtData::GetRecordDataAt(const rocprofvis_dm_property_ind
 }
 
 rocprofvis_dm_result_t ExtData::GetRecordCategoryAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t& category) {
-    ASSERT_MSG_RETURN(index < m_extdata_records.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_extdata_records.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     category = m_extdata_records[index].Category();
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t ExtData::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
-    ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
         case kRPVDMNumberOfExtDataRecordsUInt64:
             *value = GetNumberOfRecords();
             return kRocProfVisDmResultSuccess;
         default:
-            ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
 
 }
@@ -137,7 +137,7 @@ rocprofvis_dm_result_t ExtData::MakeJsonBlob(rocprofvis_dm_charptr_t & blob)
 }
 
  rocprofvis_dm_result_t ExtData::GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value){
-    ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
         case kRPVDMExtDataCategoryCharPtrIndexed:
@@ -149,7 +149,7 @@ rocprofvis_dm_result_t ExtData::MakeJsonBlob(rocprofvis_dm_charptr_t & blob)
         case kRPVDMExtDataJsonBlobCharPtr:
             return MakeJsonBlob(*(rocprofvis_dm_charptr_t*)value);
         default:
-            ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
 }
 

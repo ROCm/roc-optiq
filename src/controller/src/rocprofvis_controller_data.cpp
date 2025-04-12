@@ -2,10 +2,10 @@
 
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
+#include "rocprofvis_core_assert.h"
 
 #include <cstdlib>
 #include <cstring>
-#include <cassert>
 
 namespace RocProfVis
 {
@@ -161,7 +161,7 @@ Data::Data(char const* const string)
     {
         size_t length = strlen(string);
         m_string = (char*)calloc(length+1, 1);
-        assert(m_string);
+        ROCPROFVIS_ASSERT(m_string);
         if (m_string)
         {
             strcpy(m_string, string);

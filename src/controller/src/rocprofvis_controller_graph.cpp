@@ -3,7 +3,7 @@
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_reference.h"
-#include <cassert>
+#include "rocprofvis_core_assert.h"
 
 namespace RocProfVis
 {
@@ -39,7 +39,7 @@ rocprofvis_result_t Graph::Fetch(uint32_t pixels, double start, double end, Arra
         }
         result = m_track->Fetch(lod, start, end, array, index);
     }
-    assert(result == kRocProfVisResultSuccess || result == kRocProfVisResultOutOfRange);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess || result == kRocProfVisResultOutOfRange);
     return result;
 }
 

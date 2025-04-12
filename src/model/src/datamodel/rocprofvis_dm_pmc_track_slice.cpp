@@ -57,13 +57,13 @@ rocprofvis_dm_result_t PmcTrackSlice::ConvertTimestampToIndex(const rocprofvis_d
 }
 
 rocprofvis_dm_result_t PmcTrackSlice::GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp){
-    ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     timestamp = m_samples[index].get()->Timestamp();
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t PmcTrackSlice::GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value){
-    ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     value = m_samples[index].get()->Value();
     return kRocProfVisDmResultSuccess;
 }

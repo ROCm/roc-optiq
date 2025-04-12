@@ -15,8 +15,8 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_json_trace.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <cstring>
 
 namespace RocProfVis
@@ -118,7 +118,7 @@ rocprofvis_controller_array_t* rocprofvis_controller_array_alloc(uint32_t initia
 {
     RocProfVis::Controller::Array* array = new RocProfVis::Controller::Array();
     rocprofvis_result_t result = array->SetUInt64(kRPVControllerArrayNumEntries, 0, initial_size);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     return (rocprofvis_controller_array_t*)array;
 }
 rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_future_t* object, float timeout)

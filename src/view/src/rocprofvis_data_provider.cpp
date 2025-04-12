@@ -91,6 +91,22 @@ DataProvider::GetEndTime()
     return m_max_ts;
 }
 
+uint64_t
+DataProvider::GetTrackCount()
+{
+    return m_num_graphs;
+}
+
+const std::string&
+DataProvider::GetTraceFilePath()
+{
+    return m_trace_file_path;
+}
+
+ProviderState DataProvider::GetState() {
+    return m_state;
+}
+
 bool
 DataProvider::FetchTrace(const std::string& file_path)
 {

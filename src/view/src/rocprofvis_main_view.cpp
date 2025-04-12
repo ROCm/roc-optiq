@@ -19,8 +19,9 @@ namespace RocProfVis
 namespace View
 {
 
-MainView::MainView()
-: m_min_value(0.0f)
+MainView::MainView(DataProvider& dp)
+: m_data_provider(dp)
+, m_min_value(0.0f)
 , m_max_value(0.0f)
 , m_zoom(1.0f)
 , m_movement(0.0f)
@@ -73,9 +74,26 @@ MainView::ResetView()
     m_capture_og_v_max_x = true;
 }
 
+void MainView::Update() {
+    if(m_meta_map_made)
+    {
+        uint64_t num_graphs = m_data_provider.GetTrackCount();
+
+        int graph_id = 0;
+        int scale_x  = 1;
+        for(uint64_t i = 0; i < num_graphs; i++)
+        {
+            const RawTrackData *rtd = m_data_provider.GetRawTrackData(i);
+            
+        }
+    }
+}
+
 void
 MainView::Render()
 {
+    Update();
+
     if(m_meta_map_made)
     {
         RenderGraphPoints();
@@ -305,6 +323,102 @@ MainView::DestroyGraphs()
 }
 
 void
+MainView::MakeGraphView()
+{
+    // Destroy any existing data
+    DestroyGraphs();
+    ResetView();
+
+    /*This section makes the charts both line and flamechart are constructed here*/
+    uint64_t num_graphs = m_data_provider.GetTrackCount();
+    int scale_x  = 1;
+    for(uint64_t i = 0; i < num_graphs; i++)
+    {
+        const track_info_t* track_info = m_data_provider.GetTrackInfo(i);
+        if(!track_info)
+        {
+            // log error
+            continue;
+        }
+
+        switch(track_info->track_type)
+        {
+            case kRPVControllerTrackTypeEvents:
+            {
+                // Create FlameChart
+                RocProfVis::View::FlameChart* flame = new RocProfVis::View::FlameChart(
+                    track_info->index, track_info->name, m_zoom, m_movement, m_min_x,
+                    m_max_x, scale_x);
+
+                std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
+                    static_cast<float>(track_info->min_ts - track_info->min_ts),
+                    static_cast<float>(track_info->max_ts - track_info->min_ts));
+
+                if(std::get<0>(temp_min_max_flame) < m_min_x)
+                {
+                    m_min_x = std::get<0>(temp_min_max_flame);
+                }
+                if(std::get<1>(temp_min_max_flame) > m_max_x)
+                {
+                    m_max_x = std::get<1>(temp_min_max_flame);
+                }
+
+                rocprofvis_graph_map_t temp_flame;
+                temp_flame.chart          = flame;
+                temp_flame.graph_type     = rocprofvis_graph_map_t::TYPE_FLAMECHART;
+                temp_flame.display        = true;
+                temp_flame.selected       = ImVec4(0, 0, 0, 0);
+                temp_flame.color_by_value = false;
+                rocprofvis_color_by_value_t temp_color = {};
+                temp_flame.color_by_value_digits       = temp_color;
+                m_graph_map[track_info->index]         = temp_flame;
+
+                break;
+            }
+            case kRPVControllerTrackTypeSamples:
+            {
+                // Linechart
+                RocProfVis::View::LineChart* line = new RocProfVis::View::LineChart(
+                    track_info->index, track_info->name, m_zoom, m_movement, m_min_x,
+                    m_max_x, m_scale_x);
+
+                std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
+                    static_cast<float>(track_info->min_ts - track_info->min_ts),
+                    static_cast<float>(track_info->max_ts - track_info->min_ts));
+
+                if(std::get<0>(temp_min_max_flame) < m_min_x)
+                {
+                    m_min_x = std::get<0>(temp_min_max_flame);
+                }
+                if(std::get<1>(temp_min_max_flame) > m_max_x)
+                {
+                    m_max_x = std::get<1>(temp_min_max_flame);
+                }
+
+                rocprofvis_graph_map_t temp;
+                temp.chart          = line;
+                temp.graph_type     = rocprofvis_graph_map_t::TYPE_LINECHART;
+                temp.display        = true;
+                temp.selected       = ImVec4(0, 0, 0, 0);
+                temp.color_by_value = false;
+                rocprofvis_color_by_value_t temp_color_line = {};
+                temp.color_by_value_digits                  = temp_color_line;
+                m_graph_map[track_info->index]              = temp;
+
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+    }
+
+    m_meta_map_made = true;
+}
+
+/*
+void
 MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
                         rocprofvis_controller_array_t* array, float scale_x)
 {
@@ -312,7 +426,7 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
     DestroyGraphs();
     ResetView();
 
-    /*This section makes the charts both line and flamechart are constructed here*/
+    // This section makes the charts both line and flamechart are constructed here
     uint64_t            num_graphs = 0;
     rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
         timeline, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
@@ -433,6 +547,7 @@ MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
 
     m_meta_map_made = true;
 }
+*/
 
 void
 MainView::RenderGraphPoints()

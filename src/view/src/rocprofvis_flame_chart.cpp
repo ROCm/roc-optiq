@@ -61,7 +61,7 @@ void
 FlameChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {}
 
-std::string&
+const std::string&
 FlameChart::GetName()
 {
     return m_name;
@@ -82,6 +82,18 @@ int
 FlameChart::ReturnChartID()
 {
     return m_chart_id;
+}
+
+void FlameChart::SetRawData(RawTrackData* raw_data) {
+    if (raw_data == m_raw_data) {
+        return;
+    } else {
+        m_raw_data = raw_data;
+        RawTrackEventData* sample_track = dynamic_cast<RawTrackEventData*>(raw_data);
+        if (sample_track) {
+            //ExtractPointsFromData(sample_track);
+        }
+    }
 }
 
 void

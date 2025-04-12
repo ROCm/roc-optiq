@@ -4,6 +4,8 @@
 #include "imgui.h"
 #include "rocprofvis_charts.h"
 #include "rocprofvis_controller_types.h"
+#include "rocprofvis_raw_track_data.h"
+#include "rocprofvis_view_structs.h"
 
 #include <string>
 #include <vector>
@@ -29,8 +31,10 @@ public:
     float        GetTrackHeight() override;
     int          ReturnChartID() override;
     void         SetID(int id) override;
-    std::string& GetName() override;
+    const std::string& GetName() override;
     void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
+
+    virtual void SetRawData(RawTrackData* raw_data);
 
 private:
     std::vector<rocprofvis_trace_event_t> flames;
@@ -46,6 +50,8 @@ private:
     float                                 m_track_height;
     float                                 m_sidebar_size;
     rocprofvis_color_by_value_t           m_is_color_value_existant;
+    RawTrackData*                  m_raw_data;
+
 };
 
 }  // namespace View

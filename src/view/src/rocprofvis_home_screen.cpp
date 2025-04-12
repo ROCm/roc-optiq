@@ -9,9 +9,36 @@ using namespace RocProfVis::View;
 HomeScreen::HomeScreen()
 : m_main_view(nullptr)
 , m_sidebar(nullptr)
+, m_container(nullptr)
+, m_view_created(false)
+{}
+
+HomeScreen::~HomeScreen() {}
+
+void
+HomeScreen::Update()
 {
-    m_sidebar   = std::make_shared<SideBar>();
-    m_main_view = std::make_shared<RocProfVis::View::MainView>();
+    m_data_provider.Update();
+    if(!m_view_created && m_data_provider.GetState() == ProviderState::kReady)
+    {
+        CreateView();
+        if(m_main_view)
+        {
+            m_main_view->MakeGraphView();
+            if(m_sidebar)
+            {
+                m_sidebar->SetGraphMap(m_main_view->GetGraphMap());
+            }
+        }
+        m_view_created = true;
+    }
+}
+
+void
+HomeScreen::CreateView()
+{
+    m_sidebar   = std::make_shared<SideBar>(m_data_provider);
+    m_main_view = std::make_shared<MainView>(m_data_provider);
 
     LayoutItem left;
     left.m_item     = m_sidebar;
@@ -26,7 +53,7 @@ HomeScreen::HomeScreen()
     bottom.m_bg_color = IM_COL32(255, 255, 255, 255);
 
     LayoutItem traceArea;
-    auto split_container = std::make_shared<VSplitContainer>(top, bottom);
+    auto       split_container = std::make_shared<VSplitContainer>(top, bottom);
     split_container->SetSplit(0.75);
     traceArea.m_item = split_container;
     // traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
@@ -36,8 +63,22 @@ HomeScreen::HomeScreen()
     m_container->SetMinRightWidth(400);
 }
 
-HomeScreen::~HomeScreen() {}
+void
+HomeScreen::DestroyView()
+{
+    m_main_view    = nullptr;
+    m_sidebar      = nullptr;
+    m_container    = nullptr;
+    m_view_created = false;
+}
 
+bool
+HomeScreen::OpenFile(const std::string& file_path)
+{
+    return m_data_provider.FetchTrace(file_path);
+}
+
+/*
 void
 HomeScreen::SetData(rocprofvis_controller_timeline_t* trace_timeline,
                     rocprofvis_controller_array_t*    graph_data_array)
@@ -51,6 +92,7 @@ HomeScreen::SetData(rocprofvis_controller_timeline_t* trace_timeline,
         }
     }
 }
+*/
 
 void
 HomeScreen::Render()
@@ -60,4 +102,19 @@ HomeScreen::Render()
         m_container->Render();
         return;
     }
+
+    // if(!m_is_trace_loaded)
+    // {
+    //     if(ImGui::BeginPopupModal("Loading"))
+    //     {
+    //         ImGui::Text("Please wait...");
+    //         ImGui::EndPopup();
+    //     }
+
+    //     if(m_is_loading_trace)
+    //     {
+    //         ImGui::SetNextWindowSize(ImVec2(300, 200));
+    //         ImGui::OpenPopup("Loading");
+    //     }
+    // }
 }

@@ -54,16 +54,16 @@ AppWindow::Init()
 {
     ImPlot::CreateContext();
 
-    LayoutItem statusBarItem(-1, 30.0f);
-    statusBarItem.m_item = std::make_shared<RocWidget>();
-    LayoutItem mainAreaItem(-1, -30.0f);
+    LayoutItem status_bar_item(-1, 30.0f);
+    status_bar_item.m_item = std::make_shared<RocWidget>();
+    LayoutItem main_area_item(-1, -30.0f);
     m_home_screen       = std::make_shared<HomeScreen>();
-    mainAreaItem.m_item = m_home_screen;
+    main_area_item.m_item = m_home_screen;
 
-    std::vector<LayoutItem> layoutItems;
-    layoutItems.push_back(mainAreaItem);
-    layoutItems.push_back(statusBarItem);
-    m_main_view = std::make_shared<VFixedContainer>(layoutItems);
+    std::vector<LayoutItem> layout_items;
+    layout_items.push_back(main_area_item);
+    layout_items.push_back(status_bar_item);
+    m_main_view = std::make_shared<VFixedContainer>(layout_items);
 
     return true;
 }
@@ -103,15 +103,22 @@ AppWindow::HandleOpenFile(std::string& file_path)
     }
 }
 
+void AppWindow::Update() {
+    DebugWindow::GetInstance()->ClearTransient();
+    m_data_provider.Update();
+    if(m_home_screen) {
+        m_home_screen->Update();
+    }
+}
+
 void
 AppWindow::Render()
 {
-    DebugWindow::GetInstance()->ClearTransient();
-    m_data_provider.Update();
+    Update();
 
     if(m_home_screen && m_data_changed)
     {
-        m_home_screen->SetData(m_trace_timeline, m_graph_data_array);
+        //m_home_screen->SetData(m_trace_timeline, m_graph_data_array);
         m_data_changed = false;
 
         rocprofvis_controller_array_free(m_graph_data_array);
@@ -170,7 +177,7 @@ AppWindow::Render()
         ImGui::EndMenuBar();
     }
 
-    if(m_is_trace_loaded)
+    //if(m_is_trace_loaded)
     {
         // Show home screen
         if(m_main_view)
@@ -190,9 +197,13 @@ AppWindow::Render()
         {
             std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
 
-            HandleOpenFile(file_path);
-            spdlog::info("Opening file: {}", file_path);
-            m_is_loading_trace = true;
+            //HandleOpenFile(file_path);
+            if(m_home_screen) {
+                m_home_screen->OpenFile(file_path);
+                spdlog::info("Opening file: {}", file_path);
+            }
+            
+            //m_is_loading_trace = true;
         }
 
         ImGuiFileDialog::Instance()->Close();
@@ -213,172 +224,172 @@ AppWindow::Render()
         ImGuiFileDialog::Instance()->Close();
     }
 
-    // load data
-    if(m_trace_future || m_graph_futures)
-    {
-        if(m_trace_future)
-        {
-            rocprofvis_result_t result =
-                rocprofvis_controller_future_wait(m_trace_future, 0);
-            assert(result == kRocProfVisResultSuccess ||
-                   result == kRocProfVisResultTimeout);
-            if(result == kRocProfVisResultSuccess)
-            {
-                uint64_t uint64_result = 0;
-                result                 = rocprofvis_controller_get_uint64(
-                    m_trace_future, kRPVControllerFutureResult, 0, &uint64_result);
-                assert(result == kRocProfVisResultSuccess &&
-                       uint64_result == kRocProfVisResultSuccess);
+    // // load data
+    // if(m_trace_future || m_graph_futures)
+    // {
+    //     if(m_trace_future)
+    //     {
+    //         rocprofvis_result_t result =
+    //             rocprofvis_controller_future_wait(m_trace_future, 0);
+    //         assert(result == kRocProfVisResultSuccess ||
+    //                result == kRocProfVisResultTimeout);
+    //         if(result == kRocProfVisResultSuccess)
+    //         {
+    //             uint64_t uint64_result = 0;
+    //             result                 = rocprofvis_controller_get_uint64(
+    //                 m_trace_future, kRPVControllerFutureResult, 0, &uint64_result);
+    //             assert(result == kRocProfVisResultSuccess &&
+    //                    uint64_result == kRocProfVisResultSuccess);
 
-                result = rocprofvis_controller_get_object(
-                    m_trace_controller, kRPVControllerTimeline, 0, &m_trace_timeline);
+    //             result = rocprofvis_controller_get_object(
+    //                 m_trace_controller, kRPVControllerTimeline, 0, &m_trace_timeline);
 
-                if(result == kRocProfVisResultSuccess && m_trace_timeline)
-                {
-                    uint64_t num_graphs = 0;
-                    result              = rocprofvis_controller_get_uint64(
-                        m_trace_timeline, kRPVControllerTimelineNumGraphs, 0,
-                        &num_graphs);
+    //             if(result == kRocProfVisResultSuccess && m_trace_timeline)
+    //             {
+    //                 uint64_t num_graphs = 0;
+    //                 result              = rocprofvis_controller_get_uint64(
+    //                     m_trace_timeline, kRPVControllerTimelineNumGraphs, 0,
+    //                     &num_graphs);
 
-                    double min_ts = 0;
-                    result        = rocprofvis_controller_get_double(
-                        m_trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &min_ts);
+    //                 double min_ts = 0;
+    //                 result        = rocprofvis_controller_get_double(
+    //                     m_trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &min_ts);
 
-                    double max_ts = 0;
-                    result        = rocprofvis_controller_get_double(
-                        m_trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
+    //                 double max_ts = 0;
+    //                 result        = rocprofvis_controller_get_double(
+    //                     m_trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
 
-                    m_graph_data_array = rocprofvis_controller_array_alloc(num_graphs);
-                    m_graph_futures    = rocprofvis_controller_array_alloc(num_graphs);
+    //                 m_graph_data_array = rocprofvis_controller_array_alloc(num_graphs);
+    //                 m_graph_futures    = rocprofvis_controller_array_alloc(num_graphs);
 
-                    for(uint32_t i = 0;
-                        i < num_graphs && result == kRocProfVisResultSuccess; i++)
-                    {
-                        rocprofvis_controller_future_t* graph_future =
-                            rocprofvis_controller_future_alloc();
-                        rocprofvis_controller_array_t* graph_array =
-                            rocprofvis_controller_array_alloc(32);
-                        rocprofvis_handle_t* graph = nullptr;
-                        result                     = rocprofvis_controller_get_object(
-                            m_trace_timeline, kRPVControllerTimelineGraphIndexed, i,
-                            &graph);
-                        if(result == kRocProfVisResultSuccess && graph && graph_future &&
-                           graph_array)
-                        {
-                            rocprofvis_handle_t* track = nullptr;
-                            result                     = rocprofvis_controller_get_object(
-                                graph, kRPVControllerGraphTrack, 0, &track);
-                            if(result == kRocProfVisResultSuccess)
-                            {
-                                result = rocprofvis_controller_graph_fetch_async(
-                                    m_trace_controller, graph, min_ts, max_ts, 1000,
-                                    graph_future, graph_array);
-                                if(result == kRocProfVisResultSuccess)
-                                {
-                                    result = rocprofvis_controller_set_object(
-                                        m_graph_data_array,
-                                        kRPVControllerArrayEntryIndexed, i, graph_array);
-                                    assert(result == kRocProfVisResultSuccess);
+    //                 for(uint32_t i = 0;
+    //                     i < num_graphs && result == kRocProfVisResultSuccess; i++)
+    //                 {
+    //                     rocprofvis_controller_future_t* graph_future =
+    //                         rocprofvis_controller_future_alloc();
+    //                     rocprofvis_controller_array_t* graph_array =
+    //                         rocprofvis_controller_array_alloc(32);
+    //                     rocprofvis_handle_t* graph = nullptr;
+    //                     result                     = rocprofvis_controller_get_object(
+    //                         m_trace_timeline, kRPVControllerTimelineGraphIndexed, i,
+    //                         &graph);
+    //                     if(result == kRocProfVisResultSuccess && graph && graph_future &&
+    //                        graph_array)
+    //                     {
+    //                         rocprofvis_handle_t* track = nullptr;
+    //                         result                     = rocprofvis_controller_get_object(
+    //                             graph, kRPVControllerGraphTrack, 0, &track);
+    //                         if(result == kRocProfVisResultSuccess)
+    //                         {
+    //                             result = rocprofvis_controller_graph_fetch_async(
+    //                                 m_trace_controller, graph, min_ts, max_ts, 1000,
+    //                                 graph_future, graph_array);
+    //                             if(result == kRocProfVisResultSuccess)
+    //                             {
+    //                                 result = rocprofvis_controller_set_object(
+    //                                     m_graph_data_array,
+    //                                     kRPVControllerArrayEntryIndexed, i, graph_array);
+    //                                 assert(result == kRocProfVisResultSuccess);
 
-                                    result = rocprofvis_controller_set_object(
-                                        m_graph_futures, kRPVControllerArrayEntryIndexed,
-                                        i, graph_future);
-                                    assert(result == kRocProfVisResultSuccess);
-                                }
-                            }
-                        }
-                    }
-                }
+    //                                 result = rocprofvis_controller_set_object(
+    //                                     m_graph_futures, kRPVControllerArrayEntryIndexed,
+    //                                     i, graph_future);
+    //                                 assert(result == kRocProfVisResultSuccess);
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+    //             }
 
-                rocprofvis_controller_future_free(m_trace_future);
-                m_trace_future = nullptr;
-            }
-        }
-        else if(m_graph_futures)
-        {
-            uint64_t            num_tracks = 0;
-            rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
-                m_graph_futures, kRPVControllerArrayNumEntries, 0, &num_tracks);
-            assert(result == kRocProfVisResultSuccess);
+    //             rocprofvis_controller_future_free(m_trace_future);
+    //             m_trace_future = nullptr;
+    //         }
+    //     }
+    //     else if(m_graph_futures)
+    //     {
+    //         uint64_t            num_tracks = 0;
+    //         rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
+    //             m_graph_futures, kRPVControllerArrayNumEntries, 0, &num_tracks);
+    //         assert(result == kRocProfVisResultSuccess);
 
-            for(uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
-            {
-                rocprofvis_handle_t* future = nullptr;
-                result                      = rocprofvis_controller_get_object(
-                    m_graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
-                assert(result == kRocProfVisResultSuccess && future);
+    //         for(uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess; i++)
+    //         {
+    //             rocprofvis_handle_t* future = nullptr;
+    //             result                      = rocprofvis_controller_get_object(
+    //                 m_graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
+    //             assert(result == kRocProfVisResultSuccess && future);
 
-                rocprofvis_result_t result = rocprofvis_controller_future_wait(
-                    (rocprofvis_controller_future_t*) future, 0);
-                assert(result == kRocProfVisResultSuccess ||
-                       result == kRocProfVisResultTimeout);
+    //             rocprofvis_result_t result = rocprofvis_controller_future_wait(
+    //                 (rocprofvis_controller_future_t*) future, 0);
+    //             assert(result == kRocProfVisResultSuccess ||
+    //                    result == kRocProfVisResultTimeout);
 
-                if(result != kRocProfVisResultSuccess)
-                {
-                    break;
-                }
-            }
+    //             if(result != kRocProfVisResultSuccess)
+    //             {
+    //                 break;
+    //             }
+    //         }
 
-            if(result != kRocProfVisResultTimeout)
-            {
-                for(uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess;
-                    i++)
-                {
-                    rocprofvis_handle_t* future = nullptr;
-                    result                      = rocprofvis_controller_get_object(
-                        m_graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
-                    assert(result == kRocProfVisResultSuccess && future);
+    //         if(result != kRocProfVisResultTimeout)
+    //         {
+    //             for(uint32_t i = 0; i < num_tracks && result == kRocProfVisResultSuccess;
+    //                 i++)
+    //             {
+    //                 rocprofvis_handle_t* future = nullptr;
+    //                 result                      = rocprofvis_controller_get_object(
+    //                     m_graph_futures, kRPVControllerArrayEntryIndexed, i, &future);
+    //                 assert(result == kRocProfVisResultSuccess && future);
 
-                    rocprofvis_controller_future_free(
-                        (rocprofvis_controller_future_t*) future);
+    //                 rocprofvis_controller_future_free(
+    //                     (rocprofvis_controller_future_t*) future);
 
-                    if(result != kRocProfVisResultSuccess)
-                    {
-                        rocprofvis_handle_t* array = nullptr;
-                        result                     = rocprofvis_controller_get_object(
-                            m_graph_data_array, kRPVControllerArrayEntryIndexed, i,
-                            &future);
-                        assert(result == kRocProfVisResultSuccess && array);
+    //                 if(result != kRocProfVisResultSuccess)
+    //                 {
+    //                     rocprofvis_handle_t* array = nullptr;
+    //                     result                     = rocprofvis_controller_get_object(
+    //                         m_graph_data_array, kRPVControllerArrayEntryIndexed, i,
+    //                         &future);
+    //                     assert(result == kRocProfVisResultSuccess && array);
 
-                        rocprofvis_controller_array_free(
-                            (rocprofvis_controller_array_t*) array);
-                    }
-                }
+    //                     rocprofvis_controller_array_free(
+    //                         (rocprofvis_controller_array_t*) array);
+    //                 }
+    //             }
 
-                rocprofvis_controller_array_free(m_graph_futures);
-                m_graph_futures = nullptr;
+    //             rocprofvis_controller_array_free(m_graph_futures);
+    //             m_graph_futures = nullptr;
 
-                if(result != kRocProfVisResultSuccess)
-                {
-                    rocprofvis_controller_array_free(m_graph_data_array);
-                    m_graph_data_array = nullptr;
-                }
-            }
+    //             if(result != kRocProfVisResultSuccess)
+    //             {
+    //                 rocprofvis_controller_array_free(m_graph_data_array);
+    //                 m_graph_data_array = nullptr;
+    //             }
+    //         }
 
-            if(result == kRocProfVisResultSuccess)
-            {
-                m_is_loading_trace = false;
-                m_is_trace_loaded  = true;
-                m_data_changed     = true;
-                ImGui::CloseCurrentPopup();
-            }
-        }
+    //         if(result == kRocProfVisResultSuccess)
+    //         {
+    //             m_is_loading_trace = false;
+    //             m_is_trace_loaded  = true;
+    //             m_data_changed     = true;
+    //             ImGui::CloseCurrentPopup();
+    //         }
+    //     }
 
-        if(!m_is_trace_loaded)
-        {
-            if(ImGui::BeginPopupModal("Loading"))
-            {
-                ImGui::Text("Please wait...");
-                ImGui::EndPopup();
-            }
+    //     if(!m_is_trace_loaded)
+    //     {
+    //         if(ImGui::BeginPopupModal("Loading"))
+    //         {
+    //             ImGui::Text("Please wait...");
+    //             ImGui::EndPopup();
+    //         }
 
-            if(m_is_loading_trace)
-            {
-                ImGui::SetNextWindowSize(ImVec2(300, 200));
-                ImGui::OpenPopup("Loading");
-            }
-        }
-    }
+    //         if(m_is_loading_trace)
+    //         {
+    //             ImGui::SetNextWindowSize(ImVec2(300, 200));
+    //             ImGui::OpenPopup("Loading");
+    //         }
+    //     }
+    // }
 
     RenderDebugOuput();
     if(m_show_provider_test_widow)

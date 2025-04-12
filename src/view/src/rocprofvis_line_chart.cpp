@@ -39,21 +39,24 @@ LineChart::GetTrackHeight()
     return m_track_height;  // Create an invisible button with a more area
 }
 
-std::string&
+const std::string&
 LineChart::GetName()
 {
     return m_name;
 }
+
 int
 LineChart::ReturnChartID()
 {
     return m_id;
 }
+
 void
 LineChart::SetID(int id)
 {
     m_id = id;
 }
+
 void
 LineChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {
@@ -61,8 +64,20 @@ LineChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
     m_is_color_value_existant = true;
 }
 
+void LineChart::SetRawData(RawTrackData* raw_data) {
+    if (raw_data == m_raw_data) {
+        return;
+    } else {
+        m_raw_data = raw_data;
+        RawTrackSampleData* sample_track = dynamic_cast<RawTrackSampleData*>(raw_data);
+        if (sample_track) {
+            ExtractPointsFromData(sample_track);
+        }
+    }
+}
+
 std::vector<rocprofvis_data_point_t>
-LineChart::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
+LineChart::ExtractPointsFromData(RawTrackSampleData* sample_track)
 {
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
@@ -77,36 +92,19 @@ LineChart::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     int    bin_count         = 0;
     double current_bin_start = DBL_MAX;
 
-    uint64_t            count  = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-        track_data, kRPVControllerArrayNumEntries, 0, &count);
-    assert(result == kRocProfVisResultSuccess);
+    const std::vector<rocprofvis_trace_counter_t> track_data    = sample_track->GetData();
+    uint64_t                                      count = track_data.size();
 
     rocprofvis_trace_counter_t counter;
 
     for(uint64_t i = 0; i < count; i++)
     {
-        rocprofvis_controller_sample_t* sample = nullptr;
-        result                                 = rocprofvis_controller_get_object(
-            track_data, kRPVControllerArrayEntryIndexed, i, &sample);
-        assert(result == kRocProfVisResultSuccess && sample);
-
-        double start_ts = 0;
-        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
-                                                  0, &start_ts);
-        assert(result == kRocProfVisResultSuccess);
-
-        double value = 0;
-        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
-                                                  &value);
-        assert(result == kRocProfVisResultSuccess);
-
-        counter.m_start_ts = start_ts;
-        counter.m_value    = value;
+        counter.m_start_ts = track_data[i].m_start_ts;
+        counter.m_value    = track_data[i].m_value;
 
         if(i == 0)
         {
-            current_bin_start = start_ts;
+            current_bin_start = counter.m_start_ts;
         }
 
         if(counter.m_start_ts < current_bin_start + bin_size)
@@ -142,6 +140,89 @@ LineChart::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     m_data = aggregated_points;
     return aggregated_points;
 }
+
+// std::vector<rocprofvis_data_point_t>
+// LineChart::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
+// {
+//     std::vector<rocprofvis_data_point_t> aggregated_points;
+
+//     ImVec2 display_size = ImGui::GetIO().DisplaySize;
+//     int    screen_width = static_cast<int>(display_size.x);
+
+//     float effectiveWidth = screen_width / m_zoom;
+//     float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
+
+//     double bin_sum_x         = 0.0;
+//     double bin_sum_y         = 0.0;
+//     int    bin_count         = 0;
+//     double current_bin_start = DBL_MAX;
+
+//     uint64_t            count  = 0;
+//     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+//         track_data, kRPVControllerArrayNumEntries, 0, &count);
+//     assert(result == kRocProfVisResultSuccess);
+
+//     rocprofvis_trace_counter_t counter;
+
+//     for(uint64_t i = 0; i < count; i++)
+//     {
+//         rocprofvis_controller_sample_t* sample = nullptr;
+//         result                                 = rocprofvis_controller_get_object(
+//             track_data, kRPVControllerArrayEntryIndexed, i, &sample);
+//         assert(result == kRocProfVisResultSuccess && sample);
+
+//         double start_ts = 0;
+//         result = rocprofvis_controller_get_double(sample,
+//         kRPVControllerSampleTimestamp,
+//                                                   0, &start_ts);
+//         assert(result == kRocProfVisResultSuccess);
+
+//         double value = 0;
+//         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
+//                                                   &value);
+//         assert(result == kRocProfVisResultSuccess);
+
+//         counter.m_start_ts = start_ts;
+//         counter.m_value    = value;
+
+//         if(i == 0)
+//         {
+//             current_bin_start = start_ts;
+//         }
+
+//         if(counter.m_start_ts < current_bin_start + bin_size)
+//         {
+//             bin_sum_x += counter.m_start_ts;
+//             bin_sum_y += counter.m_value;
+//             bin_count++;
+//         }
+//         else
+//         {
+//             if(bin_count > 0)
+//             {
+//                 rocprofvis_data_point_t binned_point;
+//                 binned_point.xValue = bin_sum_x / bin_count;
+//                 binned_point.yValue = bin_sum_y / bin_count;
+//                 aggregated_points.push_back(binned_point);
+//             }
+//             current_bin_start += bin_size;
+//             bin_sum_x = counter.m_start_ts;
+//             bin_sum_y = counter.m_value;
+//             bin_count = 1;
+//         }
+//     }
+
+//     if(bin_count > 0)
+//     {
+//         rocprofvis_data_point_t binned_point;
+//         binned_point.xValue = bin_sum_x / bin_count;
+//         binned_point.yValue = bin_sum_y / bin_count;
+//         aggregated_points.push_back(binned_point);
+//     }
+
+//     m_data = aggregated_points;
+//     return aggregated_points;
+// }
 
 std::tuple<float, float>
 LineChart::FindMaxMin()

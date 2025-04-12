@@ -8,12 +8,14 @@
 #include "rocprofvis_flame_chart.h"
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_structs.h"
+#include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
 #include <map>
 #include <string>
 #include <utility>
 #include <vector>
 #include "rocprofvis_grid.h"
+#include "rocprofvis_data_provider.h"
 
 namespace RocProfVis
 {
@@ -23,12 +25,15 @@ namespace View
 class MainView : public RocWidget
 {
 public:
-    MainView();
+    MainView(DataProvider &dp);
     ~MainView();
 
     virtual void Render();
-    void         MakeGraphView(rocprofvis_controller_timeline_t* timeline,
-                               rocprofvis_controller_array_t* array, float scale_x);
+    void Update();
+    void MakeGraphView();
+
+    // void         MakeGraphView(rocprofvis_controller_timeline_t* timeline,
+    //                            rocprofvis_controller_array_t* array, float scale_x);
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
 
 private:
@@ -73,6 +78,7 @@ private:
     bool                                        m_is_control_held;
     bool                                        m_can_drag_to_pan;
 
+    DataProvider &m_data_provider;
 };
 
 }  // namespace View

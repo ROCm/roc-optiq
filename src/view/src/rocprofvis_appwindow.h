@@ -21,6 +21,8 @@ public:
     bool         Init();
     virtual void Render();
     
+    void Update();
+    
 private:
     AppWindow();
     

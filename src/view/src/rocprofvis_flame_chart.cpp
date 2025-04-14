@@ -46,6 +46,12 @@ FlameChart::FindMaxMinFlame()
     return std::make_tuple(m_min_x, m_max_x);
 }
 
+std::tuple<float, float>
+FlameChart::GetMinMax()
+{
+    return std::make_tuple(m_min_x, m_max_x);
+}
+
 void
 FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
                            float scale_x)
@@ -84,20 +90,30 @@ FlameChart::ReturnChartID()
     return m_chart_id;
 }
 
-void FlameChart::SetRawData(RawTrackData* raw_data) {
-    if (raw_data == m_raw_data) {
-        return;
-    } else {
+bool
+FlameChart::SetRawData(const RawTrackData* raw_data)
+{
+    if(raw_data == m_raw_data)
+    {
+        return false;
+    }
+    else
+    {
         m_raw_data = raw_data;
-        RawTrackEventData* sample_track = dynamic_cast<RawTrackEventData*>(raw_data);
-        if (sample_track) {
-            //ExtractPointsFromData(sample_track);
+        const RawTrackEventData* event_track =
+            dynamic_cast<const RawTrackEventData*>(raw_data);
+        if(event_track)
+        {
+            ExtractPointsFromData(event_track);
+            FindMaxMinFlame();
+            return true;
         }
     }
+    return false;
 }
 
 void
-FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
+FlameChart::ExtractPointsFromData(const RawTrackEventData* event_track)
 {
     std::vector<rocprofvis_trace_event_t> entries;
 
@@ -112,50 +128,20 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
     double current_bin_start = DBL_MAX;
     float  largest_duration  = 0;
 
-    uint64_t            count  = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-        track_data, kRPVControllerArrayNumEntries, 0, &count);
-    assert(result == kRocProfVisResultSuccess);
-
-    rocprofvis_trace_event_t counter;
+    const std::vector<rocprofvis_trace_event_t> track_data = event_track->GetData();
+    uint64_t                                    count      = track_data.size();
+    rocprofvis_trace_event_t                    counter;
 
     for(uint64_t i = 0; i < count; i++)
     {
-        rocprofvis_controller_event_t* event = nullptr;
-        result                               = rocprofvis_controller_get_object(
-            track_data, kRPVControllerArrayEntryIndexed, i, &event);
-        assert(result == kRocProfVisResultSuccess && event);
-
-        double start_ts = 0;
-        result          = rocprofvis_controller_get_double(
-            event, kRPVControllerEventStartTimestamp, 0, &start_ts);
-        assert(result == kRocProfVisResultSuccess);
-
-        double end_ts = 0;
-        result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp,
-                                                  0, &end_ts);
-        assert(result == kRocProfVisResultSuccess);
-
-        uint32_t length = 0;
-        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
-                                                  nullptr, &length);
-        assert(result == kRocProfVisResultSuccess);
-
-        length += 1;
-        counter.m_name.resize(length);
-        char* buffer = const_cast<char*>(counter.m_name.c_str());
-        assert(buffer);
-        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
-                                                  buffer, &length);
-        assert(result == kRocProfVisResultSuccess);
-
         if(i == 0)
         {
-            current_bin_start = start_ts;
+            current_bin_start = track_data[i].m_start_ts;
         }
 
-        counter.m_start_ts = start_ts;
-        counter.m_duration = end_ts - start_ts;
+        counter.m_name     = track_data[i].m_name;
+        counter.m_start_ts = track_data[i].m_start_ts;
+        counter.m_duration = track_data[i].m_duration;
 
         if(counter.m_start_ts < current_bin_start + bin_size)
         {
@@ -201,6 +187,114 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
 
     flames = entries;
 }
+
+// void
+// FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
+// {
+//     std::vector<rocprofvis_trace_event_t> entries;
+
+//     ImVec2 display_size = ImGui::GetIO().DisplaySize;
+//     int    screen_width = static_cast<int>(display_size.x);
+
+//     float effective_width = screen_width / m_zoom;
+//     float bin_size        = ((m_max_x - m_min_x) / effective_width);
+
+//     double bin_sum_x         = 0.0;
+//     int    bin_count         = 0;
+//     double current_bin_start = DBL_MAX;
+//     float  largest_duration  = 0;
+
+//     uint64_t            count  = 0;
+//     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+//         track_data, kRPVControllerArrayNumEntries, 0, &count);
+//     assert(result == kRocProfVisResultSuccess);
+
+//     rocprofvis_trace_event_t counter;
+
+//     for(uint64_t i = 0; i < count; i++)
+//     {
+//         rocprofvis_controller_event_t* event = nullptr;
+//         result                               = rocprofvis_controller_get_object(
+//             track_data, kRPVControllerArrayEntryIndexed, i, &event);
+//         assert(result == kRocProfVisResultSuccess && event);
+
+//         double start_ts = 0;
+//         result          = rocprofvis_controller_get_double(
+//             event, kRPVControllerEventStartTimestamp, 0, &start_ts);
+//         assert(result == kRocProfVisResultSuccess);
+
+//         double end_ts = 0;
+//         result = rocprofvis_controller_get_double(event,
+//         kRPVControllerEventEndTimestamp,
+//                                                   0, &end_ts);
+//         assert(result == kRocProfVisResultSuccess);
+
+//         uint32_t length = 0;
+//         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
+//                                                   nullptr, &length);
+//         assert(result == kRocProfVisResultSuccess);
+
+//         length += 1;
+//         counter.m_name.resize(length);
+//         char* buffer = const_cast<char*>(counter.m_name.c_str());
+//         assert(buffer);
+//         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
+//                                                   buffer, &length);
+//         assert(result == kRocProfVisResultSuccess);
+
+//         if(i == 0)
+//         {
+//             current_bin_start = start_ts;
+//         }
+
+//         counter.m_start_ts = start_ts;
+//         counter.m_duration = end_ts - start_ts;
+
+//         if(counter.m_start_ts < current_bin_start + bin_size)
+//         {
+//             if(counter.m_duration > largest_duration)
+//             {
+//                 largest_duration =
+//                     counter.m_duration;  // Use the largest duration per bin.
+//             }
+//             bin_sum_x += counter.m_start_ts;
+//             bin_count++;
+//         }
+//         else
+//         {
+//             if(bin_count > 0)
+//             {
+//                 rocprofvis_trace_event_t binned_point;
+//                 binned_point.m_start_ts = bin_sum_x / bin_count;
+//                 binned_point.m_duration = largest_duration;
+//                 binned_point.m_name     = counter.m_name;
+//                 entries.push_back(binned_point);
+//             }
+
+//             // Prepare next bin.
+//             current_bin_start =
+//                 current_bin_start +
+//                 bin_size *
+//                     static_cast<int>((counter.m_start_ts - current_bin_start) /
+//                     bin_size);
+//             bin_sum_x        = counter.m_start_ts;
+//             largest_duration = counter.m_duration;
+//             bin_count        = 1;
+//         }
+//     }
+
+//     if(bin_count > 0)
+//     {
+//         rocprofvis_trace_event_t binned_point;
+//         binned_point.m_start_ts = bin_sum_x / bin_count;
+//         binned_point.m_duration = largest_duration;
+//         binned_point.m_name     = counter.m_name;
+
+//         entries.push_back(binned_point);
+//     }
+
+//     flames = entries;
+// }
 
 void
 FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,

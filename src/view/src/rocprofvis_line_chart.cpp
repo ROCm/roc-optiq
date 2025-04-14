@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "spdlog/spdlog.h"
+
 namespace RocProfVis
 {
 namespace View
@@ -64,20 +66,32 @@ LineChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
     m_is_color_value_existant = true;
 }
 
-void LineChart::SetRawData(RawTrackData* raw_data) {
-    if (raw_data == m_raw_data) {
-        return;
-    } else {
+bool
+LineChart::SetRawData(const RawTrackData* raw_data)
+{
+    if(raw_data == m_raw_data)
+    {
+        return false;
+    }
+    else
+    {
+        spdlog::debug("track {} data changed", m_id);
         m_raw_data = raw_data;
-        RawTrackSampleData* sample_track = dynamic_cast<RawTrackSampleData*>(raw_data);
-        if (sample_track) {
+        const RawTrackSampleData* sample_track =
+            dynamic_cast<const RawTrackSampleData*>(raw_data);
+        if(sample_track)
+        {
+            spdlog::debug("track {} extracting data points", m_id);
             ExtractPointsFromData(sample_track);
+            FindMaxMin();
+            return true;
         }
     }
+    return false;
 }
 
 std::vector<rocprofvis_data_point_t>
-LineChart::ExtractPointsFromData(RawTrackSampleData* sample_track)
+LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
 {
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
@@ -92,8 +106,8 @@ LineChart::ExtractPointsFromData(RawTrackSampleData* sample_track)
     int    bin_count         = 0;
     double current_bin_start = DBL_MAX;
 
-    const std::vector<rocprofvis_trace_counter_t> track_data    = sample_track->GetData();
-    uint64_t                                      count = track_data.size();
+    const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
+    uint64_t                                      count      = track_data.size();
 
     rocprofvis_trace_counter_t counter;
 
@@ -223,6 +237,12 @@ LineChart::ExtractPointsFromData(RawTrackSampleData* sample_track)
 //     m_data = aggregated_points;
 //     return aggregated_points;
 // }
+
+std::tuple<float, float>
+LineChart::GetMinMax()
+{
+    return std::make_tuple(m_min_x, m_max_x);
+}
 
 std::tuple<float, float>
 LineChart::FindMaxMin()

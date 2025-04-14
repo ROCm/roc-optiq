@@ -5,7 +5,7 @@
 #include "rocprofvis_charts.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
-//#include "rocprofvis_structs.h"
+// #include "rocprofvis_structs.h"
 #include "rocprofvis_view_structs.h"
 #include <string>
 #include <tuple>
@@ -30,20 +30,22 @@ public:
                    float scale_x, float scale_y);
 
     std::vector<rocprofvis_data_point_t> ExtractPointsFromData(
-        RawTrackSampleData* track_data);
+        const RawTrackSampleData* track_data);
 
     // std::vector<rocprofvis_data_point_t> LineChart::ExtractPointsFromData(
     //     rocprofvis_controller_array_t* track_data);
+
+    std::tuple<float, float> GetMinMax();
     std::tuple<float, float> FindMaxMin();
     float                    GetTrackHeight() override;
     void                     SetID(int id) override;
     int                      ReturnChartID() override;
-    const std::string&             GetName() override;
+    const std::string&       GetName() override;
     int                      SetSize();
     void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
     float CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
 
-    virtual void SetRawData(RawTrackData* raw_data);
+    virtual bool SetRawData(const RawTrackData* raw_data);
 
 private:
     std::vector<rocprofvis_data_point_t> m_data;
@@ -61,7 +63,7 @@ private:
     int                                  m_id;
     float                                m_track_height;
     bool                                 m_is_color_value_existant;
-    RawTrackData*                  m_raw_data;
+    const RawTrackData*                  m_raw_data;
 };
 
 }  // namespace View

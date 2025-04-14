@@ -14,6 +14,8 @@
 #include <tuple>
 #include <vector>
 
+#include "spdlog/spdlog.h"
+
 namespace RocProfVis
 {
 namespace View
@@ -74,7 +76,9 @@ MainView::ResetView()
     m_capture_og_v_max_x = true;
 }
 
-void MainView::Update() {
+void
+MainView::Update()
+{
     if(m_meta_map_made)
     {
         uint64_t num_graphs = m_data_provider.GetTrackCount();
@@ -83,8 +87,22 @@ void MainView::Update() {
         int scale_x  = 1;
         for(uint64_t i = 0; i < num_graphs; i++)
         {
-            const RawTrackData *rtd = m_data_provider.GetRawTrackData(i);
-            
+            const RawTrackData* rtd = m_data_provider.GetRawTrackData(i);
+            if(m_graph_map[i].chart->SetRawData(rtd))
+            {
+                auto min_max = m_graph_map[i].chart->GetMinMax();
+
+                if(std::get<0>(min_max) < m_min_x)
+                {
+                    m_min_x = std::get<0>(min_max);
+                }
+                if(std::get<1>(min_max) > m_max_x)
+                {
+                    m_max_x = std::get<1>(min_max);
+                }
+
+                spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
+            }
         }
     }
 }
@@ -97,6 +115,14 @@ MainView::Render()
     if(m_meta_map_made)
     {
         RenderGraphPoints();
+
+        ImGuiIO& io = ImGui::GetIO();
+        if(ImGui::IsKeyPressed(ImGuiKey_L))
+        {
+            m_data_provider.FetchTrack(0, m_data_provider.GetStartTime(),
+                                       m_data_provider.GetEndTime(), 1000, 0);
+            // m_data_provider.FetchTrack(0,m_min_x,m_max_x,1000,0);
+        }
     }
 }
 
@@ -331,7 +357,7 @@ MainView::MakeGraphView()
 
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();
-    int scale_x  = 1;
+    int      scale_x    = 1;
     for(uint64_t i = 0; i < num_graphs; i++)
     {
         const track_info_t* track_info = m_data_provider.GetTrackInfo(i);
@@ -351,8 +377,8 @@ MainView::MakeGraphView()
                     m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
-                    static_cast<float>(track_info->min_ts - track_info->min_ts),
-                    static_cast<float>(track_info->max_ts - track_info->min_ts));
+                    static_cast<float>(track_info->min_ts),   // - track_info->min_ts),
+                    static_cast<float>(track_info->max_ts));  // - track_info->min_ts));
 
                 if(std::get<0>(temp_min_max_flame) < m_min_x)
                 {
@@ -383,8 +409,8 @@ MainView::MakeGraphView()
                     m_max_x, m_scale_x);
 
                 std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
-                    static_cast<float>(track_info->min_ts - track_info->min_ts),
-                    static_cast<float>(track_info->max_ts - track_info->min_ts));
+                    static_cast<float>(track_info->min_ts),   // - track_info->min_ts),
+                    static_cast<float>(track_info->max_ts));  // - track_info->min_ts));
 
                 if(std::get<0>(temp_min_max_flame) < m_min_x)
                 {
@@ -411,6 +437,13 @@ MainView::MakeGraphView()
             {
                 break;
             }
+        }
+
+        // quick hack
+        if(i < 10)
+        {
+            m_data_provider.FetchTrack(i, m_data_provider.GetStartTime(),
+                                       m_data_provider.GetEndTime(), 1000, 0);
         }
     }
 

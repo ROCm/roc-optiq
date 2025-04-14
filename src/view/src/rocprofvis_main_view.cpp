@@ -1,10 +1,10 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_main_view.h"
-#include "rocprofvis_core_assert.h"
 #include "imgui.h"
 #include "rocprofvis_boxplot.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_chart.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
@@ -89,7 +89,7 @@ MainView::Update()
         for(uint64_t i = 0; i < num_graphs; i++)
         {
             const RawTrackData* rtd = m_data_provider.GetRawTrackData(i);
-            //TODO: This is hack for detecting changes until an event system is in place
+            // TODO: This is hack for detecting changes until an event system is in place
             if(m_graph_map[i].chart->SetRawData(rtd))
             {
                 auto min_max = m_graph_map[i].chart->GetMinMax();
@@ -449,8 +449,10 @@ MainView::MakeGraphView()
             }
         }
 
-        // quick hack
-        if(i < 10)
+        // TODO: Quick hack Fetch all tracks for now... in future use event system to
+        // decide what / when to fetch 
+        
+        //if(i < 10)
         {
             m_data_provider.FetchTrack(i, m_data_provider.GetStartTime(),
                                        m_data_provider.GetEndTime(), 1000, 0);
@@ -459,138 +461,6 @@ MainView::MakeGraphView()
 
     m_meta_map_made = true;
 }
-
-/*
-void
-MainView::MakeGraphView(rocprofvis_controller_timeline_t* timeline,
-                        rocprofvis_controller_array_t* array, float scale_x)
-{
-    // Destroy any existing data
-    DestroyGraphs();
-    ResetView();
-
-    // This section makes the charts both line and flamechart are constructed here
-    uint64_t            num_graphs = 0;
-    rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
-        timeline, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-    int graph_id = 0;
-    for(uint64_t i = 0; i < num_graphs; i++)
-    {
-        rocprofvis_handle_t* graph = nullptr;
-        result                     = rocprofvis_controller_get_object(
-            timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && graph);
-
-        rocprofvis_handle_t* track = nullptr;
-        result =
-            rocprofvis_controller_get_object(graph, kRPVControllerGraphTrack, 0, &track);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && track);
-
-        rocprofvis_controller_array_t* track_data = nullptr;
-        result = rocprofvis_controller_get_object(array, kRPVControllerArrayEntryIndexed,
-                                                  i, &track_data);
-        if(result == kRocProfVisResultSuccess && track_data)
-        {
-            uint64_t track_type = 0;
-            result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
-                                                      &track_type);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            uint32_t length = 0;
-            result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
-                                                      nullptr, &length);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            char* buffer = (char*) alloca(length + 1);
-            length += 1;
-            result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
-                                                      buffer, &length);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            switch(track_type)
-            {
-                case kRPVControllerTrackTypeEvents:
-                {
-                    // Create FlameChart
-                    std::string                   name = buffer;
-                    RocProfVis::View::FlameChart* flame =
-                        new RocProfVis::View::FlameChart(graph_id, name, m_zoom,
-                                                         m_movement, m_min_x, m_max_x,
-                                                         scale_x);
-
-                    flame->ExtractFlamePoints(track_data);
-                    std::tuple<float, float> temp_min_max_flame =
-                        flame->FindMaxMinFlame();
-
-                    if(std::get<0>(temp_min_max_flame) < m_min_x)
-                    {
-                        m_min_x = std::get<0>(temp_min_max_flame);
-                    }
-                    if(std::get<1>(temp_min_max_flame) > m_max_x)
-                    {
-                        m_max_x = std::get<1>(temp_min_max_flame);
-                    }
-
-                    rocprofvis_graph_map_t temp_flame;
-                    temp_flame.chart          = flame;
-                    temp_flame.graph_type     = rocprofvis_graph_map_t::TYPE_FLAMECHART;
-                    temp_flame.display        = true;
-                    temp_flame.selected       = ImVec4(0, 0, 0, 0);
-                    temp_flame.color_by_value = false;
-                    rocprofvis_color_by_value_t temp_color = {};
-                    temp_flame.color_by_value_digits       = temp_color;
-                    m_graph_map[graph_id]                  = temp_flame;
-
-                    graph_id = graph_id + 1;
-
-                    break;
-                }
-                case kRPVControllerTrackTypeSamples:
-                {
-                    // Linechart
-                    std::string name = buffer;
-
-                    RocProfVis::View::LineChart* line = new RocProfVis::View::LineChart(
-                        graph_id, name, m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
-
-                    line->ExtractPointsFromData(track_data);
-                    std::tuple<float, float> temp_min_max = line->FindMaxMin();
-
-                    if(std::get<0>(temp_min_max) < m_min_x)
-                    {
-                        m_min_x = std::get<0>(temp_min_max);
-                    }
-                    if(std::get<1>(temp_min_max) > m_max_x)
-                    {
-                        m_max_x = std::get<1>(temp_min_max);
-                    }
-
-                    rocprofvis_graph_map_t temp;
-                    temp.chart          = line;
-                    temp.graph_type     = rocprofvis_graph_map_t::TYPE_LINECHART;
-                    temp.display        = true;
-                    temp.selected       = ImVec4(0, 0, 0, 0);
-                    temp.color_by_value = false;
-                    rocprofvis_color_by_value_t temp_color_line = {};
-                    temp.color_by_value_digits                  = temp_color_line;
-                    m_graph_map[graph_id]                       = temp;
-
-                    graph_id = graph_id + 1;
-                    break;
-                }
-                default:
-                {
-                    break;
-                }
-            }
-        }
-    }
-
-    m_meta_map_made = true;
-}
-*/
 
 void
 MainView::RenderGraphPoints()

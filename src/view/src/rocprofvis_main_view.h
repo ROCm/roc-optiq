@@ -5,7 +5,9 @@
 #include "imgui.h"
 #include "rocprofvis_charts.h"
 #include "rocprofvis_controller_types.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_flame_chart.h"
+#include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_structs.h"
 #include "rocprofvis_view_structs.h"
@@ -14,8 +16,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "rocprofvis_grid.h"
-#include "rocprofvis_data_provider.h"
 
 namespace RocProfVis
 {
@@ -25,20 +25,19 @@ namespace View
 class MainView : public RocWidget
 {
 public:
-    MainView(DataProvider &dp);
+    MainView(DataProvider& dp);
     ~MainView();
 
     virtual void Render();
-    void Update();
-    void MakeGraphView();
+    void         Update();
+    void         MakeGraphView();
 
-    // void         MakeGraphView(rocprofvis_controller_timeline_t* timeline,
-    //                            rocprofvis_controller_array_t* array, float scale_x);
+    void ResetView();
+    void DestroyGraphs();
+
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
 
 private:
-    void ResetView();
-    void DestroyGraphs();
     void RenderGraphPoints();
     void RenderGrid();
     void RenderScrubber(ImVec2 screen_pos);
@@ -52,7 +51,7 @@ private:
 private:
     std::map<int, rocprofvis_meta_map_struct_t> m_meta_map;
     std::map<int, rocprofvis_graph_map_t>       m_graph_map;
-    RocProfVis::View::Grid*                      m_grid; 
+    RocProfVis::View::Grid*                     m_grid;
     float                                       m_min_value;
     float                                       m_max_value;
     float                                       m_zoom;
@@ -78,7 +77,7 @@ private:
     bool                                        m_is_control_held;
     bool                                        m_can_drag_to_pan;
 
-    DataProvider &m_data_provider;
+    DataProvider& m_data_provider;
 };
 
 }  // namespace View

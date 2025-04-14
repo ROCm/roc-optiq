@@ -11,6 +11,7 @@ HomeScreen::HomeScreen()
 , m_sidebar(nullptr)
 , m_container(nullptr)
 , m_view_created(false)
+, m_open_loading_popup(false)
 {}
 
 HomeScreen::~HomeScreen() {}
@@ -18,10 +19,20 @@ HomeScreen::~HomeScreen() {}
 void
 HomeScreen::Update()
 {
+    auto last_state = m_data_provider.GetState();
     m_data_provider.Update();
-    if(!m_view_created && m_data_provider.GetState() == ProviderState::kReady)
+
+    if(!m_view_created)
     {
         CreateView();
+        m_view_created = true;
+    }
+
+    auto new_state = m_data_provider.GetState();
+
+    // new file loaded
+    if(last_state != new_state && new_state == ProviderState::kReady)
+    {
         if(m_main_view)
         {
             m_main_view->MakeGraphView();
@@ -30,7 +41,10 @@ HomeScreen::Update()
                 m_sidebar->SetGraphMap(m_main_view->GetGraphMap());
             }
         }
-        m_view_created = true;
+    }
+
+    if(m_main_view) {
+        m_main_view->Update();
     }
 }
 
@@ -75,46 +89,46 @@ HomeScreen::DestroyView()
 bool
 HomeScreen::OpenFile(const std::string& file_path)
 {
-    return m_data_provider.FetchTrace(file_path);
-}
-
-/*
-void
-HomeScreen::SetData(rocprofvis_controller_timeline_t* trace_timeline,
-                    rocprofvis_controller_array_t*    graph_data_array)
-{
-    if(m_main_view)
+    bool result = false;
+    result      = m_data_provider.FetchTrace(file_path);
+    if(result)
     {
-        m_main_view->MakeGraphView(trace_timeline, graph_data_array, 1);
-        if(m_sidebar)
+        m_open_loading_popup = true;
+        if(m_view_created)
         {
-            m_sidebar->SetGraphMap(m_main_view->GetGraphMap());
+            m_main_view->ResetView();
+            m_main_view->DestroyGraphs();
         }
     }
+    return result;
 }
-*/
 
 void
 HomeScreen::Render()
 {
-    if(m_container)
+    if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
         m_container->Render();
         return;
     }
 
-    // if(!m_is_trace_loaded)
-    // {
-    //     if(ImGui::BeginPopupModal("Loading"))
-    //     {
-    //         ImGui::Text("Please wait...");
-    //         ImGui::EndPopup();
-    //     }
+    if(m_open_loading_popup)
+    {
+        ImGui::OpenPopup("Loading");
+        m_open_loading_popup = false;
+    }
 
-    //     if(m_is_loading_trace)
-    //     {
-    //         ImGui::SetNextWindowSize(ImVec2(300, 200));
-    //         ImGui::OpenPopup("Loading");
-    //     }
-    // }
+    if(m_data_provider.GetState() == ProviderState::kLoading)
+    {
+        ImGui::SetNextWindowSize(ImVec2(300, 200));
+        if(ImGui::BeginPopupModal("Loading"))
+        {
+            ImGui::Text("Please wait...");
+            ImGui::EndPopup();
+        }
+    }
+    else
+    {
+        ImGui::CloseCurrentPopup();
+    }
 }

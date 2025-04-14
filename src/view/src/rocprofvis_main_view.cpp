@@ -88,6 +88,7 @@ MainView::Update()
         for(uint64_t i = 0; i < num_graphs; i++)
         {
             const RawTrackData* rtd = m_data_provider.GetRawTrackData(i);
+            //TODO: This is hack for detecting changes until an event system is in place
             if(m_graph_map[i].chart->SetRawData(rtd))
             {
                 auto min_max = m_graph_map[i].chart->GetMinMax();
@@ -110,8 +111,6 @@ MainView::Update()
 void
 MainView::Render()
 {
-    Update();
-
     if(m_meta_map_made)
     {
         RenderGraphPoints();

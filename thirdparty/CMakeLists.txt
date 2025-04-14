@@ -32,6 +32,12 @@ target_compile_definitions(ImGuiFileDialog PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiFileDialog)
 
+add_library(ImGuiColorTextEdit STATIC
+    ImGuiColorTextEdit/TextEditor.cpp
+)
+target_include_directories(ImGuiColorTextEdit PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
+target_include_directories(ImGuiColorTextEdit PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiColorTextEdit)
+
 if(JSON_SUPPORT) 
 # Add double-conversion library
 add_library(double-conversion STATIC

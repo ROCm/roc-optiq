@@ -59,8 +59,8 @@ rocprofvis_dm_result_t RocprofDatabase::RemapStringIds(rocprofvis_db_record_data
 
 
 int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(argc==NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS+1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc==NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS+1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_dm_track_params_t track_params = {0};
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
@@ -124,8 +124,8 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **
 }
 
 int RocprofDatabase::CallBackAddString(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
@@ -136,7 +136,7 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, char **argv, char *
 
 
 int RocprofDatabase::CallbackCacheTable(void *data, int argc, char **argv, char **azColName){
-    ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     DatabaseCache * ref_tables = (DatabaseCache *)callback_params->handle;
@@ -151,10 +151,10 @@ int RocprofDatabase::CallbackCacheTable(void *data, int argc, char **argv, char 
 
 rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 {
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {
-        ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
         std::string value;
 
         ShowProgress(2, "Load Nodes information", kRPVDbBusy, future);
@@ -251,13 +251,13 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)
 {
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {
-        ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
-        ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
+        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_flowtrace_t flowtrace = BindObject()->FuncAddFlowTrace(BindObject()->trace_object, event_id);
-        ASSERT_MSG_BREAK(flowtrace, ERROR_FLOW_TRACE_CANNOT_BE_NULL);
+        ROCPROFVIS_ASSERT_MSG_BREAK(flowtrace, ERROR_FLOW_TRACE_CANNOT_BE_NULL);
         std::stringstream query;
         if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {
@@ -338,7 +338,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(
 {
     return future->SetPromise(kRocProfVisDmResultNotSupported);
 
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
 }
 
 
@@ -346,13 +346,13 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
             rocprofvis_dm_event_id_t event_id, 
             Future* future){
 
-    ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {
-        ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
-        ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
+        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_extdata_t extdata = BindObject()->FuncAddExtData(BindObject()->trace_object, event_id);
-        ASSERT_MSG_BREAK(extdata, ERROR_EXT_DATA_CANNOT_BE_NULL);
+        ROCPROFVIS_ASSERT_MSG_BREAK(extdata, ERROR_EXT_DATA_CANNOT_BE_NULL);
         std::stringstream query;
         if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {

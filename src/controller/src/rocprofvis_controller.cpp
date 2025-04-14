@@ -15,8 +15,8 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_json_trace.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <cstring>
 
 namespace RocProfVis
@@ -118,7 +118,7 @@ rocprofvis_controller_array_t* rocprofvis_controller_array_alloc(uint32_t initia
 {
     RocProfVis::Controller::Array* array = new RocProfVis::Controller::Array();
     rocprofvis_result_t result = array->SetUInt64(kRPVControllerArrayNumEntries, 0, initial_size);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     return (rocprofvis_controller_array_t*)array;
 }
 rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_future_t* object, float timeout)
@@ -164,6 +164,24 @@ rocprofvis_result_t rocprofvis_controller_graph_fetch_async(
     }
     return error;
 }
+
+rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
+    rocprofvis_controller_t* controller, rocprofvis_handle_t* object,
+    rocprofvis_property_t property, uint64_t index, uint32_t count,
+    rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::EventRef  event_ref(object);
+    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::ArrayRef  array(output);
+    if(trace.IsValid() && event_ref.IsValid() && future.IsValid() && array.IsValid())
+    {
+        error = trace->AsyncFetch(*event_ref, *future, *array, property);
+    }
+    return error;
+}
+
 void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
 {
     RocProfVis::Controller::ArrayRef array(object);

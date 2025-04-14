@@ -57,7 +57,7 @@ rocprofvis_dm_result_t Future::WaitForCompletion(rocprofvis_db_timeout_ms_t time
     if (status != std::future_status::ready) {
         if(timeout_ms == 0) return result;
         m_interrupt_status = true;
-        LOG("Timeout expired!");
+        spdlog::debug("Timeout expired!");
     }
     if (m_worker.joinable()) m_worker.join();
     result = m_future.get();

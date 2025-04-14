@@ -2,8 +2,8 @@
 
 #include "rocprofvis_controller_sample_lod.h"
 #include "rocprofvis_controller_reference.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <cfloat>
 #include <cmath>
 
@@ -16,7 +16,7 @@ typedef Reference<rocprofvis_controller_sample_t, Sample, kRPVControllerObjectTy
 
 void SampleLOD::CalculateChildValues(void)
 {
-    assert(m_children.size() > 0);
+    ROCPROFVIS_ASSERT(m_children.size() > 0);
     m_child_min                 = DBL_MAX;
     m_child_max                 = DBL_MIN;
     m_child_mean                = 0;
@@ -32,9 +32,9 @@ void SampleLOD::CalculateChildValues(void)
             double timestamp = 0;
             double value     = 0;
             rocprofvis_result_t result = sample->GetDouble( kRPVControllerSampleTimestamp, 0, &timestamp);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             result = sample->GetDouble(kRPVControllerSampleValue, 0, &value);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             {
                 m_child_min_timestamp = std::min(m_child_min_timestamp, timestamp);
                 m_child_max_timestamp = std::max(m_child_max_timestamp, timestamp);
@@ -60,7 +60,7 @@ void SampleLOD::CalculateChildValues(void)
     }
     m_child_mean /= entries;
     auto result = SetDouble(kRPVControllerSampleValue, 0, m_child_mean);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 }
 
 SampleLOD::SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)

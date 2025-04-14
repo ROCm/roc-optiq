@@ -1,8 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_track.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <algorithm>
 #include <cfloat>
 #include <cstring>
@@ -80,6 +80,36 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            {
+                *value = sizeof(Track);
+                result = kRocProfVisResultSuccess;
+                for(auto& pair : m_segments)
+                {
+                    *value += sizeof(pair);
+                    uint64_t entry_size = 0;
+                    result = pair.second->GetMemoryUsage(&entry_size, (rocprofvis_common_property_t)property);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        *value += entry_size;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                break;
+            }
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Track);
+                result = kRocProfVisResultSuccess;
+                for (auto& pair : m_segments)
+                {
+                    *value += sizeof(pair);
+                }
+                break;
+            }
             case kRPVControllerTrackId:
             {
                 *value = m_id;
@@ -299,7 +329,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackEntry:
             {
                 // Start & end timestamps must be configured
-                assert(m_start_timestamp >= 0.0 && m_start_timestamp < m_end_timestamp);
+                ROCPROFVIS_ASSERT(m_start_timestamp >= 0.0 && m_start_timestamp < m_end_timestamp);
 
                 Handle* object = (Handle*)value;
                 auto object_type = object->GetType();

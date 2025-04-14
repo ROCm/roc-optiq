@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <cassert>
+#include "rocprofvis_core_assert.h"
 
 namespace RocProfVis
 {
@@ -36,13 +36,13 @@ public:
 
     Type& operator*()
     {
-        assert(m_object);
+        ROCPROFVIS_ASSERT(m_object);
         return *m_object;
     }
 
     Type* operator->()
     {
-        assert(m_object);
+        ROCPROFVIS_ASSERT(m_object);
         return m_object;
     }
 

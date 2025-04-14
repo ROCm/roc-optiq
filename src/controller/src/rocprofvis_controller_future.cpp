@@ -1,8 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_future.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <cfloat>
 
 namespace RocProfVis
@@ -25,7 +25,7 @@ rocprofvis_controller_object_type_t Future::GetType(void)
 
 void Future::Set(std::future<rocprofvis_result_t>&& future)
 {
-    assert(future.valid() && !m_future.valid());
+    ROCPROFVIS_ASSERT(future.valid() && !m_future.valid());
     m_future = std::move(future);
 }
 
@@ -66,6 +66,13 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
     {
         switch (property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Future);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerFutureResult:
             {
                 if(m_future.valid())

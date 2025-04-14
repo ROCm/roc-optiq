@@ -4,8 +4,8 @@
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_event_lod.h"
 #include "rocprofvis_controller_sample_lod.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <algorithm>
 
 namespace RocProfVis
@@ -119,14 +119,14 @@ static void AddSamples(std::vector<Sample*>& samples, Sample* sample, uint64_t l
     {
         uint64_t children = 0;
         rocprofvis_result_t result = sample->GetUInt64(kRPVControllerSampleNumChildren, 0, &children);
-        assert(result == kRocProfVisResultSuccess);
-        assert(children > 0);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(children > 0);
         for(uint64_t i = 0; i < children; i++)
         {
             rocprofvis_handle_t* child = nullptr;
             result = sample->GetObject(kRPVControllerSampleChildIndex, i, &child);
-            assert(result == kRocProfVisResultSuccess);
-            assert(child);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(child);
             samples.push_back((Sample*)child);
         }
     }
@@ -142,14 +142,14 @@ static void AddEvents(std::vector<Event*>& events, Event* event, uint64_t lod)
     {
         uint64_t children = 0;
         rocprofvis_result_t result = event->GetUInt64(kRPVControllerEventNumChildren, 0, &children);
-        assert(result == kRocProfVisResultSuccess);
-        assert(children > 0);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(children > 0);
         for(uint64_t i = 0; i < children; i++)
         {
             rocprofvis_handle_t* child = nullptr;
             result = event->GetObject(kRPVControllerEventChildIndexed, i, &child);
-            assert(result == kRocProfVisResultSuccess);
-            assert(child);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(child);
             events.push_back((Event*)child);
         }
     }
@@ -171,7 +171,7 @@ void Segment::GenerateLOD(uint32_t lod_to_generate)
             }
         }
         std::unique_ptr<LOD>& lod = m_lods[lod_to_generate];
-        assert(lod);
+        ROCPROFVIS_ASSERT(lod);
         if(!lod->IsValid())
         {
             uint32_t previous_lod                  = (uint32_t) (lod_to_generate - 1);
@@ -209,7 +209,7 @@ void Segment::GenerateLOD(uint32_t lod_to_generate)
                                 {
                                     // We assume that the events are ordered by time, so
                                     // this must at least end after the current event
-                                    assert(event_end > max_ts);
+                                    ROCPROFVIS_ASSERT(event_end > max_ts);
 
                                     // Generate the stub event for any populated events.
                                     if(events.size() && ((events.front()->GetDouble(
@@ -269,7 +269,7 @@ void Segment::GenerateLOD(uint32_t lod_to_generate)
                                 {
                                     // We assume that the events are ordered by time, so
                                     // this must at least end after the current sample
-                                    assert(sample_start > max_ts);
+                                    ROCPROFVIS_ASSERT(sample_start > max_ts);
 
                                     // Generate the stub event for any populated events.
                                     uint64_t type = 0;
@@ -358,7 +358,7 @@ void Segment::Insert(double timestamp, Handle* event)
     {
         // LOD0 is always valid or nothing will work.
         m_lods[0] = std::make_unique<LOD>();
-        assert(m_lods[0]);
+        ROCPROFVIS_ASSERT(m_lods[0]);
         m_lods[0]->SetValid(true);
     }
     m_lods[0]->GetEntries().insert(std::make_pair(timestamp, event));
@@ -426,6 +426,67 @@ rocprofvis_result_t Segment::Fetch(uint32_t lod, double start, double end, Array
                 {
                     break;
                 }
+            }
+        }
+    }
+    return result;
+}
+
+
+
+rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            {
+                *value = 0;
+                result = kRocProfVisResultSuccess;
+
+                for (auto& pair : m_lods)
+                {
+                    *value += sizeof(pair);
+                    *value += sizeof(LOD);
+                    for (auto& entry : pair.second->GetEntries())
+                    {
+                        *value += sizeof(entry);
+                        uint64_t entry_size = 0;
+                        result = entry.second->GetUInt64(property, 0, &entry_size);
+                        if (result == kRocProfVisResultSuccess)
+                        {
+                            *value += entry_size;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
+                break;
+            }
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = 0;
+                result = kRocProfVisResultSuccess;
+
+                for(auto& pair : m_lods)
+                {
+                    *value += sizeof(pair);
+                    *value += sizeof(LOD);
+                    for(auto& entry : pair.second->GetEntries())
+                    {
+                        *value += sizeof(entry);
+                    }
+                }
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
             }
         }
     }

@@ -23,7 +23,7 @@ public:
     ~BoxPlot();
     void   Render() override;
     void   UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                          float scale_x) override;
+                          float scale_x, float y_scroll_position) override;
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
     std::vector<rocprofvis_data_point_t> BoxPlot::ExtractPointsFromData(

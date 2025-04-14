@@ -1,8 +1,8 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_core_assert.h"
 
 #include "spdlog/spdlog.h"
-#include <cassert>
 
 using namespace RocProfVis::View;
 
@@ -129,7 +129,7 @@ DataProvider::FetchTrace(const std::string& file_path)
         {
             result = rocprofvis_controller_load_async(m_trace_controller,
                                                       file_path.c_str(), m_trace_future);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             if(result != kRocProfVisResultSuccess)
             {
@@ -171,13 +171,13 @@ DataProvider::HandleLoadTrace()
     if(m_trace_future)
     {
         rocprofvis_result_t result = rocprofvis_controller_future_wait(m_trace_future, 0);
-        assert(result == kRocProfVisResultSuccess || result == kRocProfVisResultTimeout);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess || result == kRocProfVisResultTimeout);
         if(result == kRocProfVisResultSuccess)
         {
             uint64_t uint64_result = 0;
             result                 = rocprofvis_controller_get_uint64(
                 m_trace_future, kRPVControllerFutureResult, 0, &uint64_result);
-            assert(result == kRocProfVisResultSuccess &&
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
                    uint64_result == kRocProfVisResultSuccess);
 
             result = rocprofvis_controller_get_object(
@@ -229,12 +229,12 @@ DataProvider::HandleLoadTrackMetaData()
         rocprofvis_handle_t* graph  = nullptr;
         rocprofvis_result_t  result = rocprofvis_controller_get_object(
             m_trace_timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
-        assert(result == kRocProfVisResultSuccess && graph);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && graph);
 
         rocprofvis_handle_t* track = nullptr;
         result =
             rocprofvis_controller_get_object(graph, kRPVControllerGraphTrack, 0, &track);
-        assert(result == kRocProfVisResultSuccess && track);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && track);
 
         if(result == kRocProfVisResultSuccess)
         {
@@ -243,12 +243,12 @@ DataProvider::HandleLoadTrackMetaData()
             track_info.index = i;
             result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackId, 0,
                                                       &track_info.id);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             uint64_t track_type = 0;
             result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
                                                       &track_type);
-            assert(result == kRocProfVisResultSuccess &&
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
                    (track_type == kRPVControllerTrackTypeEvents ||
                     track_type == kRPVControllerTrackTypeSamples));
             track_info.track_type = track_type == kRPVControllerTrackTypeSamples
@@ -259,22 +259,22 @@ DataProvider::HandleLoadTrackMetaData()
             uint32_t length = 0;
             result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
                                                       nullptr, &length);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             char* buffer = (char*) alloca(length + 1);
             length += 1;
             result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
                                                       buffer, &length);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             track_info.name = std::string(buffer);
 
             result = rocprofvis_controller_get_double(
                 track, kRPVControllerTrackMinTimestamp, 0, &track_info.min_ts);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             result = rocprofvis_controller_get_double(
                 track, kRPVControllerTrackMaxTimestamp, 0, &track_info.max_ts);
-            assert(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             // Todo:
             // kRPVControllerTrackDescription = 0x30000007,
@@ -327,7 +327,7 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
                     m_trace_controller, graph_obj, start_ts, end_ts, horz_pixel_range,
                     graph_future, graph_array);
 
-                assert(result == kRocProfVisResultSuccess);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             }
 
             data_req_info_t request_info;
@@ -497,7 +497,7 @@ DataProvider::HandleLoadGraphs()
 
             rocprofvis_result_t result =
                 rocprofvis_controller_future_wait(req.graph_future, 0);
-            assert(result == kRocProfVisResultSuccess ||
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
                    result == kRocProfVisResultTimeout);
 
             // this graph is ready
@@ -528,28 +528,28 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 
     rocprofvis_result_t result =
         rocprofvis_controller_get_uint64(graph, kRPVControllerGraphType, 0, &graph_type);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     double min_ts = 0;
     result = rocprofvis_controller_get_double(graph, kRPVControllerGraphStartTimestamp, 0,
                                               &min_ts);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     double max_ts = 0;
     result = rocprofvis_controller_get_double(graph, kRPVControllerGraphEndTimestamp, 0,
                                               &max_ts);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     uint64_t item_count = 0;
     result = rocprofvis_controller_get_uint64(graph, kRPVControllerGraphNumEntries, 0,
                                               &item_count);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     spdlog::debug("{} Graph item count {} min ts {} max ts {}", req.index, item_count,
                   min_ts, max_ts);
 
     // use the track type to determine what type of data is present in the graph array
-    assert(req.index < m_track_metadata.size());
+    ROCPROFVIS_ASSERT(req.index < m_track_metadata.size());
     switch(m_track_metadata[req.index].track_type)
     {
         case kRPVControllerTrackTypeEvents:
@@ -584,7 +584,7 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     RawTrackSampleData* raw_sample_data = new RawTrackSampleData(index, min_ts, max_ts);
     spdlog::debug("Create sample track data at index {} with {} entries", index, count);
@@ -607,17 +607,17 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
         rocprofvis_controller_sample_t* sample = nullptr;
         result                                 = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &sample);
-        assert(result == kRocProfVisResultSuccess && sample);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
 
         double start_ts = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
                                                   0, &start_ts);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         double value = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
                                                   &value);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         trace_counter.m_start_ts = start_ts;
         trace_counter.m_value    = value;
@@ -637,7 +637,7 @@ DataProvider::CreateRawEventData(uint64_t                       index,
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
-    assert(result == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     RawTrackEventData* raw_event_data = new RawTrackEventData(index, min_ts, max_ts);
     spdlog::debug("Create event track data at index {} with {} entries", index, count);
@@ -659,31 +659,31 @@ DataProvider::CreateRawEventData(uint64_t                       index,
         rocprofvis_controller_event_t* event = nullptr;
         result                               = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &event);
-        assert(result == kRocProfVisResultSuccess && event);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
 
         double start_ts = 0;
         result          = rocprofvis_controller_get_double(
             event, kRPVControllerEventStartTimestamp, 0, &start_ts);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_start_ts = start_ts;
 
         double end_ts = 0;
         result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp,
                                                   0, &end_ts);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_duration = end_ts - start_ts;
 
         // get event name
         uint32_t length = 0;
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   nullptr, &length);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         char* str_buffer = (char*) alloca(length + 1);
         length += 1;
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   str_buffer, &length);
-        assert(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_name = std::string(str_buffer);
 
         buffer.push_back(trace_event);

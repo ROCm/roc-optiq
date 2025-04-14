@@ -38,16 +38,26 @@ file(GLOB DATABASE_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/databa
 set(SQLITE3_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/database/sqlite3/sqlite3.c")
 file(GLOB MAIN_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/test/*.cpp")
 
-
+add_subdirectory(../core ../core)
 
 add_library(${PROJECT_NAME} ${DATAMODEL_SRC} ${DATABASE_SRC} ${DATABASE_SRC} ${COMMON_SRC} ${SQLITE3_SRC} )
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
+target_link_libraries(${PROJECT_NAME} rocprof-visualizer-core)
+target_link_libraries(${PROJECT_NAME} spdlog)
+
 add_executable(${PROJECT_NAME}-test ${MAIN_SRC} )
+target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
 target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
+target_link_libraries(${PROJECT_NAME}-test rocprof-visualizer-core)
+target_link_libraries(${PROJECT_NAME}-test spdlog)
 
 add_subdirectory(../../thirdparty/catch2 thirdparty/catch2)
 
 add_executable(${PROJECT_NAME}-basic-tests src/tests/basic_tests.cpp)
+target_include_directories(${PROJECT_NAME}-basic-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE ${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE Catch2::Catch2WithMain)
+target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE rocprof-visualizer-core)
+target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE spdlog)
 add_test(NAME ${PROJECT_NAME}-basic-tests COMMAND ${PROJECT_NAME}-basic-tests)
 set_tests_properties(${PROJECT_NAME}-basic-tests PROPERTIES RUN_SERIAL ON)

@@ -9,8 +9,8 @@
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <cfloat>
 
 namespace RocProfVis
@@ -45,7 +45,7 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
             result                     = graph.Fetch(pixels, start, end, array, index);
-            assert(result == kRocProfVisResultSuccess || result == kRocProfVisResultOutOfRange);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess || result == kRocProfVisResultOutOfRange);
             return result;
         }));
 
@@ -53,7 +53,7 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
     {
         error = kRocProfVisResultSuccess;
     }
-    assert(error == kRocProfVisResultSuccess);
+    ROCPROFVIS_ASSERT(error == kRocProfVisResultSuccess);
 
     return error;
 }
@@ -92,6 +92,33 @@ rocprofvis_result_t Timeline::GetUInt64(rocprofvis_property_t property, uint64_t
     {
         switch(property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            {
+                *value = sizeof(Timeline);
+                *value += m_graphs.size() * sizeof(Graph*);
+                result = kRocProfVisResultSuccess;
+                for (auto& graph : m_graphs)
+                {
+                    uint64_t entry_size = 0;
+                    result = graph->GetUInt64(property, 0, &entry_size);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        *value += entry_size;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                break;
+            }
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Timeline);
+                *value += m_graphs.size() * sizeof(Graph*);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerTimelineId:
             {
                 *value = m_id;

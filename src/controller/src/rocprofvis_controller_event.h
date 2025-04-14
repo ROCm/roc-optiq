@@ -6,12 +6,14 @@
 #include "rocprofvis_controller_handle.h"
 #include <string>
 #include <vector>
+#include "rocprofvis_c_interface.h"
 
 namespace RocProfVis
 {
 namespace Controller
 {
 
+class Array;
 class Track;
 class Callstack;
 class FlowControl;
@@ -24,6 +26,8 @@ public:
     virtual ~Event();
 
     rocprofvis_controller_object_type_t GetType(void) override;
+
+    rocprofvis_result_t Fetch(rocprofvis_property_t property,  Array& array, rocprofvis_dm_trace_t dm_handle);
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) override;
@@ -43,6 +47,11 @@ private:
     double m_end_timestamp;
     const char* m_name;
     const char* m_category;
+
+private:
+    rocprofvis_result_t FetchDataModelFlowTraceProperty(Array& array, rocprofvis_dm_trace_t dm_trace_handle);
+    rocprofvis_result_t FetchDataModelStackTraceProperty(Array& array, rocprofvis_dm_trace_t dm_trace_handle);
+    rocprofvis_result_t FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm_trace_handle);
 };
 
 }

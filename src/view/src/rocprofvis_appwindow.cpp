@@ -5,7 +5,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "rocprofvis_controller.h"
-#include "spdlog/spdlog.h"
+#include "rocprofvis_core_assert.h"
 #include "widgets/rocprofvis_debug_window.h"
 
 using namespace RocProfVis::View;

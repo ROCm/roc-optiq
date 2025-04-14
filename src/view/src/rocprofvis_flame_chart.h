@@ -28,14 +28,15 @@ public:
 
     std::tuple<float, float> GetMinMax();
     std::tuple<float, float> FindMaxMinFlame();
-
     void  UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                         float scale_x) override;
+                         float scale_x, float m_scroll_position) override;
     float GetTrackHeight() override;
     int   ReturnChartID() override;
     void  SetID(int id) override;
     const std::string& GetName() override;
-    void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
+    void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
+    bool  GetVisibility() override;
+    float GetMovement() override;
 
     virtual bool SetRawData(const RawTrackData* raw_data);
 
@@ -53,6 +54,9 @@ private:
     float                                 m_track_height;
     float                                 m_sidebar_size;
     rocprofvis_color_by_value_t           m_is_color_value_existant;
+    bool                                  m_is_chart_visible;
+    float                                 m_movement_since_unload;
+    float                                 m_y_movement;
     const RawTrackData*                   m_raw_data;
 };
 

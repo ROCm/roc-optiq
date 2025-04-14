@@ -10,8 +10,8 @@
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
+#include "rocprofvis_core_assert.h"
 
-#include <cassert>
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
@@ -118,20 +118,20 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                 result = new_event->SetObject(
                                                     kRPVControllerEventTrack, 0,
                                                     (rocprofvis_handle_t*) track);
-                                                assert(result ==
+                                                ROCPROFVIS_ASSERT(result ==
                                                        kRocProfVisResultSuccess);
 
                                                 result = new_event->SetString(
                                                     kRPVControllerEventName, 0,
                                                     event.m_name.c_str(),
                                                     event.m_name.length());
-                                                assert(result ==
+                                                ROCPROFVIS_ASSERT(result ==
                                                        kRocProfVisResultSuccess);
 
                                                 result = track->SetObject(
                                                     kRPVControllerTrackEntry, index++,
                                                     (rocprofvis_handle_t*) new_event);
-                                                assert(result ==
+                                                ROCPROFVIS_ASSERT(result ==
                                                        kRocProfVisResultSuccess);
                                             }
                                             else
@@ -496,7 +496,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 0,
                                                                 (rocprofvis_handle_t*)
                                                                     track);
-                                                            assert(
+                                                            ROCPROFVIS_ASSERT(
                                                                 result ==
                                                                 kRocProfVisResultSuccess);
 
@@ -508,7 +508,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     kRPVDMEventTypeStringCharPtrIndexed,
                                                                     i),
                                                                 0);
-                                                            assert(
+                                                            ROCPROFVIS_ASSERT(
                                                                 result ==
                                                                 kRocProfVisResultSuccess);
 
@@ -520,7 +520,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     kRPVDMEventSymbolStringCharPtrIndexed,
                                                                     i),
                                                                 0);
-                                                            assert(
+                                                            ROCPROFVIS_ASSERT(
                                                                 result ==
                                                                 kRocProfVisResultSuccess);
 
@@ -529,7 +529,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 index++,
                                                                 (rocprofvis_handle_t*)
                                                                     new_event);
-                                                            assert(
+                                                            ROCPROFVIS_ASSERT(
                                                                 result ==
                                                                 kRocProfVisResultSuccess);
                                                         }
@@ -745,6 +745,27 @@ rocprofvis_result_t Trace::AsyncFetch(Graph& graph, Future& future, Array& array
     return error;
 }
 
+rocprofvis_result_t
+Trace::AsyncFetch(Event& event, Future& future, Array& array,
+                  rocprofvis_property_t property)
+{
+    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    future.Set(std::async(std::launch::async,
+                   [&event, &array, property, dm_handle]() -> rocprofvis_result_t {
+                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
+                              result = event.Fetch(property, array, dm_handle);
+                              return result;
+                          }));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
+
 rocprofvis_controller_object_type_t Trace::GetType(void) 
 {
     return kRPVControllerObjectTypeController;
@@ -757,6 +778,37 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
     {
         switch (property)
         {
+            case kRPVControllerCommonMemoryUsageInclusive:
+            {
+                *value = sizeof(Trace);
+                *value += m_tracks.size() * sizeof(Track*);
+                result = kRocProfVisResultSuccess;
+                for(auto& track : m_tracks)
+                {
+                    uint64_t entry_size = 0;
+                    result = track->GetUInt64(property, 0, &entry_size);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        *value += entry_size;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                if (result == kRocProfVisResultSuccess)
+                {
+                    result = m_timeline->GetUInt64(property, 0, value);
+                }
+                break;
+            }
+            case kRPVControllerCommonMemoryUsageExclusive:
+            {
+                *value = sizeof(Trace);
+                *value += m_tracks.size() * sizeof(Track*);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerId:
             {
                 *value = m_id;
@@ -765,7 +817,7 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerNumAnalysisView:
             {
-                assert(0);
+                ROCPROFVIS_UNIMPLEMENTED;
                 *value = 0;
                 result = kRocProfVisResultSuccess;
                 break;
@@ -836,14 +888,14 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerEventTable:
             {
-                assert(0);
+                ROCPROFVIS_UNIMPLEMENTED;
                 *value = nullptr;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerAnalysisViewIndexed:
             {
-                assert(0);
+                ROCPROFVIS_UNIMPLEMENTED;
                 *value = nullptr;
                 result = kRocProfVisResultSuccess;
                 break;
@@ -936,12 +988,12 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerNumAnalysisView:
         {
-            assert(0);
+            ROCPROFVIS_UNIMPLEMENTED;
             break;
         }
         case kRPVControllerNumNodes:
         {
-            assert(0);
+            ROCPROFVIS_UNIMPLEMENTED;
             break;
         }
         case kRPVControllerTimeline:
@@ -1007,13 +1059,13 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerEventTable:
             {
-                assert(0);
+                ROCPROFVIS_UNIMPLEMENTED;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerAnalysisViewIndexed:
             {
-                assert(0);
+                ROCPROFVIS_UNIMPLEMENTED;
                 result = kRocProfVisResultSuccess;
                 break;
             }

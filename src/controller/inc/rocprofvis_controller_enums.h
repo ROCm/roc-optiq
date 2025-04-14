@@ -32,6 +32,17 @@ typedef enum rocprofvis_result_t
 } rocprofvis_result_t;
 
 /*
+* Common object properties
+*/
+typedef enum rocprofvis_common_property_t
+{
+    // Total memory usage for the object - including any owned sub-objects
+    kRPVControllerCommonMemoryUsageInclusive = 0xFFFF0000,
+    // Memory usage strictly for the object alone - excluding any owned sub-objects
+    kRPVControllerCommonMemoryUsageExclusive = 0xFFFF0001,
+} rocprofvis_common_property_t;
+
+/*
 * Object types
 */
 typedef enum rocprofvis_controller_object_type_t
@@ -66,6 +77,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeNode = 13,
     // Processor object
     kRPVControllerObjectTypeProcessor = 14,
+    // Extended data object
+    kRPVControllerObjectTypeExtData = 15,
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -247,6 +260,8 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackNode = 0x3000000A,
     // The processor that the track belongs to
     kRPVControllerTrackProcessor = 0x3000000B,
+    // Track extended data
+    kRPVControllerTrackExtData = 0x3000000C,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {
@@ -314,24 +329,28 @@ typedef enum rocprofvis_controller_sample_properties_t
 */
 
 /*
-* Properties for a flow-control entry.
-*/
+ * Properties for a flow-control entry.
+ */
 typedef enum rocprofvis_controller_flow_control_properties_t
 {
-    // The source event ID
-    kRPVControllerFlowControlSourceId = 0x50000000,
-    // The number of target IDs
-    kRPVControllerFlowControlNumTargetId = 0x50000001,
-    // The indexed target IDs
-    kRPVControllerFlowControlTargetIdIndexed = 0x50000002,
+    // The target event ID
+    kRPVControllerFlowControltId       = 0x50000000,
+    // The target timestamp
+    kRPVControllerFlowControlTimestamp = 0x50000001,
+    // The target track ID
+    kRPVControllerFlowControlTrackId   = 0x50000002,
+    // Flow direction 0 - outgoing, 1 - incoming
+    kRPVControllerFlowControlDirection = 0x50000003,
 } rocprofvis_controller_flow_control_properties_t;
 /* JSON: RPVFlowControl
 {
-    source_id: UInt64,
-    num_targets: Int,
-    targets: Array[UInt64]
+    id: UInt64,
+    timestamp: UInt64,
+    track_id: UInt64,
+    direction: UInt64,
 }
 */
+
 
 /* 
 * Each entry resolves the ISA/ASM function/file/line and if possible the human readable source version.
@@ -341,16 +360,18 @@ typedef enum rocprofvis_controller_callstack_properties_t
 {
     // Human readable source code function
     kRPVControllerCallstackFunction = 0x60000000,
+    // Human readable source code function arguments
+    kRPVControllerCallstackArguments = 0x60000001,
     // Human readable source code file
-    kRPVControllerCallstackFile = 0x60000001,
+    kRPVControllerCallstackFile = 0x60000002,
     // Human readable source code line
-    kRPVControllerCallstackLine = 0x60000002,
+    kRPVControllerCallstackLine = 0x60000003,
     // ISA/ASM code function
-    kRPVControllerCallstackISAFunction = 0x60000003,
+    kRPVControllerCallstackISAFunction = 0x60000004,
     // ISA/ASM code file
-    kRPVControllerCallstackISAFile = 0x60000004,
+    kRPVControllerCallstackISAFile = 0x60000005,
     // ISA/ASM code line
-    kRPVControllerCallstackISALine = 0x60000005,
+    kRPVControllerCallstackISALine = 0x60000006,
 } rocprofvis_controller_callstack_properties_t;
 /* JSON: RPVCallstack
 {
@@ -362,6 +383,7 @@ typedef enum rocprofvis_controller_callstack_properties_t
     isa_line: Int,
 }
 */
+
 
 /*
 * Properties for each event in a track or graph
@@ -378,16 +400,6 @@ typedef enum rocprofvis_controller_event_properties_t
     kRPVControllerEventEndTimestamp = 0x70000003,
     // Name for the event
     kRPVControllerEventName = 0x70000004,
-    // Number of callstack entries for the event
-    kRPVControllerEventNumCallstackEntries = 0x70000005,
-    // The number of input flow control entries
-    kRPVControllerEventNumInputFlowControl = 0x70000006,
-    // Indexed input flow control entries
-    kRPVControllerEventInputFlowControlIndexed = 0x70000007,
-    // The number of output flow control entries
-    kRPVControllerEventNumOutputFlowControl = 0x70000008,
-    // Indexed output flow control entries
-    kRPVControllerEventOutputFlowControlIndexed = 0x70000009,
 
     // When a LOD is generated the sample will be synthetic and coalesce several real samples
     // These properties allow access to the contains samples.
@@ -528,3 +540,36 @@ typedef enum rocprofvis_controller_future_properties_t
     // Type of object, see rocprofvis_controller_object_type_t
     kRPVControllerFutureType = 0xB0000002,
 } rocprofvis_controller_future_properties_t;
+
+/*
+* Event extended properties . To be used by rocprofvis_controller_get_indexed_property_async 
+*/
+typedef enum rocprofvis_controller_event_data_properties_t
+{
+    // Load Event Flow control properties  
+    kRPVControllerEventDataFlowControl = 0xC0000000,
+    // Load Event Callstack properties  
+    kRPVControllerEventDataCallStack   = 0xC0000001,
+    // Load Event Extended data properties
+    kRPVControllerEventDataExtData     = 0xC0000002,
+} rocprofvis_controller_event_data_properties_t;
+
+/*
+* Properties for extended data
+*/
+typedef enum rocprofvis_controller_extdata_properties_t
+{
+    // Extended data category
+    kRPVControllerExtDataCategory = 0xD0000000,
+    // Extended data name
+    kRPVControllerExtDataName = 0xD0000001,
+    // Extended data value
+    kRPVControllerExtDataValue = 0xD0000002,
+} rocprofvis_controller_extdata_properties_t;
+/* JSON: RPVCallstack
+{
+    category: String,
+    name: String,
+    value: String,
+}
+*/

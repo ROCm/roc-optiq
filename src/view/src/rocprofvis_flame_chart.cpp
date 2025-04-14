@@ -3,6 +3,7 @@
 #include "rocprofvis_flame_chart.h"
 #include "imgui.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_core_assert.h"
 #include <algorithm>
 #include <iostream>
 #include <limits>
@@ -24,6 +25,7 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 , m_name(name)
 , m_track_height(75)
 , m_is_color_value_existant()
+, m_is_chart_visible(true)  // has to be true or nothing will render.
 {}
 
 std::tuple<float, float>
@@ -54,13 +56,20 @@ FlameChart::GetMinMax()
 
 void
 FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                           float scale_x)
+                           float scale_x, float y_scroll_position)
 {
-    m_zoom     = zoom;
-    m_movement = movement;
-    m_scale_x  = scale_x;
-    m_min_x    = min_x;
-    m_max_x    = max_x;
+    if(m_is_chart_visible)
+    {
+        // elements has gone off screen for the first time.
+        m_movement_since_unload = y_scroll_position;
+    }
+
+    m_zoom       = zoom;
+    m_movement   = movement;
+    m_scale_x    = scale_x;
+    m_min_x      = min_x;
+    m_max_x      = max_x;
+    m_y_movement = y_scroll_position;
 }
 
 void
@@ -72,6 +81,13 @@ FlameChart::GetName()
 {
     return m_name;
 }
+
+float
+FlameChart::GetMovement()
+{
+    return m_movement_since_unload - m_y_movement;
+}
+
 float
 FlameChart::GetTrackHeight()
 {
@@ -110,6 +126,12 @@ FlameChart::SetRawData(const RawTrackData* raw_data)
         }
     }
     return false;
+}
+
+bool
+FlameChart::GetVisibility()
+{
+    return m_is_chart_visible;
 }
 
 void
@@ -237,6 +259,15 @@ FlameChart::Render()
         ImGui::BeginChild("MetaData Content",
                           ImVec2(metadata_size - 70.0f, m_track_height), false);
         ImGui::Text(m_name.c_str());
+        if(ImGui::IsItemVisible())
+        {
+            m_is_chart_visible = true;
+        }
+        else
+        {
+            m_is_chart_visible = false;
+        }
+
         ImGui::EndChild();
 
         ImGui::SameLine();

@@ -5,7 +5,6 @@
 #include "rocprofvis_charts.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
-// #include "rocprofvis_structs.h"
 #include "rocprofvis_view_structs.h"
 #include <string>
 #include <tuple>
@@ -25,7 +24,7 @@ public:
     ~LineChart();
     void   Render() override;
     void   UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                          float scale_x) override;
+                          float scale_x, float m_scroll_position) override;
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
 
@@ -40,6 +39,8 @@ public:
     int                      SetSize();
     void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
     float CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
+    bool  GetVisibility() override;
+    float GetMovement() override;
 
     virtual bool SetRawData(const RawTrackData* raw_data);
 
@@ -59,6 +60,9 @@ private:
     int                                  m_id;
     float                                m_track_height;
     bool                                 m_is_color_value_existant;
+    bool                                 m_is_chart_visible;
+    float                                m_movement_since_unload;
+    float                                m_y_movement;
     const RawTrackData*                  m_raw_data;
 };
 

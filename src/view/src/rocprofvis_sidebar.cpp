@@ -98,7 +98,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                     ImGui::TextColored(ImVec4(0, 1, 0, 1), "Component Is: ");
 
                     ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(0, 1, 0, 1), "In Frame");
+                    ImGui::TextColored(ImVec4(0, 1, 0, 1), "In Frame ");
                 }
                 else
                 {

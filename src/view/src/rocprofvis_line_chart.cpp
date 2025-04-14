@@ -31,6 +31,9 @@ LineChart::LineChart(int id, std::string name, float zoom, float movement, float
 , m_track_height(290.0f)
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
+, m_is_chart_visible(true)  // has to be true or nothing will render.
+, m_movement_since_unload(FLT_MAX)
+, m_y_movement(0)
 {}
 
 LineChart::~LineChart() {}
@@ -50,6 +53,18 @@ LineChart::ReturnChartID()
 {
     return m_id;
 }
+bool
+LineChart::GetVisibility()
+{
+    return m_is_chart_visible;
+}
+
+float
+LineChart::GetMovement()
+{
+    return m_movement_since_unload - m_y_movement;
+}
+
 void
 LineChart::SetID(int id)
 {
@@ -192,13 +207,21 @@ LineChart::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float k
 
 void
 LineChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                          float scale_x)
+                          float scale_x, float y_scroll_position)
 {
-    m_zoom     = zoom;
-    m_movement = movement;
-    m_scale_x  = scale_x;
-    m_min_x    = min_x;
-    m_max_x    = max_x;
+    if(m_is_chart_visible)
+    {
+        // elements has gone off screen for the first time.
+        m_movement_since_unload = y_scroll_position;
+
+    }
+
+    m_zoom       = zoom;
+    m_movement   = movement;
+    m_scale_x    = scale_x;
+    m_min_x      = min_x;
+    m_max_x      = max_x;
+    m_y_movement = y_scroll_position;
 }
 
 void
@@ -224,6 +247,15 @@ LineChart::Render()
 
         ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
         ImGui::Text((std::to_string(m_max_y)).c_str());
+
+        if(ImGui::IsItemVisible())
+        {
+            m_is_chart_visible      = true;
+        }
+        else
+        {
+            m_is_chart_visible = false;
+        }
 
         ImVec2 child_window_size = ImGui::GetWindowSize();
         ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");

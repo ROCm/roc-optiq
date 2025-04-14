@@ -91,6 +91,26 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                         ImGui::PopItemWidth();
                     }
                 }
+
+                // Lets you know if component is in Frame. Dev purpose only.
+                if(tree_item.second.chart->GetVisibility())
+                {
+                    ImGui::TextColored(ImVec4(0, 1, 0, 1), "Component Is: ");
+
+                    ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(0, 1, 0, 1), "In Frame ");
+                }
+                else
+                {
+                    ImGui::TextColored(ImVec4(0, 1, 0, 1), "Component Is: ");
+
+                    ImGui::SameLine();
+                    std::string temp_movement_value =
+                        "Not In Frame by: " +
+                        std::to_string(tree_item.second.chart->GetMovement()) + " units.";
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), temp_movement_value.c_str());
+                    std::cout << tree_item.second.chart->GetMovement()<<std::endl;
+                }
             }
             else
             {

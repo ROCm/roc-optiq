@@ -190,7 +190,7 @@ BoxPlot::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float kno
 
 void
 BoxPlot::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
-                        float scale_x)
+                        float scale_x, float y_scroll_position)
 {
     m_zoom     = zoom;
     m_movement = movement;

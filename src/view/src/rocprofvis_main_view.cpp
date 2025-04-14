@@ -272,10 +272,20 @@ MainView::RenderGraphView()
                 }
             }
 
-            m_graph_map[graph_objects.first].chart->UpdateMovement(
-                m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
+            if(m_graph_map[graph_objects.first].chart->GetVisibility() == true ||
+               (m_graph_map[graph_objects.first].chart->GetVisibility() == false ||
+                m_graph_map[graph_objects.first].chart->GetMovement() < 1000))
+            {
+                // If the graph can be seen or is less than 1000 units away update
+                // movements.
+                m_graph_map[graph_objects.first].chart->UpdateMovement(
+                    m_zoom, m_movement, m_min_x, m_max_x, m_scale_x, m_scroll_position);
+            }
 
-            m_graph_map[graph_objects.first].chart->Render();
+            m_graph_map[graph_objects.first]
+                .chart->Render();  // Always render for now. Update component later on and
+                                   // move into if above.
+
             ImGui::PopStyleColor();
 
             ImGui::EndChild();

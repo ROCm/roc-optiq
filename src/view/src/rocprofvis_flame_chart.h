@@ -26,8 +26,6 @@ public:
 
     void ExtractPointsFromData(const RawTrackEventData* event_track);
 
-    // void ExtractFlamePoints(rocprofvis_controller_array_t* track_data);
-
     std::tuple<float, float> GetMinMax();
     std::tuple<float, float> FindMaxMinFlame();
 

@@ -29,11 +29,7 @@ public:
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
 
-    std::vector<rocprofvis_data_point_t> ExtractPointsFromData(
-        const RawTrackSampleData* track_data);
-
-    // std::vector<rocprofvis_data_point_t> LineChart::ExtractPointsFromData(
-    //     rocprofvis_controller_array_t* track_data);
+    void ExtractPointsFromData(const RawTrackSampleData* track_data);
 
     std::tuple<float, float> GetMinMax();
     std::tuple<float, float> FindMaxMin();

@@ -14,7 +14,6 @@
 #include <string>
 #include <tuple>
 #include <vector>
-
 #include "spdlog/spdlog.h"
 
 namespace RocProfVis
@@ -257,12 +256,12 @@ MainView::RenderGraphView()
                     graph_objects.second.color_by_value_digits);
             }
 
-            ImVec4 is_chart_selected = ImVec4(0, 0, 0, 0);
+            ImVec4 selection_color = ImVec4(0, 0, 0, 0);
             if(graph_objects.second.is_chart_selected == true)
             {
-                is_chart_selected = ImVec4(0.17, 0.54, 1.0f, 0.3f);
+                selection_color = ImVec4(0.17, 0.54, 1.0f, 0.3f);
             }
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, is_chart_selected);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
             ImGui::BeginChild(
                 (std::to_string(graph_objects.first)).c_str(),
                 ImVec2(0,

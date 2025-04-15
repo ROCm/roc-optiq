@@ -37,12 +37,3 @@ struct rocprofvis_trace_process_t
     std::string                                      m_name;
     std::map<std::string, rocprofvis_trace_thread_t> m_threads;
 };
-
-struct rocprofvis_meta_map_struct_t
-{
-    float       size;
-    float       max;
-    float       min;
-    std::string type;
-    std::string chart_name;
-};

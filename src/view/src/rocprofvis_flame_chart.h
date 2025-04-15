@@ -43,8 +43,6 @@ public:
 private:
     std::vector<rocprofvis_trace_event_t> flames;
     std::string                           m_name;
-    float                                 m_min_value;
-    float                                 m_max_value;
     float                                 m_min_x;
     float                                 m_max_x;
     float                                 m_zoom;

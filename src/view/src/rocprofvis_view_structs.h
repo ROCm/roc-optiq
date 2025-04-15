@@ -30,7 +30,7 @@ typedef struct rocprofvis_graph_map_t
     } graph_type;
     bool                        display;
     Charts*                     chart;
-    bool                        is_chart_selected = false;
+    bool                        selected;
     bool                        color_by_value;
     bool                        make_boxplot;
     rocprofvis_color_by_value_t color_by_value_digits;

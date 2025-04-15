@@ -9,12 +9,12 @@
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_utils.h"
+#include "spdlog/spdlog.h"
 #include <iostream>
 #include <map>
 #include <string>
 #include <tuple>
 #include <vector>
-#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -257,7 +257,7 @@ MainView::RenderGraphView()
             }
 
             ImVec4 selection_color = ImVec4(0, 0, 0, 0);
-            if(graph_objects.second.is_chart_selected == true)
+            if(graph_objects.second.selected == true)
             {
                 selection_color = ImVec4(0.17, 0.54, 1.0f, 0.3f);
             }
@@ -402,6 +402,7 @@ MainView::MakeGraphView()
                 temp_flame.graph_type     = rocprofvis_graph_map_t::TYPE_FLAMECHART;
                 temp_flame.display        = true;
                 temp_flame.color_by_value = false;
+                temp_flame.selected       = false;
                 rocprofvis_color_by_value_t temp_color = {};
                 temp_flame.color_by_value_digits       = temp_color;
                 m_graph_map[track_info->index]         = temp_flame;
@@ -433,6 +434,7 @@ MainView::MakeGraphView()
                 temp.graph_type     = rocprofvis_graph_map_t::TYPE_LINECHART;
                 temp.display        = true;
                 temp.color_by_value = false;
+                temp.selected       = false;
                 rocprofvis_color_by_value_t temp_color_line = {};
                 temp.color_by_value_digits                  = temp_color_line;
                 m_graph_map[track_info->index]              = temp;

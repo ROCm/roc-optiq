@@ -24,8 +24,6 @@ namespace View
 
 MainView::MainView(DataProvider& dp)
 : m_data_provider(dp)
-, m_min_value(0.0f)
-, m_max_value(0.0f)
 , m_zoom(1.0f)
 , m_movement(0.0f)
 , m_min_x(FLT_MAX)
@@ -39,7 +37,6 @@ MainView::MainView(DataProvider& dp)
 , m_v_max_x(0.0f)
 , m_scale_x(0.0f)
 , m_meta_map_made(false)
-, m_meta_map({})
 , m_user_adjusting_graph_height(false)
 , m_previous_scroll_position(0.0f)
 , m_show_graph_customization_window(false)
@@ -48,20 +45,13 @@ MainView::MainView(DataProvider& dp)
 , m_can_drag_to_pan(false)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
-, m_grid(new RocProfVis::View::Grid())
 {}
 
-MainView::~MainView()
-{
-    DestroyGraphs();
-    delete m_grid;
-}
+MainView::~MainView() { DestroyGraphs(); }
 
 void
 MainView::ResetView()
 {
-    m_min_value          = 0.0f;
-    m_max_value          = 0.0f;
     m_zoom               = 1.0f;
     m_movement           = 0.0f;
     m_min_x              = FLT_MAX;
@@ -155,7 +145,7 @@ MainView::RenderScrubber(ImVec2 screen_pos)
         ImVec2 mouse_position = ImGui::GetMousePos();
 
         char text[20];
-        sprintf(text, "%.0f", m_grid->GetCursorPosition());
+        sprintf(text, "%.0f", m_grid.GetCursorPosition());
         ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18);
 
         ImVec2 rect_pos =
@@ -195,8 +185,8 @@ MainView::RenderGrid()
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    m_grid->RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
-                       m_v_max_x, m_v_min_x);
+    m_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
+                      m_v_max_x, m_v_min_x);
 
     ImGui::PopStyleColor();
 }
@@ -375,13 +365,13 @@ MainView::MakeGraphView()
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                RocProfVis::View::FlameChart* flame = new RocProfVis::View::FlameChart(
-                    track_info->index, track_info->name, m_zoom, m_movement, m_min_x,
-                    m_max_x, scale_x);
+                FlameChart* flame =
+                    new FlameChart(track_info->index, track_info->name, m_zoom,
+                                   m_movement, m_min_x, m_max_x, scale_x);
 
-                std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
-                    static_cast<float>(track_info->min_ts),  
-                    static_cast<float>(track_info->max_ts));
+                std::tuple<float, float> temp_min_max_flame =
+                    std::tuple<float, float>(static_cast<float>(track_info->min_ts),
+                                             static_cast<float>(track_info->max_ts));
 
                 if(std::get<0>(temp_min_max_flame) < m_min_x)
                 {
@@ -407,13 +397,13 @@ MainView::MakeGraphView()
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                RocProfVis::View::LineChart* line = new RocProfVis::View::LineChart(
-                    track_info->index, track_info->name, m_zoom, m_movement, m_min_x,
-                    m_max_x, m_scale_x);
+                LineChart* line =
+                    new LineChart(track_info->index, track_info->name, m_zoom, m_movement,
+                                  m_min_x, m_max_x, m_scale_x);
 
-                std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
-                    static_cast<float>(track_info->min_ts),
-                    static_cast<float>(track_info->max_ts));
+                std::tuple<float, float> temp_min_max_flame =
+                    std::tuple<float, float>(static_cast<float>(track_info->min_ts),
+                                             static_cast<float>(track_info->max_ts));
 
                 if(std::get<0>(temp_min_max_flame) < m_min_x)
                 {
@@ -443,9 +433,9 @@ MainView::MakeGraphView()
         }
 
         // TODO: Quick hack Fetch all tracks for now... in future use event system to
-        // decide what / when to fetch 
-        
-        //if(i < 10)
+        // decide what / when to fetch
+
+        // if(i < 10)
         {
             m_data_provider.FetchTrack(i, m_data_provider.GetStartTime(),
                                        m_data_provider.GetEndTime(), 1000, 0);

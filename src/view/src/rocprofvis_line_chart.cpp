@@ -39,10 +39,11 @@ LineChart::LineChart(int id, std::string name, float zoom, float movement, float
 {}
 
 LineChart::~LineChart() {}
+
 float
 LineChart::GetTrackHeight()
 {
-    return m_track_height;  // Create an invisible button with a more area
+    return m_track_height;
 }
 
 const std::string&
@@ -230,7 +231,6 @@ LineChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x
     {
         // elements has gone off screen for the first time.
         m_movement_since_unload = y_scroll_position;
-
     }
 
     m_zoom       = zoom;
@@ -267,7 +267,7 @@ LineChart::Render()
 
         if(ImGui::IsItemVisible())
         {
-            m_is_chart_visible      = true;
+            m_is_chart_visible = true;
         }
         else
         {

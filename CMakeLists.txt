@@ -37,7 +37,6 @@ set(VIEW_FILES
 )
 
 add_executable(rocprof-visualizer 
-    src/app/src/rocprofvis_trace_ui.cpp 
     src/app/src/rocprofvis_imgui_vulkan.cpp 
     src/app/src/main.cpp
     ${VIEW_FILES})

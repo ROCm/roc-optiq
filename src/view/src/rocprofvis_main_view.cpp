@@ -49,6 +49,7 @@ MainView::MainView(DataProvider& dp)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
 , m_grid(new RocProfVis::View::Grid())
+, m_grid_size(50)
 {}
 
 MainView::~MainView()
@@ -196,7 +197,7 @@ MainView::RenderGrid()
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     m_grid->RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
-                       m_v_max_x, m_v_min_x);
+                       m_v_max_x, m_v_min_x, m_grid_size);
 
     ImGui::PopStyleColor();
 }
@@ -223,7 +224,7 @@ MainView::RenderGraphView()
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2 display_size = ImGui::GetWindowSize();
-    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - 50.0f),
+    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - m_grid_size),
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
 
@@ -379,9 +380,9 @@ MainView::MakeGraphView()
                     track_info->index, track_info->name, m_zoom, m_movement, m_min_x,
                     m_max_x, scale_x);
 
-                std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
-                    static_cast<float>(track_info->min_ts),  
-                    static_cast<float>(track_info->max_ts));
+                std::tuple<float, float> temp_min_max_flame =
+                    std::tuple<float, float>(static_cast<float>(track_info->min_ts),
+                                             static_cast<float>(track_info->max_ts));
 
                 if(std::get<0>(temp_min_max_flame) < m_min_x)
                 {
@@ -411,9 +412,9 @@ MainView::MakeGraphView()
                     track_info->index, track_info->name, m_zoom, m_movement, m_min_x,
                     m_max_x, m_scale_x);
 
-                std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
-                    static_cast<float>(track_info->min_ts),
-                    static_cast<float>(track_info->max_ts));
+                std::tuple<float, float> temp_min_max_flame =
+                    std::tuple<float, float>(static_cast<float>(track_info->min_ts),
+                                             static_cast<float>(track_info->max_ts));
 
                 if(std::get<0>(temp_min_max_flame) < m_min_x)
                 {
@@ -443,9 +444,9 @@ MainView::MakeGraphView()
         }
 
         // TODO: Quick hack Fetch all tracks for now... in future use event system to
-        // decide what / when to fetch 
-        
-        //if(i < 10)
+        // decide what / when to fetch
+
+        // if(i < 10)
         {
             m_data_provider.FetchTrack(i, m_data_provider.GetStartTime(),
                                        m_data_provider.GetEndTime(), 1000, 0);

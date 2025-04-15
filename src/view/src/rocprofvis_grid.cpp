@@ -25,7 +25,8 @@ Grid::GetCursorPosition()
 
 void
 Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
-                 ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x)
+                 ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x,
+                 int grid_size)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -57,13 +58,13 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
         float normalized_start_box = (min_x - (min_x + movement)) * scale_x;
         draw_list->AddRectFilled(ImVec2(normalized_start_box, cursor_position.y),
                                  ImVec2(normalized_start_box - 1500.0f,
-                                        cursor_position.y + content_size.y - 50.0f),
+                                        cursor_position.y + content_size.y - grid_size),
                                  IM_COL32(100, 100, 100, 100));
 
         float normalized_start_box_end = (max_x - (min_x + movement)) * scale_x;
         draw_list->AddRectFilled(ImVec2(normalized_start_box_end, cursor_position.y),
                                  ImVec2(normalized_start_box_end + 1500.0f,
-                                        cursor_position.y + content_size.y - 50.0f),
+                                        cursor_position.y + content_size.y - grid_size),
                                  IM_COL32(100, 100, 100, 100));
 
         for(float raw_position_points_x = min_x - (steps * 5);
@@ -84,13 +85,14 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
 
             draw_list->AddRect(
                 ImVec2(normalized_start, cursor_position.y),
-                ImVec2(normalized_end, cursor_position.y + content_size.y - 50.0f),
+                ImVec2(normalized_end, cursor_position.y + content_size.y - grid_size),
                 IM_COL32(0, 0, 0, 128), 1.0f);
 
             // If user hover over grid block.
             if(ImGui::IsMouseHoveringRect(
                    ImVec2(normalized_start, cursor_position.y),
-                   ImVec2(normalized_end, cursor_position.y + content_size.y - 50.0f)))
+                   ImVec2(normalized_end,
+                          cursor_position.y + content_size.y - grid_size)))
             {
                 ImVec2 mouse_position = ImGui::GetMousePos();
 
@@ -113,8 +115,8 @@ Grid::RenderGrid(float min_x, float max_x, float movement, float zoom,
             draw_list->AddText(labelPos, IM_COL32(0, 0, 0, 255), label);
         }
         draw_list->AddLine(
-            ImVec2(0, cursor_position.y + content_size.y - 50.0f),
-            ImVec2(displaySize.x, cursor_position.y + content_size.y - 50.0f),
+            ImVec2(0, cursor_position.y + content_size.y - grid_size),
+            ImVec2(displaySize.x, cursor_position.y + content_size.y - grid_size),
             IM_COL32(0, 0, 0, 128), 1.0f);
 
         ImVec2 windowPos  = ImGui::GetWindowPos();

@@ -52,6 +52,7 @@ private:
     std::map<int, rocprofvis_meta_map_struct_t> m_meta_map;
     std::map<int, rocprofvis_graph_map_t>       m_graph_map;
     RocProfVis::View::Grid*                     m_grid;
+    int                                         m_grid_size;
     float                                       m_min_value;
     float                                       m_max_value;
     float                                       m_zoom;

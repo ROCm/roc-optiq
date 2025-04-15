@@ -27,8 +27,11 @@ AppWindow::GetInstance()
     return s_instance;
 }
 
-void AppWindow::DestroyInstance() {
-    if(s_instance) {
+void
+AppWindow::DestroyInstance()
+{
+    if(s_instance)
+    {
         delete s_instance;
         s_instance = nullptr;
     }

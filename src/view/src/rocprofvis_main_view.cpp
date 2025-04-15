@@ -24,8 +24,6 @@ namespace View
 
 MainView::MainView(DataProvider& dp)
 : m_data_provider(dp)
-, m_min_value(0.0f)
-, m_max_value(0.0f)
 , m_zoom(1.0f)
 , m_movement(0.0f)
 , m_min_x(FLT_MAX)
@@ -54,8 +52,6 @@ MainView::~MainView() { DestroyGraphs(); }
 void
 MainView::ResetView()
 {
-    m_min_value          = 0.0f;
-    m_max_value          = 0.0f;
     m_zoom               = 1.0f;
     m_movement           = 0.0f;
     m_min_x              = FLT_MAX;

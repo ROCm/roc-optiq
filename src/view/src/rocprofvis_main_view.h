@@ -51,8 +51,6 @@ private:
 private:
     std::map<int, rocprofvis_graph_map_t>       m_graph_map;
     Grid                                        m_grid;
-    float                                       m_min_value;
-    float                                       m_max_value;
     float                                       m_zoom;
     float                                       m_movement;
     float                                       m_scrubber_position;

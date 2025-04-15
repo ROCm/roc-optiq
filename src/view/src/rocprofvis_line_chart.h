@@ -47,8 +47,6 @@ public:
 private:
     std::vector<rocprofvis_data_point_t> m_data;
     std::string                          m_name;
-    float                                m_min_value;
-    float                                m_max_value;
     float                                m_zoom;
     rocprofvis_color_by_value_t          m_color_by_value_digits;
     float                                m_movement;

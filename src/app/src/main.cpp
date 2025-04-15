@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_imgui_backend.h"
 #include "rocprofvis_core.h"
+#include "rocprofvis_imgui_backend.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -108,6 +108,7 @@ main(int, char**)
 
                 backend.m_shutdown(&backend);
 
+                rocprofvis_view_destroy();
                 ImGui_ImplGlfw_Shutdown();
                 ImGui::DestroyContext();
 

@@ -36,7 +36,7 @@ class RawTrackSampleData : public RawTrackData
 public:
     RawTrackSampleData(uint64_t index, double start_ts, double end_ts);
     virtual ~RawTrackSampleData();
-    const std::vector<rocprofvis_trace_counter_t>& GetData();
+    const std::vector<rocprofvis_trace_counter_t>& GetData() const;
     void SetData(std::vector<rocprofvis_trace_counter_t>&& data);
 
 private:
@@ -48,7 +48,7 @@ class RawTrackEventData : public RawTrackData
 public:
     RawTrackEventData(uint64_t index, double start_ts, double end_ts);
     virtual ~RawTrackEventData();
-    const std::vector<rocprofvis_trace_event_t>& GetData();
+    const std::vector<rocprofvis_trace_event_t>& GetData() const;
     void SetData(std::vector<rocprofvis_trace_event_t>&& data);
 
 private:

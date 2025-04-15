@@ -2,8 +2,8 @@
 
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
-#include "rocprofvis_structs.h"
 #include "rocprofvis_raw_track_data.h"
+#include "rocprofvis_structs.h"
 
 #include <string>
 #include <unordered_map>
@@ -34,11 +34,11 @@ typedef struct track_info_t
 
 typedef struct data_req_info_t
 {
-    uint64_t                        index;
-    rocprofvis_controller_future_t* graph_future;
-    rocprofvis_controller_array_t*  graph_array;
-    rocprofvis_handle_t*            graph_obj;
-    ProviderState                   loading_state;
+    uint64_t                        index;  // index of track that is being requested
+    rocprofvis_controller_future_t* graph_future;   // future for the request
+    rocprofvis_controller_array_t*  graph_array;    // array of data for the request
+    rocprofvis_handle_t*            graph_obj;      // object for the request
+    ProviderState                   loading_state;  // state of the request
 } data_req_info_t;
 
 class DataProvider
@@ -48,43 +48,43 @@ public:
     ~DataProvider();
 
     /*
-    *   Close the controller.
-    */
+     *   Close the controller.
+     */
     void CloseController();
 
     /*
-    *   Free all requests. This does not cancel the requests on the controller end._yn
-    */
+     *   Free all requests. This does not cancel the requests on the controller end._yn
+     */
     void FreeRequests();
-    
+
     /*
-    *   Free all track data
-    */
+     *   Free all track data
+     */
     void FreeAllTracks();
 
     /*
-    * Opens a trace file and loads the data into the controller.
-    * Any previous data will be cleared.
-    * @param file_path: The path to the trace file to load.
-    * 
-    */
+     * Opens a trace file and loads the data into the controller.
+     * Any previous data will be cleared.
+     * @param file_path: The path to the trace file to load.
+     *
+     */
     bool FetchTrace(const std::string& file_path);
 
     /*
-    * Fetches a track from the controller. Stores the data in a raw track buffer.
-    * @param index: The index of the track to select
-    * @param start_ts: The start timestamp of the track
-    * @param end_ts: The end timestamp of the track
-    * @param horz_pixel_range: The horizontal pixel range of the view
-    * @param lod: The level of detail to use
-    */
+     * Fetches a track from the controller. Stores the data in a raw track buffer.
+     * @param index: The index of the track to select
+     * @param start_ts: The start timestamp of the track
+     * @param end_ts: The end timestamp of the track
+     * @param horz_pixel_range: The horizontal pixel range of the view
+     * @param lod: The level of detail to use
+     */
     bool FetchTrack(uint64_t index, double start_ts, double end_ts, int horz_pixel_range,
                     int lod);
 
     /*
-    * Release memory buffer holding raw data for selected track
-    * @param index: The index of the track to select
-    */
+     * Release memory buffer holding raw data for selected track
+     * @param index: The index of the track to select
+     */
     bool FreeTrack(uint64_t index);
 
     /*
@@ -104,27 +104,33 @@ public:
     void Update();
 
     /*
-    * Gets the start timestamp of the trace
-    */
+     * Gets the start timestamp of the trace
+     */
     double GetStartTime();
 
     /*
-    * Gets the end timestamp of the trace
-    */
+     * Gets the end timestamp of the trace
+     */
     double GetEndTime();
 
     /*
-    * Get access to the raw track data.  The returned pointer should only be
-    * considered valid until the next call to Update() or any of the memory 
-    * freeing functions and FetchTrace() or CloseController().
-    * @param index: The index of the track data to fetch.
-    * @return: Pointer to the raw track data 
-    * or null if data for this track has not been fetched.
-    */
+     * Get access to the raw track data.  The returned pointer should only be
+     * considered valid until the next call to Update() or any of the memory
+     * freeing functions and FetchTrace() or CloseController().
+     * @param index: The index of the track data to fetch.
+     * @return: Pointer to the raw track data
+     * or null if data for this track has not been fetched.
+     */
     const RawTrackData* GetRawTrackData(uint64_t index);
 
     const track_info_t* GetTrackInfo(uint64_t index);
 
+    uint64_t GetTrackCount();
+
+    const std::string& GetTraceFilePath();
+
+    ProviderState GetState();
+    
 private:
     void HandleLoadTrace();
     void HandleLoadTrackMetaData();
@@ -142,9 +148,10 @@ private:
 
     ProviderState m_state;
 
-    uint64_t m_num_graphs = 0;  // number of graphs contained in the trace
-    double   m_min_ts     = 0;  // timeline start point
-    double   m_max_ts     = 0;  // timeline end point
+    uint64_t    m_num_graphs = 0;   // number of graphs contained in the trace
+    double      m_min_ts     = 0;   // timeline start point
+    double      m_max_ts     = 0;   // timeline end point
+    std::string m_trace_file_path;  // path to the trace file
 
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;

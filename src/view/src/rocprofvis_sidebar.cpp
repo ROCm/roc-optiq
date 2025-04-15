@@ -11,8 +11,9 @@
 
 using namespace RocProfVis::View;
 
-SideBar::SideBar()
-: m_dropdown_select(0)
+SideBar::SideBar(DataProvider &dp)
+: m_data_provider(dp) 
+, m_dropdown_select(0)
 , m_graph_map(nullptr)
 {}
 
@@ -35,7 +36,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 {
     if(!tree)
     {
-        std::cout << "No graph tree!! " << std::endl;
+        //std::cout << "No graph tree!! " << std::endl;
         return;
     }
 

@@ -48,6 +48,12 @@ FlameChart::FindMaxMinFlame()
     return std::make_tuple(m_min_x, m_max_x);
 }
 
+std::tuple<float, float>
+FlameChart::GetMinMax()
+{
+    return std::make_tuple(m_min_x, m_max_x);
+}
+
 void
 FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
                            float scale_x, float y_scroll_position)
@@ -70,7 +76,7 @@ void
 FlameChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {}
 
-std::string&
+const std::string&
 FlameChart::GetName()
 {
     return m_name;
@@ -101,12 +107,35 @@ FlameChart::ReturnChartID()
 }
 
 bool
+FlameChart::SetRawData(const RawTrackData* raw_data)
+{
+    if(raw_data == m_raw_data)
+    {
+        return false;
+    }
+    else
+    {
+        m_raw_data = raw_data;
+        const RawTrackEventData* event_track =
+            dynamic_cast<const RawTrackEventData*>(raw_data);
+        if(event_track)
+        {
+            ExtractPointsFromData(event_track);
+            FindMaxMinFlame();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool
 FlameChart::GetVisibility()
 {
     return m_is_chart_visible;
 }
+
 void
-FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
+FlameChart::ExtractPointsFromData(const RawTrackEventData* event_track)
 {
     std::vector<rocprofvis_trace_event_t> entries;
 
@@ -121,50 +150,20 @@ FlameChart::ExtractFlamePoints(rocprofvis_controller_array_t* track_data)
     double current_bin_start = DBL_MAX;
     float  largest_duration  = 0;
 
-    uint64_t            count  = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-        track_data, kRPVControllerArrayNumEntries, 0, &count);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-    rocprofvis_trace_event_t counter;
+    const std::vector<rocprofvis_trace_event_t> track_data = event_track->GetData();
+    uint64_t                                    count      = track_data.size();
+    rocprofvis_trace_event_t                    counter;
 
     for(uint64_t i = 0; i < count; i++)
     {
-        rocprofvis_controller_event_t* event = nullptr;
-        result                               = rocprofvis_controller_get_object(
-            track_data, kRPVControllerArrayEntryIndexed, i, &event);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
-
-        double start_ts = 0;
-        result          = rocprofvis_controller_get_double(
-            event, kRPVControllerEventStartTimestamp, 0, &start_ts);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-        double end_ts = 0;
-        result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp,
-                                                  0, &end_ts);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-        uint32_t length = 0;
-        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
-                                                  nullptr, &length);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-        length += 1;
-        counter.m_name.resize(length);
-        char* buffer = const_cast<char*>(counter.m_name.c_str());
-        ROCPROFVIS_ASSERT(buffer);
-        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
-                                                  buffer, &length);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
         if(i == 0)
         {
-            current_bin_start = start_ts;
+            current_bin_start = track_data[i].m_start_ts;
         }
 
-        counter.m_start_ts = start_ts;
-        counter.m_duration = end_ts - start_ts;
+        counter.m_name     = track_data[i].m_name;
+        counter.m_start_ts = track_data[i].m_start_ts;
+        counter.m_duration = track_data[i].m_duration;
 
         if(counter.m_start_ts < current_bin_start + bin_size)
         {

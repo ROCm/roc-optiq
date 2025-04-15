@@ -41,7 +41,7 @@ RawTrackSampleData::RawTrackSampleData(uint64_t index, double start_ts, double e
 RawTrackSampleData::~RawTrackSampleData() { m_data.clear(); }
 
 const std::vector<rocprofvis_trace_counter_t>&
-RawTrackSampleData::GetData()
+RawTrackSampleData::GetData() const
 {
     return m_data;
 }
@@ -59,7 +59,7 @@ RawTrackEventData::RawTrackEventData(uint64_t index, double start_ts, double end
 RawTrackEventData::~RawTrackEventData() { m_data.clear(); }
 
 const std::vector<rocprofvis_trace_event_t>&
-RawTrackEventData::GetData()
+RawTrackEventData::GetData() const
 {
     return m_data;
 }

@@ -223,7 +223,7 @@ MainView::RenderGraphView()
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2 display_size = ImGui::GetWindowSize();
-    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - 60.0f),
+    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - 50.0f),
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
 

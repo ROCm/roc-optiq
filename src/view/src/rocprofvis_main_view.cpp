@@ -257,7 +257,12 @@ MainView::RenderGraphView()
                     graph_objects.second.color_by_value_digits);
             }
 
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, graph_objects.second.selected);
+            ImVec4 is_chart_selected = ImVec4(0, 0, 0, 0);
+            if(graph_objects.second.is_chart_selected == true)
+            {
+                is_chart_selected = ImVec4(0.17, 0.54, 1.0f, 0.3f);
+            }
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, is_chart_selected);
             ImGui::BeginChild(
                 (std::to_string(graph_objects.first)).c_str(),
                 ImVec2(0,
@@ -397,7 +402,6 @@ MainView::MakeGraphView()
                 temp_flame.chart          = flame;
                 temp_flame.graph_type     = rocprofvis_graph_map_t::TYPE_FLAMECHART;
                 temp_flame.display        = true;
-                temp_flame.selected       = ImVec4(0, 0, 0, 0);
                 temp_flame.color_by_value = false;
                 rocprofvis_color_by_value_t temp_color = {};
                 temp_flame.color_by_value_digits       = temp_color;
@@ -429,7 +433,6 @@ MainView::MakeGraphView()
                 temp.chart          = line;
                 temp.graph_type     = rocprofvis_graph_map_t::TYPE_LINECHART;
                 temp.display        = true;
-                temp.selected       = ImVec4(0, 0, 0, 0);
                 temp.color_by_value = false;
                 rocprofvis_color_by_value_t temp_color_line = {};
                 temp.color_by_value_digits                  = temp_color_line;

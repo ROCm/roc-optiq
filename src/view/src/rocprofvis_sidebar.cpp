@@ -11,8 +11,8 @@
 
 using namespace RocProfVis::View;
 
-SideBar::SideBar(DataProvider &dp)
-: m_data_provider(dp) 
+SideBar::SideBar(DataProvider& dp)
+: m_data_provider(dp)
 , m_dropdown_select(0)
 , m_graph_map(nullptr)
 {}
@@ -36,7 +36,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 {
     if(!tree)
     {
-        //std::cout << "No graph tree!! " << std::endl;
+        // std::cout << "No graph tree!! " << std::endl;
         return;
     }
 
@@ -53,7 +53,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                                         ": " + tree_item.second.chart->GetName())
                                            .c_str()))
             {
-                tree_item.second.selected = ImVec4(0.17, 0.54, 1.0f, 0.3f);
+                tree_item.second.is_chart_selected = true;
 
                 if(ImGui::Checkbox(
                        (" Enable/Disable Chart #" + std::to_string((tree_item.first)))
@@ -110,12 +110,12 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                         "Not In Frame by: " +
                         std::to_string(tree_item.second.chart->GetMovement()) + " units.";
                     ImGui::TextColored(ImVec4(1, 0, 0, 1), temp_movement_value.c_str());
-                    std::cout << tree_item.second.chart->GetMovement()<<std::endl;
+                    std::cout << tree_item.second.chart->GetMovement() << std::endl;
                 }
             }
             else
             {
-                tree_item.second.selected = ImVec4(0, 0, 0, 0);
+                tree_item.second.is_chart_selected = false;
             }
             ImGui::PopStyleColor(3);
         }

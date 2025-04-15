@@ -115,14 +115,6 @@ MainView::Render()
     if(m_meta_map_made)
     {
         RenderGraphPoints();
-
-        ImGuiIO& io = ImGui::GetIO();
-        if(ImGui::IsKeyPressed(ImGuiKey_L))
-        {
-            m_data_provider.FetchTrack(0, m_data_provider.GetStartTime(),
-                                       m_data_provider.GetEndTime(), 1000, 0);
-            // m_data_provider.FetchTrack(0,m_min_x,m_max_x,1000,0);
-        }
     }
 }
 
@@ -373,7 +365,8 @@ MainView::MakeGraphView()
         const track_info_t* track_info = m_data_provider.GetTrackInfo(i);
         if(!track_info)
         {
-            // log error
+            // log warning (should this be an error?)
+            spdlog::warn("Missing track meta data for track at index {}", i);
             continue;
         }
 
@@ -387,8 +380,8 @@ MainView::MakeGraphView()
                     m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
-                    static_cast<float>(track_info->min_ts),   // - track_info->min_ts),
-                    static_cast<float>(track_info->max_ts));  // - track_info->min_ts));
+                    static_cast<float>(track_info->min_ts),  
+                    static_cast<float>(track_info->max_ts));
 
                 if(std::get<0>(temp_min_max_flame) < m_min_x)
                 {
@@ -419,8 +412,8 @@ MainView::MakeGraphView()
                     m_max_x, m_scale_x);
 
                 std::tuple<float, float> temp_min_max_flame = std::tuple<float, float>(
-                    static_cast<float>(track_info->min_ts),   // - track_info->min_ts),
-                    static_cast<float>(track_info->max_ts));  // - track_info->min_ts));
+                    static_cast<float>(track_info->min_ts),
+                    static_cast<float>(track_info->max_ts));
 
                 if(std::get<0>(temp_min_max_flame) < m_min_x)
                 {

@@ -30,8 +30,8 @@ public:
 
     void ExtractPointsFromData(const RawTrackSampleData* track_data);
 
-    std::tuple<float, float> GetMinMax();
-    std::tuple<float, float> FindMaxMin();
+    std::tuple<double, double> GetMinMax();
+    std::tuple<double, double> FindMaxMin();
     float                    GetTrackHeight() override;
     void                     SetID(int id) override;
     int                      ReturnChartID() override;

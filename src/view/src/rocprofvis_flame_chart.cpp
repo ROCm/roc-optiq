@@ -28,7 +28,7 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 , m_is_chart_visible(true)  // has to be true or nothing will render.
 {}
 
-std::tuple<float, float>
+std::tuple<double, double>
 FlameChart::FindMaxMinFlame()
 {
     m_min_x = flames[0].m_start_ts;
@@ -48,7 +48,7 @@ FlameChart::FindMaxMinFlame()
     return std::make_tuple(m_min_x, m_max_x);
 }
 
-std::tuple<float, float>
+std::tuple<double, double>
 FlameChart::GetMinMax()
 {
     return std::make_tuple(m_min_x, m_max_x);

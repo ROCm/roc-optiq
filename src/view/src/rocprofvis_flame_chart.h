@@ -26,8 +26,8 @@ public:
 
     void ExtractPointsFromData(const RawTrackEventData* event_track);
 
-    std::tuple<float, float> GetMinMax();
-    std::tuple<float, float> FindMaxMinFlame();
+    std::tuple<double, double> GetMinMax();
+    std::tuple<double, double> FindMaxMinFlame();
     void  UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                          float scale_x, float m_scroll_position) override;
     float GetTrackHeight() override;

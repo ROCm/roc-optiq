@@ -22,7 +22,7 @@ public:
     virtual void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) = 0;
     virtual bool  GetVisibility()                                                    = 0;
     virtual float GetMovement()                                                      = 0;
-    virtual std::tuple<float, float> GetMinMax()                                     = 0;
+    virtual std::tuple<double, double> GetMinMax()                                     = 0;
     virtual bool                     SetRawData(const RawTrackData* raw_data)        = 0;
 };
 

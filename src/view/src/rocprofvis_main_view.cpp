@@ -45,9 +45,20 @@ MainView::MainView(DataProvider& dp)
 , m_can_drag_to_pan(false)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
-{}
+{
+    m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
+        this->HandleNewTrackData(e);
+    };
+    EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kNewTrackData),
+                                           m_new_track_data_handler);
+}
 
-MainView::~MainView() { DestroyGraphs(); }
+MainView::~MainView()
+{
+    DestroyGraphs();
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTrackData),
+                              m_new_track_data_handler);
+}
 
 void
 MainView::ResetView()
@@ -68,34 +79,49 @@ MainView::ResetView()
 }
 
 void
+MainView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
+{
+    if(!e)
+    {
+        spdlog::debug("Null event, cannot process new track data");
+        return;
+    }
+
+    std::shared_ptr<TrackDataEvent> tde = std::dynamic_pointer_cast<TrackDataEvent>(e);
+    if(!tde)
+    {
+        spdlog::debug("Invalid event type {}, cannot process new track data",
+                      static_cast<int>(e->GetType()));
+    }
+    else
+    {
+        uint64_t            track_index = tde->GetTrackIndex();
+        const RawTrackData* rtd         = m_data_provider.GetRawTrackData(track_index);
+
+        if(m_graph_map[track_index].chart->SetRawData(rtd))
+        {
+            auto min_max = m_graph_map[track_index].chart->GetMinMax();
+
+            if(std::get<0>(min_max) < m_min_x)
+            {
+                m_min_x = std::get<0>(min_max);
+            }
+            if(std::get<1>(min_max) > m_max_x)
+            {
+                m_max_x = std::get<1>(min_max);
+            }
+
+            spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
+        }
+    }
+}
+
+void
 MainView::Update()
 {
     if(m_meta_map_made)
     {
-        uint64_t num_graphs = m_data_provider.GetTrackCount();
-
-        int graph_id = 0;
-        int scale_x  = 1;
-        for(uint64_t i = 0; i < num_graphs; i++)
-        {
-            const RawTrackData* rtd = m_data_provider.GetRawTrackData(i);
-            // TODO: This is hack for detecting changes until an event system is in place
-            if(m_graph_map[i].chart->SetRawData(rtd))
-            {
-                auto min_max = m_graph_map[i].chart->GetMinMax();
-
-                if(std::get<0>(min_max) < m_min_x)
-                {
-                    m_min_x = std::get<0>(min_max);
-                }
-                if(std::get<1>(min_max) > m_max_x)
-                {
-                    m_max_x = std::get<1>(min_max);
-                }
-
-                spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
-            }
-        }
+        // nothing for now
     }
 }
 

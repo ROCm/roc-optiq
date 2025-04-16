@@ -6,6 +6,7 @@
 #include "implot.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_events.h"
 #include "widgets/rocprofvis_debug_window.h"
 
 using namespace RocProfVis::View;
@@ -66,6 +67,8 @@ AppWindow::Init()
 void
 AppWindow::Update()
 {
+    EventManager::GetInstance()->DispatchEvents();
+
     DebugWindow::GetInstance()->ClearTransient();
     m_data_provider.Update();
     if(m_home_screen)

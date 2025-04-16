@@ -9,13 +9,12 @@
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_utils.h"
+#include "spdlog/spdlog.h"
 #include <iostream>
 #include <map>
 #include <string>
 #include <tuple>
 #include <vector>
-
-#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -24,6 +23,8 @@ namespace View
 
 MainView::MainView(DataProvider& dp)
 : m_data_provider(dp)
+, m_min_value(0.0f)
+, m_max_value(0.0f)
 , m_zoom(1.0f)
 , m_movement(0.0f)
 , m_min_x(FLT_MAX)
@@ -37,6 +38,7 @@ MainView::MainView(DataProvider& dp)
 , m_v_max_x(0.0f)
 , m_scale_x(0.0f)
 , m_meta_map_made(false)
+, m_meta_map({})
 , m_user_adjusting_graph_height(false)
 , m_previous_scroll_position(0.0f)
 , m_show_graph_customization_window(false)
@@ -45,13 +47,21 @@ MainView::MainView(DataProvider& dp)
 , m_can_drag_to_pan(false)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
+, m_grid(new RocProfVis::View::Grid())
+, m_grid_size(50)
 {}
 
-MainView::~MainView() { DestroyGraphs(); }
+MainView::~MainView()
+{
+    DestroyGraphs();
+    delete m_grid;
+}
 
 void
 MainView::ResetView()
 {
+    m_min_value          = 0.0f;
+    m_max_value          = 0.0f;
     m_zoom               = 1.0f;
     m_movement           = 0.0f;
     m_min_x              = FLT_MAX;
@@ -145,7 +155,7 @@ MainView::RenderScrubber(ImVec2 screen_pos)
         ImVec2 mouse_position = ImGui::GetMousePos();
 
         char text[20];
-        sprintf(text, "%.0f", m_grid.GetCursorPosition());
+        sprintf(text, "%.0f", m_grid->GetCursorPosition());
         ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18);
 
         ImVec2 rect_pos =
@@ -185,8 +195,8 @@ MainView::RenderGrid()
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    m_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
-                      m_v_max_x, m_v_min_x);
+    m_grid->RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
+                       m_v_max_x, m_v_min_x, m_grid_size);
 
     ImGui::PopStyleColor();
 }
@@ -213,7 +223,7 @@ MainView::RenderGraphView()
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2 display_size = ImGui::GetWindowSize();
-    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - 60.0f),
+    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - m_grid_size),
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
 
@@ -246,7 +256,12 @@ MainView::RenderGraphView()
                     graph_objects.second.color_by_value_digits);
             }
 
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, graph_objects.second.selected);
+            ImVec4 selection_color = ImVec4(0, 0, 0, 0);
+            if(graph_objects.second.selected == true)
+            {
+                selection_color = ImVec4(0.17, 0.54, 1.0f, 0.3f);
+            }
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
             ImGui::BeginChild(
                 (std::to_string(graph_objects.first)).c_str(),
                 ImVec2(0,
@@ -365,9 +380,9 @@ MainView::MakeGraphView()
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                FlameChart* flame =
-                    new FlameChart(track_info->index, track_info->name, m_zoom,
-                                   m_movement, m_min_x, m_max_x, scale_x);
+                RocProfVis::View::FlameChart* flame = new RocProfVis::View::FlameChart(
+                    track_info->index, track_info->name, m_zoom, m_movement, m_min_x,
+                    m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -386,8 +401,8 @@ MainView::MakeGraphView()
                 temp_flame.chart          = flame;
                 temp_flame.graph_type     = rocprofvis_graph_map_t::TYPE_FLAMECHART;
                 temp_flame.display        = true;
-                temp_flame.selected       = ImVec4(0, 0, 0, 0);
                 temp_flame.color_by_value = false;
+                temp_flame.selected       = false;
                 rocprofvis_color_by_value_t temp_color = {};
                 temp_flame.color_by_value_digits       = temp_color;
                 m_graph_map[track_info->index]         = temp_flame;
@@ -397,9 +412,9 @@ MainView::MakeGraphView()
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                LineChart* line =
-                    new LineChart(track_info->index, track_info->name, m_zoom, m_movement,
-                                  m_min_x, m_max_x, m_scale_x);
+                RocProfVis::View::LineChart* line = new RocProfVis::View::LineChart(
+                    track_info->index, track_info->name, m_zoom, m_movement, m_min_x,
+                    m_max_x, m_scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -418,8 +433,8 @@ MainView::MakeGraphView()
                 temp.chart          = line;
                 temp.graph_type     = rocprofvis_graph_map_t::TYPE_LINECHART;
                 temp.display        = true;
-                temp.selected       = ImVec4(0, 0, 0, 0);
                 temp.color_by_value = false;
+                temp.selected       = false;
                 rocprofvis_color_by_value_t temp_color_line = {};
                 temp.color_by_value_digits                  = temp_color_line;
                 m_graph_map[track_info->index]              = temp;

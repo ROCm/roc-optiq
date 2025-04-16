@@ -328,11 +328,11 @@ LineChart::Render()
                 {
                     if(m_color_by_value_digits.interest_1_max < m_data[i - 1].yValue)
                     {
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                        point_2.y, new_y);
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
                         LineColor        = IM_COL32(0, 0, 0, 255);
@@ -342,11 +342,11 @@ LineChart::Render()
                     }
                     else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].yValue)
                     {
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                        point_2.y, new_y);
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
                         LineColor        = IM_COL32(0, 0, 0, 255);
@@ -361,11 +361,11 @@ LineChart::Render()
                     {
                         // if greater than upper max.
 
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                        point_2.y, new_y);
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
                         LineColor        = IM_COL32(250, 0, 0, 255);
@@ -375,11 +375,11 @@ LineChart::Render()
                     }
                     else if(m_color_by_value_digits.interest_1_min > m_data[i].yValue)
                     {
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                        point_2.y, new_y);
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
                         LineColor        = IM_COL32(250, 0, 0, 255);
@@ -422,8 +422,8 @@ ImVec2
 LineChart::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
                    ImVec2& content_size, float scaleX, float scaleY)
 {
-    float x = (point.xValue - (m_min_x + m_movement)) * scaleX;
-    float y = cursor_position.y + content_size.y - (point.yValue - m_min_y) * scaleY;
+    double x = (point.xValue - (m_min_x + m_movement)) * scaleX;
+    double y = cursor_position.y + content_size.y - (point.yValue - m_min_y) * scaleY;
 
     return ImVec2(x, y);
 }

@@ -43,10 +43,10 @@ public:
 private:
     std::vector<rocprofvis_trace_event_t> flames;
     std::string                           m_name;
-    float                                 m_min_x;
-    float                                 m_max_x;
+    double                                m_min_x;
+    double                                m_max_x;
     float                                 m_zoom;
-    float                                 m_movement;
+    double                                m_movement;
     float                                 m_scale_x;
     int                                   m_chart_id;
     float                                 m_track_height;

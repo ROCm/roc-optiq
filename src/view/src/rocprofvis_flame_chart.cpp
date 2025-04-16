@@ -285,13 +285,13 @@ FlameChart::Render()
 
         for(const auto& flame : flames)
         {
-            float normalized_start =
+            double normalized_start =
                 (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
 
             // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
-            float normalized_end = flame.m_duration * m_scale_x;
+            double normalized_end = flame.m_duration * m_scale_x;
 
-            float fullBoxSize = normalized_start + normalized_end;
+            double fullBoxSize = normalized_start + normalized_end;
 
             ImVec2 start_position;
             ImVec2 end_position;

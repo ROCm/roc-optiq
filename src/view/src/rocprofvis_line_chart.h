@@ -49,11 +49,11 @@ private:
     std::string                          m_name;
     float                                m_zoom;
     rocprofvis_color_by_value_t          m_color_by_value_digits;
-    float                                m_movement;
-    float                                m_min_x;
-    float                                m_max_x;
-    float                                m_min_y;
-    float                                m_max_y;
+    double                               m_movement;
+    double                               m_min_x;
+    double                               m_max_x;
+    double                               m_min_y;
+    double                               m_max_y;
     float                                m_scale_x;
     int                                  m_id;
     float                                m_track_height;

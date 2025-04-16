@@ -15,7 +15,7 @@ public:
     Grid();
     ~Grid();
 
-    void  RenderGrid(float min_x, float max_x, float movement, float zoom,
+    void  RenderGrid(double min_x, double max_x, double movement, float zoom,
                      ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x);
     float GetCursorPosition();
 

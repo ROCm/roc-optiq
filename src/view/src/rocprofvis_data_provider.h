@@ -53,7 +53,7 @@ public:
     void CloseController();
 
     /*
-     *   Free all requests. This does not cancel the requests on the controller end._yn
+     *   Free all requests. This does not cancel the requests on the controller end.
      */
     void FreeRequests();
 
@@ -130,7 +130,10 @@ public:
     const std::string& GetTraceFilePath();
 
     ProviderState GetState();
-    
+
+    void SetTrackDataReadyCallback(const std::function<void(uint64_t)>& callback);
+    void SetTraceLoadedCallback(const std::function<void()>& callback);
+
 private:
     void HandleLoadTrace();
     void HandleLoadTrackMetaData();
@@ -157,6 +160,11 @@ private:
     std::vector<RawTrackData*> m_raw_trackdata;
 
     std::unordered_map<int64_t, data_req_info_t> m_requests;
+
+    // Called when new track data is ready
+    std::function<void(uint64_t)> m_track_data_ready_callback;
+    // Called when a new trace is loaded
+    std::function<void()> m_trace_data_ready_callback;
 };
 
 }  // namespace View

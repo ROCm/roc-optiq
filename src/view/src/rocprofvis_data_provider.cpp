@@ -11,6 +11,8 @@ DataProvider::DataProvider()
 , m_trace_future(nullptr)
 , m_trace_controller(nullptr)
 , m_trace_timeline(nullptr)
+, m_track_data_ready_callback(nullptr)
+, m_trace_data_ready_callback(nullptr)
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
@@ -105,6 +107,15 @@ DataProvider::GetTraceFilePath()
 
 ProviderState DataProvider::GetState() {
     return m_state;
+}
+
+
+void DataProvider::SetTrackDataReadyCallback(const std::function<void(uint64_t)>& callback) {
+    m_track_data_ready_callback = callback;
+}
+
+void DataProvider::SetTraceLoadedCallback(const std::function<void()>& callback) {
+    m_trace_data_ready_callback = callback;
 }
 
 bool
@@ -208,8 +219,12 @@ DataProvider::HandleLoadTrace()
             // trace loaded successfully, free the future pointer
             rocprofvis_controller_future_free(m_trace_future);
             m_trace_future = nullptr;
-
-            m_state = ProviderState::kReady;
+            
+            m_state = ProviderState::kReady;            
+            // fire callback
+            if(m_trace_data_ready_callback) {
+                m_trace_data_ready_callback();
+            }
         }
         else
         {
@@ -573,6 +588,11 @@ DataProvider::ProcessRequest(data_req_info_t& req)
     {
         rocprofvis_controller_array_free(req.graph_array);
         req.graph_array = nullptr;
+    }
+
+    //call the new data ready callback
+    if (m_track_data_ready_callback) {
+        m_track_data_ready_callback(req.index);
     }
 }
 

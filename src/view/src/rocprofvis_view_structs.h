@@ -17,8 +17,8 @@ typedef struct rocprofvis_color_by_value_t
 
 typedef struct rocprofvis_data_point_t
 {
-    float xValue;
-    float yValue;
+    double xValue;
+    double yValue;
 } rocprofvis_data_point_t;
 
 typedef struct rocprofvis_graph_map_t

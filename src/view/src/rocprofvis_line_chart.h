@@ -19,11 +19,11 @@ namespace View
 class LineChart : public Charts
 {
 public:
-    LineChart(int id, std::string name, float zoom, float movement, float& min_x,
-              float& max_x, float scale_x);
+    LineChart(int id, std::string name, float zoom, float movement, double& min_x,
+              double& max_x, float scale_x);
     ~LineChart();
     void   Render() override;
-    void   UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+    void   UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                           float scale_x, float m_scroll_position) override;
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);

@@ -18,8 +18,8 @@ namespace RocProfVis
 namespace View
 {
 
-LineChart::LineChart(int id, std::string name, float zoom, float movement, float& min_x,
-                     float& max_x, float scale_x)
+LineChart::LineChart(int id, std::string name, float zoom, float movement, double& min_x,
+                     double& max_x, float scale_x)
 : m_id(id)
 , m_zoom(zoom)
 , m_movement(movement)
@@ -115,8 +115,8 @@ LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
     int    screen_width = static_cast<int>(display_size.x);
 
-    float effectiveWidth = screen_width / m_zoom;
-    float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
+    double effectiveWidth = screen_width / m_zoom;
+    double bin_size       = (m_max_x - m_min_x) / effectiveWidth;
 
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
@@ -224,7 +224,7 @@ LineChart::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float k
 }
 
 void
-LineChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+LineChart::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                           float scale_x, float y_scroll_position)
 {
     if(m_is_chart_visible)

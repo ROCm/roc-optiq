@@ -15,7 +15,7 @@ namespace RocProfVis
 namespace View
 {
 FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movement,
-                       float min_x, float max_x, float scale_x)
+                       double min_x, double max_x, float scale_x)
 : m_zoom(zoom)
 , m_movement(movement)
 , m_min_x(min_x)
@@ -55,7 +55,7 @@ FlameChart::GetMinMax()
 }
 
 void
-FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+FlameChart::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                            float scale_x, float y_scroll_position)
 {
     if(m_is_chart_visible)
@@ -142,8 +142,8 @@ FlameChart::ExtractPointsFromData(const RawTrackEventData* event_track)
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
     int    screen_width = static_cast<int>(display_size.x);
 
-    float effective_width = screen_width / m_zoom;
-    float bin_size        = ((m_max_x - m_min_x) / effective_width);
+    double effective_width = screen_width / m_zoom;
+    double bin_size        = ((m_max_x - m_min_x) / effective_width);
 
     double bin_sum_x         = 0.0;
     int    bin_count         = 0;

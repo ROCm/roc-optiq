@@ -69,8 +69,8 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
     int    screen_width = static_cast<int>(display_size.x);
 
-    float effectiveWidth = screen_width / m_zoom;
-    float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
+    double effectiveWidth = screen_width / m_zoom;
+    double bin_size       = (m_max_x - m_min_x) / effectiveWidth;
 
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
@@ -190,7 +190,7 @@ BoxPlot::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float kno
 }
 
 void
-BoxPlot::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+BoxPlot::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                         float scale_x, float y_scroll_position)
 {
     m_zoom     = zoom;

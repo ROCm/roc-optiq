@@ -9,13 +9,12 @@
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
 #include "rocprofvis_utils.h"
+#include "spdlog/spdlog.h"
 #include <iostream>
 #include <map>
 #include <string>
 #include <tuple>
 #include <vector>
-
-#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -45,6 +44,8 @@ MainView::MainView(DataProvider& dp)
 , m_can_drag_to_pan(false)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
+, m_grid_size(50)
+
 {}
 
 MainView::~MainView() { DestroyGraphs(); }
@@ -186,7 +187,7 @@ MainView::RenderGrid()
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     m_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
-                      m_v_max_x, m_v_min_x);
+                      m_v_max_x, m_v_min_x, m_grid_size);
 
     ImGui::PopStyleColor();
 }
@@ -213,7 +214,7 @@ MainView::RenderGraphView()
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
     ImVec2 display_size = ImGui::GetWindowSize();
-    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - 60.0f),
+    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - m_grid_size),
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(0, 0));
 
@@ -246,7 +247,12 @@ MainView::RenderGraphView()
                     graph_objects.second.color_by_value_digits);
             }
 
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, graph_objects.second.selected);
+            ImVec4 selection_color = ImVec4(0, 0, 0, 0);
+            if(graph_objects.second.selected == true)
+            {
+                selection_color = ImVec4(0.17, 0.54, 1.0f, 0.3f);
+            }
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
             ImGui::BeginChild(
                 (std::to_string(graph_objects.first)).c_str(),
                 ImVec2(0,
@@ -386,8 +392,8 @@ MainView::MakeGraphView()
                 temp_flame.chart          = flame;
                 temp_flame.graph_type     = rocprofvis_graph_map_t::TYPE_FLAMECHART;
                 temp_flame.display        = true;
-                temp_flame.selected       = ImVec4(0, 0, 0, 0);
                 temp_flame.color_by_value = false;
+                temp_flame.selected       = false;
                 rocprofvis_color_by_value_t temp_color = {};
                 temp_flame.color_by_value_digits       = temp_color;
                 m_graph_map[track_info->index]         = temp_flame;
@@ -418,8 +424,8 @@ MainView::MakeGraphView()
                 temp.chart          = line;
                 temp.graph_type     = rocprofvis_graph_map_t::TYPE_LINECHART;
                 temp.display        = true;
-                temp.selected       = ImVec4(0, 0, 0, 0);
                 temp.color_by_value = false;
+                temp.selected       = false;
                 rocprofvis_color_by_value_t temp_color_line = {};
                 temp.color_by_value_digits                  = temp_color_line;
                 m_graph_map[track_info->index]              = temp;
@@ -543,7 +549,6 @@ MainView::HandleTopSurfaceTouch()
         // Handle Panning
         if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
-            std::cout << m_v_min_x << std::endl;
             float drag_y      = ImGui::GetIO().MouseDelta.y;
             m_scroll_position = m_scroll_position - drag_y, 0.0f, m_content_max_y_scoll;
 

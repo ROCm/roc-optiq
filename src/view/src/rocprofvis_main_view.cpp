@@ -44,7 +44,6 @@ MainView::MainView(DataProvider& dp)
 , m_can_drag_to_pan(false)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
-, m_grid(new RocProfVis::View::Grid())
 , m_grid_size(50)
 
 {}
@@ -187,10 +186,8 @@ MainView::RenderGrid()
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-
-    m_grid->RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
-                       m_v_max_x, m_v_min_x, m_grid_size);
-
+    m_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
+                      m_v_max_x, m_v_min_x, m_grid_size);
 
     ImGui::PopStyleColor();
 }
@@ -552,29 +549,24 @@ MainView::HandleTopSurfaceTouch()
         // Handle Panning
         if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
-            float drag_y = ImGui::GetIO().MouseDelta.y;
-            m_scroll_position =
-                clamp(m_scroll_position - drag_y, 0.0f, m_content_max_y_scoll);
+            float drag_y      = ImGui::GetIO().MouseDelta.y;
+            m_scroll_position = m_scroll_position - drag_y, 0.0f, m_content_max_y_scoll;
 
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (m_max_x - m_min_x) / m_zoom;
-            if((10000 * ((m_min_x / m_v_min_x) - 1)) > 1.6 * (1 / (m_scale_x * 1000)))
+
+            // Left side
+            if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
             {
-                // Left side
-                if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
-                {
-                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
-                }
+                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
             }
-            else if((100000 * ((m_original_v_max_x / m_v_max_x) - 1)) <
-                    1.6 * (1 / (m_scale_x * 1000)))
+
+            // Right side
+            if((drag / ImGui::GetContentRegionAvail().x) * view_width > 0)
             {
-                // Right side
-                if((drag / ImGui::GetContentRegionAvail().x) * view_width > 0)
-                {
-                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
-                }
+                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
             }
+
             else
             {
                 m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;

@@ -19,19 +19,19 @@ namespace View
 class LineChart : public Charts
 {
 public:
-    LineChart(int id, std::string name, float zoom, float movement, float& min_x,
-              float& max_x, float scale_x);
+    LineChart(int id, std::string name, float zoom, float movement, double& min_x,
+              double& max_x, float scale_x);
     ~LineChart();
     void   Render() override;
-    void   UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+    void   UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                           float scale_x, float m_scroll_position) override;
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
 
     void ExtractPointsFromData(const RawTrackSampleData* track_data);
 
-    std::tuple<float, float> GetMinMax();
-    std::tuple<float, float> FindMaxMin();
+    std::tuple<double, double> GetMinMax();
+    std::tuple<double, double> FindMaxMin();
     float                    GetTrackHeight() override;
     void                     SetID(int id) override;
     int                      ReturnChartID() override;
@@ -49,11 +49,11 @@ private:
     std::string                          m_name;
     float                                m_zoom;
     rocprofvis_color_by_value_t          m_color_by_value_digits;
-    float                                m_movement;
-    float                                m_min_x;
-    float                                m_max_x;
-    float                                m_min_y;
-    float                                m_max_y;
+    double                               m_movement;
+    double                               m_min_x;
+    double                               m_max_x;
+    double                               m_min_y;
+    double                               m_max_y;
     float                                m_scale_x;
     int                                  m_id;
     float                                m_track_height;

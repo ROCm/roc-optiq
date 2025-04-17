@@ -103,7 +103,9 @@ DataProvider::GetTraceFilePath()
     return m_trace_file_path;
 }
 
-ProviderState DataProvider::GetState() {
+ProviderState
+DataProvider::GetState()
+{
     return m_state;
 }
 
@@ -171,14 +173,15 @@ DataProvider::HandleLoadTrace()
     if(m_trace_future)
     {
         rocprofvis_result_t result = rocprofvis_controller_future_wait(m_trace_future, 0);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess || result == kRocProfVisResultTimeout);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
+                          result == kRocProfVisResultTimeout);
         if(result == kRocProfVisResultSuccess)
         {
             uint64_t uint64_result = 0;
             result                 = rocprofvis_controller_get_uint64(
                 m_trace_future, kRPVControllerFutureResult, 0, &uint64_result);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                   uint64_result == kRocProfVisResultSuccess);
+                              uint64_result == kRocProfVisResultSuccess);
 
             result = rocprofvis_controller_get_object(
                 m_trace_controller, kRPVControllerTimeline, 0, &m_trace_timeline);
@@ -224,6 +227,9 @@ DataProvider::HandleLoadTrackMetaData()
     m_track_metadata.clear();
     FreeAllTracks();
 
+    size_t str_buffer_length = 128;
+    char*  str_buffer        = new char[str_buffer_length];
+
     for(uint64_t i = 0; i < m_num_graphs; i++)
     {
         rocprofvis_handle_t* graph  = nullptr;
@@ -249,8 +255,8 @@ DataProvider::HandleLoadTrackMetaData()
             result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
                                                       &track_type);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                   (track_type == kRPVControllerTrackTypeEvents ||
-                    track_type == kRPVControllerTrackTypeSamples));
+                              (track_type == kRPVControllerTrackTypeEvents ||
+                               track_type == kRPVControllerTrackTypeSamples));
             track_info.track_type = track_type == kRPVControllerTrackTypeSamples
                                         ? kRPVControllerTrackTypeSamples
                                         : kRPVControllerTrackTypeEvents;
@@ -261,12 +267,18 @@ DataProvider::HandleLoadTrackMetaData()
                                                       nullptr, &length);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            char* buffer = (char*) alloca(length + 1);
+            if(length >= str_buffer_length)
+            {
+                delete[] str_buffer;
+                str_buffer_length = length + 1;
+                str_buffer        = new char[str_buffer_length];
+                spdlog::debug("Resizing str buffer to {}", str_buffer_length);
+            }
             length += 1;
             result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
-                                                      buffer, &length);
+                                                      str_buffer, &length);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            track_info.name = std::string(buffer);
+            track_info.name = std::string(str_buffer);
 
             result = rocprofvis_controller_get_double(
                 track, kRPVControllerTrackMinTimestamp, 0, &track_info.min_ts);
@@ -291,6 +303,8 @@ DataProvider::HandleLoadTrackMetaData()
             spdlog::debug("Error getting track meta data for track at index: {}", i);
         }
     }
+
+    delete[] str_buffer;
 
     spdlog::info("Track meta data loaded");
 }
@@ -498,7 +512,7 @@ DataProvider::HandleLoadGraphs()
             rocprofvis_result_t result =
                 rocprofvis_controller_future_wait(req.graph_future, 0);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
-                   result == kRocProfVisResultTimeout);
+                              result == kRocProfVisResultTimeout);
 
             // this graph is ready
             if(result == kRocProfVisResultSuccess)
@@ -654,6 +668,9 @@ DataProvider::CreateRawEventData(uint64_t                       index,
 
     rocprofvis_trace_event_t trace_event;
 
+    size_t str_buffer_length = 128;
+    char*  str_buffer        = new char[str_buffer_length];
+
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_event_t* event = nullptr;
@@ -679,15 +696,22 @@ DataProvider::CreateRawEventData(uint64_t                       index,
                                                   nullptr, &length);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        char* str_buffer = (char*) alloca(length + 1);
+        if(length >= str_buffer_length)
+        {
+            delete[] str_buffer;
+            str_buffer_length = length + 1;
+            str_buffer        = new char[str_buffer_length];
+            spdlog::debug("Resizing str buffer to {}", str_buffer_length);
+        }
         length += 1;
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   str_buffer, &length);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_name = std::string(str_buffer);
-
         buffer.push_back(trace_event);
     }
+
+    delete[] str_buffer;
 
     raw_event_data->SetData(std::move(buffer));
     m_raw_trackdata[index] = raw_event_data;

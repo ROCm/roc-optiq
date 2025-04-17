@@ -14,18 +14,10 @@ namespace RocProfVis
 {
 namespace View
 {
-FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movement,
-                       double min_x, double max_x, float scale_x)
-: m_zoom(zoom)
-, m_movement(movement)
-, m_min_x(min_x)
-, m_chart_id(chart_id)
-, m_max_x(max_x)
-, m_scale_x(scale_x)
-, m_name(name)
-, m_track_height(75)
+FlameChart::FlameChart(int id, std::string name, float zoom, float movement, double min_x,
+                       double max_x, float scale_x)
+: Charts(id, name, zoom, movement, min_x, max_x, scale_x)
 , m_is_color_value_existant()
-, m_is_chart_visible(true)  // has to be true or nothing will render.
 {}
 
 std::tuple<double, double>
@@ -45,12 +37,6 @@ FlameChart::FindMaxMinFlame()
             m_max_x = point.m_start_ts + point.m_duration;
         }
     }
-    return std::make_tuple(m_min_x, m_max_x);
-}
-
-std::tuple<double, double>
-FlameChart::GetMinMax()
-{
     return std::make_tuple(m_min_x, m_max_x);
 }
 
@@ -76,34 +62,10 @@ void
 FlameChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {}
 
-const std::string&
-FlameChart::GetName()
-{
-    return m_name;
-}
-
 float
 FlameChart::GetMovement()
 {
     return m_movement_since_unload - m_y_movement;
-}
-
-float
-FlameChart::GetTrackHeight()
-{
-    return m_track_height;
-}
-
-void
-FlameChart::SetID(int id)
-{
-    m_chart_id = id;
-}
-
-int
-FlameChart::ReturnChartID()
-{
-    return m_chart_id;
 }
 
 bool
@@ -126,12 +88,6 @@ FlameChart::SetRawData(const RawTrackData* raw_data)
         }
     }
     return false;
-}
-
-bool
-FlameChart::GetVisibility()
-{
-    return m_is_chart_visible;
 }
 
 void
@@ -246,7 +202,7 @@ FlameChart::Render()
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 
-    if(ImGui::BeginChild((std::to_string(m_chart_id)).c_str()), ImVec2(0, 50), true,
+    if(ImGui::BeginChild((std::to_string(m_id)).c_str()), ImVec2(0, 50), true,
        window_flags)
     {
         int    boxplot_box_id = 0;
@@ -310,8 +266,8 @@ FlameChart::Render()
     bool     is_control_held = io.KeyCtrl;
     if(is_control_held)
     {
-        ImGui::Selectable(("Move Position Line " + std::to_string(m_chart_id)).c_str(),
-                          false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+        ImGui::Selectable(("Move Position Line " + std::to_string(m_id)).c_str(), false,
+                          ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
 
         if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
         {

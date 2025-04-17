@@ -20,61 +20,20 @@ namespace View
 
 LineChart::LineChart(int id, std::string name, float zoom, float movement, double& min_x,
                      double& max_x, float scale_x)
-: m_id(id)
-, m_zoom(zoom)
+: Charts(id, name, zoom, movement, min_x, max_x, scale_x)
 , m_movement(movement)
-, m_min_x(min_x)
-, m_max_x(max_x)
 , m_min_y(0)
 , m_max_y(0)
-, m_scale_x(scale_x)
 , m_data({})
-, m_name(name)
-, m_track_height(290.0f)
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
-, m_is_chart_visible(true)  // has to be true or nothing will render.
 , m_movement_since_unload(FLT_MAX)
 , m_y_movement(0)
-{}
+{
+    m_track_height = 290.0f;
+}
 
 LineChart::~LineChart() {}
-
-float
-LineChart::GetTrackHeight()
-{
-    return m_track_height;
-}
-
-const std::string&
-LineChart::GetName()
-{
-    return m_name;
-}
-
-int
-LineChart::ReturnChartID()
-{
-    return m_id;
-}
-
-bool
-LineChart::GetVisibility()
-{
-    return m_is_chart_visible;
-}
-
-float
-LineChart::GetMovement()
-{
-    return m_movement_since_unload - m_y_movement;
-}
-
-void
-LineChart::SetID(int id)
-{
-    m_id = id;
-}
 
 void
 LineChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
@@ -116,7 +75,7 @@ LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
     int    screen_width = static_cast<int>(display_size.x);
 
     double effective_width = screen_width / m_zoom;
-    double bin_size       = (m_max_x - m_min_x) / effective_width;
+    double bin_size        = (m_max_x - m_min_x) / effective_width;
 
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
@@ -169,12 +128,6 @@ LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
     }
 
     m_data = aggregated_points;
-}
-
-std::tuple<double, double>
-LineChart::GetMinMax()
-{
-    return std::make_tuple(m_min_x, m_max_x);
 }
 
 std::tuple<double, double>
@@ -239,6 +192,12 @@ LineChart::UpdateMovement(float zoom, float movement, double& min_x, double& max
     m_min_x      = min_x;
     m_max_x      = max_x;
     m_y_movement = y_scroll_position;
+}
+
+float
+LineChart::GetMovement()
+{
+    return m_movement_since_unload - m_y_movement;
 }
 
 void
@@ -340,7 +299,8 @@ LineChart::Render()
                         LineColor = IM_COL32(250, 0, 0, 255);
                         point_1   = new_point;
                     }
-                    else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].y_value)
+                    else if(m_color_by_value_digits.interest_1_min >
+                            m_data[i - 1].y_value)
                     {
                         double new_y =
                             cursor_position.y + content_size.y -

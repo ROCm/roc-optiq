@@ -15,54 +15,28 @@ namespace RocProfVis
 namespace View
 {
 
-BoxPlot::BoxPlot(int id, std::string name, float zoom, float movement, float& min_x,
-                 float& max_x, float scale_x)
-: m_id(id)
-, m_zoom(zoom)
+BoxPlot::BoxPlot(int id, std::string name, float zoom, float movement, double min_x,
+                 double max_x, float scale_x)
+: Charts(id, name, zoom, movement, min_x, max_x, scale_x)
 , m_movement(movement)
-, m_min_x(min_x)
-, m_max_x(max_x)
 , m_min_y(0)
 , m_max_y(0)
-, m_scale_x(scale_x)
 , m_data({})
-, m_name(name)
-, m_track_height(290.0f)
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
 {}
 
 BoxPlot::~BoxPlot() {}
-float
-BoxPlot::GetTrackHeight()
-{
-    return m_track_height;  // Create an invisible button with a more area
-}
 
-std::string&
-BoxPlot::GetName()
-{
-    return m_name;
-}
-int
-BoxPlot::ReturnChartID()
-{
-    return m_id;
-}
-void
-BoxPlot::SetID(int id)
-{
-    m_id = id;
-}
 void
 BoxPlot::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {
-    m_color_by_value_digits = color_by_value_digits;
+    m_color_by_value_digits   = color_by_value_digits;
     m_is_color_value_existant = true;
 }
 
-std::vector<rocprofvis_data_point_t>
-BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
+void
+BoxPlot::ExtractPointsFromData(const RawTrackSampleData* sample_track)
 {
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
@@ -70,43 +44,26 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     int    screen_width = static_cast<int>(display_size.x);
 
     double effective_width = screen_width / m_zoom;
-    double bin_size       = (m_max_x - m_min_x) / effective_width;
+    double bin_size        = (m_max_x - m_min_x) / effective_width;
 
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
     int    bin_count         = 0;
     double current_bin_start = DBL_MAX;
 
-    uint64_t            count  = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-        track_data, kRPVControllerArrayNumEntries, 0, &count);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
+    uint64_t                                      count      = track_data.size();
 
     rocprofvis_trace_counter_t counter;
 
     for(uint64_t i = 0; i < count; i++)
     {
-        rocprofvis_controller_sample_t* sample = nullptr;
-        result                                 = rocprofvis_controller_get_object(
-            track_data, kRPVControllerArrayEntryIndexed, i, &sample);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
-
-        double start_ts = 0;
-        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
-                                                  0, &start_ts);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-        double value = 0;
-        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
-                                                  &value);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-        counter.m_start_ts = start_ts;
-        counter.m_value    = value;
+        counter.m_start_ts = track_data[i].m_start_ts;
+        counter.m_value    = track_data[i].m_value;
 
         if(i == 0)
         {
-            current_bin_start = start_ts;
+            current_bin_start = counter.m_start_ts;
         }
 
         if(counter.m_start_ts < current_bin_start + bin_size)
@@ -140,10 +97,9 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     }
 
     m_data = aggregated_points;
-    return aggregated_points;
 }
 
-std::tuple<float, float>
+std::tuple<double, double>
 BoxPlot::FindMaxMin()
 {
     m_min_y = m_data[0].y_value;
@@ -215,8 +171,7 @@ BoxPlot::Render()
         ImGui::BeginChild("MetaData View", ImVec2(metadata_size, m_track_height), false);
 
         ImGui::BeginChild("MetaData Content",
-                          ImVec2(metadata_size - 70.0f, m_track_height),
-                          false);
+                          ImVec2(metadata_size - 70.0f, m_track_height), false);
         ImGui::Text(m_name.c_str());
         ImGui::EndChild();
 
@@ -306,4 +261,3 @@ BoxPlot::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
 
 }  // namespace View
 }  // namespace RocProfVis
-

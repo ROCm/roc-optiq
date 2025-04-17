@@ -69,8 +69,8 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
     int    screen_width = static_cast<int>(display_size.x);
 
-    float effectiveWidth = screen_width / m_zoom;
-    float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
+    double effective_width = screen_width / m_zoom;
+    double bin_size       = (m_max_x - m_min_x) / effective_width;
 
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
@@ -120,8 +120,8 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
             if(bin_count > 0)
             {
                 rocprofvis_data_point_t binned_point;
-                binned_point.xValue = bin_sum_x / bin_count;
-                binned_point.yValue = bin_sum_y / bin_count;
+                binned_point.x_value = bin_sum_x / bin_count;
+                binned_point.y_value = bin_sum_y / bin_count;
                 aggregated_points.push_back(binned_point);
             }
             current_bin_start += bin_size;
@@ -134,8 +134,8 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     if(bin_count > 0)
     {
         rocprofvis_data_point_t binned_point;
-        binned_point.xValue = bin_sum_x / bin_count;
-        binned_point.yValue = bin_sum_y / bin_count;
+        binned_point.x_value = bin_sum_x / bin_count;
+        binned_point.y_value = bin_sum_y / bin_count;
         aggregated_points.push_back(binned_point);
     }
 
@@ -146,28 +146,28 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
 std::tuple<float, float>
 BoxPlot::FindMaxMin()
 {
-    m_min_y = m_data[0].yValue;
-    m_max_y = m_data[0].yValue;
-    m_min_x = m_data[0].xValue;
-    m_max_x = m_data[0].xValue;
+    m_min_y = m_data[0].y_value;
+    m_max_y = m_data[0].y_value;
+    m_min_x = m_data[0].x_value;
+    m_max_x = m_data[0].x_value;
 
     for(const auto& point : m_data)
     {
-        if(point.xValue < m_min_x)
+        if(point.x_value < m_min_x)
         {
-            m_min_x = point.xValue;
+            m_min_x = point.x_value;
         }
-        if(point.xValue > m_max_x)
+        if(point.x_value > m_max_x)
         {
-            m_max_x = point.xValue;
+            m_max_x = point.x_value;
         }
-        if(point.yValue < m_min_y)
+        if(point.y_value < m_min_y)
         {
-            m_min_y = point.yValue;
+            m_min_y = point.y_value;
         }
-        if(point.yValue > m_max_y)
+        if(point.y_value > m_max_y)
         {
-            m_max_y = point.yValue;
+            m_max_y = point.y_value;
         }
     }
 
@@ -190,7 +190,7 @@ BoxPlot::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float kno
 }
 
 void
-BoxPlot::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+BoxPlot::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                         float scale_x, float y_scroll_position)
 {
     m_zoom     = zoom;
@@ -252,7 +252,7 @@ BoxPlot::Render()
                                           ImVec2(point_1.x + 10, point_1.y + 10)))
             {
                 ImGui::BeginTooltip();
-                ImGui::Text(std::to_string(m_data[i - 1].xValue - m_min_x).c_str());
+                ImGui::Text(std::to_string(m_data[i - 1].x_value - m_min_x).c_str());
                 ImGui::EndTooltip();
             }
             ImVec2 point_2 =
@@ -298,8 +298,8 @@ ImVec2
 BoxPlot::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
                  ImVec2& content_size, float scaleX, float scaleY)
 {
-    float x = (point.xValue - (m_min_x + m_movement)) * scaleX;
-    float y = cursor_position.y + content_size.y - (point.yValue - m_min_y) * scaleY;
+    float x = (point.x_value - (m_min_x + m_movement)) * scaleX;
+    float y = cursor_position.y + content_size.y - (point.y_value - m_min_y) * scaleY;
 
     return ImVec2(x, y);
 }

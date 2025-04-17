@@ -18,17 +18,17 @@ namespace View
 class FlameChart : public Charts
 {
 public:
-    FlameChart(int chart_id, std::string name, float zoom, float movement, float min_x,
-               float max_x, float scale_x);
+    FlameChart(int chart_id, std::string name, float zoom, float movement, double min_x,
+               double max_x, float scale_x);
     void Render() override;
     void DrawBox(ImVec2 start_position, int boxplot_box_id,
                  rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list);
 
     void ExtractPointsFromData(const RawTrackEventData* event_track);
 
-    std::tuple<float, float> GetMinMax();
-    std::tuple<float, float> FindMaxMinFlame();
-    void  UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+    std::tuple<double, double> GetMinMax();
+    std::tuple<double, double> FindMaxMinFlame();
+    void  UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                          float scale_x, float m_scroll_position) override;
     float GetTrackHeight() override;
     int   ReturnChartID() override;
@@ -43,10 +43,10 @@ public:
 private:
     std::vector<rocprofvis_trace_event_t> flames;
     std::string                           m_name;
-    float                                 m_min_x;
-    float                                 m_max_x;
+    double                                m_min_x;
+    double                                m_max_x;
     float                                 m_zoom;
-    float                                 m_movement;
+    double                                m_movement;
     float                                 m_scale_x;
     int                                   m_chart_id;
     float                                 m_track_height;

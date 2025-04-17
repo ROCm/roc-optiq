@@ -15,7 +15,7 @@ namespace RocProfVis
 namespace View
 {
 FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movement,
-                       float min_x, float max_x, float scale_x)
+                       double min_x, double max_x, float scale_x)
 : m_zoom(zoom)
 , m_movement(movement)
 , m_min_x(min_x)
@@ -28,7 +28,7 @@ FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movemen
 , m_is_chart_visible(true)  // has to be true or nothing will render.
 {}
 
-std::tuple<float, float>
+std::tuple<double, double>
 FlameChart::FindMaxMinFlame()
 {
     m_min_x = flames[0].m_start_ts;
@@ -48,14 +48,14 @@ FlameChart::FindMaxMinFlame()
     return std::make_tuple(m_min_x, m_max_x);
 }
 
-std::tuple<float, float>
+std::tuple<double, double>
 FlameChart::GetMinMax()
 {
     return std::make_tuple(m_min_x, m_max_x);
 }
 
 void
-FlameChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+FlameChart::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                            float scale_x, float y_scroll_position)
 {
     if(m_is_chart_visible)
@@ -142,8 +142,8 @@ FlameChart::ExtractPointsFromData(const RawTrackEventData* event_track)
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
     int    screen_width = static_cast<int>(display_size.x);
 
-    float effective_width = screen_width / m_zoom;
-    float bin_size        = ((m_max_x - m_min_x) / effective_width);
+    double effective_width = screen_width / m_zoom;
+    double bin_size        = ((m_max_x - m_min_x) / effective_width);
 
     double bin_sum_x         = 0.0;
     int    bin_count         = 0;
@@ -285,13 +285,13 @@ FlameChart::Render()
 
         for(const auto& flame : flames)
         {
-            float normalized_start =
+            double normalized_start =
                 (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
 
             // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
-            float normalized_end = flame.m_duration * m_scale_x;
+            double normalized_end = flame.m_duration * m_scale_x;
 
-            float fullBoxSize = normalized_start + normalized_end;
+            double fullBoxSize = normalized_start + normalized_end;
 
             ImVec2 start_position;
             ImVec2 end_position;

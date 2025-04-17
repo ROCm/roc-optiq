@@ -19,8 +19,8 @@ typedef struct rocprofvis_color_by_value_t
 
 typedef struct rocprofvis_data_point_t
 {
-    float xValue;
-    float yValue;
+    double x_value;
+    double y_value;
 } rocprofvis_data_point_t;
 
 typedef struct rocprofvis_graph_map_t
@@ -30,16 +30,14 @@ typedef struct rocprofvis_graph_map_t
         TYPE_LINECHART,
         TYPE_FLAMECHART
     } graph_type;
-    bool    display;
-    Charts* chart;
-    ImVec4  selected;
-
+    bool                        display;
+    Charts*                     chart;
+    bool                        selected;
     bool                        color_by_value;
     bool                        make_boxplot;
     rocprofvis_color_by_value_t color_by_value_digits;
 
 } rocprofvis_graph_map_t;
-
 
 }  // namespace View
 }  // namespace RocProfVis

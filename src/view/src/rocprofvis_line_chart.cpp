@@ -18,8 +18,8 @@ namespace RocProfVis
 namespace View
 {
 
-LineChart::LineChart(int id, std::string name, float zoom, float movement, float& min_x,
-                     float& max_x, float scale_x)
+LineChart::LineChart(int id, std::string name, float zoom, float movement, double& min_x,
+                     double& max_x, float scale_x)
 : m_id(id)
 , m_zoom(zoom)
 , m_movement(movement)
@@ -115,8 +115,8 @@ LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
     int    screen_width = static_cast<int>(display_size.x);
 
-    float effectiveWidth = screen_width / m_zoom;
-    float bin_size       = (m_max_x - m_min_x) / effectiveWidth;
+    double effective_width = screen_width / m_zoom;
+    double bin_size       = (m_max_x - m_min_x) / effective_width;
 
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
@@ -149,8 +149,8 @@ LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
             if(bin_count > 0)
             {
                 rocprofvis_data_point_t binned_point;
-                binned_point.xValue = bin_sum_x / bin_count;
-                binned_point.yValue = bin_sum_y / bin_count;
+                binned_point.x_value = bin_sum_x / bin_count;
+                binned_point.y_value = bin_sum_y / bin_count;
                 aggregated_points.push_back(binned_point);
             }
             current_bin_start += bin_size;
@@ -163,45 +163,45 @@ LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
     if(bin_count > 0)
     {
         rocprofvis_data_point_t binned_point;
-        binned_point.xValue = bin_sum_x / bin_count;
-        binned_point.yValue = bin_sum_y / bin_count;
+        binned_point.x_value = bin_sum_x / bin_count;
+        binned_point.y_value = bin_sum_y / bin_count;
         aggregated_points.push_back(binned_point);
     }
 
     m_data = aggregated_points;
 }
 
-std::tuple<float, float>
+std::tuple<double, double>
 LineChart::GetMinMax()
 {
     return std::make_tuple(m_min_x, m_max_x);
 }
 
-std::tuple<float, float>
+std::tuple<double, double>
 LineChart::FindMaxMin()
 {
-    m_min_y = m_data[0].yValue;
-    m_max_y = m_data[0].yValue;
-    m_min_x = m_data[0].xValue;
-    m_max_x = m_data[0].xValue;
+    m_min_y = m_data[0].y_value;
+    m_max_y = m_data[0].y_value;
+    m_min_x = m_data[0].x_value;
+    m_max_x = m_data[0].x_value;
 
     for(const auto& point : m_data)
     {
-        if(point.xValue < m_min_x)
+        if(point.x_value < m_min_x)
         {
-            m_min_x = point.xValue;
+            m_min_x = point.x_value;
         }
-        if(point.xValue > m_max_x)
+        if(point.x_value > m_max_x)
         {
-            m_max_x = point.xValue;
+            m_max_x = point.x_value;
         }
-        if(point.yValue < m_min_y)
+        if(point.y_value < m_min_y)
         {
-            m_min_y = point.yValue;
+            m_min_y = point.y_value;
         }
-        if(point.yValue > m_max_y)
+        if(point.y_value > m_max_y)
         {
-            m_max_y = point.yValue;
+            m_max_y = point.y_value;
         }
     }
 
@@ -224,7 +224,7 @@ LineChart::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float k
 }
 
 void
-LineChart::UpdateMovement(float zoom, float movement, float& min_x, float& max_x,
+LineChart::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                           float scale_x, float y_scroll_position)
 {
     if(m_is_chart_visible)
@@ -301,7 +301,7 @@ LineChart::Render()
                                           ImVec2(point_1.x + 10, point_1.y + 10)))
             {
                 ImGui::BeginTooltip();
-                ImGui::Text(std::to_string(m_data[i - 1].xValue - m_min_x).c_str());
+                ImGui::Text(std::to_string(m_data[i - 1].x_value - m_min_x).c_str());
                 ImGui::EndTooltip();
             }
             ImVec2 point_2 =
@@ -313,11 +313,11 @@ LineChart::Render()
                 // Add to struct if more regions needed.
 
                 bool point_1_in =
-                    (m_color_by_value_digits.interest_1_max > m_data[i - 1].yValue &&
-                     m_color_by_value_digits.interest_1_min < m_data[i - 1].yValue);
+                    (m_color_by_value_digits.interest_1_max > m_data[i - 1].y_value &&
+                     m_color_by_value_digits.interest_1_min < m_data[i - 1].y_value);
                 bool point_2_in =
-                    (m_color_by_value_digits.interest_1_max > m_data[i].yValue &&
-                     m_color_by_value_digits.interest_1_min < m_data[i].yValue);
+                    (m_color_by_value_digits.interest_1_max > m_data[i].y_value &&
+                     m_color_by_value_digits.interest_1_min < m_data[i].y_value);
 
                 if(point_1_in && point_2_in)
                 {
@@ -326,13 +326,13 @@ LineChart::Render()
 
                 else if(!point_1_in && point_2_in)
                 {
-                    if(m_color_by_value_digits.interest_1_max < m_data[i - 1].yValue)
+                    if(m_color_by_value_digits.interest_1_max < m_data[i - 1].y_value)
                     {
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                        point_2.y, new_y);
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
                         LineColor        = IM_COL32(0, 0, 0, 255);
@@ -340,13 +340,13 @@ LineChart::Render()
                         LineColor = IM_COL32(250, 0, 0, 255);
                         point_1   = new_point;
                     }
-                    else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].yValue)
+                    else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].y_value)
                     {
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                        point_2.y, new_y);
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
                         LineColor        = IM_COL32(0, 0, 0, 255);
@@ -357,15 +357,15 @@ LineChart::Render()
                 }
                 else if(point_1_in && !point_2_in)
                 {
-                    if(m_color_by_value_digits.interest_1_max < m_data[i].yValue)
+                    if(m_color_by_value_digits.interest_1_max < m_data[i].y_value)
                     {
                         // if greater than upper max.
 
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                        point_2.y, new_y);
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
                         LineColor        = IM_COL32(250, 0, 0, 255);
@@ -373,13 +373,13 @@ LineChart::Render()
                         LineColor = IM_COL32(0, 0, 0, 255);
                         point_1   = new_point;
                     }
-                    else if(m_color_by_value_digits.interest_1_min > m_data[i].yValue)
+                    else if(m_color_by_value_digits.interest_1_min > m_data[i].y_value)
                     {
-                        float new_y =
+                        double new_y =
                             cursor_position.y + content_size.y -
                             (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                        float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                        point_2.y, new_y);
+                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                         point_2.y, new_y);
 
                         ImVec2 new_point = ImVec2(new_x, new_y);
                         LineColor        = IM_COL32(250, 0, 0, 255);
@@ -422,8 +422,8 @@ ImVec2
 LineChart::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
                    ImVec2& content_size, float scaleX, float scaleY)
 {
-    float x = (point.xValue - (m_min_x + m_movement)) * scaleX;
-    float y = cursor_position.y + content_size.y - (point.yValue - m_min_y) * scaleY;
+    double x = (point.x_value - (m_min_x + m_movement)) * scaleX;
+    double y = cursor_position.y + content_size.y - (point.y_value - m_min_y) * scaleY;
 
     return ImVec2(x, y);
 }

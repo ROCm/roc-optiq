@@ -3,6 +3,8 @@
 #include "imgui.h"
 #include "rocprofvis_main_view.h"
 #include "rocprofvis_sidebar.h"
+#include "rocprofvis_event_manager.h"
+#include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
 
@@ -12,9 +14,16 @@ HomeScreen::HomeScreen()
 , m_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
-{}
+{
+    m_data_provider.SetTrackDataReadyCallback([](uint64_t track_index) {
+        std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(static_cast<int>(RocEvents::kNewTrackData), track_index);
+        EventManager::GetInstance()->AddEvent(e);
+    });
+}
 
-HomeScreen::~HomeScreen() {}
+HomeScreen::~HomeScreen() {
+    m_data_provider.SetTrackDataReadyCallback(nullptr);
+}
 
 void
 HomeScreen::Update()

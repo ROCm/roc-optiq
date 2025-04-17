@@ -6,6 +6,7 @@
 #include "rocprofvis_charts.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_flame_chart.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_chart.h"
@@ -48,6 +49,8 @@ private:
     void RenderGraphCustomizationWindow(int graph_number);
     void HandleTopSurfaceTouch();
 
+    void HandleNewTrackData(std::shared_ptr<RocEvent> e);
+
 private:
     std::map<int, rocprofvis_graph_map_t> m_graph_map;
     Grid                                  m_grid;
@@ -75,6 +78,7 @@ private:
     bool  m_is_control_held;
     bool  m_can_drag_to_pan;
 
+    EventManager::EventHandler m_new_track_data_handler;
     DataProvider& m_data_provider;
 };
 

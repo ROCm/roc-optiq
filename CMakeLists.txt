@@ -32,6 +32,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_view_module.cpp
     src/view/src/rocprofvis_data_provider.cpp
     src/view/src/rocprofvis_raw_track_data.cpp
+    src/view/src/rocprofvis_events.cpp
+    src/view/src/rocprofvis_event_manager.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
 )

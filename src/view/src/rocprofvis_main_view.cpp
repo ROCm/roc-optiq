@@ -16,6 +16,8 @@
 #include <tuple>
 #include <vector>
 
+#include "widgets/rocprofvis_debug_window.h"
+
 namespace RocProfVis
 {
 namespace View
@@ -45,10 +47,20 @@ MainView::MainView(DataProvider& dp)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
 , m_grid_size(50)
+{
+    m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
+        this->HandleNewTrackData(e);
+    };
+    EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kNewTrackData),
+                                           m_new_track_data_handler);
+}
 
-{}
-
-MainView::~MainView() { DestroyGraphs(); }
+MainView::~MainView()
+{
+    DestroyGraphs();
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTrackData),
+                                             m_new_track_data_handler);
+}
 
 void
 MainView::ResetView()
@@ -69,34 +81,49 @@ MainView::ResetView()
 }
 
 void
+MainView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
+{
+    if(!e)
+    {
+        spdlog::debug("Null event, cannot process new track data");
+        return;
+    }
+
+    std::shared_ptr<TrackDataEvent> tde = std::dynamic_pointer_cast<TrackDataEvent>(e);
+    if(!tde)
+    {
+        spdlog::debug("Invalid event type {}, cannot process new track data",
+                      static_cast<int>(e->GetType()));
+    }
+    else
+    {
+        uint64_t            track_index = tde->GetTrackIndex();
+        const RawTrackData* rtd         = m_data_provider.GetRawTrackData(track_index);
+
+        if(m_graph_map[track_index].chart->SetRawData(rtd))
+        {
+            auto min_max = m_graph_map[track_index].chart->GetMinMax();
+
+            if(std::get<0>(min_max) < m_min_x)
+            {
+                m_min_x = std::get<0>(min_max);
+            }
+            if(std::get<1>(min_max) > m_max_x)
+            {
+                m_max_x = std::get<1>(min_max);
+            }
+
+            spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
+        }
+    }
+}
+
+void
 MainView::Update()
 {
     if(m_meta_map_made)
     {
-        uint64_t num_graphs = m_data_provider.GetTrackCount();
-
-        int graph_id = 0;
-        int scale_x  = 1;
-        for(uint64_t i = 0; i < num_graphs; i++)
-        {
-            const RawTrackData* rtd = m_data_provider.GetRawTrackData(i);
-            // TODO: This is hack for detecting changes until an event system is in place
-            if(m_graph_map[i].chart->SetRawData(rtd))
-            {
-                auto min_max = m_graph_map[i].chart->GetMinMax();
-
-                if(std::get<0>(min_max) < m_min_x)
-                {
-                    m_min_x = std::get<0>(min_max);
-                }
-                if(std::get<1>(min_max) > m_max_x)
-                {
-                    m_max_x = std::get<1>(min_max);
-                }
-
-                spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
-            }
-        }
+        // nothing for now
     }
 }
 
@@ -116,14 +143,14 @@ MainView::RenderScrubber(ImVec2 screen_pos)
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
-    ImVec2      display_size    = ImGui::GetWindowSize();
-    float       scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    const float sidebar_offset  = 400.0f;
+    ImVec2      display_size         = ImGui::GetWindowSize();
+    float       scrollbar_width      = ImGui::GetStyle().ScrollbarSize;
+    const float metadata_area_offset = 400.0f;
     ImGui::SetNextWindowSize(
-        ImVec2(display_size.x - scrollbar_width - sidebar_offset, display_size.y),
+        ImVec2(display_size.x - scrollbar_width - metadata_area_offset, display_size.y),
         ImGuiCond_Always);
     ImGui::SetCursorPos(
-        ImVec2(sidebar_offset, 0));  // Sidebar size will be universal next PR.
+        ImVec2(metadata_area_offset, 0));  // Meta Data size will be universal next PR.
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
@@ -131,17 +158,19 @@ MainView::RenderScrubber(ImVec2 screen_pos)
 
     ImGui::BeginChild("Scrubber View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
     ImDrawList* draw_list      = ImGui::GetWindowDrawList();
-    float       window_size    = ImGui::GetContentRegionAvail().x;
-    float       mouse_relative = window_size - ImGui::GetMousePos().x;
+    ImVec2      window_size    = ImGui::GetContentRegionAvail();
+    float       mouse_relative = window_size.x - ImGui::GetMousePos().x;
 
     ImVec2 window_position = ImGui::GetWindowPos();
     ImVec2 mouse_position  = ImGui::GetMousePos();
 
     ImVec2 relativeMousePos = ImVec2(mouse_position.x - window_position.x,
                                      mouse_position.y - window_position.y);
+
+    // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(
-           ImVec2(0, 0), ImVec2(display_size.x + 400,
-                                display_size.y)))  // 400 to account for sidebar size
+           window_position,
+           ImVec2(window_position.x + window_size.x, window_position.y + window_size.y)))
     {
         ImVec2 mouse_position = ImGui::GetMousePos();
 

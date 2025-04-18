@@ -4,6 +4,7 @@
 #include "rocprofvis_imgui_backend.h"
 
 #include "imgui.h"
+#include "imgui_spectrum.h"
 #include "imgui_impl_glfw.h"
 
 #define GLFW_INCLUDE_NONE
@@ -46,7 +47,9 @@ main(int, char**)
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-                ImGui::StyleColorsLight();
+                ImGui::Spectrum::StyleColorsSpectrum();
+                io.Fonts->Clear();
+                ImGui::Spectrum::LoadFont();
 
                 rocprofvis_view_init();
 

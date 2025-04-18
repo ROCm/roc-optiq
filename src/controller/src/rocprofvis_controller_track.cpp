@@ -295,11 +295,13 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackMinTimestamp:
         {
             m_start_timestamp = value;
+            result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackMaxTimestamp:
         {
             m_end_timestamp = value;
+            result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackEntry:

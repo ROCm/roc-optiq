@@ -7,9 +7,6 @@
 [submodule "thirdparty/ImGuiFileDialog"]
 	path = thirdparty/ImGuiFileDialog
 	url = https://github.com/aiekick/ImGuiFileDialog.git
-[submodule "thirdparty/imgui"]
-	path = thirdparty/imgui
-	url = https://github.com/ocornut/imgui.git
 [submodule "thirdparty/implot"]
 	path = thirdparty/implot
 	url = https://github.com/epezent/implot.git

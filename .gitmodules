@@ -17,3 +17,6 @@
 	path = thirdparty/catch2
 	url = https://github.com/catchorg/Catch2.git
 	branch = devel
+[submodule "thirdparty/imgui"]
+	path = thirdparty/imgui
+	url = https://github.com/adobe/imgui.git

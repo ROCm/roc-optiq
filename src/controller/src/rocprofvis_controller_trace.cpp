@@ -464,9 +464,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                     track->SetDouble(
                                                         kRPVControllerTrackMinTimestamp,
                                                         0, min_ts);
-                                                    track->SetDouble(
-                                                        kRPVControllerTrackMaxTimestamp,
-                                                        0, max_ts);
 
                                                     for(int i = 0; i < num_records; i++)
                                                     {
@@ -481,6 +478,9 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 kRPVDMEventDurationInt64Indexed,
                                                                 i);
                                                         if(duration < 0) continue;
+
+                                                        max_ts = std::max(max_ts, (timestamp + duration));
+
                                                         uint64_t event_id =
                                                             rocprofvis_dm_get_property_as_uint64(
                                                                 slice,
@@ -541,6 +541,9 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                         }
                                                     }
 
+                                                    track->SetDouble(
+                                                        kRPVControllerTrackMaxTimestamp,
+                                                        0, max_ts);
                                                     break;
                                                 }
                                                 case kRocProfVisDmPmcTrack:

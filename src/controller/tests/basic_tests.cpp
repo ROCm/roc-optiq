@@ -88,6 +88,62 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0, &future_result);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(future_result == kRocProfVisResultSuccess);
+
+        rocprofvis_controller_future_free(future);
+    }
+
+    SECTION("Controller Load Whole Track Data")
+    {
+        uint64_t num_tracks = 0;
+        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerNumTracks, 0, &num_tracks);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(num_tracks > 0);
+
+        rocprofvis_handle_t* track_handle = nullptr;
+        result = rocprofvis_controller_get_object(m_controller, kRPVControllerTrackIndexed, 0, &track_handle);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(track_handle != nullptr);
+
+        double min_time = 0;
+        result = rocprofvis_controller_get_double(track_handle, kRPVControllerTrackMinTimestamp, 0, &min_time);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        
+        double max_time = 0;
+        result = rocprofvis_controller_get_double(track_handle, kRPVControllerTrackMaxTimestamp, 0, &max_time);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(100);
+        REQUIRE(array != nullptr);
+
+        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        REQUIRE(future != nullptr);
+
+        result = rocprofvis_controller_track_fetch_async(m_controller, (rocprofvis_controller_track_t*)track_handle, min_time, max_time, future, array);
+        REQUIRE(array != nullptr);
+
+        result = rocprofvis_controller_future_wait(future, FLT_MAX);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        uint64_t future_result = 0;
+        result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0, &future_result);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(future_result == kRocProfVisResultSuccess);
+
+        uint64_t num_results = 0;
+        result = rocprofvis_controller_get_uint64(array, kRPVControllerArrayNumEntries, 0, &num_results);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(num_results > 0);
+
+        for (uint64_t i = 0; i < num_results; i++)
+        {
+            rocprofvis_handle_t* entry = nullptr;
+            result = rocprofvis_controller_get_object(array, kRPVControllerArrayEntryIndexed, i, &entry);
+            REQUIRE(result == kRocProfVisResultSuccess);
+        }
+        
+        rocprofvis_controller_future_free(future);
+
+        rocprofvis_controller_array_free(array);
     }
 
     SECTION("Delete controller")

@@ -20,3 +20,6 @@
 	path = thirdparty/catch2
 	url = https://github.com/catchorg/Catch2.git
 	branch = devel
+[submodule "thirdparty/csv-parser"]
+	path = thirdparty/csv-parser
+	url = https://github.com/vincentlaucsb/csv-parser

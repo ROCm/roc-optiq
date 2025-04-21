@@ -367,8 +367,10 @@ void Segment::Insert(double timestamp, Handle* event)
 rocprofvis_result_t Segment::Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
-    if ((start <= m_start_timestamp && end >= m_end_timestamp) || (start >= m_start_timestamp && start < m_end_timestamp) || (end > m_start_timestamp && end <= m_end_timestamp))
+    double last_timestamp = std::max(m_end_timestamp, m_max_timestamp);
+    if(m_start_timestamp <= end && last_timestamp >= start)
     {
+        result = kRocProfVisResultSuccess;
         if(m_lods.find(0) != m_lods.end())
         {
             for(uint32_t i = 1; i <= lod; i++)
@@ -393,29 +395,53 @@ rocprofvis_result_t Segment::Fetch(uint32_t lod, double start, double end, Array
     
             auto& lod_ref = m_lods[i];
             auto& entries = lod_ref->GetEntries();
-            rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type = kRPVControllerTrackTypeEvents) ? kRPVControllerEventStartTimestamp : kRPVControllerSampleTimestamp);
-            auto lower = std::lower_bound(entries.begin(), entries.end(), start, [property](std::pair<double, Handle*> const& pair, double const& start) -> bool
+            rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type = kRPVControllerTrackTypeEvents) ? kRPVControllerEventEndTimestamp : kRPVControllerSampleTimestamp);
+            
+            std::multimap<double, Handle*>::iterator lower = entries.end();
+            for (auto it = entries.begin(); it != entries.end(); ++it)
             {
-                double max_ts = pair.first;
-                pair.second->GetDouble(property, 0, &max_ts);
-
-                bool result = max_ts < start;
-                return result;
-            });
-            auto upper = std::upper_bound(entries.begin(), entries.end(), end, [](double const& end, std::pair<double, Handle*> const& pair) -> bool
-            {
-                bool result = end <= pair.first;
-                return result;
-            });
-            while (lower != upper)
-            {
-                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, index + 1);
-                if(result == kRocProfVisResultSuccess)
+                double min_ts = it->first;
+                double max_ts = it->first;
+                it->second->GetDouble(property, 0, &max_ts);
+                if(min_ts <= end && max_ts >= start)
                 {
-                    result = array.SetObject(kRPVControllerArrayEntryIndexed, index++, (rocprofvis_handle_t*)lower->second);
+                    lower = it;
+                    break;
+                }
+            }
+
+            std::multimap<double, Handle*>::iterator upper = entries.end();
+            for (auto it = entries.begin(); it != entries.end(); ++it)
+            {
+                double min_ts = it->first;
+                if(min_ts > end)
+                {
+                    upper = it;
+                    break;
+                }
+            }
+
+            while(lower != upper && lower != entries.end())
+            {
+                double min_ts = lower->first;
+                double max_ts = lower->first;
+                lower->second->GetDouble(property, 0, &max_ts);
+
+                if(min_ts <= end && max_ts >= start)
+                {
+                    result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, index + 1);
                     if(result == kRocProfVisResultSuccess)
                     {
-                        ++lower;
+                        result = array.SetObject(kRPVControllerArrayEntryIndexed, index++,
+                                                 (rocprofvis_handle_t*) lower->second);
+                        if(result == kRocProfVisResultSuccess)
+                        {
+                            ++lower;
+                        }
+                        else
+                        {
+                            break;
+                        }
                     }
                     else
                     {
@@ -424,7 +450,7 @@ rocprofvis_result_t Segment::Fetch(uint32_t lod, double start, double end, Array
                 }
                 else
                 {
-                    break;
+                    ++lower;
                 }
             }
         }

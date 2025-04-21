@@ -201,181 +201,156 @@ LineChart::GetMovement()
 }
 
 void
-LineChart::Render()
+LineChart::RenderMetaArea()
 {
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
+    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height), false);
 
-    if(ImGui::BeginChild((std::to_string(m_id)).c_str()), true, window_flags)
+    ImGui::BeginChild("MetaData Content",
+                      ImVec2(m_metadata_width - 70.0f, m_track_height), false);
+    ImGui::Text(m_name.c_str());
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
+    ImGui::Text((std::to_string(m_max_y)).c_str());
+
+    if(ImGui::IsItemVisible())
     {
-        ImVec2 parent_size   = ImGui::GetContentRegionAvail();
-        float  metadata_size = 400.0f;
-        float  graph_size    = parent_size.x - metadata_size;
-
-        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, m_track_height), false);
-
-        ImGui::BeginChild("MetaData Content",
-                          ImVec2(metadata_size - 70.0f, m_track_height), false);
-        ImGui::Text(m_name.c_str());
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-
-        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
-        ImGui::Text((std::to_string(m_max_y)).c_str());
-
-        if(ImGui::IsItemVisible())
-        {
-            m_is_chart_visible = true;
-        }
-        else
-        {
-            m_is_chart_visible = false;
-        }
-
-        ImVec2 child_window_size = ImGui::GetWindowSize();
-        ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
-        ImGui::SetCursorPos(ImVec2(0, child_window_size.y - text_size.y -
-                                          ImGui::GetStyle().WindowPadding.y));
-
-        ImGui::Text((std::to_string(m_min_y)).c_str());
-
-        ImGui::EndChild();
-
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-        ImGui::BeginChild("Graph View", ImVec2(graph_size, m_track_height), false);
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-        ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-        ImVec2 content_size    = ImGui::GetContentRegionAvail();
-
-        float scale_y = content_size.y / (m_max_y - m_min_y);
-        for(int i = 1; i < m_data.size(); i++)
-        {
-            ImVec2 point_1 =
-                MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
-            if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
-                                          ImVec2(point_1.x + 10, point_1.y + 10)))
-            {
-                ImGui::BeginTooltip();
-                ImGui::Text(std::to_string(m_data[i - 1].x_value - m_min_x).c_str());
-                ImGui::EndTooltip();
-            }
-            ImVec2 point_2 =
-                MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
-            ImU32 LineColor = IM_COL32(0, 0, 0, 255);
-            if(m_is_color_value_existant)
-            {
-                // Code below enables user to define problematic regions in LineChart.
-                // Add to struct if more regions needed.
-
-                bool point_1_in =
-                    (m_color_by_value_digits.interest_1_max > m_data[i - 1].y_value &&
-                     m_color_by_value_digits.interest_1_min < m_data[i - 1].y_value);
-                bool point_2_in =
-                    (m_color_by_value_digits.interest_1_max > m_data[i].y_value &&
-                     m_color_by_value_digits.interest_1_min < m_data[i].y_value);
-
-                if(point_1_in && point_2_in)
-                {
-                    LineColor = IM_COL32(255, 0, 0, 255);
-                }
-
-                else if(!point_1_in && point_2_in)
-                {
-                    if(m_color_by_value_digits.interest_1_max < m_data[i - 1].y_value)
-                    {
-                        double new_y =
-                            cursor_position.y + content_size.y -
-                            (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                         point_2.y, new_y);
-
-                        ImVec2 new_point = ImVec2(new_x, new_y);
-                        LineColor        = IM_COL32(0, 0, 0, 255);
-                        draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                        LineColor = IM_COL32(250, 0, 0, 255);
-                        point_1   = new_point;
-                    }
-                    else if(m_color_by_value_digits.interest_1_min >
-                            m_data[i - 1].y_value)
-                    {
-                        double new_y =
-                            cursor_position.y + content_size.y -
-                            (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                         point_2.y, new_y);
-
-                        ImVec2 new_point = ImVec2(new_x, new_y);
-                        LineColor        = IM_COL32(0, 0, 0, 255);
-                        draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                        LineColor = IM_COL32(255, 0, 0, 255);
-                        point_1   = new_point;
-                    }
-                }
-                else if(point_1_in && !point_2_in)
-                {
-                    if(m_color_by_value_digits.interest_1_max < m_data[i].y_value)
-                    {
-                        // if greater than upper max.
-
-                        double new_y =
-                            cursor_position.y + content_size.y -
-                            (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                         point_2.y, new_y);
-
-                        ImVec2 new_point = ImVec2(new_x, new_y);
-                        LineColor        = IM_COL32(250, 0, 0, 255);
-                        draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                        LineColor = IM_COL32(0, 0, 0, 255);
-                        point_1   = new_point;
-                    }
-                    else if(m_color_by_value_digits.interest_1_min > m_data[i].y_value)
-                    {
-                        double new_y =
-                            cursor_position.y + content_size.y -
-                            (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                        double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                         point_2.y, new_y);
-
-                        ImVec2 new_point = ImVec2(new_x, new_y);
-                        LineColor        = IM_COL32(250, 0, 0, 255);
-                        draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                        LineColor = IM_COL32(0, 0, 0, 255);
-                        point_1   = new_point;
-                    }
-                }
-            }
-            draw_list->AddLine(point_1, point_2, LineColor, 2.0f);
-        }
-        ImGui::EndChild();
+        m_is_chart_visible = true;
+    }
+    else
+    {
+        m_is_chart_visible = false;
     }
 
-    // Controls for graph resize.
-    ImGuiIO& io              = ImGui::GetIO();
-    bool     is_control_held = io.KeyCtrl;
-    if(is_control_held)
-    {
-        ImGui::Selectable(("Move Position Line " + std::to_string(m_id)).c_str(), false,
-                          ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+    ImVec2 child_window_size = ImGui::GetWindowSize();
+    ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
+    ImGui::SetCursorPos(
+        ImVec2(0, child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
 
-        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
-        {
-            ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-            m_track_height    = m_track_height + (drag_delta.y);
-            ImGui::ResetMouseDragDelta();
-            ImGui::EndDragDropSource();
-        }
-        if(ImGui::BeginDragDropTarget())
-        {
-            ImGui::EndDragDropTarget();
-        }
-    }
+    ImGui::Text((std::to_string(m_min_y)).c_str());
 
     ImGui::EndChild();
+
+    ImGui::EndChild();
+}
+
+void
+LineChart::RenderChart(float graph_width)
+{
+    ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+    ImVec2 content_size    = ImGui::GetContentRegionAvail();
+
+    float scale_y = content_size.y / (m_max_y - m_min_y);
+    for(int i = 1; i < m_data.size(); i++)
+    {
+        ImVec2 point_1 =
+            MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
+        if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
+                                      ImVec2(point_1.x + 10, point_1.y + 10)))
+        {
+            ImGui::BeginTooltip();
+            ImGui::Text(std::to_string(m_data[i - 1].x_value - m_min_x).c_str());
+            ImGui::EndTooltip();
+        }
+        ImVec2 point_2 =
+            MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
+        ImU32 LineColor = IM_COL32(0, 0, 0, 255);
+        if(m_is_color_value_existant)
+        {
+            // Code below enables user to define problematic regions in LineChart.
+            // Add to struct if more regions needed.
+
+            bool point_1_in =
+                (m_color_by_value_digits.interest_1_max > m_data[i - 1].y_value &&
+                 m_color_by_value_digits.interest_1_min < m_data[i - 1].y_value);
+            bool point_2_in =
+                (m_color_by_value_digits.interest_1_max > m_data[i].y_value &&
+                 m_color_by_value_digits.interest_1_min < m_data[i].y_value);
+
+            if(point_1_in && point_2_in)
+            {
+                LineColor = IM_COL32(255, 0, 0, 255);
+            }
+
+            else if(!point_1_in && point_2_in)
+            {
+                if(m_color_by_value_digits.interest_1_max < m_data[i - 1].y_value)
+                {
+                    double new_y =
+                        cursor_position.y + content_size.y -
+                        (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
+                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                     point_2.y, new_y);
+
+                    ImVec2 new_point = ImVec2(new_x, new_y);
+                    LineColor        = IM_COL32(0, 0, 0, 255);
+                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
+                    LineColor = IM_COL32(250, 0, 0, 255);
+                    point_1   = new_point;
+                }
+                else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].y_value)
+                {
+                    double new_y =
+                        cursor_position.y + content_size.y -
+                        (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
+                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                     point_2.y, new_y);
+
+                    ImVec2 new_point = ImVec2(new_x, new_y);
+                    LineColor        = IM_COL32(0, 0, 0, 255);
+                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
+                    LineColor = IM_COL32(255, 0, 0, 255);
+                    point_1   = new_point;
+                }
+            }
+            else if(point_1_in && !point_2_in)
+            {
+                if(m_color_by_value_digits.interest_1_max < m_data[i].y_value)
+                {
+                    // if greater than upper max.
+
+                    double new_y =
+                        cursor_position.y + content_size.y -
+                        (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
+                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                     point_2.y, new_y);
+
+                    ImVec2 new_point = ImVec2(new_x, new_y);
+                    LineColor        = IM_COL32(250, 0, 0, 255);
+                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
+                    LineColor = IM_COL32(0, 0, 0, 255);
+                    point_1   = new_point;
+                }
+                else if(m_color_by_value_digits.interest_1_min > m_data[i].y_value)
+                {
+                    double new_y =
+                        cursor_position.y + content_size.y -
+                        (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
+                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                                                     point_2.y, new_y);
+
+                    ImVec2 new_point = ImVec2(new_x, new_y);
+                    LineColor        = IM_COL32(250, 0, 0, 255);
+                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
+                    LineColor = IM_COL32(0, 0, 0, 255);
+                    point_1   = new_point;
+                }
+            }
+        }
+        draw_list->AddLine(point_1, point_2, LineColor, 2.0f);
+    }
+    ImGui::EndChild();
+}
+
+void
+LineChart::Render()
+{
+    Charts::Render();
 }
 
 ImVec2

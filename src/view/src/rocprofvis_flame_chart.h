@@ -34,22 +34,17 @@ public:
 
     virtual bool SetRawData(const RawTrackData* raw_data);
 
+protected:
+    void RenderMetaArea() override;
+    void RenderChart(float graph_width) override;
+
 private:
     std::vector<rocprofvis_trace_event_t> flames;
-    // std::string                           m_name;
-    // double                                m_min_x;
-    // double                                m_max_x;
-    // float                                 m_zoom;
-    // double                                m_movement;
-    // float                                 m_scale_x;
-    // int                                   m_chart_id;
-    // float                                 m_track_height;
-    float                       m_sidebar_size;
-    rocprofvis_color_by_value_t m_is_color_value_existant;
-    // bool                                  m_is_chart_visible;
-    float               m_movement_since_unload;
-    float               m_y_movement;
-    const RawTrackData* m_raw_data;
+    float                                 m_sidebar_size;
+    rocprofvis_color_by_value_t           m_is_color_value_existant;
+    float                                 m_movement_since_unload;
+    float                                 m_y_movement;
+    const RawTrackData*                   m_raw_data;
 };
 
 }  // namespace View

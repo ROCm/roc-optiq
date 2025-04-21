@@ -32,6 +32,10 @@ public:
     void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
     float CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
 
+protected:
+    virtual void RenderMetaArea() override;
+    virtual void RenderChart(float graph_width) override;
+
 private:
     std::vector<rocprofvis_data_point_t> m_data;
     rocprofvis_color_by_value_t          m_color_by_value_digits;

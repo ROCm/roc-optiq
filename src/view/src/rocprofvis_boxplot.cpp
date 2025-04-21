@@ -157,96 +157,81 @@ BoxPlot::UpdateMovement(float zoom, float movement, double& min_x, double& max_x
 }
 
 void
-BoxPlot::Render()
+BoxPlot::RenderMetaArea()
 {
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
+    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height), false);
 
-    if(ImGui::BeginChild((std::to_string(m_id)).c_str()), true, window_flags)
+    ImGui::BeginChild("MetaData Content",
+                      ImVec2(m_metadata_width - 70.0f, m_track_height), false);
+    ImGui::Text(m_name.c_str());
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
+    ImGui::Text((std::to_string(m_max_y)).c_str());
+
+    if(ImGui::IsItemVisible())
     {
-        ImVec2 parent_size   = ImGui::GetContentRegionAvail();
-        float  metadata_size = 400.0f;
-        float  graph_size    = parent_size.x - metadata_size;
-
-        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, m_track_height), false);
-
-        ImGui::BeginChild("MetaData Content",
-                          ImVec2(metadata_size - 70.0f, m_track_height), false);
-        ImGui::Text(m_name.c_str());
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-
-        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
-        ImGui::Text((std::to_string(m_max_y)).c_str());
-
-        ImVec2 child_window_size = ImGui::GetWindowSize();
-        ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
-        ImGui::SetCursorPos(ImVec2(0, child_window_size.y - text_size.y -
-                                          ImGui::GetStyle().WindowPadding.y));
-
-        ImGui::Text((std::to_string(m_min_y)).c_str());
-
-        ImGui::EndChild();
-
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-        ImGui::BeginChild("Graph View", ImVec2(graph_size, m_track_height), false);
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-        ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-        ImVec2 content_size    = ImGui::GetContentRegionAvail();
-
-        float scale_y = content_size.y / (m_max_y - m_min_y);
-        for(int i = 1; i < m_data.size(); i++)
-        {
-            ImVec2 point_1 =
-                MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
-            if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
-                                          ImVec2(point_1.x + 10, point_1.y + 10)))
-            {
-                ImGui::BeginTooltip();
-                ImGui::Text(std::to_string(m_data[i - 1].x_value - m_min_x).c_str());
-                ImGui::EndTooltip();
-            }
-            ImVec2 point_2 =
-                MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
-            ImU32 box_color =
-                IM_COL32(0, 0, 0, 200);  // Used for color by value (to be added later).
-
-            float bottom_of_chart =
-                cursor_position.y + content_size.y - (m_min_y - m_min_y) * scale_y;
-
-            draw_list->AddRectFilled(
-                point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
-                box_color, 2.0f);
-        }
-        ImGui::EndChild();
+        m_is_chart_visible = true;
+    }
+    else
+    {
+        m_is_chart_visible = false;
     }
 
-    // Controls for graph resize.
-    ImGuiIO& io              = ImGui::GetIO();
-    bool     is_control_held = io.KeyCtrl;
-    if(is_control_held)
-    {
-        ImGui::Selectable(("Move Position Line " + std::to_string(m_id)).c_str(), false,
-                          ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+    ImVec2 child_window_size = ImGui::GetWindowSize();
+    ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
+    ImGui::SetCursorPos(
+        ImVec2(0, child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
 
-        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
-        {
-            ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-            m_track_height    = m_track_height + (drag_delta.y);
-            ImGui::ResetMouseDragDelta();
-            ImGui::EndDragDropSource();
-        }
-        if(ImGui::BeginDragDropTarget())
-        {
-            ImGui::EndDragDropTarget();
-        }
-    }
+    ImGui::Text((std::to_string(m_min_y)).c_str());
 
     ImGui::EndChild();
+
+    ImGui::EndChild();
+}
+
+void
+BoxPlot::RenderChart(float graph_width)
+{
+    ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+    ImVec2 content_size    = ImGui::GetContentRegionAvail();
+
+    float scale_y = content_size.y / (m_max_y - m_min_y);
+    for(int i = 1; i < m_data.size(); i++)
+    {
+        ImVec2 point_1 =
+            MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
+        if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
+                                      ImVec2(point_1.x + 10, point_1.y + 10)))
+        {
+            ImGui::BeginTooltip();
+            ImGui::Text(std::to_string(m_data[i - 1].x_value - m_min_x).c_str());
+            ImGui::EndTooltip();
+        }
+        ImVec2 point_2 =
+            MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
+        ImU32 box_color =
+            IM_COL32(0, 0, 0, 200);  // Used for color by value (to be added later).
+
+        float bottom_of_chart =
+            cursor_position.y + content_size.y - (m_min_y - m_min_y) * scale_y;
+
+        draw_list->AddRectFilled(
+            point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
+            box_color, 2.0f);
+    }
+    ImGui::EndChild();
+}
+
+void
+BoxPlot::Render()
+{
+    Charts::Render();
 }
 
 ImVec2

@@ -266,6 +266,7 @@ MainView::RenderGraphView()
     {
         ImGui::SetScrollY(m_scroll_position);
     }
+
     for(const auto& graph_objects : m_graph_map)
     {
         if(graph_objects.second.display == true)
@@ -285,7 +286,8 @@ MainView::RenderGraphView()
             ImGui::BeginChild(
                 (std::to_string(graph_objects.first)).c_str(),
                 ImVec2(0,
-                       m_graph_map[graph_objects.first].chart->GetTrackHeight() + 40.0f),
+                       m_graph_map[graph_objects.first].chart->GetTrackHeight() +
+                           4.0f),  // TODO: magic number was 40.0f
                 false,
                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                     ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);

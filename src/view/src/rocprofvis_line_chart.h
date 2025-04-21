@@ -37,6 +37,10 @@ public:
     float        GetMovement() override;
     virtual bool SetRawData(const RawTrackData* raw_data);
 
+protected:
+    virtual void RenderMetaArea() override;
+    virtual void RenderChart(float graph_width) override;
+
 private:
     std::vector<rocprofvis_data_point_t> m_data;
     rocprofvis_color_by_value_t          m_color_by_value_digits;

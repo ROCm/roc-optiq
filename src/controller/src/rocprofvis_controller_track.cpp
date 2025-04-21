@@ -36,27 +36,43 @@ rocprofvis_dm_track_t Track::GetDmHandle(void){
 rocprofvis_result_t Track::Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
-    if((start <= m_start_timestamp && end >= m_end_timestamp) || (start >= m_start_timestamp && start < m_end_timestamp) || (end > m_start_timestamp && end <= m_end_timestamp))
+    if(m_start_timestamp <= end && m_end_timestamp >= start)
     {
-        auto lower = std::lower_bound(m_segments.begin(), m_segments.end(), std::max(m_start_timestamp, start), [](std::pair<const double, std::unique_ptr<Segment>> const& pair, double const& start) -> bool
+        result = kRocProfVisResultSuccess;
+
+        std::multimap<double, std::unique_ptr<Segment>>::iterator lower = m_segments.end();
+        for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
         {
-            bool result = (pair.second->GetMaxTimestamp() < start);
-            return result;
-        });
-        auto upper = std::upper_bound(m_segments.begin(), m_segments.end(), std::min(m_end_timestamp, end), [](double const& end, std::pair<const double, std::unique_ptr<Segment>> const& pair) -> bool
+            double min_ts = it->first;
+            double max_ts = it->second->GetMaxTimestamp();
+            if(min_ts <= end && max_ts >= start)
+            {
+                lower = it;
+                break;
+            }
+        }
+
+        std::multimap<double, std::unique_ptr<Segment>>::iterator upper = m_segments.end();
+        for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
         {
-            bool result = (end <= pair.first);
-            return result;
-        });
-        while (lower != upper)
+            double min_ts = it->first;
+            if(min_ts > end)
+            {
+                upper = it;
+                break;
+            }
+        }
+
+        while (lower != upper && lower != m_segments.end())
         {
             result = lower->second->Fetch(lod, start, end, array, index);
             if (result == kRocProfVisResultSuccess)
             {
                 ++lower;
             }
-            else if (result == kRocProfVisResultOutOfRange)
+            else if(result == kRocProfVisResultOutOfRange)
             {
+                result = kRocProfVisResultSuccess;
                 ++lower;
             }
             else
@@ -295,11 +311,13 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackMinTimestamp:
         {
             m_start_timestamp = value;
+            result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackMaxTimestamp:
         {
             m_end_timestamp = value;
+            result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackEntry:

@@ -117,8 +117,11 @@ rocprofvis_controller_future_t* rocprofvis_controller_future_alloc(void)
 rocprofvis_controller_array_t* rocprofvis_controller_array_alloc(uint32_t initial_size)
 {
     RocProfVis::Controller::Array* array = new RocProfVis::Controller::Array();
-    rocprofvis_result_t result = array->SetUInt64(kRPVControllerArrayNumEntries, 0, initial_size);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    if (initial_size)
+    {
+        rocprofvis_result_t result = array->SetUInt64(kRPVControllerArrayNumEntries, 0, initial_size);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    }
     return (rocprofvis_controller_array_t*)array;
 }
 rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_future_t* object, float timeout)

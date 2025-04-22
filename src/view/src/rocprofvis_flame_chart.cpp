@@ -15,7 +15,7 @@ namespace RocProfVis
 namespace View
 {
 
-std::vector<ImU32> FlameChart::m_colors = {
+std::vector<ImU32> FlameChart::s_colors = {
 
     IM_COL32(0, 114, 188, 204),   IM_COL32(0, 158, 115, 204),
     IM_COL32(240, 228, 66, 204),  IM_COL32(204, 121, 167, 204),
@@ -179,7 +179,7 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
     ImU32 rectColor;
     if(m_request_random_color)
     {
-        rectColor = m_colors[boxplot_box_id % 10];
+        rectColor = s_colors[boxplot_box_id % 10];
     }
     else
     {

@@ -42,7 +42,7 @@ private:
     float                                 m_sidebar_size;
     rocprofvis_color_by_value_t           m_is_color_value_existant;
     const RawTrackData*                   m_raw_data;
-    static std::vector<ImU32>             m_colors;
+    static std::vector<ImU32>             s_colors;
     bool                                  m_request_random_color;
 };
 

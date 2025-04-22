@@ -41,32 +41,8 @@ FlameChart::FindMaxMinFlame()
 }
 
 void
-FlameChart::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                           float scale_x, float y_scroll_position)
-{
-    if(m_is_chart_visible)
-    {
-        // elements has gone off screen for the first time.
-        m_movement_since_unload = y_scroll_position;
-    }
-
-    m_zoom       = zoom;
-    m_movement   = movement;
-    m_scale_x    = scale_x;
-    m_min_x      = min_x;
-    m_max_x      = max_x;
-    m_y_movement = y_scroll_position;
-}
-
-void
 FlameChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {}
-
-float
-FlameChart::GetMovement()
-{
-    return m_movement_since_unload - m_y_movement;
-}
 
 bool
 FlameChart::SetRawData(const RawTrackData* raw_data)
@@ -215,11 +191,11 @@ FlameChart::RenderMetaArea()
     ImGui::Text(m_name.c_str());
     if(ImGui::IsItemVisible())
     {
-        m_is_chart_visible = true;
+        m_is_in_view_vertical = true;
     }
     else
     {
-        m_is_chart_visible = false;
+        m_is_in_view_vertical = false;
     }
 
     ImGui::EndChild();

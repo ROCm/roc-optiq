@@ -27,10 +27,8 @@ public:
     void ExtractPointsFromData(const RawTrackEventData* event_track);
 
     std::tuple<double, double> FindMaxMinFlame();
-    void  UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                         float scale_x, float m_scroll_position) override;
-    void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
-    float GetMovement() override;
+
+    void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
 
     virtual bool SetRawData(const RawTrackData* raw_data);
 
@@ -42,8 +40,6 @@ private:
     std::vector<rocprofvis_trace_event_t> flames;
     float                                 m_sidebar_size;
     rocprofvis_color_by_value_t           m_is_color_value_existant;
-    float                                 m_movement_since_unload;
-    float                                 m_y_movement;
     const RawTrackData*                   m_raw_data;
 };
 

@@ -22,9 +22,8 @@ public:
     LineChart(int id, std::string name, float zoom, float movement, double& min_x,
               double& max_x, float scale_x);
     ~LineChart();
-    void   Render() override;
-    void   UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                          float scale_x, float m_scroll_position) override;
+    void Render() override;
+
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
 
@@ -34,7 +33,6 @@ public:
     void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
     float CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
 
-    float        GetMovement() override;
     virtual bool SetRawData(const RawTrackData* raw_data);
 
 protected:
@@ -48,8 +46,6 @@ private:
     double                               m_min_y;
     double                               m_max_y;
     bool                                 m_is_color_value_existant;
-    float                                m_movement_since_unload;
-    float                                m_y_movement;
     const RawTrackData*                  m_raw_data;
 };
 

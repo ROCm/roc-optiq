@@ -27,8 +27,6 @@ LineChart::LineChart(int id, std::string name, float zoom, float movement, doubl
 , m_data({})
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
-, m_movement_since_unload(FLT_MAX)
-, m_y_movement(0)
 {
     m_track_height = 290.0f;
 }
@@ -177,36 +175,13 @@ LineChart::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float k
 }
 
 void
-LineChart::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                          float scale_x, float y_scroll_position)
-{
-    if(m_is_chart_visible)
-    {
-        // elements has gone off screen for the first time.
-        m_movement_since_unload = y_scroll_position;
-    }
-
-    m_zoom       = zoom;
-    m_movement   = movement;
-    m_scale_x    = scale_x;
-    m_min_x      = min_x;
-    m_max_x      = max_x;
-    m_y_movement = y_scroll_position;
-}
-
-float
-LineChart::GetMovement()
-{
-    return m_movement_since_unload - m_y_movement;
-}
-
-void
 LineChart::RenderMetaArea()
 {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
-    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height), ImGuiChildFlags_None);
+    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height),
+                      ImGuiChildFlags_None);
 
-    ImVec2 content_size    = ImGui::GetContentRegionAvail();
+    ImVec2 content_size = ImGui::GetContentRegionAvail();
     // Set padding for the child window (Note this done using SetCursorPos
     // because ImGuiStyleVar_WindowPadding has no effect on child windows without borders)
     ImGui::SetCursorPos(m_metadata_padding);
@@ -220,16 +195,17 @@ LineChart::RenderMetaArea()
 
     ImGui::SameLine();
 
-    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, content_size.y), ImGuiChildFlags_None);
+    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, content_size.y),
+                      ImGuiChildFlags_None);
     ImGui::Text((std::to_string(m_max_y)).c_str());
 
     if(ImGui::IsItemVisible())
     {
-        m_is_chart_visible = true;
+        m_is_in_view_vertical = true;
     }
     else
     {
-        m_is_chart_visible = false;
+        m_is_in_view_vertical = false;
     }
 
     ImVec2 child_window_size = ImGui::GetWindowSize();

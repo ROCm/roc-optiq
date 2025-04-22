@@ -146,17 +146,6 @@ BoxPlot::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float kno
 }
 
 void
-BoxPlot::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                        float scale_x, float y_scroll_position)
-{
-    m_zoom     = zoom;
-    m_movement = movement;
-    m_scale_x  = scale_x;
-    m_min_x    = min_x;
-    m_max_x    = max_x;
-}
-
-void
 BoxPlot::RenderMetaArea()
 {
     ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height), false);
@@ -173,11 +162,11 @@ BoxPlot::RenderMetaArea()
 
     if(ImGui::IsItemVisible())
     {
-        m_is_chart_visible = true;
+        m_is_in_view_vertical = true;
     }
     else
     {
-        m_is_chart_visible = false;
+        m_is_in_view_vertical = false;
     }
 
     ImVec2 child_window_size = ImGui::GetWindowSize();

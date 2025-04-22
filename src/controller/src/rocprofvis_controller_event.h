@@ -45,8 +45,8 @@ private:
     uint64_t m_id;
     double m_start_timestamp;
     double m_end_timestamp;
-    const char* m_name;
-    const char* m_category;
+    size_t m_name;
+    size_t m_category;
 
 private:
     rocprofvis_result_t FetchDataModelFlowTraceProperty(Array& array, rocprofvis_dm_trace_t dm_trace_handle);

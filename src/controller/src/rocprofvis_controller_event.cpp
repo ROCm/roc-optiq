@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_ext_data.h"
 #include "rocprofvis_controller_flow_control.h"
 #include "rocprofvis_controller_call_stack.h"
+#include "rocprofvis_controller_string_table.h"
 #include <cstring>
 
 namespace RocProfVis
@@ -21,19 +22,13 @@ Event::Event(uint64_t id, double start_ts, double end_ts)
 , m_track(nullptr)
 , m_start_timestamp(start_ts)
 , m_end_timestamp(end_ts)
-, m_name("")
-, m_category("")
+, m_name(UINT64_MAX)
+, m_category(UINT64_MAX)
 {
 }
 
 Event::~Event()
 { 
-#ifdef JSON_SUPPORT
-    if (m_track && m_track->GetDmHandle() == nullptr && strlen(m_name) > 0)
-    {
-        free((char*)m_name);
-    }
-#endif
 }
 
 rocprofvis_controller_object_type_t Event::GetType(void) 
@@ -345,8 +340,6 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerCommonMemoryUsageExclusive:
             {
                 *value = sizeof(Event);
-                *value += strlen(m_name) + 1;
-                *value += strlen(m_category) + 1;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -460,14 +453,20 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
         {
             if (length && (!value || *length == 0))
             {
-                *length = strlen(m_name) + strlen(m_category)+1;
+                char const* name = StringTable::Get().GetString(m_name);
+                char const* category = StringTable::Get().GetString(m_category);
+                ROCPROFVIS_ASSERT(name && category);
+                *length = strlen(name) + strlen(category)+1;
                 result = kRocProfVisResultSuccess;
             }
             else if (length && value && *length > 0)
             {
-                std::string full_name = m_category;
+                char const* name = StringTable::Get().GetString(m_name);
+                char const* category = StringTable::Get().GetString(m_category);
+                ROCPROFVIS_ASSERT(name && category);
+                std::string full_name = category;
                 full_name += " ";
-                full_name += m_name; 
+                full_name += name; 
                 strncpy(value, full_name.c_str(), *length);
        
                 result = kRocProfVisResultSuccess;
@@ -482,12 +481,16 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
         {
             if (length && (!value || *length == 0))
             {
-                *length = strlen(m_category);
+                char const* category = StringTable::Get().GetString(m_category);
+                ROCPROFVIS_ASSERT(category);
+                *length = strlen(category);
                 result = kRocProfVisResultSuccess;
             }
             else if (length && value && *length > 0)
             {
-                strncpy(value, m_category, *length);
+                char const* category = StringTable::Get().GetString(m_category);
+                ROCPROFVIS_ASSERT(category);
+                strncpy(value, category, *length);
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -634,30 +637,15 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerEventName:
             {
-#ifdef JSON_SUPPORT
-                if(m_track && m_track->GetDmHandle()==nullptr)
-                {
-                    if(length > 0)
-                    {
-                        char* name = (char*) calloc(length + 1, 1);
-                        if(name)
-                        {
-                            strcpy(name, value);
-                            m_name = name;
-                        }
-                    }
-                }
-                else
-#endif
-                {
-                    m_name = value;
-                }
+                std::string name = value;
+                m_name = StringTable::Get().AddString(name);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventCategory:
             {
-                m_category = value;
+                std::string category = value;
+                m_category = StringTable::Get().AddString(category);
                 result = kRocProfVisResultSuccess;
                 break;
             }

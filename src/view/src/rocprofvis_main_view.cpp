@@ -391,7 +391,8 @@ MainView::RenderGraphView()
                 DebugWindow::GetInstance()->AddDebugMessage(
                     "Dummy for: " + std::to_string(graph_objects.second.chart->GetID()) +
                     " " +
-                    std::to_string(graph_objects.second.chart->GetDistanceToView()));
+                    std::to_string(graph_objects.second.chart->GetDistanceToView()) +
+                    " " + std::to_string(m_scroll_position));
             }
         }
     }
@@ -619,7 +620,7 @@ MainView::HandleTopSurfaceTouch()
         if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
             float drag_y      = ImGui::GetIO().MouseDelta.y;
-            m_scroll_position = m_scroll_position - drag_y, 0.0f, m_content_max_y_scoll;
+            m_scroll_position = clamp(m_scroll_position - drag_y, 0.0, m_content_max_y_scoll);
 
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (m_max_x - m_min_x) / m_zoom;

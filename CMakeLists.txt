@@ -58,6 +58,7 @@ target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-controller)
 target_link_libraries(rocprof-visualizer PRIVATE datamodel)
 target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer PRIVATE spdlog)
+target_link_libraries(rocprof-visualizer PRIVATE csv)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
 

@@ -14,11 +14,28 @@ namespace RocProfVis
 {
 namespace View
 {
+
+std::vector<ImU32> FlameChart::m_colors = {
+
+    IM_COL32(0, 114, 188, 204),   IM_COL32(0, 158, 115, 204),
+    IM_COL32(240, 228, 66, 204),  IM_COL32(204, 121, 167, 204),
+    IM_COL32(86, 180, 233, 204),  IM_COL32(213, 94, 0, 204),
+    IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
+    IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
+};
+
 FlameChart::FlameChart(int id, std::string name, float zoom, float movement, double min_x,
                        double max_x, float scale_x)
 : Charts(id, name, zoom, movement, min_x, max_x, scale_x)
 , m_is_color_value_existant()
+, m_request_random_color(true)
 {}
+
+void
+FlameChart::SetRandomColorFlag(bool set_color)
+{
+    m_request_random_color = set_color;
+}
 
 std::tuple<double, double>
 FlameChart::FindMaxMinFlame()
@@ -159,7 +176,15 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
                             start_position.y + 40 +
                                 cursor_position.y);  // End position (bottom-right corner)
 
-    ImU32 rectColor = IM_COL32(128, 128, 128, 255);  // Black colored box.
+    ImU32 rectColor;
+    if(m_request_random_color)
+    {
+        rectColor = m_colors[boxplot_box_id % 10];
+    }
+    else
+    {
+        rectColor = IM_COL32(128, 128, 128, 255);  // Black colored box.
+    }
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
 

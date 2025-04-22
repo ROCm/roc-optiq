@@ -61,6 +61,16 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                        &tree_item.second.display))
                 {
                 }
+                if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_FLAMECHART)
+                {
+                    if(ImGui::Checkbox("Turn off color",
+                                       &tree_item.second.colorful_flamechart))
+
+                    {
+                        static_cast<FlameChart*>(tree_item.second.chart)
+                            ->SetRandomColorFlag(tree_item.second.colorful_flamechart);
+                    }
+                }
                 if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
                 {
                     if(ImGui::Checkbox(

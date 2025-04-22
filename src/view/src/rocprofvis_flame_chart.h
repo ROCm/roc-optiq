@@ -20,6 +20,7 @@ class FlameChart : public Charts
 public:
     FlameChart(int chart_id, std::string name, float zoom, float movement, double min_x,
                double max_x, float scale_x);
+    void SetRandomColorFlag(bool set_color);
     void Render() override;
     void DrawBox(ImVec2 start_position, int boxplot_box_id,
                  rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list);
@@ -41,6 +42,8 @@ private:
     float                                 m_sidebar_size;
     rocprofvis_color_by_value_t           m_is_color_value_existant;
     const RawTrackData*                   m_raw_data;
+    static std::vector<ImU32>             m_colors;
+    bool                                  m_request_random_color;
 };
 
 }  // namespace View

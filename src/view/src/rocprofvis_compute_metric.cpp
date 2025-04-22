@@ -2,7 +2,10 @@
 
 #include "rocprofvis_compute_metric.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
 
@@ -68,3 +71,6 @@ void ComputeMetric::Render()
         }
     }
 }
+
+}  // namespace View
+}  // namespace RocProfVis

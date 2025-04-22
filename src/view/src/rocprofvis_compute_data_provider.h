@@ -25,7 +25,10 @@ class ComputeDataProvider
 {
 public:
     rocprofvis_compute_metric_group_t* GetMetricGroup(std::string group);
+
+    void SetMetricsPath(std::filesystem::path path);
     void LoadMetricsFromCSV();
+    bool MetricsLoaded();
 
     ComputeDataProvider();
     ~ComputeDataProvider();
@@ -33,6 +36,10 @@ public:
 private:
     void FreeMetrics();
 
+    csv::CSVFormat csv_format;
+    bool m_metrics_loaded;
+    bool m_attempt_metrics_load;
+    std::filesystem::path m_metrics_path;
     std::unordered_map<std::string, std::unique_ptr<rocprofvis_compute_metric_group_t>> m_metrics;
 
 };

@@ -2,7 +2,10 @@
 
 #include "rocprofvis_compute_table.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 ComputeTableView::ComputeTableView(std::shared_ptr<ComputeDataProvider> data_provider) {}
 
@@ -51,3 +54,6 @@ void ComputeTableView::Render()
         ImGui::EndTabBar();
     }
 }
+
+}  // namespace View
+}  // namespace RocProfVis

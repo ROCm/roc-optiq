@@ -2,7 +2,10 @@
 
 #include "rocprofvis_compute_data_provider.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 rocprofvis_compute_metric_group_t* ComputeDataProvider::GetMetricGroup(std::string group)
 {
@@ -14,73 +17,87 @@ rocprofvis_compute_metric_group_t* ComputeDataProvider::GetMetricGroup(std::stri
     return metric_group;
 }
 
-void ComputeDataProvider::LoadMetricsFromCSV()
+void ComputeDataProvider::SetMetricsPath(std::filesystem::path path)
 {
-    FreeMetrics();
-    m_metrics.clear();
-
-    std::filesystem::path csv_path("C:/Users/drchen/OneDrive - Advanced Micro Devices Inc/Documents/Notes/workloads/monte_carlo/MI300/analyze/dfs/");
-
-    csv::CSVFormat format;
-    format.delimiter(',');
-    format.header_row(0);
-
-    if (std::filesystem::exists(csv_path))
+    if (m_metrics_loaded)
     {
-        for (auto& entry : std::filesystem::directory_iterator{csv_path})
-        {
-            if (entry.path().extension() == ".csv")
+        FreeMetrics();
+        m_metrics.clear(); 
+        m_metrics_loaded = false;
+    }
+    m_metrics_path = path;
+    m_attempt_metrics_load = true;
+}
+
+void
+ComputeDataProvider::LoadMetricsFromCSV()
+{
+    if (!m_metrics_loaded && m_attempt_metrics_load)
+    {
+        if (std::filesystem::exists(m_metrics_path) && std::filesystem::is_directory(m_metrics_path))
+        {        
+            for (auto& entry : std::filesystem::directory_iterator{m_metrics_path})
             {
-                csv::CSVReader csv(entry.path().string(), format);
-
-                std::unique_ptr metric_group = std::make_unique<rocprofvis_compute_metric_group_t>();
-                metric_group->m_table_column_names = csv.get_col_names();
-                std::unordered_map<int, int> numeric_columns_map;
-
-                for (csv::CSVRow& row : csv)
+                if (entry.path().extension() == ".csv")
                 {
-                    if (csv.n_rows() == 1)
+                    csv::CSVReader csv(entry.path().string(), csv_format);
+
+                    std::unique_ptr metric_group = std::make_unique<rocprofvis_compute_metric_group_t>();
+                    metric_group->m_table_column_names = csv.get_col_names();
+                    std::unordered_map<int, int> numeric_columns_map;
+
+                    for (csv::CSVRow& row : csv)
                     {
-                        int numeric_columns_count = 0;
-                        for (int col = 0; col < row.size(); col ++)
+                        if (csv.n_rows() == 1)
                         {
-                            if (row[col].is_num())
+                            int numeric_columns_count = 0;
+                            for (int col = 0; col < row.size(); col ++)
                             {
-                                numeric_columns_map[col] = numeric_columns_count;
-                                metric_group->m_plot_values.push_back(std::vector<float>{});
-                                numeric_columns_count ++;
+                                if (row[col].is_num())
+                                {
+                                    numeric_columns_map[col] = numeric_columns_count;
+                                    metric_group->m_plot_values.push_back(std::vector<float>{});
+                                    numeric_columns_count ++;
+                                }
                             }
                         }
-                    }
-                    if (row[0].is_str())
-                    {
-                        std::string plot_name = row[0].get();
-                        char* plot_label = new char[plot_name.length() + 1];
-                        strcpy(plot_label, plot_name.c_str());
-                        metric_group->m_plot_labels.push_back(plot_label);
-                    }
-                    std::vector<std::string> table_values;
-                    for (int col = 0; col < row.size(); col ++)
-                    {
-                        if (numeric_columns_map.count(col) > 0 && row[col].is_num())
+                        if (row[0].is_str())
                         {
-                            metric_group->m_plot_values[numeric_columns_map[col]].push_back(row[col].get<float>());
+                            std::string plot_name = row[0].get();
+                            char* plot_label = new char[plot_name.length() + 1];
+                            strcpy(plot_label, plot_name.c_str());
+                            metric_group->m_plot_labels.push_back(plot_label);
                         }
-                        table_values.push_back(row[col].get());
+                        std::vector<std::string> table_values;
+                        for (int col = 0; col < row.size(); col ++)
+                        {
+                            if (numeric_columns_map.count(col) > 0 && row[col].is_num())
+                            {
+                                metric_group->m_plot_values[numeric_columns_map[col]].push_back(row[col].get<float>());
+                            }
+                            table_values.push_back(row[col].get());
+                        }
+
+                        metric_group->m_table_values.push_back(table_values);
                     }
 
-                    metric_group->m_table_values.push_back(table_values);
+                    m_metrics[entry.path().filename().string()] = std::move(metric_group);
+                    spdlog::info("ComputeDataProvider::LoadMetricsFromCSV() - Loaded {}", entry.path().string());
                 }
-
-                m_metrics[entry.path().filename().string()] = std::move(metric_group);
-                spdlog::info("ComputeDataProvider::LoadMetricsFromCSV() - Loaded {}", entry.path().string());
             }
+            m_metrics_loaded = true;
+        }
+        else
+        {
+            spdlog::info("ComputeDataProvider::LoadMetricsFromCSV() - Invalid path");
         }
     }
-    else
-    {
-        spdlog::info("ComputeDataProvider::LoadMetricsFromCSV() - Csv_path is invalid.");
-    }
+    m_attempt_metrics_load = false;
+}
+
+bool ComputeDataProvider::MetricsLoaded()
+{
+    return m_metrics_loaded;
 }
 
 void ComputeDataProvider::FreeMetrics()
@@ -94,8 +111,18 @@ void ComputeDataProvider::FreeMetrics()
     }
 }
 
-ComputeDataProvider::ComputeDataProvider() {}
+ComputeDataProvider::ComputeDataProvider() 
+: m_metrics_loaded(false)
+, m_attempt_metrics_load(true)
+, m_metrics_path(std::filesystem::path("C:/Users/drchen/OneDrive - Advanced Micro Devices Inc/Documents/Notes/workloads/monte_carlo/MI300/analyze/dfs"))
+{
+    csv_format.delimiter(',');
+    csv_format.header_row(0);
+}
 
 ComputeDataProvider::~ComputeDataProvider() {
     FreeMetrics();
 }
+
+}  // namespace View
+}  // namespace RocProfVis

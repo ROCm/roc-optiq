@@ -41,7 +41,6 @@ AppWindow::DestroyInstance()
 AppWindow::AppWindow()
 : m_show_debug_widow(false)
 , m_show_provider_test_widow(false)
-, m_show_compute_view(false)
 {}
 
 AppWindow::~AppWindow() {}
@@ -79,7 +78,7 @@ AppWindow::Update()
         m_home_screen->Update();
     }
 
-    if (m_compute_root && m_show_compute_view)
+    if (m_compute_root)
     {
         m_compute_root->Update();
     }
@@ -115,7 +114,7 @@ AppWindow::Render()
             {
                 IGFD::FileDialogConfig config;
                 config.path                      = ".";
-                std::string supported_extensions = ".db,.rpd";
+                std::string supported_extensions = ".db,.rpd,.csv";
 #ifdef JSON_SUPPORT
                 supported_extensions += ",.json";
 #endif
@@ -137,12 +136,11 @@ AppWindow::Render()
             }
             ImGui::EndMenu();
         }
-        ImGui::Checkbox("Compute Mode", &m_show_compute_view);
         ImGui::EndMenuBar();
     }
 
     // Show main view container
-    if (m_compute_root && m_show_compute_view)
+    if (m_compute_root && m_compute_root->MetricsLoaded())
     {
         m_compute_root->Render();
     }
@@ -159,11 +157,15 @@ AppWindow::Render()
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {
-            std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-            if(m_home_screen)
+            std::filesystem::path file_path (ImGuiFileDialog::Instance()->GetFilePathName());
+            if (m_compute_root && file_path.extension().string() == ".csv")
             {
-                m_home_screen->OpenFile(file_path);
-                spdlog::info("Opening file: {}", file_path);
+                m_compute_root->SetMetricsPath(file_path.parent_path());
+            }
+            else if (m_home_screen)
+            {
+                m_home_screen->OpenFile(file_path.string());
+                spdlog::info("Opening file: {}", file_path.string());
             }
         }
 

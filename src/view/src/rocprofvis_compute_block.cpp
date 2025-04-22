@@ -2,7 +2,10 @@
 
 #include "rocprofvis_compute_block.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 constexpr int WINDOW_PADDING_DEFAULT = 8;
 constexpr int LEVEL_HISTORY_LIMIT = 5;
@@ -328,3 +331,6 @@ void ComputeBlockView::Render()
         return;
     }
 }
+
+}  // namespace View
+}  // namespace RocProfVis

@@ -2,7 +2,10 @@
 
 #include "rocprofvis_compute_root.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 constexpr char* normalization_units[] = {"Per Wave", "Per Cycle", "Per Kernel", "Per Second"};
 constexpr char* kernel_names[] = {"Kernel A", "Kernel B", "Kernel C", "Kernel D", "Kernel E", "Kernel F", "Kernel G", "Kernel H", "Kernel I", "Kernel J"};
@@ -20,7 +23,6 @@ ComputeRoot::ComputeRoot()
 , m_normalization_unit(kPerWave)
 , m_dispatch_filter(0)
 , m_kernel_filter(0)
-, m_metrics_loaded(false)
 {
     m_compute_data_provider = std::make_shared<ComputeDataProvider>();
 
@@ -33,35 +35,51 @@ ComputeRoot::~ComputeRoot() {}
 
 void ComputeRoot::Update()
 {
-    if (!m_metrics_loaded)
+    if (!m_compute_data_provider->MetricsLoaded())
     {
         m_compute_data_provider->LoadMetricsFromCSV();
-        m_compute_summary_view->Update();
-        m_metrics_loaded = true;
+
+        if (m_compute_data_provider->MetricsLoaded())
+        {
+            m_compute_summary_view->Update();
+        }
     }
+}
+
+void ComputeRoot::SetMetricsPath(std::filesystem::path path)
+{
+    m_compute_data_provider->SetMetricsPath(path);
+}
+
+bool ComputeRoot::MetricsLoaded()
+{
+    return m_compute_data_provider->MetricsLoaded();
 }
 
 void ComputeRoot::Render()
 {
-    RenderMenuBar();
-    if(ImGui::BeginTabBar("compute_root_tab_bar", ImGuiTabBarFlags_None))
+    if (m_compute_data_provider->MetricsLoaded())
     {
-        if(ImGui::BeginTabItem("Summary View") && m_compute_summary_view)
+        RenderMenuBar();
+        if(ImGui::BeginTabBar("compute_root_tab_bar", ImGuiTabBarFlags_None))
         {
-            m_compute_summary_view->Render();
-            ImGui::EndTabItem();
+            if(ImGui::BeginTabItem("Summary View") && m_compute_summary_view)
+            {
+                m_compute_summary_view->Render();
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Block View") && m_compute_block_view)
+            {
+                m_compute_block_view->Render();
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Table View") && m_compute_table_view)
+            {
+                m_compute_table_view->Render();
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
         }
-        if(ImGui::BeginTabItem("Block View") && m_compute_block_view)
-        {
-            m_compute_block_view->Render();
-            ImGui::EndTabItem();
-        }
-        if(ImGui::BeginTabItem("Table View") && m_compute_table_view)
-        {
-            m_compute_table_view->Render();
-            ImGui::EndTabItem();
-        }
-        ImGui::EndTabBar();
     }
 }
 
@@ -118,3 +136,6 @@ void ComputeRoot::RenderMenuBar()
     }
     ImGui::EndMenuBar();
 }
+
+}  // namespace View
+}  // namespace RocProfVis

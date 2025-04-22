@@ -26,6 +26,8 @@ class ComputeRoot : public RocWidget
 public:
     void Render();
     void Update();
+    void SetMetricsPath(std::filesystem::path path);
+    bool MetricsLoaded();
     ComputeRoot();
     ~ComputeRoot();
 
@@ -40,8 +42,6 @@ private:
     compute_normalization_unit_t m_normalization_unit;
     int m_dispatch_filter;
     int m_kernel_filter;
-
-    bool m_metrics_loaded;
 };
 
 }  // namespace View

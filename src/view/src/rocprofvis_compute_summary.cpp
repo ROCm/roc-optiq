@@ -2,7 +2,10 @@
 
 #include "rocprofvis_compute_summary.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 void ComputeSummaryLeft::Update()
 {
@@ -115,3 +118,6 @@ void ComputeSummaryView::Render()
         return;
     }
 }
+
+}  // namespace View
+}  // namespace RocProfVis

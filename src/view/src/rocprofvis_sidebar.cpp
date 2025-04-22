@@ -49,7 +49,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 
             ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
 
-            if(ImGui::CollapsingHeader(("Chart # " + std::to_string(tree_item.first) +
+            if(ImGui::CollapsingHeader(("Chart #" + std::to_string(tree_item.first) +
                                         ": " + tree_item.second.chart->GetName())
                                            .c_str()))
             {
@@ -70,8 +70,10 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 
                     {
                     }
-                    if(ImGui::Checkbox("Convert to Boxplot",
-                                       &tree_item.second.make_boxplot))
+                    if(ImGui::Checkbox(
+                           (" Convert to Boxplot #" + std::to_string((tree_item.first)))
+                               .c_str(),
+                           &tree_item.second.make_boxplot))
 
                     {
                     }

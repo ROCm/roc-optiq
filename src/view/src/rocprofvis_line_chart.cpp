@@ -203,16 +203,24 @@ LineChart::GetMovement()
 void
 LineChart::RenderMetaArea()
 {
-    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height), false);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
+    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height), ImGuiChildFlags_None);
 
-    ImGui::BeginChild("MetaData Content",
-                      ImVec2(m_metadata_width - 70.0f, m_track_height), false);
+    ImVec2 content_size    = ImGui::GetContentRegionAvail();
+    // Set padding for the child window (Note this done using SetCursorPos
+    // because ImGuiStyleVar_WindowPadding has no effect on child windows without borders)
+    ImGui::SetCursorPos(m_metadata_padding);
+    // Adjust content size to account for padding
+    content_size.x -= m_metadata_padding.x * 2;
+    content_size.y -= m_metadata_padding.x * 2;
+    ImGui::BeginChild("MetaData Content", ImVec2(content_size.x - 70.0f, content_size.y),
+                      ImGuiChildFlags_None);
     ImGui::Text(m_name.c_str());
     ImGui::EndChild();
 
     ImGui::SameLine();
 
-    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
+    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, content_size.y), ImGuiChildFlags_None);
     ImGui::Text((std::to_string(m_max_y)).c_str());
 
     if(ImGui::IsItemVisible())
@@ -234,6 +242,7 @@ LineChart::RenderMetaArea()
     ImGui::EndChild();
 
     ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
 
 void

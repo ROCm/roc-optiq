@@ -14,6 +14,8 @@ Charts::Charts(int id, std::string name, float zoom, float movement, double& min
 , m_track_height(75.0f)
 , m_metadata_width(400.0f)
 , m_is_chart_visible(true)
+, m_metadata_bg_color(IM_COL32(240, 240, 240, 55))
+, m_metadata_padding(ImVec2(4.0f, 4.0f))
 {}
 
 float
@@ -75,6 +77,7 @@ Charts::Render()
 void
 Charts::RenderResizeBar(const ImVec2& parent_size)
 {
+    ImGui::SetCursorPos(ImVec2(0, parent_size.y - 4.0f));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
     ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, 4.0f), false);
 

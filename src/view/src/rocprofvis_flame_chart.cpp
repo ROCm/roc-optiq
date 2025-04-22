@@ -14,19 +14,28 @@ namespace RocProfVis
 {
 namespace View
 {
-FlameChart::FlameChart(int chart_id, std::string name, float zoom, float movement,
-                       double min_x, double max_x, float scale_x)
-: m_zoom(zoom)
-, m_movement(movement)
-, m_min_x(min_x)
-, m_chart_id(chart_id)
-, m_max_x(max_x)
-, m_scale_x(scale_x)
-, m_name(name)
-, m_track_height(75)
+
+std::vector<ImU32> FlameChart::s_colors = {
+
+    IM_COL32(0, 114, 188, 204),   IM_COL32(0, 158, 115, 204),
+    IM_COL32(240, 228, 66, 204),  IM_COL32(204, 121, 167, 204),
+    IM_COL32(86, 180, 233, 204),  IM_COL32(213, 94, 0, 204),
+    IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
+    IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
+};
+
+FlameChart::FlameChart(int id, std::string name, float zoom, float movement, double min_x,
+                       double max_x, float scale_x)
+: Charts(id, name, zoom, movement, min_x, max_x, scale_x)
 , m_is_color_value_existant()
-, m_is_chart_visible(true)  // has to be true or nothing will render.
+, m_request_random_color(true)
 {}
+
+void
+FlameChart::SetRandomColorFlag(bool set_color)
+{
+    m_request_random_color = set_color;
+}
 
 std::tuple<double, double>
 FlameChart::FindMaxMinFlame()
@@ -48,63 +57,9 @@ FlameChart::FindMaxMinFlame()
     return std::make_tuple(m_min_x, m_max_x);
 }
 
-std::tuple<double, double>
-FlameChart::GetMinMax()
-{
-    return std::make_tuple(m_min_x, m_max_x);
-}
-
-void
-FlameChart::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                           float scale_x, float y_scroll_position)
-{
-    if(m_is_chart_visible)
-    {
-        // elements has gone off screen for the first time.
-        m_movement_since_unload = y_scroll_position;
-    }
-
-    m_zoom       = zoom;
-    m_movement   = movement;
-    m_scale_x    = scale_x;
-    m_min_x      = min_x;
-    m_max_x      = max_x;
-    m_y_movement = y_scroll_position;
-}
-
 void
 FlameChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {}
-
-const std::string&
-FlameChart::GetName()
-{
-    return m_name;
-}
-
-float
-FlameChart::GetMovement()
-{
-    return m_movement_since_unload - m_y_movement;
-}
-
-float
-FlameChart::GetTrackHeight()
-{
-    return m_track_height;
-}
-
-void
-FlameChart::SetID(int id)
-{
-    m_chart_id = id;
-}
-
-int
-FlameChart::ReturnChartID()
-{
-    return m_chart_id;
-}
 
 bool
 FlameChart::SetRawData(const RawTrackData* raw_data)
@@ -126,12 +81,6 @@ FlameChart::SetRawData(const RawTrackData* raw_data)
         }
     }
     return false;
-}
-
-bool
-FlameChart::GetVisibility()
-{
-    return m_is_chart_visible;
 }
 
 void
@@ -227,7 +176,15 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
                             start_position.y + 40 +
                                 cursor_position.y);  // End position (bottom-right corner)
 
-    ImU32 rectColor = IM_COL32(128, 128, 128, 255);  // Black colored box.
+    ImU32 rectColor;
+    if(m_request_random_color)
+    {
+        rectColor = s_colors[boxplot_box_id % 10];
+    }
+    else
+    {
+        rectColor = IM_COL32(128, 128, 128, 255);  // Black colored box.
+    }
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
 
@@ -241,92 +198,77 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
 }
 
 void
-FlameChart::Render()
+FlameChart::RenderMetaArea()
 {
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
+    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height),
+                      ImGuiChildFlags_None);
+    ImVec2 content_size = ImGui::GetContentRegionAvail();
 
-    if(ImGui::BeginChild((std::to_string(m_chart_id)).c_str()), ImVec2(0, 50), true,
-       window_flags)
+    // Set padding for the child window (Note this done using SetCursorPos
+    // because ImGuiStyleVar_WindowPadding has no effect on child windows without borders)
+    ImGui::SetCursorPos(m_metadata_padding);
+    // Adjust content size to account for padding
+    content_size.x -= m_metadata_padding.x * 2;
+    content_size.y -= m_metadata_padding.x * 2;
+    ImGui::BeginChild("MetaData Content", ImVec2(content_size.x - 70.0f, content_size.y),
+                      ImGuiChildFlags_None);
+    ImGui::Text(m_name.c_str());
+    if(ImGui::IsItemVisible())
     {
-        int    boxplot_box_id = 0;
-        ImVec2 parent_size    = ImGui::GetContentRegionAvail();
-        float  metadata_size  = 400.0f;
-        float  graph_size     = parent_size.x - metadata_size;
-
-        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, m_track_height), false);
-
-        ImGui::BeginChild("MetaData Content",
-                          ImVec2(metadata_size - 70.0f, m_track_height), false);
-        ImGui::Text(m_name.c_str());
-        if(ImGui::IsItemVisible())
-        {
-            m_is_chart_visible = true;
-        }
-        else
-        {
-            m_is_chart_visible = false;
-        }
-
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-
-        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
-
-        ImGui::EndChild();
-
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-
-        ImGui::BeginChild("Graph View", ImVec2(graph_size, m_track_height), false);
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-        for(const auto& flame : flames)
-        {
-            double normalized_start =
-                (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
-
-            // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
-            double normalized_end = flame.m_duration * m_scale_x;
-
-            double fullBoxSize = normalized_start + normalized_end;
-
-            ImVec2 start_position;
-            ImVec2 end_position;
-
-            start_position = ImVec2(normalized_start,
-                                    0);  // Scale the start time for better visualization
-
-            DrawBox(start_position, boxplot_box_id, flame, normalized_end, draw_list);
-
-            boxplot_box_id = boxplot_box_id + 1;
-        }
-        ImGui::EndChild();
+        m_is_in_view_vertical = true;
     }
-    // Controls for graph resize.
-    ImGuiIO& io              = ImGui::GetIO();
-    bool     is_control_held = io.KeyCtrl;
-    if(is_control_held)
+    else
     {
-        ImGui::Selectable(("Move Position Line " + std::to_string(m_chart_id)).c_str(),
-                          false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
-
-        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
-        {
-            ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-            m_track_height    = m_track_height + (drag_delta.y);
-            ImGui::ResetMouseDragDelta();
-            ImGui::EndDragDropSource();
-        }
-        if(ImGui::BeginDragDropTarget())
-        {
-            ImGui::EndDragDropTarget();
-        }
+        m_is_in_view_vertical = false;
     }
 
     ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, content_size.y),
+                      ImGuiChildFlags_None);
+
+    ImGui::EndChild();
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+void
+FlameChart::RenderChart(float graph_width)
+{
+    ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    int boxplot_box_id = 0;
+
+    for(const auto& flame : flames)
+    {
+        double normalized_start = (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
+
+        // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
+        double normalized_end = flame.m_duration * m_scale_x;
+
+        double fullBoxSize = normalized_start + normalized_end;
+
+        ImVec2 start_position;
+        ImVec2 end_position;
+
+        // Scale the start time for better visualization
+        start_position = ImVec2(normalized_start, 0);
+        DrawBox(start_position, boxplot_box_id, flame, normalized_end, draw_list);
+
+        boxplot_box_id = boxplot_box_id + 1;
+    }
+    ImGui::EndChild();
+}
+
+void
+FlameChart::Render()
+{
+    Charts::Render();
 }
 
 }  // namespace View

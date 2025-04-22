@@ -49,7 +49,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 
             ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
 
-            if(ImGui::CollapsingHeader(("Chart # " + std::to_string(tree_item.first) +
+            if(ImGui::CollapsingHeader(("Chart #" + std::to_string(tree_item.first) +
                                         ": " + tree_item.second.chart->GetName())
                                            .c_str()))
             {
@@ -61,6 +61,16 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                        &tree_item.second.display))
                 {
                 }
+                if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_FLAMECHART)
+                {
+                    if(ImGui::Checkbox("Turn off color",
+                                       &tree_item.second.colorful_flamechart))
+
+                    {
+                        static_cast<FlameChart*>(tree_item.second.chart)
+                            ->SetRandomColorFlag(tree_item.second.colorful_flamechart);
+                    }
+                }
                 if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
                 {
                     if(ImGui::Checkbox(
@@ -70,8 +80,10 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 
                     {
                     }
-                    if(ImGui::Checkbox("Convert to Boxplot",
-                                       &tree_item.second.make_boxplot))
+                    if(ImGui::Checkbox(
+                           (" Convert to Boxplot #" + std::to_string((tree_item.first)))
+                               .c_str(),
+                           &tree_item.second.make_boxplot))
 
                     {
                     }
@@ -94,7 +106,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                 }
 
                 // Lets you know if component is in Frame. Dev purpose only.
-                if(tree_item.second.chart->GetVisibility())
+                if(tree_item.second.chart->IsInViewVertical())
                 {
                     ImGui::TextColored(ImVec4(0, 1, 0, 1), "Component Is: ");
 
@@ -108,9 +120,9 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                     ImGui::SameLine();
                     std::string temp_movement_value =
                         "Not In Frame by: " +
-                        std::to_string(tree_item.second.chart->GetMovement()) + " units.";
+                        std::to_string(tree_item.second.chart->GetDistanceToView()) +
+                        " units.";
                     ImGui::TextColored(ImVec4(1, 0, 0, 1), temp_movement_value.c_str());
-                    std::cout << tree_item.second.chart->GetMovement() << std::endl;
                 }
             }
             else

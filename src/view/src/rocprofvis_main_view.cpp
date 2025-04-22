@@ -266,93 +266,125 @@ MainView::RenderGraphView()
     {
         ImGui::SetScrollY(m_scroll_position);
     }
+
+    ImVec2 window_size = ImGui::GetWindowSize();  // Size of the parent window
+
     for(const auto& graph_objects : m_graph_map)
     {
         if(graph_objects.second.display == true)
         {
-            if(graph_objects.second.color_by_value)
+            // Get track height and position to check if the track is in view
+            float  track_height = graph_objects.second.chart->GetTrackHeight();
+            ImVec2 track_pos    = ImGui::GetCursorPos();
+
+            // Calculate the track's position in the scrollable area
+            float track_top    = track_pos.y;
+            float track_bottom = track_top + track_height;
+
+            // Calculate deltas for out-of-view tracks
+            float delta_top = m_scroll_position -
+                              track_bottom;  // Positive if the track is above the view
+            float delta_bottom =
+                track_top - (m_scroll_position +
+                             window_size.y);  // Positive if the track is below the view
+
+            // Save distance for book keeping
+            graph_objects.second.chart->SetDistanceToView(
+                std::max(std::max(delta_bottom, delta_top), 0.0f));
+
+            // Check if the track is visible
+            bool is_visible = (track_bottom >= m_scroll_position &&
+                               track_top <= m_scroll_position + window_size.y);
+
+            if(is_visible)
             {
-                graph_objects.second.chart->SetColorByValue(
-                    graph_objects.second.color_by_value_digits);
-            }
-
-            ImVec4 selection_color = ImVec4(0, 0, 0, 0);
-            if(graph_objects.second.selected == true)
-            {
-                selection_color = ImVec4(0.17, 0.54, 1.0f, 0.3f);
-            }
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
-            ImGui::BeginChild(
-                (std::to_string(graph_objects.first)).c_str(),
-                ImVec2(0,
-                       m_graph_map[graph_objects.first].chart->GetTrackHeight() + 40.0f),
-                false,
-                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                    ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
-
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-
-            if(m_is_control_held)
-            {
-                ImGui::Selectable(
-                    ("Move Position " + std::to_string(graph_objects.first)).c_str(),
-                    false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
-
-                if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+                if(graph_objects.second.color_by_value)
                 {
-                    ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE", &graph_objects.second,
-                                              sizeof(graph_objects.second));
-                    ImGui::EndDragDropSource();
+                    graph_objects.second.chart->SetColorByValue(
+                        graph_objects.second.color_by_value_digits);
                 }
-                if(ImGui::BeginDragDropTarget())
+
+                ImVec4 selection_color = ImVec4(0, 0, 0, 0);
+                if(graph_objects.second.selected)
                 {
-                    if(const ImGuiPayload* payload =
-                           ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
+                    // TODO: move somewhere else don't need to create each loop
+                    selection_color = ImVec4(0.17, 0.54, 1.0f, 0.3f);
+                }
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
+                ImGui::BeginChild(
+                    (std::to_string(graph_objects.first)).c_str(),
+                    ImVec2(0,
+                           track_height + 0.0f),  // TODO: magic number was 40.0f
+                    false,
+                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                        ImGuiWindowFlags_NoScrollWithMouse |
+                        ImGuiWindowFlags_NoScrollbar);
+
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+
+                if(m_is_control_held)
+                {
+                    ImGui::Selectable(
+                        ("Move Position " + std::to_string(graph_objects.first)).c_str(),
+                        false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+
+                    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
                     {
-                        // Handle the payload (here we just print it)
-
-                        rocprofvis_graph_map_t* payload_data =
-                            (rocprofvis_graph_map_t*)
-                                payload->Data;  // incoming (being dragged)
-                        rocprofvis_graph_map_t payload_data_copy = *payload_data;
-                        int payload_position = payload_data_copy.chart->ReturnChartID();
-                        rocprofvis_graph_map_t outgoing_chart =
-                            m_graph_map[graph_objects.first];  // outgoing (getting
-                                                               // replaced)
-                        int outgoing_position = outgoing_chart.chart->ReturnChartID();
-
-                        // Change position in object itself.
-                        payload_data_copy.chart->SetID(outgoing_position);
-                        outgoing_chart.chart->SetID(payload_position);
-
-                        // Swap Positions.
-                        m_graph_map[outgoing_position] = payload_data_copy;
-                        m_graph_map[payload_position]  = outgoing_chart;
+                        ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE",
+                                                  &graph_objects.second,
+                                                  sizeof(graph_objects.second));
+                        ImGui::EndDragDropSource();
                     }
-                    ImGui::EndDragDropTarget();
+                    if(ImGui::BeginDragDropTarget())
+                    {
+                        if(const ImGuiPayload* payload =
+                               ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
+                        {
+                            // Handle the payload (here we just print it)
+
+                            rocprofvis_graph_map_t* payload_data =
+                                (rocprofvis_graph_map_t*)
+                                    payload->Data;  // incoming (being dragged)
+                            rocprofvis_graph_map_t payload_data_copy = *payload_data;
+                            int payload_position = payload_data_copy.chart->GetID();
+                            rocprofvis_graph_map_t outgoing_chart =
+                                m_graph_map[graph_objects.first];  // outgoing (getting
+                                                                   // replaced)
+                            int outgoing_position = outgoing_chart.chart->GetID();
+
+                            // Change position in object itself.
+                            payload_data_copy.chart->SetID(outgoing_position);
+                            outgoing_chart.chart->SetID(payload_position);
+
+                            // Swap Positions.
+                            m_graph_map[outgoing_position] = payload_data_copy;
+                            m_graph_map[payload_position]  = outgoing_chart;
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
                 }
-            }
 
-            if(m_graph_map[graph_objects.first].chart->GetVisibility() == true ||
-               (m_graph_map[graph_objects.first].chart->GetVisibility() == false ||
-                m_graph_map[graph_objects.first].chart->GetMovement() < 1000))
-            {
-                // If the graph can be seen or is less than 1000 units away update
-                // movements.
-                m_graph_map[graph_objects.first].chart->UpdateMovement(
+                graph_objects.second.chart->UpdateMovement(
                     m_zoom, m_movement, m_min_x, m_max_x, m_scale_x, m_scroll_position);
+
+                graph_objects.second.chart->Render();
+                ImGui::PopStyleColor();
+
+                ImGui::EndChild();
+                ImGui::PopStyleColor();
+
+                ImGui::Separator();
             }
-
-            m_graph_map[graph_objects.first]
-                .chart->Render();  // Always render for now. Update component later on and
-                                   // move into if above.
-
-            ImGui::PopStyleColor();
-
-            ImGui::EndChild();
-            ImGui::PopStyleColor();
-
-            ImGui::Separator();
+            else
+            {
+                // render dummy
+                ImGui::Dummy(ImVec2(0, track_height));
+                DebugWindow::GetInstance()->AddDebugMessage(
+                    "Dummy for: " + std::to_string(graph_objects.second.chart->GetID()) +
+                    " " +
+                    std::to_string(graph_objects.second.chart->GetDistanceToView()) +
+                    " " + std::to_string(m_scroll_position));
+            }
         }
     }
 
@@ -578,8 +610,9 @@ MainView::HandleTopSurfaceTouch()
         // Handle Panning
         if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
-            float drag_y      = ImGui::GetIO().MouseDelta.y;
-            m_scroll_position = m_scroll_position - drag_y, 0.0f, m_content_max_y_scoll;
+            float drag_y = ImGui::GetIO().MouseDelta.y;
+            m_scroll_position =
+                clamp(m_scroll_position - drag_y, 0.0, m_content_max_y_scoll);
 
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (m_max_x - m_min_x) / m_zoom;

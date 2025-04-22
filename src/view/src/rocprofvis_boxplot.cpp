@@ -15,54 +15,27 @@ namespace RocProfVis
 namespace View
 {
 
-BoxPlot::BoxPlot(int id, std::string name, float zoom, float movement, float& min_x,
-                 float& max_x, float scale_x)
-: m_id(id)
-, m_zoom(zoom)
-, m_movement(movement)
-, m_min_x(min_x)
-, m_max_x(max_x)
+BoxPlot::BoxPlot(int id, std::string name, float zoom, float movement, double min_x,
+                 double max_x, float scale_x)
+: Charts(id, name, zoom, movement, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
-, m_scale_x(scale_x)
 , m_data({})
-, m_name(name)
-, m_track_height(290.0f)
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
 {}
 
 BoxPlot::~BoxPlot() {}
-float
-BoxPlot::GetTrackHeight()
-{
-    return m_track_height;  // Create an invisible button with a more area
-}
 
-std::string&
-BoxPlot::GetName()
-{
-    return m_name;
-}
-int
-BoxPlot::ReturnChartID()
-{
-    return m_id;
-}
-void
-BoxPlot::SetID(int id)
-{
-    m_id = id;
-}
 void
 BoxPlot::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {
-    m_color_by_value_digits = color_by_value_digits;
+    m_color_by_value_digits   = color_by_value_digits;
     m_is_color_value_existant = true;
 }
 
-std::vector<rocprofvis_data_point_t>
-BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
+void
+BoxPlot::ExtractPointsFromData(const RawTrackSampleData* sample_track)
 {
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
@@ -70,43 +43,26 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     int    screen_width = static_cast<int>(display_size.x);
 
     double effective_width = screen_width / m_zoom;
-    double bin_size       = (m_max_x - m_min_x) / effective_width;
+    double bin_size        = (m_max_x - m_min_x) / effective_width;
 
     double bin_sum_x         = 0.0;
     double bin_sum_y         = 0.0;
     int    bin_count         = 0;
     double current_bin_start = DBL_MAX;
 
-    uint64_t            count  = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-        track_data, kRPVControllerArrayNumEntries, 0, &count);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
+    uint64_t                                      count      = track_data.size();
 
     rocprofvis_trace_counter_t counter;
 
     for(uint64_t i = 0; i < count; i++)
     {
-        rocprofvis_controller_sample_t* sample = nullptr;
-        result                                 = rocprofvis_controller_get_object(
-            track_data, kRPVControllerArrayEntryIndexed, i, &sample);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
-
-        double start_ts = 0;
-        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
-                                                  0, &start_ts);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-        double value = 0;
-        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
-                                                  &value);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-        counter.m_start_ts = start_ts;
-        counter.m_value    = value;
+        counter.m_start_ts = track_data[i].m_start_ts;
+        counter.m_value    = track_data[i].m_value;
 
         if(i == 0)
         {
-            current_bin_start = start_ts;
+            current_bin_start = counter.m_start_ts;
         }
 
         if(counter.m_start_ts < current_bin_start + bin_size)
@@ -140,10 +96,9 @@ BoxPlot::ExtractPointsFromData(rocprofvis_controller_array_t* track_data)
     }
 
     m_data = aggregated_points;
-    return aggregated_points;
 }
 
-std::tuple<float, float>
+std::tuple<double, double>
 BoxPlot::FindMaxMin()
 {
     m_min_y = m_data[0].y_value;
@@ -190,108 +145,81 @@ BoxPlot::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float kno
 }
 
 void
-BoxPlot::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                        float scale_x, float y_scroll_position)
+BoxPlot::RenderMetaArea()
 {
-    m_zoom     = zoom;
-    m_movement = movement;
-    m_scale_x  = scale_x;
-    m_min_x    = min_x;
-    m_max_x    = max_x;
+    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height), false);
+
+    ImGui::BeginChild("MetaData Content",
+                      ImVec2(m_metadata_width - 70.0f, m_track_height), false);
+    ImGui::Text(m_name.c_str());
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
+    ImGui::Text((std::to_string(m_max_y)).c_str());
+
+    if(ImGui::IsItemVisible())
+    {
+        m_is_in_view_vertical = true;
+    }
+    else
+    {
+        m_is_in_view_vertical = false;
+    }
+
+    ImVec2 child_window_size = ImGui::GetWindowSize();
+    ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
+    ImGui::SetCursorPos(
+        ImVec2(0, child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
+
+    ImGui::Text((std::to_string(m_min_y)).c_str());
+
+    ImGui::EndChild();
+
+    ImGui::EndChild();
+}
+
+void
+BoxPlot::RenderChart(float graph_width)
+{
+    ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+    ImVec2 content_size    = ImGui::GetContentRegionAvail();
+
+    float scale_y = content_size.y / (m_max_y - m_min_y);
+    for(int i = 1; i < m_data.size(); i++)
+    {
+        ImVec2 point_1 =
+            MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
+        if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
+                                      ImVec2(point_1.x + 10, point_1.y + 10)))
+        {
+            ImGui::BeginTooltip();
+            ImGui::Text(std::to_string(m_data[i - 1].x_value - m_min_x).c_str());
+            ImGui::EndTooltip();
+        }
+        ImVec2 point_2 =
+            MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
+        ImU32 box_color =
+            IM_COL32(0, 0, 0, 200);  // Used for color by value (to be added later).
+
+        float bottom_of_chart =
+            cursor_position.y + content_size.y - (m_min_y - m_min_y) * scale_y;
+
+        draw_list->AddRectFilled(
+            point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
+            box_color, 2.0f);
+    }
+    ImGui::EndChild();
 }
 
 void
 BoxPlot::Render()
 {
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
-
-    if(ImGui::BeginChild((std::to_string(m_id)).c_str()), true, window_flags)
-    {
-        ImVec2 parent_size   = ImGui::GetContentRegionAvail();
-        float  metadata_size = 400.0f;
-        float  graph_size    = parent_size.x - metadata_size;
-
-        ImGui::BeginChild("MetaData View", ImVec2(metadata_size, m_track_height), false);
-
-        ImGui::BeginChild("MetaData Content",
-                          ImVec2(metadata_size - 70.0f, m_track_height),
-                          false);
-        ImGui::Text(m_name.c_str());
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-
-        ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, m_track_height), false);
-        ImGui::Text((std::to_string(m_max_y)).c_str());
-
-        ImVec2 child_window_size = ImGui::GetWindowSize();
-        ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
-        ImGui::SetCursorPos(ImVec2(0, child_window_size.y - text_size.y -
-                                          ImGui::GetStyle().WindowPadding.y));
-
-        ImGui::Text((std::to_string(m_min_y)).c_str());
-
-        ImGui::EndChild();
-
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-        ImGui::BeginChild("Graph View", ImVec2(graph_size, m_track_height), false);
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-        ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-        ImVec2 content_size    = ImGui::GetContentRegionAvail();
-
-        float scale_y = content_size.y / (m_max_y - m_min_y);
-        for(int i = 1; i < m_data.size(); i++)
-        {
-            ImVec2 point_1 =
-                MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
-            if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
-                                          ImVec2(point_1.x + 10, point_1.y + 10)))
-            {
-                ImGui::BeginTooltip();
-                ImGui::Text(std::to_string(m_data[i - 1].x_value - m_min_x).c_str());
-                ImGui::EndTooltip();
-            }
-            ImVec2 point_2 =
-                MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
-            ImU32 box_color =
-                IM_COL32(0, 0, 0, 200);  // Used for color by value (to be added later).
-
-            float bottom_of_chart =
-                cursor_position.y + content_size.y - (m_min_y - m_min_y) * scale_y;
-
-            draw_list->AddRectFilled(
-                point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
-                box_color, 2.0f);
-        }
-        ImGui::EndChild();
-    }
-
-    // Controls for graph resize.
-    ImGuiIO& io              = ImGui::GetIO();
-    bool     is_control_held = io.KeyCtrl;
-    if(is_control_held)
-    {
-        ImGui::Selectable(("Move Position Line " + std::to_string(m_id)).c_str(), false,
-                          ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
-
-        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
-        {
-            ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-            m_track_height    = m_track_height + (drag_delta.y);
-            ImGui::ResetMouseDragDelta();
-            ImGui::EndDragDropSource();
-        }
-        if(ImGui::BeginDragDropTarget())
-        {
-            ImGui::EndDragDropTarget();
-        }
-    }
-
-    ImGui::EndChild();
+    Charts::Render();
 }
 
 ImVec2
@@ -306,4 +234,3 @@ BoxPlot::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
 
 }  // namespace View
 }  // namespace RocProfVis
-

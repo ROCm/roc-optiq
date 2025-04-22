@@ -34,6 +34,12 @@ set(VIEW_FILES
     src/view/src/rocprofvis_raw_track_data.cpp
     src/view/src/rocprofvis_events.cpp
     src/view/src/rocprofvis_event_manager.cpp
+	src/view/src/rocprofvis_compute_root.cpp
+	src/view/src/rocprofvis_compute_summary.cpp
+	src/view/src/rocprofvis_compute_block.cpp
+	src/view/src/rocprofvis_compute_table.cpp
+	src/view/src/rocprofvis_compute_data_provider.cpp
+	src/view/src/rocprofvis_compute_metric.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
 )

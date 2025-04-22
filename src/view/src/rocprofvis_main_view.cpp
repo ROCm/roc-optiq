@@ -267,35 +267,32 @@ MainView::RenderGraphView()
         ImGui::SetScrollY(m_scroll_position);
     }
 
-    float  scroll_max_y = ImGui::GetScrollMaxY();  // Maximum vertical scroll position
-    ImVec2 window_size  = ImGui::GetWindowSize();  // Size of the parent window
+    ImVec2 window_size = ImGui::GetWindowSize();  // Size of the parent window
 
     for(const auto& graph_objects : m_graph_map)
     {
         if(graph_objects.second.display == true)
         {
-            // check if the graph is in view
-            // get the track height
+            // Get track height and position to check if the track is in view
             float  track_height = graph_objects.second.chart->GetTrackHeight();
-            ImVec2 track_pos =
-                ImGui::GetCursorPos();  // Position of the track relative to view
+            ImVec2 track_pos    = ImGui::GetCursorPos();
 
-            // Calculate the child's position in the scrollable area
+            // Calculate the track's position in the scrollable area
             float track_top    = track_pos.y;
             float track_bottom = track_top + track_height;
 
-            // Calculate deltas for out-of-view children
+            // Calculate deltas for out-of-view tracks
             float delta_top = m_scroll_position -
-                              track_bottom;  // Positive if the child is above the view
+                              track_bottom;  // Positive if the track is above the view
             float delta_bottom =
                 track_top - (m_scroll_position +
-                             window_size.y);  // Positive if the child is below the view
+                             window_size.y);  // Positive if the track is below the view
 
             // Save distance for book keeping
             graph_objects.second.chart->SetDistanceToView(
                 std::max(std::max(delta_bottom, delta_top), 0.0f));
 
-            // Check if the child is visible
+            // Check if the track is visible
             bool is_visible = (track_bottom >= m_scroll_position &&
                                track_top <= m_scroll_position + window_size.y);
 
@@ -367,12 +364,6 @@ MainView::RenderGraphView()
                     }
                 }
 
-                // if(m_graph_map[graph_objects.first].chart->GetVisibility() == true ||
-                //    (m_graph_map[graph_objects.first].chart->GetVisibility() == false ||
-                //     m_graph_map[graph_objects.first].chart->GetMovement() < 1000))
-                // {
-                //     // If the graph can be seen or is less than 1000 units away update
-                //     // movements.
                 graph_objects.second.chart->UpdateMovement(
                     m_zoom, m_movement, m_min_x, m_max_x, m_scale_x, m_scroll_position);
 
@@ -619,8 +610,9 @@ MainView::HandleTopSurfaceTouch()
         // Handle Panning
         if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
-            float drag_y      = ImGui::GetIO().MouseDelta.y;
-            m_scroll_position = clamp(m_scroll_position - drag_y, 0.0, m_content_max_y_scoll);
+            float drag_y = ImGui::GetIO().MouseDelta.y;
+            m_scroll_position =
+                clamp(m_scroll_position - drag_y, 0.0, m_content_max_y_scoll);
 
             float drag       = ImGui::GetIO().MouseDelta.x;
             float view_width = (m_max_x - m_min_x) / m_zoom;

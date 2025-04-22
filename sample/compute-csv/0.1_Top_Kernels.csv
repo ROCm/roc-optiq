@@ -1,0 +1,17 @@
+Kernel_Name,Count,Sum(ns),Mean(ns),Median(ns),Pct
+"void rocprim::detail::block_reduce_kerne
+l<false, rocprim::detail::wrapped_reduce
+_config<rocprim::default_config, int>...",2.0,936072.0,468036.0,468036.0,67.43
+"_ZN12rocrand_impl6system6detail14kernel_
+wrapperITnDaXadL_ZNS_4host19init_xorwow_
+enginesE4dim3S4_S4_S4_PN14rocrand_dev...",1.0,230008.0,230008.0,230008.0,16.57
+"void rocprim::detail::block_reduce_kerne
+l<true, rocprim::detail::wrapped_reduce_
+config<rocprim::default_config, int>,...",2.0,202425.0,101212.5,101212.5,14.58
+"void rocrand_impl::host::generate_sobol_
+kernel<1u, false, rocrand_device::sobol3
+2_engine<true>, unsigned int, float, ...",1.0,9742.0,9742.0,9742.0,0.7
+"_ZN12rocrand_impl6system6detail14kernel_
+wrapperITnDaXadL_ZNS_4host15generate_xor
+wowINS3_23default_config_providerIL16...",1.0,7618.0,7618.0,7618.0,0.55
+__amd_rocclr_initHeap.kd,1.0,2325.0,2325.0,2325.0,0.17

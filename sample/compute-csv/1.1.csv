@@ -1,0 +1,39 @@
+Info
+monte_carlo
+./applications_monte_carlo_pi
+SQ|LDS|SQC|TA|TD|TCP|TCC|SPI|CPC|CPF
+Tue 25 Mar 2025 10:44:41 AM  (CDT)
+3
+banff-pla-r25-14
+Intel(R) Xeon(R) Platinum 8480C
+"American Megatrends International, LLC.C2789.5.BS.1C17.AG.1"
+Ubuntu 22.04.2 LTS
+5.15.0-70-generic
+""
+2113432292
+""
+6.3.0-39
+113-M3000100-103
+SPX
+NPS1
+MI300
+gfx942
+32
+4096
+304
+4
+32
+64
+1024
+MI300X_A1
+32
+2100
+1300
+2100
+1300
+16
+32
+160
+4
+665.6
+1

@@ -21,7 +21,6 @@ namespace View
 LineChart::LineChart(int id, std::string name, float zoom, float movement, double& min_x,
                      double& max_x, float scale_x)
 : Charts(id, name, zoom, movement, min_x, max_x, scale_x)
-, m_movement(movement)
 , m_min_y(0)
 , m_max_y(0)
 , m_data({})

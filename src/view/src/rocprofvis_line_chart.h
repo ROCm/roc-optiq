@@ -42,7 +42,6 @@ protected:
 private:
     std::vector<rocprofvis_data_point_t> m_data;
     rocprofvis_color_by_value_t          m_color_by_value_digits;
-    double                               m_movement;
     double                               m_min_y;
     double                               m_max_y;
     bool                                 m_is_color_value_existant;

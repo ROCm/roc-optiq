@@ -19,7 +19,6 @@ typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectType
 
 Event::Event(uint64_t id, double start_ts, double end_ts)
 : m_id(id)
-, m_track(nullptr)
 , m_start_timestamp(start_ts)
 , m_end_timestamp(end_ts)
 , m_name(UINT64_MAX)
@@ -420,11 +419,6 @@ rocprofvis_result_t Event::GetObject(rocprofvis_property_t property, uint64_t in
         switch(property)
         {
             case kRPVControllerEventTrack:
-            {
-                *value = (rocprofvis_handle_t*) m_track;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
             case kRPVControllerEventStartTimestamp:
             case kRPVControllerEventEndTimestamp:
             case kRPVControllerEventId:
@@ -594,21 +588,12 @@ rocprofvis_result_t Event::SetObject(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
-            case kRPVControllerEventTrack:
-            {
-                TrackRef track_ref(value);
-                if(track_ref.IsValid())
-                {
-                    m_track = track_ref.Get();
-                    result  = kRocProfVisResultSuccess;
-                }
-                break;
-            }
             case kRPVControllerEventCallstackEntryIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
             }
+            case kRPVControllerEventTrack:
             case kRPVControllerEventStartTimestamp:
             case kRPVControllerEventEndTimestamp:
             case kRPVControllerEventId:

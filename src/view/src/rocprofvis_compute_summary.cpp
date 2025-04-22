@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#pragma once
 #include "rocprofvis_compute_summary.h"
 
 using namespace RocProfVis::View;

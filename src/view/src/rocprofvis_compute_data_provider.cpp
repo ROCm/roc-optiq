@@ -1,10 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#pragma once
 #include "rocprofvis_compute_data_provider.h"
 
 using namespace RocProfVis::View;
-using namespace csv;
 
 rocprofvis_compute_metric_group_t* ComputeDataProvider::GetMetricGroup(std::string group)
 {
@@ -23,7 +21,7 @@ void ComputeDataProvider::LoadMetricsFromCSV()
 
     std::filesystem::path csv_path("C:/Users/drchen/OneDrive - Advanced Micro Devices Inc/Documents/Notes/workloads/monte_carlo/MI300/analyze/dfs/");
 
-    CSVFormat format;
+    csv::CSVFormat format;
     format.delimiter(',');
     format.header_row(0);
 
@@ -33,13 +31,13 @@ void ComputeDataProvider::LoadMetricsFromCSV()
         {
             if (entry.path().extension() == ".csv")
             {
-                CSVReader csv(entry.path().string(), format);
+                csv::CSVReader csv(entry.path().string(), format);
 
                 std::unique_ptr metric_group = std::make_unique<rocprofvis_compute_metric_group_t>();
                 metric_group->m_table_column_names = csv.get_col_names();
                 std::unordered_map<int, int> numeric_columns_map;
 
-                for (CSVRow& row : csv)
+                for (csv::CSVRow& row : csv)
                 {
                     if (csv.n_rows() == 1)
                     {

@@ -45,8 +45,9 @@ protected:
     bool        m_is_chart_visible;
     float       m_metadata_width;
     std::string m_name;
-    ImU32 m_metadata_bg_color;
-    ImVec2 m_metadata_padding;
+    ImU32       m_metadata_bg_color;
+    ImVec2      m_metadata_padding;
+    float       m_resize_grip_thickness;
 };
 
 }  // namespace View

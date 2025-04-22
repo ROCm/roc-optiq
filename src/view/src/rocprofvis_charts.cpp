@@ -16,6 +16,7 @@ Charts::Charts(int id, std::string name, float zoom, float movement, double& min
 , m_is_chart_visible(true)
 , m_metadata_bg_color(IM_COL32(240, 240, 240, 55))
 , m_metadata_padding(ImVec2(4.0f, 4.0f))
+, m_resize_grip_thickness(4.0f)
 {}
 
 float
@@ -77,32 +78,28 @@ Charts::Render()
 void
 Charts::RenderResizeBar(const ImVec2& parent_size)
 {
-    ImGui::SetCursorPos(ImVec2(0, parent_size.y - 4.0f));
+    ImGui::SetCursorPos(ImVec2(0, parent_size.y - m_resize_grip_thickness));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-    ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, 4.0f), false);
+    ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, m_resize_grip_thickness),
+                      false);
 
-    // Controls for graph resize.
-    // ImGuiIO& io              = ImGui::GetIO();
-    // bool     is_control_held = io.KeyCtrl;
-    // if(is_control_held)
+    ImGui::Selectable(("##MovePositionLine" + std::to_string(m_id)).c_str(), false,
+                      ImGuiSelectableFlags_AllowDoubleClick,
+                      ImVec2(0, m_resize_grip_thickness));
+    if(ImGui::IsItemHovered())
     {
-        ImGui::Selectable(("##MovePositionLine" + std::to_string(m_id)).c_str(), false,
-                          ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 4.0f));
-        if(ImGui::IsItemHovered())
-        {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-        }
-        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
-        {
-            ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-            m_track_height    = m_track_height + (drag_delta.y);
-            ImGui::ResetMouseDragDelta();
-            ImGui::EndDragDropSource();
-        }
-        if(ImGui::BeginDragDropTarget())
-        {
-            ImGui::EndDragDropTarget();
-        }
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+    }
+    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+    {
+        ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+        m_track_height    = m_track_height + (drag_delta.y);
+        ImGui::ResetMouseDragDelta();
+        ImGui::EndDragDropSource();
+    }
+    if(ImGui::BeginDragDropTarget())
+    {
+        ImGui::EndDragDropTarget();
     }
     ImGui::EndChild();  // end resize handle
     ImGui::PopStyleColor();

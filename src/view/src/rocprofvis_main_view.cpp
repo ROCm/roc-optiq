@@ -49,7 +49,7 @@ MainView::MainView(DataProvider& dp)
 , m_grid_size(50)
 , m_sidebar_size(400)
 , m_resize_activity(false)
- 
+
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -150,8 +150,7 @@ MainView::RenderSplitter(ImVec2 screen_pos)
     ImVec2 display_size = ImGui::GetWindowSize();
 
     ImGui::SetNextWindowSize(ImVec2(1.0f, display_size.y), ImGuiCond_Always);
-    ImGui::SetCursorPos(
-        ImVec2(m_sidebar_size, 0));   
+    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.4f, 0.4f, 0.4f, 0.4f));
 
@@ -415,8 +414,7 @@ MainView::RenderGraphView()
                 }
 
                 graph_objects.second.chart->UpdateMovement(
-                    m_zoom, m_movement, m_min_x, m_max_x, m_scale_x, m_scroll_position,
-                    m_sidebar_size);
+                    m_zoom, m_movement, m_min_x, m_max_x, m_scale_x, m_scroll_position);
 
                 m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
                 graph_objects.second.chart->Render();
@@ -439,6 +437,10 @@ MainView::RenderGraphView()
             }
         }
     }
+
+    // Set the sidebar size at the end of render loop.
+
+    Charts::SetSidebarSize(m_sidebar_size);
 
     ImGui::EndChild();
     ImGui::PopStyleColor();

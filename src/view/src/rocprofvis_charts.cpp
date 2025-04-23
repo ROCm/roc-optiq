@@ -1,7 +1,7 @@
 #include "rocprofvis_charts.h"
- using namespace RocProfVis::View;
+using namespace RocProfVis::View;
 
-float Charts::m_metadata_width = 400.0f;
+float Charts::s_metadata_width = 400.0f;
 
 Charts::Charts(int id, std::string name, float zoom, float movement, double& min_x,
                double& max_x, float scale_x)
@@ -42,6 +42,11 @@ Charts::GetID()
 {
     return m_id;
 }
+void
+Charts::SetSidebarSize(int sidebar_size)
+{
+    s_metadata_width = sidebar_size;
+}
 
 bool
 Charts::IsInViewVertical()
@@ -81,14 +86,13 @@ Charts::GetMinMax()
 
 void
 Charts::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                       float scale_x, float y_scroll_position, int sidebar_size)
+                       float scale_x, float y_scroll_position)
 {
-    m_zoom           = zoom;
-    m_movement       = movement;
-    m_scale_x        = scale_x;
-    m_min_x          = min_x;
-    m_max_x          = max_x;
-    m_metadata_width = sidebar_size;
+    m_zoom     = zoom;
+    m_movement = movement;
+    m_scale_x  = scale_x;
+    m_min_x    = min_x;
+    m_max_x    = max_x;
 }
 
 void
@@ -101,7 +105,7 @@ Charts::Render()
        window_flags)
     {
         ImVec2 parent_size = ImGui::GetContentRegionAvail();
-        float  graph_width = parent_size.x - m_metadata_width;
+        float  graph_width = parent_size.x - s_metadata_width;
 
         RenderMetaArea();
         ImGui::SameLine();

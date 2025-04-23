@@ -1,6 +1,5 @@
 #include "rocprofvis_charts.h"
-#include <iostream>
-using namespace RocProfVis::View;
+ using namespace RocProfVis::View;
 
 float Charts::m_metadata_width = 400.0f;
 
@@ -24,7 +23,6 @@ Charts::Charts(int id, std::string name, float zoom, float movement, double& min
 bool
 Charts::GetResizeStatus()
 {
-    std::cout<<m_is_resize <<std::endl;
     return m_is_resize;
 }
 float

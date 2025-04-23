@@ -49,8 +49,7 @@ MainView::MainView(DataProvider& dp)
 , m_grid_size(50)
 , m_sidebar_size(400)
 , m_resize_activity(false)
-, m_is_graph_being_resized({})
-
+ 
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -150,11 +149,11 @@ MainView::RenderSplitter(ImVec2 screen_pos)
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
-    ImGui::SetNextWindowSize(ImVec2(2.0f, display_size.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(1.0f, display_size.y), ImGuiCond_Always);
     ImGui::SetCursorPos(
         ImVec2(m_sidebar_size, 0));   
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(250, 250, 250, 250));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.4f, 0.4f, 0.4f, 0.4f));
 
     ImGui::BeginChild("Splitter View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
 

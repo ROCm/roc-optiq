@@ -26,7 +26,7 @@ Grid::GetCursorPosition()
 void
 Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                  ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x,
-                 int grid_size)
+                 int grid_size, int sidebar_size)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -39,12 +39,12 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 
-    float temp_sidebar_size = 400.0f;  // Replace with resizeable sidebar variable.
+  
 
-    ImGui::SetCursorPos(ImVec2(temp_sidebar_size, 0));
+    ImGui::SetCursorPos(ImVec2(sidebar_size, 0));
 
     if(ImGui::BeginChild("Grid"),
-       ImVec2(displaySize.x - temp_sidebar_size, displaySize.y - 30.0f), true,
+       ImVec2(displaySize.x - sidebar_size, displaySize.y - 30.0f), true,
        window_flags)
     {
         ImVec2 child_win  = ImGui::GetWindowPos();

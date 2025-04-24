@@ -250,8 +250,8 @@ LineChart::RenderChart(float graph_width)
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
                                       ImVec2(point_1.x + 10, point_1.y + 10)))
         {
-            tooltip_x    = point_1.x;
-            tooltip_y    = point_1.y;
+            tooltip_x    = m_data[i - 1].x_value - m_min_x;
+            tooltip_y    = m_data[i - 1].y_value - m_min_y;
             show_tooltip = true;
         }
 

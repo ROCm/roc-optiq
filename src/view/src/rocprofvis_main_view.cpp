@@ -568,15 +568,6 @@ MainView::MakeGraphView()
                 break;
             }
         }
-
-        // TODO: Quick hack Fetch all tracks for now... in future use event system to
-        // decide what / when to fetch
-
-        // if(i < 4)
-        // {
-        //     m_data_provider.FetchTrack(i, m_data_provider.GetStartTime(),
-        //                                m_data_provider.GetEndTime(), 1000, 0);
-        // }
     }
 
     m_meta_map_made = true;

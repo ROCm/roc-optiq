@@ -1,0 +1,32 @@
+Metric,Avg,Unit,Peak,Pct of Peak
+VALU FLOPs,128.93,Gflop,81715.2,0.16
+VALU IOPs,1132.94,Giop,81715.2,1.39
+MFMA FLOPs (BF16),0.0,Gflop,2614886.4,0.0
+MFMA FLOPs (F16),0.0,Gflop,2614886.4,0.0
+MFMA FLOPs (F32),0.0,Gflop,163430.4,0.0
+MFMA FLOPs (F64),0.0,Gflop,163430.4,0.0
+MFMA IOPs (Int8),0.0,Giop,5229772.8,0.0
+Active CUs,19.0,Cus,304.0,6.25
+SALU Utilization,0.55,Pct,100.0,0.55
+VALU Utilization,1.54,Pct,100.0,1.54
+MFMA Utilization,0.0,Pct,100.0,0.0
+VMEM Utilization,0.07,Pct,100.0,0.07
+Branch Utilization,0.05,Pct,100.0,0.05
+VALU Active Threads,42.91,Threads,64.0,67.04
+IPC,0.44,Instr/cycle,5.0,8.86
+Wavefront Occupancy,136.08,Wavefronts,9728.0,1.4
+Theoretical LDS Bandwidth,3144.67,Gb/s,81715.2,3.85
+LDS Bank Conflicts/Access,0.15,Conflicts/access,32.0,0.46
+vL1D Cache Hit Rate,42.98,Pct,100.0,42.98
+vL1D Cache BW,8000.98,Gb/s,81715.2,9.79
+L2 Cache Hit Rate,68.51,Pct,100.0,68.51
+L2 Cache BW,2299.17,Gb/s,4300.8,53.46
+L2-Fabric Read BW,244.67,Gb/s,665.6,36.76
+L2-Fabric Write BW,817.16,Gb/s,665.6,122.77
+L2-Fabric Read Latency,1000.71,Cycles,,
+L2-Fabric Write Latency,479.61,Cycles,,
+sL1D Cache Hit Rate,70.45,Pct,100.0,70.45
+sL1D Cache BW,210.15,Gb/s,21504.0,0.98
+L1I Hit Rate,99.74,Pct,100.0,99.74
+L1I BW,1540.6,Gb/s,21504.0,7.16
+L1I Fetch Latency,22.76,Cycles,,

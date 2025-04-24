@@ -214,7 +214,7 @@ void
 FlameChart::RenderMetaArea()
 {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
-    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height),
+    ImGui::BeginChild("MetaData View", ImVec2(s_metadata_width, m_track_height),
                       ImGuiChildFlags_None);
     ImVec2 content_size = ImGui::GetContentRegionAvail();
 

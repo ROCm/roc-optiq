@@ -148,10 +148,10 @@ BoxPlot::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float kno
 void
 BoxPlot::RenderMetaArea()
 {
-    ImGui::BeginChild("MetaData View", ImVec2(m_metadata_width, m_track_height), false);
+    ImGui::BeginChild("MetaData View", ImVec2(s_metadata_width, m_track_height), false);
 
     ImGui::BeginChild("MetaData Content",
-                      ImVec2(m_metadata_width - 70.0f, m_track_height), false);
+                      ImVec2(s_metadata_width - 70.0f, m_track_height), false);
     ImGui::Text(m_name.c_str());
     ImGui::EndChild();
 

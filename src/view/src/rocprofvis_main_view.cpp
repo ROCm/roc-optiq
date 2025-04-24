@@ -48,6 +48,9 @@ MainView::MainView(DataProvider& dp)
 , m_capture_og_v_max_x(true)
 , m_grid_size(50)
 , m_unload_track_distance(1000.0f)
+, m_sidebar_size(400)
+, m_resize_activity(false)
+
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -130,6 +133,7 @@ MainView::Update()
 void
 MainView::Render()
 {
+    m_resize_activity = false;
     if(m_meta_map_made)
     {
         RenderGraphPoints();
@@ -137,26 +141,71 @@ MainView::Render()
 }
 
 void
-MainView::RenderScrubber(ImVec2 screen_pos)
+MainView::RenderSplitter(ImVec2 screen_pos)
 {
     // Scrubber Line
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
-    ImVec2      display_size         = ImGui::GetWindowSize();
-    float       scrollbar_width      = ImGui::GetStyle().ScrollbarSize;
-    const float metadata_area_offset = 400.0f;
+    ImVec2 display_size = ImGui::GetWindowSize();
+
+    ImGui::SetNextWindowSize(ImVec2(1.0f, display_size.y), ImGuiCond_Always);
+    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.4f, 0.4f, 0.4f, 0.4f));
+
+    ImGui::BeginChild("Splitter View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
+
+    ImGui::Selectable("##MovePositionLineVert", false,
+                      ImGuiSelectableFlags_AllowDoubleClick,
+                      ImVec2(5.0f, display_size.y));
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        m_resize_activity |= true;
+    }
+
+    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+    {
+        ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+        m_sidebar_size    = clamp(m_sidebar_size + drag_delta.x, 100.0f, 600.0f);
+        ImGui::ResetMouseDragDelta();
+        ImGui::EndDragDropSource();
+        m_resize_activity |= true;
+    }
+    if(ImGui::BeginDragDropTarget())
+    {
+        ImGui::EndDragDropTarget();
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+void
+MainView::RenderScrubber(ImVec2 screen_pos)
+{
+    // Scrubber Line
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoScrollWithMouse |
+                                    ImGuiWindowFlags_NoInputs;
+
+    ImVec2 display_size    = ImGui::GetWindowSize();
+    float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
     ImGui::SetNextWindowSize(
-        ImVec2(display_size.x - scrollbar_width - metadata_area_offset, display_size.y),
+        ImVec2(display_size.x - scrollbar_width - m_sidebar_size - 7, display_size.y),
         ImGuiCond_Always);
     ImGui::SetCursorPos(
-        ImVec2(metadata_area_offset, 0));  // Meta Data size will be universal next PR.
+        ImVec2(m_sidebar_size + 7, 0));  // Meta Data size will be universal next PR.
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
 
     ImGui::BeginChild("Scrubber View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
+
+    ImGui::SetItemAllowOverlap();
+
     ImDrawList* draw_list      = ImGui::GetWindowDrawList();
     ImVec2      window_size    = ImGui::GetContentRegionAvail();
     float       mouse_relative = window_size.x - ImGui::GetMousePos().x;
@@ -216,7 +265,7 @@ MainView::RenderGrid()
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     m_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
-                      m_v_max_x, m_v_min_x, m_grid_size);
+                      m_v_max_x, m_v_min_x, m_grid_size, m_sidebar_size);
 
     ImGui::PopStyleColor();
 }
@@ -376,6 +425,7 @@ MainView::RenderGraphView()
                 graph_objects.second.chart->UpdateMovement(
                     m_zoom, m_movement, m_min_x, m_max_x, m_scale_x, m_scroll_position);
 
+                m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
                 graph_objects.second.chart->Render();
                 ImGui::PopStyleColor();
 
@@ -403,6 +453,10 @@ MainView::RenderGraphView()
             }
         }
     }
+
+    // Set the sidebar size at the end of render loop.
+
+    Charts::SetSidebarSize(m_sidebar_size);
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
@@ -531,12 +585,11 @@ MainView::MakeGraphView()
 void
 MainView::RenderGraphPoints()
 {
-    ImVec2 screen_pos = ImGui::GetCursorScreenPos();
-
-    ImVec2 display_size_main = ImGui::GetWindowSize();
-
     if(ImGui::BeginChild("Main Graphs"))
     {
+        ImVec2 screen_pos = ImGui::GetCursorScreenPos();
+
+        ImVec2 display_size_main      = ImGui::GetWindowSize();
         ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
         ImGui::BeginChild(
@@ -568,13 +621,20 @@ MainView::RenderGraphPoints()
         m_is_control_held = io.KeyCtrl;
         if(!m_is_control_held)
         {
-            // Disable when user wants to reposition graphs.
+            RenderSplitter(screen_pos);
             RenderScrubber(screen_pos);
-            HandleTopSurfaceTouch();  // Funtion enables user interactions to be captured
+
+            if(m_resize_activity == false)
+            {
+                HandleTopSurfaceTouch();  // Funtion enables user interactions to be
+                                          // captured
+            }
         }
 
         ImGui::EndChild();
     }
+    ImVec2 display_size = ImGui::GetWindowSize();
+
     ImGui::EndChild();
 }
 

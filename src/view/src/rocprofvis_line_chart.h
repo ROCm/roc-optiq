@@ -19,21 +19,22 @@ namespace View
 class LineChart : public Charts
 {
 public:
-    LineChart(int id, std::string name, float zoom, float movement, double& min_x,
-              double& max_x, float scale_x);
+    LineChart(DataProvider& dp, int id, std::string name, float zoom, float movement,
+              double& min_x, double& max_x, float scale_x);
     ~LineChart();
     void Render() override;
 
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
-
-    void ExtractPointsFromData(const RawTrackSampleData* track_data);
+    bool   HandleTrackDataChanged() override;
+    bool   ExtractPointsFromData();
 
     std::tuple<double, double> FindMaxMin();
     void  SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
     float CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
 
-    virtual bool SetRawData(const RawTrackData* raw_data);
+    bool HasData() override;
+    void ReleaseData() override;
 
 protected:
     virtual void RenderMetaArea() override;
@@ -45,7 +46,6 @@ private:
     double                               m_min_y;
     double                               m_max_y;
     bool                                 m_is_color_value_existant;
-    const RawTrackData*                  m_raw_data;
 };
 
 }  // namespace View

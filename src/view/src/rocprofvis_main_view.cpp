@@ -47,6 +47,7 @@ MainView::MainView(DataProvider& dp)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
 , m_grid_size(50)
+, m_unload_track_distance(1000.0f)
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -97,10 +98,9 @@ MainView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     }
     else
     {
-        uint64_t            track_index = tde->GetTrackIndex();
-        const RawTrackData* rtd         = m_data_provider.GetRawTrackData(track_index);
+        uint64_t track_index = tde->GetTrackIndex();
 
-        if(m_graph_map[track_index].chart->SetRawData(rtd))
+        if(m_graph_map[track_index].chart->HandleTrackDataChanged())
         {
             auto min_max = m_graph_map[track_index].chart->GetMinMax();
 
@@ -267,11 +267,11 @@ MainView::RenderGraphView()
         ImGui::SetScrollY(m_scroll_position);
     }
 
-    ImVec2 window_size = ImGui::GetWindowSize();  // Size of the parent window
+    ImVec2 window_size = ImGui::GetWindowSize();
 
     for(const auto& graph_objects : m_graph_map)
     {
-        if(graph_objects.second.display == true)
+        if(graph_objects.second.display)
         {
             // Get track height and position to check if the track is in view
             float  track_height = graph_objects.second.chart->GetTrackHeight();
@@ -298,6 +298,15 @@ MainView::RenderGraphView()
 
             if(is_visible)
             {
+                // Request data for the chart if it doesn't have data 
+                if(!graph_objects.second.chart->HasData() &&
+                   graph_objects.second.chart->GetRequestState() ==
+                       TrackDataRequestState::kIdle)
+                {
+                    graph_objects.second.chart->RequestData();
+                }
+
+
                 if(graph_objects.second.color_by_value)
                 {
                     graph_objects.second.chart->SetColorByValue(
@@ -377,7 +386,14 @@ MainView::RenderGraphView()
             }
             else
             {
-                // render dummy
+                // If the track is not visible past a certain distance, release its data to free up memory
+                if(graph_objects.second.chart->GetDistanceToView() > m_unload_track_distance && graph_objects.second.chart->HasData())
+                {
+                    graph_objects.second.chart->ReleaseData();
+                    m_data_provider.FreeTrack(graph_objects.second.chart->GetID());
+                }
+
+                // Render dummy to maintain layout
                 ImGui::Dummy(ImVec2(0, track_height));
                 DebugWindow::GetInstance()->AddDebugMessage(
                     "Dummy for: " + std::to_string(graph_objects.second.chart->GetID()) +
@@ -433,8 +449,8 @@ MainView::MakeGraphView()
             {
                 // Create FlameChart
                 FlameChart* flame =
-                    new FlameChart(track_info->index, track_info->name, m_zoom,
-                                   m_movement, m_min_x, m_max_x, scale_x);
+                    new FlameChart(m_data_provider, track_info->index, track_info->name,
+                                   m_zoom, m_movement, m_min_x, m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -465,8 +481,8 @@ MainView::MakeGraphView()
             {
                 // Linechart
                 LineChart* line =
-                    new LineChart(track_info->index, track_info->name, m_zoom, m_movement,
-                                  m_min_x, m_max_x, m_scale_x);
+                    new LineChart(m_data_provider, track_info->index, track_info->name,
+                                  m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -502,11 +518,11 @@ MainView::MakeGraphView()
         // TODO: Quick hack Fetch all tracks for now... in future use event system to
         // decide what / when to fetch
 
-        // if(i < 10)
-        {
-            m_data_provider.FetchTrack(i, m_data_provider.GetStartTime(),
-                                       m_data_provider.GetEndTime(), 1000, 0);
-        }
+        // if(i < 4)
+        // {
+        //     m_data_provider.FetchTrack(i, m_data_provider.GetStartTime(),
+        //                                m_data_provider.GetEndTime(), 1000, 0);
+        // }
     }
 
     m_meta_map_made = true;

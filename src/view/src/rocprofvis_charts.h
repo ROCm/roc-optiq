@@ -1,16 +1,25 @@
 #pragma once
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_view_structs.h"
+#include "rocprofvis_data_provider.h"
 
 namespace RocProfVis
 {
 namespace View
 {
 
+enum class TrackDataRequestState
+{
+    kIdle,
+    kRequesting,
+    kTimeout,
+    kError
+};
+
 class Charts
 {
 public:
-    Charts(int id, std::string name, float zoom, float movement, double& min_x,
+    Charts(DataProvider &dp, int id, std::string name, float zoom, float movement, double& min_x,
            double& max_x, float scale_x);
 
     virtual ~Charts() {}
@@ -32,8 +41,14 @@ public:
     float GetDistanceToView();
 
     virtual std::tuple<double, double> GetMinMax();
-    virtual bool                       SetRawData(const RawTrackData* raw_data) = 0;
+    virtual bool HandleTrackDataChanged() = 0;
 
+    virtual bool HasData() = 0;
+    virtual void ReleaseData() = 0;
+    virtual void RequestData();
+
+    TrackDataRequestState GetRequestState() const { return m_request_state; }
+    
 protected:
     virtual void RenderMetaArea()               = 0;
     virtual void RenderChart(float graph_width) = 0;
@@ -53,6 +68,8 @@ protected:
     ImU32       m_metadata_bg_color;
     ImVec2      m_metadata_padding;
     float       m_resize_grip_thickness;
+    DataProvider& m_data_provider;
+    TrackDataRequestState m_request_state;
 };
 
 }  // namespace View

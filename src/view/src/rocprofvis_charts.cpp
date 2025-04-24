@@ -2,9 +2,10 @@
 
 using namespace RocProfVis::View;
 
-Charts::Charts(int id, std::string name, float zoom, float movement, double& min_x,
-               double& max_x, float scale_x)
-: m_id(id)
+Charts::Charts(DataProvider& dp, int id, std::string name, float zoom, float movement,
+               double& min_x, double& max_x, float scale_x)
+: m_data_provider(dp)
+, m_id(id)
 , m_zoom(zoom)
 , m_movement(movement)
 , m_min_x(min_x)
@@ -17,6 +18,7 @@ Charts::Charts(int id, std::string name, float zoom, float movement, double& min
 , m_metadata_bg_color(IM_COL32(240, 240, 240, 55))
 , m_metadata_padding(ImVec2(4.0f, 4.0f))
 , m_resize_grip_thickness(4.0f)
+, m_request_state(TrackDataRequestState::kIdle)
 {}
 
 float
@@ -132,4 +134,13 @@ Charts::RenderResizeBar(const ImVec2& parent_size)
     }
     ImGui::EndChild();  // end resize handle
     ImGui::PopStyleColor();
+}
+
+void Charts::RequestData() {
+    if(m_request_state == TrackDataRequestState::kIdle)
+    {
+        m_request_state = TrackDataRequestState::kRequesting;
+        m_data_provider.FetchTrack(m_id, m_data_provider.GetStartTime(),
+                                     m_data_provider.GetEndTime(), 1000, 0);
+    }  
 }

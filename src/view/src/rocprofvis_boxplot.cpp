@@ -15,9 +15,9 @@ namespace RocProfVis
 namespace View
 {
 
-BoxPlot::BoxPlot(int id, std::string name, float zoom, float movement, double min_x,
+BoxPlot::BoxPlot(DataProvider &dp, int id, std::string name, float zoom, float movement, double min_x,
                  double max_x, float scale_x)
-: Charts(id, name, zoom, movement, min_x, max_x, scale_x)
+: Charts(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
 , m_data({})
@@ -33,6 +33,7 @@ BoxPlot::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
     m_color_by_value_digits   = color_by_value_digits;
     m_is_color_value_existant = true;
 }
+
 
 void
 BoxPlot::ExtractPointsFromData(const RawTrackSampleData* sample_track)

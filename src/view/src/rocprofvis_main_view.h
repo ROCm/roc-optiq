@@ -80,6 +80,7 @@ private:
 
     EventManager::EventHandler m_new_track_data_handler;
     DataProvider& m_data_provider;
+    float m_unload_track_distance;
 };
 
 }  // namespace View

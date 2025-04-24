@@ -24,9 +24,9 @@ std::vector<ImU32> FlameChart::s_colors = {
     IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
 };
 
-FlameChart::FlameChart(int id, std::string name, float zoom, float movement, double min_x,
-                       double max_x, float scale_x)
-: Charts(id, name, zoom, movement, min_x, max_x, scale_x)
+FlameChart::FlameChart(DataProvider& dp, int id, std::string name, float zoom,
+                       float movement, double min_x, double max_x, float scale_x)
+: Charts(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_is_color_value_existant()
 , m_request_random_color(true)
 {}
@@ -40,10 +40,10 @@ FlameChart::SetRandomColorFlag(bool set_color)
 std::tuple<double, double>
 FlameChart::FindMaxMinFlame()
 {
-    m_min_x = flames[0].m_start_ts;
-    m_max_x = flames[0].m_start_ts + flames[0].m_duration;
+    m_min_x = m_flames[0].m_start_ts;
+    m_max_x = m_flames[0].m_start_ts + m_flames[0].m_duration;
 
-    for(const auto& point : flames)
+    for(const auto& point : m_flames)
     {
         if(point.m_start_ts < m_min_x)
         {
@@ -62,30 +62,42 @@ FlameChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {}
 
 bool
-FlameChart::SetRawData(const RawTrackData* raw_data)
+FlameChart::HasData()
 {
-    if(raw_data == m_raw_data)
-    {
-        return false;
-    }
-    else
-    {
-        m_raw_data = raw_data;
-        const RawTrackEventData* event_track =
-            dynamic_cast<const RawTrackEventData*>(raw_data);
-        if(event_track)
-        {
-            ExtractPointsFromData(event_track);
-            FindMaxMinFlame();
-            return true;
-        }
-    }
-    return false;
+    return !m_flames.empty();
 }
 
 void
-FlameChart::ExtractPointsFromData(const RawTrackEventData* event_track)
+FlameChart::ReleaseData()
 {
+    m_flames.clear();
+    m_flames = {};
+}
+
+bool
+FlameChart::HandleTrackDataChanged()
+{
+    m_request_state = TrackDataRequestState::kIdle;
+    bool result     = false;
+    result          = ExtractPointsFromData();
+    if(result)
+    {
+        FindMaxMinFlame();
+    }
+    return result;
+}
+
+bool
+FlameChart::ExtractPointsFromData()
+{
+    const RawTrackData*      rtd         = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackEventData* event_track = dynamic_cast<const RawTrackEventData*>(rtd);
+    if(!event_track)
+    {
+        spdlog::debug("Invalid track data type for track {}", m_id);
+        return false;
+    }
+
     std::vector<rocprofvis_trace_event_t> entries;
 
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
@@ -156,7 +168,8 @@ FlameChart::ExtractPointsFromData(const RawTrackEventData* event_track)
         entries.push_back(binned_point);
     }
 
-    flames = entries;
+    m_flames = entries;
+    return true;
 }
 
 void
@@ -244,7 +257,7 @@ FlameChart::RenderChart(float graph_width)
 
     int boxplot_box_id = 0;
 
-    for(const auto& flame : flames)
+    for(const auto& flame : m_flames)
     {
         double normalized_start = (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
 

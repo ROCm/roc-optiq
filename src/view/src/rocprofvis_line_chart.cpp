@@ -18,9 +18,9 @@ namespace RocProfVis
 namespace View
 {
 
-LineChart::LineChart(int id, std::string name, float zoom, float movement, double& min_x,
+LineChart::LineChart(DataProvider &dp, int id, std::string name, float zoom, float movement, double& min_x,
                      double& max_x, float scale_x)
-: Charts(id, name, zoom, movement, min_x, max_x, scale_x)
+: Charts(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
 , m_data({})
@@ -39,33 +39,40 @@ LineChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
     m_is_color_value_existant = true;
 }
 
-bool
-LineChart::SetRawData(const RawTrackData* raw_data)
+bool LineChart::HasData()
 {
-    if(raw_data == m_raw_data)
-    {
-        return false;
-    }
-    else
-    {
-        spdlog::debug("track {} data changed", m_id);
-        m_raw_data = raw_data;
-        const RawTrackSampleData* sample_track =
-            dynamic_cast<const RawTrackSampleData*>(raw_data);
-        if(sample_track)
-        {
-            spdlog::debug("track {} extracting data points", m_id);
-            ExtractPointsFromData(sample_track);
-            FindMaxMin();
-            return true;
-        }
-    }
-    return false;
+    return !m_data.empty();
+}   
+
+void LineChart::ReleaseData() {
+    m_data.clear();
+    m_data = {};
+    m_min_y = 0;
+    m_max_y = 0;
 }
 
-void
-LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
+bool
+LineChart::HandleTrackDataChanged() {
+    m_request_state = TrackDataRequestState::kIdle;
+    bool result = false;
+    result = ExtractPointsFromData();
+    if(result) {
+        FindMaxMin();
+    }
+    return result;
+}
+
+bool
+LineChart::ExtractPointsFromData()
 {
+    const RawTrackData* rtd         = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
+    if(!sample_track)
+    {
+        spdlog::debug("Invalid track data type for track {}", m_id);
+        return false;
+    }
+
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
@@ -125,6 +132,7 @@ LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
     }
 
     m_data = aggregated_points;
+    return true;
 }
 
 std::tuple<double, double>

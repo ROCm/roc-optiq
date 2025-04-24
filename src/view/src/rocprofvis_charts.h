@@ -33,26 +33,29 @@ public:
 
     virtual std::tuple<double, double> GetMinMax();
     virtual bool                       SetRawData(const RawTrackData* raw_data) = 0;
+    bool                               GetResizeStatus();
+    static void                               SetSidebarSize(int sidebar_size);
 
 protected:
     virtual void RenderMetaArea()               = 0;
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
 
-    float       m_zoom;
-    double      m_movement;
-    double      m_min_x;
-    double      m_max_x;
-    double      m_scale_x;
-    int         m_id;
-    float       m_track_height;
-    bool        m_is_in_view_vertical;
-    float       m_distance_to_view_y;
-    float       m_metadata_width;
-    std::string m_name;
-    ImU32       m_metadata_bg_color;
-    ImVec2      m_metadata_padding;
-    float       m_resize_grip_thickness;
+    float        m_zoom;
+    double       m_movement;
+    double       m_min_x;
+    double       m_max_x;
+    double       m_scale_x;
+    int          m_id;
+    float        m_track_height;
+    bool         m_is_in_view_vertical;
+    float        m_distance_to_view_y;
+    static float s_metadata_width;
+    std::string  m_name;
+    ImU32        m_metadata_bg_color;
+    ImVec2       m_metadata_padding;
+    float        m_resize_grip_thickness;
+    bool         m_is_resize;
 };
 
 }  // namespace View

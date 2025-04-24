@@ -1,6 +1,7 @@
 #include "rocprofvis_charts.h"
-
 using namespace RocProfVis::View;
+
+float Charts::s_metadata_width = 400.0f;
 
 Charts::Charts(int id, std::string name, float zoom, float movement, double& min_x,
                double& max_x, float scale_x)
@@ -12,13 +13,18 @@ Charts::Charts(int id, std::string name, float zoom, float movement, double& min
 , m_scale_x(scale_x)
 , m_name(name)
 , m_track_height(75.0f)
-, m_metadata_width(400.0f)
 , m_is_in_view_vertical(false)
 , m_metadata_bg_color(IM_COL32(240, 240, 240, 55))
 , m_metadata_padding(ImVec2(4.0f, 4.0f))
 , m_resize_grip_thickness(4.0f)
+, m_is_resize(false)
 {}
 
+bool
+Charts::GetResizeStatus()
+{
+    return m_is_resize;
+}
 float
 Charts::GetTrackHeight()
 {
@@ -35,6 +41,11 @@ int
 Charts::GetID()
 {
     return m_id;
+}
+void
+Charts::SetSidebarSize(int sidebar_size)
+{
+    s_metadata_width = sidebar_size;
 }
 
 bool
@@ -94,10 +105,11 @@ Charts::Render()
        window_flags)
     {
         ImVec2 parent_size = ImGui::GetContentRegionAvail();
-        float  graph_width = parent_size.x - m_metadata_width;
+        float  graph_width = parent_size.x - s_metadata_width;
 
         RenderMetaArea();
         ImGui::SameLine();
+
         RenderChart(graph_width);
         RenderResizeBar(parent_size);
     }
@@ -107,6 +119,8 @@ Charts::Render()
 void
 Charts::RenderResizeBar(const ImVec2& parent_size)
 {
+    m_is_resize = false;
+
     ImGui::SetCursorPos(ImVec2(0, parent_size.y - m_resize_grip_thickness));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
     ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, m_resize_grip_thickness),
@@ -118,13 +132,16 @@ Charts::RenderResizeBar(const ImVec2& parent_size)
     if(ImGui::IsItemHovered())
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        m_is_resize = true;
     }
+
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
         m_track_height    = m_track_height + (drag_delta.y);
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
+        m_is_resize = true;
     }
     if(ImGui::BeginDragDropTarget())
     {

@@ -39,13 +39,10 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 
-  
-
     ImGui::SetCursorPos(ImVec2(sidebar_size, 0));
 
     if(ImGui::BeginChild("Grid"),
-       ImVec2(displaySize.x - sidebar_size, displaySize.y - 30.0f), true,
-       window_flags)
+       ImVec2(displaySize.x - sidebar_size, displaySize.y - 130.0f), true, window_flags)
     {
         ImVec2 child_win  = ImGui::GetWindowPos();
         ImVec2 child_size = ImGui::GetWindowSize();
@@ -123,6 +120,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
         ImVec2 windowSize = ImGui::GetWindowSize();
         float  boxWidth   = 300.0f;  // Specify the width of the box
         draw_list->PopClipRect();
+
         ImGui::EndChild();
     }
 }

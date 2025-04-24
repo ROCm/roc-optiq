@@ -617,6 +617,8 @@ MainView::RenderGraphPoints()
 
         ImGui::EndChild();
     }
+    ImVec2 display_size = ImGui::GetWindowSize();
+
     ImGui::EndChild();
 }
 

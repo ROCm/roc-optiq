@@ -59,8 +59,9 @@ LineChart::SetRawData(const RawTrackData* raw_data)
             ExtractPointsFromData(sample_track);
             FindMaxMin();
 
-            if(m_max_y == 0)  // This statement is needed to prevent render error when
-                              // ymin/ymax is 0/0.
+            if(m_max_y == m_min_y)  // This statement is needed to prevent render error
+                                    // when
+                                    // ymin/ymax is 0/0.
             {
                 m_max_y = 1;
             }

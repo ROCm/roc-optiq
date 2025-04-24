@@ -26,6 +26,7 @@ LineChart::LineChart(int id, std::string name, float zoom, float movement, doubl
 , m_data({})
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
+
 {
     m_track_height = 290.0f;
 }
@@ -57,6 +58,13 @@ LineChart::SetRawData(const RawTrackData* raw_data)
             spdlog::debug("track {} extracting data points", m_id);
             ExtractPointsFromData(sample_track);
             FindMaxMin();
+
+            if(m_max_y == 0)  // This statement is needed to prevent render error when
+                              // ymin/ymax is 0/0.
+            {
+                m_max_y = 1;
+            }
+
             return true;
         }
     }
@@ -230,6 +238,11 @@ LineChart::RenderChart(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
     float scale_y = content_size.y / (m_max_y - m_min_y);
+
+    float tooltip_x    = 0;
+    float tooltip_y    = 0;
+    bool  show_tooltip = false;
+
     for(int i = 1; i < m_data.size(); i++)
     {
         ImVec2 point_1 =
@@ -237,10 +250,11 @@ LineChart::RenderChart(float graph_width)
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
                                       ImVec2(point_1.x + 10, point_1.y + 10)))
         {
-            ImGui::BeginTooltip();
-            ImGui::Text(std::to_string(m_data[i - 1].x_value - m_min_x).c_str());
-            ImGui::EndTooltip();
+            tooltip_x    = point_1.x;
+            tooltip_y    = point_1.y;
+            show_tooltip = true;
         }
+
         ImVec2 point_2 =
             MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
         ImU32 LineColor = IM_COL32(0, 0, 0, 255);
@@ -327,6 +341,13 @@ LineChart::RenderChart(float graph_width)
             }
         }
         draw_list->AddLine(point_1, point_2, LineColor, 2.0f);
+    }
+    if(show_tooltip == true)
+    {
+        ImGui::BeginTooltip();
+        ImGui::Text(("X Value: " + std::to_string(tooltip_x)).c_str());
+        ImGui::Text((("Y Value: " + std::to_string(tooltip_y)).c_str()));
+        ImGui::EndTooltip();
     }
     ImGui::EndChild();
 }

@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_track.h"
+#include "rocprofvis_controller_array.h"
 #include "rocprofvis_core_assert.h"
 
 #include <algorithm>
@@ -33,54 +34,25 @@ rocprofvis_dm_track_t Track::GetDmHandle(void){
     return m_dm_handle;
 }
 
-rocprofvis_result_t Track::Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index)
+rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(m_start_timestamp <= end && m_end_timestamp >= start)
     {
-        result = kRocProfVisResultSuccess;
-
-        std::multimap<double, std::unique_ptr<Segment>>::iterator lower = m_segments.end();
-        for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
-        {
-            double min_ts = it->first;
-            double max_ts = it->second->GetMaxTimestamp();
-            if(min_ts <= end && max_ts >= start)
-            {
-                lower = it;
-                break;
-            }
-        }
-
-        std::multimap<double, std::unique_ptr<Segment>>::iterator upper = m_segments.end();
-        for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
-        {
-            double min_ts = it->first;
-            if(min_ts > end)
-            {
-                upper = it;
-                break;
-            }
-        }
-
-        while (lower != upper && lower != m_segments.end())
-        {
-            result = lower->second->Fetch(lod, start, end, array, index);
-            if (result == kRocProfVisResultSuccess)
-            {
-                ++lower;
-            }
-            else if(result == kRocProfVisResultOutOfRange)
-            {
-                result = kRocProfVisResultSuccess;
-                ++lower;
-            }
-            else
-            {
-                break;
-            }
-        }
+        result = m_segments.FetchSegments(start, end, user_ptr, func);
     }
+    return result;
+}
+
+rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_t& index)
+{
+    std::pair<Array&, uint64_t&> pair(array, index);
+    rocprofvis_result_t result = FetchSegments(start, end, &pair, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t
+    {
+        std::pair<Array&, uint64_t&>* pair = (std::pair<Array&, uint64_t&>*)user_ptr;
+        rocprofvis_result_t result = segment.Fetch(start, end, pair->first.GetVector(), pair->second);
+        return result;
+    });
     return result;
 }
 
@@ -100,7 +72,7 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             {
                 *value = sizeof(Track);
                 result = kRocProfVisResultSuccess;
-                for(auto& pair : m_segments)
+                for(auto& pair : m_segments.GetSegments())
                 {
                     *value += sizeof(pair);
                     uint64_t entry_size = 0;
@@ -120,7 +92,7 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             {
                 *value = sizeof(Track);
                 result = kRocProfVisResultSuccess;
-                for (auto& pair : m_segments)
+                for(auto& pair : m_segments.GetSegments())
                 {
                     *value += sizeof(pair);
                 }
@@ -375,7 +347,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                             double num_segments = floor(relative / segment_duration);
                             double segment_start = m_start_timestamp + (num_segments * segment_duration);
 
-                            if (m_segments.find(segment_start) == m_segments.end())
+                            if (m_segments.GetSegments().find(segment_start) == m_segments.GetSegments().end())
                             {
                                 double segment_end = segment_start + segment_duration;
                                 std::unique_ptr<Segment> segment = std::make_unique<Segment>(m_type);
@@ -392,13 +364,17 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                 {
                                     segment->SetMaxTimestamp(timestamp);
                                 }
-                                m_segments.insert(std::make_pair(segment_start, std::move(segment)));
-                                result = (m_segments.find(segment_start) != m_segments.end()) ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
+                                m_segments.Insert(segment_start, std::move(segment));
+                                result = (m_segments.GetSegments().find(segment_start) !=
+                                          m_segments.GetSegments().end())
+                                             ? kRocProfVisResultSuccess
+                                             : kRocProfVisResultMemoryAllocError;
                             }
 
                             if (result == kRocProfVisResultSuccess)
                             {
-                                std::unique_ptr<Segment>& segment = m_segments[segment_start];
+                                std::unique_ptr<Segment>& segment =
+                                    m_segments.GetSegments()[segment_start];
                                 segment->SetMinTimestamp(std::min(segment->GetMinTimestamp(), timestamp));
                                 double end_timestamp = timestamp;
                                 if (object_type == kRPVControllerObjectTypeEvent)

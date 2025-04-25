@@ -13,84 +13,6 @@ namespace RocProfVis
 namespace Controller
 {
 
-Segment::LOD::LOD()
-: m_valid(false)
-{
-}
-
-Segment::LOD::LOD(LOD const& other)
-{ 
-    operator=(other);
-}
-
-Segment::LOD::LOD(LOD&& other)
-{
-    operator=(other);
-}
-        
-Segment::LOD::~LOD()
-{
-    for (auto& pair : m_entries)
-    {
-        delete pair.second;
-    }
-}
-
-Segment::LOD& Segment::LOD::operator=(LOD const& other)
-{
-    if (this != &other)
-    {
-        m_entries = other.m_entries;
-        m_valid   = other.m_valid;
-    }
-    return *this;
-}
-
-Segment::LOD& Segment::LOD::operator=(LOD&& other)
-{
-    if(this != &other)
-    {
-        m_entries = other.m_entries;
-        m_valid   = other.m_valid;
-    }
-    return *this;
-}
-
-std::multimap<double, Handle*>& Segment::LOD::GetEntries()
-{
-    return m_entries;
-}
-
-void Segment::LOD::SetValid(bool valid)
-{
-    m_valid = valid;
-}
-
-bool Segment::LOD::IsValid() const
-{
-    return m_valid;
-}
-
-void Segment::GenerateEventLOD(std::vector<Event*>& events, double event_start, double event_end, uint32_t lod_to_generate)
-{
-    Event* new_event = new EventLOD(0, event_start, event_end, events);
-    if (new_event)
-    {
-        std::multimap<double, Handle*>& new_events = m_lods[lod_to_generate]->GetEntries();
-        new_events.insert(std::make_pair(event_start, new_event));
-    }
-}
-
-void Segment::GenerateSampleLOD(std::vector<Sample*>& samples, rocprofvis_controller_primitive_type_t type, double timestamp, uint32_t lod_to_generate)
-{
-    SampleLOD* new_sample = new SampleLOD(type, 0, timestamp, samples);
-    if (new_sample)
-    {
-        std::multimap<double, Handle*>& new_samples = m_lods[lod_to_generate]->GetEntries();
-        new_samples.insert(std::make_pair(timestamp, new_sample));
-    }
-}
-
 Segment::Segment()
 : m_start_timestamp(0.0)
 , m_end_timestamp(0.0)
@@ -111,6 +33,10 @@ Segment::Segment(rocprofvis_controller_track_type_t type)
 
 Segment::~Segment()
 { 
+    for(auto& pair : m_entries)
+    {
+        delete pair.second;
+    }
 }
 
 static void AddSamples(std::vector<Sample*>& samples, Sample* sample, uint64_t lod)
@@ -159,166 +85,6 @@ static void AddEvents(std::vector<Event*>& events, Event* event, uint64_t lod)
     }
 }
 
-void Segment::GenerateLOD(uint32_t lod_to_generate)
-{
-    if (lod_to_generate > 0)
-    {
-        {
-            std::unique_ptr<LOD>& lod = m_lods[lod_to_generate];
-            if(!lod)
-            {
-                m_lods[lod_to_generate] = std::make_unique<LOD>();
-            }
-        }
-        std::unique_ptr<LOD>& lod = m_lods[lod_to_generate];
-        ROCPROFVIS_ASSERT(lod);
-        if(!lod->IsValid())
-        {
-            uint32_t previous_lod                  = (uint32_t) (lod_to_generate - 1);
-            std::unique_ptr<LOD>& prev_lod         = m_lods[previous_lod];
-            std::multimap<double, Handle*>& values = prev_lod->GetEntries();
-            if(prev_lod->IsValid() && values.size() > 1)
-            {
-                double scale = 1.0;
-                for(uint32_t i = 0; i < lod_to_generate; i++)
-                {
-                    scale *= 10.0;
-                }
-                double min_ts = m_min_timestamp;
-                double max_ts = m_min_timestamp + scale;
-                if(m_type == kRPVControllerTrackTypeEvents)
-                {
-                    std::vector<Event*> events;
-                    for(auto& pair : values)
-                    {
-                        Event* event = (Event*) pair.second;
-                        if(event)
-                        {
-                            double event_start = pair.first;
-                            double event_end   = 0.0;
-                            if(event->GetDouble(kRPVControllerEventEndTimestamp, 0,
-                                                &event_end) == kRocProfVisResultSuccess)
-                            {
-                                if((event_start >= min_ts && event_start <= max_ts) &&
-                                   (event_end >= min_ts && event_end <= max_ts))
-                                {
-                                    // Merge into the current event
-                                    AddEvents(events, event, previous_lod);
-                                }
-                                else
-                                {
-                                    // We assume that the events are ordered by time, so
-                                    // this must at least end after the current event
-                                    ROCPROFVIS_ASSERT(event_end > max_ts);
-
-                                    // Generate the stub event for any populated events.
-                                    if(events.size() && ((events.front()->GetDouble(
-                                            kRPVControllerEventStartTimestamp, 0,
-                                            &event_start) == kRocProfVisResultSuccess) &&
-                                       (events.back()->GetDouble(
-                                            kRPVControllerEventEndTimestamp, 0,
-                                            &event_end) == kRocProfVisResultSuccess)))
-                                    {
-                                        GenerateEventLOD(events, event_start, event_end,
-                                                         lod_to_generate);
-                                    }
-
-                                    // Create a new event & increment the search
-                                    min_ts = pair.first;
-                                    max_ts = std::min(pair.first + scale, m_max_timestamp);
-
-                                    events.clear();
-                                    AddEvents(events, event, previous_lod);
-                                }
-                            }
-                        }
-                    }
-
-                    if(events.size())
-                    {
-                        double event_start = 0.0;
-                        double event_end   = 0.0;
-                        if((events.front()->GetDouble(kRPVControllerEventStartTimestamp,
-                                                      0, &event_start) ==
-                            kRocProfVisResultSuccess) &&
-                           (events.back()->GetDouble(kRPVControllerEventEndTimestamp, 0,
-                                                     &event_end) ==
-                            kRocProfVisResultSuccess))
-                        {
-                            GenerateEventLOD(events, event_start, event_end,
-                                             lod_to_generate);
-                        }
-                    }
-                }
-                else
-                {
-                    std::vector<Sample*> samples;
-                    for(auto& pair : values)
-                    {
-                        Sample* sample = (Sample*) pair.second;
-                        if(sample)
-                        {
-                            double sample_start = pair.first;
-                            {
-                                if(sample_start >= min_ts && sample_start <= max_ts)
-                                {
-                                    // Merge into the current sample
-                                    AddSamples(samples, sample, previous_lod);
-                                }
-                                else
-                                {
-                                    // We assume that the events are ordered by time, so
-                                    // this must at least end after the current sample
-                                    ROCPROFVIS_ASSERT(sample_start > max_ts);
-
-                                    // Generate the stub event for any populated events.
-                                    uint64_t type = 0;
-                                    if((samples.size() > 0) && (sample->GetUInt64(kRPVControllerSampleType, 0, &type) == kRocProfVisResultSuccess))
-                                    {
-                                        GenerateSampleLOD(
-                                            samples,
-                                            (rocprofvis_controller_primitive_type_t) type,
-                                            sample_start, lod_to_generate);
-                                    }
-
-                                    // Create a new event & increment the search
-                                    do
-                                    {
-                                        min_ts = std::min(min_ts + scale, m_max_timestamp);
-                                        max_ts = std::min(max_ts + scale, m_max_timestamp);
-                                    } while(sample_start < min_ts);
-
-                                    samples.clear();
-                                    AddSamples(samples, sample, previous_lod);
-                                }
-                            }
-                        }
-                    }
-
-                    if(samples.size())
-                    {
-                        uint64_t type         = 0;
-                        double   sample_start = 0.0;
-                        if((samples.front()->GetDouble(kRPVControllerSampleTimestamp,
-                                                       0, &sample_start) ==
-                            kRocProfVisResultSuccess) &&
-                           (samples.front()->GetUInt64(kRPVControllerSampleType, 0,
-                                                       &type) ==
-                            kRocProfVisResultSuccess))
-                        {
-                            GenerateSampleLOD(
-                                samples, (rocprofvis_controller_primitive_type_t) type,
-                                sample_start, lod_to_generate);
-                        }
-                    }
-                }
-
-                lod->SetValid(true);
-            }
-        }
-    }
-}
-
 double Segment::GetStartTimestamp()
 {
     return m_start_timestamp;
@@ -354,47 +120,18 @@ void Segment::SetMaxTimestamp(double value)
 
 void Segment::Insert(double timestamp, Handle* event)
 {
-    if (m_lods.find(0) == m_lods.end())
-    {
-        // LOD0 is always valid or nothing will work.
-        m_lods[0] = std::make_unique<LOD>();
-        ROCPROFVIS_ASSERT(m_lods[0]);
-        m_lods[0]->SetValid(true);
-    }
-    m_lods[0]->GetEntries().insert(std::make_pair(timestamp, event));
+    m_entries.insert(std::make_pair(timestamp, event));
 }
 
-rocprofvis_result_t Segment::Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index)
+rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     double last_timestamp = std::max(m_end_timestamp, m_max_timestamp);
     if(m_start_timestamp <= end && last_timestamp >= start)
     {
         result = kRocProfVisResultSuccess;
-        if(m_lods.find(0) != m_lods.end())
         {
-            for(uint32_t i = 1; i <= lod; i++)
-            {
-                if(m_lods.find(i) == m_lods.end() || m_lods[i] == nullptr ||
-                    m_lods[i]->IsValid())
-                {
-                    GenerateLOD(i);
-                }
-            }
-
-            uint32_t i = lod;
-            while(i)
-            {
-                if(m_lods.find(i) != m_lods.end() && m_lods[i] != nullptr &&
-                    m_lods[i]->IsValid())
-                {
-                    break;
-                }
-                i--;
-            }
-    
-            auto& lod_ref = m_lods[i];
-            auto& entries = lod_ref->GetEntries();
+            auto& entries = m_entries; 
             rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type = kRPVControllerTrackTypeEvents) ? kRPVControllerEventEndTimestamp : kRPVControllerSampleTimestamp);
             
             std::multimap<double, Handle*>::iterator lower = entries.end();
@@ -429,36 +166,20 @@ rocprofvis_result_t Segment::Fetch(uint32_t lod, double start, double end, Array
 
                 if(min_ts <= end && max_ts >= start)
                 {
-                    result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, index + 1);
-                    if(result == kRocProfVisResultSuccess)
+                    if(array.size() < index + 1)
                     {
-                        result = array.SetObject(kRPVControllerArrayEntryIndexed, index++,
-                                                 (rocprofvis_handle_t*) lower->second);
-                        if(result == kRocProfVisResultSuccess)
-                        {
-                            ++lower;
-                        }
-                        else
-                        {
-                            break;
-                        }
+                        array.resize(index + 1);
                     }
-                    else
-                    {
-                        break;
-                    }
+                    array[index] = Data();
+                    array[index].SetType(kRPVControllerPrimitiveTypeObject);
+                    array[index++] = Data((rocprofvis_handle_t*) lower->second);
                 }
-                else
-                {
-                    ++lower;
-                }
+                ++lower;
             }
         }
     }
     return result;
 }
-
-
 
 rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property)
 {
@@ -472,23 +193,18 @@ rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_p
                 *value = 0;
                 result = kRocProfVisResultSuccess;
 
-                for (auto& pair : m_lods)
+                for(auto& entry : m_entries)
                 {
-                    *value += sizeof(pair);
-                    *value += sizeof(LOD);
-                    for (auto& entry : pair.second->GetEntries())
+                    *value += sizeof(entry);
+                    uint64_t entry_size = 0;
+                    result = entry.second->GetUInt64(property, 0, &entry_size);
+                    if (result == kRocProfVisResultSuccess)
                     {
-                        *value += sizeof(entry);
-                        uint64_t entry_size = 0;
-                        result = entry.second->GetUInt64(property, 0, &entry_size);
-                        if (result == kRocProfVisResultSuccess)
-                        {
-                            *value += entry_size;
-                        }
-                        else
-                        {
-                            break;
-                        }
+                        *value += entry_size;
+                    }
+                    else
+                    {
+                        break;
                     }
                 }
                 break;
@@ -498,14 +214,9 @@ rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_p
                 *value = 0;
                 result = kRocProfVisResultSuccess;
 
-                for(auto& pair : m_lods)
+                for(auto& entry : m_entries)
                 {
-                    *value += sizeof(pair);
-                    *value += sizeof(LOD);
-                    for(auto& entry : pair.second->GetEntries())
-                    {
-                        *value += sizeof(entry);
-                    }
+                    *value += sizeof(entry);
                 }
                 break;
             }
@@ -518,6 +229,83 @@ rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_p
     }
     return result;
 }
+
+SegmentTimeline::SegmentTimeline()
+{
+}
+
+SegmentTimeline::~SegmentTimeline()
+{
+}
+
+SegmentTimeline::SegmentTimeline(SegmentTimeline&& other)
+: m_segments(std::move(other.m_segments))
+{
+
+}
+
+SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
+{
+    m_segments = std::move(other.m_segments);
+    return *this;
+}
+
+rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
+{
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
+    std::map<double, std::unique_ptr<Segment>>::iterator lower = m_segments.end();
+    for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
+    {
+        double min_ts = it->first;
+        double max_ts = it->second->GetMaxTimestamp();
+        if(min_ts <= end && max_ts >= start)
+        {
+            lower = it;
+            break;
+        }
+    }
+
+    std::map<double, std::unique_ptr<Segment>>::iterator upper = m_segments.end();
+    for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
+    {
+        double min_ts = it->first;
+        if(min_ts > end)
+        {
+            upper = it;
+            break;
+        }
+    }
+
+    while(lower != upper && lower != m_segments.end())
+    {
+        result = func(start, end, *lower->second.get(), user_ptr);
+        if(result == kRocProfVisResultSuccess)
+        {
+            ++lower;
+        }
+        else if(result == kRocProfVisResultOutOfRange)
+        {
+            result = kRocProfVisResultSuccess;
+            ++lower;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return result;
+}
+
+void SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment)
+{
+    m_segments.insert(std::make_pair(segment_start, std::move(segment)));
+}
+
+std::map<double, std::unique_ptr<Segment>>& SegmentTimeline::GetSegments()
+{
+    return m_segments;
+}
+
 
 }
 }

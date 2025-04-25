@@ -67,7 +67,7 @@ rocprofvis_result_t Timeline::AsyncFetch(Track& track, Future& future, Array& ar
         std::launch::async, [&track, &array, start, end]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
-            result                     = track.Fetch(0, start, end, array, index);
+            result                     = track.Fetch(start, end, array, index);
             return result;
         }));
 

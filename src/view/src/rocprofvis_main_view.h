@@ -40,7 +40,7 @@ public:
 
 private:
     void RenderGraphPoints();
-    void RenderGrid();
+    void RenderGrid(float width);
     void RenderScrubber(ImVec2 screen_pos);
     void RenderSplitter(ImVec2 screen_pos);
 
@@ -50,7 +50,7 @@ private:
     void RenderFlameCharts(int chart_id, float scale_x);
     void RenderGraphCustomizationWindow(int graph_number);
     void HandleTopSurfaceTouch();
-
+    void CalibratePosition(); 
     void HandleNewTrackData(std::shared_ptr<RocEvent> e);
 
 private:
@@ -81,6 +81,11 @@ private:
     bool                                  m_is_control_held;
     bool                                  m_can_drag_to_pan;
     bool                                  m_resize_activity;
+    double   m_scroll_position_x;
+    bool                                  test;
+    double                                y_scroll_position;
+    bool y_scroll_movement;
+    double offset;
  
     EventManager::EventHandler m_new_track_data_handler;
     DataProvider&              m_data_provider;

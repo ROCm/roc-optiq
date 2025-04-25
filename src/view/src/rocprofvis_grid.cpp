@@ -12,8 +12,15 @@ namespace RocProfVis
 namespace View
 {
 
+double
+Grid::Calibrate()
+{
+    return m_calibrate;
+}
+
 Grid::Grid()
 : m_cursor_position(0.0f)
+, m_calibrate()
 {}
 Grid::~Grid() {}
 
@@ -42,7 +49,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
     ImGui::SetCursorPos(ImVec2(sidebar_size, 0));
 
     if(ImGui::BeginChild("Grid"),
-       ImVec2(displaySize.x - sidebar_size, displaySize.y - 130.0f), true, window_flags)
+       ImVec2(displaySize.x - sidebar_size, displaySize.y - 30.0f), true, window_flags)
     {
         ImVec2 child_win  = ImGui::GetWindowPos();
         ImVec2 child_size = ImGui::GetWindowSize();
@@ -53,6 +60,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
         draw_list->PushClipRect(clip_min, clip_max, true);
 
         double normalized_start_box = (min_x - (min_x + movement)) * scale_x;
+
         draw_list->AddRectFilled(ImVec2(normalized_start_box, cursor_position.y),
                                  ImVec2(normalized_start_box - 1500.0f,
                                         cursor_position.y + content_size.y - grid_size),
@@ -63,7 +71,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                                  ImVec2(normalized_start_box_end + 1500.0f,
                                         cursor_position.y + content_size.y - grid_size),
                                  IM_COL32(100, 100, 100, 100));
-
+        int first = 0;
         for(double raw_position_points_x = min_x - (steps * 5);
             raw_position_points_x < max_x + (steps * 5); raw_position_points_x += steps)
         {
@@ -80,10 +88,27 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                 scale_x;  // this value takes the raw value of the output and converts
                           // them into positions on the chart which is scaled by scale_x
 
+            if(first == 0)
+            {
+                if(ImGui::IsRectVisible(
+                       ImVec2(normalized_start, cursor_position.y),
+                       ImVec2(normalized_end,
+                              cursor_position.y + content_size.y - grid_size)))
+                {
+                    // First one thats visible.
+
+                    first       = first + 1;
+                    m_calibrate = (raw_position_points_x -
+                                  (steps * (1 - ((clip_min.x - normalized_start) /
+                                                 (normalized_end - normalized_start))))) + steps;
+                    std::cout << m_calibrate - min_x << std::endl;
+                }
+            }
+
             draw_list->AddRect(
                 ImVec2(normalized_start, cursor_position.y),
                 ImVec2(normalized_end, cursor_position.y + content_size.y - grid_size),
-                IM_COL32(0, 0, 0, 128), 1.0f);
+                IM_COL32(100, 0, 0, 128), 1.0f);
 
             // If user hover over grid block.
             if(ImGui::IsMouseHoveringRect(
@@ -120,7 +145,6 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
         ImVec2 windowSize = ImGui::GetWindowSize();
         float  boxWidth   = 300.0f;  // Specify the width of the box
         draw_list->PopClipRect();
-
         ImGui::EndChild();
     }
 }

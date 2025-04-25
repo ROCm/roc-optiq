@@ -19,9 +19,11 @@ public:
                      ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x,
                      int grid_size, int sidebar_size);
     float GetCursorPosition();
+    double Calibrate();
 
 private:
     float m_cursor_position;
+    double m_calibrate;
 };
 
 }  // namespace View

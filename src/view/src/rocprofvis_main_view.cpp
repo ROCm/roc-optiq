@@ -49,7 +49,11 @@ MainView::MainView(DataProvider& dp)
 , m_grid_size(50)
 , m_sidebar_size(400)
 , m_resize_activity(false)
-
+, m_scroll_position_x(FLT_MAX)
+, test(true)
+, y_scroll_position(FLT_MAX)
+, y_scroll_movement(false)
+, offset()
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -63,6 +67,37 @@ MainView::~MainView()
     DestroyGraphs();
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTrackData),
                                              m_new_track_data_handler);
+}
+
+void
+MainView::CalibratePosition()
+{
+    double current_position = m_grid.Calibrate();
+    m_scroll_position_x     = (current_position - m_min_x) /
+                          (m_max_x - m_min_x);  // Finds where the chart is at.
+ 
+    double scrollback =
+        (m_max_x - m_min_x) *
+        m_scroll_position_x;  // Moves the graph back to start at the beggining.
+                              // Represents how much to go back to starting
+
+    double value_to_begginging =
+        m_movement -
+        scrollback;  // how to get back to initial/first value using movement.
+
+    if(test)
+    {
+        m_movement = m_movement - scrollback;
+        test       = false;
+        offset     = m_movement - scrollback;  // initial 0
+    }
+    if(y_scroll_movement == true)
+    {
+        m_movement =
+            value_to_begginging +
+            ((m_max_x - m_min_x) *
+             y_scroll_position);  // initial/first value + position where scrubber is.
+    }
 }
 
 void
@@ -247,7 +282,7 @@ MainView::GetGraphMap()
 }
 
 void
-MainView::RenderGrid()
+MainView::RenderGrid(float width)
 {
     /*This section makes the grid for the charts*/
 
@@ -256,11 +291,12 @@ MainView::RenderGrid()
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
-    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - 55),
+                             ImGuiCond_Always);
 
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(220, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -438,10 +474,11 @@ MainView::RenderGraphView()
         }
     }
 
+    CalibratePosition();
+
     // Set the sidebar size at the end of render loop.
 
     Charts::SetSidebarSize(m_sidebar_size);
-
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
@@ -576,9 +613,9 @@ MainView::RenderGraphPoints()
         ImVec2 display_size_main      = ImGui::GetWindowSize();
         ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
-        ImGui::BeginChild(
-            "Grid View 2", ImVec2(subcomponent_size_main.x, subcomponent_size_main.y),
-            false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::BeginChild("Grid View 2", ImVec2(subcomponent_size_main.x, 500), false,
+                          ImGuiWindowFlags_NoScrollbar |
+                              ImGuiWindowFlags_NoScrollWithMouse);
 
         ImVec2 graph_view_size = ImGui::GetContentRegionAvail();
 
@@ -594,7 +631,7 @@ MainView::RenderGraphPoints()
             m_capture_og_v_max_x = false;
         }
 
-        RenderGrid();
+        RenderGrid(subcomponent_size_main.x);
 
         if(m_meta_map_made)
         {
@@ -616,8 +653,31 @@ MainView::RenderGraphPoints()
         }
 
         ImGui::EndChild();
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
+
+        ImGui::BeginChild("scrollbar", ImVec2(subcomponent_size_main.x, 75), true,
+                          ImGuiWindowFlags_HorizontalScrollbar);
+
+        float current_pos = m_scroll_position_x * (subcomponent_size_main.x * m_zoom);
+         ImGui::SliderFloat("##h", &current_pos, 0.0f, subcomponent_size_main.x * m_zoom,
+                           "%.10f");
+        y_scroll_position = current_pos / (subcomponent_size_main.x * m_zoom);
+
+        if(ImGui::IsItemActive())
+        {
+            y_scroll_movement = true;
+        }
+        else
+        {
+            y_scroll_movement = false;
+            ImGui::SetScrollX(m_scroll_position_x * (subcomponent_size_main.x * m_zoom));
+        }
+
+        bool is_scrollbar_active = ImGui::IsItemActive();
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
     }
-    ImVec2 display_size = ImGui::GetWindowSize();
 
     ImGui::EndChild();
 }

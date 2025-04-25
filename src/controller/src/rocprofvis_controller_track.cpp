@@ -342,14 +342,13 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                     {
                         if (timestamp >= m_start_timestamp && timestamp <= m_end_timestamp)
                         {
-                            double segment_duration = 10000.0;
                             double relative = (timestamp - m_start_timestamp);
-                            double num_segments = floor(relative / segment_duration);
-                            double segment_start = m_start_timestamp + (num_segments * segment_duration);
+                            double num_segments = floor(relative / kSegmentDuration);
+                            double segment_start = m_start_timestamp + (num_segments * kSegmentDuration);
 
                             if (m_segments.GetSegments().find(segment_start) == m_segments.GetSegments().end())
                             {
-                                double segment_end = segment_start + segment_duration;
+                                double segment_end = segment_start + kSegmentDuration;
                                 std::unique_ptr<Segment> segment = std::make_unique<Segment>(m_type);
                                 segment->SetStartEndTimestamps(segment_start, segment_end);
                                 segment->SetMinTimestamp(timestamp); 

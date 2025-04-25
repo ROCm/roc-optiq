@@ -170,7 +170,6 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                     {
                         array.resize(index + 1);
                     }
-                    array[index] = Data();
                     array[index].SetType(kRPVControllerPrimitiveTypeObject);
                     array[index++] = Data((rocprofvis_handle_t*) lower->second);
                 }
@@ -305,7 +304,6 @@ std::map<double, std::unique_ptr<Segment>>& SegmentTimeline::GetSegments()
 {
     return m_segments;
 }
-
 
 }
 }

@@ -85,7 +85,7 @@ void Graph::Insert(uint32_t lod, double timestamp, Handle* object)
             scale *= 10.0;
         }
 
-        double segment_duration = 10000.0 * scale;
+        double segment_duration = kSegmentDuration * scale;
         double relative         = (timestamp - start_timestamp);
         double num_segments     = floor(relative / segment_duration);
         double segment_start    = start_timestamp + (num_segments * segment_duration);
@@ -337,31 +337,54 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start, d
 
         if(start < range.first || end > range.second)
         {
-            GraphLODArgs args;
-            args.m_valid_range = range;
-            args.m_index       = 0;
-            result             = m_track->FetchSegments(
-                start, end, &args,
-                [](double start, double end, Segment& segment,
-                   void* user_ptr) -> rocprofvis_result_t {
-                    GraphLODArgs*       pair   = (GraphLODArgs*) user_ptr;
-                    rocprofvis_result_t result = kRocProfVisResultSuccess;
+            double min_ts = start;
+            double max_ts = end;
 
-                    if(pair->m_valid_range.first > segment.GetStartTimestamp() ||
-                       pair->m_valid_range.second < segment.GetMaxTimestamp())
-                    {
-                        result =
-                            segment.Fetch(start, end, pair->m_entries, pair->m_index);
-                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                    }
-                    return result;
-                });
-
-            if(result == kRocProfVisResultSuccess)
+            if((m_track->GetDouble(kRPVControllerTrackMinTimestamp, 0, &min_ts) ==
+                kRocProfVisResultSuccess) &&
+               (m_track->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &max_ts) ==
+                kRocProfVisResultSuccess))
             {
-                result = GenerateLOD(lod_to_generate, start, end, args.m_entries);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                it->second.SetValidRange(start, end);
+                double scale = 1.0;
+                for(uint32_t i = 0; i < lod_to_generate; i++)
+                {
+                    scale *= 10.0;
+                }
+                double segment_duration = kSegmentDuration * scale;
+
+                start = std::max(start, min_ts);
+                end = std::min(end, max_ts);
+                ROCPROFVIS_ASSERT(start >= min_ts);
+                ROCPROFVIS_ASSERT(end <= max_ts);
+                double fetch_start = min_ts + (floor((start - min_ts) / segment_duration) * segment_duration);
+                double fetch_end = std::min(min_ts + (ceil((end - min_ts) / segment_duration) * segment_duration), max_ts);
+
+                GraphLODArgs args;
+                args.m_valid_range = range;
+                args.m_index       = 0;
+                result             = m_track->FetchSegments(
+                    fetch_start, fetch_end, &args,
+                    [](double start, double end, Segment& segment,
+                       void* user_ptr) -> rocprofvis_result_t {
+                        GraphLODArgs*       pair   = (GraphLODArgs*) user_ptr;
+                        rocprofvis_result_t result = kRocProfVisResultSuccess;
+
+                        if(pair->m_valid_range.first > segment.GetStartTimestamp() ||
+                           pair->m_valid_range.second < segment.GetMaxTimestamp())
+                        {
+                            result =
+                                segment.Fetch(start, end, pair->m_entries, pair->m_index);
+                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                        }
+                        return result;
+                    });
+
+                if(result == kRocProfVisResultSuccess)
+                {
+                    result = GenerateLOD(lod_to_generate, start, end, args.m_entries);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    it->second.SetValidRange(start, end);
+                }
             }
         }
         else

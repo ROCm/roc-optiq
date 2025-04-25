@@ -115,12 +115,6 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                 event.m_start_ts + event.m_duration);
                                             if(new_event)
                                             {
-                                                result = new_event->SetObject(
-                                                    kRPVControllerEventTrack, 0,
-                                                    (rocprofvis_handle_t*) track);
-                                                ROCPROFVIS_ASSERT(result ==
-                                                       kRocProfVisResultSuccess);
-
                                                 result = new_event->SetString(
                                                     kRPVControllerEventName, 0,
                                                     event.m_name.c_str(),
@@ -491,15 +485,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             timestamp + duration);
                                                         if(new_event)
                                                         {
-                                                            result = new_event->SetObject(
-                                                                kRPVControllerEventTrack,
-                                                                0,
-                                                                (rocprofvis_handle_t*)
-                                                                    track);
-                                                            ROCPROFVIS_ASSERT(
-                                                                result ==
-                                                                kRocProfVisResultSuccess);
-
                                                             result = new_event->SetString(
                                                                 kRPVControllerEventCategory,
                                                                 0,

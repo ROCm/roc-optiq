@@ -18,6 +18,8 @@ public:
     Array();
     virtual ~Array();
 
+    std::vector<Data>& GetVector(void);
+
     rocprofvis_controller_object_type_t GetType(void) final;
 
     // Handlers for getters.

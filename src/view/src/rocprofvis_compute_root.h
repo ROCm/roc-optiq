@@ -32,8 +32,6 @@ public:
     ~ComputeRoot();
 
 private:
-    void RenderMenuBar();
-
     std::shared_ptr<ComputeSummaryView> m_compute_summary_view;
     std::shared_ptr<ComputeBlockView> m_compute_block_view;
     std::shared_ptr<ComputeTableView> m_compute_table_view;

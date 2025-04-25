@@ -80,3 +80,21 @@ TrackDataEvent::GetTrackIndex()
 {
     return m_track_index;
 }
+
+ComputeBlockNavitionEvent::ComputeBlockNavitionEvent(int event_id, int level, int block)
+: RocEvent(event_id)
+, m_level(level)
+, m_block(block)
+{
+    m_event_type = RocEventType::kComputeBlockNavigationEvent;
+}
+
+int ComputeBlockNavitionEvent::GetLevel()
+{
+    return m_level;
+}
+
+int ComputeBlockNavitionEvent::GetBlock()
+{
+    return m_block;
+}

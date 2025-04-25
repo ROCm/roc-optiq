@@ -41,7 +41,7 @@ private:
     void RenderMenuBar();
     void RenderMetricsTab(table_view_category_t category);
 
-    std::unordered_map<table_view_category_t, std::vector<std::unique_ptr<ComputeMetric>>> m_metrics_map;
+    std::unordered_map<table_view_category_t, std::vector<std::unique_ptr<ComputeMetricGroup>>> m_metrics_map;
 };
 
 }  // namespace View

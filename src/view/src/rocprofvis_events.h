@@ -11,13 +11,15 @@ namespace View
 enum class RocEvents
 {
     kInvalidEvent = -1,
-    kNewTrackData
+    kNewTrackData,
+    kComputeBlockNavigationChanged
 };
 
 enum class RocEventType
 {
     kRocEvent,
     kTrackDataEvent,
+    kComputeBlockNavigationEvent
 };
 
 class RocEvent
@@ -51,6 +53,18 @@ public:
 
 private:
     uint64_t m_track_index;
+};
+
+class ComputeBlockNavitionEvent : public RocEvent
+{
+public:
+    ComputeBlockNavitionEvent(int event_id, int level, int block);
+    int GetLevel();
+    int GetBlock();
+
+private:
+    int m_level;
+    int m_block;
 };
 
 }  // namespace View

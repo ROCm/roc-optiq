@@ -38,9 +38,8 @@ size_t StringTable::AddString(std::string& string)
 
 char const* StringTable::GetString(size_t id)
 {
-    ROCPROFVIS_ASSERT(id < UINT64_MAX);
     std::scoped_lock<std::mutex> lock(m_mutex);
-    char const* string = nullptr;
+    char const* string = "";
     if (m_strings.size() > id)
     {
         string = m_strings[id].c_str();

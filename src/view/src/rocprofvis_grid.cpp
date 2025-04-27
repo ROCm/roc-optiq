@@ -6,21 +6,22 @@
 #include <iostream>
 #include <string>
 #include <vector>
-
+#include <utility>
 namespace RocProfVis
 {
 namespace View
 {
 
 double
-Grid::Calibrate()
+Grid::GetViewportStartPosition()
 {
-    return m_calibrate;
+    return m_viewport_start_position;
 }
 
 Grid::Grid()
 : m_cursor_position(0.0f)
-, m_calibrate()
+, m_viewport_start_position()
+, m_highlighted_region({})
 {}
 Grid::~Grid() {}
 
@@ -28,6 +29,11 @@ float
 Grid::GetCursorPosition()
 {
     return m_cursor_position;
+}
+
+void 
+Grid::SetHighlightedRegion(std::pair<float, float> region) {
+    m_highlighted_region = region;
 }
 
 void
@@ -71,7 +77,8 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                                  ImVec2(normalized_start_box_end + 1500.0f,
                                         cursor_position.y + content_size.y - grid_size),
                                  IM_COL32(100, 100, 100, 100));
-        int first = 0;
+        bool has_been_seen          = false;
+        int  rectangle_render_count = 0;
         for(double raw_position_points_x = min_x - (steps * 5);
             raw_position_points_x < max_x + (steps * 5); raw_position_points_x += steps)
         {
@@ -87,8 +94,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                 ((raw_position_points_x + steps) - (min_x + movement)) *
                 scale_x;  // this value takes the raw value of the output and converts
                           // them into positions on the chart which is scaled by scale_x
-
-            if(first == 0)
+            if(has_been_seen == false)
             {
                 if(ImGui::IsRectVisible(
                        ImVec2(normalized_start, cursor_position.y),
@@ -97,18 +103,20 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                 {
                     // First one thats visible.
 
-                    first       = first + 1;
-                    m_calibrate = (raw_position_points_x -
-                                  (steps * (1 - ((clip_min.x - normalized_start) /
-                                                 (normalized_end - normalized_start))))) + steps;
-                    std::cout << m_calibrate - min_x << std::endl;
+                    rectangle_render_count = rectangle_render_count + 1;
+                    m_viewport_start_position =
+                        (raw_position_points_x -
+                         (steps * (1 - ((clip_min.x - normalized_start) /
+                                        (normalized_end - normalized_start))))) +
+                        steps;
+                    has_been_seen = true;
                 }
             }
 
             draw_list->AddRect(
                 ImVec2(normalized_start, cursor_position.y),
                 ImVec2(normalized_end, cursor_position.y + content_size.y - grid_size),
-                IM_COL32(100, 0, 0, 128), 1.0f);
+                IM_COL32(0, 0, 0, 128), 1.0f);
 
             // If user hover over grid block.
             if(ImGui::IsMouseHoveringRect(

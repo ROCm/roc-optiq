@@ -16,6 +16,8 @@
 #include <tuple>
 #include <vector>
 
+#include <utility>
+
 #include "widgets/rocprofvis_debug_window.h"
 
 namespace RocProfVis
@@ -50,10 +52,10 @@ MainView::MainView(DataProvider& dp)
 , m_sidebar_size(400)
 , m_resize_activity(false)
 , m_scroll_position_x(FLT_MAX)
-, test(true)
-, y_scroll_position(FLT_MAX)
-, y_scroll_movement(false)
-, offset()
+, m_calibrated(true)
+, m_scrollbar_location_as_percentage(FLT_MIN)
+, m_artifical_scrollbar_active(false)
+, m_highlighted_region({-1,-1})
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -72,31 +74,32 @@ MainView::~MainView()
 void
 MainView::CalibratePosition()
 {
-    double current_position = m_grid.Calibrate();
+    double current_position = m_grid.GetViewportStartPosition();
     m_scroll_position_x     = (current_position - m_min_x) /
                           (m_max_x - m_min_x);  // Finds where the chart is at.
- 
+
     double scrollback =
         (m_max_x - m_min_x) *
         m_scroll_position_x;  // Moves the graph back to start at the beggining.
                               // Represents how much to go back to starting
 
     double value_to_begginging =
-        m_movement -
-        scrollback;  // how to get back to initial/first value using movement.
+        m_movement - scrollback;  // how to get back to initial/first value accounting for
+                                  // current movement.
 
-    if(test)
+    if(m_calibrated)
     {
-        m_movement = m_movement - scrollback;
-        test       = false;
-        offset     = m_movement - scrollback;  // initial 0
+        // This is used to start the chart at the beggining on initial load.
+        m_movement   = m_movement - scrollback;
+        m_calibrated = false;
     }
-    if(y_scroll_movement == true)
+    if(m_artifical_scrollbar_active == true)
     {
         m_movement =
             value_to_begginging +
             ((m_max_x - m_min_x) *
-             y_scroll_position);  // initial/first value + position where scrubber is.
+             m_scrollbar_location_as_percentage);  // initial/first value + position where
+                                                   // scrollbar is.
     }
 }
 
@@ -269,6 +272,18 @@ MainView::RenderScrubber(ImVec2 screen_pos)
         draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
                            ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18),
                            IM_COL32(0, 0, 0, 255), 2.0f);
+
+        // Code below is for select
+        if(ImGui::IsMouseDoubleClicked(0))
+        {  // 0 is for the left mouse button
+            if (m_highlighted_region.first == -1) {
+                m_highlighted_region.first = m_grid.GetCursorPosition();
+            }
+            else if(m_highlighted_region.second == -1) {
+                m_highlighted_region.second = m_grid.GetCursorPosition();
+                m_grid.SetHighlightedRegion(m_highlighted_region);
+            }
+         }
     }
 
     ImGui::EndChild();
@@ -291,8 +306,7 @@ MainView::RenderGrid(float width)
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
-    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - 55),
-                             ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y), ImGuiCond_Always);
 
     ImGui::SetCursorPos(ImVec2(0, 0));
 
@@ -610,12 +624,15 @@ MainView::RenderGraphPoints()
     {
         ImVec2 screen_pos = ImGui::GetCursorScreenPos();
 
-        ImVec2 display_size_main      = ImGui::GetWindowSize();
-        ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
+        ImVec2 display_size_main         = ImGui::GetWindowSize();
+        ImVec2 subcomponent_size_main    = ImGui::GetWindowSize();
+        int    artificial_scrollbar_size = 20;
 
-        ImGui::BeginChild("Grid View 2", ImVec2(subcomponent_size_main.x, 500), false,
-                          ImGuiWindowFlags_NoScrollbar |
-                              ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::BeginChild(
+            "Grid View 2",
+            ImVec2(subcomponent_size_main.x,
+                   subcomponent_size_main.y - artificial_scrollbar_size),
+            false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
         ImVec2 graph_view_size = ImGui::GetContentRegionAvail();
 
@@ -655,21 +672,50 @@ MainView::RenderGraphPoints()
         ImGui::EndChild();
         ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
 
-        ImGui::BeginChild("scrollbar", ImVec2(subcomponent_size_main.x, 75), true,
-                          ImGuiWindowFlags_HorizontalScrollbar);
+        ImGui::BeginChild("scrollbar",
+                          ImVec2(subcomponent_size_main.x, artificial_scrollbar_size),
+                          true, ImGuiWindowFlags_HorizontalScrollbar);
+
+        ImGui::Dummy(ImVec2(m_sidebar_size, 10));
+        ImGui::SameLine();
 
         float current_pos = m_scroll_position_x * (subcomponent_size_main.x * m_zoom);
-         ImGui::SliderFloat("##h", &current_pos, 0.0f, subcomponent_size_main.x * m_zoom,
-                           "%.10f");
-        y_scroll_position = current_pos / (subcomponent_size_main.x * m_zoom);
+
+        ImGuiStyle& style = ImGui::GetStyle();
+
+        float available_width = subcomponent_size_main.x - m_sidebar_size;
+
+        style.GrabMinSize  = clamp((subcomponent_size_main.x * (1 / m_zoom)),
+                                   static_cast<float>(available_width * 0.05),
+                                   static_cast<float>(available_width * 0.90));
+        style.GrabRounding = 3.0f;
+
+        ImVec4 scroll_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        ImVec4 grab_color   = ImVec4(0.6f, 0.6f, 0.6f, 0.3f);
+
+        style.Colors[ImGuiCol_SliderGrab]       = grab_color;
+        style.Colors[ImGuiCol_SliderGrabActive] = grab_color;
+        style.Colors[ImGuiCol_FrameBg]          = scroll_color;
+        style.Colors[ImGuiCol_FrameBgHovered]   = scroll_color;
+        style.Colors[ImGuiCol_FrameBgActive]    = scroll_color;
+
+        ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
+
+        ImGui::SliderFloat("##scrollbar", &current_pos, 0.0f,
+                           subcomponent_size_main.x * m_zoom, "%.5f");
+
+        ImGui::PopItemWidth();
+
+        m_scrollbar_location_as_percentage =
+            current_pos / (subcomponent_size_main.x * m_zoom);
 
         if(ImGui::IsItemActive())
         {
-            y_scroll_movement = true;
+            m_artifical_scrollbar_active = true;
         }
         else
         {
-            y_scroll_movement = false;
+            m_artifical_scrollbar_active = false;
             ImGui::SetScrollX(m_scroll_position_x * (subcomponent_size_main.x * m_zoom));
         }
 

@@ -24,6 +24,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_charts.cpp 
     src/view/src/rocprofvis_flame_chart.cpp 
     src/view/src/rocprofvis_grid.cpp 
+    src/view/src/rocprofvis_analysis.cpp 
     src/view/src/rocprofvis_home_screen.cpp 
     src/view/src/rocprofvis_line_chart.cpp 
     src/view/src/rocprofvis_boxplot.cpp 

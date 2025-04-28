@@ -91,7 +91,7 @@ private:
     EventManager::EventHandler            m_new_track_data_handler;
     DataProvider&                         m_data_provider;
 
-    std::pair<float, float> m_highlighted_region;
+    std::pair<double, double> m_highlighted_region;
 };
 
 }  // namespace View

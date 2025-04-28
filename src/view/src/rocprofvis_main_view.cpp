@@ -282,6 +282,7 @@ MainView::RenderScrubber(ImVec2 screen_pos)
             if(m_highlighted_region.first == -1)
             {
                 m_highlighted_region.first = m_grid.GetCursorPosition();
+                m_grid.SetHighlightedRegion(m_highlighted_region);
             }
             else if(m_highlighted_region.second == -1)
             {
@@ -726,7 +727,6 @@ MainView::RenderGraphPoints()
         }
         else
         {
-            std::cout << m_scrollbar_location_as_percentage << std::endl;
             m_artifical_scrollbar_active = false;
             if(m_scrollbar_location_as_percentage > 1)
             {

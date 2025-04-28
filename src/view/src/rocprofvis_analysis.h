@@ -3,30 +3,21 @@
 #pragma once
 
 #include "imgui.h"
-#include <utility>
+#include "rocprofvis_data_provider.h"
 
 namespace RocProfVis
 {
 namespace View
 {
 
-class Grid
+class Analysis
 {
 public:
-    Grid();
-    ~Grid();
-
-    void   RenderGrid(double min_x, double max_x, double movement, float zoom,
-                      ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x,
-                      int grid_size, int sidebar_size);
-    float  GetCursorPosition();
-    double GetViewportStartPosition();
-    void   SetHighlightedRegion(std::pair<float, float> region);
+    Analysis(DataProvider& dp);
+    ~Analysis();
+    void Render();
 
 private:
-    float                   m_cursor_position;
-    double                  m_viewport_start_position;
-    std::pair<float, float> m_highlighted_region;
 };
 
 }  // namespace View

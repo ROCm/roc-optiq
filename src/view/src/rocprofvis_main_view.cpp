@@ -55,7 +55,7 @@ MainView::MainView(DataProvider& dp)
 , m_calibrated(true)
 , m_scrollbar_location_as_percentage(FLT_MIN)
 , m_artifical_scrollbar_active(false)
-, m_highlighted_region({-1,-1})
+, m_highlighted_region({ -1, -1 })
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -276,14 +276,16 @@ MainView::RenderScrubber(ImVec2 screen_pos)
         // Code below is for select
         if(ImGui::IsMouseDoubleClicked(0))
         {  // 0 is for the left mouse button
-            if (m_highlighted_region.first == -1) {
+            if(m_highlighted_region.first == -1)
+            {
                 m_highlighted_region.first = m_grid.GetCursorPosition();
             }
-            else if(m_highlighted_region.second == -1) {
+            else if(m_highlighted_region.second == -1)
+            {
                 m_highlighted_region.second = m_grid.GetCursorPosition();
                 m_grid.SetHighlightedRegion(m_highlighted_region);
             }
-         }
+        }
     }
 
     ImGui::EndChild();

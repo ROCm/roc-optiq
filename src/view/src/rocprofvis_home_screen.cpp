@@ -1,9 +1,10 @@
 #pragma once
 #include "rocprofvis_home_screen.h"
 #include "imgui.h"
+#include "rocprofvis_analysis.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_main_view.h"
 #include "rocprofvis_sidebar.h"
-#include "rocprofvis_event_manager.h"
 #include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
@@ -14,16 +15,16 @@ HomeScreen::HomeScreen()
 , m_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
+, m_analysis(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback([](uint64_t track_index) {
-        std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(static_cast<int>(RocEvents::kNewTrackData), track_index);
+        std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
+            static_cast<int>(RocEvents::kNewTrackData), track_index);
         EventManager::GetInstance()->AddEvent(e);
     });
 }
 
-HomeScreen::~HomeScreen() {
-    m_data_provider.SetTrackDataReadyCallback(nullptr);
-}
+HomeScreen::~HomeScreen() { m_data_provider.SetTrackDataReadyCallback(nullptr); }
 
 void
 HomeScreen::Update()
@@ -52,7 +53,8 @@ HomeScreen::Update()
         }
     }
 
-    if(m_main_view) {
+    if(m_main_view)
+    {
         m_main_view->Update();
     }
 }
@@ -62,6 +64,7 @@ HomeScreen::CreateView()
 {
     m_sidebar   = std::make_shared<SideBar>(m_data_provider);
     m_main_view = std::make_shared<MainView>(m_data_provider);
+    m_analysis  = std::make_shared<Analysis>(m_data_provider);
 
     LayoutItem left;
     left.m_item     = m_sidebar;
@@ -92,6 +95,7 @@ HomeScreen::DestroyView()
     m_main_view    = nullptr;
     m_sidebar      = nullptr;
     m_container    = nullptr;
+    m_analysis     = nullptr;
     m_view_created = false;
 }
 

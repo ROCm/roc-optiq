@@ -56,6 +56,9 @@ MainView::MainView(DataProvider& dp)
 , m_scrollbar_location_as_percentage(FLT_MIN)
 , m_artifical_scrollbar_active(false)
 , m_highlighted_region({ -1, -1 })
+, m_buffer_left_hit(false)
+, m_buffer_right_hit(false)
+
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -283,6 +286,12 @@ MainView::RenderScrubber(ImVec2 screen_pos)
             else if(m_highlighted_region.second == -1)
             {
                 m_highlighted_region.second = m_grid.GetCursorPosition();
+                m_grid.SetHighlightedRegion(m_highlighted_region);
+            }
+            else
+            {
+                m_highlighted_region.first  = -1;
+                m_highlighted_region.second = -1;
                 m_grid.SetHighlightedRegion(m_highlighted_region);
             }
         }
@@ -717,7 +726,21 @@ MainView::RenderGraphPoints()
         }
         else
         {
+            std::cout << m_scrollbar_location_as_percentage << std::endl;
             m_artifical_scrollbar_active = false;
+            if(m_scrollbar_location_as_percentage > 1)
+            {
+                m_buffer_right_hit = true;
+            }
+            else if(m_scrollbar_location_as_percentage < -0.10)
+            {
+                m_buffer_left_hit = true;
+            }
+            else
+            {
+                m_buffer_right_hit = false;
+                m_buffer_left_hit  = false;
+            }
             ImGui::SetScrollX(m_scroll_position_x * (subcomponent_size_main.x * m_zoom));
         }
 
@@ -788,18 +811,19 @@ MainView::HandleTopSurfaceTouch()
             // Left side
             if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
             {
-                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                if(m_buffer_right_hit == false)
+                {
+                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                }
             }
 
             // Right side
             if((drag / ImGui::GetContentRegionAvail().x) * view_width > 0)
             {
-                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
-            }
-
-            else
-            {
-                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                if(m_buffer_left_hit == false)
+                {
+                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                }
             }
         }
     }

@@ -70,6 +70,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
 
         if(m_highlighted_region.first != -1)
         {
+         
             double normalized_start_box_highlighted =
                 (m_highlighted_region.first - movement) * scale_x;
             double normalized_start_box_highlighted_end =
@@ -84,17 +85,17 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
         draw_list->AddRectFilled(ImVec2(normalized_start_box, cursor_position.y),
                                  ImVec2(normalized_start_box - 1500.0f,
                                         cursor_position.y + content_size.y - grid_size),
-                                 IM_COL32(100, 100, 100, 100));
+                                 IM_COL32(0, 0, 0, 255));
 
         double normalized_start_box_end = (max_x - (min_x + movement)) * scale_x;
         draw_list->AddRectFilled(ImVec2(normalized_start_box_end, cursor_position.y),
-                                 ImVec2(normalized_start_box_end + 1500.0f,
+                                 ImVec2(normalized_start_box_end + content_size.x,
                                         cursor_position.y + content_size.y - grid_size),
-                                 IM_COL32(100, 100, 100, 100));
+                                 IM_COL32(0, 0, 0, 255));
         bool has_been_seen          = false;
         int  rectangle_render_count = 0;
-        for(double raw_position_points_x = min_x - (steps * 5);
-            raw_position_points_x < max_x + (steps * 5); raw_position_points_x += steps)
+        for(double raw_position_points_x = min_x - (steps);
+            raw_position_points_x < max_x + (steps); raw_position_points_x += steps)
         {
             // loop through min-max and create appropriate number of scale markers with
             // marker value printed at bottom.

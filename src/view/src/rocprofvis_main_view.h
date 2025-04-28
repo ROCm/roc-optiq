@@ -85,6 +85,9 @@ private:
     bool                                  m_calibrated;
     double                                m_scrollbar_location_as_percentage;
     bool                                  m_artifical_scrollbar_active;
+    bool                                  m_buffer_right_hit;
+    bool                                  m_buffer_left_hit;
+   
     EventManager::EventHandler            m_new_track_data_handler;
     DataProvider&                         m_data_provider;
 

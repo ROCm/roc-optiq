@@ -126,7 +126,7 @@ HSplitContainer::HSplitContainer(const LayoutItem& l, const LayoutItem& r)
 {
     m_widget_name = GenUniqueName("HSplitContainer");
     m_left_name   = GenUniqueName("LeftColumn");
-    m_handle_name = GenUniqueName("ResizeHandle");
+    m_handle_name = GenUniqueName("##ResizeHandle");
     m_right_name  = GenUniqueName("RightColumn");
 }
 
@@ -201,8 +201,8 @@ HSplitContainer::Render()
     ImGui::SameLine();
 
     // Create a resize handle between columns
-    ImGui::InvisibleButton(m_handle_name.c_str(),
-                           ImVec2(m_resize_grip_size, total_size.y));  // col_height));
+    ImGui::Selectable(m_handle_name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick,
+                      ImVec2(m_resize_grip_size, total_size.y));
 
     // Change cursor appearance when hovering over the resize handle
     if(ImGui::IsItemHovered())
@@ -251,6 +251,9 @@ VSplitContainer::VSplitContainer(const LayoutItem& t, const LayoutItem& b)
 , m_dirty(true)
 {
     m_widget_name = GenUniqueName("VSplitContainer");
+    m_top_name    = GenUniqueName("TopRow");
+    m_handle_name = GenUniqueName("##ResizeHandle");
+    m_bottom_name = GenUniqueName("BottomRow");
 }
 
 void
@@ -309,7 +312,7 @@ VSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_top.m_window_padding);
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_top.m_bg_color);
-    ImGui::BeginChild("TopRow", ImVec2(col_width, m_top_row_height),
+    ImGui::BeginChild(m_top_name.c_str(), ImVec2(col_width, m_top_row_height),
                       m_top.m_child_window_flags);
     if(m_top.m_item)
     {
@@ -320,9 +323,8 @@ VSplitContainer::Render()
     ImGui::PopStyleVar(2);
 
     // Create a resize handle between columns
-    if(ImGui::InvisibleButton("ResizeHandle", ImVec2(total_size.x, m_resize_grip_size)))
-    {
-    }
+    ImGui::Selectable(m_handle_name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick,
+                      ImVec2(total_size.x, m_resize_grip_size));
 
     // Change cursor appearance when hovering over the resize handle
     if(ImGui::IsItemHovered())
@@ -347,7 +349,8 @@ VSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_bottom.m_window_padding);
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_bottom.m_bg_color);
-    ImGui::BeginChild("BottomRow", ImVec2(col_width, 0), m_bottom.m_child_window_flags);
+    ImGui::BeginChild(m_bottom_name.c_str(), ImVec2(col_width, 0),
+                      m_bottom.m_child_window_flags);
     if(m_bottom.m_item)
     {
         m_bottom.m_item->Render();

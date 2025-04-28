@@ -10,11 +10,11 @@ namespace RocProfVis
 namespace View
 {
 
-class Analysis
+class AnalysisView
 {
 public:
-    Analysis(DataProvider& dp);
-    ~Analysis();
+    AnalysisView(DataProvider& dp);
+    ~AnalysisView();
     void Render();
 
 private:

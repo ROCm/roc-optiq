@@ -1,7 +1,7 @@
 #pragma once
 #include "rocprofvis_home_screen.h"
 #include "imgui.h"
-#include "rocprofvis_analysis.h"
+#include "rocprofvis_analysis_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_main_view.h"
 #include "rocprofvis_sidebar.h"
@@ -64,7 +64,7 @@ HomeScreen::CreateView()
 {
     m_sidebar   = std::make_shared<SideBar>(m_data_provider);
     m_main_view = std::make_shared<MainView>(m_data_provider);
-    m_analysis  = std::make_shared<Analysis>(m_data_provider);
+    m_analysis  = std::make_shared<AnalysisView>(m_data_provider);
 
     LayoutItem left;
     left.m_item     = m_sidebar;

@@ -1,6 +1,6 @@
 #pragma once
 #include "imgui.h"
-#include "rocprofvis_analysis.h"
+#include "rocprofvis_analysis_view.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_main_view.h"
@@ -32,7 +32,7 @@ private:
     std::shared_ptr<MainView>        m_main_view;
     std::shared_ptr<SideBar>         m_sidebar;
     std::shared_ptr<HSplitContainer> m_container;
-    std::shared_ptr<Analysis>        m_analysis;
+    std::shared_ptr<AnalysisView>        m_analysis;
 
     DataProvider m_data_provider;
     bool         m_view_created;

@@ -16,6 +16,8 @@
 #include <tuple>
 #include <vector>
 
+#include <utility>
+
 #include "widgets/rocprofvis_debug_window.h"
 
 namespace RocProfVis
@@ -49,6 +51,13 @@ MainView::MainView(DataProvider& dp)
 , m_grid_size(50)
 , m_sidebar_size(400)
 , m_resize_activity(false)
+, m_scroll_position_x(FLT_MAX)
+, m_calibrated(true)
+, m_scrollbar_location_as_percentage(FLT_MIN)
+, m_artifical_scrollbar_active(false)
+, m_highlighted_region({ -1, -1 })
+, m_buffer_left_hit(false)
+, m_buffer_right_hit(false)
 
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -63,6 +72,38 @@ MainView::~MainView()
     DestroyGraphs();
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTrackData),
                                              m_new_track_data_handler);
+}
+
+void
+MainView::CalibratePosition()
+{
+    double current_position = m_grid.GetViewportStartPosition();
+    m_scroll_position_x     = (current_position - m_min_x) /
+                          (m_max_x - m_min_x);  // Finds where the chart is at.
+
+    double scrollback =
+        (m_max_x - m_min_x) *
+        m_scroll_position_x;  // Moves the graph back to start at the beggining.
+                              // Represents how much to go back to starting
+
+    double value_to_begginging =
+        m_movement - scrollback;  // how to get back to initial/first value accounting for
+                                  // current movement.
+
+    if(m_calibrated)
+    {
+        // This is used to start the chart at the beggining on initial load.
+        m_movement   = m_movement - scrollback;
+        m_calibrated = false;
+    }
+    if(m_artifical_scrollbar_active == true)
+    {
+        m_movement =
+            value_to_begginging +
+            ((m_max_x - m_min_x) *
+             m_scrollbar_location_as_percentage);  // initial/first value + position where
+                                                   // scrollbar is.
+    }
 }
 
 void
@@ -234,6 +275,27 @@ MainView::RenderScrubber(ImVec2 screen_pos)
         draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
                            ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18),
                            IM_COL32(0, 0, 0, 255), 2.0f);
+
+        // Code below is for select
+        if(ImGui::IsMouseDoubleClicked(0))
+        {  // 0 is for the left mouse button
+            if(m_highlighted_region.first == -1)
+            {
+                m_highlighted_region.first = m_grid.GetCursorPosition();
+                m_grid.SetHighlightedRegion(m_highlighted_region);
+            }
+            else if(m_highlighted_region.second == -1)
+            {
+                m_highlighted_region.second = m_grid.GetCursorPosition();
+                m_grid.SetHighlightedRegion(m_highlighted_region);
+            }
+            else
+            {
+                m_highlighted_region.first  = -1;
+                m_highlighted_region.second = -1;
+                m_grid.SetHighlightedRegion(m_highlighted_region);
+            }
+        }
     }
 
     ImGui::EndChild();
@@ -247,7 +309,7 @@ MainView::GetGraphMap()
 }
 
 void
-MainView::RenderGrid()
+MainView::RenderGrid(float width)
 {
     /*This section makes the grid for the charts*/
 
@@ -260,7 +322,7 @@ MainView::RenderGrid()
 
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(220, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -438,10 +500,11 @@ MainView::RenderGraphView()
         }
     }
 
+    CalibratePosition();
+
     // Set the sidebar size at the end of render loop.
 
     Charts::SetSidebarSize(m_sidebar_size);
-
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
@@ -573,11 +636,14 @@ MainView::RenderGraphPoints()
     {
         ImVec2 screen_pos = ImGui::GetCursorScreenPos();
 
-        ImVec2 display_size_main      = ImGui::GetWindowSize();
-        ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
+        ImVec2 display_size_main         = ImGui::GetWindowSize();
+        ImVec2 subcomponent_size_main    = ImGui::GetWindowSize();
+        int    artificial_scrollbar_size = 20;
 
         ImGui::BeginChild(
-            "Grid View 2", ImVec2(subcomponent_size_main.x, subcomponent_size_main.y),
+            "Grid View 2",
+            ImVec2(subcomponent_size_main.x,
+                   subcomponent_size_main.y - artificial_scrollbar_size),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
         ImVec2 graph_view_size = ImGui::GetContentRegionAvail();
@@ -594,7 +660,7 @@ MainView::RenderGraphPoints()
             m_capture_og_v_max_x = false;
         }
 
-        RenderGrid();
+        RenderGrid(subcomponent_size_main.x);
 
         if(m_meta_map_made)
         {
@@ -616,8 +682,73 @@ MainView::RenderGraphPoints()
         }
 
         ImGui::EndChild();
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
+
+        ImGui::BeginChild("scrollbar",
+                          ImVec2(subcomponent_size_main.x, artificial_scrollbar_size),
+                          true, ImGuiWindowFlags_HorizontalScrollbar);
+
+        ImGui::Dummy(ImVec2(m_sidebar_size, 10));
+        ImGui::SameLine();
+
+        float current_pos = m_scroll_position_x * (subcomponent_size_main.x * m_zoom);
+
+        ImGuiStyle& style = ImGui::GetStyle();
+
+        float available_width = subcomponent_size_main.x - m_sidebar_size;
+
+        style.GrabMinSize  = clamp((subcomponent_size_main.x * (1 / m_zoom)),
+                                   static_cast<float>(available_width * 0.05),
+                                   static_cast<float>(available_width * 0.90));
+        style.GrabRounding = 3.0f;
+
+        ImVec4 scroll_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        ImVec4 grab_color   = ImVec4(0.6f, 0.6f, 0.6f, 0.3f);
+
+        style.Colors[ImGuiCol_SliderGrab]       = grab_color;
+        style.Colors[ImGuiCol_SliderGrabActive] = grab_color;
+        style.Colors[ImGuiCol_FrameBg]          = scroll_color;
+        style.Colors[ImGuiCol_FrameBgHovered]   = scroll_color;
+        style.Colors[ImGuiCol_FrameBgActive]    = scroll_color;
+
+        ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
+
+        ImGui::SliderFloat("##scrollbar", &current_pos, 0.0f,
+                           subcomponent_size_main.x * m_zoom, "%.5f");
+
+        ImGui::PopItemWidth();
+
+        m_scrollbar_location_as_percentage =
+            current_pos / (subcomponent_size_main.x * m_zoom);
+
+        if(ImGui::IsItemActive())
+        {
+            m_artifical_scrollbar_active = true;
+        }
+        else
+        {
+            m_artifical_scrollbar_active = false;
+            if(m_scrollbar_location_as_percentage > 1)
+            {
+                m_buffer_right_hit = true;
+            }
+            else if(m_scrollbar_location_as_percentage < -0.10)
+            {
+                m_buffer_left_hit = true;
+            }
+            else
+            {
+                m_buffer_right_hit = false;
+                m_buffer_left_hit  = false;
+            }
+            ImGui::SetScrollX(m_scroll_position_x * (subcomponent_size_main.x * m_zoom));
+        }
+
+        bool is_scrollbar_active = ImGui::IsItemActive();
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
     }
-    ImVec2 display_size = ImGui::GetWindowSize();
 
     ImGui::EndChild();
 }
@@ -680,18 +811,19 @@ MainView::HandleTopSurfaceTouch()
             // Left side
             if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
             {
-                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                if(m_buffer_right_hit == false)
+                {
+                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                }
             }
 
             // Right side
             if((drag / ImGui::GetContentRegionAvail().x) * view_width > 0)
             {
-                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
-            }
-
-            else
-            {
-                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                if(m_buffer_left_hit == false)
+                {
+                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                }
             }
         }
     }

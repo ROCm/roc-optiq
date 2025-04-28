@@ -64,6 +64,7 @@ LineChart::SetRawData(const RawTrackData* raw_data)
                                     // ymin/ymax is 0/0.
             {
                 m_max_y = 1;
+                m_min_y = -1;
             }
 
             return true;

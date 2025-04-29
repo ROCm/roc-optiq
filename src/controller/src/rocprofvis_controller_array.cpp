@@ -15,6 +15,11 @@ Array::~Array()
 {
 }
 
+std::vector<Data>& Array::GetVector(void)
+{
+    return m_array;
+}
+
 rocprofvis_controller_object_type_t Array::GetType(void) 
 {
     return kRPVControllerObjectTypeArray;

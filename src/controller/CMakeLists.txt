@@ -16,6 +16,7 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_sample.cpp
     src/rocprofvis_controller_sample_lod.cpp
     src/rocprofvis_controller_segment.cpp
+    src/rocprofvis_controller_string_table.cpp
     src/rocprofvis_controller_timeline.cpp
     src/rocprofvis_controller_trace.cpp
     src/rocprofvis_controller_track.cpp

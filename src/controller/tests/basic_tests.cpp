@@ -338,6 +338,79 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         }
     }
 
+    SECTION("Controller Load Whole Graph Data")
+    { 
+        uint64_t num_tracks = 0;
+        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerNumTracks, 0, &num_tracks);
+        spdlog::info("Get num tracks: {0}", num_tracks);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(num_tracks > 0);
+
+        rocprofvis_handle_t* timeline_handle = nullptr;
+        result = rocprofvis_controller_get_object(m_controller, kRPVControllerTimeline, 0, &timeline_handle);
+        spdlog::info("Get timeline: {0}", (void*)timeline_handle);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(timeline_handle);
+
+        double start_ts = 0;
+        result = rocprofvis_controller_get_double(timeline_handle, kRPVControllerTimelineMinTimestamp, 0, &start_ts);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        double end_ts = 0;
+        result = rocprofvis_controller_get_double(timeline_handle, kRPVControllerTimelineMaxTimestamp, 0, &end_ts);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        uint64_t num_graphs = 0;
+        result = rocprofvis_controller_get_uint64(timeline_handle, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(num_graphs > 0);
+
+        for (uint32_t i = 0; i < (uint32_t)num_graphs; i++)
+        {
+            rocprofvis_handle_t* graph_handle = nullptr;
+            result = rocprofvis_controller_get_object(timeline_handle, kRPVControllerTimelineGraphIndexed, i, &graph_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(graph_handle);
+
+            spdlog::info("Allocating Array");
+            rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+            REQUIRE(array != nullptr);
+
+            spdlog::info("Allocating Future");
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_graph_fetch_async(m_controller, graph_handle, start_ts, end_ts, 1000, future, array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            spdlog::info("Wait for future");
+            result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            uint64_t future_result = 0;
+            result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0, &future_result);
+            spdlog::info("Get future result: {0}", future_result);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(future_result == kRocProfVisResultSuccess);
+
+            uint64_t num_results = 0;
+            result = rocprofvis_controller_get_uint64(array, kRPVControllerArrayNumEntries, 0, &num_results);
+            spdlog::info("Get num elements loaded from track: {0}", num_results);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            for (uint32_t idx = 0; idx < num_results; idx++)
+            {
+                rocprofvis_handle_t* entry = nullptr;
+                result = rocprofvis_controller_get_object(array, kRPVControllerArrayEntryIndexed, idx, &entry);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(entry);
+            }
+
+            rocprofvis_controller_array_free(array);
+            rocprofvis_controller_future_free(future);
+        }
+    }
+
     SECTION("Controller Load Ranges Of Track Data")
     {
         uint64_t num_tracks = 0;

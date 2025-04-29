@@ -398,14 +398,12 @@ typedef enum rocprofvis_controller_event_properties_t
 {
     // Unique ID for the event
     kRPVControllerEventId = 0x70000000,
-    // Owning track
-    kRPVControllerEventTrack = 0x70000001,
     // Start time stamp for the event
-    kRPVControllerEventStartTimestamp = 0x70000002,
+    kRPVControllerEventStartTimestamp = 0x70000001,
     // End timestamp for the event
-    kRPVControllerEventEndTimestamp = 0x70000003,
+    kRPVControllerEventEndTimestamp = 0x70000002,
     // Name for the event
-    kRPVControllerEventName = 0x70000004,
+    kRPVControllerEventName = 0x70000003,
 
     // When a LOD is generated the sample will be synthetic and coalesce several real samples
     // These properties allow access to the contains samples.

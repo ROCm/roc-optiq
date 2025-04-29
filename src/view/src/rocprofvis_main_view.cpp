@@ -380,6 +380,13 @@ MainView::RenderGraphView()
 
     ImVec2 window_size = ImGui::GetWindowSize();
 
+    DebugWindow::GetInstance()->AddDebugMessage(
+        "Window Height: " + std::to_string(window_size.y) +
+        "Parent Height: " + std::to_string(display_size.y) +
+        " Scroll Position: " + std::to_string(m_scroll_position) +
+        " Content Max Y: " + std::to_string(m_content_max_y_scoll) +
+        " Previous Scroll Position: " + std::to_string(m_previous_scroll_position));
+
     for(const auto& graph_objects : m_graph_map)
     {
         if(graph_objects.second.display)
@@ -409,14 +416,13 @@ MainView::RenderGraphView()
 
             if(is_visible)
             {
-                // Request data for the chart if it doesn't have data 
+                // Request data for the chart if it doesn't have data
                 if(!graph_objects.second.chart->HasData() &&
                    graph_objects.second.chart->GetRequestState() ==
                        TrackDataRequestState::kIdle)
                 {
                     graph_objects.second.chart->RequestData();
                 }
-
 
                 if(graph_objects.second.color_by_value)
                 {
@@ -498,8 +504,11 @@ MainView::RenderGraphView()
             }
             else
             {
-                // If the track is not visible past a certain distance, release its data to free up memory
-                if(graph_objects.second.chart->GetDistanceToView() > m_unload_track_distance && graph_objects.second.chart->HasData())
+                // If the track is not visible past a certain distance, release its data
+                // to free up memory
+                if(graph_objects.second.chart->GetDistanceToView() >
+                       m_unload_track_distance &&
+                   graph_objects.second.chart->HasData())
                 {
                     graph_objects.second.chart->ReleaseData();
                     m_data_provider.FreeTrack(graph_objects.second.chart->GetID());
@@ -639,6 +648,8 @@ MainView::MakeGraphView()
 void
 MainView::RenderGraphPoints()
 {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
     if(ImGui::BeginChild("Main Graphs"))
     {
         ImVec2 screen_pos = ImGui::GetCursorScreenPos();
@@ -654,6 +665,11 @@ MainView::RenderGraphPoints()
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
         ImVec2 graph_view_size = ImGui::GetContentRegionAvail();
+
+        DebugWindow::GetInstance()->AddDebugMessage(
+            "graph_view_size: " + std::to_string(graph_view_size.y) +
+            " Grid View 2 Height raw: " + std::to_string(subcomponent_size_main.y) +
+            " Grid View 2 Height: " + std::to_string(ImGui::GetWindowSize().y));
 
         // Scale used in all graphs computer here.
         m_v_width = (m_max_x - m_min_x) / m_zoom;
@@ -689,7 +705,10 @@ MainView::RenderGraphPoints()
         }
 
         ImGui::EndChild();
+
         ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
 
         ImGui::BeginChild("scrollbar",
                           ImVec2(subcomponent_size_main.x, artificial_scrollbar_size),
@@ -755,9 +774,11 @@ MainView::RenderGraphPoints()
 
         ImGui::EndChild();
         ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleVar(2);
 }
 
 void

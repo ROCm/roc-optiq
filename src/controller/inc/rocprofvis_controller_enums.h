@@ -260,8 +260,14 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackNode = 0x3000000A,
     // The processor that the track belongs to
     kRPVControllerTrackProcessor = 0x3000000B,
-    // Track extended data
-    kRPVControllerTrackExtData = 0x3000000C,
+    // Track extended data number of entries
+    kRPVControllerTrackExtDataNumberOfEntries = 0x3000000C,
+    // Track extended data category
+    kRPVControllerTrackExtDataCategoryIndexed = 0x3000000D,
+    // Track extended data name
+    kRPVControllerTrackExtDataNameIndexed = 0x3000000E,
+    // Track extended data value
+    kRPVControllerTrackExtDataValueIndexed = 0x3000000F,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {

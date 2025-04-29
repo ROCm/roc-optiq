@@ -144,10 +144,19 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerTrackExtDataNumberOfEntries:
+            {
+                *value = rocprofvis_dm_get_property_as_uint64(
+                    m_dm_handle, kRPVDMNumberOfTrackExtDataRecordsUInt64, 0);
+                break;
+            }
             case kRPVControllerTrackMinTimestamp:
             case kRPVControllerTrackMaxTimestamp:
             case kRPVControllerTrackEntry:
             case kRPVControllerTrackName:
+            case kRPVControllerTrackExtDataCategoryIndexed:
+            case kRPVControllerTrackExtDataNameIndexed:
+            case kRPVControllerTrackExtDataValueIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -161,6 +170,7 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+
 rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -185,6 +195,10 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackNumberOfEntries:
             case kRPVControllerTrackEntry:
             case kRPVControllerTrackName:
+            case kRPVControllerTrackExtDataNumberOfEntries:
+            case kRPVControllerTrackExtDataCategoryIndexed:
+            case kRPVControllerTrackExtDataNameIndexed:
+            case kRPVControllerTrackExtDataValueIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -216,6 +230,10 @@ rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackMinTimestamp:
             case kRPVControllerTrackMaxTimestamp:
             case kRPVControllerTrackName:
+            case kRPVControllerTrackExtDataNumberOfEntries:
+            case kRPVControllerTrackExtDataCategoryIndexed:
+            case kRPVControllerTrackExtDataNameIndexed:
+            case kRPVControllerTrackExtDataValueIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -229,6 +247,7 @@ rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+
 rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -248,12 +267,63 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
             }
             break;
         }
+
+        case kRPVControllerTrackExtDataCategoryIndexed:
+        {
+            char* str = rocprofvis_dm_get_property_as_charptr(
+                    m_dm_handle, kRPVDMTrackExtDataCategoryCharPtrIndexed, 0);
+            if (length && (!value || *length == 0))
+            {
+                *length = strlen(str);
+                result = kRocProfVisResultSuccess;
+            }
+            else if (value && length && *length > 0)
+            {
+                strncpy(value, str, *length);
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerTrackExtDataNameIndexed:
+        {
+            char* str = rocprofvis_dm_get_property_as_charptr(
+                    m_dm_handle, kRPVDMTrackExtDataNameCharPtrIndexed, 0);
+            if (length && (!value || *length == 0))
+            {
+                *length = strlen(str);
+                result = kRocProfVisResultSuccess;
+            }
+            else if (value && length && *length > 0)
+            {
+                strncpy(value, str, *length);
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerTrackExtDataValueIndexed:
+        {
+            char* str = rocprofvis_dm_get_property_as_charptr(
+                    m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, 0);
+            if (length && (!value || *length == 0))
+            {
+                *length = strlen(str);
+                result = kRocProfVisResultSuccess;
+            }
+            else if (value && length && *length > 0)
+            {
+                strncpy(value, str, *length);
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+
         case kRPVControllerTrackMinTimestamp:
         case kRPVControllerTrackMaxTimestamp:
         case kRPVControllerTrackId:
         case kRPVControllerTrackType:
         case kRPVControllerTrackNumberOfEntries:
         case kRPVControllerTrackEntry:
+        case kRPVControllerTrackExtDataNumberOfEntries:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -291,6 +361,10 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackMaxTimestamp:
         case kRPVControllerTrackEntry:
         case kRPVControllerTrackName:
+        case kRPVControllerTrackExtDataNumberOfEntries:
+        case kRPVControllerTrackExtDataCategoryIndexed:
+        case kRPVControllerTrackExtDataNameIndexed:
+        case kRPVControllerTrackExtDataValueIndexed:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -325,6 +399,10 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackType:
         case kRPVControllerTrackNumberOfEntries:
         case kRPVControllerTrackName:
+        case kRPVControllerTrackExtDataNumberOfEntries:
+        case kRPVControllerTrackExtDataCategoryIndexed:
+        case kRPVControllerTrackExtDataNameIndexed:
+        case kRPVControllerTrackExtDataValueIndexed:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -423,6 +501,10 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackMinTimestamp:
             case kRPVControllerTrackMaxTimestamp:
             case kRPVControllerTrackName:
+            case kRPVControllerTrackExtDataNumberOfEntries:
+            case kRPVControllerTrackExtDataCategoryIndexed:
+            case kRPVControllerTrackExtDataNameIndexed:
+            case kRPVControllerTrackExtDataValueIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -455,6 +537,10 @@ rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackType:
             case kRPVControllerTrackNumberOfEntries:
             case kRPVControllerTrackEntry:
+            case kRPVControllerTrackExtDataNumberOfEntries:
+            case kRPVControllerTrackExtDataCategoryIndexed:
+            case kRPVControllerTrackExtDataNameIndexed:
+            case kRPVControllerTrackExtDataValueIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;

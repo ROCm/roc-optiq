@@ -652,9 +652,7 @@ MainView::RenderGraphPoints()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
     if(ImGui::BeginChild("Main Graphs"))
     {
-        ImVec2 screen_pos = ImGui::GetCursorScreenPos();
-
-        ImVec2 display_size_main         = ImGui::GetWindowSize();
+        ImVec2 screen_pos                = ImGui::GetCursorScreenPos();
         ImVec2 subcomponent_size_main    = ImGui::GetWindowSize();
         int    artificial_scrollbar_size = 20;
 
@@ -712,7 +710,7 @@ MainView::RenderGraphPoints()
 
         ImGui::BeginChild("scrollbar",
                           ImVec2(subcomponent_size_main.x, artificial_scrollbar_size),
-                          true, ImGuiWindowFlags_HorizontalScrollbar);
+                          true, ImGuiWindowFlags_NoScrollbar);
 
         ImGui::Dummy(ImVec2(m_sidebar_size, 10));
         ImGui::SameLine();
@@ -723,10 +721,11 @@ MainView::RenderGraphPoints()
 
         float available_width = subcomponent_size_main.x - m_sidebar_size;
 
-        style.GrabMinSize  = clamp((subcomponent_size_main.x * (1 / m_zoom)),
-                                   static_cast<float>(available_width * 0.05),
-                                   static_cast<float>(available_width * 0.90));
-        style.GrabRounding = 3.0f;
+        float original_grab_min_size = style.GrabMinSize;
+        style.GrabMinSize            = clamp((subcomponent_size_main.x * (1 / m_zoom)),
+                                             static_cast<float>(available_width * 0.05),
+                                             static_cast<float>(available_width * 0.90));
+        style.GrabRounding           = 3.0f;
 
         ImVec4 scroll_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
         ImVec4 grab_color   = ImVec4(0.6f, 0.6f, 0.6f, 0.3f);
@@ -743,6 +742,7 @@ MainView::RenderGraphPoints()
                            subcomponent_size_main.x * m_zoom, "%.5f");
 
         ImGui::PopItemWidth();
+        style.GrabMinSize = original_grab_min_size;
 
         m_scrollbar_location_as_percentage =
             current_pos / (subcomponent_size_main.x * m_zoom);
@@ -767,10 +767,7 @@ MainView::RenderGraphPoints()
                 m_buffer_right_hit = false;
                 m_buffer_left_hit  = false;
             }
-            ImGui::SetScrollX(m_scroll_position_x * (subcomponent_size_main.x * m_zoom));
         }
-
-        bool is_scrollbar_active = ImGui::IsItemActive();
 
         ImGui::EndChild();
         ImGui::PopStyleColor();

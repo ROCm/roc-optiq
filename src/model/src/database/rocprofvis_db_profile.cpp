@@ -183,9 +183,13 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
         if (it_query!=slice_query_map.begin()) query += " UNION ";
         query += it_query->first;
         query += it_query->second;
-        query += ") and start >= ";
+        /* 
+         *   to select events that intersect the requested range
+         *   range start should be less or equal to event end and event start should be less or equal to range end
+         */
+        query += ") and ";
         query += std::to_string(start);
-        query += " and end < ";
+        query += "<= end and start <= ";
         query += std::to_string(end);
     }
     query += ") ORDER BY start;";
@@ -206,6 +210,7 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
 #if defined(SLICE_OPT) && (SLICE_OPT == 2)
+        // todo : clean up this code when all optimizations are done in BuildSliceQuery. Keeping for now for reference
         double step = 100.0/num;
         int i=0;
         for (; i < num; i++)
@@ -216,9 +221,14 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
             std::stringstream query;
             std::string subquery;
             if (BuildTrackQuery(tracks[i], subquery) != kRocProfVisDmResultSuccess) break;
+        /* 
+         *   to select events that intersect the requested range
+         *   range start should be less or equal to event end and event start should be less or equal to range end
+         */
             query << subquery
-                << " start >= " << start
-                << " and end < " << end
+                << start
+                << "<= end and start <= " 
+                << end
                 << " ORDER BY start;";
             ShowProgress(step, query.str().c_str(),kRPVDbBusy, future);
             if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), slice, TrackPropertiesAt(i)->track_category == kRocProfVisDmPmcTrack ? &CallbackAddPmcRecord : &CallbackAddEventRecord)) break;

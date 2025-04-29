@@ -42,6 +42,7 @@ void ComputeRoot::Update()
         if (m_compute_data_provider->MetricsLoaded())
         {
             m_compute_summary_view->Update();
+            m_compute_table_view->Update();
         }
     }
 }

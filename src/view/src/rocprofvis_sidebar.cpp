@@ -36,7 +36,6 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 {
     if(!tree)
     {
-        // std::cout << "No graph tree!! " << std::endl;
         return;
     }
 

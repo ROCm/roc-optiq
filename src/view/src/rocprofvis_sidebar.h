@@ -3,10 +3,10 @@
 #pragma once
 #include "imgui.h"
 #include "rocprofvis_main_view.h"
-//#include "rocprofvis_structs.h"
+// #include "rocprofvis_structs.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
-#include "rocprofvis_data_provider.h"
 
 #include <map>
 #include <vector>
@@ -19,7 +19,7 @@ namespace View
 class SideBar : public RocWidget
 {
 public:
-    SideBar(DataProvider &dp);
+    SideBar(DataProvider& dp);
     ~SideBar();
     virtual void Render();
 
@@ -30,8 +30,7 @@ private:
     int                                    m_dropdown_select;
     std::map<int, rocprofvis_graph_map_t>* m_graph_map;
 
-    DataProvider &m_data_provider;
-
+    DataProvider& m_data_provider;
 };
 
 }  // namespace View

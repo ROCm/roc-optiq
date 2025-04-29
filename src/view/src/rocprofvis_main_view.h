@@ -40,7 +40,7 @@ public:
 
 private:
     void RenderGraphPoints();
-    void RenderGrid();
+    void RenderGrid(float width);
     void RenderScrubber(ImVec2 screen_pos);
     void RenderSplitter(ImVec2 screen_pos);
 
@@ -50,7 +50,7 @@ private:
     void RenderFlameCharts(int chart_id, float scale_x);
     void RenderGraphCustomizationWindow(int graph_number);
     void HandleTopSurfaceTouch();
-
+    void CalibratePosition();
     void HandleNewTrackData(std::shared_ptr<RocEvent> e);
 
 private:
@@ -81,10 +81,16 @@ private:
     bool                                  m_is_control_held;
     bool                                  m_can_drag_to_pan;
     bool                                  m_resize_activity;
-
-    EventManager::EventHandler m_new_track_data_handler;
-    DataProvider&              m_data_provider;
-    float                      m_unload_track_distance;
+    double                                m_scroll_position_x;
+    bool                                  m_calibrated;
+    double                                m_scrollbar_location_as_percentage;
+    bool                                  m_artifical_scrollbar_active;
+    bool                                  m_buffer_right_hit;
+    bool                                  m_buffer_left_hit;
+    float                                 m_unload_track_distance;
+    EventManager::EventHandler            m_new_track_data_handler;
+    DataProvider&                         m_data_provider;
+    std::pair<double, double>             m_highlighted_region;
 };
 
 }  // namespace View

@@ -18,30 +18,30 @@ namespace View
 class FlameChart : public Charts
 {
 public:
-    FlameChart(int chart_id, std::string name, float zoom, float movement, double min_x,
-               double max_x, float scale_x);
+    FlameChart(DataProvider& dp, int chart_id, std::string name, float zoom,
+               float movement, double min_x, double max_x, float scale_x);
     void SetRandomColorFlag(bool set_color);
     void Render() override;
     void DrawBox(ImVec2 start_position, int boxplot_box_id,
                  rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list);
 
-    void ExtractPointsFromData(const RawTrackEventData* event_track);
-
+    bool HandleTrackDataChanged() override;
+    bool ExtractPointsFromData(); 
     std::tuple<double, double> FindMaxMinFlame();
 
     void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
 
-    virtual bool SetRawData(const RawTrackData* raw_data);
+    bool HasData() override;
+    void ReleaseData() override;
 
 protected:
     void RenderMetaArea() override;
     void RenderChart(float graph_width) override;
 
 private:
-    std::vector<rocprofvis_trace_event_t> flames;
+    std::vector<rocprofvis_trace_event_t> m_flames;
     float                                 m_sidebar_size;
     rocprofvis_color_by_value_t           m_is_color_value_existant;
-    const RawTrackData*                   m_raw_data;
     static std::vector<ImU32>             s_colors;
     bool                                  m_request_random_color;
 };

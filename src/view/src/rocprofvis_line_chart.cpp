@@ -18,9 +18,9 @@ namespace RocProfVis
 namespace View
 {
 
-LineChart::LineChart(int id, std::string name, float zoom, float movement, double& min_x,
-                     double& max_x, float scale_x)
-: Charts(id, name, zoom, movement, min_x, max_x, scale_x)
+LineChart::LineChart(DataProvider& dp, int id, std::string name, float zoom,
+                     float movement, double& min_x, double& max_x, float scale_x)
+: Charts(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
 , m_data({})
@@ -41,41 +41,59 @@ LineChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 }
 
 bool
-LineChart::SetRawData(const RawTrackData* raw_data)
+LineChart::HasData()
 {
-    if(raw_data == m_raw_data)
-    {
-        return false;
-    }
-    else
-    {
-        spdlog::debug("track {} data changed", m_id);
-        m_raw_data = raw_data;
-        const RawTrackSampleData* sample_track =
-            dynamic_cast<const RawTrackSampleData*>(raw_data);
-        if(sample_track)
-        {
-            spdlog::debug("track {} extracting data points", m_id);
-            ExtractPointsFromData(sample_track);
-            FindMaxMin();
-
-            if(m_max_y == m_min_y)  // This statement is needed to prevent render error
-                                    // when
-                                    // ymin/ymax is 0/0.
-            {
-                m_max_y = 1;
-                m_min_y = -1;
-            }
-
-            return true;
-        }
-    }
-    return false;
+    return !m_data.empty();
 }
 
 void
-LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
+LineChart::ReleaseData()
 {
+    m_data.clear();
+    m_data  = {};
+    m_min_y = 0;
+    m_max_y = 0;
+}
+
+bool
+LineChart::HandleTrackDataChanged()
+{
+    m_request_state = TrackDataRequestState::kIdle;
+    bool result     = false;
+    result          = ExtractPointsFromData();
+    if(result)
+    {
+        FindMaxMin();
+
+        // This statement is needed to prevent render errors when all y values are the
+        // same.
+        if(m_max_y == m_min_y)
+        {
+            if(m_max_y == 0)
+            {
+                m_max_y = 1.0;
+                m_min_y = -1.0;
+            }
+            else
+            {
+                m_max_y = m_min_y + 1.0;
+            }
+        }
+    }
+    return result;
+}
+
+bool
+LineChart::ExtractPointsFromData()
+{
+    const RawTrackData*       rtd          = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
+    if(!sample_track)
+    {
+        spdlog::debug("Invalid track data type for track {}", m_id);
+        return false;
+    }
+
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
@@ -135,6 +153,7 @@ LineChart::ExtractPointsFromData(const RawTrackSampleData* sample_track)
     }
 
     m_data = aggregated_points;
+    return true;
 }
 
 std::tuple<double, double>
@@ -192,7 +211,8 @@ LineChart::RenderMetaArea()
 
     ImVec2 content_size = ImGui::GetContentRegionAvail();
     // Set padding for the child window (Note this done using SetCursorPos
-    // because ImGuiStyleVar_WindowPadding has no effect on child windows without borders)
+    // because ImGuiStyleVar_WindowPadding has no effect on child windows without
+    // borders)
     ImGui::SetCursorPos(m_metadata_padding);
     // Adjust content size to account for padding
     content_size.x -= m_metadata_padding.x * 2;

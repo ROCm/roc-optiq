@@ -18,7 +18,7 @@ namespace View
 class BoxPlot : public Charts
 {
 public:
-    BoxPlot(int id, std::string name, float zoom, float movement, double min_x,
+    BoxPlot(DataProvider &dp, int id, std::string name, float zoom, float movement, double min_x,
             double max_x, float scale_x);
     ~BoxPlot();
     void Render() override;

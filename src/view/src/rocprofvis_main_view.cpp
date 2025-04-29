@@ -49,6 +49,7 @@ MainView::MainView(DataProvider& dp)
 , m_original_v_max_x(0.0f)
 , m_capture_og_v_max_x(true)
 , m_grid_size(50)
+, m_unload_track_distance(1000.0f)
 , m_sidebar_size(400)
 , m_resize_activity(false)
 , m_scroll_position_x(FLT_MAX)
@@ -141,10 +142,9 @@ MainView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     }
     else
     {
-        uint64_t            track_index = tde->GetTrackIndex();
-        const RawTrackData* rtd         = m_data_provider.GetRawTrackData(track_index);
+        uint64_t track_index = tde->GetTrackIndex();
 
-        if(m_graph_map[track_index].chart->SetRawData(rtd))
+        if(m_graph_map[track_index].chart->HandleTrackDataChanged())
         {
             auto min_max = m_graph_map[track_index].chart->GetMinMax();
 
@@ -378,11 +378,18 @@ MainView::RenderGraphView()
         ImGui::SetScrollY(m_scroll_position);
     }
 
-    ImVec2 window_size = ImGui::GetWindowSize();  // Size of the parent window
+    ImVec2 window_size = ImGui::GetWindowSize();
+
+    DebugWindow::GetInstance()->AddDebugMessage(
+        "Window Height: " + std::to_string(window_size.y) +
+        "Parent Height: " + std::to_string(display_size.y) +
+        " Scroll Position: " + std::to_string(m_scroll_position) +
+        " Content Max Y: " + std::to_string(m_content_max_y_scoll) +
+        " Previous Scroll Position: " + std::to_string(m_previous_scroll_position));
 
     for(const auto& graph_objects : m_graph_map)
     {
-        if(graph_objects.second.display == true)
+        if(graph_objects.second.display)
         {
             // Get track height and position to check if the track is in view
             float  track_height = graph_objects.second.chart->GetTrackHeight();
@@ -409,6 +416,14 @@ MainView::RenderGraphView()
 
             if(is_visible)
             {
+                // Request data for the chart if it doesn't have data
+                if(!graph_objects.second.chart->HasData() &&
+                   graph_objects.second.chart->GetRequestState() ==
+                       TrackDataRequestState::kIdle)
+                {
+                    graph_objects.second.chart->RequestData();
+                }
+
                 if(graph_objects.second.color_by_value)
                 {
                     graph_objects.second.chart->SetColorByValue(
@@ -489,7 +504,17 @@ MainView::RenderGraphView()
             }
             else
             {
-                // render dummy
+                // If the track is not visible past a certain distance, release its data
+                // to free up memory
+                if(graph_objects.second.chart->GetDistanceToView() >
+                       m_unload_track_distance &&
+                   graph_objects.second.chart->HasData())
+                {
+                    graph_objects.second.chart->ReleaseData();
+                    m_data_provider.FreeTrack(graph_objects.second.chart->GetID());
+                }
+
+                // Render dummy to maintain layout
                 ImGui::Dummy(ImVec2(0, track_height));
                 DebugWindow::GetInstance()->AddDebugMessage(
                     "Dummy for: " + std::to_string(graph_objects.second.chart->GetID()) +
@@ -550,8 +575,8 @@ MainView::MakeGraphView()
             {
                 // Create FlameChart
                 FlameChart* flame =
-                    new FlameChart(track_info->index, track_info->name, m_zoom,
-                                   m_movement, m_min_x, m_max_x, scale_x);
+                    new FlameChart(m_data_provider, track_info->index, track_info->name,
+                                   m_zoom, m_movement, m_min_x, m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -582,8 +607,8 @@ MainView::MakeGraphView()
             {
                 // Linechart
                 LineChart* line =
-                    new LineChart(track_info->index, track_info->name, m_zoom, m_movement,
-                                  m_min_x, m_max_x, m_scale_x);
+                    new LineChart(m_data_provider, track_info->index, track_info->name,
+                                  m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -615,15 +640,6 @@ MainView::MakeGraphView()
                 break;
             }
         }
-
-        // TODO: Quick hack Fetch all tracks for now... in future use event system to
-        // decide what / when to fetch
-
-        // if(i < 10)
-        {
-            m_data_provider.FetchTrack(i, m_data_provider.GetStartTime(),
-                                       m_data_provider.GetEndTime(), 1000, 0);
-        }
     }
 
     m_meta_map_made = true;
@@ -632,11 +648,11 @@ MainView::MakeGraphView()
 void
 MainView::RenderGraphPoints()
 {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
     if(ImGui::BeginChild("Main Graphs"))
     {
-        ImVec2 screen_pos = ImGui::GetCursorScreenPos();
-
-        ImVec2 display_size_main         = ImGui::GetWindowSize();
+        ImVec2 screen_pos                = ImGui::GetCursorScreenPos();
         ImVec2 subcomponent_size_main    = ImGui::GetWindowSize();
         int    artificial_scrollbar_size = 20;
 
@@ -647,6 +663,11 @@ MainView::RenderGraphPoints()
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
         ImVec2 graph_view_size = ImGui::GetContentRegionAvail();
+
+        DebugWindow::GetInstance()->AddDebugMessage(
+            "graph_view_size: " + std::to_string(graph_view_size.y) +
+            " Grid View 2 Height raw: " + std::to_string(subcomponent_size_main.y) +
+            " Grid View 2 Height: " + std::to_string(ImGui::GetWindowSize().y));
 
         // Scale used in all graphs computer here.
         m_v_width = (m_max_x - m_min_x) / m_zoom;
@@ -682,11 +703,14 @@ MainView::RenderGraphPoints()
         }
 
         ImGui::EndChild();
+
         ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
 
         ImGui::BeginChild("scrollbar",
                           ImVec2(subcomponent_size_main.x, artificial_scrollbar_size),
-                          true, ImGuiWindowFlags_HorizontalScrollbar);
+                          true, ImGuiWindowFlags_NoScrollbar);
 
         ImGui::Dummy(ImVec2(m_sidebar_size, 10));
         ImGui::SameLine();
@@ -697,10 +721,11 @@ MainView::RenderGraphPoints()
 
         float available_width = subcomponent_size_main.x - m_sidebar_size;
 
-        style.GrabMinSize  = clamp((subcomponent_size_main.x * (1 / m_zoom)),
-                                   static_cast<float>(available_width * 0.05),
-                                   static_cast<float>(available_width * 0.90));
-        style.GrabRounding = 3.0f;
+        float original_grab_min_size = style.GrabMinSize;
+        style.GrabMinSize            = clamp((subcomponent_size_main.x * (1 / m_zoom)),
+                                             static_cast<float>(available_width * 0.05),
+                                             static_cast<float>(available_width * 0.90));
+        style.GrabRounding           = 3.0f;
 
         ImVec4 scroll_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
         ImVec4 grab_color   = ImVec4(0.6f, 0.6f, 0.6f, 0.3f);
@@ -717,6 +742,7 @@ MainView::RenderGraphPoints()
                            subcomponent_size_main.x * m_zoom, "%.5f");
 
         ImGui::PopItemWidth();
+        style.GrabMinSize = original_grab_min_size;
 
         m_scrollbar_location_as_percentage =
             current_pos / (subcomponent_size_main.x * m_zoom);
@@ -741,16 +767,15 @@ MainView::RenderGraphPoints()
                 m_buffer_right_hit = false;
                 m_buffer_left_hit  = false;
             }
-            ImGui::SetScrollX(m_scroll_position_x * (subcomponent_size_main.x * m_zoom));
         }
-
-        bool is_scrollbar_active = ImGui::IsItemActive();
 
         ImGui::EndChild();
         ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleVar(2);
 }
 
 void

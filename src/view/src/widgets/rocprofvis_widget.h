@@ -20,6 +20,7 @@ public:
     virtual void Render();
 
     std::string GenUniqueName(std::string name);
+
 protected:
     std::string m_widget_name;
 };
@@ -31,8 +32,8 @@ public:
     LayoutItem(float w, float h);
 
     std::shared_ptr<RocWidget> m_item;  // Widget that this item will render
-    float m_height;
-    float m_width;
+    float                      m_height;
+    float                      m_width;
 
     int32_t m_bg_color;
 
@@ -47,13 +48,12 @@ class RocCustomWidget : public RocWidget
 public:
     RocCustomWidget(const std::function<void()>& callback);
 
-	virtual void Render();
-    void SetCallback(const std::function<void()>& callback);
+    virtual void Render();
+    void         SetCallback(const std::function<void()>& callback);
 
 private:
-	std::function<void()> m_callback;
+    std::function<void()> m_callback;
 };
-
 
 class VFixedContainer : public RocWidget
 {
@@ -63,7 +63,7 @@ public:
     // Todo, add, insert, remove operations
     // ex: void AddItem(LayoutItem &item);
 
-    bool SetAt(int index, const LayoutItem &item);
+    bool   SetAt(int index, const LayoutItem& item);
     size_t ItemCount();
 
     virtual void Render();
@@ -99,7 +99,7 @@ private:
     std::string m_handle_name;
 
     float m_split_ratio;
-    bool m_dirty;
+    bool  m_dirty;
 };
 
 class VSplitContainer : public RocWidget
@@ -125,8 +125,12 @@ private:
     LayoutItem m_bottom;
     float      m_resize_grip_size;
 
+    std::string m_top_name;
+    std::string m_bottom_name;
+    std::string m_handle_name;
+
     float m_split_ratio;
-    bool m_dirty;
+    bool  m_dirty;
 };
 
 }  // namespace View

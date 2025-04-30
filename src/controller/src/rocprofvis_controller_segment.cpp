@@ -120,6 +120,37 @@ void Segment::SetMaxTimestamp(double value)
 
 void Segment::Insert(double timestamp, Handle* event)
 {
+    if (m_type == kRPVControllerTrackTypeEvents)
+    {
+        uint64_t event_level = 0;
+        double event_start = 0;
+        double event_end = 0;
+        if ((event->GetDouble(kRPVControllerEventStartTimestamp, 0, &event_start) == kRocProfVisResultSuccess) &&
+            (event->GetDouble(kRPVControllerEventEndTimestamp, 0, &event_end) == kRocProfVisResultSuccess))
+        {
+            std::vector<Data> events;
+            uint64_t index = 0;
+            if (Fetch(event_start, event_end, events, index) == kRocProfVisResultSuccess)
+            {
+                for (Data& entry : events)
+                {
+                    uint64_t entry_level = 0;
+                    double entry_start = 0;
+                    double entry_end   = 0;
+                    rocprofvis_handle_t* handle = nullptr;
+                    if((entry.GetObject(&handle) == kRocProfVisResultSuccess) &&
+                       (handle != nullptr) &&
+                       (((Handle*)handle)->GetUInt64(kRPVControllerEventLevel, 0,
+                            &entry_level) == kRocProfVisResultSuccess))
+                    {
+                        event_level = std::max(event_level, entry_level + 1);
+                    }
+                }
+            }
+
+            event->SetUInt64(kRPVControllerEventLevel, 0, event_level);
+        }
+    }
     m_entries.insert(std::make_pair(timestamp, event));
 }
 

@@ -23,6 +23,7 @@ Event::Event(uint64_t id, double start_ts, double end_ts)
 , m_end_timestamp(end_ts)
 , m_name(UINT64_MAX)
 , m_category(UINT64_MAX)
+, m_level(0)
 {
 }
 
@@ -354,6 +355,12 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerEventLevel:
+            {
+                *value = m_level;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerEventStartTimestamp:
             case kRPVControllerEventEndTimestamp:
             case kRPVControllerEventName:
@@ -396,6 +403,7 @@ rocprofvis_result_t Event::GetDouble(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventName:
             case kRPVControllerEventChildIndexed:
             case kRPVControllerEventCallstackEntryIndexed:
+            case kRPVControllerEventLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -422,6 +430,7 @@ rocprofvis_result_t Event::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventNumChildren:
             case kRPVControllerEventName:
             case kRPVControllerEventChildIndexed:
+            case kRPVControllerEventLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -496,6 +505,7 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventNumChildren:
         case kRPVControllerEventChildIndexed:
         case kRPVControllerEventCallstackEntryIndexed:
+        case kRPVControllerEventLevel:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -522,6 +532,12 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventNumChildren:
         {
             result = kRocProfVisResultReadOnlyError;
+            break;
+        }
+        case kRPVControllerEventLevel:
+        {
+            m_level = value;
+            result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerEventStartTimestamp:
@@ -563,6 +579,7 @@ rocprofvis_result_t Event::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventName:
         case kRPVControllerEventChildIndexed:
         case kRPVControllerEventCallstackEntryIndexed:
+        case kRPVControllerEventLevel:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -593,6 +610,7 @@ rocprofvis_result_t Event::SetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventNumChildren:
             case kRPVControllerEventName:
             case kRPVControllerEventChildIndexed:
+            case kRPVControllerEventLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -633,6 +651,7 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventNumChildren:
             case kRPVControllerEventChildIndexed:
             case kRPVControllerEventCallstackEntryIndexed:
+            case kRPVControllerEventLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;

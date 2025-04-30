@@ -17,7 +17,7 @@ namespace View
 
 BoxPlot::BoxPlot(DataProvider &dp, int id, std::string name, float zoom, float movement, double min_x,
                  double max_x, float scale_x)
-: Charts(dp, id, name, zoom, movement, min_x, max_x, scale_x)
+: TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
 , m_data({})
@@ -220,7 +220,7 @@ BoxPlot::RenderChart(float graph_width)
 void
 BoxPlot::Render()
 {
-    Charts::Render();
+    TrackItem::Render();
 }
 
 ImVec2

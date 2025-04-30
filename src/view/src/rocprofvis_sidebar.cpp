@@ -66,7 +66,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                                        &tree_item.second.colorful_flamechart))
 
                     {
-                        static_cast<FlameChart*>(tree_item.second.chart)
+                        static_cast<FlameTrackItem*>(tree_item.second.chart)
                             ->SetRandomColorFlag(tree_item.second.colorful_flamechart);
                     }
                 }

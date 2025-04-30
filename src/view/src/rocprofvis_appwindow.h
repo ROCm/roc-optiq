@@ -5,7 +5,7 @@
 #include "rocprofvis_compute_root.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_home_screen.h"
+#include "rocprofvis_trace_view.h"
 #include "widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -32,7 +32,7 @@ private:
 
     static AppWindow* s_instance;
 
-    std::shared_ptr<HomeScreen> m_home_screen;
+    std::shared_ptr<TraceView> m_home_screen;
     std::shared_ptr<RocWidget>  m_main_view;
 
     bool         m_show_debug_widow;

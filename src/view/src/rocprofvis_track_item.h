@@ -16,13 +16,13 @@ enum class TrackDataRequestState
     kError
 };
 
-class Charts
+class TrackItem
 {
 public:
-    Charts(DataProvider& dp, int id, std::string name, float zoom, float movement,
+    TrackItem(DataProvider& dp, int id, std::string name, float zoom, float movement,
            double& min_x, double& max_x, float scale_x);
 
-    virtual ~Charts() {}
+    virtual ~TrackItem() {}
     void               SetID(int id);
     int                GetID();
     virtual float      GetTrackHeight();

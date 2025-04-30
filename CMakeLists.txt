@@ -21,14 +21,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp 
     src/view/src/rocprofvis_appwindow.h 
-    src/view/src/rocprofvis_charts.cpp 
-    src/view/src/rocprofvis_flame_chart.cpp 
+    src/view/src/rocprofvis_track_item.cpp 
+    src/view/src/rocprofvis_flame_track_item.cpp 
     src/view/src/rocprofvis_grid.cpp 
     src/view/src/rocprofvis_analysis_view.cpp 
-    src/view/src/rocprofvis_home_screen.cpp 
-    src/view/src/rocprofvis_line_chart.cpp 
+    src/view/src/rocprofvis_trace_view.cpp 
+    src/view/src/rocprofvis_line_track_item.cpp 
     src/view/src/rocprofvis_boxplot.cpp 
-    src/view/src/rocprofvis_main_view.cpp 
+    src/view/src/rocprofvis_timeline_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp
     src/view/src/rocprofvis_data_provider.cpp

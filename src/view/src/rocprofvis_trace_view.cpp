@@ -1,15 +1,15 @@
 #pragma once
-#include "rocprofvis_home_screen.h"
+#include "rocprofvis_trace_view.h"
 #include "imgui.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_main_view.h"
+#include "rocprofvis_timeline_view.h"
 #include "rocprofvis_sidebar.h"
 #include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
 
-HomeScreen::HomeScreen()
+TraceView::TraceView()
 : m_main_view(nullptr)
 , m_sidebar(nullptr)
 , m_container(nullptr)
@@ -24,10 +24,10 @@ HomeScreen::HomeScreen()
     });
 }
 
-HomeScreen::~HomeScreen() { m_data_provider.SetTrackDataReadyCallback(nullptr); }
+TraceView::~TraceView() { m_data_provider.SetTrackDataReadyCallback(nullptr); }
 
 void
-HomeScreen::Update()
+TraceView::Update()
 {
     auto last_state = m_data_provider.GetState();
     m_data_provider.Update();
@@ -60,10 +60,10 @@ HomeScreen::Update()
 }
 
 void
-HomeScreen::CreateView()
+TraceView::CreateView()
 {
     m_sidebar   = std::make_shared<SideBar>(m_data_provider);
-    m_main_view = std::make_shared<MainView>(m_data_provider);
+    m_main_view = std::make_shared<TimelineView>(m_data_provider);
     m_analysis  = std::make_shared<AnalysisView>(m_data_provider);
 
     LayoutItem left;
@@ -90,7 +90,7 @@ HomeScreen::CreateView()
 }
 
 void
-HomeScreen::DestroyView()
+TraceView::DestroyView()
 {
     m_main_view    = nullptr;
     m_sidebar      = nullptr;
@@ -100,7 +100,7 @@ HomeScreen::DestroyView()
 }
 
 bool
-HomeScreen::OpenFile(const std::string& file_path)
+TraceView::OpenFile(const std::string& file_path)
 {
     bool result = false;
     result      = m_data_provider.FetchTrace(file_path);
@@ -117,7 +117,7 @@ HomeScreen::OpenFile(const std::string& file_path)
 }
 
 void
-HomeScreen::Render()
+TraceView::Render()
 {
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {

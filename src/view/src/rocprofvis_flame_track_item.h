@@ -2,9 +2,9 @@
 
 #pragma once
 #include "imgui.h"
-#include "rocprofvis_charts.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
+#include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
 
 #include <string>
@@ -15,18 +15,18 @@ namespace RocProfVis
 namespace View
 {
 
-class FlameChart : public Charts
+class FlameTrackItem : public TrackItem
 {
 public:
-    FlameChart(DataProvider& dp, int chart_id, std::string name, float zoom,
-               float movement, double min_x, double max_x, float scale_x);
+    FlameTrackItem(DataProvider& dp, int chart_id, std::string name, float zoom,
+                   float movement, double min_x, double max_x, float scale_x);
     void SetRandomColorFlag(bool set_color);
     void Render() override;
     void DrawBox(ImVec2 start_position, int boxplot_box_id,
                  rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list);
 
-    bool HandleTrackDataChanged() override;
-    bool ExtractPointsFromData(); 
+    bool                       HandleTrackDataChanged() override;
+    bool                       ExtractPointsFromData();
     std::tuple<double, double> FindMaxMinFlame();
 
     void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;

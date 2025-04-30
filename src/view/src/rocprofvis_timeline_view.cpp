@@ -1,13 +1,13 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_main_view.h"
+#include "rocprofvis_timeline_view.h"
 #include "imgui.h"
 #include "rocprofvis_boxplot.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
-#include "rocprofvis_flame_chart.h"
+#include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_grid.h"
-#include "rocprofvis_line_chart.h"
+#include "rocprofvis_line_track_item.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include <iostream>
@@ -25,7 +25,7 @@ namespace RocProfVis
 namespace View
 {
 
-MainView::MainView(DataProvider& dp)
+TimelineView::TimelineView(DataProvider& dp)
 : m_data_provider(dp)
 , m_zoom(1.0f)
 , m_movement(0.0f)
@@ -68,7 +68,7 @@ MainView::MainView(DataProvider& dp)
                                            m_new_track_data_handler);
 }
 
-MainView::~MainView()
+TimelineView::~TimelineView()
 {
     DestroyGraphs();
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTrackData),
@@ -76,7 +76,7 @@ MainView::~MainView()
 }
 
 void
-MainView::CalibratePosition()
+TimelineView::CalibratePosition()
 {
     double current_position = m_grid.GetViewportStartPosition();
     m_scroll_position_x     = (current_position - m_min_x) /
@@ -108,7 +108,7 @@ MainView::CalibratePosition()
 }
 
 void
-MainView::ResetView()
+TimelineView::ResetView()
 {
     m_zoom               = 1.0f;
     m_movement           = 0.0f;
@@ -126,7 +126,7 @@ MainView::ResetView()
 }
 
 void
-MainView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
+TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
 {
     if(!e)
     {
@@ -163,7 +163,7 @@ MainView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
 }
 
 void
-MainView::Update()
+TimelineView::Update()
 {
     if(m_meta_map_made)
     {
@@ -172,7 +172,7 @@ MainView::Update()
 }
 
 void
-MainView::Render()
+TimelineView::Render()
 {
     m_resize_activity = false;
     if(m_meta_map_made)
@@ -182,7 +182,7 @@ MainView::Render()
 }
 
 void
-MainView::RenderSplitter(ImVec2 screen_pos)
+TimelineView::RenderSplitter(ImVec2 screen_pos)
 {
     // Scrubber Line
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
@@ -224,7 +224,7 @@ MainView::RenderSplitter(ImVec2 screen_pos)
 }
 
 void
-MainView::RenderScrubber(ImVec2 screen_pos)
+TimelineView::RenderScrubber(ImVec2 screen_pos)
 {
     // Scrubber Line
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
@@ -303,13 +303,13 @@ MainView::RenderScrubber(ImVec2 screen_pos)
 }
 
 std::map<int, rocprofvis_graph_map_t>*
-MainView::GetGraphMap()
+TimelineView::GetGraphMap()
 {
     return &m_graph_map;
 }
 
 void
-MainView::RenderGrid(float width)
+TimelineView::RenderGrid(float width)
 {
     /*This section makes the grid for the charts*/
 
@@ -333,7 +333,7 @@ MainView::RenderGrid(float width)
 }
 
 void
-MainView::RenderGraphCustomizationWindow(int graph_id)
+TimelineView::RenderGraphCustomizationWindow(int graph_id)
 {
     if(ImGui::Begin((std::to_string(graph_id)).c_str(), nullptr,
                     ImGuiWindowFlags_AlwaysAutoResize))
@@ -348,7 +348,7 @@ MainView::RenderGraphCustomizationWindow(int graph_id)
 }
 
 void
-MainView::RenderGraphView()
+TimelineView::RenderGraphView()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
@@ -529,13 +529,13 @@ MainView::RenderGraphView()
 
     // Set the sidebar size at the end of render loop.
 
-    Charts::SetSidebarSize(m_sidebar_size);
+    TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
 
 void
-MainView::DestroyGraphs()
+TimelineView::DestroyGraphs()
 {
     for(const auto& graph_object : m_graph_map)
     {
@@ -550,7 +550,7 @@ MainView::DestroyGraphs()
 }
 
 void
-MainView::MakeGraphView()
+TimelineView::MakeGraphView()
 {
     // Destroy any existing data
     DestroyGraphs();
@@ -574,8 +574,8 @@ MainView::MakeGraphView()
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                FlameChart* flame =
-                    new FlameChart(m_data_provider, track_info->index, track_info->name,
+                FlameTrackItem* flame = new FlameTrackItem(
+                    m_data_provider, track_info->index, track_info->name,
                                    m_zoom, m_movement, m_min_x, m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
@@ -606,8 +606,8 @@ MainView::MakeGraphView()
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                LineChart* line =
-                    new LineChart(m_data_provider, track_info->index, track_info->name,
+                LineTrackItem* line = new LineTrackItem(
+                    m_data_provider, track_info->index, track_info->name,
                                   m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
@@ -646,7 +646,7 @@ MainView::MakeGraphView()
 }
 
 void
-MainView::RenderGraphPoints()
+TimelineView::RenderGraphPoints()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
@@ -779,7 +779,7 @@ MainView::RenderGraphPoints()
 }
 
 void
-MainView::HandleTopSurfaceTouch()
+TimelineView::HandleTopSurfaceTouch()
 {
     /*
     This component enables the capture of user inputs and saves them as class variable.

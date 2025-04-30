@@ -2,7 +2,7 @@
 
 #pragma once
 #include "imgui.h"
-#include "rocprofvis_main_view.h"
+#include "rocprofvis_timeline_view.h"
 // #include "rocprofvis_structs.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_view_structs.h"

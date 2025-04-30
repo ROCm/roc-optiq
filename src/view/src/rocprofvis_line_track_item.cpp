@@ -1,6 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_line_chart.h"
+#include "rocprofvis_line_track_item.h"
 #include "imgui.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
@@ -18,9 +18,9 @@ namespace RocProfVis
 namespace View
 {
 
-LineChart::LineChart(DataProvider& dp, int id, std::string name, float zoom,
+LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
                      float movement, double& min_x, double& max_x, float scale_x)
-: Charts(dp, id, name, zoom, movement, min_x, max_x, scale_x)
+: TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
 , m_data({})
@@ -31,23 +31,23 @@ LineChart::LineChart(DataProvider& dp, int id, std::string name, float zoom,
     m_track_height = 290.0f;
 }
 
-LineChart::~LineChart() {}
+LineTrackItem::~LineTrackItem() {}
 
 void
-LineChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
+LineTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {
     m_color_by_value_digits   = color_by_value_digits;
     m_is_color_value_existant = true;
 }
 
 bool
-LineChart::HasData()
+LineTrackItem::HasData()
 {
     return !m_data.empty();
 }
 
 void
-LineChart::ReleaseData()
+LineTrackItem::ReleaseData()
 {
     m_data.clear();
     m_data  = {};
@@ -56,7 +56,7 @@ LineChart::ReleaseData()
 }
 
 bool
-LineChart::HandleTrackDataChanged()
+LineTrackItem::HandleTrackDataChanged()
 {
     m_request_state = TrackDataRequestState::kIdle;
     bool result     = false;
@@ -84,7 +84,7 @@ LineChart::HandleTrackDataChanged()
 }
 
 bool
-LineChart::ExtractPointsFromData()
+LineTrackItem::ExtractPointsFromData()
 {
     const RawTrackData*       rtd          = m_data_provider.GetRawTrackData(m_id);
     const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
@@ -157,7 +157,7 @@ LineChart::ExtractPointsFromData()
 }
 
 std::tuple<double, double>
-LineChart::FindMaxMin()
+LineTrackItem::FindMaxMin()
 {
     m_min_y = m_data[0].y_value;
     m_max_y = m_data[0].y_value;
@@ -188,7 +188,8 @@ LineChart::FindMaxMin()
 }
 
 float
-LineChart::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float known_y)
+LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
+                                 float known_y)
 {
     // Calculate slope (m)
     double m = (y_2 - y_1) / (x_2 - x_1);
@@ -203,7 +204,7 @@ LineChart::CalculateMissingX(float x_1, float y_1, float x_2, float y_2, float k
 }
 
 void
-LineChart::RenderMetaArea()
+LineTrackItem::RenderMetaArea()
 {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
     ImGui::BeginChild("MetaData View", ImVec2(s_metadata_width, m_track_height),
@@ -251,7 +252,7 @@ LineChart::RenderMetaArea()
 }
 
 void
-LineChart::RenderChart(float graph_width)
+LineTrackItem::RenderChart(float graph_width)
 {
     ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -375,13 +376,13 @@ LineChart::RenderChart(float graph_width)
 }
 
 void
-LineChart::Render()
+LineTrackItem::Render()
 {
-    Charts::Render();
+    TrackItem::Render();
 }
 
 ImVec2
-LineChart::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
+LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
                    ImVec2& content_size, float scaleX, float scaleY)
 {
     double x = (point.x_value - (m_min_x + m_movement)) * scaleX;

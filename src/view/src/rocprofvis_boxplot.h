@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "rocprofvis_charts.h"
+#include "rocprofvis_track_item.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_structs.h"
 #include <string>
@@ -15,7 +15,7 @@ namespace RocProfVis
 namespace View
 {
 
-class BoxPlot : public Charts
+class BoxPlot : public TrackItem
 {
 public:
     BoxPlot(DataProvider &dp, int id, std::string name, float zoom, float movement, double min_x,

@@ -1,6 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_flame_chart.h"
+#include "rocprofvis_flame_track_item.h"
 #include "imgui.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
@@ -15,7 +15,7 @@ namespace RocProfVis
 namespace View
 {
 
-std::vector<ImU32> FlameChart::s_colors = {
+std::vector<ImU32> FlameTrackItem::s_colors = {
 
     IM_COL32(0, 114, 188, 204),   IM_COL32(0, 158, 115, 204),
     IM_COL32(240, 228, 66, 204),  IM_COL32(204, 121, 167, 204),
@@ -24,21 +24,21 @@ std::vector<ImU32> FlameChart::s_colors = {
     IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
 };
 
-FlameChart::FlameChart(DataProvider& dp, int id, std::string name, float zoom,
+FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float zoom,
                        float movement, double min_x, double max_x, float scale_x)
-: Charts(dp, id, name, zoom, movement, min_x, max_x, scale_x)
+: TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_is_color_value_existant()
 , m_request_random_color(true)
 {}
 
 void
-FlameChart::SetRandomColorFlag(bool set_color)
+FlameTrackItem::SetRandomColorFlag(bool set_color)
 {
     m_request_random_color = set_color;
 }
 
 std::tuple<double, double>
-FlameChart::FindMaxMinFlame()
+FlameTrackItem::FindMaxMinFlame()
 {
     m_min_x = m_flames[0].m_start_ts;
     m_max_x = m_flames[0].m_start_ts + m_flames[0].m_duration;
@@ -58,24 +58,24 @@ FlameChart::FindMaxMinFlame()
 }
 
 void
-FlameChart::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
+FlameTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {}
 
 bool
-FlameChart::HasData()
+FlameTrackItem::HasData()
 {
     return !m_flames.empty();
 }
 
 void
-FlameChart::ReleaseData()
+FlameTrackItem::ReleaseData()
 {
     m_flames.clear();
     m_flames = {};
 }
 
 bool
-FlameChart::HandleTrackDataChanged()
+FlameTrackItem::HandleTrackDataChanged()
 {
     m_request_state = TrackDataRequestState::kIdle;
     bool result     = false;
@@ -88,7 +88,7 @@ FlameChart::HandleTrackDataChanged()
 }
 
 bool
-FlameChart::ExtractPointsFromData()
+FlameTrackItem::ExtractPointsFromData()
 {
     const RawTrackData*      rtd         = m_data_provider.GetRawTrackData(m_id);
     const RawTrackEventData* event_track = dynamic_cast<const RawTrackEventData*>(rtd);
@@ -173,7 +173,7 @@ FlameChart::ExtractPointsFromData()
 }
 
 void
-FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
+FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
                     rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list)
 {
     ImGui::PushID(static_cast<int>(boxplot_box_id));
@@ -211,7 +211,7 @@ FlameChart::DrawBox(ImVec2 start_position, int boxplot_box_id,
 }
 
 void
-FlameChart::RenderMetaArea()
+FlameTrackItem::RenderMetaArea()
 {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
     ImGui::BeginChild("MetaData View", ImVec2(s_metadata_width, m_track_height),
@@ -250,7 +250,7 @@ FlameChart::RenderMetaArea()
 }
 
 void
-FlameChart::RenderChart(float graph_width)
+FlameTrackItem::RenderChart(float graph_width)
 {
     ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -279,9 +279,9 @@ FlameChart::RenderChart(float graph_width)
 }
 
 void
-FlameChart::Render()
+FlameTrackItem::Render()
 {
-    Charts::Render();
+    TrackItem::Render();
 }
 
 }  // namespace View

@@ -53,7 +53,7 @@ AppWindow::Init()
     LayoutItem status_bar_item(-1, 30.0f);
     status_bar_item.m_item = std::make_shared<RocWidget>();
     LayoutItem main_area_item(-1, -30.0f);
-    m_home_screen         = std::make_shared<HomeScreen>();
+    m_home_screen         = std::make_shared<TraceView>();
     main_area_item.m_item = m_home_screen;
 
     std::vector<LayoutItem> layout_items;

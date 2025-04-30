@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "rocprofvis_charts.h"
+#include "rocprofvis_track_item.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_view_structs.h"
@@ -16,12 +16,12 @@ namespace RocProfVis
 namespace View
 {
 
-class LineChart : public Charts
+class LineTrackItem : public TrackItem
 {
 public:
-    LineChart(DataProvider& dp, int id, std::string name, float zoom, float movement,
+    LineTrackItem(DataProvider& dp, int id, std::string name, float zoom, float movement,
               double& min_x, double& max_x, float scale_x);
-    ~LineChart();
+    ~LineTrackItem();
     void Render() override;
 
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,

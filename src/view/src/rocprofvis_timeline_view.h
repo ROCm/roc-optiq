@@ -3,13 +3,13 @@
 #pragma once
 
 #include "imgui.h"
-#include "rocprofvis_charts.h"
+#include "rocprofvis_track_item.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_flame_chart.h"
+#include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_grid.h"
-#include "rocprofvis_line_chart.h"
+#include "rocprofvis_line_track_item.h"
 #include "rocprofvis_structs.h"
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
@@ -23,11 +23,11 @@ namespace RocProfVis
 namespace View
 {
 
-class MainView : public RocWidget
+class TimelineView : public RocWidget
 {
 public:
-    MainView(DataProvider& dp);
-    ~MainView();
+    TimelineView(DataProvider& dp);
+    ~TimelineView();
 
     virtual void Render();
     void         Update();

@@ -15,7 +15,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
-
+#include <GLFW/glfw3.h>
 #include <utility>
 
 #include "widgets/rocprofvis_debug_window.h"

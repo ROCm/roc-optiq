@@ -54,15 +54,11 @@ main(int, char**)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-                float xscale, yscale;
-             
-
                 while(!glfwWindowShouldClose(window))
                 {
                     glfwPollEvents();
-                    glfwGetWindowContentScale(window, &xscale, &yscale); //Need this to scale in the future
 
-                     // Handle changes in the frame buffer size
+                    // Handle changes in the frame buffer size
                     int fb_width, fb_height;
                     glfwGetFramebufferSize(window, &fb_width, &fb_height);
                     backend.m_update_framebuffer(&backend, fb_width, fb_height);

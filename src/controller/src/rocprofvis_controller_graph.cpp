@@ -147,6 +147,7 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts
 
     double min_ts = start_ts;
     double max_ts = start_ts + scale;
+    uint64_t level = UINT64_MAX;
 
     uint64_t track_type = 0;
     result = m_track->GetUInt64(kRPVControllerTrackType, 0, &track_type);
@@ -168,6 +169,7 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts
 
                 double event_start = 0.0;
                 double event_end   = 0.0;
+                uint64_t event_level = 0;
 
                 result =
                     event->GetDouble(kRPVControllerEventStartTimestamp, 0, &event_start);
@@ -175,24 +177,29 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts
                     (result == kRocProfVisResultSuccess)
                         ? event->GetDouble(kRPVControllerEventEndTimestamp, 0, &event_end)
                         : result;
+                result =
+                    (result == kRocProfVisResultSuccess)
+                        ? event->GetUInt64(kRPVControllerEventLevel, 0, &event_level)
+                        : result;
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 if(result == kRocProfVisResultSuccess)
                 {
                     ROCPROFVIS_ASSERT(event_start >= min_ts);
 
                     if((event_start >= min_ts && event_start <= max_ts) &&
-                       (event_end >= min_ts && event_end <= max_ts))
+                       (event_end >= min_ts && event_end <= max_ts) && (level == event_level || level == UINT64_MAX))
                     {
                         // Merge into current event
                         events.push_back(event);
+                        level = level == UINT64_MAX ? event_level : level;
                     }
                     else
                     {
                         // Start a new event
 
                         // We assume that the events are ordered by time, so
-                        // this must at least end after the current event
-                        ROCPROFVIS_ASSERT(event_end > max_ts);
+                        // this must at least end after the current event or be a different level
+                        ROCPROFVIS_ASSERT(event_end > max_ts || level != event_level);
 
                         double sample_start = event_start;
 
@@ -206,6 +213,8 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts
                              kRocProfVisResultSuccess)))
                         {
                             Event* event = new Event(0, event_start, event_end);
+                            ROCPROFVIS_ASSERT(level != UINT64_MAX);
+                            event->SetUInt64(kRPVControllerEventLevel, 0, level);
                             Insert(lod_to_generate, event_start, event);
                         }
 
@@ -218,6 +227,7 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts
 
                         events.clear();
                         events.push_back(event);
+                        level = event_level;
                     }
                 }
             }
@@ -233,6 +243,8 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts
                                          &event_end) == kRocProfVisResultSuccess))
             {
                 Event* event = new Event(0, event_start, event_end);
+                ROCPROFVIS_ASSERT(level != UINT64_MAX);
+                event->SetUInt64(kRPVControllerEventLevel, 0, level);
                 Insert(lod_to_generate, event_start, event);
             }
         }

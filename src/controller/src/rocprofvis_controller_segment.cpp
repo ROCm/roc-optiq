@@ -7,6 +7,7 @@
 #include "rocprofvis_core_assert.h"
 
 #include <algorithm>
+#include <queue>
 
 namespace RocProfVis
 {
@@ -118,39 +119,71 @@ void Segment::SetMaxTimestamp(double value)
     m_max_timestamp = value;
 }
 
-void Segment::Insert(double timestamp, Handle* event)
+void Segment::Level(Handle* event)
 {
-    if (m_type == kRPVControllerTrackTypeEvents)
+    if(m_type == kRPVControllerTrackTypeEvents)
     {
-        uint64_t event_level = 0;
-        double event_start = 0;
-        double event_end = 0;
-        if ((event->GetDouble(kRPVControllerEventStartTimestamp, 0, &event_start) == kRocProfVisResultSuccess) &&
-            (event->GetDouble(kRPVControllerEventEndTimestamp, 0, &event_end) == kRocProfVisResultSuccess))
+        std::queue<Handle*> events_to_level;
+        events_to_level.push(event);
+        while(events_to_level.size() > 0)
         {
-            std::vector<Data> events;
-            uint64_t index = 0;
-            if (Fetch(event_start, event_end, events, index) == kRocProfVisResultSuccess)
+            Handle* event_to_level = events_to_level.front();
+            events_to_level.pop();
+
+            uint64_t event_level = 0;
+            double   event_start = 0;
+            double   event_end   = 0;
+            if((event_to_level->GetDouble(kRPVControllerEventStartTimestamp, 0, &event_start) ==
+                kRocProfVisResultSuccess) &&
+               (event_to_level->GetDouble(kRPVControllerEventEndTimestamp, 0,
+                                          &event_end) ==
+                kRocProfVisResultSuccess))
             {
-                for (Data& entry : events)
+                std::vector<Data> events;
+                uint64_t          index = 0;
+                if(Fetch(event_start, event_end, events, index) == kRocProfVisResultSuccess)
                 {
-                    uint64_t entry_level = 0;
-                    double entry_start = 0;
-                    double entry_end   = 0;
-                    rocprofvis_handle_t* handle = nullptr;
-                    if((entry.GetObject(&handle) == kRocProfVisResultSuccess) &&
-                       (handle != nullptr) &&
-                       (((Handle*)handle)->GetUInt64(kRPVControllerEventLevel, 0,
-                            &entry_level) == kRocProfVisResultSuccess))
+                    for(Data& entry : events)
                     {
-                        event_level = std::max(event_level, entry_level + 1);
+                        uint64_t             entry_level = 0;
+                        double               entry_start = 0;
+                        double               entry_end   = 0;
+                        rocprofvis_handle_t* handle      = nullptr;
+                        if((entry.GetObject(&handle) == kRocProfVisResultSuccess) &&
+                           (handle != nullptr) && (event_to_level != ((Handle*) handle)) &&
+                           (((Handle*) handle)->GetUInt64(kRPVControllerEventLevel, 0, &entry_level) ==
+                            kRocProfVisResultSuccess) && 
+                            (((Handle*) handle)->GetDouble(kRPVControllerEventStartTimestamp, 0,
+                                            &entry_start) == kRocProfVisResultSuccess) &&
+                           (((Handle*) handle)->GetDouble(kRPVControllerEventEndTimestamp, 0,
+                                             &entry_end) == kRocProfVisResultSuccess))
+                        {
+                            if (event_start >= entry_start && event_end <= entry_end)
+                            {
+                                event_level = std::max(event_level, entry_level + 1);
+                            }
+                            else if (event_start > entry_start && event_start < event_end)
+                            {
+                                event_level = std::max(event_level, entry_level + 1);
+                            }
+                            else if (event_start < entry_start)
+                            {
+                                // Need to relevel for the entry as it has been levelled out of order
+                                // This can happen depending on how events are loaded as they aren't always in order
+                                events_to_level.push(((Handle*) handle));
+                            }
+                        }
                     }
                 }
-            }
 
-            event->SetUInt64(kRPVControllerEventLevel, 0, event_level);
+                event_to_level->SetUInt64(kRPVControllerEventLevel, 0, event_level);
+            }
         }
     }
+}
+
+void Segment::Insert(double timestamp, Handle* event)
+{
     m_entries.insert(std::make_pair(timestamp, event));
 }
 

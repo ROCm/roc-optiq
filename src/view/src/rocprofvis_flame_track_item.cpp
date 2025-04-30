@@ -125,18 +125,19 @@ FlameTrackItem::ExtractPointsFromData()
         counter.m_name     = track_data[i].m_name;
         counter.m_start_ts = track_data[i].m_start_ts;
         counter.m_duration = track_data[i].m_duration;
+        counter.m_level = track_data[i].m_level;
 
-        if(counter.m_start_ts < current_bin_start + bin_size)
-        {
-            if(counter.m_duration > largest_duration)
-            {
-                largest_duration =
-                    counter.m_duration;  // Use the largest duration per bin.
-            }
-            bin_sum_x += counter.m_start_ts;
-            bin_count++;
-        }
-        else
+        //if(counter.m_start_ts < current_bin_start + bin_size)
+        //{
+        //    if(counter.m_duration > largest_duration)
+        //    {
+        //        largest_duration =
+        //            counter.m_duration;  // Use the largest duration per bin.
+        //    }
+        //    bin_sum_x += counter.m_start_ts;
+        //    bin_count++;
+        //}
+        //else
         {
             if(bin_count > 0)
             {
@@ -144,6 +145,7 @@ FlameTrackItem::ExtractPointsFromData()
                 binned_point.m_start_ts = bin_sum_x / bin_count;
                 binned_point.m_duration = largest_duration;
                 binned_point.m_name     = counter.m_name;
+                binned_point.m_level    = counter.m_level;
                 entries.push_back(binned_point);
             }
 
@@ -164,6 +166,7 @@ FlameTrackItem::ExtractPointsFromData()
         binned_point.m_start_ts = bin_sum_x / bin_count;
         binned_point.m_duration = largest_duration;
         binned_point.m_name     = counter.m_name;
+        binned_point.m_level    = counter.m_level;
 
         entries.push_back(binned_point);
     }
@@ -270,7 +273,7 @@ FlameTrackItem::RenderChart(float graph_width)
         ImVec2 end_position;
 
         // Scale the start time for better visualization
-        start_position = ImVec2(normalized_start, 0);
+        start_position = ImVec2(normalized_start, flame.m_level * 40);
         DrawBox(start_position, boxplot_box_id, flame, normalized_end, draw_list);
 
         boxplot_box_id = boxplot_box_id + 1;

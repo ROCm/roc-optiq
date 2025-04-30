@@ -1,1 +1,2 @@
 *.rpd filter=lfs diff=lfs merge=lfs -text
+sample/trace_70b_1024_32.json filter=lfs diff=lfs merge=lfs -text

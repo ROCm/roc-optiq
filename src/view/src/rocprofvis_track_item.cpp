@@ -1,4 +1,5 @@
 #include "rocprofvis_track_item.h"
+#include "../src/view/src/rocprofvis_settings.h"
 using namespace RocProfVis::View;
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -15,7 +16,8 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 , m_name(name)
 , m_track_height(75.0f)
 , m_is_in_view_vertical(false)
-, m_metadata_bg_color(IM_COL32(240, 240, 240, 55))
+, m_metadata_bg_color(
+      Settings::GetInstance().GetColor(static_cast<int>(Colors::kMetaDataColor)))
 , m_metadata_padding(ImVec2(4.0f, 4.0f))
 , m_resize_grip_thickness(4.0f)
 , m_request_state(TrackDataRequestState::kIdle)

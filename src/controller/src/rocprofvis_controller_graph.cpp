@@ -212,9 +212,35 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts
                                                       &event_end) ==
                              kRocProfVisResultSuccess)))
                         {
+                            std::string combined_name = "";
+                            for(auto event : events)
+                            {
+                                std::string name;
+                                uint32_t    len = 0;
+                                result = event->GetString(kRPVControllerEventName, 0,
+                                                               nullptr, &len);
+                                if(result == kRocProfVisResultSuccess)
+                                {
+                                    name.resize(len);
+                                    result = event->GetString(
+                                        kRPVControllerEventName, 0,
+                                        const_cast<char*>(name.c_str()), &len);
+                                    if(result == kRocProfVisResultSuccess)
+                                    {
+                                        if(combined_name.size() > 0)
+                                        {
+                                            combined_name += "\n";
+                                        }
+                                        combined_name += name;
+                                    }
+                                }
+                            }
+
                             Event* event = new Event(0, event_start, event_end);
                             ROCPROFVIS_ASSERT(level != UINT64_MAX);
                             event->SetUInt64(kRPVControllerEventLevel, 0, level);
+                            event->SetString(kRPVControllerEventName, 0,
+                                             combined_name.c_str(), combined_name.size());
                             Insert(lod_to_generate, event_start, event);
                         }
 
@@ -242,9 +268,33 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts
                (events.back()->GetDouble(kRPVControllerEventEndTimestamp, 0,
                                          &event_end) == kRocProfVisResultSuccess))
             {
+                std::string combined_name = "";
+                for (auto event : events)
+                {
+                    std::string name;
+                    uint32_t len = 0;
+                    result = event->GetString(kRPVControllerEventName, 0, nullptr, &len);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        name.resize(len);
+                        result = event->GetString(kRPVControllerEventName, 0,
+                                                  const_cast<char*>(name.c_str()), &len);
+                        if (result == kRocProfVisResultSuccess)
+                        {
+                            if(combined_name.size() > 0)
+                            {
+                                combined_name += "\n";
+                            }
+                            combined_name += name;
+                        }
+                    }
+                }
+
                 Event* event = new Event(0, event_start, event_end);
                 ROCPROFVIS_ASSERT(level != UINT64_MAX);
                 event->SetUInt64(kRPVControllerEventLevel, 0, level);
+                event->SetString(kRPVControllerEventName, 0, combined_name.c_str(),
+                                 combined_name.size());
                 Insert(lod_to_generate, event_start, event);
             }
         }

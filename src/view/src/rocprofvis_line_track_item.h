@@ -10,6 +10,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include "../src/view/src/rocprofvis_settings.h"
 
 namespace RocProfVis
 {
@@ -46,6 +47,7 @@ private:
     double                               m_min_y;
     double                               m_max_y;
     bool                                 m_is_color_value_existant;
+    Settings&                            m_settings;
 };
 
 }  // namespace View

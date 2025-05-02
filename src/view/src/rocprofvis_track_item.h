@@ -1,4 +1,5 @@
 #pragma once
+#include "../src/view/src/rocprofvis_settings.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_view_structs.h"
@@ -20,7 +21,7 @@ class TrackItem
 {
 public:
     TrackItem(DataProvider& dp, int id, std::string name, float zoom, float movement,
-           double& min_x, double& max_x, float scale_x);
+              double& min_x, double& max_x, float scale_x);
 
     virtual ~TrackItem() {}
     void               SetID(int id);
@@ -74,8 +75,8 @@ protected:
     bool                  m_is_resize;
     DataProvider&         m_data_provider;
     TrackDataRequestState m_request_state;
-
-    static float s_metadata_width;
+    Settings&              m_settings;
+    static float          s_metadata_width;
 };
 
 }  // namespace View

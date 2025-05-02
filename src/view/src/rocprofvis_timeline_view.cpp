@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_timeline_view.h"
+#include "../src/view/src/rocprofvis_settings.h"
 #include "imgui.h"
 #include "rocprofvis_boxplot.h"
 #include "rocprofvis_controller.h"
@@ -10,15 +11,14 @@
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_debug_window.h"
+#include <GLFW/glfw3.h>
 #include <iostream>
 #include <map>
 #include <string>
 #include <tuple>
-#include <vector>
-#include <GLFW/glfw3.h>
 #include <utility>
-
-#include "widgets/rocprofvis_debug_window.h"
+#include <vector>
 
 namespace RocProfVis
 {
@@ -59,7 +59,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_highlighted_region({ -1, -1 })
 , m_buffer_left_hit(false)
 , m_buffer_right_hit(false)
-
+, m_settings(Settings::GetInstance())
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -193,7 +193,8 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     ImGui::SetNextWindowSize(ImVec2(1.0f, display_size.y), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.4f, 0.4f, 0.4f, 0.4f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_settings.GetColor(static_cast<int>(Colors::kScrollBarColor)));
 
     ImGui::BeginChild("Splitter View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
 
@@ -241,7 +242,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
 
     ImGui::BeginChild("Scrubber View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
 
@@ -270,11 +272,14 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
         ImVec2 rect_pos =
             ImVec2(mouse_position.x + 50, screen_pos.y + display_size.y - 5);
-        draw_list->AddRectFilled(text_pos, rect_pos, IM_COL32(0, 0, 0, 255));
-        draw_list->AddText(text_pos, IM_COL32(255, 255, 255, 255), text);
+        draw_list->AddRectFilled(
+            text_pos, rect_pos,
+            m_settings.GetColor(static_cast<int>(Colors::kGenericBlack)));
+        draw_list->AddText(
+            text_pos, m_settings.GetColor(static_cast<int>(Colors::kGenericWhite)), text);
         draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
                            ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18),
-                           IM_COL32(0, 0, 0, 255), 2.0f);
+                           m_settings.GetColor(static_cast<int>(Colors::kGenericBlack)));
 
         // Code below is for select
         if(ImGui::IsMouseDoubleClicked(0))
@@ -322,7 +327,8 @@ TimelineView::RenderGrid(float width)
 
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -360,7 +366,8 @@ TimelineView::RenderGraphView()
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
     ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
     ImGuiIO& io           = ImGui::GetIO();
     m_is_control_held     = io.KeyCtrl;
@@ -430,11 +437,13 @@ TimelineView::RenderGraphView()
                         graph_objects.second.color_by_value_digits);
                 }
 
-                ImVec4 selection_color = ImVec4(0, 0, 0, 0);
+                ImVec4 selection_color = ImGui::ColorConvertU32ToFloat4(
+                    m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
                 if(graph_objects.second.selected)
                 {
                     // TODO: move somewhere else don't need to create each loop
-                    selection_color = ImVec4(0.17, 0.54, 1.0f, 0.3f);
+                    selection_color = ImGui::ColorConvertU32ToFloat4(
+                        m_settings.GetColor(static_cast<int>(Colors::kLightBlue)));
                 }
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
                 ImGui::BeginChild(
@@ -446,7 +455,9 @@ TimelineView::RenderGraphView()
                         ImGuiWindowFlags_NoScrollWithMouse |
                         ImGuiWindowFlags_NoScrollbar);
 
-                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+                ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                                      ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
+                                          static_cast<int>(Colors::kTransparent))));
 
                 if(m_is_control_held)
                 {
@@ -575,8 +586,8 @@ TimelineView::MakeGraphView()
             {
                 // Create FlameChart
                 FlameTrackItem* flame = new FlameTrackItem(
-                    m_data_provider, track_info->index, track_info->name,
-                                   m_zoom, m_movement, m_min_x, m_max_x, scale_x);
+                    m_data_provider, track_info->index, track_info->name, m_zoom,
+                    m_movement, m_min_x, m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -607,8 +618,8 @@ TimelineView::MakeGraphView()
             {
                 // Linechart
                 LineTrackItem* line = new LineTrackItem(
-                    m_data_provider, track_info->index, track_info->name,
-                                  m_zoom, m_movement, m_min_x, m_max_x, m_scale_x);
+                    m_data_provider, track_info->index, track_info->name, m_zoom,
+                    m_movement, m_min_x, m_max_x, m_scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -704,7 +715,8 @@ TimelineView::RenderGraphPoints()
 
         ImGui::EndChild();
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(static_cast<int>(
+                                                    Colors::kTransparent)));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
 
@@ -727,8 +739,10 @@ TimelineView::RenderGraphPoints()
                                              static_cast<float>(available_width * 0.90));
         style.GrabRounding           = 3.0f;
 
-        ImVec4 scroll_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-        ImVec4 grab_color   = ImVec4(0.6f, 0.6f, 0.6f, 0.3f);
+        ImVec4 scroll_color = ImGui::ColorConvertU32ToFloat4(
+            m_settings.GetColor(static_cast<int>(Colors::kGenericWhite)));
+        ImVec4 grab_color = ImGui::ColorConvertU32ToFloat4(
+            m_settings.GetColor(static_cast<int>(Colors::kScrollBarColor)));
 
         style.Colors[ImGuiCol_SliderGrab]       = grab_color;
         style.Colors[ImGuiCol_SliderGrabActive] = grab_color;

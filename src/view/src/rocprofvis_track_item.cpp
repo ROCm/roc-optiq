@@ -16,13 +16,15 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 , m_name(name)
 , m_track_height(75.0f)
 , m_is_in_view_vertical(false)
-, m_metadata_bg_color(
-      Settings::GetInstance().GetColor(static_cast<int>(Colors::kMetaDataColor)))
+, m_metadata_bg_color()
 , m_metadata_padding(ImVec2(4.0f, 4.0f))
 , m_resize_grip_thickness(4.0f)
 , m_request_state(TrackDataRequestState::kIdle)
 , m_is_resize(false)
-{}
+, m_settings(Settings::GetInstance())
+{
+    m_metadata_bg_color = m_settings.GetColor(static_cast<int>(Colors::kMetaDataColor));
+}
 
 bool
 TrackItem::GetResizeStatus()
@@ -127,7 +129,8 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     m_is_resize = false;
 
     ImGui::SetCursorPos(ImVec2(0, parent_size.y - m_resize_grip_thickness));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
     ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, m_resize_grip_thickness),
                       false);
 

@@ -1,12 +1,12 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
+#include "../src/view/src/rocprofvis_settings.h"
 #include "imgui.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
-
 #include <string>
 #include <vector>
 
@@ -42,8 +42,8 @@ private:
     std::vector<rocprofvis_trace_event_t> m_flames;
     float                                 m_sidebar_size;
     rocprofvis_color_by_value_t           m_is_color_value_existant;
-    static std::vector<ImU32>             s_colors;
-    bool                                  m_request_random_color;
+     bool                                  m_request_random_color;
+    Settings&                             m_settings;
 };
 
 }  // namespace View

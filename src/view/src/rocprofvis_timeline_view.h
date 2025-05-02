@@ -2,8 +2,8 @@
 
 #pragma once
 
+#include "../src/view/src/rocprofvis_settings.h"
 #include "imgui.h"
-#include "rocprofvis_track_item.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
@@ -11,6 +11,7 @@
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_structs.h"
+#include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
 #include <map>
@@ -91,6 +92,7 @@ private:
     EventManager::EventHandler            m_new_track_data_handler;
     DataProvider&                         m_data_provider;
     std::pair<double, double>             m_highlighted_region;
+    Settings&                             m_settings;
 };
 
 }  // namespace View

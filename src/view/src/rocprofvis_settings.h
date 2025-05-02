@@ -11,22 +11,35 @@ namespace View
 {
 enum class Colors
 {
-    kMetaDataColor
-};
+    kMetaDataColor,
+    kTransparent,
+    kTextError,
+    kTextSuccess,
+    kFlameChartColor,
+    kGenericBlack,
+    kGenericRed,
+    kLightBlue,
+    kDarkBlue,
+    kBoundBox,
+    kGenericWhite,
+    kScrollBarColor
+ };
 class Settings
 {
 public:
-   static Settings& GetInstance(); 
+    static Settings& GetInstance();
 
-   Settings(const Settings&) = delete;
-   Settings& operator=(const Settings&) = delete;
-   ImU32     GetColor(int value);
+    Settings(const Settings&)                     = delete;
+    Settings&          operator=(const Settings&) = delete;
+    ImU32              GetColor(int value);
+    std::vector<ImU32> GetColorWheel();
 
 private:
     Settings();
     ~Settings();
     std::vector<ImU32> color_store;
- };
+    std::vector<ImU32> m_flame_color_wheel;
+};
 
 }  // namespace View
 }  // namespace RocProfVis

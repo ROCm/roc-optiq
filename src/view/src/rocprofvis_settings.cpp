@@ -12,7 +12,6 @@ namespace RocProfVis
 namespace View
 {
 
-
 Settings&
 Settings::GetInstance()
 {
@@ -26,15 +25,35 @@ Settings::GetColor(int value)
     return color_store[value];
 }
 
+std::vector<ImU32>
+Settings::GetColorWheel()
+{
+    return m_flame_color_wheel;
+}
+
 Settings::Settings()
-: color_store(5)
+: color_store(15)
+, m_flame_color_wheel({
+
+      IM_COL32(0, 114, 188, 204), IM_COL32(0, 158, 115, 204), IM_COL32(240, 228, 66, 204),
+      IM_COL32(204, 121, 167, 204), IM_COL32(86, 180, 233, 204),
+      IM_COL32(213, 94, 0, 204), IM_COL32(0, 204, 102, 204), IM_COL32(230, 159, 0, 204),
+      IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204) })
 
 {
-    color_store[static_cast<int>(Colors::kMetaDataColor)] =  IM_COL32(240, 240, 240, 55);
-    
-    //int y = static_cast<int>(Colors::kLineColor);
-
-    //color_store[static_cast<int>(Colors::kLineColor)] = 0;
+    color_store[static_cast<int>(Colors::kMetaDataColor)] = IM_COL32(240, 240, 240, 55);
+    color_store[static_cast<int>(Colors::kTransparent)]   = IM_COL32(0, 0, 0, 0);
+    color_store[static_cast<int>(Colors::kTextError)]     = IM_COL32(255, 0, 0, 255);
+    color_store[static_cast<int>(Colors::kTextSuccess)]   = IM_COL32(0, 255, 0, 255);
+    color_store[static_cast<int>(Colors::kFlameChartColor)] =
+        IM_COL32(128, 128, 128, 255);
+    color_store[static_cast<int>(Colors::kGenericBlack)]   = IM_COL32(0, 0, 0, 255);
+    color_store[static_cast<int>(Colors::kGenericRed)]     = IM_COL32(255, 0, 0, 255);
+    color_store[static_cast<int>(Colors::kLightBlue)]      = IM_COL32(0, 0, 200, 255);
+    color_store[static_cast<int>(Colors::kDarkBlue)]       = IM_COL32(0, 0, 100, 80);
+    color_store[static_cast<int>(Colors::kBoundBox)]       = IM_COL32(100, 100, 100, 150);
+    color_store[static_cast<int>(Colors::kGenericWhite)]   = IM_COL32(255, 255, 255, 255);
+    color_store[static_cast<int>(Colors::kScrollBarColor)] = IM_COL32(200, 200, 200, 255);
 }
 
 Settings::~Settings() {}

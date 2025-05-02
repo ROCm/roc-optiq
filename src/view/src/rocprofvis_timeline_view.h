@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "../src/view/src/rocprofvis_settings.h"
 #include "imgui.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
@@ -10,6 +9,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_track_item.h"
+#include "rocprofvis_settings.h"
 #include "rocprofvis_structs.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"

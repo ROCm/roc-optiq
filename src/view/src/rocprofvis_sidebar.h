@@ -4,8 +4,8 @@
 #include "imgui.h"
 #include "rocprofvis_timeline_view.h"
 // #include "rocprofvis_structs.h"
-#include "../src/view/src/rocprofvis_settings.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_settings.h"
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
 #include <map>

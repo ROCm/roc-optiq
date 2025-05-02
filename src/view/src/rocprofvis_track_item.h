@@ -1,7 +1,7 @@
 #pragma once
-#include "../src/view/src/rocprofvis_settings.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_raw_track_data.h"
+#include "rocprofvis_settings.h"
 #include "rocprofvis_view_structs.h"
 
 namespace RocProfVis
@@ -75,7 +75,7 @@ protected:
     bool                  m_is_resize;
     DataProvider&         m_data_provider;
     TrackDataRequestState m_request_state;
-    Settings&              m_settings;
+    Settings&             m_settings;
     static float          s_metadata_width;
 };
 

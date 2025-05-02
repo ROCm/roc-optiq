@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "../src/view/src/rocprofvis_settings.h"
 #include "imgui.h"
+#include "rocprofvis_settings.h"
 #include <utility>
 namespace RocProfVis
 {

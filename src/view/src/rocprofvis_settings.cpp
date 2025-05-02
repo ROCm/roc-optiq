@@ -47,12 +47,12 @@ Settings::Settings()
     color_store[static_cast<int>(Colors::kTextSuccess)]   = IM_COL32(0, 255, 0, 255);
     color_store[static_cast<int>(Colors::kFlameChartColor)] =
         IM_COL32(128, 128, 128, 255);
-    color_store[static_cast<int>(Colors::kGenericBlack)]    = IM_COL32(0, 0, 0, 255);
-    color_store[static_cast<int>(Colors::kGenericRed)]      = IM_COL32(255, 0, 0, 255);
+    color_store[static_cast<int>(Colors::kGridColor)]    = IM_COL32(0, 0, 0, 255);
+    color_store[static_cast<int>(Colors::kGridRed)]      = IM_COL32(255, 0, 0, 255);
     color_store[static_cast<int>(Colors::kSelectionBorder)] = IM_COL32(0, 0, 200, 255);
     color_store[static_cast<int>(Colors::kSelection)]       = IM_COL32(0, 0, 100, 80);
     color_store[static_cast<int>(Colors::kBoundBox)]       = IM_COL32(100, 100, 100, 150);
-    color_store[static_cast<int>(Colors::kGenericWhite)]   = IM_COL32(255, 255, 255, 255);
+    color_store[static_cast<int>(Colors::kFillerColor)]   = IM_COL32(255, 255, 255, 255);
     color_store[static_cast<int>(Colors::kScrollBarColor)] = IM_COL32(200, 200, 200, 255);
 }
 

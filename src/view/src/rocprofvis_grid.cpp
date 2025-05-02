@@ -103,7 +103,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted_end,
                        cursor_position.y + content_size.y - grid_size),
-                m_settings.GetColor(static_cast<int>(Colors::kDarkBlue)));
+                m_settings.GetColor(static_cast<int>(Colors::kSelection)));
         }
 
         draw_list->AddRectFilled(
@@ -183,8 +183,8 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
             ImVec2 labelPos =
                 ImVec2(normalized_start - labelSize.x / 2,
                        cursor_position.y + content_size.y - labelSize.y - 5);
-            draw_list->AddText(
-                labelPos, m_settings.GetColor(static_cast<int>(Colors::kGenericBlack)),
+            draw_list->AddText(labelPos,
+                               m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
                 label);
         }
 

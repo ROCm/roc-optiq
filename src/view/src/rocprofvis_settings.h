@@ -16,12 +16,12 @@ enum class Colors
     kTextError,
     kTextSuccess,
     kFlameChartColor,
-    kGenericBlack,
-    kGenericRed,
-    kLightBlue,
-    kDarkBlue,
+    kGridColor,
+    kGridRed,
+    kSelectionBorder,
+    kSelection,
     kBoundBox,
-    kGenericWhite,
+    kFillerColor,
     kScrollBarColor
 };
 class Settings

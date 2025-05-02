@@ -274,12 +274,12 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             ImVec2(mouse_position.x + 50, screen_pos.y + display_size.y - 5);
         draw_list->AddRectFilled(
             text_pos, rect_pos,
-            m_settings.GetColor(static_cast<int>(Colors::kGenericBlack)));
+            m_settings.GetColor(static_cast<int>(Colors::kGridColor)));
         draw_list->AddText(
-            text_pos, m_settings.GetColor(static_cast<int>(Colors::kGenericWhite)), text);
+            text_pos, m_settings.GetColor(static_cast<int>(Colors::kFillerColor)), text);
         draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
                            ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18),
-                           m_settings.GetColor(static_cast<int>(Colors::kGenericBlack)));
+                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)));
 
         // Code below is for select
         if(ImGui::IsMouseDoubleClicked(0))
@@ -740,7 +740,7 @@ TimelineView::RenderGraphPoints()
         style.GrabRounding           = 3.0f;
 
         ImVec4 scroll_color = ImGui::ColorConvertU32ToFloat4(
-            m_settings.GetColor(static_cast<int>(Colors::kGenericWhite)));
+            m_settings.GetColor(static_cast<int>(Colors::kFillerColor)));
         ImVec4 grab_color = ImGui::ColorConvertU32ToFloat4(
             m_settings.GetColor(static_cast<int>(Colors::kScrollBarColor)));
 

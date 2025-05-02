@@ -262,8 +262,8 @@ LineTrackItem::RenderChart(float graph_width)
     float tooltip_x     = 0;
     float tooltip_y     = 0;
     bool  show_tooltip  = false;
-    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kGenericBlack));
-    ImU32 generic_red   = m_settings.GetColor(static_cast<int>(Colors::kGenericRed));
+    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kGridColor));
+    ImU32 generic_red   = m_settings.GetColor(static_cast<int>(Colors::kGridRed));
 
     for(int i = 1; i < m_data.size(); i++)
     {

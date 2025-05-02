@@ -18,7 +18,7 @@ class Array;
 class Event;
 class Sample;
 
-constexpr double kSegmentDuration = 10000.0;
+constexpr double kSegmentDuration = 100000000.0;
 
 class Segment
 {

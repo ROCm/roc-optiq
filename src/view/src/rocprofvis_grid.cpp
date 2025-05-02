@@ -135,12 +135,12 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                 ((raw_position_points_x + steps) - (min_x + movement)) *
                 scale_x;  // this value takes the raw value of the output and converts
                           // them into positions on the chart which is scaled by scale_x
-            if(has_been_seen == false)
+            if(ImGui::IsRectVisible(
+                   ImVec2(normalized_start, cursor_position.y),
+                   ImVec2(normalized_end,
+                          cursor_position.y + content_size.y - grid_size)))
             {
-                if(ImGui::IsRectVisible(
-                       ImVec2(normalized_start, cursor_position.y),
-                       ImVec2(normalized_end,
-                              cursor_position.y + content_size.y - grid_size)))
+                if(has_been_seen == false)
                 {
                     // First one thats visible.
 
@@ -153,39 +153,50 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                     has_been_seen = true;
                 }
             }
-
-            draw_list->AddRect(
-                ImVec2(normalized_start, cursor_position.y),
-                ImVec2(normalized_end, cursor_position.y + content_size.y - grid_size),
-                m_settings.GetColor(static_cast<int>(Colors::kBoundBox)), 0.5f);
-
-            // If user hover over grid block.
-            if(ImGui::IsMouseHoveringRect(
-                   ImVec2(normalized_start, cursor_position.y),
-                   ImVec2(normalized_end,
-                          cursor_position.y + content_size.y - grid_size)))
+            else if (has_been_seen)
             {
-                ImVec2 mouse_position = ImGui::GetMousePos();
-
-                ImVec2 relativeMousePos = ImVec2(mouse_position.x - normalized_start,
-                                                 mouse_position.y - cursor_position.y);
-                m_cursor_position =
-                    (raw_position_points_x - min_x) +
-                    ((relativeMousePos.x / (normalized_end - normalized_start)) *
-                     (steps));
+                // We are offscreen again, no need to render
+                break;
             }
 
-            char label[32];
-            snprintf(label, sizeof(label), "%.0f", raw_position_points_x - min_x);
-            // All though the gridlines are drawn based on where they should be on the
-            // scale the raw values are used to represent them.
-            ImVec2 labelSize = ImGui::CalcTextSize(label);
-            ImVec2 labelPos =
-                ImVec2(normalized_start - labelSize.x / 2,
-                       cursor_position.y + content_size.y - labelSize.y - 5);
-            draw_list->AddText(labelPos,
-                               m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
-                label);
+            // Only render visible grid lines or the clipping time is excessive when zooming in to large traces
+            if(has_been_seen)
+            {
+                draw_list->AddRect(
+                    ImVec2(normalized_start, cursor_position.y),
+                    ImVec2(normalized_end,
+                           cursor_position.y + content_size.y - grid_size),
+                    m_settings.GetColor(static_cast<int>(Colors::kBoundBox)), 0.5f);
+
+                // If user hover over grid block.
+                if(ImGui::IsMouseHoveringRect(
+                       ImVec2(normalized_start, cursor_position.y),
+                       ImVec2(normalized_end,
+                              cursor_position.y + content_size.y - grid_size)))
+                {
+                    ImVec2 mouse_position = ImGui::GetMousePos();
+
+                    ImVec2 relativeMousePos =
+                        ImVec2(mouse_position.x - normalized_start,
+                               mouse_position.y - cursor_position.y);
+                    m_cursor_position =
+                        (raw_position_points_x - min_x) +
+                        ((relativeMousePos.x / (normalized_end - normalized_start)) *
+                         (steps));
+                }
+
+                char label[32];
+                snprintf(label, sizeof(label), "%.0f", raw_position_points_x - min_x);
+                // All though the gridlines are drawn based on where they should be on the
+                // scale the raw values are used to represent them.
+                ImVec2 labelSize = ImGui::CalcTextSize(label);
+                ImVec2 labelPos =
+                    ImVec2(normalized_start - labelSize.x / 2,
+                           cursor_position.y + content_size.y - labelSize.y - 5);
+                draw_list->AddText(
+                    labelPos, m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
+                    label);
+            }
         }
 
         ImVec2 windowPos  = ImGui::GetWindowPos();

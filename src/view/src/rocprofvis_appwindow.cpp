@@ -11,6 +11,8 @@
 
 using namespace RocProfVis::View;
 
+constexpr ImVec2 FILE_DIALOG_SIZE = ImVec2(480.0f, 360.0f);
+
 // For testing DataProvider
 void
 RenderProviderTest(DataProvider& provider);
@@ -165,7 +167,7 @@ AppWindow::Render()
     ImGui::SetNextWindowPos(
         ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
         ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(ImVec2(480.0f, 360.0f), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
     if(ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
     {
         if(ImGuiFileDialog::Instance()->IsOk())
@@ -189,7 +191,7 @@ AppWindow::Render()
     ImGui::SetNextWindowPos(
         ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
         ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(ImVec2(480.0f, 360.0f), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
     if(ImGuiFileDialog::Instance()->Display("DebugFile"))
     {
         if(ImGuiFileDialog::Instance()->IsOk())

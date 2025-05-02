@@ -40,8 +40,6 @@ public:
 
     void SetMaxTimestamp(double value);
 
-    void Level(Handle* event);
-
     void Insert(double timestamp, Handle* event);
 
     rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index);

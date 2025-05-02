@@ -460,7 +460,6 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                 }
                                 segment->SetMaxTimestamp(std::max(segment->GetMaxTimestamp(), end_timestamp));
                                 segment->Insert(timestamp, object);
-                                //segment->Level(object);
                             }
                         }
                         else

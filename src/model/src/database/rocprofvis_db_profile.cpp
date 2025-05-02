@@ -288,7 +288,10 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, char** argv, cha
     rocprofvis_db_sqlite_callback_parameters* callback_params =
         (rocprofvis_db_sqlite_callback_parameters*) data;
     ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
-    if(callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted())
+    {
+        return 1;
+    }
     uint64_t process_id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
     for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS;i++)
     {
@@ -301,17 +304,26 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, char** argv, cha
     uint64_t end_time = std::stoll(argv[6]);
     uint32_t level=0;
 
-    for (int i = db->m_event_timing_params.size()-1; i >= 0; i--)
+    for(int i = db->m_event_timing_params.size()-1; i >= 0; i--)
     {
         int id_counter = 0;
         for(; id_counter < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; id_counter++)
-        if(process_id[id_counter] != db->m_event_timing_params[i].process_id[id_counter]) break;
-        if(id_counter < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS) continue;
+        {
+            if(process_id[id_counter] !=
+               db->m_event_timing_params[i].process_id[id_counter])
+            {
+                break;
+            }
+        }
+        if(id_counter < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS)
+        {
+            continue;
+        }
         if(start_time > db->m_event_timing_params[i].end_time)
         {
             db->m_event_timing_params.erase(db->m_event_timing_params.begin() + i);
-        } else
-        if(start_time < db->m_event_timing_params[i].end_time)
+        } 
+        else if(start_time < db->m_event_timing_params[i].end_time)
         {
             level = db->m_event_timing_params[i].level + 1;
             break;

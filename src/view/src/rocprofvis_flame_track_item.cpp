@@ -15,20 +15,12 @@ namespace RocProfVis
 namespace View
 {
 
-std::vector<ImU32> FlameTrackItem::s_colors = {
-
-    IM_COL32(0, 114, 188, 204),   IM_COL32(0, 158, 115, 204),
-    IM_COL32(240, 228, 66, 204),  IM_COL32(204, 121, 167, 204),
-    IM_COL32(86, 180, 233, 204),  IM_COL32(213, 94, 0, 204),
-    IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
-    IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
-};
-
 FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float zoom,
-                       float movement, double min_x, double max_x, float scale_x)
+                               float movement, double min_x, double max_x, float scale_x)
 : TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_is_color_value_existant()
 , m_request_random_color(true)
+
 {}
 
 void
@@ -174,7 +166,8 @@ FlameTrackItem::ExtractPointsFromData()
 
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
-                    rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list)
+                        rocprofvis_trace_event_t flame, float duration,
+                        ImDrawList* draw_list)
 {
     ImGui::PushID(static_cast<int>(boxplot_box_id));
 
@@ -192,11 +185,12 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
     ImU32 rectColor;
     if(m_request_random_color)
     {
-        rectColor = s_colors[boxplot_box_id % 10];
+        rectColor = m_settings.GetColorWheel()[boxplot_box_id % 10];
     }
     else
     {
-        rectColor = IM_COL32(128, 128, 128, 255);  // Black colored box.
+        rectColor = m_settings.GetColor(
+            static_cast<int>(Colors::kFlameChartColor));  // Black colored box.
     }
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);

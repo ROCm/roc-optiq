@@ -3,8 +3,8 @@
 #pragma once
 
 #include "imgui.h"
+#include "rocprofvis_settings.h"
 #include <utility>
-
 namespace RocProfVis
 {
 namespace View
@@ -27,6 +27,7 @@ private:
     float                   m_cursor_position;
     double                  m_viewport_start_position;
     std::pair<float, float> m_highlighted_region;
+    Settings&               m_settings;
 };
 
 }  // namespace View

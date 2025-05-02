@@ -10,7 +10,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-
+ 
 namespace RocProfVis
 {
 namespace View
@@ -46,7 +46,7 @@ private:
     double                               m_min_y;
     double                               m_max_y;
     bool                                 m_is_color_value_existant;
-};
+ };
 
 }  // namespace View
 }  // namespace RocProfVis

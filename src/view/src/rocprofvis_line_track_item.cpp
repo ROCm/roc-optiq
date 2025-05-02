@@ -1,17 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_line_track_item.h"
-#include "imgui.h"
+ #include "imgui.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
-
+#include "spdlog/spdlog.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -19,14 +17,13 @@ namespace View
 {
 
 LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
-                     float movement, double& min_x, double& max_x, float scale_x)
+                             float movement, double& min_x, double& max_x, float scale_x)
 : TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
 , m_data({})
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
-
 {
     m_track_height = 290.0f;
 }
@@ -262,9 +259,11 @@ LineTrackItem::RenderChart(float graph_width)
 
     float scale_y = content_size.y / (m_max_y - m_min_y);
 
-    float tooltip_x    = 0;
-    float tooltip_y    = 0;
-    bool  show_tooltip = false;
+    float tooltip_x     = 0;
+    float tooltip_y     = 0;
+    bool  show_tooltip  = false;
+    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kGridColor));
+    ImU32 generic_red   = m_settings.GetColor(static_cast<int>(Colors::kGridRed));
 
     for(int i = 1; i < m_data.size(); i++)
     {
@@ -280,7 +279,7 @@ LineTrackItem::RenderChart(float graph_width)
 
         ImVec2 point_2 =
             MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
-        ImU32 LineColor = IM_COL32(0, 0, 0, 255);
+        ImU32 LineColor = generic_black;
         if(m_is_color_value_existant)
         {
             // Code below enables user to define problematic regions in LineChart.
@@ -295,7 +294,7 @@ LineTrackItem::RenderChart(float graph_width)
 
             if(point_1_in && point_2_in)
             {
-                LineColor = IM_COL32(255, 0, 0, 255);
+                LineColor = generic_red;
             }
 
             else if(!point_1_in && point_2_in)
@@ -309,9 +308,9 @@ LineTrackItem::RenderChart(float graph_width)
                                                      point_2.y, new_y);
 
                     ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = IM_COL32(0, 0, 0, 255);
+                    LineColor        = generic_black;
                     draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = IM_COL32(250, 0, 0, 255);
+                    LineColor = generic_red;
                     point_1   = new_point;
                 }
                 else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].y_value)
@@ -323,9 +322,9 @@ LineTrackItem::RenderChart(float graph_width)
                                                      point_2.y, new_y);
 
                     ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = IM_COL32(0, 0, 0, 255);
+                    LineColor        = generic_black;
                     draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = IM_COL32(255, 0, 0, 255);
+                    LineColor = generic_red;
                     point_1   = new_point;
                 }
             }
@@ -342,9 +341,9 @@ LineTrackItem::RenderChart(float graph_width)
                                                      point_2.y, new_y);
 
                     ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = IM_COL32(250, 0, 0, 255);
+                    LineColor        = generic_red;
                     draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = IM_COL32(0, 0, 0, 255);
+                    LineColor = generic_black;
                     point_1   = new_point;
                 }
                 else if(m_color_by_value_digits.interest_1_min > m_data[i].y_value)
@@ -356,9 +355,9 @@ LineTrackItem::RenderChart(float graph_width)
                                                      point_2.y, new_y);
 
                     ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = IM_COL32(250, 0, 0, 255);
+                    LineColor        = generic_red;
                     draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = IM_COL32(0, 0, 0, 255);
+                    LineColor = generic_black;
                     point_1   = new_point;
                 }
             }
@@ -383,7 +382,7 @@ LineTrackItem::Render()
 
 ImVec2
 LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
-                   ImVec2& content_size, float scaleX, float scaleY)
+                       ImVec2& content_size, float scaleX, float scaleY)
 {
     double x = (point.x_value - (m_min_x + m_movement)) * scaleX;
     double y = cursor_position.y + content_size.y - (point.y_value - m_min_y) * scaleY;

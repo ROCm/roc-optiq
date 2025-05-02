@@ -485,6 +485,13 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             timestamp + duration);
                                                         if(new_event)
                                                         {
+                                                            result = new_event->SetUInt64(
+                                                                kRPVControllerEventLevel,
+                                                                0,
+                                                                rocprofvis_dm_get_property_as_uint64(
+                                                                    slice,
+                                                                    kRPVDMEventLevelUInt64Indexed,
+                                                                    i));
                                                             result = new_event->SetString(
                                                                 kRPVControllerEventCategory,
                                                                 0,

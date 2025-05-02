@@ -23,16 +23,16 @@ enum class Colors
     kBoundBox,
     kGenericWhite,
     kScrollBarColor
- };
+};
 class Settings
 {
 public:
     static Settings& GetInstance();
 
-    Settings(const Settings&)                     = delete;
-    Settings&          operator=(const Settings&) = delete;
-    ImU32              GetColor(int value);
-    std::vector<ImU32> GetColorWheel();
+    Settings(const Settings&)                            = delete;
+    Settings&                 operator=(const Settings&) = delete;
+    ImU32                     GetColor(int value);
+    const std::vector<ImU32>& GetColorWheel();
 
 private:
     Settings();

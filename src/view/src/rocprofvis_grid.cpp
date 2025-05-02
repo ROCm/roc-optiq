@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_grid.h"
-#include "../src/view/src/rocprofvis_settings.h"
+#include "rocprofvis_settings.h"
 #include "imgui.h"
 #include <algorithm>
 #include <iostream>
@@ -80,7 +80,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted,
                        cursor_position.y + content_size.y - grid_size),
-                m_settings.GetColor(static_cast<int>(Colors::kLightBlue)), 3.0f);
+                m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)), 3.0f);
         }
         if(m_highlighted_region.first != -1)
         {
@@ -91,7 +91,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                 ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted_end,
                        cursor_position.y + content_size.y - grid_size),
-                m_settings.GetColor(static_cast<int>(Colors::kLightBlue)), 3.0f);
+                m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)), 3.0f);
         }
         if(m_highlighted_region.first != -1 && m_highlighted_region.second != -1)
         {

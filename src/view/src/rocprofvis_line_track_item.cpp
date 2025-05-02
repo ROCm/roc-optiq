@@ -1,17 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_line_track_item.h"
-#include "../src/view/src/rocprofvis_settings.h"
-#include "imgui.h"
+ #include "imgui.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
+#include "spdlog/spdlog.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -26,7 +24,6 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_data({})
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
-, m_settings(Settings::GetInstance())
 {
     m_track_height = 290.0f;
 }

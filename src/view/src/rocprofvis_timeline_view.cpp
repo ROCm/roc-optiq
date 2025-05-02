@@ -1,7 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_timeline_view.h"
-#include "../src/view/src/rocprofvis_settings.h"
 #include "imgui.h"
 #include "rocprofvis_boxplot.h"
 #include "rocprofvis_controller.h"
@@ -9,6 +8,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_grid.h"
 #include "rocprofvis_line_track_item.h"
+#include "rocprofvis_settings.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
@@ -443,7 +443,7 @@ TimelineView::RenderGraphView()
                 {
                     // TODO: move somewhere else don't need to create each loop
                     selection_color = ImGui::ColorConvertU32ToFloat4(
-                        m_settings.GetColor(static_cast<int>(Colors::kLightBlue)));
+                        m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)));
                 }
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
                 ImGui::BeginChild(

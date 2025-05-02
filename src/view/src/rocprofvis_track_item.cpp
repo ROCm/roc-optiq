@@ -1,5 +1,5 @@
 #include "rocprofvis_track_item.h"
-#include "../src/view/src/rocprofvis_settings.h"
+#include "rocprofvis_settings.h"
 using namespace RocProfVis::View;
 
 float TrackItem::s_metadata_width = 400.0f;

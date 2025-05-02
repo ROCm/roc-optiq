@@ -1,7 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_flame_track_item.h"
-#include "../src/view/src/rocprofvis_settings.h"
 #include "imgui.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
@@ -21,7 +20,6 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float
 : TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_is_color_value_existant()
 , m_request_random_color(true)
-, m_settings(Settings::GetInstance())
 
 {}
 

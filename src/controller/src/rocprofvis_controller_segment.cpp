@@ -162,7 +162,7 @@ void Segment::Level(Handle* event)
                             {
                                 event_level = std::max(event_level, entry_level + 1);
                             }
-                            else if (event_start > entry_start && event_start < event_end)
+                            else if(event_start > entry_start && event_start < entry_end)
                             {
                                 event_level = std::max(event_level, entry_level + 1);
                             }

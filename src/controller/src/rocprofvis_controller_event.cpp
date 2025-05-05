@@ -23,6 +23,7 @@ Event::Event(uint64_t id, double start_ts, double end_ts)
 , m_end_timestamp(end_ts)
 , m_name(UINT64_MAX)
 , m_category(UINT64_MAX)
+, m_level(0)
 {
 }
 
@@ -354,6 +355,12 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerEventLevel:
+            {
+                *value = m_level;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerEventStartTimestamp:
             case kRPVControllerEventEndTimestamp:
             case kRPVControllerEventName:
@@ -396,6 +403,7 @@ rocprofvis_result_t Event::GetDouble(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventName:
             case kRPVControllerEventChildIndexed:
             case kRPVControllerEventCallstackEntryIndexed:
+            case kRPVControllerEventLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -422,6 +430,7 @@ rocprofvis_result_t Event::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventNumChildren:
             case kRPVControllerEventName:
             case kRPVControllerEventChildIndexed:
+            case kRPVControllerEventLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -456,7 +465,10 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
                 char const* category = StringTable::Get().GetString(m_category);
                 ROCPROFVIS_ASSERT(name && category);
                 std::string full_name = category;
-                full_name += " ";
+                if(full_name.size() > 0)
+                {
+                    full_name += " ";
+                }
                 full_name += name; 
                 strncpy(value, full_name.c_str(), *length);
        
@@ -496,6 +508,7 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventNumChildren:
         case kRPVControllerEventChildIndexed:
         case kRPVControllerEventCallstackEntryIndexed:
+        case kRPVControllerEventLevel:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -522,6 +535,15 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventNumChildren:
         {
             result = kRocProfVisResultReadOnlyError;
+            break;
+        }
+        case kRPVControllerEventLevel:
+        {
+            // Currently the level should be an 8bit unsigned integer
+            // Anything beyond 255 will probably not display well.
+            ROCPROFVIS_ASSERT(value < 256);
+            m_level = std::min(value, 255llu);
+            result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerEventStartTimestamp:
@@ -563,6 +585,7 @@ rocprofvis_result_t Event::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventName:
         case kRPVControllerEventChildIndexed:
         case kRPVControllerEventCallstackEntryIndexed:
+        case kRPVControllerEventLevel:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -593,6 +616,7 @@ rocprofvis_result_t Event::SetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventNumChildren:
             case kRPVControllerEventName:
             case kRPVControllerEventChildIndexed:
+            case kRPVControllerEventLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -633,6 +657,7 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventNumChildren:
             case kRPVControllerEventChildIndexed:
             case kRPVControllerEventCallstackEntryIndexed:
+            case kRPVControllerEventLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;

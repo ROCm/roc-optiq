@@ -171,7 +171,7 @@ int RocpdDatabase::CallbackAddStackTrace(void *data, int argc, char **argv, char
     if (db->BindObject()->FuncAddStackFrame(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     callback_params->future->CountThisRow();
     return 0;
-}
+}       
 
 rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 {
@@ -215,6 +215,12 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT string, GROUP_CONCAT(id) AS ids FROM rocpd_string GROUP BY string;", &CallBackAddString)) break;
+
+        ShowProgress(10, "Calculate levels for HIP API events", kRPVDbBusy, future);
+        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT 0, pid, tid, 1 as op, id, start, end FROM rocpd_api ORDER BY start", &CalculateEventLevels)) break;
+
+        ShowProgress(10, "Calculate levels for Kernel events", kRPVDbBusy, future);
+        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT 0, gpuId, queueId, 2 as op, id, start, end FROM rocpd_op ORDER BY start", &CalculateEventLevels)) break;
 
         TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );

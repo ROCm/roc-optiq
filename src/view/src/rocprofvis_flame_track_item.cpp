@@ -90,77 +90,7 @@ FlameTrackItem::ExtractPointsFromData()
         return false;
     }
 
-    std::vector<rocprofvis_trace_event_t> entries;
-
-    ImVec2 display_size = ImGui::GetIO().DisplaySize;
-    int    screen_width = static_cast<int>(display_size.x);
-
-    double effective_width = screen_width / m_zoom;
-    double bin_size        = ((m_max_x - m_min_x) / effective_width);
-
-    double bin_sum_x         = 0.0;
-    int    bin_count         = 0;
-    double current_bin_start = DBL_MAX;
-    float  largest_duration  = 0;
-
-    const std::vector<rocprofvis_trace_event_t> track_data = event_track->GetData();
-    uint64_t                                    count      = track_data.size();
-    rocprofvis_trace_event_t                    counter;
-
-    for(uint64_t i = 0; i < count; i++)
-    {
-        if(i == 0)
-        {
-            current_bin_start = track_data[i].m_start_ts;
-        }
-
-        counter.m_name     = track_data[i].m_name;
-        counter.m_start_ts = track_data[i].m_start_ts;
-        counter.m_duration = track_data[i].m_duration;
-
-        if(counter.m_start_ts < current_bin_start + bin_size)
-        {
-            if(counter.m_duration > largest_duration)
-            {
-                largest_duration =
-                    counter.m_duration;  // Use the largest duration per bin.
-            }
-            bin_sum_x += counter.m_start_ts;
-            bin_count++;
-        }
-        else
-        {
-            if(bin_count > 0)
-            {
-                rocprofvis_trace_event_t binned_point;
-                binned_point.m_start_ts = bin_sum_x / bin_count;
-                binned_point.m_duration = largest_duration;
-                binned_point.m_name     = counter.m_name;
-                entries.push_back(binned_point);
-            }
-
-            // Prepare next bin.
-            current_bin_start =
-                current_bin_start +
-                bin_size *
-                    static_cast<int>((counter.m_start_ts - current_bin_start) / bin_size);
-            bin_sum_x        = counter.m_start_ts;
-            largest_duration = counter.m_duration;
-            bin_count        = 1;
-        }
-    }
-
-    if(bin_count > 0)
-    {
-        rocprofvis_trace_event_t binned_point;
-        binned_point.m_start_ts = bin_sum_x / bin_count;
-        binned_point.m_duration = largest_duration;
-        binned_point.m_name     = counter.m_name;
-
-        entries.push_back(binned_point);
-    }
-
-    m_flames = entries;
+    m_flames = event_track->GetData();
     return true;
 }
 
@@ -194,6 +124,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
     }
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
+    draw_list->PushClipRect(rectMin, rectMax, true);
+    draw_list->AddText(rectMin, IM_COL32_BLACK, flame.m_name.c_str());
+    draw_list->PopClipRect();
 
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
     {
@@ -264,7 +197,7 @@ FlameTrackItem::RenderChart(float graph_width)
         ImVec2 end_position;
 
         // Scale the start time for better visualization
-        start_position = ImVec2(normalized_start, 0);
+        start_position = ImVec2(normalized_start, flame.m_level * 40);
         DrawBox(start_position, boxplot_box_id, flame, normalized_end, draw_list);
 
         boxplot_box_id = boxplot_box_id + 1;

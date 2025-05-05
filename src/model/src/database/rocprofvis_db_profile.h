@@ -27,6 +27,15 @@ namespace RocProfVis
 namespace DataModel
 {
 
+
+typedef struct
+{
+    uint64_t process_id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+    uint64_t start_time;
+    uint64_t end_time;
+    uint32_t level;
+} rocprofvis_event_timing_params_t;
+
 // class for methods and members common for all RocPd-based schemas
 class ProfileDatabase : public SqliteDatabase
 {
@@ -63,6 +72,7 @@ class ProfileDatabase : public SqliteDatabase
         // method to detect rocpd-based database type (rocpd vs rocprof)
         // @param filename - full path to database file
         static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
+
     private:
 
     // sqlite3_exec callback to add event record to time slice container. Used in per-track time slice query
@@ -109,7 +119,7 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_db_track_selection_t tracks,
                             rocprofvis_dm_string_t& query,
                             slice_array_t& slices) override;
-protected:
+    protected:
     // sqlite3_exec callback to add flowtrace record to FlowTrace container.
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
@@ -125,9 +135,20 @@ protected:
     // @return SQLITE_OK if successful
         static int CallbackAddExtInfo(void* data, int argc, char** argv, char** azColName);
 
+    // sqlite3_exec callback to calculate graph level for an event and store it into trace object map array
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names  
+    // @return SQLITE_OK if successful
+       static int CalculateEventLevels(void* data, int argc, char** argv, char** azColName);
     protected:
     // offset of kernel symbols in string table
         uint32_t m_symbols_offset;
+
+    private:
+    // vector array to keep current events stack
+        std::vector<rocprofvis_event_timing_params_t> m_event_timing_params;
 };
 
 }  // namespace DataModel

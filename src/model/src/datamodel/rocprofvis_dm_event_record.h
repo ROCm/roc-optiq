@@ -59,6 +59,8 @@ class EventRecord
         // Event ID getter
         // @return 60-bit event id
         const rocprofvis_dm_id_t                EventId() {return m_event_id.bitfield.event_id;}
+        // Event ID + operation getter
+        const rocprofvis_dm_event_id_t          EventIdFull() { return m_event_id; }
         // Timestamp getter
         // @return 64-bit timestamp value
         const rocprofvis_dm_timestamp_t         Timestamp() {return m_timestamp;}

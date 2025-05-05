@@ -818,7 +818,7 @@ TimelineView::HandleTopSurfaceTouch()
                 const float zoom_speed = 0.1f;
                 m_zoom *= (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
                 m_zoom = m_zoom;
-                m_zoom = clamp(m_zoom, 0.9f, 200.0f);
+                m_zoom = std::max(m_zoom, 0.9f);
                 m_movement += m_v_width - ((m_max_x - m_min_x) / m_zoom);
                 m_v_width = (m_max_x - m_min_x) / m_zoom;
                 m_v_min_x = m_min_x + m_movement;

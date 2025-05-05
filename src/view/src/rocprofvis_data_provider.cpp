@@ -710,6 +710,12 @@ DataProvider::CreateRawEventData(uint64_t                       index,
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_duration = end_ts - start_ts;
 
+        uint64_t level = 0;
+        result = rocprofvis_controller_get_uint64(event, kRPVControllerEventLevel, 0,
+                                                  &level);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        trace_event.m_level = level;
+
         // get event name
         uint32_t length = 0;
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,

@@ -119,6 +119,11 @@ class TrackSlice : public DmBase {
         // @param symbol_charptr - reference to symbol string
         // @return status of operation  
         virtual rocprofvis_dm_result_t  GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & symbol_charptr);
+        // Method to get event level value by provided index of record
+        // @param index - index of the record
+        // @param level - graph level for the event
+        // @return status of operation
+        virtual rocprofvis_dm_result_t GetRecordGraphLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t & level);
 
         // Method to read TrackSlice object property as uint64
         // @param property - property enumeration rocprofvis_dm_slice_property_t

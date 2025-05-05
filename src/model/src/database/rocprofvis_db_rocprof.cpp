@@ -236,6 +236,18 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT COUNT(*) FROM rocpd_string;", &CallbackGetValue, m_symbols_offset)) break;
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT display_name FROM rocpd_info_kernel_symbol;", &CallBackAddString)) break;
 
+        ShowProgress(10, "Calculate levels for CPU events", kRPVDbBusy, future);
+        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT nid, pid, tid, 1 as op, id, start, end FROM rocpd_region ORDER BY start", &CalculateEventLevels)) break;
+
+        ShowProgress(10, "Calculate levels for Kernel events", kRPVDbBusy, future);
+        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT gpu.nid, gpu.agent_id, gpu.queue_id, gpu.op, gpu.id, gpu.start, gpu.end FROM("
+                                                                                                                   " SELECT nid, agent_id, queue_id, 2 as op, id, start, end FROM rocpd_kernel_dispatch"
+                                                                                                                   " UNION ALL"
+                                                                                                                   " SELECT nid, coalesce(agent_id,0), coalesce(queue_id,0), 3 as op, id, start, end FROM rocpd_memory_allocate"
+                                                                                                                   " UNION ALL"
+                                                                                                                   " SELECT nid, coalesce(dst_agent_id,0), coalesce(queue_id,0), 4 as op, id, start, end FROM rocpd_memory_copy"
+                                                                                                                   " ) gpu ORDER BY gpu.start;", &CalculateEventLevels)) break;
+
         TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
         return future->SetPromise(kRocProfVisDmResultSuccess);

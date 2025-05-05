@@ -237,7 +237,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT display_name FROM rocpd_info_kernel_symbol;", &CallBackAddString)) break;
 
         ShowProgress(10, "Calculate levels for CPU events", kRPVDbBusy, future);
-        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT nid, pid, tid, 1 as op, id, start, end FROM rocpd_region", &CalculateEventLevels)) break;
+        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT nid, pid, tid, 1 as op, id, start, end FROM rocpd_region ORDER BY start", &CalculateEventLevels)) break;
 
         ShowProgress(10, "Calculate levels for Kernel events", kRPVDbBusy, future);
         if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT gpu.nid, gpu.agent_id, gpu.queue_id, gpu.op, gpu.id, gpu.start, gpu.end FROM("

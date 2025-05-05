@@ -539,7 +539,10 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerEventLevel:
         {
-            m_level = value;
+            // Currently the level should be an 8bit unsigned integer
+            // Anything beyond 255 will probably not display well.
+            ROCPROFVIS_ASSERT(value < 256);
+            m_level = std::min(value, 255llu);
             result = kRocProfVisResultSuccess;
             break;
         }

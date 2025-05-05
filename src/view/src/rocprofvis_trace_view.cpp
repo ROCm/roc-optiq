@@ -3,10 +3,10 @@
 #include "imgui.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_timeline_view.h"
+#include "rocprofvis_settings.h"
 #include "rocprofvis_sidebar.h"
+#include "rocprofvis_timeline_view.h"
 #include "spdlog/spdlog.h"
-
 using namespace RocProfVis::View;
 
 TraceView::TraceView()
@@ -122,6 +122,8 @@ TraceView::Render()
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
         m_container->Render();
+        ImGui::GetIO().FontGlobalScale =
+            Settings::GetInstance().GetDPI() - 0.20;  // Scale font by DPI. -0.20 should be removed once font lib is in place.
         return;
     }
 

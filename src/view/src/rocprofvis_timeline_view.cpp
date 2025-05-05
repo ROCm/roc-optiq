@@ -437,13 +437,19 @@ TimelineView::RenderGraphView()
                         graph_objects.second.color_by_value_digits);
                 }
 
+                if(graph_objects.second.graph_type == graph_objects.second.TYPE_LINECHART)
+                {
+                    static_cast<LineTrackItem*>(graph_objects.second.chart)
+                        ->SetShowBoxplot(graph_objects.second.make_boxplot);
+                }
+
                 ImVec4 selection_color = ImGui::ColorConvertU32ToFloat4(
                     m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
                 if(graph_objects.second.selected)
                 {
                     // TODO: move somewhere else don't need to create each loop
                     selection_color = ImGui::ColorConvertU32ToFloat4(
-                        m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)));
+                        m_settings.GetColor(static_cast<int>(Colors::kHighlightChart)));
                 }
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
                 ImGui::BeginChild(
@@ -636,6 +642,7 @@ TimelineView::MakeGraphView()
 
                 rocprofvis_graph_map_t temp;
                 temp.chart          = line;
+                temp.make_boxplot   = false;
                 temp.graph_type     = rocprofvis_graph_map_t::TYPE_LINECHART;
                 temp.display        = true;
                 temp.color_by_value = false;
@@ -665,7 +672,7 @@ TimelineView::RenderGraphPoints()
     {
         ImVec2 screen_pos                = ImGui::GetCursorScreenPos();
         ImVec2 subcomponent_size_main    = ImGui::GetWindowSize();
-        int    artificial_scrollbar_size = 20;
+        int    artificial_scrollbar_size = 30;
 
         ImGui::BeginChild(
             "Grid View 2",

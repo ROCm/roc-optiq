@@ -22,23 +22,27 @@ enum class Colors
     kSelection,
     kBoundBox,
     kFillerColor,
-    kScrollBarColor
+    kScrollBarColor,
+    kHighlightChart
 };
 class Settings
 {
 public:
     static Settings& GetInstance();
-
+    void                      SetDPI(float DPI);
+    float GetDPI();
     Settings(const Settings&)                            = delete;
     Settings&                 operator=(const Settings&) = delete;
     ImU32                     GetColor(int value);
     const std::vector<ImU32>& GetColorWheel();
+    void                      DarkMode();
 
 private:
     Settings();
     ~Settings();
-    std::vector<ImU32> color_store;
+    std::vector<ImU32> m_color_store;
     std::vector<ImU32> m_flame_color_wheel;
+    float m_DPI; 
 };
 
 }  // namespace View

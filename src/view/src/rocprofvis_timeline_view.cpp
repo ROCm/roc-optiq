@@ -332,8 +332,8 @@ TimelineView::RenderGrid(float width)
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    m_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, draw_list, m_scale_x,
-                      m_v_max_x, m_v_min_x, m_grid_size, m_sidebar_size);
+    m_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, m_scale_x, m_v_max_x,
+                      m_v_min_x, m_grid_size, m_sidebar_size);
 
     ImGui::PopStyleColor();
 }

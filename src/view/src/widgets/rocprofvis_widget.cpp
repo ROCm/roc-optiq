@@ -341,9 +341,7 @@ VSplitContainer::Render()
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
         // convert to local space
-        // convert to local space
-        // convert to local space
-        // convert to local space
+
         ImVec2 ml = ImVec2(mouse_pos.x - window_pos.x, mouse_pos.y - window_pos.y);
 
         // Minimum and maximum height for the top row

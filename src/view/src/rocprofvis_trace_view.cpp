@@ -67,16 +67,13 @@ TraceView::CreateView()
     m_analysis  = std::make_shared<AnalysisView>(m_data_provider);
 
     LayoutItem left;
-    left.m_item     = m_sidebar;
-    left.m_bg_color = IM_COL32(255, 255, 255, 255);
+    left.m_item = m_sidebar;
 
     LayoutItem top;
-    top.m_item     = m_main_view;
-    top.m_bg_color = IM_COL32(255, 255, 255, 255);
+    top.m_item = m_main_view;
 
     LayoutItem bottom;
-    bottom.m_item     = std::make_shared<RocWidget>();  // Analysis view, empty for now
-    bottom.m_bg_color = IM_COL32(255, 255, 255, 255);
+    bottom.m_item = std::make_shared<RocWidget>();  // Analysis view, empty for now
 
     LayoutItem traceArea;
     auto       split_container = std::make_shared<VSplitContainer>(top, bottom);
@@ -122,8 +119,10 @@ TraceView::Render()
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
         m_container->Render();
-        ImGui::GetIO().FontGlobalScale =
-            Settings::GetInstance().GetDPI() - 0.20;  // Scale font by DPI. -0.20 should be removed once font lib is in place.
+        //Use global DPI to adjust font. Reactivate later. 
+        //ImGui::GetIO().FontGlobalScale = Settings::GetInstance().GetDPI() -
+        //                                 0.20;  // Scale font by DPI. -0.20 should be
+        //                                        // removed once font lib is in place.
         return;
     }
 

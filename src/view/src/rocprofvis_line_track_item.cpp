@@ -209,88 +209,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
         ImVec2 point_2 =
             MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
         ImU32 LineColor = generic_black;
-        if(m_is_color_value_existant)
-        {
-            // Code below enables user to define problematic regions in LineChart.
-            // Add to struct if more regions needed.
 
-            bool point_1_in =
-                (m_color_by_value_digits.interest_1_max > m_data[i - 1].y_value &&
-                 m_color_by_value_digits.interest_1_min < m_data[i - 1].y_value);
-            bool point_2_in =
-                (m_color_by_value_digits.interest_1_max > m_data[i].y_value &&
-                 m_color_by_value_digits.interest_1_min < m_data[i].y_value);
-
-            if(point_1_in && point_2_in)
-            {
-                LineColor = generic_red;
-            }
-
-            else if(!point_1_in && point_2_in)
-            {
-                if(m_color_by_value_digits.interest_1_max < m_data[i - 1].y_value)
-                {
-                    double new_y =
-                        cursor_position.y + content_size.y -
-                        (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = generic_black;
-                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = generic_red;
-                    point_1   = new_point;
-                }
-                else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].y_value)
-                {
-                    double new_y =
-                        cursor_position.y + content_size.y -
-                        (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = generic_black;
-                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = generic_red;
-                    point_1   = new_point;
-                }
-            }
-            else if(point_1_in && !point_2_in)
-            {
-                if(m_color_by_value_digits.interest_1_max < m_data[i].y_value)
-                {
-                    // if greater than upper max.
-
-                    double new_y =
-                        cursor_position.y + content_size.y -
-                        (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = generic_red;
-                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = generic_black;
-                    point_1   = new_point;
-                }
-                else if(m_color_by_value_digits.interest_1_min > m_data[i].y_value)
-                {
-                    double new_y =
-                        cursor_position.y + content_size.y -
-                        (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = generic_red;
-                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = generic_black;
-                    point_1   = new_point;
-                }
-            }
-        }
         float bottom_of_chart =
             cursor_position.y + content_size.y - (m_min_y - m_min_y) * scale_y;
 
@@ -373,36 +292,45 @@ LineTrackItem::ExtractPointsFromData()
     uint64_t                                      count      = track_data.size();
 
     rocprofvis_trace_counter_t counter;
-
+    bool                       enable_binning = false;
     for(uint64_t i = 0; i < count; i++)
     {
-        counter.m_start_ts = track_data[i].m_start_ts;
-        counter.m_value    = track_data[i].m_value;
+        if(enable_binning)
+        {
+            counter.m_start_ts = track_data[i].m_start_ts;
+            counter.m_value    = track_data[i].m_value;
 
-        if(i == 0)
-        {
-            current_bin_start = counter.m_start_ts;
-        }
-
-        if(counter.m_start_ts < current_bin_start + bin_size)
-        {
-            bin_sum_x += counter.m_start_ts;
-            bin_sum_y += counter.m_value;
-            bin_count++;
-        }
-        else
-        {
-            if(bin_count > 0)
+            if(i == 0)
             {
-                rocprofvis_data_point_t binned_point;
-                binned_point.x_value = bin_sum_x / bin_count;
-                binned_point.y_value = bin_sum_y / bin_count;
-                aggregated_points.push_back(binned_point);
+                current_bin_start = counter.m_start_ts;
             }
-            current_bin_start += bin_size;
-            bin_sum_x = counter.m_start_ts;
-            bin_sum_y = counter.m_value;
-            bin_count = 1;
+
+            if(counter.m_start_ts < current_bin_start + bin_size)
+            {
+                bin_sum_x += counter.m_start_ts;
+                bin_sum_y += counter.m_value;
+                bin_count++;
+            }
+            else
+            {
+                if(bin_count > 0)
+                {
+                    rocprofvis_data_point_t binned_point;
+                    binned_point.x_value = bin_sum_x / bin_count;
+                    binned_point.y_value = bin_sum_y / bin_count;
+                    aggregated_points.push_back(binned_point);
+                }
+                current_bin_start += bin_size;
+                bin_sum_x = counter.m_start_ts;
+                bin_sum_y = counter.m_value;
+                bin_count = 1;
+            }
+        }
+        else {
+            rocprofvis_data_point_t binned_point;
+            binned_point.x_value = track_data[i].m_start_ts;
+            binned_point.y_value = track_data[i].m_value;
+            aggregated_points.push_back(binned_point);
         }
     }
 

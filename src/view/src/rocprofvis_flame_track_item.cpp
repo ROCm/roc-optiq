@@ -106,47 +106,59 @@ FlameTrackItem::ExtractPointsFromData()
     const std::vector<rocprofvis_trace_event_t> track_data = event_track->GetData();
     uint64_t                                    count      = track_data.size();
     rocprofvis_trace_event_t                    counter;
+    bool                                        enable_binning = false;
 
     for(uint64_t i = 0; i < count; i++)
     {
-        if(i == 0)
+        if(enable_binning)
         {
-            current_bin_start = track_data[i].m_start_ts;
-        }
-
-        counter.m_name     = track_data[i].m_name;
-        counter.m_start_ts = track_data[i].m_start_ts;
-        counter.m_duration = track_data[i].m_duration;
-
-        if(counter.m_start_ts < current_bin_start + bin_size)
-        {
-            if(counter.m_duration > largest_duration)
+            if(i == 0)
             {
-                largest_duration =
-                    counter.m_duration;  // Use the largest duration per bin.
+                current_bin_start = track_data[i].m_start_ts;
             }
-            bin_sum_x += counter.m_start_ts;
-            bin_count++;
+
+            counter.m_name     = track_data[i].m_name;
+            counter.m_start_ts = track_data[i].m_start_ts;
+            counter.m_duration = track_data[i].m_duration;
+
+            if(counter.m_start_ts < current_bin_start + bin_size)
+            {
+                if(counter.m_duration > largest_duration)
+                {
+                    largest_duration =
+                        counter.m_duration;  // Use the largest duration per bin.
+                }
+                bin_sum_x += counter.m_start_ts;
+                bin_count++;
+            }
+            else
+            {
+                if(bin_count > 0)
+                {
+                    rocprofvis_trace_event_t binned_point;
+                    binned_point.m_start_ts = bin_sum_x / bin_count;
+                    binned_point.m_duration = largest_duration;
+                    binned_point.m_name     = counter.m_name;
+                    entries.push_back(binned_point);
+                }
+
+                // Prepare next bin.
+                current_bin_start =
+                    current_bin_start +
+                    bin_size * static_cast<int>((counter.m_start_ts - current_bin_start) /
+                                                bin_size);
+                bin_sum_x        = counter.m_start_ts;
+                largest_duration = counter.m_duration;
+                bin_count        = 1;
+            }
         }
         else
         {
-            if(bin_count > 0)
-            {
-                rocprofvis_trace_event_t binned_point;
-                binned_point.m_start_ts = bin_sum_x / bin_count;
-                binned_point.m_duration = largest_duration;
-                binned_point.m_name     = counter.m_name;
-                entries.push_back(binned_point);
-            }
-
-            // Prepare next bin.
-            current_bin_start =
-                current_bin_start +
-                bin_size *
-                    static_cast<int>((counter.m_start_ts - current_bin_start) / bin_size);
-            bin_sum_x        = counter.m_start_ts;
-            largest_duration = counter.m_duration;
-            bin_count        = 1;
+            rocprofvis_trace_event_t binned_point;
+            binned_point.m_start_ts = track_data[i].m_start_ts;
+            binned_point.m_duration = track_data[i].m_duration;
+            binned_point.m_name     = track_data[i].m_name;
+            entries.push_back(binned_point);
         }
     }
 

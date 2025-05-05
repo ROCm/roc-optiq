@@ -11,6 +11,8 @@
 
 using namespace RocProfVis::View;
 
+constexpr ImVec2 FILE_DIALOG_SIZE = ImVec2(480.0f, 360.0f);
+
 // For testing DataProvider
 void
 RenderProviderTest(DataProvider& provider);
@@ -63,6 +65,9 @@ AppWindow::Init()
 
     m_compute_root = std::make_shared<ComputeRoot>();
 
+    m_default_padding = ImGui::GetStyle().WindowPadding;
+    m_default_spacing = ImGui::GetStyle().ItemSpacing;
+
     return true;
 }
 
@@ -78,7 +83,7 @@ AppWindow::Update()
         m_home_screen->Update();
     }
 
-    if (m_compute_root)
+    if(m_compute_root)
     {
         m_compute_root->Update();
     }
@@ -98,6 +103,7 @@ AppWindow::Render()
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 #endif
+
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
@@ -106,6 +112,8 @@ AppWindow::Render()
                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
                      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
     if(ImGui::BeginMenuBar())
     {
         if(ImGui::BeginMenu("File"))
@@ -138,31 +146,39 @@ AppWindow::Render()
         }
         ImGui::EndMenuBar();
     }
+    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
 
     // Show main view container
-    if (m_compute_root && m_compute_root->MetricsLoaded())
+    if(m_compute_root && m_compute_root->MetricsLoaded())
     {
         m_compute_root->Render();
     }
-    else if (m_main_view)
+    else if(m_main_view)
     {
         m_main_view->Render();
     }
 
     ImGui::End();
+    // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
+    // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
     // handle Dialog stuff
+    ImGui::SetNextWindowPos(
+        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
+        ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
     if(ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {
-            std::filesystem::path file_path (ImGuiFileDialog::Instance()->GetFilePathName());
-            if (m_compute_root && file_path.extension().string() == ".csv")
+            std::filesystem::path file_path(
+                ImGuiFileDialog::Instance()->GetFilePathName());
+            if(m_compute_root && file_path.extension().string() == ".csv")
             {
                 m_compute_root->SetMetricsPath(file_path.parent_path());
             }
-            else if (m_home_screen)
+            else if(m_home_screen)
             {
                 m_home_screen->OpenFile(file_path.string());
                 spdlog::info("Opening file: {}", file_path.string());
@@ -172,6 +188,10 @@ AppWindow::Render()
         ImGuiFileDialog::Instance()->Close();
     }
 
+    ImGui::SetNextWindowPos(
+        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
+        ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
     if(ImGuiFileDialog::Instance()->Display("DebugFile"))
     {
         if(ImGuiFileDialog::Instance()->IsOk())

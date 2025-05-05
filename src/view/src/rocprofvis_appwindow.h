@@ -39,6 +39,10 @@ private:
     DataProvider m_data_provider;
     bool         m_show_provider_test_widow;
     std::shared_ptr<ComputeRoot> m_compute_root;
+
+    ImVec2 m_default_padding;
+    ImVec2 m_default_spacing;
+
 };
 
 }  // namespace View

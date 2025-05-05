@@ -30,6 +30,9 @@ SideBar::SetGraphMap(std::map<int, rocprofvis_graph_map_t>* graph_map)
 void
 SideBar::Render()
 {
+    if(ImGui::Button("DarkMode")) {
+        m_settings.DarkMode();
+    }
     ConstructTree(m_graph_map);
 }
 
@@ -40,7 +43,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
     {
         return;
     }
-
+    
     if(ImGui::CollapsingHeader("Project 1"))
     {
         for(auto& tree_item : *tree)

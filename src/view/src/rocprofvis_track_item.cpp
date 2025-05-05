@@ -105,6 +105,7 @@ TrackItem::UpdateMovement(float zoom, float movement, double& min_x, double& max
 void
 TrackItem::Render()
 {
+    m_metadata_bg_color = m_settings.GetColor(static_cast<int>(Colors::kMetaDataColor));
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 

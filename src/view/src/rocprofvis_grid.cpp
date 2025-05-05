@@ -1,8 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_grid.h"
-#include "rocprofvis_settings.h"
 #include "imgui.h"
+#include "rocprofvis_settings.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -41,7 +41,7 @@ Grid::SetHighlightedRegion(std::pair<float, float> region)
 
 void
 Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
-                 ImDrawList* draw_list, float scale_x, float v_max_x, float v_min_x,
+                  float scale_x, float v_max_x, float v_min_x,
                  int grid_size, int sidebar_size)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
@@ -60,12 +60,28 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
     if(ImGui::BeginChild("Grid"),
        ImVec2(displaySize.x - sidebar_size, displaySize.y - 30.0f), true, window_flags)
     {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(static_cast<int>(
+                                                    Colors::kFillerColor)));
+        ImGui::BeginChild("background component",
+                          ImVec2(displaySize.x - sidebar_size, displaySize.y - 30.0f),
+                          true);
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+
+        ImGui::SetCursorPos(ImVec2(0, 0));
+
+        ImGui::BeginChild("main component",
+                          ImVec2(displaySize.x - sidebar_size, displaySize.y - 30.0f),
+                          false);
         ImVec2 child_win  = ImGui::GetWindowPos();
         ImVec2 child_size = ImGui::GetWindowSize();
 
         // Define the clipping rectangle to match the child window
         ImVec2 clip_min = child_win;
         ImVec2 clip_max = ImVec2(child_win.x + child_size.x, child_win.y + child_size.y);
+        ImDrawList* draw_list =
+            ImGui::GetWindowDrawList();
         draw_list->PushClipRect(clip_min, clip_max, true);
 
         double normalized_start_box = (min_x - (min_x + movement)) * scale_x;
@@ -159,6 +175,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                 break;
             }
 
+
             // Only render visible grid lines or the clipping time is excessive when zooming in to large traces
             if(has_been_seen)
             {
@@ -197,12 +214,15 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                     labelPos, m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
                     label);
             }
+ 
         }
 
         ImVec2 windowPos  = ImGui::GetWindowPos();
         ImVec2 windowSize = ImGui::GetWindowSize();
         float  boxWidth   = 300.0f;  // Specify the width of the box
         draw_list->PopClipRect();
+        ImGui::EndChild();
+
         ImGui::EndChild();
     }
 }

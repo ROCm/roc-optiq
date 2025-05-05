@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_line_track_item.h"
- #include "imgui.h"
+#include "imgui.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
@@ -24,6 +24,8 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_data({})
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
+, m_dp(dp)
+, m_show_boxplot(false)
 {
     m_track_height = 290.0f;
 }
@@ -44,212 +46,13 @@ LineTrackItem::HasData()
 }
 
 void
-LineTrackItem::ReleaseData()
+LineTrackItem::SetShowBoxplot(bool show_boxplot)
 {
-    m_data.clear();
-    m_data  = {};
-    m_min_y = 0;
-    m_max_y = 0;
-}
-
-bool
-LineTrackItem::HandleTrackDataChanged()
-{
-    m_request_state = TrackDataRequestState::kIdle;
-    bool result     = false;
-    result          = ExtractPointsFromData();
-    if(result)
-    {
-        FindMaxMin();
-
-        // This statement is needed to prevent render errors when all y values are the
-        // same.
-        if(m_max_y == m_min_y)
-        {
-            if(m_max_y == 0)
-            {
-                m_max_y = 1.0;
-                m_min_y = -1.0;
-            }
-            else
-            {
-                m_max_y = m_min_y + 1.0;
-            }
-        }
-    }
-    return result;
-}
-
-bool
-LineTrackItem::ExtractPointsFromData()
-{
-    const RawTrackData*       rtd          = m_data_provider.GetRawTrackData(m_id);
-    const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
-    if(!sample_track)
-    {
-        spdlog::debug("Invalid track data type for track {}", m_id);
-        return false;
-    }
-
-    std::vector<rocprofvis_data_point_t> aggregated_points;
-
-    ImVec2 display_size = ImGui::GetIO().DisplaySize;
-    int    screen_width = static_cast<int>(display_size.x);
-
-    double effective_width = screen_width / m_zoom;
-    double bin_size        = (m_max_x - m_min_x) / effective_width;
-
-    double bin_sum_x         = 0.0;
-    double bin_sum_y         = 0.0;
-    int    bin_count         = 0;
-    double current_bin_start = DBL_MAX;
-
-    const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
-    uint64_t                                      count      = track_data.size();
-
-    rocprofvis_trace_counter_t counter;
-
-    for(uint64_t i = 0; i < count; i++)
-    {
-        counter.m_start_ts = track_data[i].m_start_ts;
-        counter.m_value    = track_data[i].m_value;
-
-        if(i == 0)
-        {
-            current_bin_start = counter.m_start_ts;
-        }
-
-        if(counter.m_start_ts < current_bin_start + bin_size)
-        {
-            bin_sum_x += counter.m_start_ts;
-            bin_sum_y += counter.m_value;
-            bin_count++;
-        }
-        else
-        {
-            if(bin_count > 0)
-            {
-                rocprofvis_data_point_t binned_point;
-                binned_point.x_value = bin_sum_x / bin_count;
-                binned_point.y_value = bin_sum_y / bin_count;
-                aggregated_points.push_back(binned_point);
-            }
-            current_bin_start += bin_size;
-            bin_sum_x = counter.m_start_ts;
-            bin_sum_y = counter.m_value;
-            bin_count = 1;
-        }
-    }
-
-    if(bin_count > 0)
-    {
-        rocprofvis_data_point_t binned_point;
-        binned_point.x_value = bin_sum_x / bin_count;
-        binned_point.y_value = bin_sum_y / bin_count;
-        aggregated_points.push_back(binned_point);
-    }
-
-    m_data = aggregated_points;
-    return true;
-}
-
-std::tuple<double, double>
-LineTrackItem::FindMaxMin()
-{
-    m_min_y = m_data[0].y_value;
-    m_max_y = m_data[0].y_value;
-    m_min_x = m_data[0].x_value;
-    m_max_x = m_data[0].x_value;
-
-    for(const auto& point : m_data)
-    {
-        if(point.x_value < m_min_x)
-        {
-            m_min_x = point.x_value;
-        }
-        if(point.x_value > m_max_x)
-        {
-            m_max_x = point.x_value;
-        }
-        if(point.y_value < m_min_y)
-        {
-            m_min_y = point.y_value;
-        }
-        if(point.y_value > m_max_y)
-        {
-            m_max_y = point.y_value;
-        }
-    }
-
-    return std::make_tuple(m_min_x, m_max_x);
-}
-
-float
-LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
-                                 float known_y)
-{
-    // Calculate slope (m)
-    double m = (y_2 - y_1) / (x_2 - x_1);
-
-    // Calculate y-intercept (b)
-    double b = y_1 - m * x_1;
-
-    // Calculate x for the given y
-    double x = (known_y - b) / m;
-
-    return x;
+    m_show_boxplot = show_boxplot;
 }
 
 void
-LineTrackItem::RenderMetaArea()
-{
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
-    ImGui::BeginChild("MetaData View", ImVec2(s_metadata_width, m_track_height),
-                      ImGuiChildFlags_None);
-
-    ImVec2 content_size = ImGui::GetContentRegionAvail();
-    // Set padding for the child window (Note this done using SetCursorPos
-    // because ImGuiStyleVar_WindowPadding has no effect on child windows without
-    // borders)
-    ImGui::SetCursorPos(m_metadata_padding);
-    // Adjust content size to account for padding
-    content_size.x -= m_metadata_padding.x * 2;
-    content_size.y -= m_metadata_padding.x * 2;
-    ImGui::BeginChild("MetaData Content", ImVec2(content_size.x - 70.0f, content_size.y),
-                      ImGuiChildFlags_None);
-    ImGui::Text(m_name.c_str());
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-
-    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, content_size.y),
-                      ImGuiChildFlags_None);
-    ImGui::Text((std::to_string(m_max_y)).c_str());
-
-    if(ImGui::IsItemVisible())
-    {
-        m_is_in_view_vertical = true;
-    }
-    else
-    {
-        m_is_in_view_vertical = false;
-    }
-
-    ImVec2 child_window_size = ImGui::GetWindowSize();
-    ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
-    ImGui::SetCursorPos(
-        ImVec2(0, child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
-
-    ImGui::Text((std::to_string(m_min_y)).c_str());
-
-    ImGui::EndChild();
-
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-}
-
-void
-LineTrackItem::RenderChart(float graph_width)
+LineTrackItem::LineTrackRender(float graph_width)
 {
     ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -372,6 +175,289 @@ LineTrackItem::RenderChart(float graph_width)
         ImGui::EndTooltip();
     }
     ImGui::EndChild();
+}
+
+void
+LineTrackItem::BoxPlotRender(float graph_width)
+{
+    ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+    ImVec2 content_size    = ImGui::GetContentRegionAvail();
+
+    float scale_y = content_size.y / (m_max_y - m_min_y);
+
+    float tooltip_x     = 0;
+    float tooltip_y     = 0;
+    bool  show_tooltip  = false;
+    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kGridColor));
+    ImU32 generic_red   = m_settings.GetColor(static_cast<int>(Colors::kGridRed));
+
+    for(int i = 1; i < m_data.size(); i++)
+    {
+        ImVec2 point_1 =
+            MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
+        if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
+                                      ImVec2(point_1.x + 10, point_1.y + 10)))
+        {
+            tooltip_x    = m_data[i - 1].x_value - m_min_x;
+            tooltip_y    = m_data[i - 1].y_value - m_min_y;
+            show_tooltip = true;
+        }
+
+        ImVec2 point_2 =
+            MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
+        ImU32 LineColor = generic_black;
+
+        float bottom_of_chart =
+            cursor_position.y + content_size.y - (m_min_y - m_min_y) * scale_y;
+
+        draw_list->AddRectFilled(
+            point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
+            m_settings.GetColor(static_cast<int>(Colors::kGridColor)), 2.0f);
+    }
+    if(show_tooltip == true)
+    {
+        ImGui::BeginTooltip();
+        ImGui::Text(("X Value: " + std::to_string(tooltip_x)).c_str());
+        ImGui::Text((("Y Value: " + std::to_string(tooltip_y)).c_str()));
+        ImGui::EndTooltip();
+    }
+    ImGui::EndChild();
+}
+
+void
+LineTrackItem::ReleaseData()
+{
+    m_data.clear();
+    m_data  = {};
+    m_min_y = 0;
+    m_max_y = 0;
+}
+
+bool
+LineTrackItem::HandleTrackDataChanged()
+{
+    m_request_state = TrackDataRequestState::kIdle;
+    bool result     = false;
+    result          = ExtractPointsFromData();
+    if(result)
+    {
+        FindMaxMin();
+
+        // This statement is needed to prevent render errors when all y values are the
+        // same.
+        if(m_max_y == m_min_y)
+        {
+            if(m_max_y == 0)
+            {
+                m_max_y = 1.0;
+                m_min_y = -1.0;
+            }
+            else
+            {
+                m_max_y = m_min_y + 1.0;
+            }
+        }
+    }
+    return result;
+}
+
+bool
+LineTrackItem::ExtractPointsFromData()
+{
+    const RawTrackData*       rtd          = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
+    if(!sample_track)
+    {
+        spdlog::debug("Invalid track data type for track {}", m_id);
+        return false;
+    }
+
+    std::vector<rocprofvis_data_point_t> aggregated_points;
+
+    ImVec2 display_size = ImGui::GetIO().DisplaySize;
+    int    screen_width = static_cast<int>(display_size.x);
+
+    double effective_width = screen_width / m_zoom;
+    double bin_size        = (m_max_x - m_min_x) / effective_width;
+
+    double bin_sum_x         = 0.0;
+    double bin_sum_y         = 0.0;
+    int    bin_count         = 0;
+    double current_bin_start = DBL_MAX;
+
+    const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
+    uint64_t                                      count      = track_data.size();
+
+    rocprofvis_trace_counter_t counter;
+    bool                       enable_binning = false;
+    for(uint64_t i = 0; i < count; i++)
+    {
+        if(enable_binning)
+        {
+            counter.m_start_ts = track_data[i].m_start_ts;
+            counter.m_value    = track_data[i].m_value;
+
+            if(i == 0)
+            {
+                current_bin_start = counter.m_start_ts;
+            }
+
+            if(counter.m_start_ts < current_bin_start + bin_size)
+            {
+                bin_sum_x += counter.m_start_ts;
+                bin_sum_y += counter.m_value;
+                bin_count++;
+            }
+            else
+            {
+                if(bin_count > 0)
+                {
+                    rocprofvis_data_point_t binned_point;
+                    binned_point.x_value = bin_sum_x / bin_count;
+                    binned_point.y_value = bin_sum_y / bin_count;
+                    aggregated_points.push_back(binned_point);
+                }
+                current_bin_start += bin_size;
+                bin_sum_x = counter.m_start_ts;
+                bin_sum_y = counter.m_value;
+                bin_count = 1;
+            }
+        }
+        else {
+            rocprofvis_data_point_t binned_point;
+            binned_point.x_value = track_data[i].m_start_ts;
+            binned_point.y_value = track_data[i].m_value;
+            aggregated_points.push_back(binned_point);
+        }
+    }
+
+    if(bin_count > 0)
+    {
+        rocprofvis_data_point_t binned_point;
+        binned_point.x_value = bin_sum_x / bin_count;
+        binned_point.y_value = bin_sum_y / bin_count;
+        aggregated_points.push_back(binned_point);
+    }
+
+    m_data = aggregated_points;
+    return true;
+}
+
+std::tuple<double, double>
+LineTrackItem::FindMaxMin()
+{
+    m_min_y = m_data[0].y_value;
+    m_max_y = m_data[0].y_value;
+    m_min_x = m_data[0].x_value;
+    m_max_x = m_data[0].x_value;
+
+    for(const auto& point : m_data)
+    {
+        if(point.x_value < m_min_x)
+        {
+            m_min_x = point.x_value;
+        }
+        if(point.x_value > m_max_x)
+        {
+            m_max_x = point.x_value;
+        }
+        if(point.y_value < m_min_y)
+        {
+            m_min_y = point.y_value;
+        }
+        if(point.y_value > m_max_y)
+        {
+            m_max_y = point.y_value;
+        }
+    }
+
+    return std::make_tuple(m_min_x, m_max_x);
+}
+
+float
+LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
+                                 float known_y)
+{
+    // Calculate slope (m)
+    double m = (y_2 - y_1) / (x_2 - x_1);
+
+    // Calculate y-intercept (b)
+    double b = y_1 - m * x_1;
+
+    // Calculate x for the given y
+    double x = (known_y - b) / m;
+
+    return x;
+}
+
+void
+LineTrackItem::RenderMetaArea()
+{
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
+    ImGui::BeginChild("MetaData View", ImVec2(s_metadata_width, m_track_height),
+                      ImGuiChildFlags_None);
+
+    ImVec2 content_size = ImGui::GetContentRegionAvail();
+    // Set padding for the child window (Note this done using SetCursorPos
+    // because ImGuiStyleVar_WindowPadding has no effect on child windows without
+    // borders)
+    ImGui::SetCursorPos(m_metadata_padding);
+    // Adjust content size to account for padding
+    content_size.x -= m_metadata_padding.x * 2;
+    content_size.y -= m_metadata_padding.x * 2;
+    ImGui::BeginChild("MetaData Content", ImVec2(content_size.x - 70.0f, content_size.y),
+                      ImGuiChildFlags_None);
+
+    ImGui::Text(m_name.c_str());
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, content_size.y),
+                      ImGuiChildFlags_None);
+
+    char max_y_print[32];
+    std::sprintf(max_y_print, "%.1f", m_max_y);
+    ImGui::Text(max_y_print);
+
+    if(ImGui::IsItemVisible())
+    {
+        m_is_in_view_vertical = true;
+    }
+    else
+    {
+        m_is_in_view_vertical = false;
+    }
+
+    ImVec2 child_window_size = ImGui::GetWindowSize();
+    ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
+    ImGui::SetCursorPos(
+        ImVec2(0, child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
+
+    char min_y_print[32];
+    std::sprintf(min_y_print, "%.1f", m_min_y);
+    ImGui::Text(min_y_print);
+
+    ImGui::EndChild();
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+void
+LineTrackItem::RenderChart(float graph_width)
+{
+    if(m_show_boxplot)
+    {
+        BoxPlotRender(graph_width);
+    }
+    else
+    {
+        LineTrackRender(graph_width);
+    }
 }
 
 void

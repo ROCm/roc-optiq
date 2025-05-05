@@ -13,6 +13,7 @@ typedef struct rocprofvis_trace_event_t
     std::string m_name;
     double      m_start_ts;
     double      m_duration;
+    uint32_t    m_level;
 } rocprofvis_trace_event_t;
 
 typedef struct rocprofvis_trace_counter_t

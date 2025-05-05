@@ -28,6 +28,7 @@
 #include "rocprofvis_dm_table.h"
 #include <vector> 
 #include <memory> 
+#include <map>
 
 namespace RocProfVis
 {
@@ -35,6 +36,8 @@ namespace DataModel
 {
 
 class RpvDatabase;
+
+typedef std::map<uint64_t, uint32_t> event_level_map_t;
 
 // Trace class is main data model class. It serves as a container of all other data model objects
 // and dispatcher for most of the database component calls and external interface calls
@@ -109,6 +112,10 @@ class Trace : public DmBase{
         // @return pointer to property symbol string 
         const char*                                     GetPropertySymbol(rocprofvis_dm_property_t property) override;
 #endif
+        // Method returns graph level for event
+        // @param event_id - 60-bit event id and 4-bit operation type
+        // @return graph level value for the event 
+        rocprofvis_dm_event_level_t                     GetEventLevelAt(rocprofvis_dm_event_id_t event_id);
 
     private:
         // Method to get handle to a Track object at provided index
@@ -211,6 +218,12 @@ class Trace : public DmBase{
         // @param cell_value - pointer to table value string
         // @return status of operation  
         static rocprofvis_dm_result_t                   AddTableRowCell(const rocprofvis_dm_table_row_t object, rocprofvis_dm_charptr_t cell_value);
+        // Static method to  add event level to a map array. Used by database component via binding interface
+        // @param object - trace object handle to add new string to
+        // @param event_id - 60-bit event id and 4-bit operation type
+        // @param level - event level in graph
+        // @return status of operation
+        static rocprofvis_dm_result_t                   AddEventLevel(const rocprofvis_dm_trace_t object,  const rocprofvis_dm_event_id_t event_id, rocprofvis_dm_event_level_t level);
 
         // trace parameters structure
         rocprofvis_dm_trace_params_t                    m_parameters;
@@ -219,17 +232,19 @@ class Trace : public DmBase{
         // pointer to database object
         rocprofvis_dm_database_t                        m_db;
         // vector array of Track objects
-        std::vector<std::unique_ptr<Track>>        m_tracks;
+        std::vector<std::unique_ptr<Track>>             m_tracks;
         // vector array of Flow trace objects
-        std::vector<std::unique_ptr<FlowTrace>>    m_flow_traces;
+        std::vector<std::unique_ptr<FlowTrace>>         m_flow_traces;
         // vector array of Stack trace objects
-        std::vector<std::unique_ptr<StackTrace>>   m_stack_traces;
+        std::vector<std::unique_ptr<StackTrace>>        m_stack_traces;
         // vector array of Extended data objects
-        std::vector<std::unique_ptr<ExtData>>      m_ext_data;
+        std::vector<std::unique_ptr<ExtData>>           m_ext_data;
         // vector array of Table objects
-        std::vector<std::unique_ptr<Table>>        m_tables;
+        std::vector<std::unique_ptr<Table>>             m_tables;
         // vector array of strings
         std::vector<std::string>                        m_strings;
+        // map of every event level in graph
+        event_level_map_t                               m_event_level_map;
 
 };
 

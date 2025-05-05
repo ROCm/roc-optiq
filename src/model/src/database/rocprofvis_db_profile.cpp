@@ -280,5 +280,61 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename){
     return rocprofvis_db_type_t::kAutodetect;
 }
 
+
+int ProfileDatabase::CalculateEventLevels(void* data, int argc, char** argv, char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 7, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted())
+    {
+        return 1;
+    }
+    uint64_t process_id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+    for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS;i++)
+    {
+        process_id[i] = std::stoll(argv[i]);
+    }
+    rocprofvis_dm_event_id_t id;
+    id.bitfield.event_op = std::stol(argv[3]);
+    id.bitfield.event_id = std::stoll(argv[4]);
+    uint64_t start_time = std::stoll(argv[5]);
+    uint64_t end_time = std::stoll(argv[6]);
+    uint32_t level=0;
+
+    for(int i = db->m_event_timing_params.size()-1; i >= 0; i--)
+    {
+        int id_counter = 0;
+        for(; id_counter < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; id_counter++)
+        {
+            if(process_id[id_counter] !=
+               db->m_event_timing_params[i].process_id[id_counter])
+            {
+                break;
+            }
+        }
+        if(id_counter < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS)
+        {
+            continue;
+        }
+        if(start_time > db->m_event_timing_params[i].end_time)
+        {
+            db->m_event_timing_params.erase(db->m_event_timing_params.begin() + i);
+        } 
+        else if(start_time < db->m_event_timing_params[i].end_time)
+        {
+            level = db->m_event_timing_params[i].level + 1;
+            break;
+        }
+    }
+    db->m_event_timing_params.push_back(
+        { { process_id[TRACK_ID_NODE], process_id[TRACK_ID_PID_OR_AGENT], process_id[TRACK_ID_TID_OR_QUEUE]}, start_time, end_time, level });
+    db->BindObject()->FuncAddEventLevel(db->BindObject()->trace_object, id, level);
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
 }  // namespace DataModel
 }  // namespace RocProfVis

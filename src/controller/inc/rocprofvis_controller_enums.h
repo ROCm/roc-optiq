@@ -404,6 +404,8 @@ typedef enum rocprofvis_controller_event_properties_t
     kRPVControllerEventEndTimestamp = 0x70000002,
     // Name for the event
     kRPVControllerEventName = 0x70000003,
+    // Level in the stack of events
+    kRPVControllerEventLevel = 0x70000004,
 
     // When a LOD is generated the sample will be synthetic and coalesce several real samples
     // These properties allow access to the contains samples.

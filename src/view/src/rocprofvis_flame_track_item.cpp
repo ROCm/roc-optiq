@@ -90,6 +90,7 @@ FlameTrackItem::ExtractPointsFromData()
         return false;
     }
 
+
     std::vector<rocprofvis_trace_event_t> entries;
 
     ImVec2 display_size = ImGui::GetIO().DisplaySize;
@@ -173,6 +174,7 @@ FlameTrackItem::ExtractPointsFromData()
     }
 
     m_flames = entries;
+
     return true;
 }
 
@@ -206,6 +208,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
     }
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
+    draw_list->PushClipRect(rectMin, rectMax, true);
+    draw_list->AddText(rectMin, IM_COL32_BLACK, flame.m_name.c_str());
+    draw_list->PopClipRect();
 
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
     {
@@ -276,7 +281,7 @@ FlameTrackItem::RenderChart(float graph_width)
         ImVec2 end_position;
 
         // Scale the start time for better visualization
-        start_position = ImVec2(normalized_start, 0);
+        start_position = ImVec2(normalized_start, flame.m_level * 40);
         DrawBox(start_position, boxplot_box_id, flame, normalized_end, draw_list);
 
         boxplot_box_id = boxplot_box_id + 1;

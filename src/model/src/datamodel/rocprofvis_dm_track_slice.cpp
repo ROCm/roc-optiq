@@ -55,6 +55,9 @@ rocprofvis_dm_result_t TrackSlice::GetRecordCategoryStringAt(const rocprofvis_dm
 rocprofvis_dm_result_t TrackSlice::GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t, rocprofvis_dm_charptr_t & symbol_charptr){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
+rocprofvis_dm_result_t TrackSlice::GetRecordGraphLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t & level){
+    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
+}
 
 
 rocprofvis_dm_result_t    TrackSlice::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
@@ -77,6 +80,9 @@ rocprofvis_dm_result_t    TrackSlice::GetPropertyAsUint64(rocprofvis_dm_property
         case kRPVDMSliceMemoryFootprintUInt64:
             *value = GetMemoryFootprint();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMEventLevelUInt64Indexed:
+            *value = 0;
+            return GetRecordGraphLevelAt(index, *(rocprofvis_dm_event_level_t*) value);
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -109,6 +115,8 @@ const char*  TrackSlice::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMEventIdOperationCharPtrIndexed";
         case kRPVDMPmcValueDoubleIndexed:
             return "kRPVDMPmcValueDoubleIndexed";
+        case kRPVDMEventLevelUInt64Indexed: 
+            return "kRPVDMEventLevelUInt64Indexed";
         default:
             return "Unknown property";
     }   

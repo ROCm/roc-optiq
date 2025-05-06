@@ -349,8 +349,8 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                             num_tracks = (rocprofvis_db_num_of_tracks_t)
                                 rocprofvis_dm_get_property_as_uint64(
                                     m_dm_handle, kRPVDMNumberOfTracksUInt64, 0);
-                            std::vector<uint32_t> tracks_selection;
 
+                            uint64_t  graph_id = 0;
                             for(int i = 0; i < num_tracks; i++)
                             {
                                 rocprofvis_dm_track_t dm_track_handle =
@@ -373,7 +373,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                         new Track(type, track_id, dm_track_handle);
                                     if(track)
                                     {
-                                        tracks_selection.push_back((uint32_t) track_id);
                                         std::string dm_track_name =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
@@ -392,6 +391,27 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                          dm_track_name.c_str(),
                                                          dm_track_name.length());
 
+                                        uint64_t num_records =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackNumRecordsUInt64, 0);
+
+                                        track->SetUInt64(
+                                            kRPVControllerTrackNumberOfEntries, 0,
+                                            num_records);
+                                        double min_ts =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackMinimumTimestampUInt64, 0);
+                                        double max_ts =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackMaximumTimestampUInt64, 0);
+                                        track->SetDouble(kRPVControllerTrackMinTimestamp,
+                                                         0, min_ts);
+                                        track->SetDouble(kRPVControllerTrackMaxTimestamp,
+                                                         0, max_ts);
+
                                         uint32_t index = m_tracks.size();
                                         m_tracks.push_back(track);
                                         if(m_tracks.size() != (index + 1))
@@ -399,256 +419,55 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             delete track;
                                             track  = nullptr;
                                             result = kRocProfVisResultMemoryAllocError;
+                                            break;
                                         }
-                                    }
-                                }
-                            }
-                            if(tracks_selection.size() > 0)
-                            {
-                                if(kRocProfVisDmResultSuccess ==
-                                   rocprofvis_db_read_trace_slice_async(
-                                       db, start_time, end_time, tracks_selection.size(),
-                                       &tracks_selection[0], object2wait))
-                                {
-                                    if(kRocProfVisDmResultSuccess ==
-                                       rocprofvis_db_future_wait(object2wait, UINT64_MAX))
-                                    {
-                                        uint64_t graph_id = 0;
-                                        for(Track* track : m_tracks)
+
+                                        Graph* graph = new Graph(
+                                            (dm_track_type == kRocProfVisDmPmcTrack)
+                                                ? kRPVControllerGraphTypeLine
+                                                : kRPVControllerGraphTypeFlame,
+                                            graph_id++);
+                                        if(graph)
                                         {
-                                            uint64_t              sample_id = 0;
-                                            rocprofvis_dm_slice_t slice =
-                                                rocprofvis_dm_get_property_as_handle(
-                                                    track->GetDmHandle(),
-                                                    kRPVDMSliceHandleTimed, start_time);
-                                            uint64_t dm_track_type =
-                                                rocprofvis_dm_get_property_as_uint64(
-                                                    track->GetDmHandle(),
-                                                    kRPVDMTrackCategoryEnumUInt64, 0);
-                                            uint64_t num_records =
-                                                rocprofvis_dm_get_property_as_uint64(
-                                                    slice, kRPVDMNumberOfRecordsUInt64,
-                                                    0);
-                                            if(num_records == 0) continue;
-                                            track->SetUInt64(
-                                                kRPVControllerTrackNumberOfEntries, 0,
-                                                num_records);
-                                            switch(dm_track_type)
+                                            result = graph->SetObject(
+                                                kRPVControllerGraphTrack, 0,
+                                                (rocprofvis_handle_t*) track);
+                                            if(result == kRocProfVisResultSuccess)
                                             {
-                                                case kRocProfVisDmRegionTrack:
-                                                case kRocProfVisDmKernelTrack:
-                                                {
-                                                    uint64_t index  = 0;
-                                                    double   min_ts = (double)
-                                                        rocprofvis_dm_get_property_as_uint64(
-                                                            slice,
-                                                            kRPVDMTimestampUInt64Indexed,
-                                                            0);
-                                                    double max_ts =
-                                                        (double)
-                                                            rocprofvis_dm_get_property_as_uint64(
-                                                                slice,
-                                                                kRPVDMTimestampUInt64Indexed,
-                                                                num_records - 1) +
-                                                        (double)
-                                                            rocprofvis_dm_get_property_as_int64(
-                                                                slice,
-                                                                kRPVDMEventDurationInt64Indexed,
-                                                                num_records - 1);
-                                                    track->SetDouble(
-                                                        kRPVControllerTrackMinTimestamp,
-                                                        0, min_ts);
-
-                                                    for(int i = 0; i < num_records; i++)
-                                                    {
-                                                        double timestamp = (double)
-                                                            rocprofvis_dm_get_property_as_uint64(
-                                                                slice,
-                                                                kRPVDMTimestampUInt64Indexed,
-                                                                i);
-                                                        double duration = (double)
-                                                            rocprofvis_dm_get_property_as_int64(
-                                                                slice,
-                                                                kRPVDMEventDurationInt64Indexed,
-                                                                i);
-                                                        if(duration < 0) continue;
-
-                                                        max_ts = std::max(max_ts, (timestamp + duration));
-
-                                                        uint64_t event_id =
-                                                            rocprofvis_dm_get_property_as_uint64(
-                                                                slice,
-                                                                kRPVDMEventIdUInt64Indexed,
-                                                                i);
-                                                        Event* new_event = new Event(
-                                                            event_id, timestamp,
-                                                            timestamp + duration);
-                                                        if(new_event)
-                                                        {
-                                                            result = new_event->SetUInt64(
-                                                                kRPVControllerEventLevel,
-                                                                0,
-                                                                rocprofvis_dm_get_property_as_uint64(
-                                                                    slice,
-                                                                    kRPVDMEventLevelUInt64Indexed,
-                                                                    i));
-                                                            result = new_event->SetString(
-                                                                kRPVControllerEventCategory,
-                                                                0,
-                                                                rocprofvis_dm_get_property_as_charptr(
-                                                                    slice,
-                                                                    kRPVDMEventTypeStringCharPtrIndexed,
-                                                                    i),
-                                                                0);
-                                                            ROCPROFVIS_ASSERT(
-                                                                result ==
-                                                                kRocProfVisResultSuccess);
-
-                                                            result = new_event->SetString(
-                                                                kRPVControllerEventName,
-                                                                0,
-                                                                rocprofvis_dm_get_property_as_charptr(
-                                                                    slice,
-                                                                    kRPVDMEventSymbolStringCharPtrIndexed,
-                                                                    i),
-                                                                0);
-                                                            ROCPROFVIS_ASSERT(
-                                                                result ==
-                                                                kRocProfVisResultSuccess);
-
-                                                            result = track->SetObject(
-                                                                kRPVControllerTrackEntry,
-                                                                index++,
-                                                                (rocprofvis_handle_t*)
-                                                                    new_event);
-                                                            ROCPROFVIS_ASSERT(
-                                                                result ==
-                                                                kRocProfVisResultSuccess);
-                                                        }
-                                                        else
-                                                        {
-                                                            result =
-                                                                kRocProfVisResultMemoryAllocError;
-                                                            break;
-                                                        }
-                                                    }
-
-                                                    track->SetDouble(
-                                                        kRPVControllerTrackMaxTimestamp,
-                                                        0, max_ts);
-                                                    break;
-                                                }
-                                                case kRocProfVisDmPmcTrack:
-                                                {
-                                                    uint64_t index  = 0;
-                                                    double   min_ts = (double)
-                                                        rocprofvis_dm_get_property_as_uint64(
-                                                            slice,
-                                                            kRPVDMTimestampUInt64Indexed,
-                                                            0);
-                                                    double max_ts = (double)
-                                                        rocprofvis_dm_get_property_as_uint64(
-                                                            slice,
-                                                            kRPVDMTimestampUInt64Indexed,
-                                                            num_records - 1);
-                                                    track->SetDouble(
-                                                        kRPVControllerTrackMinTimestamp,
-                                                        0, min_ts);
-                                                    track->SetDouble(
-                                                        kRPVControllerTrackMaxTimestamp,
-                                                        0, max_ts);
-
-                                                    for(int i = 0; i < num_records; i++)
-                                                    {
-                                                        double timestamp = (double)
-                                                            rocprofvis_dm_get_property_as_uint64(
-                                                                slice,
-                                                                kRPVDMTimestampUInt64Indexed,
-                                                                i);
-
-                                                        Sample* new_sample = new Sample(
-                                                            kRPVControllerPrimitiveTypeDouble,
-                                                            sample_id++, timestamp);
-                                                        if(new_sample)
-                                                        {
-                                                            new_sample->SetObject(
-                                                                kRPVControllerSampleTrack,
-                                                                0,
-                                                                (rocprofvis_handle_t*)
-                                                                    track);
-                                                            new_sample->SetDouble(
-                                                                kRPVControllerSampleValue,
-                                                                0,
-                                                                rocprofvis_dm_get_property_as_double(
-                                                                    slice,
-                                                                    kRPVDMPmcValueDoubleIndexed,
-                                                                    i));
-                                                            track->SetObject(
-                                                                kRPVControllerTrackEntry,
-                                                                index++,
-                                                                (rocprofvis_handle_t*)
-                                                                    new_sample);
-                                                        }
-                                                        else
-                                                        {
-                                                            result =
-                                                                kRocProfVisResultMemoryAllocError;
-                                                            break;
-                                                        }
-                                                    }
-
-                                                    break;
-                                                }
-                                                default:
-                                                {
-                                                    break;
-                                                }
-                                            }
-
-                                            Graph* graph = new Graph(
-                                                (dm_track_type == kRocProfVisDmPmcTrack)
-                                                    ? kRPVControllerGraphTypeLine
-                                                    : kRPVControllerGraphTypeFlame,
-                                                graph_id++);
-                                            if(graph)
-                                            {
-                                                result = graph->SetObject(
-                                                    kRPVControllerGraphTrack, 0,
-                                                    (rocprofvis_handle_t*) track);
+                                                result = m_timeline->SetUInt64(
+                                                    kRPVControllerTimelineNumGraphs, 0,
+                                                    graph_id);
                                                 if(result == kRocProfVisResultSuccess)
                                                 {
-                                                    result = m_timeline->SetUInt64(
-                                                        kRPVControllerTimelineNumGraphs,
-                                                        0, graph_id);
-                                                    if(result == kRocProfVisResultSuccess)
-                                                    {
-                                                        result = m_timeline->SetObject(
-                                                            kRPVControllerTimelineGraphIndexed,
-                                                            graph_id - 1,
-                                                            (rocprofvis_handle_t*) graph);
-                                                    }
-                                                    if(result != kRocProfVisResultSuccess)
-                                                    {
-                                                        delete graph;
-                                                    }
+                                                    result = m_timeline->SetObject(
+                                                        kRPVControllerTimelineGraphIndexed,
+                                                        graph_id - 1,
+                                                        (rocprofvis_handle_t*) graph);
+                                                }
+                                                if(result != kRocProfVisResultSuccess)
+                                                {
+                                                    delete graph;
                                                 }
                                             }
                                         }
                                     }
-                                    else
-                                    {
-                                        result = kRocProfVisResultTimeout;
-                                    }
                                 }
-                                else
-                                {
-                                    result = kRocProfVisResultUnknownError;
-                                }
-                                rocprofvis_dm_delete_all_time_slices(m_dm_handle);
                             }
-                            else
-                            {
-                                result = kRocProfVisResultNotLoaded;
+                            // This block is asynchronously loading full trace
+                            // todo : remove following block after  UI implemented segmented loading
+                            // or : use this code for preloading some segments at the load time. start and end has to be calculated considering preloaded segment boundaries  
+                            for(int i = 0; i < num_tracks; i++)
+                            {                               
+                                RocProfVis::Controller::Array* array = (RocProfVis::Controller::Array*)rocprofvis_controller_array_alloc(32);
+                                RocProfVis::Controller::Future* future = (RocProfVis::Controller::Future*) rocprofvis_controller_future_alloc();
+                                double start, end;
+                                m_tracks[i]->GetDouble(kRPVControllerTrackMinTimestamp, 0, &start);
+                                m_tracks[i]->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &end);
+                                result = AsyncFetch(*m_tracks[i], *future, *array, start, end);
+                                result = rocprofvis_controller_future_wait(
+                                    (rocprofvis_controller_future_t*) future, FLT_MAX);
+                                rocprofvis_controller_future_free(
+                                    (rocprofvis_controller_future_t*) future);
                             }
                         }
                         else

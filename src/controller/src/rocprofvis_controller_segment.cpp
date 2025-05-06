@@ -251,7 +251,7 @@ SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
 
 rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
-    rocprofvis_result_t result = kRocProfVisResultSuccess;
+    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     std::map<double, std::unique_ptr<Segment>>::iterator lower = m_segments.end();
     for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
     {

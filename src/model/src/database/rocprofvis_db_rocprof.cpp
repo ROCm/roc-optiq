@@ -180,21 +180,18 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         CachedTables()->AddTableCell("PMC", -1, "name", "MALLOC");
 
-        ShowProgress(1, "Getting minimum timestamp", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT MIN(start) FROM rocpd_region;", &CallbackGetValue, TraceProperties()->start_time)) break;
-
-        ShowProgress(1, "Get maximum timestamp", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT MAX(end) FROM ("
-                                                                                                " SELECT end FROM rocpd_region"
+        ShowProgress(1, "Get minimum and maximum timestamps", kRPVDbBusy, future );
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT MIN(start), MAX(end) FROM ("
+                                                                                                " SELECT start, end FROM rocpd_region"
                                                                                                 " UNION ALL"
-                                                                                                " SELECT timestamp FROM rocpd_sample"
+                                                                                                " SELECT timestamp as start, timestamp as end FROM rocpd_sample"
                                                                                                 " UNION ALL"
-                                                                                                " SELECT end FROM rocpd_kernel_dispatch"
+                                                                                                " SELECT start, end FROM rocpd_kernel_dispatch"
                                                                                                 " UNION ALL"
-                                                                                                " SELECT end FROM rocpd_memory_allocate"
+                                                                                                " SELECT start, end FROM rocpd_memory_allocate"
                                                                                                 " UNION ALL"
-                                                                                                " SELECT end FROM rocpd_memory_copy"
-                                                                                                " );", &CallbackGetValue, TraceProperties()->end_time)) break;
+                                                                                                " SELECT start, end FROM rocpd_memory_copy"
+                                                                                                " );", CallbackGetTraceProperties)) break;
 
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
@@ -217,7 +214,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding Memory allocation graph tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid, coalesce(agent_id, 0) agent_id, -1 as const, 1 from rocpd_memory_allocate;", 
-                    "select 0 as op, start, sum(CASE WHEN type = 'FREE' THEN (select -size from rocpd_memory_allocate MA1 where MA.address == MA1.address limit 1) ELSE size END) over (ORDER BY start ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as current, 0, 0, 0, nid, coalesce(agent_id, 0) agent_id, -1 as queue_id  from rocpd_memory_allocate MA ", 
+                    "select 0 as op, start, sum(CASE WHEN type = 'FREE' THEN (select -size from rocpd_memory_allocate MA1 where MA.address == MA1.address limit 1) ELSE size END) over (ORDER BY start ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as current, start as end, 0, 0, nid, coalesce(agent_id, 0) agent_id, -1 as queue_id  from rocpd_memory_allocate MA ", 
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Memory Copy tracks", kRPVDbBusy, future );
@@ -247,6 +244,21 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                                                                                                                    " UNION ALL"
                                                                                                                    " SELECT nid, coalesce(dst_agent_id,0), coalesce(queue_id,0), 4 as op, id, start, end FROM rocpd_memory_copy"
                                                                                                                    " ) gpu ORDER BY gpu.start;", &CalculateEventLevels)) break;
+
+        ShowProgress(5, "Count records per track", kRPVDbBusy, future);
+        for(int i = 0; i < NumTracks(); i++)
+        {
+            std::string query;
+            if(BuildTrackQuery(true, i, query) != kRocProfVisDmResultSuccess)
+            {
+                break;
+            }
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(future, query.c_str(), &CallbackGetTrackProperties))
+            {
+                break;
+            }
+        }
 
         TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );

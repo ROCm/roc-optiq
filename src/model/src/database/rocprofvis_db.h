@@ -248,10 +248,11 @@ class Database
                                                                 rocprofvis_dm_charptr_t description,
                                                                 Future* object) = 0;
         // method to build a query to read time slice of records for single track 
+        // @param track_properties_only - true if getting only track properties, no records 
         // @param index - track index 
         // @param query - reference to query string  
         // @return status of operation
-        virtual rocprofvis_dm_result_t  BuildTrackQuery(            
+        virtual rocprofvis_dm_result_t  BuildTrackQuery(        bool track_properties_only,    
                                                                 rocprofvis_dm_index_t index, 
                                                                 rocprofvis_dm_string_t & query) = 0;
 
@@ -263,7 +264,7 @@ class Database
         // @param query - reference to query string 
         // @param slices - reference map array for storing slice handlers for multi-track request   
         // @return status of operation                                                      
-        virtual rocprofvis_dm_result_t  BuildSliceQuery(            
+        virtual rocprofvis_dm_result_t  BuildSliceQuery(      
                                                                 rocprofvis_dm_timestamp_t start, 
                                                                 rocprofvis_dm_timestamp_t end, 
                                                                 rocprofvis_db_num_of_tracks_t num, 

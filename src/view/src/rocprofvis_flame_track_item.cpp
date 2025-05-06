@@ -105,6 +105,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
     // Define the start and end positions for the rectangle
+
     ImVec2 rectMin =
         ImVec2(start_position.x,
                start_position.y + cursor_position.y);  // Start position (top-left corner)

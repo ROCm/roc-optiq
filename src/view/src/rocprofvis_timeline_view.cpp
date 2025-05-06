@@ -2,7 +2,6 @@
 
 #include "rocprofvis_timeline_view.h"
 #include "imgui.h"
-#include "rocprofvis_boxplot.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_track_item.h"

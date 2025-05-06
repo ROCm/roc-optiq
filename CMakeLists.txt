@@ -28,7 +28,6 @@ set(VIEW_FILES
     src/view/src/rocprofvis_analysis_view.cpp 
     src/view/src/rocprofvis_trace_view.cpp 
     src/view/src/rocprofvis_line_track_item.cpp 
-    src/view/src/rocprofvis_boxplot.cpp 
     src/view/src/rocprofvis_timeline_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp

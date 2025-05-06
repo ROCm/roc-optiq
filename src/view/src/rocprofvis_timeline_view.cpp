@@ -90,6 +90,9 @@ TimelineView::CalibratePosition()
         m_movement - scrollback;  // how to get back to initial/first value accounting for
                                   // current movement.
 
+    std::cout << m_scroll_position * (m_max_x - m_min_x) << " " << m_movement
+              << std::endl;
+
     if(m_calibrated)
     {
         // This is used to start the chart at the beggining on initial load.

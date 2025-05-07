@@ -118,11 +118,11 @@ TraceView::Render()
 {
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
+        // Use global DPI to adjust font. Reactivate later.
+        ImGui::GetIO().FontGlobalScale = Settings::GetInstance().GetDPI() -
+                                         0.20;  // Scale font by DPI. -0.20 should be
+                                                // removed once font lib is in place.
         m_container->Render();
-        //Use global DPI to adjust font. Reactivate later. 
-        //ImGui::GetIO().FontGlobalScale = Settings::GetInstance().GetDPI() -
-        //                                 0.20;  // Scale font by DPI. -0.20 should be
-        //                                        // removed once font lib is in place.
         return;
     }
 

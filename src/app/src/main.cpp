@@ -4,7 +4,6 @@
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_imgui_backend.h"
-
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
@@ -56,15 +55,10 @@ main(int, char**)
 
                 while(!glfwWindowShouldClose(window))
                 {
-                    // Get DPI info and add to settings instance. REACTIVATE NEXT VERSION.
-                    // DO NOT QUERY EVERYTIME.
-                    /*      float xscale, yscale;
-                          glfwGetWindowContentScale(window, &xscale, &yscale);
+                    float xscale, yscale;
+                    glfwGetWindowContentScale(window, &xscale, &yscale);
 
-                          if(Settings::GetInstance().GetDPI() != xscale)
-                          {
-                              Settings::GetInstance().SetDPI(xscale);
-                          }*/
+                    rocprofvis_view_set_dpi(xscale);
 
                     glfwPollEvents();
 

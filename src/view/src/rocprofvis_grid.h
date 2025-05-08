@@ -19,15 +19,20 @@ public:
     void   RenderGrid(double min_x, double max_x, double movement, float zoom,
                       float scale_x, float v_max_x, float v_min_x, int grid_size,
                       int sidebar_size);
-    float  GetCursorPosition();
+    float  GetCursorPosition(float mouse_position);
     double GetViewportStartPosition();
+    double GetViewportEndPosition();
     void   SetHighlightedRegion(std::pair<float, float> region);
 
 private:
-    float                   m_cursor_position;
     double                  m_viewport_start_position;
     std::pair<float, float> m_highlighted_region;
     Settings&               m_settings;
+    double                  m_viewport_end_position;
+    float                   m_content_size_x;
+    float                   m_sidebar_size;
+    float                   m_scale_x;
+    float                   m_min_x;
 };
 
 }  // namespace View

@@ -36,7 +36,7 @@ public:
 
     void ResetView();
     void DestroyGraphs();
-
+    void                                   GetScreenPosition();
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
 
 private:

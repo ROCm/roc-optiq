@@ -26,7 +26,7 @@ void ComputeSummaryLeft::Render()
 ComputeSummaryLeft::ComputeSummaryLeft(std::shared_ptr<ComputeDataProvider> data_provider)
 : m_system_info(nullptr)
 {
-    m_system_info = std::make_shared<ComputeMetric>(data_provider, "1.1.csv");
+    m_system_info = std::make_shared<ComputeMetricGroup>(data_provider, "1.1.csv");
 }
 
 ComputeSummaryLeft::~ComputeSummaryLeft() {}
@@ -59,8 +59,8 @@ ComputeSummaryRight::ComputeSummaryRight(std::shared_ptr<ComputeDataProvider> da
 : m_kernel_list(nullptr)
 , m_dispatch_list(nullptr)
 {
-    m_kernel_list = std::make_shared<ComputeMetric>(data_provider, "0.1_Top_Kernels.csv", kComputeMetricTable | kComputeMetricPie | kComputeMetricBar);
-    m_dispatch_list = std::make_shared<ComputeMetric>(data_provider, "0.2_Dispatch_List.csv");
+    m_kernel_list = std::make_shared<ComputeMetricGroup>(data_provider, "0.1_Top_Kernels.csv", kComputeMetricTable | kComputeMetricPie | kComputeMetricBar, std::vector<int>({0}), std::vector<int>({1}));
+    m_dispatch_list = std::make_shared<ComputeMetricGroup>(data_provider, "0.2_Dispatch_List.csv");
 }
 
 ComputeSummaryRight::~ComputeSummaryRight() {}

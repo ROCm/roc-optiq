@@ -7,7 +7,7 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr char* CATEGORY_LABELS[kTableCategoryCount] = {
+constexpr const char* TAB_LABELS[kTableCategoryCount] = {
     "System Speed of Light", 
     "Command Processor", 
     "Workgroup Manager", 
@@ -16,14 +16,14 @@ constexpr char* CATEGORY_LABELS[kTableCategoryCount] = {
     "Compute Pipeline", 
     "Local Data Store", 
     "L1 Instruction Cache",
-    "Scaler L1 Data Cache",
+    "Scalar L1 Data Cache",
     "Address Processing Unit & Data Return Path",
     "Vector L1 Data Cache",
     "L2 Cache",
     "L2 Cache (Per Channel)"
 };
 constexpr int CSV_COUNT = 45;
-constexpr std::array<std::pair<table_view_category_t, char*>, CSV_COUNT> CATEGORY_DEFINITIONS = {{
+constexpr std::array<std::pair<table_view_category_t, const char*>, CSV_COUNT> TAB_DEFINITIONS = {{
     {kTableCategorySystemSOL, "2.1_Speed-of-Light.csv"}, 
     {kTableCategoryCP, "5.1_Command_Processor_Fetcher.csv"},
     {kTableCategoryCP, "5.2_Packet_Processor.csv"},
@@ -72,10 +72,10 @@ constexpr std::array<std::pair<table_view_category_t, char*>, CSV_COUNT> CATEGOR
 }};
 
 ComputeTableView::ComputeTableView(std::shared_ptr<ComputeDataProvider> data_provider) {
-    for (int i = 0; i < CATEGORY_DEFINITIONS.size(); i ++)
+    for (int i = 0; i < TAB_DEFINITIONS.size(); i ++)
     {
-        std::unique_ptr<ComputeMetric> metric = std::make_unique<ComputeMetric>(data_provider, CATEGORY_DEFINITIONS[i].second);
-        m_metrics_map[CATEGORY_DEFINITIONS[i].first].push_back(std::move(metric));        
+        std::unique_ptr<ComputeMetricGroup> metric = std::make_unique<ComputeMetricGroup>(data_provider, TAB_DEFINITIONS[i].second);
+        m_metrics_map[TAB_DEFINITIONS[i].first].push_back(std::move(metric));        
     }
 }
 
@@ -85,7 +85,7 @@ void ComputeTableView::Update()
 {
     for (auto it = m_metrics_map.begin(); it != m_metrics_map.end(); it ++)
     {
-        for (std::unique_ptr<ComputeMetric>& metric : it->second)
+        for (std::unique_ptr<ComputeMetricGroup>& metric : it->second)
         {
             metric->Update();
         }
@@ -113,10 +113,10 @@ void ComputeTableView::RenderMenuBar()
 
 void ComputeTableView::RenderMetricsTab(table_view_category_t category)
 {
-    if (ImGui::BeginTabItem(CATEGORY_LABELS[category]))
+    if (ImGui::BeginTabItem(TAB_LABELS[category]))
     {
         ImGui::BeginChild("compute_table_category", ImVec2(-1, -1), ImGuiChildFlags_Borders);
-        for (std::unique_ptr<ComputeMetric>& metric : m_metrics_map[category])
+        for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics_map[category])
         {
             metric->Render();
         }

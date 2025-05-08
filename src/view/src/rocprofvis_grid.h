@@ -19,7 +19,7 @@ public:
     void   RenderGrid(double min_x, double max_x, double movement, float zoom,
                       float scale_x, float v_max_x, float v_min_x, int grid_size,
                       int sidebar_size);
-    float  GetCursorPosition(float mouse_position);
+    double  GetCursorPosition(float mouse_position);
     double GetViewportStartPosition();
     double GetViewportEndPosition();
     void   SetHighlightedRegion(std::pair<float, float> region);

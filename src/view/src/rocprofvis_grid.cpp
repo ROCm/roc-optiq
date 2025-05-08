@@ -21,8 +21,7 @@ Grid::GetViewportStartPosition()
 double
 Grid::GetViewportEndPosition()
 {
-    return (m_viewport_start_position +
-            ((m_content_size_x - m_sidebar_size) * (1 / m_scale_x)) - m_min_x);
+    return GetCursorPosition(m_content_size_x);
 }
 Grid::Grid()
 : m_viewport_start_position(FLT_MIN)
@@ -36,7 +35,7 @@ Grid::Grid()
 {}
 Grid::~Grid() {}
 
-float
+double
 Grid::GetCursorPosition(float mouse_position)
 {
     return (m_viewport_start_position +
@@ -59,7 +58,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
     ImVec2 displaySize     = ImGui::GetIO().DisplaySize;
 
     m_content_size_x = content_size.x;
-    m_sidebar_size   = m_sidebar_size;
+    m_sidebar_size   = sidebar_size;
     m_scale_x        = scale_x;
     m_min_x          = min_x;
 

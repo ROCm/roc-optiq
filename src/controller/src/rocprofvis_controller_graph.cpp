@@ -397,6 +397,7 @@ struct GraphLODArgs
     uint64_t m_index;
     std::pair<double, double> m_valid_range;
     std::vector<Data> m_entries;
+    std::set<uint64_t> m_ids;
 };
 
 rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
@@ -451,7 +452,7 @@ rocprofvis_result_t Graph::GenerateLOD(uint32_t lod_to_generate, double start, d
                            pair->m_valid_range.second < segment.GetMaxTimestamp())
                         {
                             result =
-                                segment.Fetch(start, end, pair->m_entries, pair->m_index);
+                                segment.Fetch(start, end, pair->m_entries, pair->m_index, &pair->m_ids);
                             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                         }
                         return result;
@@ -517,7 +518,7 @@ rocprofvis_result_t Graph::Fetch(uint32_t pixels, double start, double end, Arra
             result = it->second.GetSegments().FetchSegments(start, end, &args, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t{
                 rocprofvis_result_t result = kRocProfVisResultSuccess;
                 GraphFetchLODArgs* args = (GraphFetchLODArgs*)user_ptr;
-                return segment.Fetch(start, end, args->m_array->GetVector(), *(args->m_index));
+                return segment.Fetch(start, end, args->m_array->GetVector(), *(args->m_index), nullptr);
             });
         }
     }

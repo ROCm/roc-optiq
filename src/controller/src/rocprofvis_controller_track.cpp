@@ -44,15 +44,25 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
     return result;
 }
 
+struct GraphFetchEventsArgs
+{
+    Array*             m_array;
+    uint64_t*          m_index;
+    std::set<uint64_t> m_ids;
+};
+
 rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_t& index)
 {
+    GraphFetchEventsArgs  args;
+    args.m_array = &array;
+    args.m_index = &index;
     std::pair<Array&, uint64_t&> pair(array, index);
-    rocprofvis_result_t result = FetchSegments(start, end, &pair, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t
-    {
-        std::pair<Array&, uint64_t&>* pair = (std::pair<Array&, uint64_t&>*)user_ptr;
-        rocprofvis_result_t result = segment.Fetch(start, end, pair->first.GetVector(), pair->second);
-        return result;
-    });
+        rocprofvis_result_t result = FetchSegments(start, end, &args, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t
+        {
+            GraphFetchEventsArgs* args = (GraphFetchEventsArgs*) user_ptr;
+            rocprofvis_result_t result = segment.Fetch(start, end, args->m_array->GetVector(), *args->m_index, &args->m_ids);
+            return result;
+        });
     return result;
 }
 

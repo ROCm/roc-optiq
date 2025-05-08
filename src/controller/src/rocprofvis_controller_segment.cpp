@@ -123,7 +123,7 @@ void Segment::Insert(double timestamp, Handle* event)
     m_entries.insert(std::make_pair(timestamp, event));
 }
 
-rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index)
+rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::set<uint64_t>* event_id_set)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     double last_timestamp = std::max(m_end_timestamp, m_max_timestamp);
@@ -162,9 +162,12 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
             {
                 double min_ts = lower->first;
                 double max_ts = lower->first;
+                uint64_t event_id;
                 lower->second->GetDouble(property, 0, &max_ts);
+                lower->second->GetUInt64(kRPVControllerEventId, 0, &event_id);
 
-                if(min_ts <= end && max_ts >= start)
+                if(min_ts <= end && max_ts >= start &&
+                   (event_id_set == nullptr || event_id_set->find(event_id) == event_id_set->end()))
                 {
                     if(array.size() < index + 1)
                     {
@@ -172,6 +175,10 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                     }
                     array[index].SetType(kRPVControllerPrimitiveTypeObject);
                     array[index++] = Data((rocprofvis_handle_t*) lower->second);
+                    if(event_id_set != nullptr)
+                    {
+                        event_id_set->insert(event_id);
+                    }
                 }
                 ++lower;
             }

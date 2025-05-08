@@ -6,6 +6,7 @@
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
 #include <map>
+#include <set>
 #include <vector>
 #include <memory>
 
@@ -42,7 +43,7 @@ public:
 
     void Insert(double timestamp, Handle* event);
 
-    rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index);
+    rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::set<uint64_t>* event_id_set);
 
     rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
 

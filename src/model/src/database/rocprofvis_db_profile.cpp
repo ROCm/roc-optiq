@@ -19,6 +19,9 @@
 // SOFTWARE.
 
 #include "rocprofvis_db_profile.h"
+#include "rocprofvis_dm_track_slice.h"
+#include "rocprofvis_dm_pmc_track_slice.h"
+#include "rocprofvis_dm_event_track_slice.h"
 #include <sstream>
 
 namespace RocProfVis
@@ -84,6 +87,44 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, char** argv, cha
             record.pmc.value = std::stod(argv[2]);
         }
         if (db->BindObject()->FuncAddRecord((*(slice_array_t*)callback_params->handle)[track_id], record) != kRocProfVisDmResultSuccess) return 1;
+    }
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
+int
+ProfileDatabase::CallbackAddAnyTableRecord(void* data, int argc, char** argv, char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 9, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted()) return 1;
+    rocprofvis_dm_track_id_t    track_id;
+    rocprofvis_db_record_data_t record;
+    record.event.id.bitfield.event_op = std::stol(argv[0]);
+    if(db->FindTrackId(argv[6], argv[7], argv[8], record.event.id.bitfield.event_op,
+                       track_id) == kRocProfVisDmResultSuccess)
+    {
+        if(record.event.id.bitfield.event_op > 0)
+        {
+            record.event.id.bitfield.event_id = std::stoll(argv[5]);
+            record.event.timestamp            = std::stoll(argv[1]);
+            record.event.duration = std::stoll(argv[2]) - record.event.timestamp;
+            record.event.category = std::stoll(argv[3]);
+            record.event.symbol   = std::stoll(argv[4]);
+            if(kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
+        }
+        else
+        {
+            record.pmc.timestamp = std::stoll(argv[1]);
+            record.pmc.value     = std::stod(argv[2]);
+        }
+        if(db->BindObject()->FuncAddRecord(
+               ((rocprofvis_dm_slice_t) callback_params->handle), record) !=
+           kRocProfVisDmResultSuccess)
+            return 1;
     }
     callback_params->future->CountThisRow();
     return 0;
@@ -193,6 +234,146 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
 
 }
 
+rocprofvis_dm_result_t ProfileDatabase::BuildTableSliceQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query) {
+    slice_query_t slice_query_map;
+    for (int i = 0; i < num; i++){
+        rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
+        for (int j = 0; j < props->query.size(); j++) {
+            std::string q = props->query[j]; 
+            std::string tuple = "(";
+            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+                if (props->process_tag[k] != "const") {
+                    if (tuple.length() > 1) tuple += ",";
+                    if(props->process_id_numeric[k]) tuple += "coalesce(";
+                    tuple += props->process_tag[k];
+                    if(props->process_id_numeric[k]) tuple += ",0)";
+                }
+            }
+            tuple += ")";
+            q += " where ";
+            q += tuple;
+            q += " IN (";
+            tuple = "(";
+            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+                if (props->process_tag[k] != "const") {
+                    if (tuple.length() > 1) tuple += ",";
+                    std::string id = props->process_id_numeric[k] ? std::to_string(props->process_id[k]) : std::string("'") + props->process_name[k] + "'";
+                    tuple += id;
+                      
+                }
+            }
+            tuple += ")";
+            if (slice_query_map[q].length() > 0) slice_query_map[q] += ", ";
+            slice_query_map[q] += tuple ;
+        }
+    }
+    if(count_only)
+    {
+        query = "COUNT(*) AS [NumRecords] FROM ( ";
+    }
+    else
+    { 
+        query = "SELECT * FROM ( "; 
+    } 
+    for (std::map<std::string, std::string>::iterator it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
+        if (it_query!=slice_query_map.begin()) query += " UNION ";
+        query += it_query->first;
+        query += it_query->second;
+        query += ") and start >= ";
+        query += std::to_string(start);
+        query += " and end < ";
+        query += std::to_string(end);
+    }
+    query += ") ORDER BY ";
+    switch (sort_column)
+    {
+        case kRPVDMSortColumnTimestamp:
+        default:
+        {
+            query += "start";
+            break;
+        }
+    }
+    if(!count_only)
+    {
+        if(max_count)
+        {
+            query += " LIMIT ";
+            query += std::to_string(max_count);
+        }
+        if(offset)
+        {
+            query += " OFFSET ";
+            query += std::to_string(offset);
+        }
+    }
+    query += ";";
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t
+ProfileDatabase::ReadTableSlice(rocprofvis_dm_timestamp_t       start,
+                                rocprofvis_dm_timestamp_t       end,
+                                rocprofvis_db_num_of_tracks_t   num,
+                                rocprofvis_db_track_selection_t tracks,
+                                rocprofvis_dm_sort_columns_t    sort_column,
+                                uint64_t max_count, uint64_t offset, Future* future,
+                                rocprofvis_dm_slice_t* output_slice)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    while(true)
+    {
+        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties,
+                                    ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded,
+                                    ERROR_METADATA_IS_NOT_LOADED);
+        std::string   query;
+        TrackSlice* slice = nullptr;
+        rocprofvis_dm_track_category_t track_type = TrackPropertiesAt(tracks[0])
+            ->track_category;
+        if(track_type == kRocProfVisDmPmcTrack)
+        {
+            try
+            {
+                slice = new PmcTrackSlice(nullptr, start, end);
+            } catch(std::exception ex)
+            {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                    "Error! Falure allocating PMC track time slice!",
+                    kRocProfVisDmResultAllocFailure);
+            }
+        }
+        else if(track_type != kRocProfVisDmNotATrack)
+        {
+            try
+            {
+                slice = new EventTrackSlice(nullptr, start, end);
+            } catch(std::exception ex)
+            {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                    "Error! Falure allocating event track time slice!",
+                    kRocProfVisDmResultAllocFailure);
+            }
+        }
+
+        if(BuildTableSliceQuery(start, end, num, tracks, sort_column, max_count, offset,
+                                false, query) != kRocProfVisDmResultSuccess)
+            break;
+        ShowProgress(100, query.c_str(), kRPVDbBusy, future);
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteSQLQuery(future, query.c_str(), slice, &CallbackAddAnyTableRecord))
+            break;
+        ShowProgress(100 - future->Progress(), "Time slice successfully loaded!",
+                     kRPVDbSuccess, future);
+
+        *output_slice = (rocprofvis_dm_slice_t)slice;
+        return future->SetPromise(kRocProfVisDmResultSuccess);
+    }
+    ShowProgress(0, "Not all tracks are loaded!", kRPVDbError, future);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout
+                                                    : kRocProfVisDmResultDbAccessFailed);
+}
 
 rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice( 
                                                     rocprofvis_dm_timestamp_t start,

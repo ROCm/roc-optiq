@@ -8,8 +8,10 @@
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_graph.h"
+#include "rocprofvis_controller_table.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
+#include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_core_assert.h"
 
 #include <cfloat>
@@ -23,19 +25,24 @@ namespace Controller
 
 static IdGenerator<Trace> s_trace_id;
 
+typedef Reference<rocprofvis_controller_table_t, Table, kRPVControllerObjectTypeTable> TableRef;
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 typedef Reference<rocprofvis_controller_timeline_t, Timeline, kRPVControllerObjectTypeTimeline> TimelineRef;
 
 Trace::Trace()
 : m_id(s_trace_id.GetNextId())
 , m_timeline(nullptr)
+, m_event_table(nullptr)
 , m_dm_handle(nullptr)
 {
+    m_event_table = new Table(0);
+    ROCPROFVIS_ASSERT(m_event_table);
 }
 
 Trace::~Trace()
 {
     delete m_timeline;
+    delete m_event_table;
     for (Track* track : m_tracks)
     {
         delete track;
@@ -761,6 +768,65 @@ Trace::AsyncFetch(Event& event, Future& future, Array& array,
     return error;
 }
 
+rocprofvis_result_t
+Trace::AsyncFetch(Table& table, Future& future, Array& array,
+    uint64_t index, uint64_t count)
+{
+    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+
+    future.Set(std::async(std::launch::async,
+                   [&table, &array, index, count, dm_handle]() -> rocprofvis_result_t {
+                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
+                              result = table.Fetch(dm_handle, index, count, array);
+                              return result;
+                          }));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
+
+rocprofvis_result_t
+Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
+{
+    rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+
+    future.Set(std::async(
+        std::launch::async, [&table, dm_handle, &args, &array]() -> rocprofvis_result_t {
+            rocprofvis_result_t result = kRocProfVisResultUnknownError;
+            result = table.Setup(dm_handle, args);
+            if (result == kRocProfVisResultSuccess)
+            {
+                uint64_t start_index = 0;
+                uint64_t start_count = 0;
+                if(result == kRocProfVisResultSuccess)
+                {
+                    result = args.GetUInt64(kRPVControllerTableArgsStartIndex, 0,
+                                            &start_index);
+                }
+                if(result == kRocProfVisResultSuccess)
+                {
+                    result = args.GetUInt64(kRPVControllerTableArgsStartCount, 0,
+                                            &start_count);
+                }
+                result = table.Fetch(dm_handle, start_index, start_count, array);
+            }
+            return result;
+        }));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
+
 rocprofvis_controller_object_type_t Trace::GetType(void) 
 {
     return kRPVControllerObjectTypeController;
@@ -883,8 +949,7 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerEventTable:
             {
-                ROCPROFVIS_UNIMPLEMENTED;
-                *value = nullptr;
+                *value = (rocprofvis_handle_t*)m_event_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -1054,8 +1119,12 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerEventTable:
             {
-                ROCPROFVIS_UNIMPLEMENTED;
-                result = kRocProfVisResultSuccess;
+                TableRef table(value);
+                if(table.IsValid())
+                {
+                    m_event_table = table.Get();
+                    result = kRocProfVisResultSuccess;
+                }
                 break;
             }
             case kRPVControllerAnalysisViewIndexed:

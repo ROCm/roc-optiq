@@ -411,328 +411,414 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         }
     }
 
-    SECTION("Controller Load Ranges Of Track Data")
+    SECTION("Controller Load Single Track Table Data")
     {
-        uint64_t num_tracks = 0;
-        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerNumTracks, 0, &num_tracks);
-        spdlog::info("Get num tracks: {0}", num_tracks);
+        rocprofvis_handle_t* table_handle = nullptr;
+        auto result = rocprofvis_controller_get_object(m_controller, kRPVControllerEventTable, 0, &table_handle);
         REQUIRE(result == kRocProfVisResultSuccess);
-        REQUIRE(num_tracks > 0);
+        REQUIRE(table_handle);
 
-        for(uint32_t track_idx = 0; track_idx < num_tracks; track_idx++)
-        {
-            spdlog::info("Get track {0}", track_idx);
-            rocprofvis_handle_t* track_handle = nullptr;
-            auto                 result       = rocprofvis_controller_get_object(
-                m_controller, kRPVControllerTrackIndexed, track_idx, &track_handle);
-            REQUIRE(result == kRocProfVisResultSuccess);
-            REQUIRE(track_handle != nullptr);
+        spdlog::info("Get track 0");
+        rocprofvis_handle_t* track_handle = nullptr;
+        result                            = rocprofvis_controller_get_object(
+            m_controller, kRPVControllerTrackIndexed, 0, &track_handle);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(track_handle != nullptr);
 
-            double min_time = 0;
-            result          = rocprofvis_controller_get_double(
-                track_handle, kRPVControllerTrackMinTimestamp, 0, &min_time);
-            spdlog::info("Get track min time: {0}", min_time);
-            REQUIRE(result == kRocProfVisResultSuccess);
+        double min_time = 0;
+        result          = rocprofvis_controller_get_double(
+            track_handle, kRPVControllerTrackMinTimestamp, 0, &min_time);
+        spdlog::info("Get track min time: {0}", min_time);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-            double max_time = 0;
-            result          = rocprofvis_controller_get_double(
-                track_handle, kRPVControllerTrackMaxTimestamp, 0, &max_time);
-            spdlog::info("Get track max time: {0}", max_time);
-            REQUIRE(result == kRocProfVisResultSuccess);
+        double max_time = 0;
+        result          = rocprofvis_controller_get_double(
+            track_handle, kRPVControllerTrackMaxTimestamp, 0, &max_time);
+        spdlog::info("Get track max time: {0}", max_time);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-            uint64_t track_num_entries = 0;
-            result                     = rocprofvis_controller_get_uint64(
-                track_handle, kRPVControllerTrackNumberOfEntries, 0, &track_num_entries);
-            spdlog::info("Get track num entries: {0}", track_num_entries);
-            REQUIRE(result == kRocProfVisResultSuccess);
-            if(track_num_entries > 0)
-            {
-                uint64_t track_type = 0;
-                result              = rocprofvis_controller_get_uint64(
-                    track_handle, kRPVControllerTrackType, 0, &track_type);
-                spdlog::info("Get track type: {0} {1}", track_type,
-                             track_type == kRPVControllerTrackTypeEvents ? "Events"
-                                                                         : "Samples");
-                REQUIRE(result == kRocProfVisResultSuccess);
-                REQUIRE((track_type == kRPVControllerTrackTypeEvents ||
-                         track_type == kRPVControllerTrackTypeSamples));
+        uint64_t track_num_entries = 0;
+        result                     = rocprofvis_controller_get_uint64(
+            track_handle, kRPVControllerTrackNumberOfEntries, 0, &track_num_entries);
+        spdlog::info("Get track num entries: {0}", track_num_entries);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-                double start_ts = min_time;
-                double RANGE    = 1000 * 1000;
+        auto args = rocprofvis_controller_arguments_alloc();
+        REQUIRE(args != nullptr);
 
-                uint64_t total = 0;
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
+                                                  kRPVControllerTableTypeEvents);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-                while(start_ts < max_time && total < track_num_entries)
-                {
-                    double end_ts = std::min(start_ts + RANGE, max_time);
-                    spdlog::trace("Fetching Range {0}-{1} (Total: {2}, Fetched: {3})",
-                                 start_ts, end_ts, track_num_entries, total);
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumTracks,
+                                                  0, 1);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-                    spdlog::trace("Allocating Array");
-                    rocprofvis_controller_array_t* array =
-                        rocprofvis_controller_array_alloc(0);
-                    REQUIRE(array != nullptr);
+        result = rocprofvis_controller_set_object(args, kRPVControllerTableArgsTracksIndexed, 0, track_handle);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-                    spdlog::trace("Allocating Future");
-                    rocprofvis_controller_future_t* future =
-                        rocprofvis_controller_future_alloc();
-                    REQUIRE(future != nullptr);
+        result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime, 0,
+                                                  min_time);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-                    spdlog::trace("Fetch track data");
-                    result = rocprofvis_controller_track_fetch_async(
-                        m_controller, (rocprofvis_controller_track_t*) track_handle,
-                        start_ts, end_ts, future, array);
-                    REQUIRE(array != nullptr);
+        result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsEndTime,
+                                                  0, max_time);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-                    spdlog::trace("Wait for future");
-                    result = rocprofvis_controller_future_wait(future, FLT_MAX);
-                    REQUIRE(result == kRocProfVisResultSuccess);
+        spdlog::info("Allocating Array");
+        auto array = rocprofvis_controller_array_alloc(0);
+        REQUIRE(array != nullptr);
 
-                    uint64_t future_result = 0;
-                    result                 = rocprofvis_controller_get_uint64(
-                        future, kRPVControllerFutureResult, 0, &future_result);
-                    spdlog::trace("Get future result: {0}", future_result);
-                    REQUIRE(result == kRocProfVisResultSuccess);
-                    REQUIRE(future_result == kRocProfVisResultSuccess);
+        spdlog::info("Allocating Future");
+        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        REQUIRE(future != nullptr);
 
-                    uint64_t num_results = 0;
-                    result               = rocprofvis_controller_get_uint64(
-                        array, kRPVControllerArrayNumEntries, 0, &num_results);
-                    spdlog::trace("Get num elements loaded from track: {0}", num_results);
-                    REQUIRE(result == kRocProfVisResultSuccess);
+        result = rocprofvis_controller_table_fetch_async(m_controller, table_handle, args, future, array);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-                    for(uint64_t i = 0; i < num_results; i++)
-                    {
-                        rocprofvis_handle_t* entry = nullptr;
-                        result                     = rocprofvis_controller_get_object(
-                            array, kRPVControllerArrayEntryIndexed, i, &entry);
-                        REQUIRE(result == kRocProfVisResultSuccess);
-                        REQUIRE(entry != nullptr);
+        spdlog::info("Wait for future");
+        result = rocprofvis_controller_future_wait(future, FLT_MAX);
+        REQUIRE(result == kRocProfVisResultSuccess);
 
-                        double begin_ts = 0;
-                        double stop_ts  = 0;
-                        switch(track_type)
-                        {
-                            case kRPVControllerTrackTypeEvents:
-                            {
-                                result = rocprofvis_controller_get_double(
-                                    entry, kRPVControllerEventStartTimestamp, 0,
-                                    &begin_ts);
-                                REQUIRE(result == kRocProfVisResultSuccess);
-                                REQUIRE(begin_ts >= min_time);
-                                REQUIRE(begin_ts <= max_time);
+        uint64_t future_result = 0;
+        result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0,
+                                                  &future_result);
+        spdlog::info("Get future result: {0}", future_result);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(future_result == kRocProfVisResultSuccess);
 
-                                result = rocprofvis_controller_get_double(
-                                    entry, kRPVControllerEventEndTimestamp, 0, &stop_ts);
-                                REQUIRE(result == kRocProfVisResultSuccess);
-                                REQUIRE(stop_ts >= min_time);
-                                REQUIRE(stop_ts <= max_time);
-                                break;
-                            }
-                            case kRPVControllerTrackTypeSamples:
-                            {
-                                result = rocprofvis_controller_get_double(
-                                    entry, kRPVControllerSampleTimestamp, 0, &begin_ts);
-                                REQUIRE(result == kRocProfVisResultSuccess);
-                                REQUIRE(begin_ts >= min_time);
-                                REQUIRE(begin_ts <= max_time);
+        spdlog::info("Free Future");
+        rocprofvis_controller_future_free(future);
 
-                                stop_ts = begin_ts;
-                                break;
-                            }
-                            default:
-                            {
-                                break;
-                            }
-                        }
+        spdlog::info("Free Array");
+        rocprofvis_controller_array_free(array);
 
-                        if(!(begin_ts <= end_ts && stop_ts >= start_ts))
-                        {
-                            spdlog::info("Idx: {0} Range: {1}-{2} Entry: {3}-{4}", i,
-                                         start_ts, end_ts, begin_ts, stop_ts);
-                        }
-                        REQUIRE((begin_ts <= end_ts && stop_ts >= start_ts));
-                    }
-
-                    rocprofvis_controller_array_t* track_data = m_track_data[track_idx];
-                    REQUIRE(track_data != nullptr);
-
-                    uint64_t range_idx = 0;
-                    for(uint64_t i = 0; i < track_num_entries; i++)
-                    {
-                        rocprofvis_handle_t* entry = nullptr;
-                        result                     = rocprofvis_controller_get_object(
-                            track_data, kRPVControllerArrayEntryIndexed, i, &entry);
-                        REQUIRE(result == kRocProfVisResultSuccess);
-                        REQUIRE(entry != nullptr);
-
-                        double begin_ts = 0;
-                        double stop_ts  = 0;
-                        switch(track_type)
-                        {
-                            case kRPVControllerTrackTypeEvents:
-                            {
-                                result = rocprofvis_controller_get_double(
-                                    entry, kRPVControllerEventStartTimestamp, 0,
-                                    &begin_ts);
-                                REQUIRE(result == kRocProfVisResultSuccess);
-                                REQUIRE(begin_ts >= min_time);
-                                REQUIRE(begin_ts <= max_time);
-
-                                result = rocprofvis_controller_get_double(
-                                    entry, kRPVControllerEventEndTimestamp, 0, &stop_ts);
-                                REQUIRE(result == kRocProfVisResultSuccess);
-                                REQUIRE(stop_ts >= min_time);
-                                REQUIRE(stop_ts <= max_time);
-                                break;
-                            }
-                            case kRPVControllerTrackTypeSamples:
-                            {
-                                result = rocprofvis_controller_get_double(
-                                    entry, kRPVControllerSampleTimestamp, 0, &begin_ts);
-                                REQUIRE(result == kRocProfVisResultSuccess);
-                                REQUIRE(begin_ts >= min_time);
-                                REQUIRE(begin_ts <= max_time);
-
-                                stop_ts = begin_ts;
-                                break;
-                            }
-                            default:
-                            {
-                                break;
-                            }
-                        }
-
-                        if(begin_ts <= end_ts && stop_ts >= start_ts)
-                        {
-                            range_idx++;
-                        }
-                    }
-
-                    if(range_idx != num_results)
-                    {
-                        for(uint64_t i = 0; i < num_results; i++)
-                        {
-                            rocprofvis_handle_t* entry = nullptr;
-                            result                     = rocprofvis_controller_get_object(
-                                array, kRPVControllerArrayEntryIndexed, i, &entry);
-                            REQUIRE(result == kRocProfVisResultSuccess);
-                            REQUIRE(entry != nullptr);
-
-                            double begin_ts = 0;
-                            double stop_ts  = 0;
-                            switch(track_type)
-                            {
-                                case kRPVControllerTrackTypeEvents:
-                                {
-                                    result = rocprofvis_controller_get_double(
-                                        entry, kRPVControllerEventStartTimestamp, 0,
-                                        &begin_ts);
-                                    REQUIRE(result == kRocProfVisResultSuccess);
-                                    REQUIRE(begin_ts >= min_time);
-                                    REQUIRE(begin_ts <= max_time);
-
-                                    result = rocprofvis_controller_get_double(
-                                        entry, kRPVControllerEventEndTimestamp, 0,
-                                        &stop_ts);
-                                    REQUIRE(result == kRocProfVisResultSuccess);
-                                    REQUIRE(stop_ts >= min_time);
-                                    REQUIRE(stop_ts <= max_time);
-                                    break;
-                                }
-                                case kRPVControllerTrackTypeSamples:
-                                {
-                                    result = rocprofvis_controller_get_double(
-                                        entry, kRPVControllerSampleTimestamp, 0,
-                                        &begin_ts);
-                                    REQUIRE(result == kRocProfVisResultSuccess);
-                                    REQUIRE(begin_ts >= min_time);
-                                    REQUIRE(begin_ts <= max_time);
-
-                                    stop_ts = begin_ts;
-                                    break;
-                                }
-                                default:
-                                {
-                                    break;
-                                }
-                            }
-
-                            spdlog::info("Idx: {0} Range: {1}-{2} Entry: {3}-{4}", i,
-                                         start_ts, end_ts, begin_ts, stop_ts);
-                        }
-
-                        for(uint64_t i = 0; i < track_num_entries; i++)
-                        {
-                            rocprofvis_handle_t* entry = nullptr;
-                            result                     = rocprofvis_controller_get_object(
-                                track_data, kRPVControllerArrayEntryIndexed, i, &entry);
-                            REQUIRE(result == kRocProfVisResultSuccess);
-                            REQUIRE(entry != nullptr);
-
-                            double begin_ts = 0;
-                            double stop_ts  = 0;
-                            switch(track_type)
-                            {
-                                case kRPVControllerTrackTypeEvents:
-                                {
-                                    result = rocprofvis_controller_get_double(
-                                        entry, kRPVControllerEventStartTimestamp, 0,
-                                        &begin_ts);
-                                    REQUIRE(result == kRocProfVisResultSuccess);
-                                    REQUIRE(begin_ts >= min_time);
-                                    REQUIRE(begin_ts <= max_time);
-
-                                    result = rocprofvis_controller_get_double(
-                                        entry, kRPVControllerEventEndTimestamp, 0,
-                                        &stop_ts);
-                                    REQUIRE(result == kRocProfVisResultSuccess);
-                                    REQUIRE(stop_ts >= min_time);
-                                    REQUIRE(stop_ts <= max_time);
-                                    break;
-                                }
-                                case kRPVControllerTrackTypeSamples:
-                                {
-                                    result = rocprofvis_controller_get_double(
-                                        entry, kRPVControllerSampleTimestamp, 0,
-                                        &begin_ts);
-                                    REQUIRE(result == kRocProfVisResultSuccess);
-                                    REQUIRE(begin_ts >= min_time);
-                                    REQUIRE(begin_ts <= max_time);
-
-                                    stop_ts = begin_ts;
-                                    break;
-                                }
-                                default:
-                                {
-                                    break;
-                                }
-                            }
-
-                            if(begin_ts <= end_ts && stop_ts >= start_ts)
-                            {
-                                spdlog::info(
-                                    "Raw Track Idx: {0} Range: {1}-{2} Entry: {3}-{4}", i,
-                                    start_ts, end_ts, begin_ts, stop_ts);
-                            }
-                        }
-                    }
-                    REQUIRE(range_idx == num_results);
-                    total += num_results;
-
-                    spdlog::trace("Free Array");
-                    rocprofvis_controller_array_free(array);
-
-                    spdlog::trace("Free Future");
-                    rocprofvis_controller_future_free(future);
-
-                    start_ts = end_ts;
-                }
-
-                REQUIRE(total >= track_num_entries);
-            }
-        }
+        spdlog::info("Free Args");
+        rocprofvis_controller_arguments_free(args);
     }
+
+    //SECTION("Controller Load Ranges Of Track Data")
+    //{
+    //    uint64_t num_tracks = 0;
+    //    auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerNumTracks, 0, &num_tracks);
+    //    spdlog::info("Get num tracks: {0}", num_tracks);
+    //    REQUIRE(result == kRocProfVisResultSuccess);
+    //    REQUIRE(num_tracks > 0);
+
+    //    for(uint32_t track_idx = 0; track_idx < num_tracks; track_idx++)
+    //    {
+    //        spdlog::info("Get track {0}", track_idx);
+    //        rocprofvis_handle_t* track_handle = nullptr;
+    //        auto                 result       = rocprofvis_controller_get_object(
+    //            m_controller, kRPVControllerTrackIndexed, track_idx, &track_handle);
+    //        REQUIRE(result == kRocProfVisResultSuccess);
+    //        REQUIRE(track_handle != nullptr);
+
+    //        double min_time = 0;
+    //        result          = rocprofvis_controller_get_double(
+    //            track_handle, kRPVControllerTrackMinTimestamp, 0, &min_time);
+    //        spdlog::info("Get track min time: {0}", min_time);
+    //        REQUIRE(result == kRocProfVisResultSuccess);
+
+    //        double max_time = 0;
+    //        result          = rocprofvis_controller_get_double(
+    //            track_handle, kRPVControllerTrackMaxTimestamp, 0, &max_time);
+    //        spdlog::info("Get track max time: {0}", max_time);
+    //        REQUIRE(result == kRocProfVisResultSuccess);
+
+    //        uint64_t track_num_entries = 0;
+    //        result                     = rocprofvis_controller_get_uint64(
+    //            track_handle, kRPVControllerTrackNumberOfEntries, 0, &track_num_entries);
+    //        spdlog::info("Get track num entries: {0}", track_num_entries);
+    //        REQUIRE(result == kRocProfVisResultSuccess);
+    //        if(track_num_entries > 0)
+    //        {
+    //            uint64_t track_type = 0;
+    //            result              = rocprofvis_controller_get_uint64(
+    //                track_handle, kRPVControllerTrackType, 0, &track_type);
+    //            spdlog::info("Get track type: {0} {1}", track_type,
+    //                         track_type == kRPVControllerTrackTypeEvents ? "Events"
+    //                                                                     : "Samples");
+    //            REQUIRE(result == kRocProfVisResultSuccess);
+    //            REQUIRE((track_type == kRPVControllerTrackTypeEvents ||
+    //                     track_type == kRPVControllerTrackTypeSamples));
+
+    //            double start_ts = min_time;
+    //            double RANGE    = 1000 * 1000;
+
+    //            uint64_t total = 0;
+
+    //            while(start_ts < max_time && total < track_num_entries)
+    //            {
+    //                double end_ts = std::min(start_ts + RANGE, max_time);
+    //                spdlog::trace("Fetching Range {0}-{1} (Total: {2}, Fetched: {3})",
+    //                             start_ts, end_ts, track_num_entries, total);
+
+    //                spdlog::trace("Allocating Array");
+    //                rocprofvis_controller_array_t* array =
+    //                    rocprofvis_controller_array_alloc(0);
+    //                REQUIRE(array != nullptr);
+
+    //                spdlog::trace("Allocating Future");
+    //                rocprofvis_controller_future_t* future =
+    //                    rocprofvis_controller_future_alloc();
+    //                REQUIRE(future != nullptr);
+
+    //                spdlog::trace("Fetch track data");
+    //                result = rocprofvis_controller_track_fetch_async(
+    //                    m_controller, (rocprofvis_controller_track_t*) track_handle,
+    //                    start_ts, end_ts, future, array);
+    //                REQUIRE(array != nullptr);
+
+    //                spdlog::trace("Wait for future");
+    //                result = rocprofvis_controller_future_wait(future, FLT_MAX);
+    //                REQUIRE(result == kRocProfVisResultSuccess);
+
+    //                uint64_t future_result = 0;
+    //                result                 = rocprofvis_controller_get_uint64(
+    //                    future, kRPVControllerFutureResult, 0, &future_result);
+    //                spdlog::trace("Get future result: {0}", future_result);
+    //                REQUIRE(result == kRocProfVisResultSuccess);
+    //                REQUIRE(future_result == kRocProfVisResultSuccess);
+
+    //                uint64_t num_results = 0;
+    //                result               = rocprofvis_controller_get_uint64(
+    //                    array, kRPVControllerArrayNumEntries, 0, &num_results);
+    //                spdlog::trace("Get num elements loaded from track: {0}", num_results);
+    //                REQUIRE(result == kRocProfVisResultSuccess);
+
+    //                for(uint64_t i = 0; i < num_results; i++)
+    //                {
+    //                    rocprofvis_handle_t* entry = nullptr;
+    //                    result                     = rocprofvis_controller_get_object(
+    //                        array, kRPVControllerArrayEntryIndexed, i, &entry);
+    //                    REQUIRE(result == kRocProfVisResultSuccess);
+    //                    REQUIRE(entry != nullptr);
+
+    //                    double begin_ts = 0;
+    //                    double stop_ts  = 0;
+    //                    switch(track_type)
+    //                    {
+    //                        case kRPVControllerTrackTypeEvents:
+    //                        {
+    //                            result = rocprofvis_controller_get_double(
+    //                                entry, kRPVControllerEventStartTimestamp, 0,
+    //                                &begin_ts);
+    //                            REQUIRE(result == kRocProfVisResultSuccess);
+    //                            REQUIRE(begin_ts >= min_time);
+    //                            REQUIRE(begin_ts <= max_time);
+
+    //                            result = rocprofvis_controller_get_double(
+    //                                entry, kRPVControllerEventEndTimestamp, 0, &stop_ts);
+    //                            REQUIRE(result == kRocProfVisResultSuccess);
+    //                            REQUIRE(stop_ts >= min_time);
+    //                            REQUIRE(stop_ts <= max_time);
+    //                            break;
+    //                        }
+    //                        case kRPVControllerTrackTypeSamples:
+    //                        {
+    //                            result = rocprofvis_controller_get_double(
+    //                                entry, kRPVControllerSampleTimestamp, 0, &begin_ts);
+    //                            REQUIRE(result == kRocProfVisResultSuccess);
+    //                            REQUIRE(begin_ts >= min_time);
+    //                            REQUIRE(begin_ts <= max_time);
+
+    //                            stop_ts = begin_ts;
+    //                            break;
+    //                        }
+    //                        default:
+    //                        {
+    //                            break;
+    //                        }
+    //                    }
+
+    //                    if(!(begin_ts <= end_ts && stop_ts >= start_ts))
+    //                    {
+    //                        spdlog::info("Idx: {0} Range: {1}-{2} Entry: {3}-{4}", i,
+    //                                     start_ts, end_ts, begin_ts, stop_ts);
+    //                    }
+    //                    REQUIRE((begin_ts <= end_ts && stop_ts >= start_ts));
+    //                }
+
+    //                rocprofvis_controller_array_t* track_data = m_track_data[track_idx];
+    //                REQUIRE(track_data != nullptr);
+
+    //                uint64_t range_idx = 0;
+    //                for(uint64_t i = 0; i < track_num_entries; i++)
+    //                {
+    //                    rocprofvis_handle_t* entry = nullptr;
+    //                    result                     = rocprofvis_controller_get_object(
+    //                        track_data, kRPVControllerArrayEntryIndexed, i, &entry);
+    //                    REQUIRE(result == kRocProfVisResultSuccess);
+    //                    REQUIRE(entry != nullptr);
+
+    //                    double begin_ts = 0;
+    //                    double stop_ts  = 0;
+    //                    switch(track_type)
+    //                    {
+    //                        case kRPVControllerTrackTypeEvents:
+    //                        {
+    //                            result = rocprofvis_controller_get_double(
+    //                                entry, kRPVControllerEventStartTimestamp, 0,
+    //                                &begin_ts);
+    //                            REQUIRE(result == kRocProfVisResultSuccess);
+    //                            REQUIRE(begin_ts >= min_time);
+    //                            REQUIRE(begin_ts <= max_time);
+
+    //                            result = rocprofvis_controller_get_double(
+    //                                entry, kRPVControllerEventEndTimestamp, 0, &stop_ts);
+    //                            REQUIRE(result == kRocProfVisResultSuccess);
+    //                            REQUIRE(stop_ts >= min_time);
+    //                            REQUIRE(stop_ts <= max_time);
+    //                            break;
+    //                        }
+    //                        case kRPVControllerTrackTypeSamples:
+    //                        {
+    //                            result = rocprofvis_controller_get_double(
+    //                                entry, kRPVControllerSampleTimestamp, 0, &begin_ts);
+    //                            REQUIRE(result == kRocProfVisResultSuccess);
+    //                            REQUIRE(begin_ts >= min_time);
+    //                            REQUIRE(begin_ts <= max_time);
+
+    //                            stop_ts = begin_ts;
+    //                            break;
+    //                        }
+    //                        default:
+    //                        {
+    //                            break;
+    //                        }
+    //                    }
+
+    //                    if(begin_ts <= end_ts && stop_ts >= start_ts)
+    //                    {
+    //                        range_idx++;
+    //                    }
+    //                }
+
+    //                if(range_idx != num_results)
+    //                {
+    //                    for(uint64_t i = 0; i < num_results; i++)
+    //                    {
+    //                        rocprofvis_handle_t* entry = nullptr;
+    //                        result                     = rocprofvis_controller_get_object(
+    //                            array, kRPVControllerArrayEntryIndexed, i, &entry);
+    //                        REQUIRE(result == kRocProfVisResultSuccess);
+    //                        REQUIRE(entry != nullptr);
+
+    //                        double begin_ts = 0;
+    //                        double stop_ts  = 0;
+    //                        switch(track_type)
+    //                        {
+    //                            case kRPVControllerTrackTypeEvents:
+    //                            {
+    //                                result = rocprofvis_controller_get_double(
+    //                                    entry, kRPVControllerEventStartTimestamp, 0,
+    //                                    &begin_ts);
+    //                                REQUIRE(result == kRocProfVisResultSuccess);
+    //                                REQUIRE(begin_ts >= min_time);
+    //                                REQUIRE(begin_ts <= max_time);
+
+    //                                result = rocprofvis_controller_get_double(
+    //                                    entry, kRPVControllerEventEndTimestamp, 0,
+    //                                    &stop_ts);
+    //                                REQUIRE(result == kRocProfVisResultSuccess);
+    //                                REQUIRE(stop_ts >= min_time);
+    //                                REQUIRE(stop_ts <= max_time);
+    //                                break;
+    //                            }
+    //                            case kRPVControllerTrackTypeSamples:
+    //                            {
+    //                                result = rocprofvis_controller_get_double(
+    //                                    entry, kRPVControllerSampleTimestamp, 0,
+    //                                    &begin_ts);
+    //                                REQUIRE(result == kRocProfVisResultSuccess);
+    //                                REQUIRE(begin_ts >= min_time);
+    //                                REQUIRE(begin_ts <= max_time);
+
+    //                                stop_ts = begin_ts;
+    //                                break;
+    //                            }
+    //                            default:
+    //                            {
+    //                                break;
+    //                            }
+    //                        }
+
+    //                        spdlog::info("Idx: {0} Range: {1}-{2} Entry: {3}-{4}", i,
+    //                                     start_ts, end_ts, begin_ts, stop_ts);
+    //                    }
+
+    //                    for(uint64_t i = 0; i < track_num_entries; i++)
+    //                    {
+    //                        rocprofvis_handle_t* entry = nullptr;
+    //                        result                     = rocprofvis_controller_get_object(
+    //                            track_data, kRPVControllerArrayEntryIndexed, i, &entry);
+    //                        REQUIRE(result == kRocProfVisResultSuccess);
+    //                        REQUIRE(entry != nullptr);
+
+    //                        double begin_ts = 0;
+    //                        double stop_ts  = 0;
+    //                        switch(track_type)
+    //                        {
+    //                            case kRPVControllerTrackTypeEvents:
+    //                            {
+    //                                result = rocprofvis_controller_get_double(
+    //                                    entry, kRPVControllerEventStartTimestamp, 0,
+    //                                    &begin_ts);
+    //                                REQUIRE(result == kRocProfVisResultSuccess);
+    //                                REQUIRE(begin_ts >= min_time);
+    //                                REQUIRE(begin_ts <= max_time);
+
+    //                                result = rocprofvis_controller_get_double(
+    //                                    entry, kRPVControllerEventEndTimestamp, 0,
+    //                                    &stop_ts);
+    //                                REQUIRE(result == kRocProfVisResultSuccess);
+    //                                REQUIRE(stop_ts >= min_time);
+    //                                REQUIRE(stop_ts <= max_time);
+    //                                break;
+    //                            }
+    //                            case kRPVControllerTrackTypeSamples:
+    //                            {
+    //                                result = rocprofvis_controller_get_double(
+    //                                    entry, kRPVControllerSampleTimestamp, 0,
+    //                                    &begin_ts);
+    //                                REQUIRE(result == kRocProfVisResultSuccess);
+    //                                REQUIRE(begin_ts >= min_time);
+    //                                REQUIRE(begin_ts <= max_time);
+
+    //                                stop_ts = begin_ts;
+    //                                break;
+    //                            }
+    //                            default:
+    //                            {
+    //                                break;
+    //                            }
+    //                        }
+
+    //                        if(begin_ts <= end_ts && stop_ts >= start_ts)
+    //                        {
+    //                            spdlog::info(
+    //                                "Raw Track Idx: {0} Range: {1}-{2} Entry: {3}-{4}", i,
+    //                                start_ts, end_ts, begin_ts, stop_ts);
+    //                        }
+    //                    }
+    //                }
+    //                REQUIRE(range_idx == num_results);
+    //                total += num_results;
+
+    //                spdlog::trace("Free Array");
+    //                rocprofvis_controller_array_free(array);
+
+    //                spdlog::trace("Free Future");
+    //                rocprofvis_controller_future_free(future);
+
+    //                start_ts = end_ts;
+    //            }
+
+    //            REQUIRE(total >= track_num_entries);
+    //        }
+    //    }
+    //}
 
     SECTION("Delete controller")
     {

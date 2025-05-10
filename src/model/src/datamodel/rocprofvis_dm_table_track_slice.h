@@ -127,7 +127,22 @@ class TableSlice : public TrackSlice {
         // @param level - graph level for the event
         // @return status of operation
         rocprofvis_dm_result_t GetRecordGraphLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t & level) override;
-
+        // Method to read TrackSlice object property as uint64
+        // @param property - property enumeration rocprofvis_dm_slice_property_t
+        // @param index - index of any indexed property
+        // @param value - pointer reference to uint64_t return value
+        // @return status of operation
+        rocprofvis_dm_result_t GetPropertyAsUint64(rocprofvis_dm_property_t property,
+                                                   rocprofvis_dm_property_index_t index,
+                                                   uint64_t* value) override;
+        // Method to read TrackSlice object property as char*
+        // @param property - property enumeration rocprofvis_dm_slice_property_t
+        // @param index - index of any indexed property
+        // @param value - pointer reference to char* return value
+        // @return status of operation
+        rocprofvis_dm_result_t GetPropertyAsCharPtr(rocprofvis_dm_property_t property,
+                                                    rocprofvis_dm_property_index_t index,
+                                                    char** value) override;
     private:
         std::map<uint32_t, Track*> m_track_map;
         // vector array of tracks that match samples for underlying record slice

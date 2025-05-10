@@ -80,6 +80,7 @@ rocprofvis_dm_result_t  TableSlice::GetRecordSymbolIndexAt(const rocprofvis_dm_p
 
 rocprofvis_dm_result_t  TableSlice::GetRecordCategoryStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & category_charptr){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_tracks.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT(m_tracks[index]);
     ROCPROFVIS_ASSERT_MSG_RETURN(m_tracks[index], ERROR_TRACK_CANNOT_BE_NULL,
                                  kRocProfVisDmResultNotLoaded);
     ROCPROFVIS_ASSERT_MSG_RETURN(m_tracks[index]->Ctx(), ERROR_TRACE_CANNOT_BE_NULL,
@@ -96,6 +97,7 @@ rocprofvis_dm_result_t  TableSlice::GetRecordCategoryStringAt(const rocprofvis_d
 
 rocprofvis_dm_result_t  TableSlice::GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & symbol_charptr){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_tracks.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT(m_tracks[index]);
     ROCPROFVIS_ASSERT_MSG_RETURN(m_tracks[index], ERROR_TRACK_CANNOT_BE_NULL,
                                  kRocProfVisDmResultNotLoaded);
     ROCPROFVIS_ASSERT_MSG_RETURN(m_tracks[index]->Ctx(), ERROR_TRACE_CANNOT_BE_NULL,
@@ -111,6 +113,7 @@ rocprofvis_dm_result_t  TableSlice::GetRecordSymbolStringAt(const rocprofvis_dm_
 
 rocprofvis_dm_result_t TableSlice::GetRecordGraphLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t& level) {
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_tracks.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT(m_tracks[index]);
     ROCPROFVIS_ASSERT_MSG_RETURN(m_tracks[index], ERROR_TRACK_CANNOT_BE_NULL,
                                  kRocProfVisDmResultNotLoaded);
     ROCPROFVIS_ASSERT_MSG_RETURN(m_tracks[index]->Ctx(), ERROR_TRACE_CANNOT_BE_NULL,
@@ -120,6 +123,97 @@ rocprofvis_dm_result_t TableSlice::GetRecordGraphLevelAt(const rocprofvis_dm_pro
     if(result == kRocProfVisDmResultSuccess)
     {
         level = m_tracks[index]->Ctx()->GetEventLevelAt(event_id);
+    }
+    return result;
+}
+
+rocprofvis_dm_result_t TableSlice::GetPropertyAsUint64(rocprofvis_dm_property_t property, 
+                                                    rocprofvis_dm_property_index_t index, 
+                                                    uint64_t* value)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+    switch (property)
+    {
+        case kRPVDMTableTrackIdIndexed:
+        {
+            if(index < m_tracks.size())
+            {
+                *value = m_tracks[index]->TrackId();
+            }
+            break;
+        }
+        case kRPVDMTableTrackCategoryNameIndexed:
+        case kRPVDMTableTrackMainProcessNameIndexed:
+        case kRPVDMTableTrackSubProcessNameIndexed:
+        {
+            result = kRocProfVisDmResultInvalidParameter;
+            break;
+        }
+        default:
+        {
+            result = m_records->GetPropertyAsUint64(property, index, value);
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_dm_result_t TableSlice::GetPropertyAsCharPtr(rocprofvis_dm_property_t property, 
+                                                    rocprofvis_dm_property_index_t index, 
+                                                    char** value)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+    switch(property)
+    {
+        case kRPVDMTableTrackIdIndexed:
+        {
+            result = kRocProfVisDmResultInvalidParameter;
+            break;
+        }
+        case kRPVDMEventTypeStringCharPtrIndexed:
+        {
+            result = GetRecordCategoryStringAt(index, *(rocprofvis_dm_charptr_t*) value);
+            break;
+        }
+        case kRPVDMEventSymbolStringCharPtrIndexed:
+        {
+            result = GetRecordSymbolStringAt(index, *(rocprofvis_dm_charptr_t*) value);
+            break;
+        }
+        case kRPVDMEventIdOperationCharPtrIndexed:
+        {
+            result = GetRecordOperationStringAt(index, *(rocprofvis_dm_charptr_t*) value);
+            break;
+        }
+        case kRPVDMTableTrackCategoryNameIndexed:
+        {
+            if(index < m_tracks.size())
+            {
+                result = m_tracks[index]->GetPropertyAsCharPtr(kRPVDMTrackCategoryEnumCharPtr, 0, value);
+            }
+            break;
+        }
+        case kRPVDMTableTrackMainProcessNameIndexed:
+        {
+            if(index < m_tracks.size())
+            {
+                result = m_tracks[index]->GetPropertyAsCharPtr(kRPVDMTrackMainProcessNameCharPtr, 0, value);
+            }
+            break;
+        }
+        case kRPVDMTableTrackSubProcessNameIndexed:
+        {
+            if(index < m_tracks.size())
+            {
+                result = m_tracks[index]->GetPropertyAsCharPtr(kRPVDMTrackSubProcessNameCharPtr, 0, value);
+            }
+            break;
+        }
+        default:
+        {
+            result = m_records->GetPropertyAsCharPtr(property, index, value);
+            break;
+        }
     }
     return result;
 }

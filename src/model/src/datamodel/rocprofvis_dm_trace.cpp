@@ -250,6 +250,7 @@ rocprofvis_dm_slice_t Trace::AllocTableSlice(
         rocprofvis_dm_result_t result = trace->GetTrackAtIndex(tracks[i], track);
         if(result == kRocProfVisDmResultSuccess)
         {
+            ROCPROFVIS_ASSERT(track);
             ROCPROFVIS_ASSERT_MSG_RETURN(track, ERROR_TRACK_CANNOT_BE_NULL, nullptr);
             tracks_map[tracks[i]] = ((Track*) track);
         }

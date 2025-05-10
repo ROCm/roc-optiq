@@ -52,9 +52,14 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
         rocprofvis_dm_slice_t  slice     = nullptr;
         rocprofvis_dm_database_t db    = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
         ROCPROFVIS_ASSERT(db);
+
+        Columns sort_column = m_columns[m_sort_column].m_sort_enum;
+
+        rocprofvis_dm_sort_columns_t sort_enum = (rocprofvis_dm_sort_columns_t)(sort_column <= Columns::LastSortColumn ? sort_column : Columns::Timestamp);
+
         rocprofvis_dm_result_t dm_result = rocprofvis_db_read_table_slice_async(db, m_start_ts, m_end_ts,
                                              m_tracks.size(), m_tracks.data(),
-                                             m_columns[m_sort_column].m_sort_enum, count, index, object2wait, &slice);
+                                             sort_enum, count, index, object2wait, &slice);
 
         if(dm_result == kRocProfVisDmResultSuccess)
         {
@@ -72,6 +77,12 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
                 double duration = (double) rocprofvis_dm_get_property_as_int64(
                     slice, kRPVDMEventDurationInt64Indexed, i);
 
+                uint64_t track_id = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTableTrackIdIndexed, i);
+
+                char* track_cat = rocprofvis_dm_get_property_as_charptr(slice, kRPVDMTableTrackCategoryNameIndexed, i);
+                char* track_main = rocprofvis_dm_get_property_as_charptr(slice, kRPVDMTableTrackMainProcessNameIndexed, i);
+                char* track_sub = rocprofvis_dm_get_property_as_charptr(slice, kRPVDMTableTrackSubProcessNameIndexed, i);
+
                 uint64_t event_id = 0;
                 char* cat = "";
                 char* name = "";
@@ -85,6 +96,9 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
                         slice, kRPVDMEventTypeStringCharPtrIndexed, i);
                     name = rocprofvis_dm_get_property_as_charptr(
                         slice, kRPVDMEventSymbolStringCharPtrIndexed, i);
+
+                    cat = cat == nullptr ? "" : cat;
+                    name = name == nullptr ? "" : name;
                 }
                 else
                 {
@@ -101,43 +115,59 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
                     row_value.SetType(m_columns[c].m_type);
                     switch(column.m_sort_enum)
                     {
-                        case kRPVDMSortColumnTimestamp:
+                        case Columns::Timestamp:
                         {
                             row_value.SetDouble(timestamp);
                             break;
                         }
-                        case kRPVDMSortColumnEventId:
+                        case Columns::EventId:
                         {
                             row_value.SetUInt64(event_id);
                             break;
                         }
-                        case kRPVDMSortColumnEventOperation:
+                        case Columns::EventOperation:
                         {
                             break;
                         }
-                        case kRPVDMSortColumnEventDuration:
+                        case Columns::EventDuration:
                         {
                             row_value.SetDouble(duration);
                             break;
                         }
-                        case kRPVDMSortColumnEventEnd:
+                        case Columns::EventEnd:
                         {
                             row_value.SetDouble(timestamp + duration);
                             break;
                         }
-                        case kRPVDMSortColumnEventType:
+                        case Columns::EventType:
                         {
                             row_value.SetString(cat);
                             break;
                         }
-                        case kRPVDMSortColumnEventSymbol:
+                        case Columns::EventSymbol:
                         {
                             row_value.SetString(name);
                             break;
                         }
-                        case kRPVDMSortColumnPmcValue:
+                        case Columns::PmcValue:
                         {
                             row_value.SetDouble(value);
+                            break;
+                        }
+                        case Columns::TrackId:
+                        {
+                            row_value.SetUInt64(track_id);
+                            break;
+                        }
+                        case Columns::TrackName:
+                        {
+                            std::string track_name = track_cat;
+                            track_name += ":";
+                            track_name += track_main;
+                            track_name += ":";
+                            track_name += track_sub;
+
+                            row_value.SetString(track_name.c_str());
                             break;
                         }
                         default:
@@ -202,43 +232,43 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
 
                 column.m_name = "id";
                 column.m_type = kRPVControllerPrimitiveTypeUInt64;
-                column.m_sort_enum = kRPVDMSortColumnEventId;
+                column.m_sort_enum = Columns::EventId;
                 columns.push_back(column);
                 
                 column.m_name = "start_ts";
                 column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = kRPVDMSortColumnTimestamp;
+                column.m_sort_enum = Columns::Timestamp;
                 columns.push_back(column);
                 
                 column.m_name = "end_ts";
                 column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = kRPVDMSortColumnEventEnd;
+                column.m_sort_enum = Columns::EventEnd;
                 columns.push_back(column);
                 
                 column.m_name = "duration";
                 column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = kRPVDMSortColumnEventDuration;
+                column.m_sort_enum = Columns::EventDuration;
                 columns.push_back(column);
 
                 column.m_name = "name";
                 column.m_type = kRPVControllerPrimitiveTypeString;
-                column.m_sort_enum = kRPVDMSortColumnEventSymbol;
+                column.m_sort_enum = Columns::EventSymbol;
                 columns.push_back(column);
                 
                 column.m_name = "category";
                 column.m_type = kRPVControllerPrimitiveTypeString;
-                column.m_sort_enum = kRPVDMSortColumnEventType;
+                column.m_sort_enum = Columns::EventType;
                 columns.push_back(column);
                 
-                //column.m_name = "track_id";
-                //column.m_type = kRPVControllerPrimitiveTypeUInt64;
-                //column.m_sort_enum = kRPVDMSortColumnEventId;
-                //columns.push_back(column);
-                //
-                //column.m_name = "track_name";
-                //column.m_type = kRPVControllerPrimitiveTypeString;
-                //column.m_sort_enum = kRPVDMSortColumnEventSymbol;
-                //columns.push_back(column);
+                column.m_name = "track_id";
+                column.m_type = kRPVControllerPrimitiveTypeUInt64;
+                column.m_sort_enum = Columns::TrackId;
+                columns.push_back(column);
+                
+                column.m_name = "track_name";
+                column.m_type = kRPVControllerPrimitiveTypeString;
+                column.m_sort_enum = Columns::TrackName;
+                columns.push_back(column);
 
                 break;
             }
@@ -250,23 +280,23 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
                 
                 column.m_name = "timestamp";
                 column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = kRPVDMSortColumnTimestamp;
+                column.m_sort_enum = Columns::Timestamp;
                 columns.push_back(column);
                 
                 column.m_name = "value";
                 column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = kRPVDMSortColumnPmcValue;
+                column.m_sort_enum = Columns::PmcValue;
                 columns.push_back(column);
                 
-                //column.m_name = "track_id";
-                //column.m_type = kRPVControllerPrimitiveTypeUInt64;
-                //column.m_sort_enum = kRPVDMSortColumnEventId;
-                //columns.push_back(column);
-                //
-                //column.m_name = "track_name";
-                //column.m_type = kRPVControllerPrimitiveTypeString;
-                //column.m_sort_enum = kRPVDMSortColumnEventSymbol;
-                //columns.push_back(column);
+                column.m_name = "track_id";
+                column.m_type = kRPVControllerPrimitiveTypeUInt64;
+                column.m_sort_enum = Columns::TrackId;
+                columns.push_back(column);
+                
+                column.m_name = "track_name";
+                column.m_type = kRPVControllerPrimitiveTypeString;
+                column.m_sort_enum = Columns::TrackName;
+                columns.push_back(column);
 
                 break;
             }

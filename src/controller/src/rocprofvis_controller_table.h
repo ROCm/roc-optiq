@@ -47,11 +47,35 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
 private:
+    enum class Columns
+    {
+        // Record timestamp
+        Timestamp,
+        // PMC record value
+        PmcValue,
+        // Event ID
+        EventId,
+        // Event operation enumeration (none, launch, dispatch, allocate, copy)
+        EventOperation,
+        // Event duration. Can be negative. Negative has to be invalidated by controller
+        EventDuration,
+        // Event duration. Can be negative. Negative has to be invalidated by controller
+        EventEnd,
+        // Event type string
+        EventType,
+        // Event symbol string
+        EventSymbol,
+        
+        LastSortColumn = EventSymbol,
+
+        TrackId,
+        TrackName
+    };
     struct ColumnDefintion
     {
         std::string m_name;
         rocprofvis_controller_primitive_type_t m_type;
-        rocprofvis_dm_sort_columns_t m_sort_enum;
+        Columns m_sort_enum;
     };
 
     std::vector<uint32_t> m_tracks;

@@ -4,6 +4,7 @@
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_reference.h"
+#include "rocprofvis_controller_array.h"
 
 namespace RocProfVis
 {
@@ -66,9 +67,10 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
             dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
         }
         
+        uint64_t num_records = 0; 
         if (dm_result == kRocProfVisDmResultSuccess)
         {
-            uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
+            num_records = rocprofvis_dm_get_property_as_uint64(
                 slice, kRPVDMNumberOfRecordsUInt64, 0);
             for (uint32_t i = 0; i < num_records; i++)
             {
@@ -185,13 +187,37 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
         {
             case kRocProfVisDmResultSuccess:
             {
-                result = kRocProfVisResultSuccess;
+                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, num_records);
                 break;
             }
             default:
             {
                 result = kRocProfVisResultUnknownError;
                 break;
+            }
+        }
+
+
+
+        for(uint32_t i = index;
+            (result == kRocProfVisResultSuccess) && i < index + num_records; i++)
+        {
+            Array* row_array = new Array();
+            if(row_array)
+            {
+                auto& row_vec = row_array->GetVector();
+                row_vec.resize(m_rows[i].size());
+                for (uint32_t j = 0; j < m_rows[i].size(); j++)
+                {
+                    row_vec[j].SetType(m_rows[i][j].GetType());
+                    row_vec[j] = m_rows[i][j];
+                }
+                result = array.SetObject(kRPVControllerArrayEntryIndexed, i - index,
+                                (rocprofvis_handle_t*)row_array);
+            }
+            else
+            {
+                result = kRocProfVisResultMemoryAllocError;
             }
         }
 
@@ -387,6 +413,51 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
 rocprofvis_result_t Table::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerTableId:
+            {
+                *value = m_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTableNumColumns:
+            {
+                *value = m_columns.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTableNumRows:
+            {
+                *value = m_rows.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTableColumnTypeIndexed:
+            {
+                if(index < m_columns.size())
+                {
+                    *value = m_columns[index].m_type;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerTableColumnHeaderIndexed:
+            case kRPVControllerTableRowHeaderIndexed:
+            case kRPVControllerTableRowIndexed:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
     return result;
 }
 
@@ -405,6 +476,44 @@ rocprofvis_result_t Table::GetObject(rocprofvis_property_t property, uint64_t in
 rocprofvis_result_t Table::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(length)
+    {
+        switch(property)
+        {
+            case kRPVControllerTableColumnHeaderIndexed:
+            {
+                if (index < m_columns.size())
+                {
+                    if(!value && length)
+                    {
+                        *length = m_columns[index].m_name.size();
+                        result  = kRocProfVisResultSuccess;
+                    }
+                    else if (value && length)
+                    {
+                        strncpy(value, m_columns[index].m_name.c_str(), *length);
+                        result = kRocProfVisResultSuccess;
+                    }
+                }
+                break;
+            }
+            case kRPVControllerTableId:
+            case kRPVControllerTableNumColumns:
+            case kRPVControllerTableNumRows:
+            case kRPVControllerTableColumnTypeIndexed:
+            case kRPVControllerTableRowHeaderIndexed:
+            case kRPVControllerTableRowIndexed:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
     return result;
 }
 

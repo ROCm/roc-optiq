@@ -225,6 +225,12 @@ class Trace : public DmBase{
         // @return status of operation
         static rocprofvis_dm_result_t                   AddEventLevel(const rocprofvis_dm_trace_t object,  const rocprofvis_dm_event_id_t event_id, rocprofvis_dm_event_level_t level);
 
+        static rocprofvis_dm_slice_t AllocTableSlice(
+            const rocprofvis_dm_trace_t object, const rocprofvis_db_num_of_tracks_t num,
+            const rocprofvis_db_track_selection_t tracks,
+            const rocprofvis_dm_track_category_t  track_type,
+            const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
+
         // trace parameters structure
         rocprofvis_dm_trace_params_t                    m_parameters;
         // binding info structure

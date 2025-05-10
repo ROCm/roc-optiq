@@ -81,10 +81,10 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
                 {
                     event_id = rocprofvis_dm_get_property_as_uint64(
                         slice, kRPVDMEventIdUInt64Indexed, i);
-                    //cat = rocprofvis_dm_get_property_as_charptr(
-                    //    slice, kRPVDMEventTypeStringCharPtrIndexed, i);
-                    //name = rocprofvis_dm_get_property_as_charptr(
-                    //    slice, kRPVDMEventSymbolStringCharPtrIndexed, i);
+                    cat = rocprofvis_dm_get_property_as_charptr(
+                        slice, kRPVDMEventTypeStringCharPtrIndexed, i);
+                    name = rocprofvis_dm_get_property_as_charptr(
+                        slice, kRPVDMEventSymbolStringCharPtrIndexed, i);
                 }
                 else
                 {

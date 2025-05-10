@@ -20,8 +20,7 @@
 
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_dm_track_slice.h"
-#include "rocprofvis_dm_pmc_track_slice.h"
-#include "rocprofvis_dm_event_track_slice.h"
+#include "rocprofvis_dm_table_track_slice.h"
 #include <sstream>
 
 namespace RocProfVis
@@ -121,8 +120,8 @@ ProfileDatabase::CallbackAddAnyTableRecord(void* data, int argc, char** argv, ch
             record.pmc.timestamp = std::stoll(argv[1]);
             record.pmc.value     = std::stod(argv[2]);
         }
-        if(db->BindObject()->FuncAddRecord(
-               ((rocprofvis_dm_slice_t) callback_params->handle), record) !=
+
+        if(((TableSlice*) callback_params->handle)->AddRecord(track_id, record) !=
            kRocProfVisDmResultSuccess)
             return 1;
     }
@@ -329,33 +328,9 @@ ProfileDatabase::ReadTableSlice(rocprofvis_dm_timestamp_t       start,
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded,
                                     ERROR_METADATA_IS_NOT_LOADED);
         std::string   query;
-        TrackSlice* slice = nullptr;
-        rocprofvis_dm_track_category_t track_type = TrackPropertiesAt(tracks[0])
-            ->track_category;
-        if(track_type == kRocProfVisDmPmcTrack)
-        {
-            try
-            {
-                slice = new PmcTrackSlice(nullptr, start, end);
-            } catch(std::exception ex)
-            {
-                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
-                    "Error! Falure allocating PMC track time slice!",
-                    kRocProfVisDmResultAllocFailure);
-            }
-        }
-        else if(track_type != kRocProfVisDmNotATrack)
-        {
-            try
-            {
-                slice = new EventTrackSlice(nullptr, start, end);
-            } catch(std::exception ex)
-            {
-                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
-                    "Error! Falure allocating event track time slice!",
-                    kRocProfVisDmResultAllocFailure);
-            }
-        }
+        rocprofvis_dm_track_category_t track_type = TrackPropertiesAt(tracks[0])->track_category;
+        rocprofvis_dm_slice_t          slice = BindObject()->FuncAllocTableSlice(BindObject()->trace_object, num, tracks, track_type, start, end);
+        ROCPROFVIS_ASSERT_MSG_RETURN(slice, "Failed to allocate table slice", kRocProfVisDmResultAllocFailure);
 
         if(BuildTableSliceQuery(start, end, num, tracks, sort_column, max_count, offset,
                                 false, query) != kRocProfVisDmResultSuccess)
@@ -367,7 +342,7 @@ ProfileDatabase::ReadTableSlice(rocprofvis_dm_timestamp_t       start,
         ShowProgress(100 - future->Progress(), "Time slice successfully loaded!",
                      kRPVDbSuccess, future);
 
-        *output_slice = (rocprofvis_dm_slice_t)slice;
+        *output_slice = slice;
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
     ShowProgress(0, "Not all tracks are loaded!", kRPVDbError, future);

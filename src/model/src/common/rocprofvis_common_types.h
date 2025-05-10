@@ -123,6 +123,11 @@ typedef struct {
 
 /***********************Trace to Database binding info******************************/
 
+typedef rocprofvis_dm_slice_t (*rocprofvis_dm_alloc_table_slice_func_t)(
+    const rocprofvis_dm_trace_t object, const rocprofvis_db_num_of_tracks_t num,
+    const rocprofvis_db_track_selection_t tracks, const rocprofvis_dm_track_category_t track_type,
+    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
+
 
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_track_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_track_params_t * params);
 typedef rocprofvis_dm_slice_t (*rocprofvis_dm_add_slice_func_t) (const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, 
@@ -163,5 +168,5 @@ typedef struct
         rocprofvis_dm_add_table_row_cell_func_t FuncAddTableRowCell;    // Called by database query callback to add new cell to a table row
         rocprofvis_db_find_cached_table_value_func_t FuncFindCachedTableValue; // Get value from tables cached in database component (tables like rocpd_node, rocpd_process, rocpd_thread, rocpd_agent, rocpd_queue, rocpd_stream, etc. )
         rocprofvis_dm_add_event_level_func_t FuncAddEventLevel;         // Called by database query callback to add event level to a map array located in trace object
-
+        rocprofvis_dm_alloc_table_slice_func_t FuncAllocTableSlice;
 } rocprofvis_dm_db_bind_struct;

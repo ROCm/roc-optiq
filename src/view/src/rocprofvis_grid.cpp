@@ -38,8 +38,9 @@ Grid::~Grid() {}
 double
 Grid::GetCursorPosition(float mouse_position)
 {
+    std::cout << m_content_size_x << std::endl;
     return (m_viewport_start_position +
-            ((mouse_position - m_sidebar_size) * (1 / m_scale_x)) - m_min_x);
+            ((mouse_position ) * (1 / m_scale_x)) - m_min_x);
 }
 
 void

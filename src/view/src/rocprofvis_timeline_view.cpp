@@ -80,6 +80,7 @@ TimelineView::CalibratePosition()
     double current_position = m_grid.GetViewportStartPosition();
     double end_position     = m_grid.GetViewportEndPosition();
 
+
     m_scroll_position_x = (current_position - m_min_x) /
                           (m_max_x - m_min_x);  // Finds where the chart is at.
 
@@ -236,10 +237,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImVec2 display_size    = ImGui::GetWindowSize();
     float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
     ImGui::SetNextWindowSize(
-        ImVec2(display_size.x - scrollbar_width - m_sidebar_size - 7, display_size.y),
+        ImVec2(display_size.x - scrollbar_width , display_size.y),
         ImGuiCond_Always);
     ImGui::SetCursorPos(
-        ImVec2(m_sidebar_size + 7, 0));  // Meta Data size will be universal next PR.
+        ImVec2(m_sidebar_size, 0));  // Meta Data size will be universal next PR.
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
@@ -268,11 +269,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         ImVec2 mouse_position = ImGui::GetMousePos();
 
         ImVec2 containerPos = ImGui::GetWindowPos();
-        m_grid.GetCursorPosition(mouse_position.x - containerPos.x);
 
         char text[20];
         sprintf(text, "%.0f",
-                m_grid.GetCursorPosition(mouse_position.x - containerPos.x));
+                m_grid.GetCursorPosition(mouse_position.x - containerPos.x + 2));
         ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28);
 
         ImVec2 rect_pos = ImVec2(mouse_position.x + 50 * Settings::GetInstance().GetDPI(),
@@ -284,7 +284,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             text_pos, m_settings.GetColor(static_cast<int>(Colors::kFillerColor)), text);
         draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
                            ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28),
-                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)));
+                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)),2.0f);
 
         // Code below is for select
         if(ImGui::IsMouseDoubleClicked(0))
@@ -696,9 +696,11 @@ TimelineView::RenderGraphPoints()
 
         // Scale used in all graphs computer here.
         m_v_width = (m_max_x - m_min_x) / m_zoom;
+
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
-        m_scale_x = graph_view_size.x / (m_v_max_x - m_v_min_x);
+        m_scale_x = (graph_view_size.x - m_sidebar_size) / (m_v_max_x - m_v_min_x);
+        std::cout << graph_view_size.x << std::endl;
 
         if(m_capture_og_v_max_x)
         {

@@ -3,6 +3,7 @@
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_controller_trace.h"
 
 #include <algorithm>
 #include <cfloat>
@@ -14,13 +15,14 @@ namespace RocProfVis
 namespace Controller
 {
 
-Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle)
+Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, Trace * ctx)
 : m_id(id)
 , m_num_elements(0)
 , m_type(type)
 , m_start_timestamp(DBL_MIN)
 , m_end_timestamp(DBL_MAX)
 , m_dm_handle(dm_handle)
+, m_ctx(ctx)
 {
 
 }
@@ -34,12 +36,33 @@ rocprofvis_dm_track_t Track::GetDmHandle(void){
     return m_dm_handle;
 }
 
+Trace* Track::GetContext(void)
+{
+    return m_ctx;
+}
+
 rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(m_start_timestamp <= end && m_end_timestamp >= start)
     {
         result = m_segments.FetchSegments(start, end, user_ptr, func);
+    }
+    return result;
+}
+
+rocprofvis_result_t Track::DeleteSegment(Track* requestor, Segment* target)
+{
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
+    if(requestor != this)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        result = m_segments.Remove(target);
+    }
+    else
+    {
+        result = m_segments.Remove(target);
     }
     return result;
 }
@@ -427,7 +450,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                             if (m_segments.GetSegments().find(segment_start) == m_segments.GetSegments().end())
                             {
                                 double segment_end = segment_start + kSegmentDuration;
-                                std::unique_ptr<Segment> segment = std::make_unique<Segment>(m_type);
+                                std::unique_ptr<Segment> segment = std::make_unique<Segment>(m_type,m_ctx);
                                 segment->SetStartEndTimestamps(segment_start, segment_end);
                                 segment->SetMinTimestamp(timestamp); 
                                 if (object_type == kRPVControllerObjectTypeEvent)
@@ -441,11 +464,14 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                 {
                                     segment->SetMaxTimestamp(timestamp);
                                 }
+                                m_ctx->ManageLRU(this);
                                 m_segments.Insert(segment_start, std::move(segment));
                                 result = (m_segments.GetSegments().find(segment_start) !=
                                           m_segments.GetSegments().end())
                                              ? kRocProfVisResultSuccess
                                              : kRocProfVisResultMemoryAllocError;
+                                m_ctx->AddLRUReference(
+                                    this, m_segments.GetSegments()[segment_start].get());
                             }
 
                             if (result == kRocProfVisResultSuccess)

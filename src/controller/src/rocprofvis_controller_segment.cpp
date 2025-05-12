@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_event_lod.h"
 #include "rocprofvis_controller_sample_lod.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_controller_trace.h"
 
 #include <algorithm>
 
@@ -28,7 +29,18 @@ Segment::Segment(rocprofvis_controller_track_type_t type)
 , m_min_timestamp(0.0)
 , m_max_timestamp(0.0)
 , m_type(type)
+, m_trace_ctx(nullptr)
+{}
+
+Segment::Segment(rocprofvis_controller_track_type_t type, Trace* ctx)
+: m_start_timestamp(0.0)
+, m_end_timestamp(0.0)
+, m_min_timestamp(0.0)
+, m_max_timestamp(0.0)
+, m_type(type)
+, m_trace_ctx(ctx)
 {
+
 }
 
 Segment::~Segment()
@@ -175,6 +187,11 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 }
                 ++lower;
             }
+
+            if(m_trace_ctx)
+            {
+                m_trace_ctx->AddLRUReference(nullptr, this);
+            }
         }
     }
     return result;
@@ -303,6 +320,19 @@ void SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& se
 std::map<double, std::unique_ptr<Segment>>& SegmentTimeline::GetSegments()
 {
     return m_segments;
+}
+
+rocprofvis_result_t SegmentTimeline::Remove(Segment* target)
+{
+    rocprofvis_result_t result = kRocProfVisResultNotLoaded;
+    auto it = std::find_if(m_segments.begin(), m_segments.end(),
+        [target](const auto& pair) { return pair.second.get() == target; });
+    if (it != m_segments.end())
+    {
+        m_segments.erase(it);
+        result = kRocProfVisResultSuccess;
+    }
+    return result;
 }
 
 }

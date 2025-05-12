@@ -6,6 +6,9 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface.h"
 #include <vector>
+#include <set>
+#include <map>
+#include <mutex>
 
 namespace RocProfVis
 {
@@ -18,6 +21,18 @@ class Track;
 class Graph;
 class Timeline;
 class Event;
+class Segment;
+
+#define TRACE_MEMORY_USAGE_LIMIT 10000000
+struct LRUMember
+{
+    uint64_t  timestamp;
+    Track* track;
+    Segment* reference;
+
+    // Logic for descending sort
+    bool operator<(const LRUMember& other) const { return timestamp > other.timestamp; }
+};
 
 class Trace : public Handle
 {
@@ -37,6 +52,9 @@ public:
     rocprofvis_result_t AsyncFetch(Event& event, Future& future, Array& array,
                                    rocprofvis_property_t property);
 
+    rocprofvis_result_t AddLRUReference(Track* owner, Segment* reference);
+    rocprofvis_result_t ManageLRU(Track* requestor);
+
     rocprofvis_controller_object_type_t GetType(void) final;
 
     // Handlers for getters.
@@ -55,6 +73,9 @@ private:
     uint64_t m_id;
     Timeline* m_timeline;
     rocprofvis_dm_trace_t m_dm_handle;
+    std::set<LRUMember> m_lru_array;
+    std::map<Segment*, std::set<LRUMember>::iterator> m_lru_lookup;
+    std::mutex m_lru_mutex;
 
 private:
 #ifdef JSON_SUPPORT

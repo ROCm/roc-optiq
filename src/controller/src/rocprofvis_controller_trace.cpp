@@ -79,7 +79,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                ? kRPVControllerTrackTypeEvents
                                                : kRPVControllerTrackTypeSamples;
                             Graph* graph = nullptr;
-                            Track* track = new Track(type, track_id++, nullptr);
+                            Track* track = new Track(type, track_id++, nullptr, this);
                             if(track)
                             {
                                 track->SetString(kRPVControllerTrackName, 0,
@@ -370,7 +370,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                       ? kRPVControllerTrackTypeSamples
                                                       : kRPVControllerTrackTypeEvents;
                                     Track* track =
-                                        new Track(type, track_id, dm_track_handle);
+                                        new Track(type, track_id, dm_track_handle, this);
                                     if(track)
                                     {
                                         tracks_selection.push_back((uint32_t) track_id);
@@ -766,6 +766,61 @@ rocprofvis_controller_object_type_t Trace::GetType(void)
     return kRPVControllerObjectTypeController;
 }
 
+rocprofvis_result_t Trace::AddLRUReference(Track* owner, Segment* reference)
+{ 
+    auto now          = std::chrono::system_clock::now();
+    uint64_t ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(now)
+                            .time_since_epoch()
+                            .count();
+    auto it = m_lru_lookup.find(reference);
+    if(it != m_lru_lookup.end())
+    {
+        owner = it->second->track;
+        m_lru_array.erase(it->second);
+    }
+    size_t size = m_lru_array.size();
+    auto pair = m_lru_array.insert({ts, owner, reference});
+    if(pair.second)
+    {
+        m_lru_lookup[reference] = pair.first;
+        return kRocProfVisResultSuccess;
+    }
+
+    return kRocProfVisResultMemoryAllocError;
+}
+
+rocprofvis_result_t Trace::ManageLRU(Track* requestor)
+{ 
+    std::lock_guard<std::mutex> lock(m_lru_mutex);
+    uint64_t memory_used = 0;
+    rocprofvis_result_t result =
+        GetUInt64(kRPVControllerCommonMemoryUsageInclusive, 0, &memory_used);
+
+    if (result == kRocProfVisResultSuccess)
+    {
+        while (memory_used > TRACE_MEMORY_USAGE_LIMIT)
+        {
+            size_t lru_size = m_lru_array.size();
+            auto it = std::prev(m_lru_array.end());            
+            result = it->track->DeleteSegment(requestor, it->reference);
+            m_lru_array.erase(it);
+            m_lru_lookup.erase(it->reference);
+            if (result != kRocProfVisResultSuccess)
+            {
+                break;
+            }
+            result =
+                GetUInt64(kRPVControllerCommonMemoryUsageInclusive, 0, &memory_used);
+            if(result != kRocProfVisResultSuccess)
+            {
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+
 rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -793,7 +848,9 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                 }
                 if (result == kRocProfVisResultSuccess)
                 {
-                    result = m_timeline->GetUInt64(property, 0, value);
+                    uint64_t timeline_size = 0;
+                    result = m_timeline->GetUInt64(property, 0, &timeline_size);
+                    *value += timeline_size;
                 }
                 break;
             }

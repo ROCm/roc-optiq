@@ -17,6 +17,7 @@ namespace Controller
 class Array;
 class Event;
 class Sample;
+class Trace;
 
 constexpr double kSegmentDuration = 1000000000.0;
 
@@ -26,6 +27,7 @@ public:
     Segment();
 
     Segment(rocprofvis_controller_track_type_t type);
+    Segment(rocprofvis_controller_track_type_t type, Trace* trace_ctx);
 
     ~Segment();
 
@@ -53,6 +55,7 @@ private:
     double m_min_timestamp;
     double m_max_timestamp;
     rocprofvis_controller_track_type_t m_type;
+    Trace* m_trace_ctx;
 };
 
 typedef rocprofvis_result_t (*FetchSegmentsFunc)(double start, double end, Segment& segment, void* user_ptr); 
@@ -69,6 +72,7 @@ public:
     SegmentTimeline& operator=(SegmentTimeline&& other);
 
     rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
+    rocprofvis_result_t Remove(Segment* segment);
     void Insert(double segment_start, std::unique_ptr<Segment>&& segment);
     std::map<double, std::unique_ptr<Segment>>& GetSegments();
 

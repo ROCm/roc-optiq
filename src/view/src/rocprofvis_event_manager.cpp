@@ -2,7 +2,7 @@
 
 #include "rocprofvis_event_manager.h"
 #include "spdlog/spdlog.h"
-
+#include "iostream"
 using namespace RocProfVis::View;
 
 // EventManager Implementation
@@ -45,6 +45,7 @@ EventManager::AddEvent(std::shared_ptr<RocEvent> event)
 bool
 EventManager::Subscribe(int event_id, EventHandler handler)
 {
+  
     bool                       result   = false;
     std::vector<EventHandler>& handlers = m_subscriptions[event_id];
 

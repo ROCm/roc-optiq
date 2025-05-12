@@ -700,8 +700,7 @@ TimelineView::RenderGraphPoints()
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
         m_scale_x = (graph_view_size.x - m_sidebar_size) / (m_v_max_x - m_v_min_x);
-        std::cout << graph_view_size.x << std::endl;
-
+ 
         if(m_capture_og_v_max_x)
         {
             m_original_v_max_x   = m_v_max_x;  // Used to set bounds

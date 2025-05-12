@@ -33,16 +33,21 @@ Trace::Trace()
 : m_id(s_trace_id.GetNextId())
 , m_timeline(nullptr)
 , m_event_table(nullptr)
+, m_sample_table(nullptr)
 , m_dm_handle(nullptr)
 {
     m_event_table = new Table(0);
     ROCPROFVIS_ASSERT(m_event_table);
+
+    m_sample_table = new Table(1);
+    ROCPROFVIS_ASSERT(m_sample_table);
 }
 
 Trace::~Trace()
 {
     delete m_timeline;
     delete m_event_table;
+    delete m_sample_table;
     for (Track* track : m_tracks)
     {
         delete track;
@@ -894,6 +899,7 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTimeline:
             case kRPVControllerTrackIndexed:
             case kRPVControllerEventTable:
+            case kRPVControllerSampleTable:
             case kRPVControllerAnalysisViewIndexed:
             {
                 result = kRocProfVisResultInvalidType;
@@ -921,6 +927,7 @@ rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTimeline:
         case kRPVControllerTrackIndexed:
         case kRPVControllerEventTable:
+        case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
         {
             result = kRocProfVisResultInvalidType;
@@ -950,6 +957,12 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventTable:
             {
                 *value = (rocprofvis_handle_t*)m_event_table;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerSampleTable:
+            {
+                *value = (rocprofvis_handle_t*)m_sample_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -1004,6 +1017,7 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTimeline:
         case kRPVControllerTrackIndexed:
         case kRPVControllerEventTable:
+        case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
         {
             result = kRocProfVisResultInvalidType;
@@ -1058,6 +1072,7 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerTimeline:
         case kRPVControllerEventTable:
+        case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerTrackIndexed:
         case kRPVControllerNodeIndexed:
@@ -1086,6 +1101,7 @@ rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTimeline:
         case kRPVControllerTrackIndexed:
         case kRPVControllerEventTable:
+        case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
         {
             result = kRocProfVisResultInvalidType;
@@ -1123,6 +1139,16 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
                 if(table.IsValid())
                 {
                     m_event_table = table.Get();
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerSampleTable:
+            {
+                TableRef table(value);
+                if(table.IsValid())
+                {
+                    m_sample_table = table.Get();
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -1181,6 +1207,7 @@ rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTimeline:
         case kRPVControllerTrackIndexed:
         case kRPVControllerEventTable:
+        case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
         {
             result = kRocProfVisResultInvalidType;

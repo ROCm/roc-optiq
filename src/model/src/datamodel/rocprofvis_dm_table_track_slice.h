@@ -143,6 +143,9 @@ class TableSlice : public TrackSlice {
         rocprofvis_dm_result_t GetPropertyAsCharPtr(rocprofvis_dm_property_t property,
                                                     rocprofvis_dm_property_index_t index,
                                                     char** value) override;
+
+        rocprofvis_dm_result_t GetRecordValueAt(const rocprofvis_dm_property_index_t index, 
+                                                rocprofvis_dm_value_t& value) override;
     private:
         std::map<uint32_t, Track*> m_track_map;
         // vector array of tracks that match samples for underlying record slice

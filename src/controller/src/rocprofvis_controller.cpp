@@ -73,7 +73,7 @@ rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object
 rocprofvis_result_t rocprofvis_controller_set_uint64(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, uint64_t value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(object && value)
+    if(object)
     {
         RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*) object;
         result = handle->SetUInt64(property, index, value);
@@ -83,7 +83,7 @@ rocprofvis_result_t rocprofvis_controller_set_uint64(rocprofvis_handle_t* object
 rocprofvis_result_t rocprofvis_controller_set_double(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, double value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(object && value)
+    if(object)
     {
         RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*) object;
         result = handle->SetDouble(property, index, value);

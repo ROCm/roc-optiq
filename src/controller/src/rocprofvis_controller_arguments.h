@@ -6,6 +6,7 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_data.h"
 #include <map>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -40,7 +41,7 @@ public:
                                   char const* value, uint32_t length) final;
 
 private:
-    std::map<rocprofvis_property_t, Data> m_args;
+    std::map<rocprofvis_property_t, std::vector<Data>> m_args;
 };
 
 }

@@ -139,6 +139,7 @@ rocprofvis_dm_result_t TableSlice::GetPropertyAsUint64(rocprofvis_dm_property_t 
             if(index < m_tracks.size())
             {
                 *value = m_tracks[index]->TrackId();
+                result = kRocProfVisDmResultSuccess;
             }
             break;
         }
@@ -216,6 +217,13 @@ rocprofvis_dm_result_t TableSlice::GetPropertyAsCharPtr(rocprofvis_dm_property_t
         }
     }
     return result;
+}
+
+rocprofvis_dm_result_t
+TableSlice::GetRecordValueAt(const rocprofvis_dm_property_index_t index,
+    rocprofvis_dm_value_t& value)
+{
+    return m_records->GetRecordValueAt(index, value);
 }
 
 }  // namespace DataModel

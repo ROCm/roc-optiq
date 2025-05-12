@@ -76,8 +76,7 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
             {
                 double timestamp = (double) rocprofvis_dm_get_property_as_uint64(
                     slice, kRPVDMTimestampUInt64Indexed, i);
-                double duration = (double) rocprofvis_dm_get_property_as_int64(
-                    slice, kRPVDMEventDurationInt64Indexed, i);
+                double duration = 0;
 
                 uint64_t track_id = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTableTrackIdIndexed, i);
 
@@ -92,6 +91,8 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
 
                 if(m_track_type == kRPVControllerTrackTypeEvents)
                 {
+                    duration = (double) rocprofvis_dm_get_property_as_int64(
+                        slice, kRPVDMEventDurationInt64Indexed, i);
                     event_id = rocprofvis_dm_get_property_as_uint64(
                         slice, kRPVDMEventIdUInt64Indexed, i);
                     cat = rocprofvis_dm_get_property_as_charptr(

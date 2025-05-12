@@ -30,7 +30,10 @@ rocprofvis_result_t Arguments::GetUInt64(rocprofvis_property_t property, uint64_
         {
             default:
             {
-                result = m_args[property].GetUInt64(value);
+                if(m_args[property].size() > index)
+                {
+                    result = m_args[property][index].GetUInt64(value);
+                }
                 break;
             }
         }
@@ -47,7 +50,10 @@ rocprofvis_result_t Arguments::GetDouble(rocprofvis_property_t property, uint64_
         {
             default:
             {
-                result = m_args[property].GetDouble(value);
+                if(m_args[property].size() > index)
+                {
+                    result = m_args[property][index].GetDouble(value);
+                }
                 break;
             }
         }
@@ -64,7 +70,10 @@ rocprofvis_result_t Arguments::GetObject(rocprofvis_property_t property, uint64_
         {
             default:
             {
-                result = m_args[property].GetObject(value);
+                if(m_args[property].size() > index)
+                {
+                    result = m_args[property][index].GetObject(value);
+                }
                 break;
             }
         }
@@ -81,7 +90,10 @@ rocprofvis_result_t Arguments::GetString(rocprofvis_property_t property, uint64_
         {
             default:
             {
-                result = m_args[property].GetString(value, length);
+                if(m_args[property].size() > index)
+                {
+                    result = m_args[property][index].GetString(value, length);
+                }
                 break;
             }
         }
@@ -93,14 +105,17 @@ rocprofvis_result_t Arguments::SetUInt64(rocprofvis_property_t property, uint64_
                                 uint64_t value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
     {
         switch(property)
         {
             default:
             {
-                m_args[property].SetType(kRPVControllerPrimitiveTypeUInt64);
-                result = m_args[property].SetUInt64(value);
+                if(m_args[property].size() < index + 1)
+                {
+                    m_args[property].resize(index + 1);
+                }
+                m_args[property][index].SetType(kRPVControllerPrimitiveTypeUInt64);
+                result = m_args[property][index].SetUInt64(value);
                 break;
             }
         }
@@ -111,14 +126,17 @@ rocprofvis_result_t Arguments::SetDouble(rocprofvis_property_t property, uint64_
                                 double value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
     {
         switch(property)
         {
             default:
             {
-                m_args[property].SetType(kRPVControllerPrimitiveTypeDouble);
-                result = m_args[property].SetDouble(value);
+                if(m_args[property].size() < index + 1)
+                {
+                    m_args[property].resize(index + 1);
+                }
+                m_args[property][index].SetType(kRPVControllerPrimitiveTypeDouble);
+                result = m_args[property][index].SetDouble(value);
                 break;
             }
         }
@@ -135,8 +153,12 @@ rocprofvis_result_t Arguments::SetObject(rocprofvis_property_t property, uint64_
         {
             default:
             {
-                m_args[property].SetType(kRPVControllerPrimitiveTypeObject);
-                result = m_args[property].SetObject(value);
+                if(m_args[property].size() < index + 1)
+                {
+                    m_args[property].resize(index + 1);
+                }
+                m_args[property][index].SetType(kRPVControllerPrimitiveTypeObject);
+                result = m_args[property][index].SetObject(value);
                 break;
             }
         }
@@ -153,8 +175,12 @@ rocprofvis_result_t Arguments::SetString(rocprofvis_property_t property, uint64_
         {
             default:
             {
-                m_args[property].SetType(kRPVControllerPrimitiveTypeString);
-                result = m_args[property].SetString(value);
+                if(m_args[property].size() < index + 1)
+                {
+                    m_args[property].resize(index + 1);
+                }
+                m_args[property][index].SetType(kRPVControllerPrimitiveTypeString);
+                result = m_args[property][index].SetString(value);
                 break;
             }
         }

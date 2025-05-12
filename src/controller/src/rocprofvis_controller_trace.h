@@ -63,6 +63,7 @@ private:
     uint64_t m_id;
     Timeline* m_timeline;
     Table* m_event_table;
+    Table* m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
 
 private:

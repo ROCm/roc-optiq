@@ -119,6 +119,8 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerNumTracks = 0x00000007,
     // Indexed tracks
     kRPVControllerTrackIndexed = 0x00000008,
+    // Global sample table controller
+    kRPVControllerSampleTable = 0x00000009,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {

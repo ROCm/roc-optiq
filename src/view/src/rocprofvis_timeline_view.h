@@ -90,6 +90,8 @@ private:
     bool                                  m_buffer_left_hit;
     float                                 m_unload_track_distance;
     float                                 m_universal_content_size;
+    double                                m_viewport_start;
+    double                                m_viewport_end;
     EventManager::EventHandler            m_new_track_data_handler;
     DataProvider&                         m_data_provider;
     std::pair<double, double>             m_highlighted_region;

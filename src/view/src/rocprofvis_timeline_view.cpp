@@ -59,6 +59,8 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_buffer_left_hit(false)
 , m_buffer_right_hit(false)
 , m_settings(Settings::GetInstance())
+, m_viewport_start(0)
+, m_viewport_end(0)
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -80,6 +82,8 @@ TimelineView::CalibratePosition()
     double current_position = m_grid.GetViewportStartPosition();
     double end_position     = m_grid.GetViewportEndPosition();
 
+    m_viewport_start = current_position;
+    m_viewport_end   = end_position + m_min_x;
 
     m_scroll_position_x = (current_position - m_min_x) /
                           (m_max_x - m_min_x);  // Finds where the chart is at.
@@ -236,9 +240,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     ImVec2 display_size    = ImGui::GetWindowSize();
     float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    ImGui::SetNextWindowSize(
-        ImVec2(display_size.x - scrollbar_width , display_size.y),
-        ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(display_size.x - scrollbar_width, display_size.y),
+                             ImGuiCond_Always);
     ImGui::SetCursorPos(
         ImVec2(m_sidebar_size, 0));  // Meta Data size will be universal next PR.
 
@@ -284,7 +287,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             text_pos, m_settings.GetColor(static_cast<int>(Colors::kFillerColor)), text);
         draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
                            ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28),
-                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)),2.0f);
+                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
+                           2.0f);
 
         // Code below is for select
         if(ImGui::IsMouseDoubleClicked(0))
@@ -435,7 +439,7 @@ TimelineView::RenderGraphView()
                    graph_objects.second.chart->GetRequestState() ==
                        TrackDataRequestState::kIdle)
                 {
-                    graph_objects.second.chart->RequestData();
+                    graph_objects.second.chart->RequestData(m_viewport_start, m_viewport_end);
                 }
 
                 if(graph_objects.second.color_by_value)
@@ -700,7 +704,7 @@ TimelineView::RenderGraphPoints()
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
         m_scale_x = (graph_view_size.x - m_sidebar_size) / (m_v_max_x - m_v_min_x);
- 
+
         if(m_capture_og_v_max_x)
         {
             m_original_v_max_x   = m_v_max_x;  // Used to set bounds

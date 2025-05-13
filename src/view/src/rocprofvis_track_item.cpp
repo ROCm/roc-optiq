@@ -1,5 +1,7 @@
 #include "rocprofvis_track_item.h"
+#include "iostream"
 #include "rocprofvis_settings.h"
+
 using namespace RocProfVis::View;
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -161,12 +163,28 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 }
 
 void
-TrackItem::RequestData()
+TrackItem::RequestData(double min, double max)
 {
+    std::cout << min << "    " << max << std::endl;
     if(m_request_state == TrackDataRequestState::kIdle)
     {
-        m_request_state = TrackDataRequestState::kRequesting;
-        m_data_provider.FetchTrack(m_id, m_data_provider.GetStartTime(),
-                                   m_data_provider.GetEndTime(), 1000, 0);
+        if(min > m_data_provider.GetStartTime() && max < m_data_provider.GetEndTime())
+        {
+            m_request_state = TrackDataRequestState::kRequesting;
+            m_data_provider.FetchTrack(m_id, min, max, 1000, 0);
+        }
+        else if(min < m_data_provider.GetStartTime() &&
+                max < m_data_provider.GetEndTime())
+        {
+            /* m_request_state = TrackDataRequestState::kRequesting;
+             m_data_provider.FetchTrack(m_id, m_data_provider.GetStartTime(), max, 1000,
+                                        0);*/
+        }
+        else if(min > m_data_provider.GetStartTime() &&
+                max > m_data_provider.GetEndTime())
+        {
+            m_request_state = TrackDataRequestState::kRequesting;
+            m_data_provider.FetchTrack(m_id, min, m_data_provider.GetEndTime(), 1000, 0);
+        }
     }
 }

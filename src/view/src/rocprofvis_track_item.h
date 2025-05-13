@@ -49,7 +49,7 @@ public:
 
     virtual bool HasData()     = 0;
     virtual void ReleaseData() = 0;
-    virtual void RequestData();
+    virtual void RequestData(double min, double max);
 
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 

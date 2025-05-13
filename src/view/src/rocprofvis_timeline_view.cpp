@@ -449,7 +449,10 @@ TimelineView::RenderGraphView()
                                                                 m_viewport_end);
                     }
                 }
-
+                if (ImGui::Button(std::to_string(graph_objects.second.chart->GetID()).c_str())) {
+                    graph_objects.second.chart->RequestData(m_viewport_start,
+                                                            m_viewport_end);
+                }
                 if(graph_objects.second.color_by_value)
                 {
                     graph_objects.second.chart->SetColorByValue(

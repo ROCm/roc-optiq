@@ -435,9 +435,9 @@ TimelineView::RenderGraphView()
             if(is_visible)
             {
                 // Request data for the chart if it doesn't have data
-                if(!graph_objects.second.chart->HasData() &&
+                /* if(!graph_objects.second.chart->HasData() &&
                    graph_objects.second.chart->GetRequestState() ==
-                       TrackDataRequestState::kIdle)
+                       TrackDataRequestState::kIdle)*/
                 {
                     graph_objects.second.chart->RequestData(m_viewport_start, m_viewport_end);
                 }

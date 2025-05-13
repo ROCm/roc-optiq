@@ -168,23 +168,7 @@ TrackItem::RequestData(double min, double max)
     std::cout << min << "    " << max << std::endl;
     if(m_request_state == TrackDataRequestState::kIdle)
     {
-        if(min > m_data_provider.GetStartTime() && max < m_data_provider.GetEndTime())
-        {
-            m_request_state = TrackDataRequestState::kRequesting;
-            m_data_provider.FetchTrack(m_id, min, max, 1000, 0);
-        }
-        else if(min < m_data_provider.GetStartTime() &&
-                max < m_data_provider.GetEndTime())
-        {
-            /* m_request_state = TrackDataRequestState::kRequesting;
-             m_data_provider.FetchTrack(m_id, m_data_provider.GetStartTime(), max, 1000,
-                                        0);*/
-        }
-        else if(min > m_data_provider.GetStartTime() &&
-                max > m_data_provider.GetEndTime())
-        {
-            m_request_state = TrackDataRequestState::kRequesting;
-            m_data_provider.FetchTrack(m_id, min, m_data_provider.GetEndTime(), 1000, 0);
-        }
+        m_request_state = TrackDataRequestState::kRequesting;
+        m_data_provider.FetchTrack(m_id, min, max, 1000, 0);
     }
 }

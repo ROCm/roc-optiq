@@ -32,8 +32,13 @@ FlameTrackItem::SetRandomColorFlag(bool set_color)
 std::tuple<double, double>
 FlameTrackItem::FindMaxMinFlame()
 {
-    m_min_x = m_flames[0].m_start_ts;
-    m_max_x = m_flames[0].m_start_ts + m_flames[0].m_duration;
+    m_min_x = 0;
+    m_max_x = 0;
+    if(m_flames.size() > 0)
+    {
+        m_min_x = m_flames[0].m_start_ts;
+        m_max_x = m_flames[0].m_start_ts + m_flames[0].m_duration;
+    }
 
     for(const auto& point : m_flames)
     {

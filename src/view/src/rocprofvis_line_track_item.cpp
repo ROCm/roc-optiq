@@ -326,7 +326,8 @@ LineTrackItem::ExtractPointsFromData()
                 bin_count = 1;
             }
         }
-        else {
+        else
+        {
             rocprofvis_data_point_t binned_point;
             binned_point.x_value = track_data[i].m_start_ts;
             binned_point.y_value = track_data[i].m_value;
@@ -349,10 +350,18 @@ LineTrackItem::ExtractPointsFromData()
 std::tuple<double, double>
 LineTrackItem::FindMaxMin()
 {
-    m_min_y = m_data[0].y_value;
-    m_max_y = m_data[0].y_value;
-    m_min_x = m_data[0].x_value;
-    m_max_x = m_data[0].x_value;
+    m_min_y = 0;
+    m_max_y = 0;
+    m_min_x = 0;
+    m_max_x = 0;
+
+    if(m_data.size() > 0)
+    {
+        m_min_y = m_data[0].y_value;
+        m_max_y = m_data[0].y_value;
+        m_min_x = m_data[0].x_value;
+        m_max_x = m_data[0].x_value;
+    }
 
     for(const auto& point : m_data)
     {

@@ -439,7 +439,15 @@ TimelineView::RenderGraphView()
                    graph_objects.second.chart->GetRequestState() ==
                        TrackDataRequestState::kIdle)
                 {
-                    graph_objects.second.chart->RequestData(m_viewport_start, m_viewport_end);
+                    std::cout << m_viewport_start << " viewport   " << m_viewport_end
+                              << std::endl;
+
+                    std::cout << m_min_x << " main   " << m_max_x << std::endl;
+                    if(m_viewport_start != 0 && m_viewport_end != 0)
+                    {
+                        graph_objects.second.chart->RequestData(m_viewport_start,
+                                                                m_viewport_end);
+                    }
                 }
 
                 if(graph_objects.second.color_by_value)

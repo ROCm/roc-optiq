@@ -80,7 +80,6 @@ TimelineView::CalibratePosition()
     double current_position = m_grid.GetViewportStartPosition();
     double end_position     = m_grid.GetViewportEndPosition();
 
-
     m_scroll_position_x = (current_position - m_min_x) /
                           (m_max_x - m_min_x);  // Finds where the chart is at.
 
@@ -214,6 +213,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
         m_sidebar_size    = clamp(m_sidebar_size + drag_delta.x, 100.0f, 600.0f);
+        m_movement -= (drag_delta.x / display_size.x) * m_v_width; //Prevents chart from moving in unexpected way. 
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
         m_resize_activity |= true;
@@ -236,9 +236,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     ImVec2 display_size    = ImGui::GetWindowSize();
     float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    ImGui::SetNextWindowSize(
-        ImVec2(display_size.x - scrollbar_width , display_size.y),
-        ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(display_size.x - scrollbar_width, display_size.y),
+                             ImGuiCond_Always);
     ImGui::SetCursorPos(
         ImVec2(m_sidebar_size, 0));  // Meta Data size will be universal next PR.
 
@@ -284,7 +283,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             text_pos, m_settings.GetColor(static_cast<int>(Colors::kFillerColor)), text);
         draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
                            ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28),
-                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)),2.0f);
+                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
+                           2.0f);
 
         // Code below is for select
         if(ImGui::IsMouseDoubleClicked(0))
@@ -700,7 +700,7 @@ TimelineView::RenderGraphPoints()
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
         m_scale_x = (graph_view_size.x - m_sidebar_size) / (m_v_max_x - m_v_min_x);
- 
+
         if(m_capture_og_v_max_x)
         {
             m_original_v_max_x   = m_v_max_x;  // Used to set bounds

@@ -468,6 +468,10 @@ TimelineView::RenderGraphView()
                 if(ImGui::Button(
                        std::to_string(graph_objects.second.chart->GetID()).c_str()))
                 {
+                    if(graph_objects.second.chart->HasData())
+                    {
+                        graph_objects.second.chart->ReleaseData();
+                    }
                     graph_objects.second.chart->RequestData(m_viewport_start,
                                                             m_viewport_end);
                 }

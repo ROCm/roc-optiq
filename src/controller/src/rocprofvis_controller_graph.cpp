@@ -206,9 +206,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
                 if(result == kRocProfVisResultSuccess)
                 {
-                    if(event_start > min_ts)
+                    if((event_start < max_ts && event_end > min_ts) || events.size())
                     {
-                        ROCPROFVIS_ASSERT(event_start >= min_ts);
 
                         ROCPROFVIS_ASSERT(level == event_level || level == UINT64_MAX);
 
@@ -222,11 +221,6 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                         else
                         {
                             // Start a new event
-
-                            // We assume that the events are ordered by time, so
-                            // this must at least end after the current event or be a
-                            // different level
-                            ROCPROFVIS_ASSERT(event_end > max_ts || level != event_level);
 
                             double sample_start = event_start;
 
@@ -273,7 +267,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                             }
 
                             // Create a new event & increment the search
-                            while(max_ts < sample_start)
+                            while(max_ts < sample_start && min_ts < end_ts)
                             {
                                 min_ts = std::min(max_ts, end_ts);
                                 max_ts = std::min(max_ts + scale, end_ts);
@@ -283,7 +277,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                             events.push_back(event);
                             level = event_level;
                         }
-                    }
+                    }                  
                 }
             }
 
@@ -364,7 +358,6 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                         // this must at least end after the current sample
                         if(sample_start > max_ts)
                         {
-                            ROCPROFVIS_ASSERT(sample_start > max_ts);
 
                             // Generate the stub event for any populated events.
                             uint64_t type = 0;
@@ -463,7 +456,6 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                         std::min(min_ts + (ceil((end - min_ts) / segment_duration) *
                                            segment_duration),
                                  max_ts);
-
                     GraphLODArgs args;
                     args.m_valid_range = range;
                     args.m_index       = 0;

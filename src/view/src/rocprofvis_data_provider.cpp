@@ -1,7 +1,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
-
+#include <iostream>
 #include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
@@ -328,6 +328,7 @@ bool
 DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
                          int horz_pixel_range, int lod)
 {
+    std::cout << "FetchTrack called" << std::endl;
     if(m_state != ProviderState::kReady)
     {
         spdlog::debug("Cannot fetch, provider not ready or error, state: {}",

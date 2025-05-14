@@ -12,13 +12,13 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include <GLFW/glfw3.h>
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
-
 namespace RocProfVis
 {
 namespace View
@@ -61,6 +61,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_settings(Settings::GetInstance())
 , m_viewport_start(0)
 , m_viewport_end(0)
+, m_viewport_past_position(0)
 {
     m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -134,6 +135,8 @@ TimelineView::ResetView()
 void
 TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
 {
+    spdlog::debug("new track data event fired!");
+
     if(!e)
     {
         spdlog::debug("Null event, cannot process new track data");
@@ -149,6 +152,7 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     else
     {
         uint64_t track_index = tde->GetTrackIndex();
+        spdlog::debug("Got new track data for track: {}", track_index);
 
         if(m_graph_map[track_index].chart->HandleTrackDataChanged())
         {
@@ -404,6 +408,14 @@ TimelineView::RenderGraphView()
         " Scroll Position: " + std::to_string(m_scroll_position) +
         " Content Max Y: " + std::to_string(m_content_max_y_scoll) +
         " Previous Scroll Position: " + std::to_string(m_previous_scroll_position));
+    bool request = false;
+
+    if(std::abs(m_movement - m_viewport_past_position) > m_v_width * 0.50)
+    {
+        m_viewport_past_position = m_movement;
+        request                  = true;
+        std::cout << "ran" << std::endl;
+    }
 
     for(const auto& graph_objects : m_graph_map)
     {
@@ -434,22 +446,28 @@ TimelineView::RenderGraphView()
 
             if(is_visible)
             {
-                // Request data for the chart if it doesn't have data
                 if(!graph_objects.second.chart->HasData() &&
                    graph_objects.second.chart->GetRequestState() ==
                        TrackDataRequestState::kIdle)
                 {
-                    std::cout << m_viewport_start << " viewport   " << m_viewport_end
-                              << std::endl;
-
-                    std::cout << m_min_x << " main   " << m_max_x << std::endl;
-                    if(m_viewport_start != 0 && m_viewport_end != 0)
-                    {
-                        graph_objects.second.chart->RequestData(m_viewport_start,
-                                                                m_viewport_end);
-                    }
+                    graph_objects.second.chart->RequestData(m_min_x,
+                                                            m_max_x);
+                    std::cout << "no data " << m_max_x << " "
+                              << (int)graph_objects.second.chart->GetRequestState() << std::endl;
                 }
-                if (ImGui::Button(std::to_string(graph_objects.second.chart->GetID()).c_str())) {
+
+                if(request && graph_objects.second.chart->GetRequestState() ==
+                                  TrackDataRequestState::kIdle)
+                {
+                  std::cout << "requested from request" << std::endl;
+
+                 graph_objects.second.chart->RequestData(m_viewport_start,
+                                                           m_viewport_end);
+              }
+
+                if(ImGui::Button(
+                       std::to_string(graph_objects.second.chart->GetID()).c_str()))
+                {
                     graph_objects.second.chart->RequestData(m_viewport_start,
                                                             m_viewport_end);
                 }
@@ -563,6 +581,7 @@ TimelineView::RenderGraphView()
             }
         }
     }
+    request = false;
 
     CalibratePosition();
 

@@ -13,6 +13,10 @@ DataProvider::DataProvider()
 , m_trace_timeline(nullptr)
 , m_track_data_ready_callback(nullptr)
 , m_trace_data_ready_callback(nullptr)
+, m_num_graphs(0)
+, m_min_ts(0)
+, m_max_ts(0)
+, m_trace_file_path("")
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
@@ -41,6 +45,7 @@ DataProvider::CloseController()
     m_num_graphs = 0;
     m_min_ts     = 0;
     m_max_ts     = 0;
+    m_trace_file_path.clear();
 }
 
 void
@@ -132,7 +137,7 @@ DataProvider::FetchTrace(const std::string& file_path)
 
     // free any previously acquired resources
     CloseController();
-
+    m_trace_file_path = file_path;
     m_trace_controller = rocprofvis_controller_alloc();
     if(m_trace_controller)
     {

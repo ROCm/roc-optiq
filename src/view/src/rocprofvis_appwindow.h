@@ -21,8 +21,7 @@ public:
 
     bool Init();
     void Render() override;
-
-    void Update();
+    void Update() override;
 
 private:
     AppWindow();

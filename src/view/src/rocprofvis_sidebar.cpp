@@ -63,7 +63,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                                            .c_str()))
             {
                 tree_item.second.selected = true;
-
+                
                 if(ImGui::Checkbox(
                        (" Enable/Disable Chart #" + std::to_string((tree_item.first)))
                            .c_str(),
@@ -72,7 +72,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                 }
                 if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_FLAMECHART)
                 {
-                    if(ImGui::Checkbox("Turn off color",
+                    if(ImGui::Checkbox( ("Turn off color #" + std::to_string(tree_item.first)).c_str(),
                                        &tree_item.second.colorful_flamechart))
 
                     {

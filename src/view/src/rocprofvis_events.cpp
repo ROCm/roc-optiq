@@ -67,10 +67,11 @@ RocEvent::CanPropagate() const
 }
 
 // TrackDataEvent Implementation
-
-TrackDataEvent::TrackDataEvent(int event_id, uint64_t track_index)
+TrackDataEvent::TrackDataEvent(int event_id, uint64_t track_index,
+                               const std::string& trace_path)
 : RocEvent(event_id)
 , m_track_index(track_index)
+, m_trace_path(trace_path)
 {
     m_event_type = RocEventType::kTrackDataEvent;
 }
@@ -81,6 +82,12 @@ TrackDataEvent::GetTrackIndex()
     return m_track_index;
 }
 
+const std::string&
+TrackDataEvent::GetTracePath()
+{
+    return m_trace_path;
+}
+
 ComputeBlockNavitionEvent::ComputeBlockNavitionEvent(int event_id, int level, int block)
 : RocEvent(event_id)
 , m_level(level)
@@ -89,12 +96,26 @@ ComputeBlockNavitionEvent::ComputeBlockNavitionEvent(int event_id, int level, in
     m_event_type = RocEventType::kComputeBlockNavigationEvent;
 }
 
-int ComputeBlockNavitionEvent::GetLevel()
+int
+ComputeBlockNavitionEvent::GetLevel()
 {
     return m_level;
 }
 
-int ComputeBlockNavitionEvent::GetBlock()
+int
+ComputeBlockNavitionEvent::GetBlock()
 {
     return m_block;
+}
+
+TabClosedEvent::TabClosedEvent(int event_id, const std::string& tab_id)
+: RocEvent(event_id)
+, m_tab_id(tab_id)
+{
+    m_event_type = RocEventType::kTabEvent;
+}
+
+const std::string&
+TabClosedEvent::GetTabId() {
+    return m_tab_id;
 }

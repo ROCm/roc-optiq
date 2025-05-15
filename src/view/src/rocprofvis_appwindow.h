@@ -17,9 +17,9 @@ class AppWindow : public RocWidget
 {
 public:
     static AppWindow* GetInstance();
-    static void DestroyInstance();
+    static void       DestroyInstance();
 
-    bool         Init();
+    bool Init();
     void Render() override;
 
     void Update();
@@ -29,20 +29,23 @@ private:
     ~AppWindow();
 
     void RenderDebugOuput();
+    void HandleTabClosed(std::shared_ptr<RocEvent> e);
 
     static AppWindow* s_instance;
 
-    std::shared_ptr<TraceView> m_home_screen;
-    std::shared_ptr<RocWidget>  m_main_view;
+    std::shared_ptr<RocWidget>    m_main_view;
+    std::shared_ptr<TabContainer> m_tab_container;
 
     bool         m_show_debug_widow;
     DataProvider m_data_provider;
     bool         m_show_provider_test_widow;
-    std::shared_ptr<ComputeRoot> m_compute_root;
 
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;
 
+    std::map<std::string, TabItem> m_open_views;
+
+    EventManager::SubscriptionToken m_tabclosed_event_token;
 };
 
 }  // namespace View

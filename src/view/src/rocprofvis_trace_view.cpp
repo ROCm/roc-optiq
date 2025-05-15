@@ -17,11 +17,12 @@ TraceView::TraceView()
 , m_open_loading_popup(false)
 , m_analysis(nullptr)
 {
-    m_data_provider.SetTrackDataReadyCallback([](uint64_t track_index) {
-        std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
-            static_cast<int>(RocEvents::kNewTrackData), track_index);
-        EventManager::GetInstance()->AddEvent(e);
-    });
+    m_data_provider.SetTrackDataReadyCallback(
+        [](uint64_t track_index, const std::string& trace_path) {
+            std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
+                static_cast<int>(RocEvents::kNewTrackData), track_index, trace_path);
+            EventManager::GetInstance()->AddEvent(e);
+        });
 }
 
 TraceView::~TraceView() { m_data_provider.SetTrackDataReadyCallback(nullptr); }

@@ -2,6 +2,7 @@
 
 #pragma once
 #include <cstdint>
+#include <string>
 
 namespace RocProfVis
 {
@@ -12,14 +13,16 @@ enum class RocEvents
 {
     kInvalidEvent = -1,
     kNewTrackData,
-    kComputeBlockNavigationChanged
+    kComputeBlockNavigationChanged,
+    kTabClosed
 };
 
 enum class RocEventType
 {
     kRocEvent,
     kTrackDataEvent,
-    kComputeBlockNavigationEvent
+    kComputeBlockNavigationEvent,
+    kTabEvent
 };
 
 class RocEvent
@@ -48,11 +51,13 @@ private:
 class TrackDataEvent : public RocEvent
 {
 public:
-    TrackDataEvent(int event_id, uint64_t track_index);
-    uint64_t GetTrackIndex();
+    TrackDataEvent(int event_id, uint64_t track_index, const std::string& trace_path);
+    uint64_t           GetTrackIndex();
+    const std::string& TrackDataEvent::GetTracePath();
 
 private:
-    uint64_t m_track_index;
+    uint64_t    m_track_index;
+    std::string m_trace_path;
 };
 
 class ComputeBlockNavitionEvent : public RocEvent
@@ -65,6 +70,15 @@ public:
 private:
     int m_level;
     int m_block;
+};
+
+class TabClosedEvent : public RocEvent
+{
+public:
+    TabClosedEvent(int event_id, const std::string& tab_id);
+    const std::string& GetTabId();  
+private:
+    std::string m_tab_id;
 };
 
 }  // namespace View

@@ -131,8 +131,8 @@ public:
 
     ProviderState GetState();
 
-    void SetTrackDataReadyCallback(const std::function<void(uint64_t)>& callback);
-    void SetTraceLoadedCallback(const std::function<void()>& callback);
+    void SetTrackDataReadyCallback(const std::function<void(uint64_t, const std::string &)>& callback);
+    void SetTraceLoadedCallback(const std::function<void(const std::string &)>& callback);
 
 private:
     void HandleLoadTrace();
@@ -162,9 +162,9 @@ private:
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 
     // Called when new track data is ready
-    std::function<void(uint64_t)> m_track_data_ready_callback;
+    std::function<void(uint64_t, const std::string &)> m_track_data_ready_callback;
     // Called when a new trace is loaded
-    std::function<void()> m_trace_data_ready_callback;
+    std::function<void(const std::string &)> m_trace_data_ready_callback;
 };
 
 }  // namespace View

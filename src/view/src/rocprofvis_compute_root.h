@@ -24,8 +24,8 @@ typedef enum compute_normalization_unit_t
 class ComputeRoot : public RocWidget
 {
 public:
-    void Render();
-    void Update();
+    void Render() override;
+    void Update() override;
     void SetMetricsPath(std::filesystem::path path);
     bool MetricsLoaded();
     ComputeRoot();

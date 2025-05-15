@@ -18,23 +18,25 @@ namespace View
 class EventManager
 {
 public:
-    using EventHandler = std::function<void(std::shared_ptr<RocEvent>)>;
+    using EventHandler      = std::function<void(std::shared_ptr<RocEvent>)>;
+    using SubscriptionToken = size_t;
 
     static EventManager* GetInstance();
     static void          DestroyInstance();
 
-    bool Subscribe(int event_id, EventHandler handler);
-    bool Unsubscribe(int event_id, EventHandler handler);
+    SubscriptionToken Subscribe(int event_id, EventHandler handler);
+    bool              Unsubscribe(int event_id, SubscriptionToken token);
 
-    void EventManager::DispatchEvents();
+    void DispatchEvents();
     void AddEvent(std::shared_ptr<RocEvent> event);
 
 private:
     EventManager();
     ~EventManager();
-
-    std::map<int, std::vector<EventHandler>> m_subscriptions;
-    std::list<std::shared_ptr<RocEvent>>     m_event_queue;
+    size_t m_next_token;
+    std::map<int, std::vector<std::pair<SubscriptionToken, EventHandler>>>
+                                         m_subscriptions;
+    std::list<std::shared_ptr<RocEvent>> m_event_queue;
 
     static EventManager* s_instance;
 };

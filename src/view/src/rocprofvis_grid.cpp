@@ -24,10 +24,10 @@ Grid::GetViewportEndPosition()
     return GetCursorPosition(m_content_size_x);
 }
 Grid::Grid()
-: m_viewport_start_position(FLT_MIN)
+: m_viewport_start_position(std::numeric_limits<double>::lowest())
 , m_highlighted_region({ -1, -1 })
 , m_settings(Settings::GetInstance())
-, m_viewport_end_position(FLT_MAX)
+, m_viewport_end_position(std::numeric_limits<double>::max())
 , m_content_size_x()
 , m_sidebar_size()
 , m_scale_x()

@@ -28,6 +28,7 @@ private:
     ~AppWindow();
 
     void RenderDebugOuput();
+    void RenderSettingsMenu();    
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
 
     static AppWindow* s_instance;

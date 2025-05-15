@@ -277,8 +277,7 @@ ComputeBlockDiagram::ComputeBlockDiagram(std::shared_ptr<ComputeDataProvider> da
 
 ComputeBlockDiagram::~ComputeBlockDiagram() {}
 
-bool
-RocProfVis::View::ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, ImVec2 rel_pos, ImVec2 rel_size, block_diagram_block_option_flags options)
+bool ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, ImVec2 rel_pos, ImVec2 rel_size, block_diagram_block_option_flags options)
 {
     const ImVec2 abs_size(rel_size * m_content_region);
     const ImVec2 abs_pos(m_content_region_center + m_content_region * rel_pos - abs_size / 2);

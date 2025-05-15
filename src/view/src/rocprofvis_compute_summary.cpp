@@ -7,6 +7,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
+
 void ComputeSummaryLeft::Update()
 {
     if (m_system_info)
@@ -45,6 +47,10 @@ void ComputeSummaryRight::Update()
 
 void ComputeSummaryRight::Render()
 {    
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
+    ImGui::SeparatorText("Top Stats");
+    ImGui::PopStyleVar();
+
     if (m_kernel_list)
     {
         m_kernel_list->Render();

@@ -2,7 +2,6 @@
 
 #pragma once
 #include <numeric>
-#include "imgui.h"
 #include "implot.h"
 #include "rocprofvis_compute_data_provider.h"
 #include "widgets/rocprofvis_widget.h"
@@ -54,6 +53,23 @@ private:
     rocprofvis_compute_metrics_group_t* m_metric_data;
     std::vector<int> m_bar_data_index;
     std::vector<int> m_pie_data_index;
+};
+
+class ComputeMetricRoofline : public RocWidget
+{
+public:
+    roofline_grouping_mode_t GetGroupMode();
+    void SetGroupMode(roofline_grouping_mode_t grouping);
+    void Render();
+    void Update();
+    ComputeMetricRoofline(std::shared_ptr<ComputeDataProvider> data_provider, roofline_grouping_mode_t grouping);
+    ~ComputeMetricRoofline();
+
+private:
+    std::shared_ptr<ComputeDataProvider> m_data_provider;
+    rocprofvis_compute_metrics_group_t* m_roof_data;
+    rocprofvis_compute_metrics_group_t* m_intensity_data;
+    roofline_grouping_mode_t m_group_mode;
 };
 
 }  // namespace View

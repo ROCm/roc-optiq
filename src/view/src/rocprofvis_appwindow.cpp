@@ -43,9 +43,15 @@ AppWindow::DestroyInstance()
 AppWindow::AppWindow()
 : m_show_debug_widow(false)
 , m_show_provider_test_widow(false)
+, m_tabclosed_event_token(-1)
 {}
 
-AppWindow::~AppWindow() {}
+AppWindow::~AppWindow()
+{
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
+                                             m_tabclosed_event_token);
+    m_open_views.clear();                                             
+}
 
 bool
 AppWindow::Init()
@@ -55,19 +61,23 @@ AppWindow::Init()
     LayoutItem status_bar_item(-1, 30.0f);
     status_bar_item.m_item = std::make_shared<RocWidget>();
     LayoutItem main_area_item(-1, -30.0f);
-    m_home_screen         = std::make_shared<TraceView>();
-    main_area_item.m_item = m_home_screen;
+
+    m_tab_container       = std::make_shared<TabContainer>();
+    main_area_item.m_item = m_tab_container;
 
     std::vector<LayoutItem> layout_items;
     layout_items.push_back(main_area_item);
     layout_items.push_back(status_bar_item);
     m_main_view = std::make_shared<VFixedContainer>(layout_items);
 
-    m_compute_root = std::make_shared<ComputeRoot>();
-
     m_default_padding = ImGui::GetStyle().WindowPadding;
     m_default_spacing = ImGui::GetStyle().ItemSpacing;
 
+    auto new_tab_closed_handler = [this](std::shared_ptr<RocEvent> e) {
+        this->HandleTabClosed(e);
+    };
+    m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
     return true;
 }
 
@@ -78,15 +88,7 @@ AppWindow::Update()
 
     DebugWindow::GetInstance()->ClearTransient();
     m_data_provider.Update();
-    if(m_home_screen)
-    {
-        m_home_screen->Update();
-    }
-
-    if(m_compute_root)
-    {
-        m_compute_root->Update();
-    }
+    m_tab_container->Update();
 }
 
 void
@@ -148,12 +150,7 @@ AppWindow::Render()
     }
     ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
 
-    // Show main view container
-    if(m_compute_root && m_compute_root->MetricsLoaded())
-    {
-        m_compute_root->Render();
-    }
-    else if(m_main_view)
+    if(m_main_view)
     {
         m_main_view->Render();
     }
@@ -174,14 +171,42 @@ AppWindow::Render()
         {
             std::filesystem::path file_path(
                 ImGuiFileDialog::Instance()->GetFilePathName());
-            if(m_compute_root && file_path.extension().string() == ".csv")
+
+            std::string file_path_str = file_path.string();
+
+            // Check if the file is already opened using our m_open_views map
+            auto it = m_open_views.find(file_path_str);
+            if(it != m_open_views.end())
             {
-                m_compute_root->SetMetricsPath(file_path.parent_path());
+                // File is already opened, just switch to that tab
+                m_tab_container->SetActiveTab(it->second.m_id);
             }
-            else if(m_home_screen)
+            else
             {
-                m_home_screen->OpenFile(file_path.string());
-                spdlog::info("Opening file: {}", file_path.string());
+                TabItem tab_item;
+                tab_item.m_label     = file_path.filename().string();
+                tab_item.m_id        = file_path_str;
+                tab_item.m_can_close = true;
+
+                // Determine the type of view to create based on the file extension
+                if(file_path.extension().string() == ".csv")
+                {
+                    auto compute_view = std::make_shared<ComputeRoot>();
+                    compute_view->SetMetricsPath(file_path.parent_path());
+                    tab_item.m_widget = compute_view;
+                    spdlog::info("Opening file: {}", file_path.string());
+                    m_tab_container->AddTab(tab_item);
+                    m_open_views[file_path_str] = tab_item;
+                }
+                else
+                {
+                    auto trace_view = std::make_shared<TraceView>();
+                    trace_view->OpenFile(file_path.string());
+                    tab_item.m_widget = trace_view;
+                    spdlog::info("Opening file: {}", file_path.string());
+                    m_tab_container->AddTab(tab_item);
+                    m_open_views[file_path_str] = tab_item;
+                }
             }
         }
 
@@ -211,6 +236,20 @@ AppWindow::Render()
     if(m_show_provider_test_widow)
     {
         RenderProviderTest(m_data_provider);
+    }
+}
+
+void
+AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
+{
+    auto tab_closed_event = std::dynamic_pointer_cast<TabClosedEvent>(e);
+    if(tab_closed_event)
+    {
+        auto it = m_open_views.find(tab_closed_event->GetTabId());
+        if(it != m_open_views.end())
+        {
+            m_open_views.erase(it);
+        }
     }
 }
 

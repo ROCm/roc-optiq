@@ -137,7 +137,7 @@ private:
     void OnNavigationChanged(std::shared_ptr<RocEvent> event);
 
     std::unordered_map<block_diagram_block_id_t, std::vector<std::unique_ptr<ComputeMetricGroup>>> m_metrics_map;
-    EventManager::EventHandler m_block_navigation_event_handler;
+    EventManager::SubscriptionToken m_block_navigation_event_token;
     block_diagram_navigation_location_t m_current_location;
     bool m_navigation_changed;
 };

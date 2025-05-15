@@ -18,7 +18,7 @@ class RocWidget
 public:
     virtual ~RocWidget();
     virtual void Render();
-
+    virtual void Update() {}
     std::string GenUniqueName(std::string name);
 
 protected:
@@ -131,6 +131,37 @@ private:
 
     float m_split_ratio;
     bool  m_dirty;
+};
+
+struct TabItem
+{
+    std::string                m_label;
+    std::string                m_id;
+    std::shared_ptr<RocWidget> m_widget;
+    bool                       m_can_close;
+};
+
+class TabContainer : public RocWidget
+{
+public:
+    TabContainer();
+    virtual ~TabContainer();
+
+    virtual void Render();
+    virtual void Update();
+
+    void AddTab(const TabItem& tab);
+    void RemoveTab(const std::string& id);
+    void RemoveTab(int index);
+
+    void SetActiveTab(int index);
+    void SetActiveTab(const std::string& id);
+
+
+private:
+    std::vector<TabItem> m_tabs;
+    int                  m_active_tab_index; // index of the currently active tab
+    int                  m_set_active_tab_index; // used to programmatically set the active tab
 };
 
 }  // namespace View

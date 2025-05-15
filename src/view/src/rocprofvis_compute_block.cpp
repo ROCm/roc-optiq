@@ -100,7 +100,7 @@ constexpr int WINDOW_PADDING_DEFAULT = 8;
 constexpr int LEVEL_HISTORY_LIMIT = 5;
 
 ComputeBlockDetails::ComputeBlockDetails(std::shared_ptr<ComputeDataProvider> data_provider)
-: m_block_navigation_event_handler(nullptr)
+: m_block_navigation_event_token(-1)
 , m_navigation_changed(true)
 , m_current_location(block_diagram_navigation_location_t{kBlockDiagramLevelGPU, kBlockDiagramBlockNone})
 {
@@ -113,16 +113,16 @@ ComputeBlockDetails::ComputeBlockDetails(std::shared_ptr<ComputeDataProvider> da
         }
     }
 
-    m_block_navigation_event_handler = [this](std::shared_ptr<RocEvent> event) 
+    auto block_navigation_event_handler = [this](std::shared_ptr<RocEvent> event) 
     {
         this->OnNavigationChanged(event);
     };
-    EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_block_navigation_event_handler);
+    m_block_navigation_event_token = EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), block_navigation_event_handler);
 }
 
 ComputeBlockDetails::~ComputeBlockDetails() 
 {
-    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_block_navigation_event_handler);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_block_navigation_event_token);
 }
 
 void ComputeBlockDetails::Render() 

@@ -1,8 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_event_manager.h"
-#include "spdlog/spdlog.h"
 #include "iostream"
+#include "spdlog/spdlog.h"
 using namespace RocProfVis::View;
 
 // EventManager Implementation
@@ -29,11 +29,13 @@ EventManager::DestroyInstance()
     }
 }
 
-EventManager::EventManager() {};
+EventManager::EventManager(): m_next_token(0) {};
+
 EventManager::~EventManager()
 {
     m_event_queue.clear();
     m_subscriptions.clear();
+    m_next_token = 0;
 }
 
 void
@@ -42,64 +44,37 @@ EventManager::AddEvent(std::shared_ptr<RocEvent> event)
     m_event_queue.push_back(event);
 }
 
-bool
+EventManager::SubscriptionToken
 EventManager::Subscribe(int event_id, EventHandler handler)
 {
-  
-    bool                       result   = false;
-    std::vector<EventHandler>& handlers = m_subscriptions[event_id];
-
-    // Check if the handler is already registered
-    auto it = std::find_if(
-        handlers.begin(), handlers.end(),
-        [&handler](const EventHandler& existing_handler) {
-            return existing_handler.target<void(std::shared_ptr<RocEvent>)>() ==
-                   handler.target<void(std::shared_ptr<RocEvent>)>();
-        });
-
-    if(it == handlers.end())
-    {
-        // Handler is not already registered, so add it
-        handlers.push_back(handler);
-        result = true;
-    }
-    else
-    {
-        // Handler is already registered
-        spdlog::debug("This handler is already registered for event {}", event_id);
-    }
-
-    return result;
+    SubscriptionToken token = m_next_token++;
+    m_subscriptions[event_id].emplace_back(token, handler);
+    return token;
 }
 
 bool
-EventManager::Unsubscribe(int event_id, EventHandler handler)
+EventManager::Unsubscribe(int event_id, SubscriptionToken token)
 {
     bool result = false;
-
     auto it = m_subscriptions.find(event_id);
     if(it != m_subscriptions.end())
     {
-        std::vector<EventHandler>& handlers = it->second;
+        // Event ID found, proceed to remove the handler
+        auto& handlers = it->second;
 
-        // Find and remove the handler
-        auto handler_it = std::find_if(
-            handlers.begin(), handlers.end(),
-            [&handler](const EventHandler& existing_handler) {
-                return existing_handler.target<void(std::shared_ptr<RocEvent>)>() ==
-                       handler.target<void(std::shared_ptr<RocEvent>)>();
-            });
-
+        auto handler_it =
+            std::remove_if(handlers.begin(), handlers.end(),
+                           [token](const auto& pair) { return pair.first == token; });
         if(handler_it != handlers.end())
         {
-            spdlog::debug("Handler unsubscribed successfully for event id: {}", event_id);
-            handlers.erase(handler_it);
-            result = true;
+            spdlog::debug("Handler unsubscribed successfully for event id: {}", event_id);            
+            handlers.erase(handler_it, handlers.end());
+            result = true;  // Successfully unsubscribed
         }
         else
         {
             // log handler does not exist
-            spdlog::debug("Handler not found for event id: {}", event_id);
+            spdlog::debug("Handler not found for event id: {} with token {}", event_id, token);
         }
 
         // Clean up empty vector if no more handlers exist for this event id
@@ -110,7 +85,7 @@ EventManager::Unsubscribe(int event_id, EventHandler handler)
     }
     else
     {
-        // The event does not exist
+        // Event ID not found, cannot unsubscribe
         spdlog::debug("Event id {} not found, cannot unregister handler", event_id);
     }
     return result;
@@ -134,7 +109,7 @@ EventManager::DispatchEvents()
             auto& handlers = it->second;
             for(auto& handler : handlers)
             {
-                handler(event);
+                handler.second(event);
                 if(!event->CanPropagate())
                 {
                     break;  // Stop propagation if indicated

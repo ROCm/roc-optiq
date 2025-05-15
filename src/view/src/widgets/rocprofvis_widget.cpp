@@ -5,8 +5,11 @@
 #include "../rocprofvis_utils.h"
 #include "imgui.h"
 #include "rocprofvis_debug_window.h"
+#include "../rocprofvis_event_manager.h"
+
 #include <iostream>
 #include <sstream>
+
 
 using namespace RocProfVis::View;
 
@@ -364,4 +367,153 @@ VSplitContainer::Render()
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
+}
+
+//------------------------------------------------------------------
+TabContainer::TabContainer()
+: m_active_tab_index(-1)
+, m_set_active_tab_index(-1)
+{
+    m_widget_name = GenUniqueName("TabContainer");
+}
+
+TabContainer::~TabContainer() { m_tabs.clear(); }
+
+void
+TabContainer::Update()
+{
+    // Update logic for each tab
+    for(auto& tab : m_tabs)
+    {
+        if(tab.m_widget)
+        {
+            tab.m_widget->Update();
+        }
+    }
+}
+
+void
+TabContainer::Render()
+{
+    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
+
+    int new_selected_tab = m_active_tab_index;
+    int index_to_remove  = -1;
+    if(!m_tabs.empty())
+    {
+        if(ImGui::BeginTabBar("Tabs"))
+        {
+            for(size_t i = 0; i < m_tabs.size(); ++i)
+            {
+                const TabItem&    tab = m_tabs[i];
+                ImGuiTabItemFlags flags =
+                    (i == m_set_active_tab_index) ? ImGuiTabItemFlags_SetSelected : 0;
+
+                bool  is_open = true;
+                bool* p_open  = &is_open;
+
+                // Close button
+                if(!tab.m_can_close)
+                {
+                    p_open = nullptr;
+                }
+                if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open,
+                                       ImGuiTabBarFlags_None))
+                {
+                    new_selected_tab = i;
+                    if(tab.m_widget)
+                    {
+                        tab.m_widget->Render();
+                    }
+                    ImGui::EndTabItem();
+                }
+
+                if(p_open && !is_open)
+                {
+                    index_to_remove = i;
+                }
+                // show tooltip if hovered
+                if(ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", tab.m_id.c_str());
+                }
+            }
+            ImGui::EndTabBar();
+        }
+
+        // Check if the active tab has changed
+        if(m_active_tab_index != new_selected_tab)
+        {
+            m_active_tab_index = new_selected_tab;
+            // Todo: add event to notify of the change
+        }
+
+        // clear the set active tab index
+        m_set_active_tab_index = -1;
+
+        // Remove the tab if it was closed
+        if(index_to_remove != -1)
+        {
+            RemoveTab(index_to_remove);
+        }
+
+    }
+    ImGui::EndChild();
+}
+
+void
+TabContainer::AddTab(const TabItem& tab)
+{
+    m_tabs.push_back(tab);
+}
+
+// Remove a tab
+void
+TabContainer::RemoveTab(const std::string& id)
+{
+    auto it = std::remove_if(m_tabs.begin(), m_tabs.end(),
+                             [&id](const TabItem& tab) { return tab.m_id == id; });
+    if(it != m_tabs.end())
+    {
+        // notify the event manager of the tab removal
+        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(static_cast<int>(RocEvents::kTabClosed), it->m_id);
+        EventManager::GetInstance()->AddEvent(e);
+                
+        m_tabs.erase(it, m_tabs.end());
+    }
+}
+
+void
+TabContainer::RemoveTab(int index)
+{
+    if(index >= 0 && index < static_cast<int>(m_tabs.size()))
+    {
+        // notify the event manager of the tab removal
+        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id);
+        EventManager::GetInstance()->AddEvent(e);
+
+        m_tabs.erase(m_tabs.begin() + index);        
+    }
+}
+
+// Set the active tab by index
+void
+TabContainer::SetActiveTab(int index)
+{
+    if(index >= 0 && index < static_cast<int>(m_tabs.size()))
+    {
+        m_set_active_tab_index = index;
+    }
+}
+
+// Set the active tab by ID
+void
+TabContainer::SetActiveTab(const std::string& id)
+{
+    auto it = std::find_if(m_tabs.begin(), m_tabs.end(),
+                           [&id](const TabItem& tab) { return tab.m_id == id; });
+    if(it != m_tabs.end())
+    {
+        m_set_active_tab_index = std::distance(m_tabs.begin(), it);
+    }
 }

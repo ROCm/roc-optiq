@@ -13,6 +13,10 @@ DataProvider::DataProvider()
 , m_trace_timeline(nullptr)
 , m_track_data_ready_callback(nullptr)
 , m_trace_data_ready_callback(nullptr)
+, m_num_graphs(0)
+, m_min_ts(0)
+, m_max_ts(0)
+, m_trace_file_path("")
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
@@ -41,6 +45,7 @@ DataProvider::CloseController()
     m_num_graphs = 0;
     m_min_ts     = 0;
     m_max_ts     = 0;
+    m_trace_file_path.clear();
 }
 
 void
@@ -112,11 +117,11 @@ DataProvider::GetState()
 }
 
 
-void DataProvider::SetTrackDataReadyCallback(const std::function<void(uint64_t)>& callback) {
+void DataProvider::SetTrackDataReadyCallback(const std::function<void(uint64_t, const std::string &)>& callback) {
     m_track_data_ready_callback = callback;
 }
 
-void DataProvider::SetTraceLoadedCallback(const std::function<void()>& callback) {
+void DataProvider::SetTraceLoadedCallback(const std::function<void(const std::string &)>& callback) {
     m_trace_data_ready_callback = callback;
 }
 
@@ -132,7 +137,7 @@ DataProvider::FetchTrace(const std::string& file_path)
 
     // free any previously acquired resources
     CloseController();
-
+    m_trace_file_path = file_path;
     m_trace_controller = rocprofvis_controller_alloc();
     if(m_trace_controller)
     {
@@ -158,7 +163,7 @@ DataProvider::FetchTrace(const std::string& file_path)
         }
 
         m_state = ProviderState::kLoading;
-        spdlog::debug("Provider load started, state: {}", static_cast<int>(m_state));
+        spdlog::debug("Provider load started, state: {}, controller: {}", static_cast<int>(m_state), reinterpret_cast<unsigned long long>(m_trace_controller));
     }
 
     return true;
@@ -226,7 +231,7 @@ DataProvider::HandleLoadTrace()
             m_state = ProviderState::kReady;            
             // fire callback
             if(m_trace_data_ready_callback) {
-                m_trace_data_ready_callback();
+                m_trace_data_ready_callback(m_trace_file_path);
             }
         }
         else
@@ -368,7 +373,7 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
 
             m_requests.emplace(request_info.index, request_info);
 
-            spdlog::debug("Fetching track data {}", index);
+            spdlog::debug("Fetching track data {} from controller {}", index, reinterpret_cast<unsigned long long>(m_trace_controller));
             return true;
         }
         else
@@ -606,7 +611,7 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 
     //call the new data ready callback
     if (m_track_data_ready_callback) {
-        m_track_data_ready_callback(req.index);
+        m_track_data_ready_callback(req.index, m_trace_file_path);
     }
 }
 

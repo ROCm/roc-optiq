@@ -137,7 +137,7 @@ class Database
         rocprofvis_dm_result_t          ExecuteQueryAsync(
                                                                 rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t description,
-                                                                rocprofvis_db_future_t  object);
+                                                                rocprofvis_db_future_t object);
 
        virtual rocprofvis_dm_result_t BuildTableQuery(
                                                                 rocprofvis_dm_timestamp_t start, 

@@ -138,6 +138,5 @@ rocprofvis_dm_result_t EventTrackSlice::GetRecordGraphLevelAt(const rocprofvis_d
     return kRocProfVisDmResultSuccess;
 }
 
-
 }  // namespace DataModel
 }  // namespace RocProfVis

@@ -206,7 +206,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
                 if(result == kRocProfVisResultSuccess)
                 {
-                    if((event_start < max_ts && event_end > min_ts) || events.size())
+                    if((event_start <= max_ts && event_end > min_ts) || events.size())
                     {
 
                         ROCPROFVIS_ASSERT(level == event_level || level == UINT64_MAX);

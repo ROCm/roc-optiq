@@ -857,7 +857,7 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
             const_cast<char*>(name.c_str()), &len);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        column_names.push_back(name);
+        column_names.push_back(std::move(name));
     }
 
     // get row data
@@ -928,9 +928,9 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
                     break;
                 }
             }
-            row_data.push_back(std::move(column_value));
+            row_data[j] = std::move(column_value);
         }
-        table_data.push_back(std::move(row_data));
+        table_data[i] = std::move(row_data);
     }
 
     m_event_table_header = std::move(column_names);

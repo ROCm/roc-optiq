@@ -119,6 +119,18 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_db_track_selection_t tracks,
                             rocprofvis_dm_string_t& query,
                             slice_array_t& slices) override;
+
+        rocprofvis_dm_result_t BuildTableQuery(
+                            rocprofvis_dm_timestamp_t start, 
+                            rocprofvis_dm_timestamp_t end,
+                            rocprofvis_db_num_of_tracks_t num,
+                            rocprofvis_db_track_selection_t tracks,
+                            rocprofvis_dm_charptr_t sort_column, 
+                            uint64_t max_count, 
+                            uint64_t offset,
+                            bool count_only, 
+                            rocprofvis_dm_string_t& query) override;
+
     protected:
     // sqlite3_exec callback to add flowtrace record to FlowTrace container.
     // @param data - pointer to callback caller argument

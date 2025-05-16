@@ -193,6 +193,78 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
 
 }
 
+rocprofvis_dm_result_t ProfileDatabase::BuildTableQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t sort_column, uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query) {
+    slice_query_t slice_query_map;
+    for (int i = 0; i < num; i++){
+        rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
+        for (int j = 0; j < props->query.size(); j++) {
+            std::string q = props->query[j]; 
+            std::string tuple = "(";
+            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+                if (props->process_tag[k] != "const") {
+                    if (tuple.length() > 1) tuple += ",";
+                    if(props->process_id_numeric[k]) tuple += "coalesce(";
+                    tuple += props->process_tag[k];
+                    if(props->process_id_numeric[k]) tuple += ",0)";
+                }
+            }
+            tuple += ")";
+            q += " where ";
+            q += tuple;
+            q += " IN (";
+            tuple = "(";
+            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+                if (props->process_tag[k] != "const") {
+                    if (tuple.length() > 1) tuple += ",";
+                    std::string id = props->process_id_numeric[k] ? std::to_string(props->process_id[k]) : std::string("'") + props->process_name[k] + "'";
+                    tuple += id;
+                      
+                }
+            }
+            tuple += ")";
+            if (slice_query_map[q].length() > 0) slice_query_map[q] += ", ";
+            slice_query_map[q] += tuple ;
+        }
+    }
+    if(count_only)
+    {
+        query = "SELECT COUNT(*) AS [NumRecords] FROM ( ";
+    }
+    else
+    { 
+        query = "SELECT * FROM ( "; 
+    } 
+    for (std::map<std::string, std::string>::iterator it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
+        if (it_query!=slice_query_map.begin()) query += " UNION ";
+        query += it_query->first;
+        query += it_query->second;
+        query += ") and start >= ";
+        query += std::to_string(start);
+        query += " and end < ";
+        query += std::to_string(end);
+    }
+    query += ")";
+    if (sort_column && strlen(sort_column))
+    {
+        query += " ORDER BY ";
+        query += sort_column;
+    }
+    if(!count_only)
+    {
+        if(max_count)
+        {
+            query += " LIMIT ";
+            query += std::to_string(max_count);
+        }
+        if(offset)
+        {
+            query += " OFFSET ";
+            query += std::to_string(offset);
+        }
+    }
+    query += ";";
+    return kRocProfVisDmResultSuccess;
+}
 
 rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice( 
                                                     rocprofvis_dm_timestamp_t start,

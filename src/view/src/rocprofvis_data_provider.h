@@ -22,6 +22,12 @@ enum class ProviderState
     kError
 };
 
+enum class RequestType {
+    kFetchTrack,
+    kFetchGraph,
+    kFetchSingleTrackEventTable
+};
+
 typedef struct track_info_t
 {
     uint64_t                           index;  // index of the track in the controller
@@ -30,15 +36,19 @@ typedef struct track_info_t
     rocprofvis_controller_track_type_t track_type;  // the type of track
     double                             min_ts;      // starting time stamp of track
     double                             max_ts;      // ending time stamp of track
+    uint64_t                           num_entries;  // number of entries in the track
 } track_info_t;
 
 typedef struct data_req_info_t
 {
     uint64_t                        index;  // index of track that is being requested
-    rocprofvis_controller_future_t* graph_future;   // future for the request
-    rocprofvis_controller_array_t*  graph_array;    // array of data for the request
-    rocprofvis_handle_t*            graph_obj;      // object for the request
+    rocprofvis_controller_future_t* request_future;   // future for the request
+    rocprofvis_controller_array_t*  request_array;    // array of data for the request
+    rocprofvis_handle_t*            request_obj_handle;      // object for the request
     ProviderState                   loading_state;  // state of the request
+    RequestType                     request_type;   // type of request
+    double                          start_ts;      // start time stamp of data being requested
+    double                          end_ts;        // end time stamp of data being requested
 } data_req_info_t;
 
 class DataProvider
@@ -80,6 +90,18 @@ public:
      */
     bool FetchTrack(uint64_t index, double start_ts, double end_ts, int horz_pixel_range,
                     int lod);
+    
+    bool FetchTrackGraph(uint64_t index, double start_ts, double end_ts,
+                          int horz_pixel_range, int lod);
+            
+    /*
+        * Fetches an event table from the controller for a single track.
+        * @param index: The index of the track to select
+        * @param start_ts: The start timestamp of the event table
+        * @param end_ts: The end timestamp of the event table
+        */
+    bool FetchEventTable(uint64_t index, double start_ts, double end_ts);
+
 
     /*
      * Release memory buffer holding raw data for selected track
@@ -141,6 +163,11 @@ private:
     void HandleLoadGraphs();
 
     void ProcessRequest(data_req_info_t& req);
+    void ProcessGraphRequest(data_req_info_t& req);
+    void ProcessTrackRequest(data_req_info_t& req);
+    void ProcessEventTableRequest(data_req_info_t& req);
+
+
     void CreateRawEventData(uint64_t index, rocprofvis_controller_array_t* track_data,
                             double min_ts, double max_ts);
     void CreateRawSampleData(uint64_t index, rocprofvis_controller_array_t* track_data,

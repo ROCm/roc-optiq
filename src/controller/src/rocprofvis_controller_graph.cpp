@@ -372,7 +372,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                             }
 
                             // Create a new event & increment the search
-                            while(max_ts < sample_start)
+                            while(max_ts < sample_start && min_ts < end_ts)
                             {
                                 min_ts = std::min(max_ts, end_ts);
                                 max_ts = std::min(max_ts + scale, end_ts);

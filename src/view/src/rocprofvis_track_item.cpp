@@ -1,6 +1,7 @@
 #include "rocprofvis_track_item.h"
 #include "iostream"
 #include "rocprofvis_settings.h"
+#include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
 
@@ -165,11 +166,17 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 void
 TrackItem::RequestData(double min, double max)
 {
-    std::cout << min << "  request " << max << std::endl;
     if(m_request_state == TrackDataRequestState::kIdle)
     {
         m_request_state = TrackDataRequestState::kRequesting;
-        m_data_provider.FetchTrack(m_id, min, max, 1000, 0);
 
-     }
+        if(min != 0 && max != 0)
+        {
+            std::cout << min<<std::endl;
+            m_data_provider.FetchTrack(m_id, min, max, 1000, 0);
+        }
+    }
+    else {
+        spdlog::debug("RequestData failed. Request already pending for track: {}", m_id);
+    }
 }

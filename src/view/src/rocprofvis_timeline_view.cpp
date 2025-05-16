@@ -151,24 +151,29 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     }
     else
     {
+        m_min_x              = m_data_provider.GetStartTime();
+        m_max_x              = m_data_provider.GetEndTime();
         uint64_t track_index = tde->GetTrackIndex();
         spdlog::debug("Got new track data for track: {}", track_index);
 
-        if(m_graph_map[track_index].chart->HandleTrackDataChanged())
-        {
-            auto min_max = m_graph_map[track_index].chart->GetMinMax();
+        m_graph_map[track_index].chart->HandleTrackDataChanged();
 
-            if(std::get<0>(min_max) < m_min_x)
-            {
-                m_min_x = std::get<0>(min_max);
-            }
-            if(std::get<1>(min_max) > m_max_x)
-            {
-                m_max_x = std::get<1>(min_max);
-            }
+             //if(m_graph_map[track_index].chart->HandleTrackDataChanged())
+             // {
+             //     auto min_max = m_graph_map[track_index].chart->GetMinMax();
 
-            spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
-        }
+             //     if(std::get<0>(min_max) < m_min_x)
+             //     {
+             //         m_min_x = std::get<0>(min_max);
+             //     }
+             //     if(std::get<1>(min_max) > m_max_x)
+             //     {
+             //         m_max_x = std::get<1>(min_max);
+             //     }
+
+             //     spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
+             // }
+              spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
     }
 }
 
@@ -450,20 +455,20 @@ TimelineView::RenderGraphView()
                    graph_objects.second.chart->GetRequestState() ==
                        TrackDataRequestState::kIdle)
                 {
-                    graph_objects.second.chart->RequestData(m_min_x,
-                                                            m_max_x);
-                    std::cout << "no data " << m_max_x << " "
-                              << (int)graph_objects.second.chart->GetRequestState() << std::endl;
+                    if(m_min_x != 0)
+                    {
+                        graph_objects.second.chart->RequestData(m_min_x, m_max_x);
+                    }
                 }
 
                 if(request && graph_objects.second.chart->GetRequestState() ==
                                   TrackDataRequestState::kIdle)
                 {
-                  std::cout << "requested from request" << std::endl;
+                    std::cout << "requested from request" << std::endl;
 
-                 graph_objects.second.chart->RequestData(m_viewport_start,
-                                                           m_viewport_end);
-              }
+                    graph_objects.second.chart->RequestData(m_viewport_start,
+                                                            m_viewport_end);
+                }
 
                 if(ImGui::Button(
                        std::to_string(graph_objects.second.chart->GetID()).c_str()))
@@ -617,6 +622,11 @@ TimelineView::MakeGraphView()
     // Destroy any existing data
     DestroyGraphs();
     ResetView();
+
+        m_min_x = m_data_provider.GetStartTime();
+    m_max_x = m_data_provider.GetEndTime();
+
+     spdlog::debug("FIRST min max is now {},{}", m_min_x, m_max_x);
 
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();

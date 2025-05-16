@@ -299,16 +299,26 @@ RenderProviderTest(DataProvider& provider)
 
     int index = std::atoi(buffer);
 
-    if(ImGui::Button("Fetch"))
+
+    if(ImGui::Button("Fetch Track"))
     {
         provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
                             0);
     }
-    if(ImGui::Button("Delete"))
+    if(ImGui::Button("Fetch Table"))
+    {
+        provider.FetchEventTable(index, provider.GetStartTime(), provider.GetEndTime());
+    }
+    if(ImGui::Button("Fetch Whole Track"))
+    {
+        provider.FetchWholeTrack(index, provider.GetStartTime(), provider.GetEndTime(),
+                                 1000, 0);
+    }
+    if(ImGui::Button("Delete Track"))
     {
         provider.FreeTrack(index);
     }
-    if(ImGui::Button("Print"))
+    if(ImGui::Button("Print Track"))
     {
         provider.DumpTrack(index);
     }
@@ -316,6 +326,11 @@ RenderProviderTest(DataProvider& provider)
     {
         provider.DumpMetaData();
     }
+    if(ImGui::Button("Print Event Table"))
+    {
+        provider.DumpEventTable();
+    }
+
     ImGui::End();
 }
 

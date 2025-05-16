@@ -4,6 +4,9 @@
 
 #include "spdlog/spdlog.h"
 
+#include <iostream>
+#include <sstream>
+
 using namespace RocProfVis::View;
 
 DataProvider::DataProvider()
@@ -116,12 +119,17 @@ DataProvider::GetState()
     return m_state;
 }
 
-
-void DataProvider::SetTrackDataReadyCallback(const std::function<void(uint64_t, const std::string &)>& callback) {
+void
+DataProvider::SetTrackDataReadyCallback(
+    const std::function<void(uint64_t, const std::string&)>& callback)
+{
     m_track_data_ready_callback = callback;
 }
 
-void DataProvider::SetTraceLoadedCallback(const std::function<void(const std::string &)>& callback) {
+void
+DataProvider::SetTraceLoadedCallback(
+    const std::function<void(const std::string&)>& callback)
+{
     m_trace_data_ready_callback = callback;
 }
 
@@ -137,7 +145,7 @@ DataProvider::FetchTrace(const std::string& file_path)
 
     // free any previously acquired resources
     CloseController();
-    m_trace_file_path = file_path;
+    m_trace_file_path  = file_path;
     m_trace_controller = rocprofvis_controller_alloc();
     if(m_trace_controller)
     {
@@ -163,7 +171,9 @@ DataProvider::FetchTrace(const std::string& file_path)
         }
 
         m_state = ProviderState::kLoading;
-        spdlog::debug("Provider load started, state: {}, controller: {}", static_cast<int>(m_state), reinterpret_cast<unsigned long long>(m_trace_controller));
+        spdlog::debug("Provider load started, state: {}, controller: {}",
+                      static_cast<int>(m_state),
+                      reinterpret_cast<unsigned long long>(m_trace_controller));
     }
 
     return true;
@@ -179,7 +189,7 @@ DataProvider::Update()
     }
     else if(m_state == ProviderState::kReady)
     {
-        HandleLoadGraphs();
+        HandleRequests();
     }
 }
 
@@ -227,10 +237,11 @@ DataProvider::HandleLoadTrace()
             // trace loaded successfully, free the future pointer
             rocprofvis_controller_future_free(m_trace_future);
             m_trace_future = nullptr;
-            
-            m_state = ProviderState::kReady;            
+
+            m_state = ProviderState::kReady;
             // fire callback
-            if(m_trace_data_ready_callback) {
+            if(m_trace_data_ready_callback)
+            {
                 m_trace_data_ready_callback(m_trace_file_path);
             }
         }
@@ -330,8 +341,8 @@ DataProvider::HandleLoadTrackMetaData()
 }
 
 bool
-DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
-                         int horz_pixel_range, int lod)
+DataProvider::FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
+                              int horz_pixel_range, int lod)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -362,14 +373,15 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
             }
 
             data_req_info_t request_info;
-            request_info.request_array   = track_array;
-            request_info.request_future  = track_future;
-            request_info.request_obj_handle     = track_handle;
-            request_info.index         = index;
-            request_info.loading_state = ProviderState::kLoading;
-            request_info.request_type  = RequestType::kFetchTrack;
-            request_info.start_ts     = start_ts; 
-            request_info.end_ts       = end_ts;
+            request_info.request_array      = track_array;
+            request_info.request_future     = track_future;
+            request_info.request_obj_handle = track_handle;
+            request_info.request_args       = nullptr;
+            request_info.index              = index;
+            request_info.loading_state      = ProviderState::kLoading;
+            request_info.request_type       = RequestType::kFetchTrack;
+            request_info.start_ts           = start_ts;
+            request_info.end_ts             = end_ts;
             m_requests.emplace(request_info.index, request_info);
 
             spdlog::debug("Fetching track graph data {}", index);
@@ -390,8 +402,8 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
 }
 
 bool
-DataProvider::FetchTrackGraph(uint64_t index, double start_ts, double end_ts,
-                              int horz_pixel_range, int lod)
+DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
+                         int horz_pixel_range, int lod)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -425,15 +437,19 @@ DataProvider::FetchTrackGraph(uint64_t index, double start_ts, double end_ts,
             }
 
             data_req_info_t request_info;
-            request_info.request_array   = graph_array;
-            request_info.request_future  = graph_future;
-            request_info.request_obj_handle     = graph_obj;
-            request_info.index         = index;
-            request_info.loading_state = ProviderState::kLoading;
-
+            request_info.request_array      = graph_array;
+            request_info.request_future     = graph_future;
+            request_info.request_obj_handle = graph_obj;
+            request_info.request_args       = nullptr;
+            request_info.index              = index;
+            request_info.loading_state      = ProviderState::kLoading;
+            request_info.request_type       = RequestType::kFetchGraph;
+            request_info.start_ts           = start_ts;
+            request_info.end_ts             = end_ts;
             m_requests.emplace(request_info.index, request_info);
 
-            spdlog::debug("Fetching track data {} from controller {}", index, reinterpret_cast<unsigned long long>(m_trace_controller));
+            spdlog::debug("Fetching track data {} from controller {}", index,
+                          reinterpret_cast<unsigned long long>(m_trace_controller));
             return true;
         }
         else
@@ -450,7 +466,9 @@ DataProvider::FetchTrackGraph(uint64_t index, double start_ts, double end_ts,
     }
 }
 
-bool DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_ts) {
+bool
+DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_ts)
+{
     if(m_state != ProviderState::kReady)
     {
         spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
@@ -467,45 +485,50 @@ bool DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_t
         {
             // get the event table handle
             rocprofvis_handle_t* table_handle = nullptr;
-            rocprofvis_result_t result = rocprofvis_controller_get_object(m_trace_controller, kRPVControllerEventTable, 0, &table_handle);
+            rocprofvis_result_t  result       = rocprofvis_controller_get_object(
+                m_trace_controller, kRPVControllerEventTable, 0, &table_handle);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             ROCPROFVIS_ASSERT(table_handle);
 
             // get the track handle
             rocprofvis_handle_t* track_handle = nullptr;
-            result = rocprofvis_controller_get_object(m_trace_controller, kRPVControllerTrackIndexed, index, &track_handle);
+            result                            = rocprofvis_controller_get_object(
+                m_trace_controller, kRPVControllerTrackIndexed, index, &track_handle);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             ROCPROFVIS_ASSERT(track_handle != nullptr);
 
             // setup arguments for event table request
-            rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+            rocprofvis_controller_arguments_t* args =
+                rocprofvis_controller_arguments_alloc();
             ROCPROFVIS_ASSERT(args != nullptr);
 
-            result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
-                                                    kRPVControllerTableTypeEvents);
+            result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType,
+                                                      0, kRPVControllerTableTypeEvents);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumTracks,
-                                                    0, 1);
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsNumTracks, 0, 1);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            result = rocprofvis_controller_set_object(args, kRPVControllerTableArgsTracksIndexed, 0, track_handle);
+            result = rocprofvis_controller_set_object(
+                args, kRPVControllerTableArgsTracksIndexed, 0, track_handle);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime, 0,
-                                                    start_ts);
+            result = rocprofvis_controller_set_double(
+                args, kRPVControllerTableArgsStartTime, 0, start_ts);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsEndTime,
-                                                    0, end_ts);
+            result = rocprofvis_controller_set_double(
+                args, kRPVControllerTableArgsEndTime, 0, end_ts);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortColumn,
-                                                    0, 0);
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsSortColumn, 0, 0);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder,
-                                                    0, kRPVControllerSortOrderAscending);
+            result =
+                rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder,
+                                                 0, kRPVControllerSortOrderAscending);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             // prepare to fetch the table
@@ -517,26 +540,28 @@ bool DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_t
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
             ROCPROFVIS_ASSERT(future != nullptr);
 
-            result = rocprofvis_controller_table_fetch_async(m_trace_controller, table_handle, args, future, array);
+            result = rocprofvis_controller_table_fetch_async(
+                m_trace_controller, table_handle, args, future, array);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             // create the request info
             data_req_info_t request_info;
-            request_info.request_array   = array;
-            request_info.request_future  = future;
-            request_info.request_obj_handle     = nullptr;
-            request_info.index         = index;
-            request_info.loading_state = ProviderState::kLoading;
-            request_info.request_type  = RequestType::kFetchSingleTrackEventTable;
-            request_info.start_ts     = start_ts;
-            request_info.end_ts       = end_ts;
+            request_info.request_array      = array;
+            request_info.request_future     = future;
+            request_info.request_obj_handle = nullptr;
+            request_info.request_args       = args;
+            request_info.index              = index;
+            request_info.loading_state      = ProviderState::kLoading;
+            request_info.request_type       = RequestType::kFetchSingleTrackEventTable;
+            request_info.start_ts           = start_ts;
+            request_info.end_ts             = end_ts;
             m_requests.emplace(request_info.index, request_info);
             spdlog::debug("Fetching event table data {}", index);
 
-            // free the arguments
-            rocprofvis_controller_arguments_free(args);
             return true;
-        } else {
+        }
+        else
+        {
             // request for item already exists
             spdlog::debug("Request for this track, index {}, is already pending", index);
             return false;
@@ -547,7 +572,6 @@ bool DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_t
         spdlog::debug("Cannot fetch track, index {} is out of range", index);
         return false;
     }
-
 }
 
 const RawTrackData*
@@ -680,8 +704,42 @@ DataProvider::DumpTrack(uint64_t index)
     return false;
 }
 
+void DataProvider::DumpEventTable() {
+    std::ostringstream str_collector;
+    for (const auto& col_header: m_event_table_header) {
+        str_collector << col_header;
+        str_collector << " ";
+    }
+    spdlog::debug("{}", str_collector.str());
+    str_collector.str("");
+    str_collector.clear();
+
+    // print the event table data
+    int skip_count = 0;
+    for (const auto& row : m_event_table_data) {
+        int col_count = 0;
+        for (const auto& column : row) {
+            str_collector << column;
+            str_collector << " ";
+            col_count++;
+        }
+        if(col_count == 0) {
+            skip_count++;
+            continue;
+        }
+        if(skip_count > 0) {
+            spdlog::debug("Skipped {} empty rows", skip_count);
+            skip_count = 0;
+        }
+        
+        spdlog::debug("{}", str_collector.str());
+        str_collector.str("");
+        str_collector.clear();
+    }
+}
+
 void
-DataProvider::HandleLoadGraphs()
+DataProvider::HandleRequests()
 {
     if(m_requests.size() > 0)
     {
@@ -698,8 +756,8 @@ DataProvider::HandleLoadGraphs()
             if(result == kRocProfVisResultSuccess)
             {
                 rocprofvis_controller_future_free(req.request_future);
-                req.request_future  = nullptr;
-                req.loading_state = ProviderState::kReady;
+                req.request_future = nullptr;
+                req.loading_state  = ProviderState::kReady;
                 ProcessRequest(req);
                 // remove request from processing container
                 it = m_requests.erase(it);
@@ -737,47 +795,58 @@ DataProvider::ProcessRequest(data_req_info_t& req)
     }
 }
 
-void 
-DataProvider::ProcessEventTableRequest(data_req_info_t& req) {
+void
+DataProvider::ProcessEventTableRequest(data_req_info_t& req)
+{
     spdlog::debug("Processing event table data {}", req.index);
 
     if(req.index >= m_track_metadata.size())
     {
-        spdlog::debug("Cannot process event table data, index out of range {}", req.index);
+        spdlog::debug("Cannot process event table data, index out of range {}",
+                      req.index);
         return;
     }
 
-    if(!req.request_array) {
+    // free arguments
+    if(req.request_args)
+    {
+        rocprofvis_controller_arguments_free(req.request_args);
+        req.request_args = nullptr;
+    }
+
+    if(!req.request_array)
+    {
         spdlog::debug("Cannot process event table data, request array is null");
         return;
     }
 
     // get the event table handle
     rocprofvis_handle_t* table_handle = nullptr;
-    rocprofvis_result_t result = rocprofvis_controller_get_object(m_trace_controller, kRPVControllerEventTable, 0, &table_handle);
+    rocprofvis_result_t  result       = rocprofvis_controller_get_object(
+        m_trace_controller, kRPVControllerEventTable, 0, &table_handle);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     ROCPROFVIS_ASSERT(table_handle);
 
     uint64_t num_columns = 0;
-    uint64_t num_rows = 0;
+    uint64_t num_rows    = 0;
 
     // get the number of columns and rows in the table
-    result = rocprofvis_controller_get_uint64(
-        table_handle, kRPVControllerTableNumColumns, 0, &num_columns);
+    result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumColumns,
+                                              0, &num_columns);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result  = rocprofvis_controller_get_uint64(
-        table_handle, kRPVControllerTableNumRows, 0, &num_rows);
+    result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumRows, 0,
+                                              &num_rows);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     // get the column names
     std::vector<std::string> column_names;
+
     for(int i = 0; i < num_columns; i++)
     {
         uint32_t len = 0;
         result       = rocprofvis_controller_get_string(
-            table_handle, kRPVControllerTableColumnHeaderIndexed, i, nullptr,
-            &len);
+            table_handle, kRPVControllerTableColumnHeaderIndexed, i, nullptr, &len);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         std::string name;
@@ -794,30 +863,31 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req) {
     // get row data
     std::vector<std::vector<std::string>> table_data;
     table_data.resize(num_rows);
-    for (uint32_t i = 0; i < num_rows; i++)
+    for(uint32_t i = 0; i < num_rows; i++)
     {
         // get the row data, for now all data will be stored as strings
         std::vector<std::string> row_data;
         row_data.resize(num_columns);
 
         rocprofvis_handle_t* row_array = nullptr;
-        result = rocprofvis_controller_get_object(req.request_array, kRPVControllerArrayEntryIndexed, i, &row_array);
+        result                         = rocprofvis_controller_get_object(
+            req.request_array, kRPVControllerArrayEntryIndexed, i, &row_array);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         ROCPROFVIS_ASSERT(row_array);
-        for (uint32_t j = 0; j < num_columns; j++)
+        for(uint32_t j = 0; j < num_columns; j++)
         {
-
             uint64_t column_type = 0;
-            result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableColumnTypeIndexed, j, &column_type);
+            result               = rocprofvis_controller_get_uint64(
+                table_handle, kRPVControllerTableColumnTypeIndexed, j, &column_type);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             std::string column_value = "";
-            switch (column_type)
+            switch(column_type)
             {
                 case kRPVControllerPrimitiveTypeUInt64:
                 {
                     uint64_t value = 0;
-                    result       = rocprofvis_controller_get_uint64(
+                    result         = rocprofvis_controller_get_uint64(
                         row_array, kRPVControllerArrayEntryIndexed, j, &value);
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
@@ -827,7 +897,7 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req) {
                 case kRPVControllerPrimitiveTypeDouble:
                 {
                     double value = 0;
-                    result         = rocprofvis_controller_get_double(
+                    result       = rocprofvis_controller_get_double(
                         row_array, kRPVControllerArrayEntryIndexed, j, &value);
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
@@ -838,11 +908,9 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req) {
                 {
                     uint32_t len = 0;
                     result       = rocprofvis_controller_get_string(
-                        row_array, kRPVControllerArrayEntryIndexed, j, nullptr,
-                        &len);
+                        row_array, kRPVControllerArrayEntryIndexed, j, nullptr, &len);
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-                
                     column_value.resize(len);
 
                     result = rocprofvis_controller_get_string(
@@ -855,7 +923,7 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req) {
                 case kRPVControllerPrimitiveTypeObject:
                 default:
                 {
-                    //skip columns with object types for now
+                    // skip columns with object types for now
                     spdlog::debug("Skipping column {} with object type", j);
                     break;
                 }
@@ -864,6 +932,9 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req) {
         }
         table_data.push_back(std::move(row_data));
     }
+
+    m_event_table_header = std::move(column_names);
+    m_event_table_data = std::move(table_data);
 
     // free the array
     if(req.request_array)
@@ -909,7 +980,7 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
     if(m_track_data_ready_callback)
     {
         m_track_data_ready_callback(req.index, m_trace_file_path);
-    }    
+    }
 }
 
 void
@@ -969,8 +1040,9 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
         req.request_array = nullptr;
     }
 
-    //call the new data ready callback
-    if (m_track_data_ready_callback) {
+    // call the new data ready callback
+    if(m_track_data_ready_callback)
+    {
         m_track_data_ready_callback(req.index, m_trace_file_path);
     }
 }
@@ -1076,8 +1148,8 @@ DataProvider::CreateRawEventData(uint64_t                       index,
         trace_event.m_duration = end_ts - start_ts;
 
         uint64_t level = 0;
-        result = rocprofvis_controller_get_uint64(event, kRPVControllerEventLevel, 0,
-                                                  &level);
+        result =
+            rocprofvis_controller_get_uint64(event, kRPVControllerEventLevel, 0, &level);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_level = level;
 

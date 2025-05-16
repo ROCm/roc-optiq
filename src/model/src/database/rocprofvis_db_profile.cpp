@@ -193,7 +193,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
 
 }
 
-rocprofvis_dm_result_t ProfileDatabase::BuildTableQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query) {
+rocprofvis_dm_result_t ProfileDatabase::BuildTableQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t sort_column, uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query) {
     slice_query_t slice_query_map;
     for (int i = 0; i < num; i++){
         rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
@@ -243,15 +243,11 @@ rocprofvis_dm_result_t ProfileDatabase::BuildTableQuery(rocprofvis_dm_timestamp_
         query += " and end < ";
         query += std::to_string(end);
     }
-    query += ") ORDER BY ";
-    switch (sort_column)
+    query += ")";
+    if (sort_column && strlen(sort_column))
     {
-        case kRPVDMSortColumnTimestamp:
-        default:
-        {
-            query += "start";
-            break;
-        }
+        query += " ORDER BY ";
+        query += sort_column;
     }
     if(!count_only)
     {

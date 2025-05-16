@@ -53,13 +53,12 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
         rocprofvis_dm_database_t db    = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
         ROCPROFVIS_ASSERT(db);
 
-        Columns sort_column = m_columns[m_sort_column].m_sort_enum;
-
-        rocprofvis_dm_sort_columns_t sort_enum = (rocprofvis_dm_sort_columns_t)(sort_column <= Columns::LastSortColumn ? sort_column : Columns::Timestamp);
+        char const* sort_column = m_columns.size() > m_sort_column ? m_columns[m_sort_column].m_name.c_str() : nullptr;
 
         char* fetch_query = nullptr;
         rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
-            db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), sort_enum, count,
+            db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), sort_column,
+            count,
             index, false, &fetch_query);
         if(dm_result == kRocProfVisDmResultSuccess)
         {
@@ -100,7 +99,6 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
                             m_columns[i].m_name = rocprofvis_dm_get_property_as_charptr(
                                 table, kRPVDMExtTableColumnNameCharPtrIndexed, i);
                             m_columns[i].m_type = kRPVControllerPrimitiveTypeString;
-                            m_columns[i].m_sort_enum = Columns::Timestamp;
                         }
                         std::vector<Data> row;
                         row.resize(m_columns.size());
@@ -203,7 +201,6 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
 rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    std::vector<ColumnDefintion> columns;
     std::vector<uint32_t> tracks;
     uint64_t sort_column = 0;
     uint64_t sort_order  = 0;
@@ -223,75 +220,11 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
             {
                 track_type = kRPVControllerTrackTypeEvents;
 
-                ColumnDefintion column;
-
-                column.m_name = "id";
-                column.m_type = kRPVControllerPrimitiveTypeUInt64;
-                column.m_sort_enum = Columns::EventId;
-                columns.push_back(column);
-                
-                column.m_name = "start_ts";
-                column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = Columns::Timestamp;
-                columns.push_back(column);
-                
-                column.m_name = "end_ts";
-                column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = Columns::EventEnd;
-                columns.push_back(column);
-                
-                column.m_name = "duration";
-                column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = Columns::EventDuration;
-                columns.push_back(column);
-
-                column.m_name = "name";
-                column.m_type = kRPVControllerPrimitiveTypeString;
-                column.m_sort_enum = Columns::EventSymbol;
-                columns.push_back(column);
-                
-                column.m_name = "category";
-                column.m_type = kRPVControllerPrimitiveTypeString;
-                column.m_sort_enum = Columns::EventType;
-                columns.push_back(column);
-                
-                column.m_name = "track_id";
-                column.m_type = kRPVControllerPrimitiveTypeUInt64;
-                column.m_sort_enum = Columns::TrackId;
-                columns.push_back(column);
-                
-                column.m_name = "track_name";
-                column.m_type = kRPVControllerPrimitiveTypeString;
-                column.m_sort_enum = Columns::TrackName;
-                columns.push_back(column);
-
                 break;
             }
             case kRPVControllerTableTypeSamples:
             {
                 track_type = kRPVControllerTrackTypeSamples;
-
-                ColumnDefintion column;
-                
-                column.m_name = "timestamp";
-                column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = Columns::Timestamp;
-                columns.push_back(column);
-                
-                column.m_name = "value";
-                column.m_type = kRPVControllerPrimitiveTypeDouble;
-                column.m_sort_enum = Columns::PmcValue;
-                columns.push_back(column);
-                
-                column.m_name = "track_id";
-                column.m_type = kRPVControllerPrimitiveTypeUInt64;
-                column.m_sort_enum = Columns::TrackId;
-                columns.push_back(column);
-                
-                column.m_name = "track_name";
-                column.m_type = kRPVControllerPrimitiveTypeString;
-                column.m_sort_enum = Columns::TrackName;
-                columns.push_back(column);
 
                 break;
             }
@@ -373,16 +306,9 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
         rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
         ROCPROFVIS_ASSERT(object2wait);
 
-        Columns column = columns[sort_column].m_sort_enum;
-
-        rocprofvis_dm_sort_columns_t sort_enum =
-            (rocprofvis_dm_sort_columns_t) (column <= Columns::LastSortColumn
-                                                ? column
-                                                : Columns::Timestamp);
-
         char*                  count_query = nullptr;
         rocprofvis_dm_result_t dm_result   = rocprofvis_db_build_table_query(
-            db, start_ts, end_ts, tracks.size(), tracks.data(), sort_enum, 0,
+            db, start_ts, end_ts, tracks.size(), tracks.data(), nullptr, 0,
             0, true, &count_query);
         if(dm_result == kRocProfVisDmResultSuccess)
         {
@@ -454,7 +380,6 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
     if (result == kRocProfVisResultSuccess)
     {
         Reset();
-        m_columns = columns;
         m_tracks  = tracks;
         m_sort_column = sort_column;
         m_sort_order  = (rocprofvis_controller_sort_order_t)sort_order;

@@ -294,27 +294,6 @@ typedef enum rocprofvis_dm_event_property_type_t {
     kRPVDMEventExtData,
 } rocprofvis_dm_event_property_type_t;
 
-typedef enum rocprofvis_dm_sort_columns_t
-{
-    // Record timestamp
-    kRPVDMSortColumnTimestamp,
-    // PMC record value
-    kRPVDMSortColumnPmcValue,
-    // Event ID
-    kRPVDMSortColumnEventId,
-    // Event operation enumeration (none, launch, dispatch, allocate, copy)
-    kRPVDMSortColumnEventOperation,
-    // Event duration. Can be negative. Negative has to be invalidated by controller
-    kRPVDMSortColumnEventDuration,
-    // Event duration. Can be negative. Negative has to be invalidated by controller
-    kRPVDMSortColumnEventEnd,
-    // Event type string
-    kRPVDMSortColumnEventType,
-    // Event symbol string
-    kRPVDMSortColumnEventSymbol,
-
-} rocprofvis_dm_sort_columns_t;
-
 // Event id structure
 typedef union { 
     struct {

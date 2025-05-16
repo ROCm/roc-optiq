@@ -120,7 +120,6 @@ class Database
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 rocprofvis_db_future_t object);
-
         // Asynchronously read different types of event properties (flowtrace, stacktrace, extdata) for event ID
         // @param type - event property type (flowtrace, stacktrace, extdata) 
         // @param event_id - 60-bit event id and 4-bit operation type  
@@ -138,13 +137,18 @@ class Database
         rocprofvis_dm_result_t          ExecuteQueryAsync(
                                                                 rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t description,
-                                                 rocprofvis_db_future_t  object);
+                                                                rocprofvis_db_future_t  object);
 
        virtual rocprofvis_dm_result_t BuildTableQuery(
-            rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
-            rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks,
-            rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count, uint64_t offset,
-            bool count_only, rocprofvis_dm_string_t& query) = 0;
+                                                                rocprofvis_dm_timestamp_t start, 
+                                                                rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_db_num_of_tracks_t num, 
+                                                                rocprofvis_db_track_selection_t tracks,
+                                                                rocprofvis_dm_sort_columns_t sort_column, 
+                                                                uint64_t max_count, 
+                                                                uint64_t offset,
+                                                                bool count_only, 
+                                                                rocprofvis_dm_string_t& query) = 0;
 
     private:
     /************************static methods to be used as a parameter to std::thread**********************/
@@ -170,7 +174,6 @@ class Database
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 Future* object);
-
         //static method to read Event properties. Required to launch a unique thread for asynchronous event properties read
         // @param db - pointer to database object
         // @param type - event property type (flowtrace, stacktrace, extdata) 

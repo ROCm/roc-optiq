@@ -60,7 +60,6 @@ class ProfileDatabase : public SqliteDatabase
                         rocprofvis_db_num_of_tracks_t num,
                         rocprofvis_db_track_selection_t tracks,
                         Future* object) override;
-
         // worker method to execute database query
         // @param query - database query 
         // @param description - database description
@@ -122,10 +121,15 @@ class ProfileDatabase : public SqliteDatabase
                             slice_array_t& slices) override;
 
         rocprofvis_dm_result_t BuildTableQuery(
-            rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
-            rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks,
-            rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count, uint64_t offset,
-            bool count_only, rocprofvis_dm_string_t& query) override;
+                            rocprofvis_dm_timestamp_t start, 
+                            rocprofvis_dm_timestamp_t end,
+                            rocprofvis_db_num_of_tracks_t num,
+                            rocprofvis_db_track_selection_t tracks,
+                            rocprofvis_dm_sort_columns_t sort_column, 
+                            uint64_t max_count, 
+                            uint64_t offset,
+                            bool count_only, 
+                            rocprofvis_dm_string_t& query) override;
 
     protected:
     // sqlite3_exec callback to add flowtrace record to FlowTrace container.

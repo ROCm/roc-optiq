@@ -154,6 +154,7 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceStatic(
     return db->ReadTraceSlice(start, end, num, tracks, object);
 }
 
+
 rocprofvis_dm_result_t   Database::ReadEventPropertyStatic(
                                                     Database* db, 
                                                     rocprofvis_dm_event_property_type_t type,

@@ -138,14 +138,6 @@ rocprofvis_dm_result_t EventTrackSlice::GetRecordGraphLevelAt(const rocprofvis_d
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t EventTrackSlice::GetRecordEventIdFullAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_id_t& event_id)
-{
-    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    event_id = m_samples[index].get()->EventIdFull();
-    return kRocProfVisDmResultSuccess;
-
-}
-
 
 }  // namespace DataModel
 }  // namespace RocProfVis

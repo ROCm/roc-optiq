@@ -20,8 +20,6 @@
 
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_dm_table_row.h"
-#include "rocprofvis_dm_pmc_track_slice.h"
-#include "rocprofvis_dm_event_track_slice.h"
 
 namespace RocProfVis
 {

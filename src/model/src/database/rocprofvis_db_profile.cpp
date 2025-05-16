@@ -19,7 +19,6 @@
 // SOFTWARE.
 
 #include "rocprofvis_db_profile.h"
-#include "rocprofvis_dm_track_slice.h"
 #include <sstream>
 
 namespace RocProfVis

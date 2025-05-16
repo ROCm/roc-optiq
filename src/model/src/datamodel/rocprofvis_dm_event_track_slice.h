@@ -111,8 +111,6 @@ class EventTrackSlice : public TrackSlice {
         // @return status of operation
         rocprofvis_dm_result_t GetRecordGraphLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t & level) override;
 
-        rocprofvis_dm_result_t GetRecordEventIdFullAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_id_t& event_id);
-
     private:
 
         // vector array of event records

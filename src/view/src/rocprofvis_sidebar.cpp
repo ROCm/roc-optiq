@@ -30,9 +30,6 @@ SideBar::SetGraphMap(std::map<int, rocprofvis_graph_map_t>* graph_map)
 void
 SideBar::Render()
 {
-    if(ImGui::Button("DarkMode")) {
-        m_settings.DarkMode();
-    }
     ConstructTree(m_graph_map);
 }
 

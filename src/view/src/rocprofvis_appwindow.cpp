@@ -146,6 +146,8 @@ AppWindow::Render()
             }
             ImGui::EndMenu();
         }
+        
+        RenderSettingsMenu();
         ImGui::EndMenuBar();
     }
     ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
@@ -236,6 +238,24 @@ AppWindow::Render()
     if(m_show_provider_test_widow)
     {
         RenderProviderTest(m_data_provider);
+    }
+}
+
+void
+AppWindow::RenderSettingsMenu()
+{
+    if(ImGui::BeginMenu("Settings"))
+    {
+        if(ImGui::MenuItem("Light Theme", nullptr, !Settings::GetInstance().IsDarkMode()))
+        {
+            Settings::GetInstance().LightMode();
+        }
+        if(ImGui::MenuItem("Dark Theme", nullptr, Settings::GetInstance().IsDarkMode()))
+        {
+            Settings::GetInstance().DarkMode();
+        }
+
+        ImGui::EndMenu();
     }
 }
 

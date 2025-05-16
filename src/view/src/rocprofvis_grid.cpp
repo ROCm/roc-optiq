@@ -25,7 +25,7 @@ Grid::GetViewportEndPosition()
 }
 Grid::Grid()
 : m_viewport_start_position(std::numeric_limits<double>::lowest())
-, m_highlighted_region({ -1, -1 })
+, m_highlighted_region({ -1.f, -1.f })
 , m_settings(Settings::GetInstance())
 , m_viewport_end_position(std::numeric_limits<double>::max())
 , m_content_size_x()

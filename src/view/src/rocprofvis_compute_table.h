@@ -28,6 +28,26 @@ typedef enum table_view_category_t
     kTableCategoryCount
 } table_view_category_t;
 
+typedef struct table_view_category_info_t
+{
+    table_view_category_t m_category;
+    std::string m_name;
+    std::vector<std::string> m_content_ids;
+} table_view_category_info_t;
+
+class ComputeTableCategory : public RocWidget
+{
+public:
+    void Render();
+    void Update();
+    ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category);
+    ~ComputeTableCategory();
+
+private:
+    table_view_category_t m_category;
+    std::vector<std::unique_ptr<ComputeMetricGroup>> m_metrics;
+};
+
 class ComputeTableView : public RocWidget
 {
 public:
@@ -38,9 +58,8 @@ public:
 
 private:
     void RenderMenuBar();
-    void RenderMetricsTab(table_view_category_t category);
 
-    std::unordered_map<table_view_category_t, std::vector<std::unique_ptr<ComputeMetricGroup>>> m_metrics_map;
+    std::shared_ptr<TabContainer> m_tab_container;
 };
 
 }  // namespace View

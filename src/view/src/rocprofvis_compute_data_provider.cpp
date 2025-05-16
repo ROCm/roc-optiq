@@ -537,7 +537,6 @@ bool ComputeDataProvider::ProfileLoaded()
 ComputeDataProvider::ComputeDataProvider() 
 : m_profile_loaded(false)
 , m_attempt_profile_load(true)
-, m_profile_path(std::filesystem::path("C:/Users/drchen/OneDrive - Advanced Micro Devices Inc/Documents/Notes/workloads/monte_carlo/MI308X/analyze/dfs"))
 {
     m_csv_format.delimiter(',');
     m_csv_format.header_row(0);

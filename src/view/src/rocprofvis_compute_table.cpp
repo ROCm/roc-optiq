@@ -7,75 +7,86 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr const char* TAB_LABELS[kTableCategoryCount] = {
-    "System Speed of Light", 
-    "Command Processor", 
-    "Workgroup Manager", 
-    "Wavefront", 
-    "Instruction Mix", 
-    "Compute Pipeline", 
-    "Local Data Store", 
-    "L1 Instruction Cache",
-    "Scalar L1 Data Cache",
-    "Address Processing Unit & Data Return Path",
-    "Vector L1 Data Cache",
-    "L2 Cache",
-    "L2 Cache (Per Channel)"
-};
-constexpr int CSV_COUNT = 45;
-constexpr std::array<std::pair<table_view_category_t, const char*>, CSV_COUNT> TAB_DEFINITIONS = {{
-    {kTableCategorySystemSOL, "2.1_Speed-of-Light.csv"}, 
-    {kTableCategoryCP, "5.1_Command_Processor_Fetcher.csv"},
-    {kTableCategoryCP, "5.2_Packet_Processor.csv"},
-    {kTableCategorySPI, "6.1_Workgroup_Manager_Utilizations.csv"},
-    {kTableCategorySPI, "6.2_Workgroup_Manager_-_Resource_Allocation.csv"},
-    {kTableCategoryWavefrontStats, "7.1_Wavefront_Launch_Stats.csv"},
-    {kTableCategoryWavefrontStats, "7.2_Wavefront_Runtime_Stats.csv"},
-    {kTableCategoryInstructionMix, "10.1_Overall_Instruction_Mix.csv"},
-    {kTableCategoryInstructionMix, "10.2_VALU_Arithmetic_Instr_Mix.csv"},
-    {kTableCategoryInstructionMix, "10.3_VMEM_Instr_Mix.csv"},
-    {kTableCategoryInstructionMix, "10.4_MFMA_Arithmetic_Instr_Mix.csv"},
-    {kTableCategoryCU, "11.1_Speed-of-Light.csv"},
-    {kTableCategoryCU, "11.2_Pipeline_Stats.csv"},
-    {kTableCategoryCU, "11.3_Arithmetic_Operations.csv"},
-    {kTableCategoryLDS, "12.1_Speed-of-Light.csv"},
-    {kTableCategoryLDS, "12.2_LDS_Stats.csv"},
-    {kTableCategoryL1I, "13.1_Speed-of-Light.csv"},
-    {kTableCategoryL1I, "13.2_Instruction_Cache_Accesses.csv"},
-    {kTableCategoryL1I, "13.3_Instruction_Cache_-_L2_Interface.csv"},
-    {kTableCategorySL1D, "14.1_Speed-of-Light.csv"},
-    {kTableCategorySL1D, "14.2_Scalar_L1D_Cache_Accesses.csv"},
-    {kTableCategorySL1D, "14.3_Scalar_L1D_Cache_-_L2_Interface.csv"},
-    {kTableCategoryAddressProcessingUnit, "15.1_Address_Processing_Unit.csv"},
-    {kTableCategoryAddressProcessingUnit, "15.2_Data-Return_Path.csv"},
-    {kTableCategoryVL1D, "16.1_Speed-of-Light.csv"},
-    {kTableCategoryVL1D, "16.2_L1D_Cache_Stalls_(%).csv"},
-    {kTableCategoryVL1D, "16.3_L1D_Cache_Accesses.csv"},
-    {kTableCategoryVL1D, "16.4_L1D_-_L2_Transactions.csv"},
-    {kTableCategoryVL1D, "16.5_L1D_Addr_Translation.csv"},
-    {kTableCategoryL2, "17.1_Speed-of-Light.csv"},
-    {kTableCategoryL2, "17.2_L2_-_Fabric_Transactions.csv"},
-    {kTableCategoryL2, "17.3_L2_Cache_Accesses.csv"},
-    {kTableCategoryL2, "17.4_L2_-_Fabric_Interface_Stalls.csv"},
-    {kTableCategoryL2, "17.5_L2_-_Fabric_Detailed_Transaction_Breakdown.csv"},
-    {kTableCategoryL2PerChannel, "18.1_Aggregate_Stats_(All_channels).csv"},
-    {kTableCategoryL2PerChannel, "18.2_L2_Cache_Hit_Rate_(pct)"},
-    {kTableCategoryL2PerChannel, "18.3_L2_Requests_(per_normUnit).csv"},
-    {kTableCategoryL2PerChannel, "18.4_L2_Requests_(per_normUnit).csv"},
-    {kTableCategoryL2PerChannel, "18.5_L2-Fabric_Requests_(per_normUnit).csv"},
-    {kTableCategoryL2PerChannel, "18.6_L2-Fabric_Read_Latency_(Cycles).csv"},
-    {kTableCategoryL2PerChannel, "18.7_L2-Fabric_Write_and_Atomic_Latency_(Cycles).csv"},
-    {kTableCategoryL2PerChannel, "18.8_L2-Fabric_Atomic_Latency_(Cycles).csv"},
-    {kTableCategoryL2PerChannel, "18.9_L2-Fabric_Read_Stall_(Cycles_per_normUnit).csv"},
-    {kTableCategoryL2PerChannel, "18.10_L2-Fabric_Write_and_Atomic_Stall_(Cycles_per_normUnit).csv"},
-    {kTableCategoryL2PerChannel, "18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv"},
-}};
+const std::array TAB_DEFINITIONS = {
+    table_view_category_info_t{kTableCategorySystemSOL, "System Speed of Light", {
+        "2.1_Speed-of-Light.csv"
+    }},
+    table_view_category_info_t{kTableCategoryCP, "Command Processor", {
+        "5.1_Command_Processor_Fetcher.csv", "5.2_Packet_Processor.csv"
+    }},
+    table_view_category_info_t{kTableCategorySPI, "Workgroup Manager", {
+        "6.1_Workgroup_Manager_Utilizations.csv", "6.2_Workgroup_Manager_-_Resource_Allocation.csv"
+    }},
+    table_view_category_info_t{kTableCategoryWavefrontStats, "Wavefront", {
+        "7.1_Wavefront_Launch_Stats.csv", "7.2_Wavefront_Runtime_Stats.csv"
+    }},
+    table_view_category_info_t{kTableCategoryInstructionMix, "Instruction Mix", {
+        "10.1_Overall_Instruction_Mix.csv", "10.2_VALU_Arithmetic_Instr_Mix.csv", "10.3_VMEM_Instr_Mix.csv", "10.4_MFMA_Arithmetic_Instr_Mix.csv"
+    }},
+    table_view_category_info_t{kTableCategoryCU, "Compute Pipeline", {
+        "11.1_Speed-of-Light.csv", "11.2_Pipeline_Stats.csv", "11.3_Arithmetic_Operations.csv"
+    }},
+    table_view_category_info_t{kTableCategoryLDS, "Local Data Store", {
+        "12.1_Speed-of-Light.csv", "12.2_LDS_Stats.csv"
+    }},
+    table_view_category_info_t{kTableCategoryL1I, "L1 Instruction Cache", {
+        "13.1_Speed-of-Light.csv", "13.2_Instruction_Cache_Accesses.csv", "13.3_Instruction_Cache_-_L2_Interface.csv"
+    }},
+    table_view_category_info_t{kTableCategorySL1D, "Scalar L1 Data Cache", {
+        "14.1_Speed-of-Light.csv", "14.2_Scalar_L1D_Cache_Accesses.csv", "14.3_Scalar_L1D_Cache_-_L2_Interface.csv"
+    }},
+    table_view_category_info_t{kTableCategoryAddressProcessingUnit, "Address Processing Unit & Data Return Path", {
+        "15.1_Address_Processing_Unit.csv", "15.2_Data-Return_Path.csv"
+    }},
+    table_view_category_info_t{kTableCategoryVL1D, "Vector L1 Data Cache", {
+        "16.1_Speed-of-Light.csv", "16.2_L1D_Cache_Stalls_(%).csv", "16.3_L1D_Cache_Accesses.csv", "16.4_L1D_-_L2_Transactions.csv", "16.5_L1D_Addr_Translation.csv",
+    }},
+    table_view_category_info_t{kTableCategoryL2, "L2 Cache", {
+        "17.1_Speed-of-Light.csv", "17.2_L2_-_Fabric_Transactions.csv", "17.3_L2_Cache_Accesses.csv", "17.4_L2_-_Fabric_Interface_Stalls.csv", "17.5_L2_-_Fabric_Detailed_Transaction_Breakdown.csv"
+    }},
+    table_view_category_info_t{kTableCategoryL2PerChannel, "L2 Cache (Per Channel)", {
+        "18.1_Aggregate_Stats_(All_channels).csv", "18.2_L2_Cache_Hit_Rate_(pct)", "18.3_L2_Requests_(per_normUnit).csv", "18.4_L2_Requests_(per_normUnit).csv", 
+        "18.5_L2-Fabric_Requests_(per_normUnit).csv", "18.6_L2-Fabric_Read_Latency_(Cycles).csv", "18.7_L2-Fabric_Write_and_Atomic_Latency_(Cycles).csv", "18.8_L2-Fabric_Atomic_Latency_(Cycles).csv", 
+        "18.9_L2-Fabric_Read_Stall_(Cycles_per_normUnit).csv", "18.10_L2-Fabric_Write_and_Atomic_Stall_(Cycles_per_normUnit).csv", "18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv"
+    }},
 
-ComputeTableView::ComputeTableView(std::shared_ptr<ComputeDataProvider> data_provider) {
-    for (int i = 0; i < TAB_DEFINITIONS.size(); i ++)
+};
+
+ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category)
+: m_category(category)
+{
+    for (const std::string& content : TAB_DEFINITIONS[category].m_content_ids)
     {
-        std::unique_ptr<ComputeMetricGroup> metric = std::make_unique<ComputeMetricGroup>(data_provider, TAB_DEFINITIONS[i].second);
-        m_metrics_map[TAB_DEFINITIONS[i].first].push_back(std::move(metric));        
+        m_metrics.push_back(std::make_unique<ComputeMetricGroup>(data_provider, content));
+    }
+}
+
+ComputeTableCategory::~ComputeTableCategory() {}
+
+void ComputeTableCategory::Render()
+{
+    for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics)
+    {
+        metric->Render();
+    }
+}
+
+void ComputeTableCategory::Update()
+{
+    for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics)
+    {
+        metric->Update();
+    }
+}
+
+ComputeTableView::ComputeTableView(std::shared_ptr<ComputeDataProvider> data_provider) 
+: m_tab_container(nullptr)
+{
+    m_tab_container = std::make_shared<TabContainer>();
+
+    for (const table_view_category_info_t& category : TAB_DEFINITIONS)
+    {
+        m_tab_container->AddTab(TabItem{category.m_name, "compute_table_tab_" + category.m_name, std::make_shared<ComputeTableCategory>(data_provider, category.m_category), false});
     }
 }
 
@@ -83,12 +94,9 @@ ComputeTableView::~ComputeTableView() {}
 
 void ComputeTableView::Update()
 {
-    for (auto it = m_metrics_map.begin(); it != m_metrics_map.end(); it ++)
+    if (m_tab_container)
     {
-        for (std::unique_ptr<ComputeMetricGroup>& metric : it->second)
-        {
-            metric->Update();
-        }
+        m_tab_container->Update();
     }
 }
 
@@ -111,31 +119,10 @@ void ComputeTableView::RenderMenuBar()
     ImGui::InputText("##compute_table_search_bar", searchTerm, 32);
 }
 
-void ComputeTableView::RenderMetricsTab(table_view_category_t category)
-{
-    if (ImGui::BeginTabItem(TAB_LABELS[category]))
-    {
-        ImGui::BeginChild("compute_table_category", ImVec2(-1, -1), ImGuiChildFlags_Borders);
-        for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics_map[category])
-        {
-            metric->Render();
-        }
-        ImGui::EndChild();
-        ImGui::EndTabItem();      
-    }
-}
-
 void ComputeTableView::Render()
 {
     RenderMenuBar();
-    if (ImGui::BeginTabBar("compute_table_tab_bar", ImGuiTabBarFlags_None))
-    {
-        for (int i = 0; i < static_cast<int>(kTableCategoryCount); i ++)
-        {
-            RenderMetricsTab(static_cast<table_view_category_t>(i));
-        }
-        ImGui::EndTabBar();
-    }
+    m_tab_container->Render();
 }
 
 }  // namespace View

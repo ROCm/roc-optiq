@@ -24,10 +24,7 @@ public:
     ~ComputeRoot();
 
 private:
-    std::shared_ptr<ComputeSummaryView> m_compute_summary_view;
-    std::shared_ptr<ComputeRooflineView> m_compute_roofline_view;
-    std::shared_ptr<ComputeBlockView> m_compute_block_view;
-    std::shared_ptr<ComputeTableView> m_compute_table_view;
+    std::shared_ptr<TabContainer> m_tab_container;
     std::shared_ptr<ComputeDataProvider> m_compute_data_provider;
 };
 

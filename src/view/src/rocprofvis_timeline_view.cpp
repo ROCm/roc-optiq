@@ -155,8 +155,6 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
 
         if(m_graph_map[track_index].chart->HandleTrackDataChanged())
         {
-            m_min_x = m_data_provider.GetStartTime();
-            m_max_x = m_data_provider.GetEndTime();
             spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
         }
     }
@@ -579,6 +577,9 @@ TimelineView::MakeGraphView()
     // Destroy any existing data
     DestroyGraphs();
     ResetView();
+
+    m_min_x = m_data_provider.GetStartTime();
+    m_max_x = m_data_provider.GetEndTime();
 
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();

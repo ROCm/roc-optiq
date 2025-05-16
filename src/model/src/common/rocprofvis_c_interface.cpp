@@ -224,25 +224,6 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
     return db->ReadTraceSliceAsync(start,end,num,tracks,object);
 }
 
-rocprofvis_dm_result_t rocprofvis_db_read_table_slice_async(
-                                        rocprofvis_dm_database_t database,
-                                        rocprofvis_dm_timestamp_t start,
-                                        rocprofvis_dm_timestamp_t end,
-                                        rocprofvis_db_num_of_tracks_t num,
-                                        rocprofvis_db_track_selection_t tracks, 
-                                        rocprofvis_dm_sort_columns_t sort_column,
-                                        uint64_t max_count, 
-                                        uint64_t offset,
-                                        rocprofvis_db_future_t object,
-                                        rocprofvis_dm_slice_t* output_slice){
-    PROFILE;
-    ROCPROFVIS_ASSERT_MSG_RETURN(database,
-                                 RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
-                                 kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
-    return db->ReadTableSliceAsync(start,end,num,tracks,sort_column,max_count,offset,object,output_slice);
-}
-
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_database_t database, rocprofvis_dm_timestamp_t start,
     rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num,

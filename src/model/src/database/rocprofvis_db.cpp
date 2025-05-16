@@ -104,28 +104,6 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t Database::ReadTableSliceAsync(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
-    rocprofvis_db_num_of_tracks_t   num,
-    rocprofvis_db_track_selection_t tracks,
-    rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count, uint64_t offset,
-    rocprofvis_db_future_t object, rocprofvis_dm_slice_t* output_slice)
-{
-    Future* future = (Future*) object;
-    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
-                                 kRocProfVisDmResultInvalidParameter);
-    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED,
-                                 kRocProfVisDmResultResourceBusy);
-    try
-    {
-        future->SetWorker(std::move(std::thread(Database::ReadTableSliceStatic, this,
-                                                start, end, num, tracks, sort_column, max_count, offset, future, output_slice)));
-    } catch(std::exception ex)
-    {
-        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
-    }
-    return kRocProfVisDmResultSuccess;
-}
-
 rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
                                                     rocprofvis_dm_event_property_type_t type,
                                                     rocprofvis_dm_event_id_t event_id,
@@ -174,15 +152,6 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceStatic(
                                                     rocprofvis_db_track_selection_t tracks,
                                                     Future* object){
     return db->ReadTraceSlice(start, end, num, tracks, object);
-}
-
-rocprofvis_dm_result_t Database::ReadTableSliceStatic(Database* db, rocprofvis_dm_timestamp_t start,
-    rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num,
-    rocprofvis_db_track_selection_t tracks,
-    rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count,
-    uint64_t offset, Future* object, rocprofvis_dm_slice_t* output_slice)
-{
-    return db->ReadTableSlice(start, end, num, tracks, sort_column, max_count, offset, object, output_slice);
 }
 
 rocprofvis_dm_result_t   Database::ReadEventPropertyStatic(

@@ -61,16 +61,6 @@ class ProfileDatabase : public SqliteDatabase
                         rocprofvis_db_track_selection_t tracks,
                         Future* object) override;
 
-        rocprofvis_dm_result_t  ReadTableSlice(
-                        rocprofvis_dm_timestamp_t start,
-                        rocprofvis_dm_timestamp_t end,
-                        rocprofvis_db_num_of_tracks_t num,
-                        rocprofvis_db_track_selection_t tracks,
-                        rocprofvis_dm_sort_columns_t sort_column,
-                        uint64_t max_count,
-                        uint64_t offset,
-                        Future* object, rocprofvis_dm_slice_t* output_slice) override;
-
         // worker method to execute database query
         // @param query - database query 
         // @param description - database description
@@ -107,8 +97,6 @@ class ProfileDatabase : public SqliteDatabase
     // @param azColName - pointer to column names  
     // @return SQLITE_OK if successful
         static int CallbackAddAnyRecord(void* data, int argc, char** argv, char** azColName);
-
-        static int CallbackAddAnyTableRecord(void* data, int argc, char** argv, char** azColName);
 
     // method to build a query to read time slice of records for single track 
     // @param index - track index 

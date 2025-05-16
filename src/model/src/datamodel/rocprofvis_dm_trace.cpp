@@ -20,7 +20,6 @@
 
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_dm_table_row.h"
-#include "rocprofvis_dm_table_track_slice.h"
 #include "rocprofvis_dm_pmc_track_slice.h"
 #include "rocprofvis_dm_event_track_slice.h"
 
@@ -58,7 +57,6 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddTableColumn = AddTableColumn;
     m_binding_info.FuncAddTableRowCell = AddTableRowCell;
     m_binding_info.FuncAddEventLevel = AddEventLevel;
-    m_binding_info.FuncAllocTableSlice = AllocTableSlice;
     bind_data = &m_binding_info;
     m_db = db;
     return kRocProfVisDmResultSuccess;
@@ -234,65 +232,6 @@ rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const 
     else
         return nullptr;
 }  
-
-rocprofvis_dm_slice_t Trace::AllocTableSlice(
-    const rocprofvis_dm_trace_t object, const rocprofvis_db_num_of_tracks_t num,
-    const rocprofvis_db_track_selection_t tracks,
-    const rocprofvis_dm_track_category_t  track_type,
-    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end)
-{
-    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
-    Trace*                 trace  = (Trace*) object;
-    std::map<uint32_t, Track*> tracks_map;
-    for(uint32_t i = 0; i < num; i++)
-    {
-        rocprofvis_dm_track_t  track  = nullptr;
-        rocprofvis_dm_result_t result = trace->GetTrackAtIndex(tracks[i], track);
-        if(result == kRocProfVisDmResultSuccess)
-        {
-            ROCPROFVIS_ASSERT(track);
-            ROCPROFVIS_ASSERT_MSG_RETURN(track, ERROR_TRACK_CANNOT_BE_NULL, nullptr);
-            tracks_map[tracks[i]] = ((Track*) track);
-        }
-        else
-            return nullptr;
-    }
-
-    TrackSlice* slice = nullptr;
-    if(track_type == kRocProfVisDmPmcTrack)
-    {
-        try
-        {
-            slice = new PmcTrackSlice(nullptr, start, end);
-        } catch(std::exception ex)
-        {
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
-                "Error! Falure allocating PMC track time slice!",
-                nullptr);
-        }
-    }
-    else if(track_type != kRocProfVisDmNotATrack)
-    {
-        try
-        {
-            slice = new EventTrackSlice(nullptr, start, end);
-        } catch(std::exception ex)
-        {
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
-                "Error! Falure allocating event track time slice!", nullptr);
-        }
-    }
-    try
-    {
-        slice = new TableSlice(slice, start, end, tracks_map);
-    } catch(std::exception ex)
-    {
-        delete slice;
-        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
-            "Error! Falure allocating event track time slice!", nullptr);
-    }
-    return slice;
-}
 
 rocprofvis_dm_result_t Trace::AddRecord(const rocprofvis_dm_slice_t object, rocprofvis_db_record_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);

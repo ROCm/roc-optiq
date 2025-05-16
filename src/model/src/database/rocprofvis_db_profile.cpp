@@ -20,7 +20,6 @@
 
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_dm_track_slice.h"
-#include "rocprofvis_dm_table_track_slice.h"
 #include <sstream>
 
 namespace RocProfVis
@@ -86,44 +85,6 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, char** argv, cha
             record.pmc.value = std::stod(argv[2]);
         }
         if (db->BindObject()->FuncAddRecord((*(slice_array_t*)callback_params->handle)[track_id], record) != kRocProfVisDmResultSuccess) return 1;
-    }
-    callback_params->future->CountThisRow();
-    return 0;
-}
-
-int
-ProfileDatabase::CallbackAddAnyTableRecord(void* data, int argc, char** argv, char** azColName)
-{
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 9, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params =
-        (rocprofvis_db_sqlite_callback_parameters*) data;
-    ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
-    if(callback_params->future->Interrupted()) return 1;
-    rocprofvis_dm_track_id_t    track_id;
-    rocprofvis_db_record_data_t record;
-    record.event.id.bitfield.event_op = std::stol(argv[0]);
-    if(db->FindTrackId(argv[6], argv[7], argv[8], record.event.id.bitfield.event_op,
-                       track_id) == kRocProfVisDmResultSuccess)
-    {
-        if(record.event.id.bitfield.event_op > 0)
-        {
-            record.event.id.bitfield.event_id = std::stoll(argv[5]);
-            record.event.timestamp            = std::stoll(argv[1]);
-            record.event.duration = std::stoll(argv[2]) - record.event.timestamp;
-            record.event.category = std::stoll(argv[3]);
-            record.event.symbol   = std::stoll(argv[4]);
-            if(kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
-        }
-        else
-        {
-            record.pmc.timestamp = std::stoll(argv[1]);
-            record.pmc.value     = std::stod(argv[2]);
-        }
-
-        if(((TableSlice*) callback_params->handle)->AddRecord(track_id, record) !=
-           kRocProfVisDmResultSuccess)
-            return 1;
     }
     callback_params->future->CountThisRow();
     return 0;
@@ -308,46 +269,6 @@ rocprofvis_dm_result_t ProfileDatabase::BuildTableQuery(rocprofvis_dm_timestamp_
     }
     query += ";";
     return kRocProfVisDmResultSuccess;
-}
-
-rocprofvis_dm_result_t
-ProfileDatabase::ReadTableSlice(rocprofvis_dm_timestamp_t       start,
-                                rocprofvis_dm_timestamp_t       end,
-                                rocprofvis_db_num_of_tracks_t   num,
-                                rocprofvis_db_track_selection_t tracks,
-                                rocprofvis_dm_sort_columns_t    sort_column,
-                                uint64_t max_count, uint64_t offset, Future* future,
-                                rocprofvis_dm_slice_t* output_slice)
-{
-    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
-                                 kRocProfVisDmResultInvalidParameter);
-    while(true)
-    {
-        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties,
-                                    ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
-        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded,
-                                    ERROR_METADATA_IS_NOT_LOADED);
-        std::string   query;
-        rocprofvis_dm_track_category_t track_type = TrackPropertiesAt(tracks[0])->track_category;
-        rocprofvis_dm_slice_t          slice = BindObject()->FuncAllocTableSlice(BindObject()->trace_object, num, tracks, track_type, start, end);
-        ROCPROFVIS_ASSERT_MSG_RETURN(slice, "Failed to allocate table slice", kRocProfVisDmResultAllocFailure);
-
-        if(BuildTableQuery(start, end, num, tracks, sort_column, max_count, offset,
-                                false, query) != kRocProfVisDmResultSuccess)
-            break;
-        ShowProgress(100, query.c_str(), kRPVDbBusy, future);
-        if(kRocProfVisDmResultSuccess !=
-           ExecuteSQLQuery(future, query.c_str(), slice, &CallbackAddAnyTableRecord))
-            break;
-        ShowProgress(100 - future->Progress(), "Time slice successfully loaded!",
-                     kRPVDbSuccess, future);
-
-        *output_slice = slice;
-        return future->SetPromise(kRocProfVisDmResultSuccess);
-    }
-    ShowProgress(0, "Not all tracks are loaded!", kRPVDbError, future);
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout
-                                                    : kRocProfVisDmResultDbAccessFailed);
 }
 
 rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice( 

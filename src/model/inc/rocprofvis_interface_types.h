@@ -220,14 +220,6 @@ typedef enum rocprofvis_dm_slice_property_t {
     kRPVDMEventLevelUInt64Indexed
 } rocprofvis_dm_slice_property_t;
 
-typedef enum rocprofvis_dm_table_slice_property_t
-{
-    kRPVDMTableTrackIdIndexed = kRPVDMEventLevelUInt64Indexed + 1,
-    kRPVDMTableTrackCategoryNameIndexed,
-    kRPVDMTableTrackMainProcessNameIndexed,
-    kRPVDMTableTrackSubProcessNameIndexed,
-} rocprofvis_dm_table_slice_property_t;
-
 //Flow trace properties
 typedef enum rocprofvis_dm_flowtrace_property_t {
     // Number of flow endpoints

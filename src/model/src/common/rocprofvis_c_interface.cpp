@@ -250,14 +250,6 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     return result;
 }
 
-void rocprofvis_db_table_slice_free(rocprofvis_dm_slice_t slice)
-{
-    if (slice)
-    {
-        delete (RocProfVis::DataModel::TrackSlice*)slice;
-    }
-}
-
 /****************************************************************************************************
  * @brief Asynchronous call to read event property of specific type
  *                                                     

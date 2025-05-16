@@ -124,19 +124,6 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_db_track_selection_t tracks, rocprofvis_dm_sort_columns_t sort_column,
     uint64_t max_count, uint64_t offset, bool count_only, char** out_query);
 
-rocprofvis_dm_result_t rocprofvis_db_read_table_slice_async(
-                                        rocprofvis_dm_database_t database,
-                                        rocprofvis_dm_timestamp_t start,
-                                        rocprofvis_dm_timestamp_t end,
-                                        rocprofvis_db_num_of_tracks_t num,
-                                        rocprofvis_db_track_selection_t tracks, 
-                                        rocprofvis_dm_sort_columns_t sort_column,
-                                        uint64_t max_count, 
-                                        uint64_t offset,
-                                        rocprofvis_db_future_t object,
-                                        rocprofvis_dm_slice_t* output_slice);
-void rocprofvis_db_table_slice_free(rocprofvis_dm_slice_t);
-
 /****************************************************************************************************
  * @brief Asynchronous call to read event property of specific type
  *

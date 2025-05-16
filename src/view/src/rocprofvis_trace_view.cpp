@@ -17,11 +17,12 @@ TraceView::TraceView()
 , m_open_loading_popup(false)
 , m_analysis(nullptr)
 {
-    m_data_provider.SetTrackDataReadyCallback([](uint64_t track_index) {
-        std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
-            static_cast<int>(RocEvents::kNewTrackData), track_index);
-        EventManager::GetInstance()->AddEvent(e);
-    });
+    m_data_provider.SetTrackDataReadyCallback(
+        [](uint64_t track_index, const std::string& trace_path) {
+            std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
+                static_cast<int>(RocEvents::kNewTrackData), track_index, trace_path);
+            EventManager::GetInstance()->AddEvent(e);
+        });
 }
 
 TraceView::~TraceView() { m_data_provider.SetTrackDataReadyCallback(nullptr); }
@@ -118,11 +119,11 @@ TraceView::Render()
 {
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
+        // Use global DPI to adjust font. Reactivate later.
+        ImGui::GetIO().FontGlobalScale = Settings::GetInstance().GetDPI() -
+                                         0.20;  // Scale font by DPI. -0.20 should be
+                                                // removed once font lib is in place.
         m_container->Render();
-        //Use global DPI to adjust font. Reactivate later. 
-        //ImGui::GetIO().FontGlobalScale = Settings::GetInstance().GetDPI() -
-        //                                 0.20;  // Scale font by DPI. -0.20 should be
-        //                                        // removed once font lib is in place.
         return;
     }
 

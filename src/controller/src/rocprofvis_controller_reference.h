@@ -13,6 +13,11 @@ template<typename Pointer, typename Type, unsigned Enum>
 class Reference
 {
 public:
+    Reference()
+    : m_object(nullptr)
+    {
+    }
+
     Reference(Pointer* ptr)
     : m_object(nullptr)
     {
@@ -26,11 +31,18 @@ public:
 
     bool IsValid(void) const
     {
-        return m_object != nullptr;
+        return (m_object && m_object->GetType() == Enum);
+    }
+
+    rocprofvis_handle_t** GetHandleAddress(void)
+    {
+        ROCPROFVIS_ASSERT(m_object == nullptr);
+        return (rocprofvis_handle_t**)&m_object;
     }
 
     Type* Get(void)
     {
+        ROCPROFVIS_ASSERT(IsValid());
         return m_object;
     }
 

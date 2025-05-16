@@ -28,10 +28,10 @@ TimelineView::TimelineView(DataProvider& dp)
 : m_data_provider(dp)
 , m_zoom(1.0f)
 , m_movement(0.0f)
-, m_min_x(FLT_MAX)
-, m_max_x(FLT_MIN)
-, m_min_y(FLT_MAX)
-, m_max_y(FLT_MIN)
+, m_min_x(std::numeric_limits<double>::max())
+, m_max_x(std::numeric_limits<double>::lowest())
+, m_min_y(std::numeric_limits<double>::max())
+, m_max_y(std::numeric_limits<double>::lowest())
 , m_scroll_position(0.0f)
 , m_content_max_y_scoll(0.0f)
 , m_scrubber_position(0.0f)
@@ -51,34 +51,37 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_unload_track_distance(1000.0f)
 , m_sidebar_size(400)
 , m_resize_activity(false)
-, m_scroll_position_x(FLT_MAX)
+, m_scroll_position_x(0)
 , m_calibrated(true)
-, m_scrollbar_location_as_percentage(FLT_MIN)
+, m_scrollbar_location_as_percentage(0)
 , m_artifical_scrollbar_active(false)
 , m_highlighted_region({ -1, -1 })
 , m_buffer_left_hit(false)
 , m_buffer_right_hit(false)
+, m_new_track_token(-1)
 , m_settings(Settings::GetInstance())
 {
-    m_new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
+    auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
     };
-    EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kNewTrackData),
-                                           m_new_track_data_handler);
+    m_new_track_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kNewTrackData), new_track_data_handler);
 }
 
 TimelineView::~TimelineView()
 {
     DestroyGraphs();
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTrackData),
-                                             m_new_track_data_handler);
+                                             m_new_track_token);
 }
 
 void
 TimelineView::CalibratePosition()
 {
     double current_position = m_grid.GetViewportStartPosition();
-    m_scroll_position_x     = (current_position - m_min_x) /
+    double end_position     = m_grid.GetViewportEndPosition();
+
+    m_scroll_position_x = (current_position - m_min_x) /
                           (m_max_x - m_min_x);  // Finds where the chart is at.
 
     double scrollback =
@@ -111,10 +114,10 @@ TimelineView::ResetView()
 {
     m_zoom               = 1.0f;
     m_movement           = 0.0f;
-    m_min_x              = FLT_MAX;
-    m_max_x              = FLT_MIN;
-    m_min_y              = FLT_MAX;
-    m_max_y              = FLT_MIN;
+    m_min_x              = std::numeric_limits<double>::max();
+    m_max_x              = std::numeric_limits<double>::lowest();
+    m_min_y              = std::numeric_limits<double>::max();
+    m_max_y              = std::numeric_limits<double>::lowest();
     m_scroll_position    = 0.0f;
     m_scrubber_position  = 0.0f;
     m_v_min_x            = 0.0f;
@@ -141,7 +144,14 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     }
     else
     {
-        uint64_t track_index = tde->GetTrackIndex();
+        uint64_t           track_index = tde->GetTrackIndex();
+        const std::string& trace_path  = tde->GetTracePath();
+        if(m_data_provider.GetTraceFilePath() != trace_path)
+        {
+            spdlog::debug("Trace path {} does not match current trace path {}",
+                          trace_path, m_data_provider.GetTraceFilePath());
+            return;
+        }
 
         if(m_graph_map[track_index].chart->HandleTrackDataChanged())
         {
@@ -211,6 +221,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
         m_sidebar_size    = clamp(m_sidebar_size + drag_delta.x, 100.0f, 600.0f);
+        m_movement -= (drag_delta.x / display_size.x) * m_v_width; //Prevents chart from moving in unexpected way. 
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
         m_resize_activity |= true;
@@ -233,11 +244,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     ImVec2 display_size    = ImGui::GetWindowSize();
     float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    ImGui::SetNextWindowSize(
-        ImVec2(display_size.x - scrollbar_width - m_sidebar_size - 7, display_size.y),
-        ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(display_size.x - scrollbar_width, display_size.y),
+                             ImGuiCond_Always);
     ImGui::SetCursorPos(
-        ImVec2(m_sidebar_size + 7, 0));  // Meta Data size will be universal next PR.
+        ImVec2(m_sidebar_size, 0));  // Meta Data size will be universal next PR.
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
@@ -265,32 +275,38 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     {
         ImVec2 mouse_position = ImGui::GetMousePos();
 
-        char text[20];
-        sprintf(text, "%.0f", m_grid.GetCursorPosition());
-        ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18);
+        ImVec2 containerPos = ImGui::GetWindowPos();
 
-        ImVec2 rect_pos =
-            ImVec2(mouse_position.x + 50, screen_pos.y + display_size.y - 5);
+        char text[20];
+        sprintf(text, "%.0f",
+                m_grid.GetCursorPosition(mouse_position.x - containerPos.x + 2));
+        ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28);
+
+        ImVec2 rect_pos = ImVec2(mouse_position.x + 50 * Settings::GetInstance().GetDPI(),
+                                 screen_pos.y + display_size.y - 5);
         draw_list->AddRectFilled(
             text_pos, rect_pos,
             m_settings.GetColor(static_cast<int>(Colors::kGridColor)));
         draw_list->AddText(
             text_pos, m_settings.GetColor(static_cast<int>(Colors::kFillerColor)), text);
         draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
-                           ImVec2(mouse_position.x, screen_pos.y + display_size.y - 18),
-                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)));
+                           ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28),
+                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
+                           2.0f);
 
         // Code below is for select
         if(ImGui::IsMouseDoubleClicked(0))
         {  // 0 is for the left mouse button
             if(m_highlighted_region.first == -1)
             {
-                m_highlighted_region.first = m_grid.GetCursorPosition();
+                m_highlighted_region.first =
+                    m_grid.GetCursorPosition(mouse_position.x - containerPos.x);
                 m_grid.SetHighlightedRegion(m_highlighted_region);
             }
             else if(m_highlighted_region.second == -1)
             {
-                m_highlighted_region.second = m_grid.GetCursorPosition();
+                m_highlighted_region.second =
+                    m_grid.GetCursorPosition(mouse_position.x - containerPos.x);
                 m_grid.SetHighlightedRegion(m_highlighted_region);
             }
             else
@@ -688,9 +704,10 @@ TimelineView::RenderGraphPoints()
 
         // Scale used in all graphs computer here.
         m_v_width = (m_max_x - m_min_x) / m_zoom;
+
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
-        m_scale_x = graph_view_size.x / (m_v_max_x - m_v_min_x);
+        m_scale_x = (graph_view_size.x - m_sidebar_size) / (m_v_max_x - m_v_min_x);
 
         if(m_capture_og_v_max_x)
         {

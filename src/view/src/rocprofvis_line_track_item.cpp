@@ -351,19 +351,10 @@ LineTrackItem::FindMaxMin()
 {
     m_min_y = m_data[0].y_value;
     m_max_y = m_data[0].y_value;
-    m_min_x = m_data[0].x_value;
-    m_max_x = m_data[0].x_value;
+
 
     for(const auto& point : m_data)
     {
-        if(point.x_value < m_min_x)
-        {
-            m_min_x = point.x_value;
-        }
-        if(point.x_value > m_max_x)
-        {
-            m_max_x = point.x_value;
-        }
         if(point.y_value < m_min_y)
         {
             m_min_y = point.y_value;

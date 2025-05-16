@@ -153,10 +153,7 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             return;
         }
 
-        if(m_graph_map[track_index].chart->HandleTrackDataChanged())
-        {
-            spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
-        }
+        m_graph_map[track_index].chart->HandleTrackDataChanged();
     }
 }
 

@@ -420,6 +420,12 @@ TabContainer::Render()
                 if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open,
                                        ImGuiTabBarFlags_None))
                 {
+                    // show tooltip for the active tab if header is hovered
+                    if(ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", tab.m_id.c_str());
+                    }
+
                     new_selected_tab = i;
                     if(tab.m_widget)
                     {
@@ -427,15 +433,15 @@ TabContainer::Render()
                     }
                     ImGui::EndTabItem();
                 }
+                // show tooltip for inactive tabs if header is hovered
+                else if(ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", tab.m_id.c_str());
+                }
 
                 if(p_open && !is_open)
                 {
                     index_to_remove = i;
-                }
-                // show tooltip if hovered
-                if(ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("%s", tab.m_id.c_str());
                 }
             }
             ImGui::EndTabBar();

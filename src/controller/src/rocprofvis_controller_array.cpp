@@ -152,7 +152,7 @@ rocprofvis_result_t Array::GetString(rocprofvis_property_t property, uint64_t in
                                 char* value, uint32_t* length) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(length)
+    if(value)
     {
         switch(property)
         {

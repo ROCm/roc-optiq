@@ -7,7 +7,6 @@ include_directories(inc)
 
 set(rocprofvis_controller_source_files)
 list(APPEND rocprofvis_controller_source_files
-    src/rocprofvis_controller_arguments.cpp
     src/rocprofvis_controller_array.cpp
     src/rocprofvis_controller_data.cpp
     src/rocprofvis_controller_event.cpp
@@ -21,7 +20,6 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_timeline.cpp
     src/rocprofvis_controller_trace.cpp
     src/rocprofvis_controller_track.cpp
-    src/rocprofvis_controller_table.cpp
     src/rocprofvis_controller.cpp
     src/rocprofvis_controller_flow_control.cpp
     src/rocprofvis_controller_call_stack.cpp

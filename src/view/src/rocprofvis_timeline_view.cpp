@@ -153,21 +153,7 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             return;
         }
 
-        if(m_graph_map[track_index].chart->HandleTrackDataChanged())
-        {
-            auto min_max = m_graph_map[track_index].chart->GetMinMax();
-
-            if(std::get<0>(min_max) < m_min_x)
-            {
-                m_min_x = std::get<0>(min_max);
-            }
-            if(std::get<1>(min_max) > m_max_x)
-            {
-                m_max_x = std::get<1>(min_max);
-            }
-
-            spdlog::debug("min max is now {},{}", m_min_x, m_max_x);
-        }
+        m_graph_map[track_index].chart->HandleTrackDataChanged();
     }
 }
 
@@ -221,7 +207,8 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
         m_sidebar_size    = clamp(m_sidebar_size + drag_delta.x, 100.0f, 600.0f);
-        m_movement -= (drag_delta.x / display_size.x) * m_v_width; //Prevents chart from moving in unexpected way. 
+        m_movement -= (drag_delta.x / display_size.x) *
+                      m_v_width;  // Prevents chart from moving in unexpected way.
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
         m_resize_activity |= true;
@@ -588,6 +575,9 @@ TimelineView::MakeGraphView()
     DestroyGraphs();
     ResetView();
 
+    m_min_x = m_data_provider.GetStartTime();
+    m_max_x = m_data_provider.GetEndTime();
+
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();
     int      scale_x    = 1;
@@ -613,15 +603,6 @@ TimelineView::MakeGraphView()
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
                                              static_cast<float>(track_info->max_ts));
-
-                if(std::get<0>(temp_min_max_flame) < m_min_x)
-                {
-                    m_min_x = std::get<0>(temp_min_max_flame);
-                }
-                if(std::get<1>(temp_min_max_flame) > m_max_x)
-                {
-                    m_max_x = std::get<1>(temp_min_max_flame);
-                }
 
                 rocprofvis_graph_map_t temp_flame;
                 temp_flame.chart          = flame;

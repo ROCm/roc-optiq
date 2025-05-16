@@ -149,7 +149,14 @@ class Database
         rocprofvis_dm_result_t          ExecuteQueryAsync(
                                                                 rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t description,
-                                                                rocprofvis_db_future_t object);
+                                                 rocprofvis_db_future_t  object);
+
+       virtual rocprofvis_dm_result_t BuildTableQuery(
+            rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
+            rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks,
+            rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count, uint64_t offset,
+            bool count_only, rocprofvis_dm_string_t& query) = 0;
+
     private:
     /************************static methods to be used as a parameter to std::thread**********************/
 
@@ -289,17 +296,6 @@ class Database
                                                                 rocprofvis_db_track_selection_t tracks, 
                                                                 rocprofvis_dm_string_t& query, 
                                                                 slice_array_t& slices) = 0; 
-
-        virtual rocprofvis_dm_result_t BuildTableSliceQuery(
-                                                                rocprofvis_dm_timestamp_t start,
-                                                                rocprofvis_dm_timestamp_t end,
-                                                                rocprofvis_db_num_of_tracks_t num,
-                                                                rocprofvis_db_track_selection_t tracks,
-                                                                rocprofvis_dm_sort_columns_t sort_column,
-                                                                uint64_t max_count,
-                                                                uint64_t offset,
-                                                                bool count_only,
-                                                                rocprofvis_dm_string_t& query) = 0;
         virtual rocprofvis_dm_result_t  ReadTableSlice(
                                                                 rocprofvis_dm_timestamp_t start,
                                                                 rocprofvis_dm_timestamp_t end,

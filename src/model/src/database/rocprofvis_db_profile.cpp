@@ -233,7 +233,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
 
 }
 
-rocprofvis_dm_result_t ProfileDatabase::BuildTableSliceQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query) {
+rocprofvis_dm_result_t ProfileDatabase::BuildTableQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query) {
     slice_query_t slice_query_map;
     for (int i = 0; i < num; i++){
         rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
@@ -268,7 +268,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildTableSliceQuery(rocprofvis_dm_times
     }
     if(count_only)
     {
-        query = "COUNT(*) AS [NumRecords] FROM ( ";
+        query = "SELECT COUNT(*) AS [NumRecords] FROM ( ";
     }
     else
     { 
@@ -332,7 +332,7 @@ ProfileDatabase::ReadTableSlice(rocprofvis_dm_timestamp_t       start,
         rocprofvis_dm_slice_t          slice = BindObject()->FuncAllocTableSlice(BindObject()->trace_object, num, tracks, track_type, start, end);
         ROCPROFVIS_ASSERT_MSG_RETURN(slice, "Failed to allocate table slice", kRocProfVisDmResultAllocFailure);
 
-        if(BuildTableSliceQuery(start, end, num, tracks, sort_column, max_count, offset,
+        if(BuildTableQuery(start, end, num, tracks, sort_column, max_count, offset,
                                 false, query) != kRocProfVisDmResultSuccess)
             break;
         ShowProgress(100, query.c_str(), kRPVDbBusy, future);

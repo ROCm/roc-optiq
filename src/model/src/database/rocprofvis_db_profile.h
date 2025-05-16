@@ -133,7 +133,7 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_string_t& query,
                             slice_array_t& slices) override;
 
-        rocprofvis_dm_result_t BuildTableSliceQuery(
+        rocprofvis_dm_result_t BuildTableQuery(
             rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
             rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks,
             rocprofvis_dm_sort_columns_t sort_column, uint64_t max_count, uint64_t offset,

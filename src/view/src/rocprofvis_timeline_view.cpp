@@ -854,7 +854,8 @@ TimelineView::HandleTopSurfaceTouch()
             // Left side
             if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
             {
-                if(m_buffer_right_hit == false)
+                //please fix scrolling and dragging, then uncomment
+                //if(m_buffer_right_hit == false)
                 {
                     m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
                 }

@@ -211,13 +211,16 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     "select DISTINCT nid as node, coalesce(agent_id, 0) as agent, coalesce(queue_id,0) as queue, 3 as category from rocpd_memory_allocate;", 
                     "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as node, coalesce(MA.agent_id,0) as agent, coalesce(MA.queue_id,0) as queue from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id ", 
                     &CallBackAddTrack)) break;
-
+        /*
+// This will not work if full track is not requested
+// Comment out for now. Will need to fetch all data, then cut samples outside of time frame.
         ShowProgress(5, "Adding Memory allocation graph tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as node, coalesce(agent_id, 0) as agent, -1 as const, 1 as category from rocpd_memory_allocate;", 
                     "select 0 as op, start, sum(CASE WHEN type = 'FREE' THEN (select -size from rocpd_memory_allocate MA1 where MA.address == MA1.address limit 1) ELSE size END) over (ORDER BY start ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as current, start as end, 0, 0, nid as node, coalesce(agent_id, 0) as agent, -1 as queue  from rocpd_memory_allocate MA ", 
                     &CallBackAddTrack)) break;
-
+*/
+   
         ShowProgress(5, "Adding Memory Copy tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as node, dst_agent_id as agent, coalesce(queue_id,0) as queue, 3 as category from rocpd_memory_copy;", 
@@ -231,7 +234,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                                                                     "rocpd_info_pmc PMC_I ON PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid "
                                                                     "INNER JOIN "
                                                                     "rocpd_kernel_dispatch K ON K.event_id = PMC_E.event_id AND K.guid = PMC_E.guid ", 
-                                                                    "select 0 as op, K.start, PMC_E.value AS counter_value, 0, 0, 0, K.nid as node, K.agent_id as agent, PMC_I.id AS counter_id FROM rocpd_pmc_event PMC_E "
+                                                                    "select 0 as op, K.start, PMC_E.value AS counter_value, K.end, 0, 0, K.nid as node, K.agent_id as agent, PMC_I.id AS counter_id FROM rocpd_pmc_event PMC_E "
                                                                     "INNER JOIN "
                                                                     "rocpd_info_pmc PMC_I ON PMC_I.id = PMC_E.pmc_id AND  PMC_I.guid = PMC_E.guid "
                                                                     "INNER JOIN "

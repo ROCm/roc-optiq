@@ -862,12 +862,12 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
 
     // get row data
     std::vector<std::vector<std::string>> table_data;
-    table_data.resize(num_rows);
+    table_data.reserve(num_rows);
     for(uint32_t i = 0; i < num_rows; i++)
     {
         // get the row data, for now all data will be stored as strings
         std::vector<std::string> row_data;
-        row_data.resize(num_columns);
+        row_data.reserve(num_columns);
 
         rocprofvis_handle_t* row_array = nullptr;
         result                         = rocprofvis_controller_get_object(
@@ -928,9 +928,9 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
                     break;
                 }
             }
-            row_data[j] = std::move(column_value);
+            row_data.push_back(std::move(column_value));
         }
-        table_data[i] = std::move(row_data);
+        table_data.push_back(std::move(row_data));
     }
 
     m_event_table_header = std::move(column_names);

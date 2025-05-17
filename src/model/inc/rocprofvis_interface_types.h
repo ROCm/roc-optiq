@@ -160,6 +160,12 @@ typedef enum  rocprofvis_dm_trace_property_t {
 
 // Track properties
 typedef enum rocprofvis_dm_track_property_t {
+    // Track total number of records
+    kRPVDMTrackNumRecordsUInt64,
+    // Track minimum timestamp
+    kRPVDMTrackMinimumTimestampUInt64,
+    // Track maximum timestamp
+    kRPVDMTrackMaximumTimestampUInt64,
     // Track category enumeration value
 	kRPVDMTrackCategoryEnumUInt64,
     // Track category string value
@@ -190,6 +196,10 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackExtDataValueCharPtrIndexed,
     // Extended data in Json format
 	kRPVDMTrackInfoJsonCharPtr, 
+    // Database handle
+	kRPVDMTrackDatabaseHandle,
+    // Trace handle
+    kRPVDMTrackTraceHandle
 } rocprofvis_dm_track_property_t;
 
 // Slice properties

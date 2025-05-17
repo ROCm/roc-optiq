@@ -26,6 +26,34 @@ namespace RocProfVis
 namespace DataModel
 {
 
+int ProfileDatabase::CallbackGetTraceProperties(void* data, int argc, char** argv, char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    ProfileDatabase*            db = (ProfileDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted()) return 1;
+    db->TraceProperties()->start_time  = std::stoll(argv[0]);
+    db->TraceProperties()->end_time = std::stoll(argv[1]);
+    return 0;
+}
+
+int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, char** argv,
+                                            char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    ProfileDatabase*            db = (ProfileDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted()) return 1;
+    uint32_t index                             = std::stol(argv[3]);
+    db->TrackPropertiesAt(index)->record_count = std::stoll(argv[0]);
+    db->TrackPropertiesAt(index)->min_ts       = std::stoll(argv[1]);
+    db->TrackPropertiesAt(index)->max_ts       = std::stoll(argv[2]);
+    return 0;
+}
 
 int ProfileDatabase::CallbackAddEventRecord(void *data, int argc, char **argv, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==9, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
@@ -125,20 +153,46 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, char** argv, char*
     return 0;
 }
 
-rocprofvis_dm_result_t ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index, rocprofvis_dm_string_t & query){
+rocprofvis_dm_result_t
+ProfileDatabase::BuildTrackQuery(bool track_properties_only, rocprofvis_dm_index_t index,
+                                 rocprofvis_dm_string_t& query)
+{
     std::stringstream ss;
     int size = TrackPropertiesAt(index)->query.size();
     ROCPROFVIS_ASSERT_MSG_RETURN(size, "Error! SQL query cannot be empty!", kRocProfVisDmResultUnknownError);
-    if (size > 1) ss << "SELECT * FROM (";
+    if (track_properties_only) {
+        ss << "SELECT COUNT(*), MIN(start), MAX(end), " << index << " FROM (";
+    }
+    else
+    {
+        ss << "SELECT * FROM (";
+    }
+
     for (int i=0; i < size; i++){
         if (i > 0) ss << " UNION ";
         ss << TrackPropertiesAt(index)->query[i];
     } 
-    if (size > 1) ss << ")";
-    ss << " where ";
+    ss << ") where ";
+    int count = 0;
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
-        if (i > 0) ss << " and ";
-        ss << TrackPropertiesAt(index)->process_tag[i] << "==" << TrackPropertiesAt(index)->process_id[i];
+        if(TrackPropertiesAt(index)->process_tag[i] == "const")
+        {
+            continue;
+        }
+        if(count > 0)
+        {
+            ss << " and ";
+        }
+        ss << TrackPropertiesAt(index)->process_tag[i] << "=="; 
+        if(TrackPropertiesAt(index)->process_id_numeric[i])
+        {
+            ss << TrackPropertiesAt(index)->process_id[i];
+        }
+        else
+        {
+            ss << "'" << TrackPropertiesAt(index)->process_name[i] << "'";
+        }
+        count++;
     }
     query = ss.str();
     return kRocProfVisDmResultSuccess;

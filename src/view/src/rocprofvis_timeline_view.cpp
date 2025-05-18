@@ -60,6 +60,9 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_buffer_right_hit(false)
 , m_new_track_token(-1)
 , m_settings(Settings::GetInstance())
+, m_viewport_start(0)
+, m_viewport_end(0)
+, m_viewport_past_position(0)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -81,26 +84,31 @@ TimelineView::CalibratePosition()
     double current_position = m_grid.GetViewportStartPosition();
     double end_position     = m_grid.GetViewportEndPosition();
 
+    m_viewport_start = current_position;
+    m_viewport_end   = end_position + m_min_x;
+
     m_scroll_position_x = (current_position - m_min_x) /
                           (m_max_x - m_min_x);  // Finds where the chart is at.
 
-    double scrollback =
-        (m_max_x - m_min_x) *
-        m_scroll_position_x;  // Moves the graph back to start at the beggining.
-                              // Represents how much to go back to starting
-
-    double value_to_begginging =
-        m_movement - scrollback;  // how to get back to initial/first value accounting for
-                                  // current movement.
-
     if(m_calibrated)
     {
+        double scrollback =
+            (m_max_x - m_min_x) *
+            m_scroll_position_x;  // Moves the graph back to start at the beggining.
+                                  // Represents how much to go back to starting
         // This is used to start the chart at the beggining on initial load.
         m_movement   = m_movement - scrollback;
         m_calibrated = false;
     }
     if(m_artifical_scrollbar_active == true)
     {
+        double scrollback =
+            (m_max_x - m_min_x) *
+            m_scroll_position_x;  // Moves the graph back to start at the beggining.
+                                  // Represents how much to go back to starting
+        double value_to_begginging =
+            m_movement - scrollback;  // how to get back to initial/first value accounting
+                                      // for current movement.
         m_movement =
             value_to_begginging +
             ((m_max_x - m_min_x) *
@@ -396,6 +404,13 @@ TimelineView::RenderGraphView()
         " Content Max Y: " + std::to_string(m_content_max_y_scoll) +
         " Previous Scroll Position: " + std::to_string(m_previous_scroll_position));
 
+    bool request_horizontal_data = false;
+
+    if(std::abs(m_movement - m_viewport_past_position) > m_v_width)
+    {
+        m_viewport_past_position = m_movement;
+        request_horizontal_data  = true;
+    }
     for(const auto& graph_objects : m_graph_map)
     {
         if(graph_objects.second.display)
@@ -430,7 +445,19 @@ TimelineView::RenderGraphView()
                    graph_objects.second.chart->GetRequestState() ==
                        TrackDataRequestState::kIdle)
                 {
-                    graph_objects.second.chart->RequestData();
+                    graph_objects.second.chart->RequestData(m_min_x, m_max_x);
+                }
+                if(m_settings.IsHorizontalRender())
+                {
+                    if(request_horizontal_data &&
+                       graph_objects.second.chart->GetRequestState() ==
+                           TrackDataRequestState::kIdle)
+                    {
+                        double buffer_distance = (m_viewport_start - m_viewport_end); //Essentially creates one viewport worth of buffer.
+                        graph_objects.second.chart->RequestData(
+                            m_viewport_start - buffer_distance,
+                            m_viewport_end + buffer_distance);
+                    }
                 }
 
                 if(graph_objects.second.color_by_value)
@@ -854,8 +881,8 @@ TimelineView::HandleTopSurfaceTouch()
             // Left side
             if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
             {
-                //please fix scrolling and dragging, then uncomment
-                //if(m_buffer_right_hit == false)
+                // please fix scrolling and dragging, then uncomment
+                // if(m_buffer_right_hit == false)
                 {
                     m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
                 }

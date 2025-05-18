@@ -94,6 +94,9 @@ private:
     std::pair<double, double>             m_highlighted_region;
     Settings&                             m_settings;
     EventManager::SubscriptionToken       m_new_track_token;
+    double                                m_viewport_start;
+    double                                m_viewport_end;
+    double                                m_viewport_past_position;
 };
 
 }  // namespace View

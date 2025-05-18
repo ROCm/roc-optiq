@@ -38,8 +38,7 @@ Grid::~Grid() {}
 double
 Grid::GetCursorPosition(float mouse_position)
 {
-    return (m_viewport_start_position +
-            ((mouse_position ) * (1 / m_scale_x)) - m_min_x);
+    return (m_viewport_start_position + ((mouse_position) * (1 / m_scale_x)) - m_min_x);
 }
 
 void
@@ -165,10 +164,11 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
                 scale_x;  // this value takes the raw value of the output and converts
                           // them into positions on the chart which is scaled by scale_x
 
-            // IsRectVisible checks overlaping with windows coordinates. So we have to add child_win.x to normalized_start to see smaller traces.  
+            // IsRectVisible checks overlaping with windows coordinates. So we have to add
+            // child_win.x to normalized_start to see smaller traces.
             if(ImGui::IsRectVisible(
-                   ImVec2(child_win.x+normalized_start, cursor_position.y),
-                   ImVec2(child_win.x+normalized_end,
+                   ImVec2(child_win.x + normalized_start, cursor_position.y),
+                   ImVec2(child_win.x + normalized_end,
                           cursor_position.y + content_size.y - grid_size)))
             {
                 if(has_been_seen == false)
@@ -187,12 +187,6 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
                                   (steps * (1 - ((clip_min.x - normalized_start) /
                                                  (normalized_end - normalized_start))))) +
                                  steps;
-            }
-            else if(has_been_seen)
-            {
-                // We are offscreen again, no need to render
-
-                break;
             }
 
             // Only render visible grid lines or the clipping time is excessive when

@@ -56,6 +56,21 @@ Settings::GetInstance()
     return instance;
 }
 
+bool
+Settings::IsHorizontalRender()
+{
+   
+    return m_use_horizontal_rendering;
+}
+
+bool
+Settings::HorizontalRender()
+{
+    m_use_horizontal_rendering = !m_use_horizontal_rendering;
+    std::cout << m_use_horizontal_rendering << std::endl;
+    return m_use_horizontal_rendering;
+}
+
 void
 Settings::DarkMode()
 {
@@ -64,14 +79,16 @@ Settings::DarkMode()
     m_use_dark_mode = true;
 }
 
-void Settings::LightMode()
+void
+Settings::LightMode()
 {
     m_color_store = LIGHT_THEME_COLORS;
     ImGui::StyleColorsLight();
     m_use_dark_mode = false;
 }
 
-bool Settings::IsDarkMode() const
+bool
+Settings::IsDarkMode() const
 {
     return m_use_dark_mode;
 }
@@ -115,6 +132,7 @@ Settings::Settings()
       IM_COL32(204, 121, 167, 204), IM_COL32(86, 180, 233, 204),
       IM_COL32(213, 94, 0, 204), IM_COL32(0, 204, 102, 204), IM_COL32(230, 159, 0, 204),
       IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204) })
+, m_use_horizontal_rendering(true)
 {
     LightMode();
 }

@@ -161,12 +161,12 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 }
 
 void
-TrackItem::RequestData()
+TrackItem::RequestData(double min, double max)
 {
     if(m_request_state == TrackDataRequestState::kIdle)
     {
         m_request_state = TrackDataRequestState::kRequesting;
-        m_data_provider.FetchTrack(m_id, m_data_provider.GetStartTime(),
-                                   m_data_provider.GetEndTime(), 1000, 0);
+        m_data_provider.FetchTrack(m_id, min,
+                                   max, 500, 0);
     }
 }

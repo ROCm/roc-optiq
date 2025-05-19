@@ -453,7 +453,7 @@ TimelineView::RenderGraphView()
                        graph_objects.second.chart->GetRequestState() ==
                            TrackDataRequestState::kIdle)
                     {
-                        double buffer_distance = (m_viewport_start - m_viewport_end); //Essentially creates one viewport worth of buffer.
+                        double buffer_distance = (m_viewport_end - m_viewport_start); //Essentially creates one viewport worth of buffer.
                         graph_objects.second.chart->RequestData(
                             m_viewport_start - buffer_distance,
                             m_viewport_end + buffer_distance);

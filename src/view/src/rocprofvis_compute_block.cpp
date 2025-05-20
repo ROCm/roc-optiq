@@ -167,7 +167,7 @@ void ComputeBlockDetails::Update()
 
 void ComputeBlockDetails::OnNavigationChanged(std::shared_ptr<RocEvent> event)
 {
-    std::shared_ptr<ComputeBlockNavitionEvent> navigation_event = std::dynamic_pointer_cast<ComputeBlockNavitionEvent>(event);
+    std::shared_ptr<ComputeBlockNavigationEvent> navigation_event = std::dynamic_pointer_cast<ComputeBlockNavigationEvent>(event);
     m_current_location.m_level = static_cast<block_diagram_level_t>(navigation_event->GetLevel());
     m_current_location.m_block = static_cast<block_diagram_block_id_t>(navigation_event->GetBlock());
     m_navigation_changed = true;
@@ -201,7 +201,7 @@ void ComputeBlockDiagramNavHelper::GoBack()
         m_previous_levels.pop_back();
         m_current_location.m_block = kBlockDiagramBlockNone;
         EventManager::GetInstance()->AddEvent(
-            std::make_shared<ComputeBlockNavitionEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
+            std::make_shared<ComputeBlockNavigationEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
         );
     }
 }
@@ -215,7 +215,7 @@ void ComputeBlockDiagramNavHelper::GoForward()
         m_next_levels.pop_back();
         m_current_location.m_block = kBlockDiagramBlockNone;
         EventManager::GetInstance()->AddEvent(
-            std::make_shared<ComputeBlockNavitionEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
+            std::make_shared<ComputeBlockNavigationEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
         );
     }
 }
@@ -233,7 +233,7 @@ void ComputeBlockDiagramNavHelper::Go(block_diagram_level_t level)
         }
         m_current_location.m_block = kBlockDiagramBlockNone;
         EventManager::GetInstance()->AddEvent(
-            std::make_shared<ComputeBlockNavitionEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
+            std::make_shared<ComputeBlockNavigationEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
         );
     }
 }
@@ -249,7 +249,7 @@ void ComputeBlockDiagramNavHelper::Select(block_diagram_block_id_t block)
         m_current_location.m_block = kBlockDiagramBlockNone;
     }
     EventManager::GetInstance()->AddEvent(
-        std::make_shared<ComputeBlockNavitionEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
+        std::make_shared<ComputeBlockNavigationEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
     );
 }
 

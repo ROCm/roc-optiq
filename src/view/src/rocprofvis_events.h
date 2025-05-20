@@ -60,12 +60,12 @@ private:
     std::string m_trace_path;
 };
 
-class ComputeBlockNavitionEvent : public RocEvent
+class ComputeBlockNavigationEvent : public RocEvent
 {
 public:
-    ComputeBlockNavitionEvent(int event_id, int level, int block);
-    int GetLevel();
-    int GetBlock();
+    ComputeBlockNavigationEvent(int event_id, int level, int block);
+    const int GetLevel();
+    const int GetBlock();
 
 private:
     int m_level;

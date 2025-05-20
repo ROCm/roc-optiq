@@ -12,12 +12,14 @@ namespace RocProfVis
 namespace Controller
 {
 
+class Arguments;
 class Array;
 class Future;
 class Track;
 class Graph;
 class Timeline;
 class Event;
+class Table;
 
 class Trace : public Handle
 {
@@ -37,6 +39,12 @@ public:
     rocprofvis_result_t AsyncFetch(Event& event, Future& future, Array& array,
                                    rocprofvis_property_t property);
 
+    rocprofvis_result_t AsyncFetch(Table& table, Future& future, Array& array,
+                                   uint64_t index, uint64_t count);
+
+    rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future,
+                                   Array& array);
+
     rocprofvis_controller_object_type_t GetType(void) final;
 
     // Handlers for getters.
@@ -54,6 +62,8 @@ private:
     std::vector<Track*> m_tracks;
     uint64_t m_id;
     Timeline* m_timeline;
+    Table* m_event_table;
+    Table* m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
 
 private:

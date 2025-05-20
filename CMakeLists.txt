@@ -21,19 +21,26 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp 
     src/view/src/rocprofvis_appwindow.h 
-    src/view/src/rocprofvis_charts.cpp 
-    src/view/src/rocprofvis_flame_chart.cpp 
+    src/view/src/rocprofvis_track_item.cpp 
+    src/view/src/rocprofvis_flame_track_item.cpp 
     src/view/src/rocprofvis_grid.cpp 
-    src/view/src/rocprofvis_home_screen.cpp 
-    src/view/src/rocprofvis_line_chart.cpp 
-    src/view/src/rocprofvis_boxplot.cpp 
-    src/view/src/rocprofvis_main_view.cpp 
+    src/view/src/rocprofvis_settings.cpp 
+    src/view/src/rocprofvis_analysis_view.cpp 
+    src/view/src/rocprofvis_trace_view.cpp 
+    src/view/src/rocprofvis_line_track_item.cpp 
+    src/view/src/rocprofvis_timeline_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp
     src/view/src/rocprofvis_data_provider.cpp
     src/view/src/rocprofvis_raw_track_data.cpp
     src/view/src/rocprofvis_events.cpp
     src/view/src/rocprofvis_event_manager.cpp
+	src/view/src/rocprofvis_compute_root.cpp
+	src/view/src/rocprofvis_compute_summary.cpp
+	src/view/src/rocprofvis_compute_block.cpp
+	src/view/src/rocprofvis_compute_table.cpp
+	src/view/src/rocprofvis_compute_data_provider.cpp
+	src/view/src/rocprofvis_compute_metric.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
 )
@@ -58,6 +65,7 @@ target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-controller)
 target_link_libraries(rocprof-visualizer PRIVATE datamodel)
 target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer PRIVATE spdlog)
+target_link_libraries(rocprof-visualizer PRIVATE csv)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
 

@@ -49,6 +49,8 @@ rocprofvis_controller_future_t* rocprofvis_controller_future_alloc(void);
 */
 rocprofvis_controller_array_t* rocprofvis_controller_array_alloc(uint32_t initial_size);
 
+rocprofvis_controller_arguments_t* rocprofvis_controller_arguments_alloc(void);
+
 /*
 * Gets the property value from the provided object or returns an error.
 * @param object The object to access.
@@ -107,7 +109,7 @@ rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_futu
 * @param result The future to wait on and return the results.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_create_analysis_view_async(rocprofvis_controller_t* controller, rocprofvis_controller_analysis_args_t* args, rocprofvis_controller_future_t* result);
+rocprofvis_result_t rocprofvis_controller_create_analysis_view_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result);
 /* JSON: CreateAnalysisView
 {
     controller: Int,
@@ -188,25 +190,23 @@ rocprofvis_result_t rocprofvis_controller_graph_fetch_async(rocprofvis_controlle
 */
 
 /*
-* Fetches more data for the table based on time.
-* Fills in the array with an array for each row
+* Setup the table based on the values in 'args' and fetch initial data.
 * Arrays have to be owned by the caller, not the controller as this is a better match to an RPC API.
-* Loading returns the raw data only - it can do so by time segment or indexed
+* Loading returns the formatted data for each row.
+* The caller can load more data using rocprofvis_controller_get_indexed_property_async to load by row index.
 * @param controller The controller.
 * @param table The table to fetch data from
-* @param start_time The start time for the results
-* @param end_time The end time for the results
+* @param args The arguments that setup the table
 * @param result The future to wait on
 * @param output The array to write to
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table, double start_time, double end_time, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
+rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
 /* JSON: TableFetch
 {
     controller: Int,
     table: Int,
-    start_time: Double,
-    end_time: Double,
+    args: Object,
 }
 ->
 {
@@ -240,6 +240,8 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_
     type: rocprofvis_controller_object_type_t
 }
 */
+
+void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* args);
 
 /*
 * Frees the provided array

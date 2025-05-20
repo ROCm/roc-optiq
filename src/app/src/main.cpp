@@ -1,12 +1,10 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_core.h"
-#include "rocprofvis_imgui_backend.h"
-
 #include "imgui.h"
 #include "imgui_spectrum.h"
 #include "imgui_impl_glfw.h"
-
+#include "rocprofvis_core.h"
+#include "rocprofvis_imgui_backend.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
@@ -36,6 +34,7 @@ main(int, char**)
         GLFWwindow* window =
             glfwCreateWindow(1280, 720, "rocprof-visualizer", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
+
         if(window && rocprofvis_imgui_backend_setup(&backend, window))
         {
             glfwShowWindow(window);
@@ -59,6 +58,11 @@ main(int, char**)
 
                 while(!glfwWindowShouldClose(window))
                 {
+                    float xscale, yscale;
+                    glfwGetWindowContentScale(window, &xscale, &yscale);
+
+                    rocprofvis_view_set_dpi(xscale);
+
                     glfwPollEvents();
 
                     // Handle changes in the frame buffer size

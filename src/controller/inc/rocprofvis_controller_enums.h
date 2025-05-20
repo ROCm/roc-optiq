@@ -119,6 +119,8 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerNumTracks = 0x00000007,
     // Indexed tracks
     kRPVControllerTrackIndexed = 0x00000008,
+    // Global sample table controller
+    kRPVControllerSampleTable = 0x00000009,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {
@@ -260,8 +262,14 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackNode = 0x3000000A,
     // The processor that the track belongs to
     kRPVControllerTrackProcessor = 0x3000000B,
-    // Track extended data
-    kRPVControllerTrackExtData = 0x3000000C,
+    // Track extended data number of entries
+    kRPVControllerTrackExtDataNumberOfEntries = 0x3000000C,
+    // Track extended data category
+    kRPVControllerTrackExtDataCategoryIndexed = 0x3000000D,
+    // Track extended data name
+    kRPVControllerTrackExtDataNameIndexed = 0x3000000E,
+    // Track extended data value
+    kRPVControllerTrackExtDataValueIndexed = 0x3000000F,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {
@@ -392,14 +400,14 @@ typedef enum rocprofvis_controller_event_properties_t
 {
     // Unique ID for the event
     kRPVControllerEventId = 0x70000000,
-    // Owning track
-    kRPVControllerEventTrack = 0x70000001,
     // Start time stamp for the event
-    kRPVControllerEventStartTimestamp = 0x70000002,
+    kRPVControllerEventStartTimestamp = 0x70000001,
     // End timestamp for the event
-    kRPVControllerEventEndTimestamp = 0x70000003,
+    kRPVControllerEventEndTimestamp = 0x70000002,
     // Name for the event
-    kRPVControllerEventName = 0x70000004,
+    kRPVControllerEventName = 0x70000003,
+    // Level in the stack of events
+    kRPVControllerEventLevel = 0x70000004,
 
     // When a LOD is generated the sample will be synthetic and coalesce several real samples
     // These properties allow access to the contains samples.
@@ -500,21 +508,19 @@ typedef enum rocprofvis_controller_table_properties_t
 {
     // Id for the table
     kRPVControllerTableId = 0xA0000000,
-    // Owning track
-    kRPVControllerTableTrack = 0xA0000001,
     // Number of columns
-    kRPVControllerTableNumColumns = 0xA0000002,
+    kRPVControllerTableNumColumns = 0xA0000001,
     // Number of rows
-    kRPVControllerTableNumRows = 0xA0000003,
+    kRPVControllerTableNumRows = 0xA0000002,
     // Indexed column header names
-    kRPVControllerTableColumnHeaderIndexed = 0xA0000004,
+    kRPVControllerTableColumnHeaderIndexed = 0xA0000003,
     // Indexed row header names
-    kRPVControllerTableRowHeaderIndexed = 0xA0000005,
+    kRPVControllerTableRowHeaderIndexed = 0xA0000004,
     // Indexed column type
-    kRPVControllerTableColumnTypeIndexed = 0xA0000006,
+    kRPVControllerTableColumnTypeIndexed = 0xA0000005,
     // Notionally would give you an array for all the cells in the row
     // But this needs to be Async if we separate the Front/Back end
-    kRPVControllerTableRowIndexed = 0xA0000007,
+    kRPVControllerTableRowIndexed = 0xA0000006,
 } rocprofvis_controller_table_properties_t;
 /* JSON: RPVTable
 {
@@ -527,6 +533,25 @@ typedef enum rocprofvis_controller_table_properties_t
     -> rows: Array[Object] -> Needs an API to load in segments.
 }
 */
+
+typedef enum rocprofvis_controller_table_arguments_t
+{
+    kRPVControllerTableArgsType = 0xE0000000,
+    kRPVControllerTableArgsNumTracks = 0xE0000001,
+    kRPVControllerTableArgsTracksIndexed = 0xE0000002,
+    kRPVControllerTableArgsStartTime = 0xE0000003,
+    kRPVControllerTableArgsEndTime = 0xE0000004,
+    kRPVControllerTableArgsSortColumn = 0xE0000005,
+    kRPVControllerTableArgsSortOrder = 0xE0000006,
+    kRPVControllerTableArgsStartIndex = 0xE0000007,
+    kRPVControllerTableArgsStartCount = 0xE0000008,
+} rocprofvis_controller_table_arguments_t;
+
+typedef enum rocprofvis_controller_table_type_t
+{
+    kRPVControllerTableTypeEvents = 0xF0000000,
+    kRPVControllerTableTypeSamples = 0xF0000001,
+} rocprofvis_controller_table_type_t;
 
 /*
 * Properties for a future object
@@ -573,3 +598,9 @@ typedef enum rocprofvis_controller_extdata_properties_t
     value: String,
 }
 */
+
+typedef enum rocprofvis_controller_sort_order_t
+{
+    kRPVControllerSortOrderAscending,
+    kRPVControllerSortOrderDescending,
+} rocprofvis_controller_sort_order_t;

@@ -65,3 +65,5 @@ option(GLFW_DOCUMENT_INTERNALS "Include internals in documentation" OFF)
 add_subdirectory(${GLFW_DIR})
 include_directories(${GLFW_DIR}/include)
 include_directories(${GLFW_DIR}/deps)
+
+add_subdirectory(csv-parser)

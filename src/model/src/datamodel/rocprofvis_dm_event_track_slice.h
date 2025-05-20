@@ -105,6 +105,11 @@ class EventTrackSlice : public TrackSlice {
         // @param symbol_charptr - reference to symbol string
         // @return status of operation  
         rocprofvis_dm_result_t  GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & symbol_charptr) override;
+        // Method to get event level value by provided index of record
+        // @param index - index of the record
+        // @param level - graph level for the event
+        // @return status of operation
+        rocprofvis_dm_result_t GetRecordGraphLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t & level) override;
 
     private:
 

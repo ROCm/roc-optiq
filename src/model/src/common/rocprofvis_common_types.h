@@ -90,6 +90,12 @@ typedef struct {
     rocprofvis_dm_track_category_t track_category;   
     // handle of extended data object  
     rocprofvis_dm_extdata_t extdata;  
+    // total number of records in track
+    uint64_t record_count;
+    // minimum timestamp
+    rocprofvis_dm_timestamp_t min_ts;
+    // maximum timestamp
+    rocprofvis_dm_timestamp_t max_ts;
 } rocprofvis_dm_track_params_t;
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model and database. Physically located in trace object and referenced by a pointer in binding structure.
@@ -141,6 +147,7 @@ typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_func_t) (const r
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_row_cell_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t cell_value);
 typedef rocprofvis_dm_result_t (*rocprofvis_db_find_cached_table_value_func_t) (const rocprofvis_dm_database_t object, rocprofvis_dm_charptr_t table, 
                                                                                 const rocprofvis_dm_id_t id, rocprofvis_dm_charptr_t column, rocprofvis_dm_charptr_t* value);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_event_level_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id, uint8_t level);
 
 typedef struct 
 {
@@ -161,5 +168,6 @@ typedef struct
         rocprofvis_dm_add_table_column_func_t FuncAddTableColumn;       // Called by database query callback to add new column name to a table object
         rocprofvis_dm_add_table_row_cell_func_t FuncAddTableRowCell;    // Called by database query callback to add new cell to a table row
         rocprofvis_db_find_cached_table_value_func_t FuncFindCachedTableValue; // Get value from tables cached in database component (tables like rocpd_node, rocpd_process, rocpd_thread, rocpd_agent, rocpd_queue, rocpd_stream, etc. )
+        rocprofvis_dm_add_event_level_func_t FuncAddEventLevel;         // Called by database query callback to add event level to a map array located in trace object
 
 } rocprofvis_dm_db_bind_struct;

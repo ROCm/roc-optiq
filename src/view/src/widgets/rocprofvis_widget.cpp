@@ -1,12 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_widget.h"
+#include "../rocprofvis_settings.h"
 #include "../rocprofvis_utils.h"
 #include "imgui.h"
+#include "rocprofvis_debug_window.h"
+#include "../rocprofvis_event_manager.h"
+
 #include <iostream>
 #include <sstream>
 
-#include "rocprofvis_debug_window.h"
 
 using namespace RocProfVis::View;
 
@@ -98,7 +101,9 @@ VFixedContainer::Render()
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_children[i].m_item_spacing);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_children[i].m_window_padding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_children[i].m_bg_color);
+        ImGui::PushStyleColor(
+            ImGuiCol_ChildBg,
+            Settings::GetInstance().GetColor(static_cast<int>(Colors::kFillerColor)));
 
         ImGui::BeginChild(ImGui::GetID(i),
                           ImVec2(m_children[i].m_width, m_children[i].m_height),
@@ -126,7 +131,7 @@ HSplitContainer::HSplitContainer(const LayoutItem& l, const LayoutItem& r)
 {
     m_widget_name = GenUniqueName("HSplitContainer");
     m_left_name   = GenUniqueName("LeftColumn");
-    m_handle_name = GenUniqueName("ResizeHandle");
+    m_handle_name = GenUniqueName("##ResizeHandle");
     m_right_name  = GenUniqueName("RightColumn");
 }
 
@@ -186,7 +191,8 @@ HSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_left.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_left.m_window_padding);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_left.m_bg_color);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
+                                                static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_left_name.c_str(), ImVec2(m_left_col_width, col_height),
                       m_left.m_child_window_flags);
     if(m_left.m_item)
@@ -201,8 +207,8 @@ HSplitContainer::Render()
     ImGui::SameLine();
 
     // Create a resize handle between columns
-    ImGui::InvisibleButton(m_handle_name.c_str(),
-                           ImVec2(m_resize_grip_size, total_size.y));  // col_height));
+    ImGui::Selectable(m_handle_name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick,
+                      ImVec2(m_resize_grip_size, total_size.y));
 
     // Change cursor appearance when hovering over the resize handle
     if(ImGui::IsItemHovered())
@@ -227,7 +233,8 @@ HSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_right.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_right.m_window_padding);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_right.m_bg_color);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
+                                                static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_right_name.c_str(), ImVec2(-1, col_height),
                       m_right.m_child_window_flags);
     if(m_right.m_item)
@@ -251,6 +258,9 @@ VSplitContainer::VSplitContainer(const LayoutItem& t, const LayoutItem& b)
 , m_dirty(true)
 {
     m_widget_name = GenUniqueName("VSplitContainer");
+    m_top_name    = GenUniqueName("TopRow");
+    m_handle_name = GenUniqueName("##ResizeHandle");
+    m_bottom_name = GenUniqueName("BottomRow");
 }
 
 void
@@ -307,9 +317,9 @@ VSplitContainer::Render()
     // Start Top Row
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_top.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_top.m_window_padding);
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_top.m_bg_color);
-    ImGui::BeginChild("TopRow", ImVec2(col_width, m_top_row_height),
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
+                                                static_cast<int>(Colors::kFillerColor)));
+    ImGui::BeginChild(m_top_name.c_str(), ImVec2(col_width, m_top_row_height),
                       m_top.m_child_window_flags);
     if(m_top.m_item)
     {
@@ -320,9 +330,8 @@ VSplitContainer::Render()
     ImGui::PopStyleVar(2);
 
     // Create a resize handle between columns
-    if(ImGui::InvisibleButton("ResizeHandle", ImVec2(total_size.x, m_resize_grip_size)))
-    {
-    }
+    ImGui::Selectable(m_handle_name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick,
+                      ImVec2(total_size.x, m_resize_grip_size));
 
     // Change cursor appearance when hovering over the resize handle
     if(ImGui::IsItemHovered())
@@ -335,6 +344,7 @@ VSplitContainer::Render()
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
         // convert to local space
+
         ImVec2 ml = ImVec2(mouse_pos.x - window_pos.x, mouse_pos.y - window_pos.y);
 
         // Minimum and maximum height for the top row
@@ -346,8 +356,10 @@ VSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_bottom.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_bottom.m_window_padding);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_bottom.m_bg_color);
-    ImGui::BeginChild("BottomRow", ImVec2(col_width, 0), m_bottom.m_child_window_flags);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
+                                                static_cast<int>(Colors::kFillerColor)));
+    ImGui::BeginChild(m_bottom_name.c_str(), ImVec2(col_width, 0),
+                      m_bottom.m_child_window_flags);
     if(m_bottom.m_item)
     {
         m_bottom.m_item->Render();
@@ -355,4 +367,159 @@ VSplitContainer::Render()
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
+}
+
+//------------------------------------------------------------------
+TabContainer::TabContainer()
+: m_active_tab_index(-1)
+, m_set_active_tab_index(-1)
+{
+    m_widget_name = GenUniqueName("TabContainer");
+}
+
+TabContainer::~TabContainer() { m_tabs.clear(); }
+
+void
+TabContainer::Update()
+{
+    // Update logic for each tab
+    for(auto& tab : m_tabs)
+    {
+        if(tab.m_widget)
+        {
+            tab.m_widget->Update();
+        }
+    }
+}
+
+void
+TabContainer::Render()
+{
+    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
+
+    int new_selected_tab = m_active_tab_index;
+    int index_to_remove  = -1;
+    if(!m_tabs.empty())
+    {
+        if(ImGui::BeginTabBar("Tabs"))
+        {
+            for(size_t i = 0; i < m_tabs.size(); ++i)
+            {
+                const TabItem&    tab = m_tabs[i];
+                ImGuiTabItemFlags flags =
+                    (i == m_set_active_tab_index) ? ImGuiTabItemFlags_SetSelected : 0;
+
+                bool  is_open = true;
+                bool* p_open  = &is_open;
+
+                // Close button
+                if(!tab.m_can_close)
+                {
+                    p_open = nullptr;
+                }
+                if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open,
+                                       ImGuiTabBarFlags_None))
+                {
+                    // show tooltip for the active tab if header is hovered
+                    if(ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", tab.m_id.c_str());
+                    }
+
+                    new_selected_tab = i;
+                    if(tab.m_widget)
+                    {
+                        tab.m_widget->Render();
+                    }
+                    ImGui::EndTabItem();
+                }
+                // show tooltip for inactive tabs if header is hovered
+                else if(ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", tab.m_id.c_str());
+                }
+
+                if(p_open && !is_open)
+                {
+                    index_to_remove = i;
+                }
+            }
+            ImGui::EndTabBar();
+        }
+
+        // Check if the active tab has changed
+        if(m_active_tab_index != new_selected_tab)
+        {
+            m_active_tab_index = new_selected_tab;
+            // Todo: add event to notify of the change
+        }
+
+        // clear the set active tab index
+        m_set_active_tab_index = -1;
+
+        // Remove the tab if it was closed
+        if(index_to_remove != -1)
+        {
+            RemoveTab(index_to_remove);
+        }
+
+    }
+    ImGui::EndChild();
+}
+
+void
+TabContainer::AddTab(const TabItem& tab)
+{
+    m_tabs.push_back(tab);
+}
+
+// Remove a tab
+void
+TabContainer::RemoveTab(const std::string& id)
+{
+    auto it = std::remove_if(m_tabs.begin(), m_tabs.end(),
+                             [&id](const TabItem& tab) { return tab.m_id == id; });
+    if(it != m_tabs.end())
+    {
+        // notify the event manager of the tab removal
+        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(static_cast<int>(RocEvents::kTabClosed), it->m_id);
+        EventManager::GetInstance()->AddEvent(e);
+                
+        m_tabs.erase(it, m_tabs.end());
+    }
+}
+
+void
+TabContainer::RemoveTab(int index)
+{
+    if(index >= 0 && index < static_cast<int>(m_tabs.size()))
+    {
+        // notify the event manager of the tab removal
+        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id);
+        EventManager::GetInstance()->AddEvent(e);
+
+        m_tabs.erase(m_tabs.begin() + index);        
+    }
+}
+
+// Set the active tab by index
+void
+TabContainer::SetActiveTab(int index)
+{
+    if(index >= 0 && index < static_cast<int>(m_tabs.size()))
+    {
+        m_set_active_tab_index = index;
+    }
+}
+
+// Set the active tab by ID
+void
+TabContainer::SetActiveTab(const std::string& id)
+{
+    auto it = std::find_if(m_tabs.begin(), m_tabs.end(),
+                           [&id](const TabItem& tab) { return tab.m_id == id; });
+    if(it != m_tabs.end())
+    {
+        m_set_active_tab_index = std::distance(m_tabs.begin(), it);
+    }
 }

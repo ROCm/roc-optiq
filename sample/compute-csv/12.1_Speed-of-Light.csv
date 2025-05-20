@@ -1,0 +1,5 @@
+Metric,Avg,Unit
+Utilization,0.41,Pct of peak
+Access Rate,0.12,Pct of peak
+Theoretical Bandwidth (% of Peak),3.85,Pct of peak
+Bank Conflict Rate,0.46,Pct of peak

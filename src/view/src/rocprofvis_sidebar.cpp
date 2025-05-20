@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_sidebar.h"
+#include "rocprofvis_settings.h"
 #include "imgui.h"
 #include "rocprofvis_structs.h"
 #include <iostream>
@@ -15,6 +16,7 @@ SideBar::SideBar(DataProvider& dp)
 : m_data_provider(dp)
 , m_dropdown_select(0)
 , m_graph_map(nullptr)
+, m_settings(Settings::GetInstance())
 {}
 
 SideBar::~SideBar() {}
@@ -36,30 +38,44 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 {
     if(!tree)
     {
-        // std::cout << "No graph tree!! " << std::endl;
         return;
     }
-
+    
     if(ImGui::CollapsingHeader("Project 1"))
     {
         for(auto& tree_item : *tree)
         {
-            //ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
-            //ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(static_cast<int>(
+                                                       Colors::kTransparent)));
+            ImGui::PushStyleColor(
+                ImGuiCol_HeaderHovered,
+                m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
 
-            //ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+            ImGui::PushStyleColor(
+                ImGuiCol_HeaderActive,
+                m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
 
-            if(ImGui::CollapsingHeader(("Chart # " + std::to_string(tree_item.first) +
+            if(ImGui::CollapsingHeader(("Chart #" + std::to_string(tree_item.first) +
                                         ": " + tree_item.second.chart->GetName())
                                            .c_str()))
             {
                 tree_item.second.selected = true;
-
+                
                 if(ImGui::Checkbox(
                        (" Enable/Disable Chart #" + std::to_string((tree_item.first)))
                            .c_str(),
                        &tree_item.second.display))
                 {
+                }
+                if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_FLAMECHART)
+                {
+                    if(ImGui::Checkbox( ("Turn off color #" + std::to_string(tree_item.first)).c_str(),
+                                       &tree_item.second.colorful_flamechart))
+
+                    {
+                        static_cast<FlameTrackItem*>(tree_item.second.chart)
+                            ->SetRandomColorFlag(tree_item.second.colorful_flamechart);
+                    }
                 }
                 if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
                 {
@@ -70,8 +86,10 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
 
                     {
                     }
-                    if(ImGui::Checkbox("Convert to Boxplot",
-                                       &tree_item.second.make_boxplot))
+                    if(ImGui::Checkbox(
+                           (" Convert to Boxplot #" + std::to_string((tree_item.first)))
+                               .c_str(),
+                           &tree_item.second.make_boxplot))
 
                     {
                     }
@@ -94,30 +112,38 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                 }
 
                 // Lets you know if component is in Frame. Dev purpose only.
-                if(tree_item.second.chart->GetVisibility())
+                if(tree_item.second.chart->IsInViewVertical())
                 {
-                    ImGui::TextColored(ImVec4(0, 1, 0, 1), "Component Is: ");
+                    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
+                                           static_cast<int>(Colors::kTextSuccess))),
+                                       "Component Is: ");
 
                     ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(0, 1, 0, 1), "In Frame ");
+                    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
+                                           static_cast<int>(Colors::kTextSuccess))),
+                                       "In Frame ");
                 }
                 else
                 {
-                    ImGui::TextColored(ImVec4(0, 1, 0, 1), "Component Is: ");
+                    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
+                                           static_cast<int>(Colors::kTextSuccess))),
+                                       "Component Is: ");
 
                     ImGui::SameLine();
                     std::string temp_movement_value =
                         "Not In Frame by: " +
-                        std::to_string(tree_item.second.chart->GetMovement()) + " units.";
-                    ImGui::TextColored(ImVec4(1, 0, 0, 1), temp_movement_value.c_str());
-                    std::cout << tree_item.second.chart->GetMovement() << std::endl;
+                        std::to_string(tree_item.second.chart->GetDistanceToView()) +
+                        " units.";
+                    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
+                                           static_cast<int>(Colors::kTextError))),
+                                       temp_movement_value.c_str());
                 }
             }
             else
             {
                 tree_item.second.selected = false;
             }
-            // ImGui::PopStyleColor(3);
+            ImGui::PopStyleColor(3);
         }
     }
 }

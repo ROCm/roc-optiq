@@ -40,7 +40,6 @@ rocprofvis_result_t EventLOD::GetUInt64(rocprofvis_property_t property, uint64_t
                 break;
             }
             case kRPVControllerEventId:
-            case kRPVControllerEventTrack:
             case kRPVControllerEventStartTimestamp:
             case kRPVControllerEventEndTimestamp:
             case kRPVControllerEventName:
@@ -81,7 +80,6 @@ rocprofvis_result_t EventLOD::GetObject(rocprofvis_property_t property, uint64_t
                 }
                 break;
             }
-            case kRPVControllerEventTrack:
             case kRPVControllerEventStartTimestamp:
             case kRPVControllerEventEndTimestamp:
             case kRPVControllerEventId:
@@ -119,7 +117,6 @@ rocprofvis_result_t EventLOD::SetUInt64(rocprofvis_property_t property, uint64_t
             break;
         }
         case kRPVControllerEventId:
-        case kRPVControllerEventTrack:
         case kRPVControllerEventStartTimestamp:
         case kRPVControllerEventEndTimestamp:
         case kRPVControllerEventName:
@@ -161,7 +158,6 @@ rocprofvis_result_t EventLOD::SetObject(rocprofvis_property_t property, uint64_t
             }
             break;
         }
-        case kRPVControllerEventTrack:
         case kRPVControllerEventStartTimestamp:
         case kRPVControllerEventEndTimestamp:
         case kRPVControllerEventId:

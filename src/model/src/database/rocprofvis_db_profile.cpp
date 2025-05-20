@@ -26,6 +26,34 @@ namespace RocProfVis
 namespace DataModel
 {
 
+int ProfileDatabase::CallbackGetTraceProperties(void* data, int argc, char** argv, char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    ProfileDatabase*            db = (ProfileDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted()) return 1;
+    db->TraceProperties()->start_time  = std::stoll(argv[0]);
+    db->TraceProperties()->end_time = std::stoll(argv[1]);
+    return 0;
+}
+
+int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, char** argv,
+                                            char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    ProfileDatabase*            db = (ProfileDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted()) return 1;
+    uint32_t index                             = std::stol(argv[3]);
+    db->TrackPropertiesAt(index)->record_count = std::stoll(argv[0]);
+    db->TrackPropertiesAt(index)->min_ts       = std::stoll(argv[1]);
+    db->TrackPropertiesAt(index)->max_ts       = std::stoll(argv[2]);
+    return 0;
+}
 
 int ProfileDatabase::CallbackAddEventRecord(void *data, int argc, char **argv, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==9, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
@@ -125,20 +153,46 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, char** argv, char*
     return 0;
 }
 
-rocprofvis_dm_result_t ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index, rocprofvis_dm_string_t & query){
+rocprofvis_dm_result_t
+ProfileDatabase::BuildTrackQuery(bool track_properties_only, rocprofvis_dm_index_t index,
+                                 rocprofvis_dm_string_t& query)
+{
     std::stringstream ss;
     int size = TrackPropertiesAt(index)->query.size();
     ROCPROFVIS_ASSERT_MSG_RETURN(size, "Error! SQL query cannot be empty!", kRocProfVisDmResultUnknownError);
-    if (size > 1) ss << "SELECT * FROM (";
+    if (track_properties_only) {
+        ss << "SELECT COUNT(*), MIN(start), MAX(end), " << index << " FROM (";
+    }
+    else
+    {
+        ss << "SELECT * FROM (";
+    }
+
     for (int i=0; i < size; i++){
         if (i > 0) ss << " UNION ";
         ss << TrackPropertiesAt(index)->query[i];
     } 
-    if (size > 1) ss << ")";
-    ss << " where ";
+    ss << ") where ";
+    int count = 0;
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
-        if (i > 0) ss << " and ";
-        ss << TrackPropertiesAt(index)->process_tag[i] << "==" << TrackPropertiesAt(index)->process_id[i];
+        if(TrackPropertiesAt(index)->process_tag[i] == "const")
+        {
+            continue;
+        }
+        if(count > 0)
+        {
+            ss << " and ";
+        }
+        ss << TrackPropertiesAt(index)->process_tag[i] << "=="; 
+        if(TrackPropertiesAt(index)->process_id_numeric[i])
+        {
+            ss << TrackPropertiesAt(index)->process_id[i];
+        }
+        else
+        {
+            ss << "'" << TrackPropertiesAt(index)->process_name[i] << "'";
+        }
+        count++;
     }
     query = ss.str();
     return kRocProfVisDmResultSuccess;
@@ -193,6 +247,78 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
 
 }
 
+rocprofvis_dm_result_t ProfileDatabase::BuildTableQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t sort_column, uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query) {
+    slice_query_t slice_query_map;
+    for (int i = 0; i < num; i++){
+        rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
+        for (int j = 0; j < props->query.size(); j++) {
+            std::string q = props->query[j]; 
+            std::string tuple = "(";
+            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+                if (props->process_tag[k] != "const") {
+                    if (tuple.length() > 1) tuple += ",";
+                    if(props->process_id_numeric[k]) tuple += "coalesce(";
+                    tuple += props->process_tag[k];
+                    if(props->process_id_numeric[k]) tuple += ",0)";
+                }
+            }
+            tuple += ")";
+            q += " where ";
+            q += tuple;
+            q += " IN (";
+            tuple = "(";
+            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+                if (props->process_tag[k] != "const") {
+                    if (tuple.length() > 1) tuple += ",";
+                    std::string id = props->process_id_numeric[k] ? std::to_string(props->process_id[k]) : std::string("'") + props->process_name[k] + "'";
+                    tuple += id;
+                      
+                }
+            }
+            tuple += ")";
+            if (slice_query_map[q].length() > 0) slice_query_map[q] += ", ";
+            slice_query_map[q] += tuple ;
+        }
+    }
+    if(count_only)
+    {
+        query = "SELECT COUNT(*) AS [NumRecords] FROM ( ";
+    }
+    else
+    { 
+        query = "SELECT * FROM ( "; 
+    } 
+    for (std::map<std::string, std::string>::iterator it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
+        if (it_query!=slice_query_map.begin()) query += " UNION ";
+        query += it_query->first;
+        query += it_query->second;
+        query += ") and start >= ";
+        query += std::to_string(start);
+        query += " and end < ";
+        query += std::to_string(end);
+    }
+    query += ")";
+    if (sort_column && strlen(sort_column))
+    {
+        query += " ORDER BY ";
+        query += sort_column;
+    }
+    if(!count_only)
+    {
+        if(max_count)
+        {
+            query += " LIMIT ";
+            query += std::to_string(max_count);
+        }
+        if(offset)
+        {
+            query += " OFFSET ";
+            query += std::to_string(offset);
+        }
+    }
+    query += ";";
+    return kRocProfVisDmResultSuccess;
+}
 
 rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice( 
                                                     rocprofvis_dm_timestamp_t start,
@@ -278,6 +404,62 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename){
     
     sqlite3_close(db);
     return rocprofvis_db_type_t::kAutodetect;
+}
+
+
+int ProfileDatabase::CalculateEventLevels(void* data, int argc, char** argv, char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 7, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted())
+    {
+        return 1;
+    }
+    uint64_t process_id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+    for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS;i++)
+    {
+        process_id[i] = std::stoll(argv[i]);
+    }
+    rocprofvis_dm_event_id_t id;
+    id.bitfield.event_op = std::stol(argv[3]);
+    id.bitfield.event_id = std::stoll(argv[4]);
+    uint64_t start_time = std::stoll(argv[5]);
+    uint64_t end_time = std::stoll(argv[6]);
+    uint32_t level=0;
+
+    for(int i = db->m_event_timing_params.size()-1; i >= 0; i--)
+    {
+        int id_counter = 0;
+        for(; id_counter < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; id_counter++)
+        {
+            if(process_id[id_counter] !=
+               db->m_event_timing_params[i].process_id[id_counter])
+            {
+                break;
+            }
+        }
+        if(id_counter < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS)
+        {
+            continue;
+        }
+        if(start_time > db->m_event_timing_params[i].end_time)
+        {
+            db->m_event_timing_params.erase(db->m_event_timing_params.begin() + i);
+        } 
+        else if(start_time < db->m_event_timing_params[i].end_time)
+        {
+            level = db->m_event_timing_params[i].level + 1;
+            break;
+        }
+    }
+    db->m_event_timing_params.push_back(
+        { { process_id[TRACK_ID_NODE], process_id[TRACK_ID_PID_OR_AGENT], process_id[TRACK_ID_TID_OR_QUEUE]}, start_time, end_time, level });
+    db->BindObject()->FuncAddEventLevel(db->BindObject()->trace_object, id, level);
+    callback_params->future->CountThisRow();
+    return 0;
 }
 
 }  // namespace DataModel

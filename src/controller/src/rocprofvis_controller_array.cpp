@@ -15,6 +15,11 @@ Array::~Array()
 {
 }
 
+std::vector<Data>& Array::GetVector(void)
+{
+    return m_array;
+}
+
 rocprofvis_controller_object_type_t Array::GetType(void) 
 {
     return kRPVControllerObjectTypeArray;
@@ -147,7 +152,7 @@ rocprofvis_result_t Array::GetString(rocprofvis_property_t property, uint64_t in
                                 char* value, uint32_t* length) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
+    if(length)
     {
         switch(property)
         {

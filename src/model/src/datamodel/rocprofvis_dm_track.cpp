@@ -143,6 +143,15 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
         case kRPVDMTrackMemoryFootprintUInt64:
             *value = GetMemoryFootprint();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackNumRecordsUInt64:
+            *value = NumRecords();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackMinimumTimestampUInt64:
+            *value = MinTimestamp();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackMaximumTimestampUInt64:
+            *value = MaxTimestamp();
+            return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -186,6 +195,14 @@ rocprofvis_dm_result_t  Track::GetPropertyAsHandle(rocprofvis_dm_property_t prop
             return GetSliceAtIndex(index, *value);
         case kRPVDMSliceHandleTimed:
             return GetSliceAtTime(index, *value);
+        case kRPVDMTrackDatabaseHandle:
+            ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACK_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
+            *value = Ctx()->Database();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackTraceHandle:
+            ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACK_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
+            *value = Ctx();
+            return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -232,6 +249,16 @@ const char*  Track::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMSliceHandleIndexed";
         case kRPVDMSliceHandleTimed:
             return "kRPVDMSliceHandleTimed";
+        case kRPVDMTrackDatabaseHandle:
+            return "kRPVDMTrackDatabaseHandle";
+        case kRPVDMTrackTraceHandle:
+        return "kRPVDMTrackTraceHandle";
+        case kRPVDMTrackNumRecordsUInt64:
+            return "kRPVDMTrackNumRecordsUInt64";
+        case kRPVDMTrackMinimumTimestampUInt64:
+            return "kRPVDMTrackMinimumTimestampUInt64";
+        case kRPVDMTrackMaximumTimestampUInt64:
+            return "kRPVDMTrackMaximumTimestampUInt64";
         default:
             return "Unknown property";
     }   

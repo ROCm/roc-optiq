@@ -24,7 +24,8 @@ public:
 
     virtual ~Track();
 
-    rocprofvis_result_t Fetch(uint32_t lod, double start, double end, Array& array, uint64_t& index);
+    rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
+    rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index);
 
     rocprofvis_controller_object_type_t GetType(void) final;
     rocprofvis_dm_track_t GetDmHandle(void);
@@ -44,11 +45,14 @@ private:
     uint64_t m_id;
     uint64_t m_num_elements;
     rocprofvis_controller_track_type_t m_type;
-    std::map<double, std::unique_ptr<Segment>> m_segments;
+    SegmentTimeline m_segments;
     double m_start_timestamp;
     double m_end_timestamp;
     std::string m_name;
     rocprofvis_dm_track_t m_dm_handle;
+
+private:
+    rocprofvis_result_t FetchFromDataModel(double start, double end);
 };
 
 }

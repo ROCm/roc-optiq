@@ -1,32 +1,34 @@
 #pragma once
-#include "rocprofvis_home_screen.h"
+#include "rocprofvis_trace_view.h"
 #include "imgui.h"
-#include "rocprofvis_main_view.h"
-#include "rocprofvis_sidebar.h"
+#include "rocprofvis_analysis_view.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_settings.h"
+#include "rocprofvis_sidebar.h"
+#include "rocprofvis_timeline_view.h"
 #include "spdlog/spdlog.h"
-
 using namespace RocProfVis::View;
 
-HomeScreen::HomeScreen()
+TraceView::TraceView()
 : m_main_view(nullptr)
 , m_sidebar(nullptr)
 , m_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
+, m_analysis(nullptr)
 {
-    m_data_provider.SetTrackDataReadyCallback([](uint64_t track_index) {
-        std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(static_cast<int>(RocEvents::kNewTrackData), track_index);
-        EventManager::GetInstance()->AddEvent(e);
-    });
+    m_data_provider.SetTrackDataReadyCallback(
+        [](uint64_t track_index, const std::string& trace_path) {
+            std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
+                static_cast<int>(RocEvents::kNewTrackData), track_index, trace_path);
+            EventManager::GetInstance()->AddEvent(e);
+        });
 }
 
-HomeScreen::~HomeScreen() {
-    m_data_provider.SetTrackDataReadyCallback(nullptr);
-}
+TraceView::~TraceView() { m_data_provider.SetTrackDataReadyCallback(nullptr); }
 
 void
-HomeScreen::Update()
+TraceView::Update()
 {
     auto last_state = m_data_provider.GetState();
     m_data_provider.Update();
@@ -52,28 +54,27 @@ HomeScreen::Update()
         }
     }
 
-    if(m_main_view) {
+    if(m_main_view)
+    {
         m_main_view->Update();
     }
 }
 
 void
-HomeScreen::CreateView()
+TraceView::CreateView()
 {
     m_sidebar   = std::make_shared<SideBar>(m_data_provider);
-    m_main_view = std::make_shared<MainView>(m_data_provider);
+    m_main_view = std::make_shared<TimelineView>(m_data_provider);
+    m_analysis  = std::make_shared<AnalysisView>(m_data_provider);
 
     LayoutItem left;
-    left.m_item     = m_sidebar;
-    left.m_bg_color = IM_COL32(255, 255, 255, 255);
+    left.m_item = m_sidebar;
 
     LayoutItem top;
-    top.m_item     = m_main_view;
-    top.m_bg_color = IM_COL32(255, 255, 255, 255);
+    top.m_item = m_main_view;
 
     LayoutItem bottom;
-    bottom.m_item     = std::make_shared<RocWidget>();  // Analysis view, empty for now
-    bottom.m_bg_color = IM_COL32(255, 255, 255, 255);
+    bottom.m_item = std::make_shared<RocWidget>();  // Analysis view, empty for now
 
     LayoutItem traceArea;
     auto       split_container = std::make_shared<VSplitContainer>(top, bottom);
@@ -87,16 +88,17 @@ HomeScreen::CreateView()
 }
 
 void
-HomeScreen::DestroyView()
+TraceView::DestroyView()
 {
     m_main_view    = nullptr;
     m_sidebar      = nullptr;
     m_container    = nullptr;
+    m_analysis     = nullptr;
     m_view_created = false;
 }
 
 bool
-HomeScreen::OpenFile(const std::string& file_path)
+TraceView::OpenFile(const std::string& file_path)
 {
     bool result = false;
     result      = m_data_provider.FetchTrace(file_path);
@@ -113,10 +115,14 @@ HomeScreen::OpenFile(const std::string& file_path)
 }
 
 void
-HomeScreen::Render()
+TraceView::Render()
 {
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
+        // Use global DPI to adjust font. Reactivate later.
+        ImGui::GetIO().FontGlobalScale = Settings::GetInstance().GetDPI() -
+                                         0.20;  // Scale font by DPI. -0.20 should be
+                                                // removed once font lib is in place.
         m_container->Render();
         return;
     }

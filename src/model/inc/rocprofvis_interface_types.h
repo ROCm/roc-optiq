@@ -54,6 +54,7 @@ typedef     void*                         rocprofvis_db_future_t;               
 typedef     uint64_t                      rocprofvis_db_timeout_sec_t;                  // asynchronous call wait timeout (seconds)
 typedef     const char*                   rocprofvis_dm_charptr_t;                      // pointer to string
 typedef     uint64_t                      rocprofvis_dm_size_t;                         // size of array
+typedef     uint8_t                       rocprofvis_dm_event_level_t;                  // event level, for stacking events
 
 
 
@@ -159,6 +160,12 @@ typedef enum  rocprofvis_dm_trace_property_t {
 
 // Track properties
 typedef enum rocprofvis_dm_track_property_t {
+    // Track total number of records
+    kRPVDMTrackNumRecordsUInt64,
+    // Track minimum timestamp
+    kRPVDMTrackMinimumTimestampUInt64,
+    // Track maximum timestamp
+    kRPVDMTrackMaximumTimestampUInt64,
     // Track category enumeration value
 	kRPVDMTrackCategoryEnumUInt64,
     // Track category string value
@@ -189,6 +196,10 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackExtDataValueCharPtrIndexed,
     // Extended data in Json format
 	kRPVDMTrackInfoJsonCharPtr, 
+    // Database handle
+	kRPVDMTrackDatabaseHandle,
+    // Trace handle
+    kRPVDMTrackTraceHandle
 } rocprofvis_dm_track_property_t;
 
 // Slice properties
@@ -214,7 +225,9 @@ typedef enum rocprofvis_dm_slice_property_t {
     // Event type string
 	kRPVDMEventTypeStringCharPtrIndexed,
     // Event symbol string
-	kRPVDMEventSymbolStringCharPtrIndexed
+	kRPVDMEventSymbolStringCharPtrIndexed,
+    // Event level in graph
+    kRPVDMEventLevelUInt64Indexed
 } rocprofvis_dm_slice_property_t;
 
 //Flow trace properties

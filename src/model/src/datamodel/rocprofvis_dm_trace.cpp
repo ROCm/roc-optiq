@@ -54,6 +54,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddTableRow = AddTableRow;
     m_binding_info.FuncAddTableColumn = AddTableColumn;
     m_binding_info.FuncAddTableRowCell = AddTableRowCell;
+    m_binding_info.FuncAddEventLevel = AddEventLevel;
     bind_data = &m_binding_info;
     m_db = db;
     return kRocProfVisDmResultSuccess;
@@ -301,6 +302,23 @@ rocprofvis_dm_extdata_t  Trace::AddExtData(const rocprofvis_dm_trace_t object, c
     return trace->m_ext_data.back().get();
 }
 
+
+rocprofvis_dm_result_t Trace::AddEventLevel(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id, rocprofvis_dm_event_level_t level)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_STACK_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    Trace* trace = (Trace*) object;
+    try
+    {
+        trace->m_event_level_map[*(uint64_t*) &event_id] = level;
+    } 
+    catch(std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failure allocating event level array",
+                                            kRocProfVisDmResultAllocFailure);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_EXT_DATA_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ExtData* ext_data = (ExtData*) object;
@@ -346,6 +364,11 @@ rocprofvis_dm_charptr_t Trace::GetStringAt(rocprofvis_dm_index_t index){
     ROCPROFVIS_ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, nullptr);
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_strings.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
     return m_strings[index].c_str();
+}
+
+rocprofvis_dm_event_level_t Trace::GetEventLevelAt(rocprofvis_dm_event_id_t event_id){
+    ROCPROFVIS_ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, 0);
+    return m_event_level_map[*(uint64_t*)&event_id];
 }
 
 rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){

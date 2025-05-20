@@ -131,8 +131,9 @@ public:
 
     ProviderState GetState();
 
-    void SetTrackDataReadyCallback(const std::function<void(uint64_t)>& callback);
-    void SetTraceLoadedCallback(const std::function<void()>& callback);
+    void SetTrackDataReadyCallback(
+        const std::function<void(uint64_t, const std::string&)>& callback);
+    void SetTraceLoadedCallback(const std::function<void(const std::string&)>& callback);
 
 private:
     void HandleLoadTrace();
@@ -151,9 +152,9 @@ private:
 
     ProviderState m_state;
 
-    uint64_t    m_num_graphs = 0;   // number of graphs contained in the trace
-    double      m_min_ts     = 0;   // timeline start point
-    double      m_max_ts     = 0;   // timeline end point
+    uint64_t    m_num_graphs;       // number of graphs contained in the trace
+    double      m_min_ts;           // timeline start point
+    double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
 
     std::vector<track_info_t>  m_track_metadata;
@@ -162,9 +163,9 @@ private:
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 
     // Called when new track data is ready
-    std::function<void(uint64_t)> m_track_data_ready_callback;
+    std::function<void(uint64_t, const std::string&)> m_track_data_ready_callback;
     // Called when a new trace is loaded
-    std::function<void()> m_trace_data_ready_callback;
+    std::function<void(const std::string&)> m_trace_data_ready_callback;
 };
 
 }  // namespace View

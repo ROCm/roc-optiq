@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "imgui.h"
-#include "imgui_spectrum.h"
+#include "imgui_spectrum_dynamic.h"
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_imgui_backend.h"
@@ -46,7 +46,7 @@ main(int, char**)
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-                ImGui::Spectrum::StyleColorsSpectrum();
+                ImGui::Spectrum::StyleColorsSpectrumLight();
                 io.Fonts->Clear();
                 ImGui::Spectrum::LoadFont();
 

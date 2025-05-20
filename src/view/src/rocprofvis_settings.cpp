@@ -2,6 +2,7 @@
 
 #include "rocprofvis_settings.h"
 #include "imgui.h"
+#include "imgui_spectrum_dynamic.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -60,14 +61,14 @@ void
 Settings::DarkMode()
 {
     m_color_store = DARK_THEME_COLORS;
-    ImGui::StyleColorsDark();
+    ImGui::Spectrum::StyleColorsSpectrumDark();
     m_use_dark_mode = true;
 }
 
 void Settings::LightMode()
 {
     m_color_store = LIGHT_THEME_COLORS;
-    ImGui::StyleColorsLight();
+    ImGui::Spectrum::StyleColorsSpectrumLight();
     m_use_dark_mode = false;
 }
 

@@ -266,7 +266,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(
            window_position,
-           ImVec2(window_position.x + window_size.x, window_position.y + window_size.y)))
+           ImVec2(window_position.x + display_size.x - m_sidebar_size - scrollbar_width,
+                  window_position.y + window_size.y)))
     {
         ImVec2 mouse_position = ImGui::GetMousePos();
 
@@ -453,7 +454,10 @@ TimelineView::RenderGraphView()
                        graph_objects.second.chart->GetRequestState() ==
                            TrackDataRequestState::kIdle)
                     {
-                        double buffer_distance = (m_viewport_end - m_viewport_start); //Essentially creates one viewport worth of buffer.
+                        double buffer_distance =
+                            (m_viewport_end -
+                             m_viewport_start);  // Essentially creates one viewport worth
+                                                 // of buffer.
                         graph_objects.second.chart->RequestData(
                             m_viewport_start - buffer_distance,
                             m_viewport_end + buffer_distance);
@@ -881,11 +885,7 @@ TimelineView::HandleTopSurfaceTouch()
             // Left side
             if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
             {
-                // please fix scrolling and dragging, then uncomment
-                // if(m_buffer_right_hit == false)
-                {
-                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
-                }
+                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
             }
 
             // Right side

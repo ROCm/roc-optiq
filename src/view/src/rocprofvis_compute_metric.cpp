@@ -15,6 +15,7 @@ constexpr int TABLE_THRESHOLD_HIGH = 80;
 constexpr int TABLE_THRESHOLD_MID = 50;
 constexpr ImU32 TABLE_COLOR_HIGH = IM_COL32(255, 18, 10, 255);
 constexpr ImU32 TABLE_COLOR_MID = IM_COL32(255, 169, 10, 255);
+constexpr ImU32 TABLE_COLOR_SEARCH = IM_COL32(0, 255, 0, 255);
 
 const std::string ComputeMetric::FormattedString()
 {
@@ -161,7 +162,11 @@ void ComputeMetricGroup::Render()
                     {
                         ImGui::TableSetColumnIndex(c);
 
-                        if (m_metric_data->m_table.m_values[r][c].m_colorize && m_metric_data->m_table.m_values[r][c].m_metric)
+                        if (m_metric_data->m_table.m_values[r][c].m_highlight)
+                        {
+                            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_SEARCH);
+                        }
+                        else if (m_metric_data->m_table.m_values[r][c].m_colorize && m_metric_data->m_table.m_values[r][c].m_metric)
                         {
                             if (m_metric_data->m_table.m_values[r][c].m_metric->m_value > TABLE_THRESHOLD_HIGH)
                             {

@@ -47,6 +47,7 @@ typedef struct rocprofvis_compute_metrics_table_cell_t
 {
     std::string m_value;
     bool m_colorize;
+    bool m_highlight;
     rocprofvis_compute_metric_t* m_metric;
 } rocprofvis_compute_metrics_table_cell_t;
 

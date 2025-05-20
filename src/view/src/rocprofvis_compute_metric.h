@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include <numeric>
+#include <regex>
 #include "implot.h"
 #include "rocprofvis_compute_data_provider.h"
 #include "widgets/rocprofvis_widget.h"
@@ -42,6 +42,7 @@ class ComputeMetricGroup : public RocWidget
 public:
     void Render();
     void Update();
+    void Search(const std::string& term);
     ComputeMetricGroup(std::shared_ptr<ComputeDataProvider> data_provider, std::string metric_category, 
                   compute_metric_group_render_flags_t render_flags = kComputeMetricTable, std::vector<int> pie_data_index = {0}, std::vector<int> bar_data_index = {0});
     ~ComputeMetricGroup();

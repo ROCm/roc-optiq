@@ -167,6 +167,7 @@ void ComputeDataProvider::LoadProfile()
                             table_cell.m_value = row[col].get();
                             table_cell.m_metric = nullptr;
                             table_cell.m_colorize = false;
+                            table_cell.m_highlight = false;
 
                             size_t pct_pos = table_cell.m_value.find("%");
                             if (pct_pos != std::string::npos)

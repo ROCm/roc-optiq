@@ -14,6 +14,7 @@ enum class RocEvents
     kInvalidEvent = -1,
     kNewTrackData,
     kComputeBlockNavigationChanged,
+    kComputeTableSearchChanged,
     kTabClosed
 };
 
@@ -22,6 +23,7 @@ enum class RocEventType
     kRocEvent,
     kTrackDataEvent,
     kComputeBlockNavigationEvent,
+    kComputeTableSearchEvent,
     kTabEvent
 };
 
@@ -70,6 +72,16 @@ public:
 private:
     int m_level;
     int m_block;
+};
+
+class ComputeTableSearchEvent : public RocEvent
+{
+public:
+    ComputeTableSearchEvent(int event_id, std::string& term);
+    const std::string GetSearchTerm();
+
+private:
+    std::string m_search_term;
 };
 
 class TabClosedEvent : public RocEvent

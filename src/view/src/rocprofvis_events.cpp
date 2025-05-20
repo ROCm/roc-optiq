@@ -108,6 +108,19 @@ ComputeBlockNavigationEvent::GetBlock()
     return m_block;
 }
 
+ComputeTableSearchEvent::ComputeTableSearchEvent(int event_id, std::string& term)
+: RocEvent(event_id)
+, m_search_term(term)
+{
+    m_event_type = RocEventType::kComputeTableSearchEvent;
+}
+
+const std::string
+RocProfVis::View::ComputeTableSearchEvent::GetSearchTerm()
+{
+    return m_search_term;
+}
+
 TabClosedEvent::TabClosedEvent(int event_id, const std::string& tab_id)
 : RocEvent(event_id)
 , m_tab_id(tab_id)

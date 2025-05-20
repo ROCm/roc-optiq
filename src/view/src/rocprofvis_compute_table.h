@@ -2,6 +2,7 @@
 
 #pragma once
 #include "rocprofvis_compute_data_provider.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_compute_metric.h"
 #include "widgets/rocprofvis_widget.h"
 
@@ -28,6 +29,11 @@ typedef enum table_view_category_t
     kTableCategoryCount
 } table_view_category_t;
 
+struct PrefixTreeNode {
+    char m_char;
+    std::array<std::unique_ptr<PrefixTreeNode>, 128> m_next;
+};
+
 typedef struct table_view_category_info_t
 {
     table_view_category_t m_category;
@@ -44,8 +50,10 @@ public:
     ~ComputeTableCategory();
 
 private:
-    table_view_category_t m_category;
+    void OnSearchChanged(std::shared_ptr<RocEvent> event);
+
     std::vector<std::unique_ptr<ComputeMetricGroup>> m_metrics;
+    EventManager::SubscriptionToken m_search_event_token;
 };
 
 class ComputeTableView : public RocWidget
@@ -59,6 +67,8 @@ public:
 private:
     void RenderMenuBar();
 
+    bool m_search_edited;
+    char m_search_term[32];
     std::shared_ptr<TabContainer> m_tab_container;
 };
 

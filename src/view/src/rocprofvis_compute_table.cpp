@@ -49,26 +49,41 @@ const std::array TAB_DEFINITIONS = {
         "18.5_L2-Fabric_Requests_(per_normUnit).csv", "18.6_L2-Fabric_Read_Latency_(Cycles).csv", "18.7_L2-Fabric_Write_and_Atomic_Latency_(Cycles).csv", "18.8_L2-Fabric_Atomic_Latency_(Cycles).csv", 
         "18.9_L2-Fabric_Read_Stall_(Cycles_per_normUnit).csv", "18.10_L2-Fabric_Write_and_Atomic_Stall_(Cycles_per_normUnit).csv", "18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv"
     }},
-
 };
 
 ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category)
-: m_category(category)
 {
     for (const std::string& content : TAB_DEFINITIONS[category].m_content_ids)
     {
         m_metrics.push_back(std::make_unique<ComputeMetricGroup>(data_provider, content));
     }
+
+    auto search_event_handler = [this](std::shared_ptr<RocEvent> event) 
+    {
+        this->OnSearchChanged(event);
+    };
+    m_search_event_token = EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kComputeTableSearchChanged), search_event_handler);
 }
 
 ComputeTableCategory::~ComputeTableCategory() {}
 
+void ComputeTableCategory::OnSearchChanged(std::shared_ptr<RocEvent> event)
+{
+    std::shared_ptr<ComputeTableSearchEvent> navigation_event = std::dynamic_pointer_cast<ComputeTableSearchEvent>(event);
+    for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics)
+    {
+        metric->Search(navigation_event->GetSearchTerm());
+    }
+}
+
 void ComputeTableCategory::Render()
 {
+    ImGui::BeginChild("", ImVec2(-1, -1));
     for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics)
     {
         metric->Render();
     }
+    ImGui::EndChild();
 }
 
 void ComputeTableCategory::Update()
@@ -81,9 +96,10 @@ void ComputeTableCategory::Update()
 
 ComputeTableView::ComputeTableView(std::shared_ptr<ComputeDataProvider> data_provider) 
 : m_tab_container(nullptr)
+, m_search_term("")
+, m_search_edited(false)
 {
     m_tab_container = std::make_shared<TabContainer>();
-
     for (const table_view_category_info_t& category : TAB_DEFINITIONS)
     {
         m_tab_container->AddTab(TabItem{category.m_name, "compute_table_tab_" + category.m_name, std::make_shared<ComputeTableCategory>(data_provider, category.m_category), false});
@@ -112,17 +128,27 @@ void ComputeTableView::RenderMenuBar()
     0.0f);
 
     ImGui::SetCursorScreenPos(ImVec2(cursor_position.x + ImGui::GetContentRegionAvail().x - 350, cursor_position.y));
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("Search");
-    char searchTerm[32] = "";
     ImGui::SameLine();
     ImGui::SetNextItemWidth(350 - ImGui::CalcTextSize("Search").x);
-    ImGui::InputText("##compute_table_search_bar", searchTerm, 32);
+    ImGui::InputTextWithHint("##compute_table_search_bar", "Metric Name", m_search_term, ARRAYSIZE(m_search_term), 
+                             ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_CallbackEdit, 
+                             [](ImGuiInputTextCallbackData* data) -> int 
+                             {
+                                 //ImGuiInputTextCallback on edit.
+                                 EventManager::GetInstance()->AddEvent(std::make_shared<ComputeTableSearchEvent>(static_cast<int>(RocEvents::kComputeTableSearchChanged), std::string(data->Buf)));
+                                 return 0;
+                             });
 }
 
 void ComputeTableView::Render()
 {
     RenderMenuBar();
+
+    ImGui::BeginChild("compute_table_tab_bar", ImVec2(-1, -1), ImGuiChildFlags_Borders);
     m_tab_container->Render();
+    ImGui::EndChild();
 }
 
 }  // namespace View

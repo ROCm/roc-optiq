@@ -49,7 +49,7 @@ Grid::SetHighlightedRegion(std::pair<float, float> region)
 
 void
 Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float scale_x,
-                 float v_max_x, float v_min_x, int grid_size, int sidebar_size)
+                 double v_max_x, double v_min_x, int grid_size, int sidebar_size)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -61,9 +61,17 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
     m_scale_x        = scale_x;
     m_min_x          = min_x;
 
-    double steps = (max_x - min_x) /
-                   (zoom * 20);  // amount the loop which generates the grid iterates by.
+    double steps = 0;
+    {
+        char label[32];
+        snprintf(label, sizeof(label), "%.0f", max_x);
+        ImVec2 labelSize = ImGui::CalcTextSize(label);
 
+        // amount the loop which generates the grid iterates by.
+        steps = labelSize.x / scale_x;
+    }
+
+    
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 
@@ -91,7 +99,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
 
         // Define the clipping rectangle to match the child window
         ImVec2 clip_min = child_win;
-        ImVec2 clip_max = ImVec2(child_win.x + child_size.x, child_win.y + child_size.y);
+        ImVec2 clip_max = ImVec2(child_win.x + content_size.x, child_win.y + content_size.y);
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
         draw_list->PushClipRect(clip_min, clip_max, true);
 
@@ -164,13 +172,16 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
                 scale_x;  // this value takes the raw value of the output and converts
                           // them into positions on the chart which is scaled by scale_x
 
+            bool is_visible = false;
+
             // IsRectVisible checks overlaping with windows coordinates. So we have to add
             // child_win.x to normalized_start to see smaller traces.
             if(ImGui::IsRectVisible(
-                   ImVec2(child_win.x + normalized_start, cursor_position.y),
-                   ImVec2(child_win.x + normalized_end,
+                   ImVec2(normalized_start, cursor_position.y),
+                   ImVec2(normalized_end,
                           cursor_position.y + content_size.y - grid_size)))
             {
+                is_visible = true;
                 if(has_been_seen == false)
                 {
                     // First one thats visible.
@@ -188,10 +199,14 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
                                                  (normalized_end - normalized_start))))) +
                                  steps;
             }
+            else
+            {
+                is_visible = false;
+            }
 
             // Only render visible grid lines or the clipping time is excessive when
             // zooming in to large traces
-            if(has_been_seen)
+            if(is_visible)
             {
                 draw_list->AddRect(
                     ImVec2(normalized_start, cursor_position.y),

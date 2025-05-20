@@ -5,3 +5,4 @@
 bool rocprofvis_view_init();
 void rocprofvis_view_render();
 void rocprofvis_view_destroy();
+void rocprofvis_view_set_dpi(float dpi);

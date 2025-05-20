@@ -56,6 +56,12 @@ public:
     rocprofvis_dm_charptr_t                             Process() { return m_track_params->process_name[TRACK_ID_PID_OR_AGENT].c_str(); }
     // Returns pointer to subprocess string
     rocprofvis_dm_charptr_t                             SubProcess() { return m_track_params->process_name[TRACK_ID_TID_OR_QUEUE].c_str(); }
+    // Return total number of records                   
+    rocprofvis_dm_size_t                                NumRecords() { return m_track_params->record_count; }
+    // Return track minimum timestamp
+    rocprofvis_dm_timestamp_t                           MinTimestamp() { return m_track_params->min_ts; }
+    // Return track maximum timestamp
+    rocprofvis_dm_timestamp_t                           MaxTimestamp() { return m_track_params->max_ts; }
     // Returns pointer to category string
     rocprofvis_dm_charptr_t                             CategoryString();
     // Method to get slice handle at provided index

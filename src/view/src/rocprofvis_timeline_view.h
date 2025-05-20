@@ -34,9 +34,9 @@ public:
     void         Update();
     void         MakeGraphView();
 
-    void ResetView();
-    void DestroyGraphs();
-
+    void                                   ResetView();
+    void                                   DestroyGraphs();
+    void                                   GetScreenPosition();
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
 
 private:
@@ -89,10 +89,11 @@ private:
     bool                                  m_buffer_right_hit;
     bool                                  m_buffer_left_hit;
     float                                 m_unload_track_distance;
-    EventManager::EventHandler            m_new_track_data_handler;
+    float                                 m_universal_content_size;
     DataProvider&                         m_data_provider;
     std::pair<double, double>             m_highlighted_region;
     Settings&                             m_settings;
+    EventManager::SubscriptionToken       m_new_track_token;
 };
 
 }  // namespace View

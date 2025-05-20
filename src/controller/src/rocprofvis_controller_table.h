@@ -3,36 +3,37 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
-#include "rocprofvis_controller_segment.h"
 #include "rocprofvis_controller_handle.h"
+#include "rocprofvis_controller_data.h"
 #include "rocprofvis_c_interface.h"
+#include <vector>
 #include <map>
+#include <deque>
 #include <string>
-#include <memory>
-#include <mutex>
 
 namespace RocProfVis
 {
 namespace Controller
 {
 
+class Arguments;
 class Array;
-class Trace;
+class Track;
 
-class Track : public Handle
+class Table : public Handle
 {
 public:
-    Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, Trace* ctx);
+    Table(uint64_t id);
 
-    virtual ~Track();
-
-    rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
-    rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index);
-    rocprofvis_result_t DeleteSegment(Track* requestor, Segment* target);
+    virtual ~Table();
 
     rocprofvis_controller_object_type_t GetType(void) final;
-    rocprofvis_dm_track_t GetDmHandle(void);
-    Trace* GetContext(void);
+
+    void Reset();
+
+    rocprofvis_result_t Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args);
+    rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index,
+                              uint64_t count, Array& array);
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -46,20 +47,23 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
 private:
+    struct ColumnDefintion
+    {
+        std::string m_name;
+        rocprofvis_controller_primitive_type_t m_type;
+    };
+
+    std::vector<uint32_t> m_tracks;
+    std::vector<ColumnDefintion> m_columns;
+    std::map<uint64_t, std::vector<Data>> m_rows;
+    std::deque<uint64_t> m_lru;
+    double m_start_ts;
+    double m_end_ts;
+    uint64_t m_num_items;
     uint64_t m_id;
-    uint64_t m_num_elements;
-    rocprofvis_controller_track_type_t m_type;
-    SegmentTimeline m_segments;
-    double m_start_timestamp;
-    double m_end_timestamp;
-    std::string m_name;
-    rocprofvis_dm_track_t m_dm_handle;
-    Trace* m_ctx;
-    std::mutex m_mutex;
-
-private:
-    rocprofvis_result_t FetchFromDataModel(double start, double end);
-
+    uint64_t m_sort_column;
+    rocprofvis_controller_sort_order_t m_sort_order;
+    rocprofvis_controller_track_type_t m_track_type;
 };
 
 }

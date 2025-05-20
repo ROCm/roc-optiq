@@ -147,7 +147,8 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
             rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type = kRPVControllerTrackTypeEvents) ? kRPVControllerEventEndTimestamp : kRPVControllerSampleTimestamp);
             
             std::multimap<double, Handle*>::iterator lower = entries.end();
-            for (auto it = entries.begin(); it != entries.end(); ++it)
+            auto it = entries.begin();
+            for (; it != entries.end(); ++it)
             {
                 double min_ts = it->first;
                 double max_ts = it->first;
@@ -160,7 +161,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
             }
 
             std::multimap<double, Handle*>::iterator upper = entries.end();
-            for (auto it = entries.begin(); it != entries.end(); ++it)
+            for (; it != entries.end(); ++it)
             {
                 double min_ts = it->first;
                 if(min_ts > end)
@@ -268,7 +269,7 @@ SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
 
 rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
-    rocprofvis_result_t result = kRocProfVisResultSuccess;
+    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     std::map<double, std::unique_ptr<Segment>>::iterator lower = m_segments.end();
     for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
     {

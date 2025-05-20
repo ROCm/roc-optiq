@@ -24,16 +24,14 @@ typedef enum compute_normalization_unit_t
 class ComputeRoot : public RocWidget
 {
 public:
-    void Render();
-    void Update();
+    void Render() override;
+    void Update() override;
     void SetMetricsPath(std::filesystem::path path);
     bool MetricsLoaded();
     ComputeRoot();
     ~ComputeRoot();
 
 private:
-    void RenderMenuBar();
-
     std::shared_ptr<ComputeSummaryView> m_compute_summary_view;
     std::shared_ptr<ComputeBlockView> m_compute_block_view;
     std::shared_ptr<ComputeTableView> m_compute_table_view;

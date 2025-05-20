@@ -224,6 +224,32 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
     return db->ReadTraceSliceAsync(start,end,num,tracks,object);
 }
 
+rocprofvis_dm_result_t rocprofvis_db_build_table_query(
+    rocprofvis_dm_database_t database, rocprofvis_dm_timestamp_t start,
+    rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num,
+    rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t sort_column,
+    uint64_t max_count, uint64_t offset, bool count_only, char** out_query)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+                                 RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(out_query, "Error! Query cannot be null.",
+                                 kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    std::string query;
+    rocprofvis_dm_result_t result = db->BuildTableQuery(start, end, num, tracks, sort_column, max_count, offset, count_only, query);
+    if (result == kRocProfVisDmResultSuccess)
+    {
+        char* ptr = (char*) calloc(query.length() + 1, 1);
+        ROCPROFVIS_ASSERT_MSG_RETURN(ptr, "Error! Couldn't allocate query string.",
+                                     kRocProfVisDmResultAllocFailure);
+        strncpy(ptr, query.c_str(), query.length());
+        *out_query = ptr;
+    }
+    return result;
+}
+
 /****************************************************************************************************
  * @brief Asynchronous call to read event property of specific type
  *                                                     

@@ -3,6 +3,7 @@
 #include "rocprofvis_view_module.h"
 #include "rocprofvis_appwindow.h"
 #include "spdlog/spdlog.h"
+#include "rocprofvis_settings.h"
 
 using namespace RocProfVis::View;
 
@@ -27,4 +28,9 @@ void
 rocprofvis_view_destroy()
 {
     AppWindow::GetInstance()->DestroyInstance();
+}
+
+void
+rocprofvis_view_set_dpi(float dpi) {
+    Settings::GetInstance().SetDPI(dpi);
 }

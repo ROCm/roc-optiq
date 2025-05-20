@@ -20,7 +20,7 @@ public:
     ~ComputeSummaryLeft();
 
 private:
-    std::shared_ptr<ComputeMetric> m_system_info;
+    std::shared_ptr<ComputeMetricGroup> m_system_info;
 };
 
 class ComputeSummaryRight : public RocWidget
@@ -32,8 +32,8 @@ public:
     ~ComputeSummaryRight();
 
 private:
-    std::shared_ptr<ComputeMetric> m_kernel_list;
-    std::shared_ptr<ComputeMetric> m_dispatch_list;
+    std::shared_ptr<ComputeMetricGroup> m_kernel_list;
+    std::shared_ptr<ComputeMetricGroup> m_dispatch_list;
 };
 
 class ComputeSummaryView : public RocWidget

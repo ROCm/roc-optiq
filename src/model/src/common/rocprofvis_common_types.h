@@ -90,6 +90,12 @@ typedef struct {
     rocprofvis_dm_track_category_t track_category;   
     // handle of extended data object  
     rocprofvis_dm_extdata_t extdata;  
+    // total number of records in track
+    uint64_t record_count;
+    // minimum timestamp
+    rocprofvis_dm_timestamp_t min_ts;
+    // maximum timestamp
+    rocprofvis_dm_timestamp_t max_ts;
 } rocprofvis_dm_track_params_t;
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model and database. Physically located in trace object and referenced by a pointer in binding structure.

@@ -18,19 +18,28 @@ Grid::GetViewportStartPosition()
 {
     return m_viewport_start_position;
 }
-
+double
+Grid::GetViewportEndPosition()
+{
+    return GetCursorPosition(m_content_size_x);
+}
 Grid::Grid()
-: m_cursor_position(0.0f)
-, m_viewport_start_position()
-, m_highlighted_region({ -1, -1 })
+: m_viewport_start_position(std::numeric_limits<double>::lowest())
+, m_highlighted_region({ -1.f, -1.f })
 , m_settings(Settings::GetInstance())
+, m_viewport_end_position(std::numeric_limits<double>::max())
+, m_content_size_x()
+, m_sidebar_size()
+, m_scale_x()
+, m_min_x()
 {}
 Grid::~Grid() {}
 
-float
-Grid::GetCursorPosition()
+double
+Grid::GetCursorPosition(float mouse_position)
 {
-    return m_cursor_position;
+    return (m_viewport_start_position +
+            ((mouse_position ) * (1 / m_scale_x)) - m_min_x);
 }
 
 void
@@ -40,14 +49,18 @@ Grid::SetHighlightedRegion(std::pair<float, float> region)
 }
 
 void
-Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
-                  float scale_x, float v_max_x, float v_min_x,
-                 int grid_size, int sidebar_size)
+Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float scale_x,
+                 float v_max_x, float v_min_x, int grid_size, int sidebar_size)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     double range           = (v_max_x + movement) - (v_min_x + movement);
     ImVec2 displaySize     = ImGui::GetIO().DisplaySize;
+
+    m_content_size_x = content_size.x;
+    m_sidebar_size   = sidebar_size;
+    m_scale_x        = scale_x;
+    m_min_x          = min_x;
 
     double steps = (max_x - min_x) /
                    (zoom * 20);  // amount the loop which generates the grid iterates by.
@@ -80,8 +93,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
         // Define the clipping rectangle to match the child window
         ImVec2 clip_min = child_win;
         ImVec2 clip_max = ImVec2(child_win.x + child_size.x, child_win.y + child_size.y);
-        ImDrawList* draw_list =
-            ImGui::GetWindowDrawList();
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
         draw_list->PushClipRect(clip_min, clip_max, true);
 
         double normalized_start_box = (min_x - (min_x + movement)) * scale_x;
@@ -134,8 +146,9 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
             ImVec2(normalized_start_box_end + content_size.x,
                    cursor_position.y + content_size.y - grid_size),
             m_settings.GetColor(static_cast<int>(Colors::kBoundBox)));
-        bool has_been_seen          = false;
-        int  rectangle_render_count = 0;
+        bool   has_been_seen = false;
+        double last_been_seen;
+        int    rectangle_render_count = 0;
         for(double raw_position_points_x = min_x - (steps);
             raw_position_points_x < max_x + (steps); raw_position_points_x += steps)
         {
@@ -151,9 +164,11 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                 ((raw_position_points_x + steps) - (min_x + movement)) *
                 scale_x;  // this value takes the raw value of the output and converts
                           // them into positions on the chart which is scaled by scale_x
+
+            // IsRectVisible checks overlaping with windows coordinates. So we have to add child_win.x to normalized_start to see smaller traces.  
             if(ImGui::IsRectVisible(
-                   ImVec2(normalized_start, cursor_position.y),
-                   ImVec2(normalized_end,
+                   ImVec2(child_win.x+normalized_start, cursor_position.y),
+                   ImVec2(child_win.x+normalized_end,
                           cursor_position.y + content_size.y - grid_size)))
             {
                 if(has_been_seen == false)
@@ -168,15 +183,20 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                         steps;
                     has_been_seen = true;
                 }
+                last_been_seen = (raw_position_points_x +
+                                  (steps * (1 - ((clip_min.x - normalized_start) /
+                                                 (normalized_end - normalized_start))))) +
+                                 steps;
             }
-            else if (has_been_seen)
+            else if(has_been_seen)
             {
                 // We are offscreen again, no need to render
+
                 break;
             }
 
-
-            // Only render visible grid lines or the clipping time is excessive when zooming in to large traces
+            // Only render visible grid lines or the clipping time is excessive when
+            // zooming in to large traces
             if(has_been_seen)
             {
                 draw_list->AddRect(
@@ -184,23 +204,6 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                     ImVec2(normalized_end,
                            cursor_position.y + content_size.y - grid_size),
                     m_settings.GetColor(static_cast<int>(Colors::kBoundBox)), 0.5f);
-
-                // If user hover over grid block.
-                if(ImGui::IsMouseHoveringRect(
-                       ImVec2(normalized_start, cursor_position.y),
-                       ImVec2(normalized_end,
-                              cursor_position.y + content_size.y - grid_size)))
-                {
-                    ImVec2 mouse_position = ImGui::GetMousePos();
-
-                    ImVec2 relativeMousePos =
-                        ImVec2(mouse_position.x - normalized_start,
-                               mouse_position.y - cursor_position.y);
-                    m_cursor_position =
-                        (raw_position_points_x - min_x) +
-                        ((relativeMousePos.x / (normalized_end - normalized_start)) *
-                         (steps));
-                }
 
                 char label[32];
                 snprintf(label, sizeof(label), "%.0f", raw_position_points_x - min_x);
@@ -214,7 +217,6 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom,
                     labelPos, m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
                     label);
             }
- 
         }
 
         ImVec2 windowPos  = ImGui::GetWindowPos();

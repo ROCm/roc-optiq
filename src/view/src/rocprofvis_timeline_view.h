@@ -97,6 +97,7 @@ private:
     double                                m_viewport_start;
     double                                m_viewport_end;
     double                                m_viewport_past_position;
+    float                                 m_graph_size;
 };
 
 }  // namespace View

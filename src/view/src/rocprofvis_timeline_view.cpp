@@ -63,6 +63,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_viewport_start(0)
 , m_viewport_end(0)
 , m_viewport_past_position(0)
+, m_graph_size()
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -89,7 +90,7 @@ TimelineView::CalibratePosition()
 
     m_scroll_position_x = (current_position - m_min_x) /
                           (m_max_x - m_min_x);  // Finds where the chart is at.
-
+    double scrollback = (m_max_x - m_min_x) * m_scroll_position_x;
     if(m_calibrated)
     {
         double scrollback =
@@ -109,8 +110,6 @@ TimelineView::CalibratePosition()
         double value_to_begginging =
             m_movement - scrollback;  // how to get back to initial/first value accounting
                                       // for current movement.
-        std::cout << "WOAHHHHHHHHHHH" << m_movement << "   " << m_viewport_past_position
-                  << std::endl;
         m_movement =
             value_to_begginging +
             ((m_max_x - m_min_x) *
@@ -414,6 +413,8 @@ TimelineView::RenderGraphView()
     {
         m_viewport_past_position = m_movement;
         request_horizontal_data  = true;
+        RenderGrid(m_graph_size);
+        CalibratePosition();
     }
     for(const auto& graph_objects : m_graph_map)
     {
@@ -449,8 +450,6 @@ TimelineView::RenderGraphView()
                    graph_objects.second.chart->GetRequestState() ==
                        TrackDataRequestState::kIdle)
                 {
-                    std::cout << "ran2" << std::endl;
-
                     double buffer_distance =
                         (m_viewport_end - m_viewport_start);  // Essentially creates one
                                                               // viewport worth of buffer.
@@ -464,11 +463,11 @@ TimelineView::RenderGraphView()
                        graph_objects.second.chart->GetRequestState() ==
                            TrackDataRequestState::kIdle)
                     {
-                        std::cout << "ran3" << std::endl;
                         double buffer_distance =
                             (m_viewport_end -
                              m_viewport_start);  // Essentially creates one viewport worth
                                                  // of buffer.
+
                         graph_objects.second.chart->RequestData(
                             m_viewport_start - buffer_distance,
                             m_viewport_end + buffer_distance);
@@ -711,6 +710,7 @@ TimelineView::RenderGraphPoints()
         ImVec2 screen_pos                = ImGui::GetCursorScreenPos();
         ImVec2 subcomponent_size_main    = ImGui::GetWindowSize();
         int    artificial_scrollbar_size = 30;
+        m_graph_size                     = subcomponent_size_main.x;
 
         ImGui::BeginChild(
             "Grid View 2",

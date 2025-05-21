@@ -15,6 +15,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr int MIN_LABEL_WIDTH = 40;
+
 FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float zoom,
                                float movement, double min_x, double max_x, float scale_x)
 : TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
@@ -43,7 +45,7 @@ FlameTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digit
 bool
 FlameTrackItem::HasData()
 {
-    return !m_flames.empty();
+    return m_data_provider.GetRawTrackData(m_id) != nullptr;
 }
 
 void
@@ -112,10 +114,13 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
     }
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
-    draw_list->PushClipRect(rectMin, rectMax, true);
-    draw_list->AddText(rectMin, IM_COL32_BLACK, flame.m_name.c_str());
-    draw_list->PopClipRect();
-
+    // don't render label if box is too small
+    if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH)
+    {
+        draw_list->PushClipRect(rectMin, rectMax, true);
+        draw_list->AddText(rectMin, IM_COL32_BLACK, flame.m_name.c_str());
+        draw_list->PopClipRect();
+    }
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
     {
         ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f ", flame.m_name.c_str(),

@@ -1,5 +1,7 @@
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_settings.h"
+#include "spdlog/spdlog.h"
+
 using namespace RocProfVis::View;
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -168,5 +170,11 @@ TrackItem::RequestData(double min, double max)
         m_request_state = TrackDataRequestState::kRequesting;
         m_data_provider.FetchTrack(m_id, min,
                                    max, 500, 0);
+
+        spdlog::debug("Fetching from {} to {} ( {} ) at zoom {}", min, max, max - min, m_zoom);
+    }
+    else 
+    {
+        spdlog::debug("Request Data rejected, already pending...");
     }
 }

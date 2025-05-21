@@ -109,6 +109,8 @@ TimelineView::CalibratePosition()
         double value_to_begginging =
             m_movement - scrollback;  // how to get back to initial/first value accounting
                                       // for current movement.
+        std::cout << "WOAHHHHHHHHHHH" << m_movement << "   " << m_viewport_past_position
+                  << std::endl;
         m_movement =
             value_to_begginging +
             ((m_max_x - m_min_x) *
@@ -367,6 +369,7 @@ TimelineView::RenderGraphCustomizationWindow(int graph_id)
 void
 TimelineView::RenderGraphView()
 {
+    CalibratePosition();
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -446,7 +449,14 @@ TimelineView::RenderGraphView()
                    graph_objects.second.chart->GetRequestState() ==
                        TrackDataRequestState::kIdle)
                 {
-                    graph_objects.second.chart->RequestData(m_min_x, m_max_x);
+                    std::cout << "ran2" << std::endl;
+
+                    double buffer_distance =
+                        (m_viewport_end - m_viewport_start);  // Essentially creates one
+                                                              // viewport worth of buffer.
+                    graph_objects.second.chart->RequestData(
+                        m_viewport_start - buffer_distance,
+                        m_viewport_end + buffer_distance);
                 }
                 if(m_settings.IsHorizontalRender())
                 {
@@ -454,6 +464,7 @@ TimelineView::RenderGraphView()
                        graph_objects.second.chart->GetRequestState() ==
                            TrackDataRequestState::kIdle)
                     {
+                        std::cout << "ran3" << std::endl;
                         double buffer_distance =
                             (m_viewport_end -
                              m_viewport_start);  // Essentially creates one viewport worth
@@ -575,7 +586,7 @@ TimelineView::RenderGraphView()
         }
     }
 
-    CalibratePosition();
+    // CalibratePosition();
 
     // Set the sidebar size at the end of render loop.
 

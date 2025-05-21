@@ -42,7 +42,7 @@ LineTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits
 bool
 LineTrackItem::HasData()
 {
-    return !m_data.empty();
+    return m_data_provider.GetRawTrackData(m_id) != nullptr;
 }
 
 void

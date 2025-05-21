@@ -280,7 +280,8 @@ RenderProviderTest(DataProvider& provider)
 {
     ImGui::Begin("Data Provider Test Window", nullptr, ImGuiWindowFlags_None);
 
-    static char track_index_buffer[64] = "0";  // Buffer to hold the user input
+    static char track_index_buffer[64] = "0";
+    static char end_track_index_buffer[64] = "1"; // for setting table track range
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
@@ -295,18 +296,15 @@ RenderProviderTest(DataProvider& provider)
         return 0;  // Allow numeric characters
     };
 
-    // InputText with numeric filtering
     ImGui::InputText("Track index", track_index_buffer, IM_ARRAYSIZE(track_index_buffer),
                      ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
 
     int index = std::atoi(track_index_buffer);
 
-
-    if(ImGui::Button("Fetch Track"))
-    {
-        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
-                            0);
-    }
+    ImGui::Separator();
+    ImGui::Text("Table Parameters");
+    ImGui::InputText("End Track index", end_track_index_buffer, IM_ARRAYSIZE(end_track_index_buffer),
+                    ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
 
     static char row_start_buffer[64] = "-1";
     ImGui::InputText("Start Row", row_start_buffer, IM_ARRAYSIZE(row_start_buffer),
@@ -317,11 +315,34 @@ RenderProviderTest(DataProvider& provider)
     ImGui::InputText("Row Count", row_count_buffer, IM_ARRAYSIZE(row_count_buffer),
                     ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
     uint64_t row_count = std::atoi(row_count_buffer);
-        
-    if(ImGui::Button("Fetch Table"))
+
+
+    if(ImGui::Button("Fetch Single Track Table"))
     {
         provider.FetchEventTable(index, provider.GetStartTime(), provider.GetEndTime(),start_row,
                                  row_count);
+    }
+    if(ImGui::Button("Fetch Multi Track Table"))
+    {
+        int end_index = std::atoi(end_track_index_buffer);
+        std::vector<uint64_t> vect;
+        for(int i = index; i < end_index; ++i)
+        {
+            vect.push_back(i);
+        }
+        provider.FetchMultiTrackEventTable(vect, provider.GetStartTime(), provider.GetEndTime(),start_row,
+                                 row_count);
+    }
+    if(ImGui::Button("Print Event Table"))
+    {
+        provider.DumpEventTable();
+    }    
+    ImGui::Separator();
+
+    if(ImGui::Button("Fetch Track"))
+    {
+        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
+                            0);
     }
 
     if(ImGui::Button("Fetch Whole Track"))
@@ -341,10 +362,7 @@ RenderProviderTest(DataProvider& provider)
     {
         provider.DumpMetaData();
     }
-    if(ImGui::Button("Print Event Table"))
-    {
-        provider.DumpEventTable();
-    }
+
 
     ImGui::End();
 }

@@ -26,7 +26,7 @@ enum class RequestType
 {
     kFetchTrack,
     kFetchGraph,
-    kFetchSingleTrackEventTable
+    kFetchTrackEventTable
 };
 
 typedef struct track_info_t

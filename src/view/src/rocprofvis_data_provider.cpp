@@ -599,7 +599,7 @@ DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_ts,
             request_info.request_args       = args;
             request_info.index              = index;
             request_info.loading_state      = ProviderState::kLoading;
-            request_info.request_type       = RequestType::kFetchSingleTrackEventTable;
+            request_info.request_type       = RequestType::kFetchTrackEventTable;
             request_info.start_ts           = start_ts;
             request_info.end_ts             = end_ts;
             m_requests.emplace(request_info.index, request_info);
@@ -703,6 +703,11 @@ DataProvider::FetchMultiTrackEventTable(const std::vector<uint64_t>& track_indic
                 return false;
             }
 
+            // set the number of tracks in the request
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsNumTracks, 0, num_sample_tracks);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
             // prepare to fetch the table
             spdlog::debug("Allocating table results array");
             rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
@@ -724,7 +729,7 @@ DataProvider::FetchMultiTrackEventTable(const std::vector<uint64_t>& track_indic
             request_info.request_args       = args;
             request_info.index              = track_indices[0];
             request_info.loading_state      = ProviderState::kLoading;
-            request_info.request_type       = RequestType::kFetchSingleTrackEventTable;
+            request_info.request_type       = RequestType::kFetchTrackEventTable;
             request_info.start_ts           = start_ts;
             request_info.end_ts             = end_ts;
             m_requests.emplace(request_info.index, request_info);
@@ -974,7 +979,7 @@ DataProvider::ProcessRequest(data_req_info_t& req)
         spdlog::debug("Processing track data {}", req.index);
         ProcessTrackRequest(req);
     }
-    else if(req.request_type == RequestType::kFetchSingleTrackEventTable)
+    else if(req.request_type == RequestType::kFetchTrackEventTable)
     {
         spdlog::debug("Processing event table data {}", req.index);
         ProcessEventTableRequest(req);

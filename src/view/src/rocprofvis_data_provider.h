@@ -22,23 +22,35 @@ enum class ProviderState
     kError
 };
 
+enum class RequestType
+{
+    kFetchTrack,
+    kFetchGraph,
+    kFetchTrackEventTable
+};
+
 typedef struct track_info_t
 {
     uint64_t                           index;  // index of the track in the controller
     uint64_t                           id;     // id of the track in the controller
     std::string                        name;   // name of the track
-    rocprofvis_controller_track_type_t track_type;  // the type of track
-    double                             min_ts;      // starting time stamp of track
-    double                             max_ts;      // ending time stamp of track
+    rocprofvis_controller_track_type_t track_type;   // the type of track
+    double                             min_ts;       // starting time stamp of track
+    double                             max_ts;       // ending time stamp of track
+    uint64_t                           num_entries;  // number of entries in the track
 } track_info_t;
 
 typedef struct data_req_info_t
 {
-    uint64_t                        index;  // index of track that is being requested
-    rocprofvis_controller_future_t* graph_future;   // future for the request
-    rocprofvis_controller_array_t*  graph_array;    // array of data for the request
-    rocprofvis_handle_t*            graph_obj;      // object for the request
-    ProviderState                   loading_state;  // state of the request
+    uint64_t                           index;  // index of track that is being requested
+    rocprofvis_controller_future_t*    request_future;  // future for the request
+    rocprofvis_controller_array_t*     request_array;   // array of data for the request
+    rocprofvis_handle_t*               request_obj_handle;  // object for the request
+    rocprofvis_controller_arguments_t* request_args;        // arguments for the request
+    ProviderState                      loading_state;       // state of the request
+    RequestType                        request_type;        // type of request
+    double start_ts;  // start time stamp of data being requested
+    double end_ts;    // end time stamp of data being requested
 } data_req_info_t;
 
 class DataProvider
@@ -81,6 +93,23 @@ public:
     bool FetchTrack(uint64_t index, double start_ts, double end_ts, int horz_pixel_range,
                     int lod);
 
+    bool FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
+                         int horz_pixel_range, int lod);
+
+    /*
+     * Fetches an event table from the controller for a single track.
+     * @param index: The index of the track to select
+     * @param start_ts: The start timestamp of the event table
+     * @param end_ts: The end timestamp of the event table
+     */
+    // bool FetchEventTable(uint64_t index, double start_ts, double end_ts);
+    bool FetchEventTable(uint64_t index, double start_ts, double end_ts,
+                         uint64_t start_row = -1, uint64_t req_row_count = -1);
+
+    bool FetchMultiTrackEventTable(const std::vector<uint64_t>& track_indices,
+                                   double start_ts, double end_ts,
+                                   uint64_t start_row = -1, uint64_t req_row_count = -1);
+
     /*
      * Release memory buffer holding raw data for selected track
      * @param index: The index of the track to select
@@ -97,6 +126,8 @@ public:
      * @param index: The index of the track to dump.
      */
     bool DumpTrack(uint64_t index);
+
+    void DumpEventTable();
 
     /*
      * Performs all data processing.  Call this from the "game loop".
@@ -138,9 +169,17 @@ public:
 private:
     void HandleLoadTrace();
     void HandleLoadTrackMetaData();
-    void HandleLoadGraphs();
+    void HandleRequests();
 
     void ProcessRequest(data_req_info_t& req);
+    void ProcessGraphRequest(data_req_info_t& req);
+    void ProcessTrackRequest(data_req_info_t& req);
+    void ProcessEventTableRequest(data_req_info_t& req);
+
+    bool SetupEventTableCommonArguments(rocprofvis_controller_arguments_t* args,
+                                        double start_ts, double end_ts,
+                                        uint64_t start_row, uint64_t req_row_count);
+
     void CreateRawEventData(uint64_t index, rocprofvis_controller_array_t* track_data,
                             double min_ts, double max_ts);
     void CreateRawSampleData(uint64_t index, rocprofvis_controller_array_t* track_data,
@@ -159,6 +198,9 @@ private:
 
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;
+
+    std::vector<std::string>              m_event_table_header;
+    std::vector<std::vector<std::string>> m_event_table_data;
 
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 

@@ -97,6 +97,8 @@ metric_roofline_info_t ROOFLINE_DEFINITIONS {{"HBM", "L2", "L1", "LDS"}, {
     roofline_format_info_t{"INT8", kRooflineNumberformatINT8, {{kRooflinePipeMFMA, "MFMAFI8Ops"}}}
 }};
 
+constexpr int PLOT_LABEL_MAX_LENGTH = 40;
+
 rocprofvis_compute_metrics_group_t* ComputeDataProvider::GetMetricGroup(std::string& group_id)
 {
     rocprofvis_compute_metrics_group_t* metric_group = nullptr;
@@ -122,6 +124,7 @@ void ComputeDataProvider::SetProfilePath(std::filesystem::path& path)
 {
     if (m_profile_loaded)
     {
+        FreePlotLabels();
         m_metrics_group_map.clear();
         m_profile_loaded = false;
     }
@@ -305,55 +308,56 @@ void ComputeDataProvider::BuildPlots()
             {
                 rocprofvis_compute_metrics_plot_t p;
                 p.m_title = std::string(title).append("##" + csv_name + std::to_string(m_metrics_group_map[csv_name]->m_plots.size()));
-                p.m_x_axis.m_label = x_axis_label; 
+                p.m_x_axis.m_name = x_axis_label; 
                 p.m_x_axis.m_min = 0;
                 p.m_x_axis.m_max = 0;
-                p.m_y_axis.m_label = y_axis_label.empty() ? "Metric" : y_axis_label;
+                p.m_y_axis.m_name = y_axis_label.empty() ? "Metric" : y_axis_label;
 
                 rocprofvis_compute_metric_plot_series_t s;
 
-                std::unordered_map<std::string, rocprofvis_compute_metric_t>& metrics = m_metrics_group_map[csv_name]->m_metrics;
+                std::unordered_map<std::string, rocprofvis_compute_metric_t>& metrics_map = m_metrics_group_map[csv_name]->m_metrics;
                 int count = 0;
+
                 for (const std::string& m_key : metric_keys)
                 {
-                    if (metrics.count(m_key) > 0)
+                    std::vector<rocprofvis_compute_metric_t*> matches;
+                    if (metrics_map.count(m_key) > 0)
                     {
-                        p.m_y_axis.m_tick_labels.push_back(metrics[m_key].m_name.c_str());
-                        s.m_x_values.push_back(metrics[m_key].m_value);
-                        s.m_y_values.push_back(count ++);
-                        p.m_x_axis.m_max = std::max(p.m_x_axis.m_max, s.m_x_values.back() * 1.01f);
-                        if (p.m_x_axis.m_label.empty())
-                        {
-                            p.m_x_axis.m_label = metrics[m_key].m_unit;
-                        }
-                        p.m_series = {s};
+                        matches = {&metrics_map[m_key]};
                     }
                     else if (m_key.back() == '#')
                     {
                         std::string search_metric = m_key;
                         search_metric.pop_back();
-                        for (auto& metric : metrics)
+                        for (auto& metric : metrics_map)
                         {
                             if (metric.first.find(search_metric) != std::string::npos)
                             {
-                                p.m_y_axis.m_tick_labels.push_back(metric.second.m_name.c_str());
-                                s.m_x_values.push_back(metric.second.m_value);
-                                s.m_y_values.push_back(count ++);
-                                p.m_x_axis.m_max = std::max(p.m_x_axis.m_max, s.m_x_values.back() * 1.01f);
-                                if (p.m_x_axis.m_label.empty())
-                                {
-                                    p.m_x_axis.m_label = metric.second.m_unit;
-                                }
+                                matches.push_back(&metric.second);
                             }
                         }
-                        p.m_series = {s};
                     }
                     else
                     {
                         spdlog::error("ComputeDataProvider::BuildPlots() - Invalid metric {}, {}", csv_name, m_key);
                     }
+                    for (int i = 0; i < matches.size(); i ++)
+                    {
+                        std::string short_name = (matches[i]->m_name.length() > PLOT_LABEL_MAX_LENGTH) ? matches[i]->m_name.substr(0, PLOT_LABEL_MAX_LENGTH) + "..." : matches[i]->m_name;
+                        char* short_name_cstr = new char[short_name.length() + 1];
+                        strcpy(short_name_cstr, short_name.c_str());
+                        p.m_y_axis.m_tick_labels.push_back(short_name_cstr);
+                        s.m_x_values.push_back(matches[i]->m_value);
+                        s.m_y_values.push_back(count ++);
+                        p.m_x_axis.m_max = std::max(p.m_x_axis.m_max, s.m_x_values.back() * 1.01f);
+                        if (p.m_x_axis.m_name.empty())
+                        {
+                            p.m_x_axis.m_name = matches[i]->m_unit;
+                        }
+                        p.m_series = {s};
+                    }
                 }
-                if (p.m_x_axis.m_label.find('%') != std::string::npos || p.m_x_axis.m_max == 0)
+                if (p.m_x_axis.m_name.find('%') != std::string::npos || p.m_x_axis.m_max == 0)
                 {
                     p.m_x_axis.m_max = 100;
                 }
@@ -442,7 +446,7 @@ void ComputeDataProvider::BuildRoofline()
                 if (flops > 0 && duration > 0)
                 {
                     const int& num_dispatches = dispatch_list.size();
-                    std::string short_name = label.substr(0, 20);
+                    std::string short_name = (label.length() > PLOT_LABEL_MAX_LENGTH) ? label.substr(0, PLOT_LABEL_MAX_LENGTH) + "..." : label;
                     std::string id = std::to_string(series_count);
                     std::array intensity_definitions = {
                         std::make_pair(std::string("L1"), l1_data), 
@@ -480,13 +484,13 @@ void ComputeDataProvider::BuildRoofline()
             p.m_title = "Emperical Roofline Analysis (" + format.m_name + ")";
             if (format.m_format == kRooflineNumberformatINT8)
             {
-                p.m_x_axis.m_label = "Arithmetic Intensity (IOP/Byte)";
-                p.m_y_axis.m_label = "Performance (GIOP/s)";
+                p.m_x_axis.m_name = "Arithmetic Intensity (IOP/Byte)";
+                p.m_y_axis.m_name = "Performance (GIOP/s)";
             }
             else
             {
-                p.m_x_axis.m_label = "Arithmetic Intensity (FLOP/Byte)";
-                p.m_y_axis.m_label = "Performance (GFLOP/s)";
+                p.m_x_axis.m_name = "Arithmetic Intensity (FLOP/Byte)";
+                p.m_y_axis.m_name = "Performance (GFLOP/s)";
             }
 
             for (std::string& level : ROOFLINE_DEFINITIONS.m_memory_levels)
@@ -535,6 +539,30 @@ bool ComputeDataProvider::ProfileLoaded()
     return m_profile_loaded;
 }
 
+void ComputeDataProvider::FreePlotLabels()
+{
+    for (auto& group : m_metrics_group_map)
+    {
+        for (rocprofvis_compute_metrics_plot_t& plot : group.second->m_plots)
+        {
+            for (const char* label : plot.m_x_axis.m_tick_labels)
+            {
+                if (label)
+                {
+                    delete[] label;
+                }                   
+            }
+            for (const char* label : plot.m_y_axis.m_tick_labels)
+            {
+                if (label)
+                {
+                    delete[] label;
+                }                    
+            }
+        }
+    }
+}
+
 ComputeDataProvider::ComputeDataProvider() 
 : m_profile_loaded(false)
 , m_attempt_profile_load(true)
@@ -543,7 +571,9 @@ ComputeDataProvider::ComputeDataProvider()
     m_csv_format.header_row(0);
 }
 
-ComputeDataProvider::~ComputeDataProvider() {}
+ComputeDataProvider::~ComputeDataProvider() {
+    FreePlotLabels();
+}
 
 }  // namespace View
 }  // namespace RocProfVis

@@ -22,7 +22,7 @@ typedef struct rocprofvis_compute_metric_t
 
 typedef struct rocprofvis_compute_metric_plot_axis_t
 {
-    std::string m_label;
+    std::string m_name;
     std::vector<const char*> m_tick_labels;
     double m_max;
     double m_min;
@@ -135,6 +135,7 @@ private:
     void LoadSystemInfo(std::filesystem::directory_entry csv_entry);
     void BuildPlots();
     void BuildRoofline();
+    void FreePlotLabels();
 
     csv::CSVFormat m_csv_format;
     bool m_profile_loaded;

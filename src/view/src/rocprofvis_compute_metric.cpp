@@ -86,13 +86,34 @@ void ComputeMetricGroup::Render()
             {
                 if (i < m_metric_data->m_plots.size())
                 {
+                    const char* title = m_metric_data->m_plots[i].m_title.c_str();
+                    std::vector<const char*>& series_names = m_metric_data->m_plots[i].m_y_axis.m_tick_labels;
+                    std::vector<double>& x_values = m_metric_data->m_plots[i].m_series[0].m_x_values;
+                    std::vector<double>& y_values = m_metric_data->m_plots[i].m_series[0].m_y_values;
+
                     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
                     ImGui::Separator();
                     ImGui::PopStyleVar();
-                    if (ImPlot::BeginPlot(m_metric_data->m_plots[i].m_title.c_str(), ImVec2(-1, 0), ImPlotFlags_Equal | ImPlotFlags_NoInputs)) {
+                    if (ImPlot::BeginPlot(title, ImVec2(-1, 0), ImPlotFlags_Equal | ImPlotFlags_NoInputs)) {
                         ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
                         ImPlot::SetupAxesLimits(0, 1, 0, 1);
-                        ImPlot::PlotPieChart(m_metric_data->m_plots[i].m_y_axis.m_tick_labels.data(), m_metric_data->m_plots[i].m_series[0].m_x_values.data(), m_metric_data->m_plots[i].m_series[0].m_x_values.size(), 0.5, 0.5, 0.1, "%.2f", 90, ImPlotPieChartFlags_None);
+                        double angle = 90;
+                        for (int j = 0; j < x_values.size(); j ++)
+                        {
+                            const char* label[1] = {series_names[j]};
+                            double value[1] = {x_values[j] / 100};
+                            ImGui::PushID(j);
+                            ImPlot::PlotPieChart(label, value, 1, 0.5, 0.5, 0.1, 
+                            [](double value, char* buff, int size, void*) -> int 
+                            {
+                                //ImplotFormatter callback.
+                                snprintf(buff, size, (value > 0.05) ? "%.1f%%" : "", value * 100);
+                                return 0;
+                            },
+                            nullptr, angle, ImPlotPieChartFlags_None);
+                            ImGui::PopID();
+                            angle += x_values[j] / 100 * 360;
+                        }
                         ImPlot::EndPlot();
                     }
                 }
@@ -110,8 +131,8 @@ void ComputeMetricGroup::Render()
 
                     ImVec2 content_region = ImGui::GetContentRegionAvail();
                     const char* title = m_metric_data->m_plots[i].m_title.c_str();
-                    const char* x_label = m_metric_data->m_plots[i].m_x_axis.m_label.c_str();
-                    const char* y_label = m_metric_data->m_plots[i].m_y_axis.m_label.c_str();
+                    const char* x_label = m_metric_data->m_plots[i].m_x_axis.m_name.c_str();
+                    const char* y_label = m_metric_data->m_plots[i].m_y_axis.m_name.c_str();
                     const float& x_min = m_metric_data->m_plots[i].m_x_axis.m_min;
                     const float& x_max = m_metric_data->m_plots[i].m_x_axis.m_max;
                     std::vector<const char*>& series_names = m_metric_data->m_plots[i].m_y_axis.m_tick_labels;
@@ -123,7 +144,7 @@ void ComputeMetricGroup::Render()
                                           ImPlotAxisFlags_NoInitialFit | ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
                         ImPlot::SetupAxisLimits(ImAxis_X1, x_min, x_max, ImPlotCond_None);
                         ImPlot::SetupAxisLimits(ImAxis_Y1, -PLOT_BAR_SIZE, series_names.size() - 1 + PLOT_BAR_SIZE, ImPlotCond_None);
-                        ImPlot::SetupAxisTicks(ImAxis_Y1, y_values.data(), x_values.size(), series_names.data());
+                        ImPlot::SetupAxisTicks(ImAxis_Y1, y_values.data(), y_values.size(), series_names.data());
                         ImPlot::PushStyleColor(ImPlotCol_Line, IM_COL32(0, 0, 0, 255));
                         for (int j = 0; j < x_values.size(); j ++)
                         {
@@ -245,7 +266,7 @@ void ComputeMetricRoofline::Render()
                 ImGui::PushID(i);
                 if(ImPlot::BeginPlot(roof_plot.m_title.c_str(), ImVec2(-1, 500), ImPlotFlags_NoMenus | ImPlotFlags_Crosshairs)) 
                 {
-                    ImPlot::SetupAxes(roof_plot.m_x_axis.m_label.c_str(), roof_plot.m_y_axis.m_label.c_str(), ImPlotAxisFlags_NoInitialFit |ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, 
+                    ImPlot::SetupAxes(roof_plot.m_x_axis.m_name.c_str(), roof_plot.m_y_axis.m_name.c_str(), ImPlotAxisFlags_NoInitialFit |ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, 
                                       ImPlotAxisFlags_NoInitialFit | ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
                     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                     ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);

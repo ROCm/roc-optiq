@@ -102,7 +102,13 @@ public:
      * @param start_ts: The start timestamp of the event table
      * @param end_ts: The end timestamp of the event table
      */
-    bool FetchEventTable(uint64_t index, double start_ts, double end_ts);
+    // bool FetchEventTable(uint64_t index, double start_ts, double end_ts);
+    bool FetchEventTable(uint64_t index, double start_ts, double end_ts,
+                         uint64_t start_row = -1, uint64_t req_row_count = -1);
+
+    bool FetchMultiTrackEventTable(const std::vector<uint64_t>& track_indices,
+                                   double start_ts, double end_ts,
+                                   uint64_t start_row = -1, uint64_t req_row_count = -1);
 
     /*
      * Release memory buffer holding raw data for selected track
@@ -120,7 +126,6 @@ public:
      * @param index: The index of the track to dump.
      */
     bool DumpTrack(uint64_t index);
-
 
     void DumpEventTable();
 
@@ -171,6 +176,10 @@ private:
     void ProcessTrackRequest(data_req_info_t& req);
     void ProcessEventTableRequest(data_req_info_t& req);
 
+    bool SetupEventTableCommonArguments(rocprofvis_controller_arguments_t* args,
+                                        double start_ts, double end_ts,
+                                        uint64_t start_row, uint64_t req_row_count);
+
     void CreateRawEventData(uint64_t index, rocprofvis_controller_array_t* track_data,
                             double min_ts, double max_ts);
     void CreateRawSampleData(uint64_t index, rocprofvis_controller_array_t* track_data,
@@ -190,7 +199,7 @@ private:
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;
 
-    std::vector<std::string> m_event_table_header;
+    std::vector<std::string>              m_event_table_header;
     std::vector<std::vector<std::string>> m_event_table_data;
 
     std::unordered_map<int64_t, data_req_info_t> m_requests;

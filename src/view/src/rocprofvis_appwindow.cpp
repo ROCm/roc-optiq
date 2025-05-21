@@ -235,6 +235,8 @@ AppWindow::Render()
     }
 
     RenderDebugOuput();
+
+    // handle debug window
     if(m_show_provider_test_widow)
     {
         RenderProviderTest(m_data_provider);
@@ -278,7 +280,7 @@ RenderProviderTest(DataProvider& provider)
 {
     ImGui::Begin("Data Provider Test Window", nullptr, ImGuiWindowFlags_None);
 
-    static char buffer[10] = "";  // Buffer to hold the user input
+    static char track_index_buffer[64] = "0";  // Buffer to hold the user input
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
@@ -294,10 +296,10 @@ RenderProviderTest(DataProvider& provider)
     };
 
     // InputText with numeric filtering
-    ImGui::InputText("Track index", buffer, IM_ARRAYSIZE(buffer),
+    ImGui::InputText("Track index", track_index_buffer, IM_ARRAYSIZE(track_index_buffer),
                      ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
 
-    int index = std::atoi(buffer);
+    int index = std::atoi(track_index_buffer);
 
 
     if(ImGui::Button("Fetch Track"))
@@ -305,10 +307,23 @@ RenderProviderTest(DataProvider& provider)
         provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
                             0);
     }
+
+    static char row_start_buffer[64] = "-1";
+    ImGui::InputText("Start Row", row_start_buffer, IM_ARRAYSIZE(row_start_buffer),
+                    ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
+    uint64_t start_row = std::atoi(row_start_buffer);
+    
+    static char row_count_buffer[64] = "-1";  
+    ImGui::InputText("Row Count", row_count_buffer, IM_ARRAYSIZE(row_count_buffer),
+                    ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
+    uint64_t row_count = std::atoi(row_count_buffer);
+        
     if(ImGui::Button("Fetch Table"))
     {
-        provider.FetchEventTable(index, provider.GetStartTime(), provider.GetEndTime());
+        provider.FetchEventTable(index, provider.GetStartTime(), provider.GetEndTime(),start_row,
+                                 row_count);
     }
+
     if(ImGui::Button("Fetch Whole Track"))
     {
         provider.FetchWholeTrack(index, provider.GetStartTime(), provider.GetEndTime(),

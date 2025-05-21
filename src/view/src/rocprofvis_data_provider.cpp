@@ -319,6 +319,10 @@ DataProvider::HandleLoadTrackMetaData()
                 track, kRPVControllerTrackMaxTimestamp, 0, &track_info.max_ts);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+            result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackNumberOfEntries, 0, &track_info.num_entries);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
             // Todo:
             // kRPVControllerTrackDescription = 0x30000007,
             // kRPVControllerTrackMinValue = 0x30000008,
@@ -467,7 +471,51 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
 }
 
 bool
-DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_ts)
+DataProvider::SetupEventTableCommonArguments(rocprofvis_controller_arguments_t* args,
+                                             double start_ts, double end_ts,
+                                             uint64_t start_row, uint64_t req_row_count)
+{
+    ROCPROFVIS_ASSERT(args != nullptr);
+
+    rocprofvis_result_t result = rocprofvis_controller_set_uint64(
+        args, kRPVControllerTableArgsType, 0, kRPVControllerTableTypeEvents);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+    result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime, 0,
+                                              start_ts);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+    result =
+        rocprofvis_controller_set_double(args, kRPVControllerTableArgsEndTime, 0, end_ts);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+    result =
+        rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortColumn, 0, 0);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+    result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder, 0,
+                                              kRPVControllerSortOrderAscending);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+    if(start_row != -1)
+    {
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex,
+                                                  0, start_row);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    }
+
+    if(req_row_count != -1)
+    {
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartCount,
+                                                  0, req_row_count);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    }
+    return true;
+}
+
+bool
+DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_ts,
+                              uint64_t start_row, uint64_t req_row_count)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -479,6 +527,15 @@ DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_ts)
     if(index < m_track_metadata.size())
     {
         auto it = m_requests.find(index);
+
+        // check if track is an event track
+        if(m_track_metadata[index].track_type != kRPVControllerTrackTypeEvents)
+        {
+            spdlog::debug("Cannot fetch event table, track {} is not an event track",
+                          index);
+            return false;
+        }
+
         // only allow load if a request for this index (track) is not pending
         // TODO: can a data request and table data request be pending at the same time?
         if(it == m_requests.end())
@@ -502,34 +559,24 @@ DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_ts)
                 rocprofvis_controller_arguments_alloc();
             ROCPROFVIS_ASSERT(args != nullptr);
 
-            result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType,
-                                                      0, kRPVControllerTableTypeEvents);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            if(SetupEventTableCommonArguments(args, start_ts, end_ts, start_row,
+                                              req_row_count))
+            {
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerTableArgsNumTracks, 0, 1);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            result = rocprofvis_controller_set_uint64(
-                args, kRPVControllerTableArgsNumTracks, 0, 1);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_set_object(
-                args, kRPVControllerTableArgsTracksIndexed, 0, track_handle);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_set_double(
-                args, kRPVControllerTableArgsStartTime, 0, start_ts);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_set_double(
-                args, kRPVControllerTableArgsEndTime, 0, end_ts);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_set_uint64(
-                args, kRPVControllerTableArgsSortColumn, 0, 0);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result =
-                rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder,
-                                                 0, kRPVControllerSortOrderAscending);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_set_object(
+                    args, kRPVControllerTableArgsTracksIndexed, 0, track_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            }
+            else
+            {
+                spdlog::debug("Failed to setup event table common arguments");
+                // free the args
+                rocprofvis_controller_arguments_free(args);
+                return false;
+            }
 
             // prepare to fetch the table
             spdlog::debug("Allocating table results array");
@@ -570,6 +617,139 @@ DataProvider::FetchEventTable(uint64_t index, double start_ts, double end_ts)
     else
     {
         spdlog::debug("Cannot fetch track, index {} is out of range", index);
+        return false;
+    }
+}
+
+bool
+DataProvider::FetchMultiTrackEventTable(const std::vector<uint64_t>& track_indices,
+                                        double start_ts, double end_ts,
+                                        uint64_t start_row, uint64_t req_row_count)
+{
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+
+    // use the first index as key for the request
+    if(!track_indices.empty() && track_indices[0] < m_track_metadata.size())
+    {
+        auto it = m_requests.find(track_indices[0]);
+        // only allow load if a request for this index (track) is not pending
+        // TODO: can a data request and table data request be pending at the same time?
+        if(it == m_requests.end())
+        {
+            // get the event table handle
+            rocprofvis_handle_t* table_handle = nullptr;
+            rocprofvis_result_t  result       = rocprofvis_controller_get_object(
+                m_trace_controller, kRPVControllerEventTable, 0, &table_handle);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(table_handle);
+
+            // setup arguments for event table request
+            rocprofvis_controller_arguments_t* args =
+                rocprofvis_controller_arguments_alloc();
+            ROCPROFVIS_ASSERT(args != nullptr);
+
+            uint32_t num_sample_tracks = 0;
+            if(SetupEventTableCommonArguments(args, start_ts, end_ts, start_row,
+                                              req_row_count))
+            {
+                for(const auto& index : track_indices)
+                {
+                    // skip track if index is out of range
+                    if(index >= m_track_metadata.size())
+                    {
+                        spdlog::warn(
+                            "Cannot fetch event table, track index {} is out of range",
+                            index);
+                        continue;
+                    }
+                    // check if track is an event track
+                    if(m_track_metadata[index].track_type !=
+                       kRPVControllerTrackTypeEvents)
+                    {
+                        spdlog::warn(
+                            "Cannot fetch event table, track {} is not an event track",
+                            index);
+                        continue;
+                    }
+
+                    // get the track handle
+                    rocprofvis_handle_t* track_handle = nullptr;
+                    result = rocprofvis_controller_get_object(m_trace_controller,
+                                                              kRPVControllerTrackIndexed,
+                                                              index, &track_handle);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    ROCPROFVIS_ASSERT(track_handle != nullptr);
+
+                    result = rocprofvis_controller_set_object(
+                        args, kRPVControllerTableArgsTracksIndexed, num_sample_tracks,
+                        track_handle);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                    num_sample_tracks++;
+                    spdlog::debug("Adding track {} to event table request", index);
+                }
+            }
+
+            if(num_sample_tracks == 0)
+            {
+                spdlog::debug("No valid tracks found for event table request, aborting");
+                // free the args
+                rocprofvis_controller_arguments_free(args);
+                return false;
+            }
+
+            // prepare to fetch the table
+            spdlog::debug("Allocating table results array");
+            rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+            ROCPROFVIS_ASSERT(array != nullptr);
+
+            spdlog::info("Allocating table request future");
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            ROCPROFVIS_ASSERT(future != nullptr);
+
+            result = rocprofvis_controller_table_fetch_async(
+                m_trace_controller, table_handle, args, future, array);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            // create the request info
+            data_req_info_t request_info;
+            request_info.request_array      = array;
+            request_info.request_future     = future;
+            request_info.request_obj_handle = nullptr;
+            request_info.request_args       = args;
+            request_info.index              = track_indices[0];
+            request_info.loading_state      = ProviderState::kLoading;
+            request_info.request_type       = RequestType::kFetchSingleTrackEventTable;
+            request_info.start_ts           = start_ts;
+            request_info.end_ts             = end_ts;
+            m_requests.emplace(request_info.index, request_info);
+            spdlog::debug("Fetching event table data {}", track_indices[0]);
+            return true;
+        }
+        else
+        {
+            // request for item already exists
+            spdlog::debug("Request for this track, index {}, is already pending",
+                          track_indices[0]);
+            return false;
+        }
+    }
+    else
+    {
+        if(track_indices.empty())
+        {
+            spdlog::debug("Cannot fetch track, no indices provided");
+        }
+        else
+        {
+            spdlog::debug("Cannot fetch track, index {} is out of range",
+                          track_indices[0]);
+        }
         return false;
     }
 }
@@ -619,9 +799,13 @@ DataProvider::DumpMetaData()
 {
     for(track_info_t& track_info : m_track_metadata)
     {
-        spdlog::debug("Track index {}, id {}, name {}, min ts {}, max ts {}, type {}",
+        spdlog::debug("Track index {}, id {}, name {}, min ts {}, max ts {}, type {}, "
+                      "num entries {}",
                       track_info.index, track_info.id, track_info.name, track_info.min_ts,
-                      track_info.max_ts, static_cast<int>(track_info.track_type));
+                      track_info.max_ts,
+                      track_info.track_type == kRPVControllerTrackTypeSamples ? "Samples"
+                                                                              : "Events",
+                      track_info.num_entries);
     }
 }
 
@@ -704,9 +888,12 @@ DataProvider::DumpTrack(uint64_t index)
     return false;
 }
 
-void DataProvider::DumpEventTable() {
+void
+DataProvider::DumpEventTable()
+{
     std::ostringstream str_collector;
-    for (const auto& col_header: m_event_table_header) {
+    for(const auto& col_header : m_event_table_header)
+    {
         str_collector << col_header;
         str_collector << " ";
     }
@@ -716,22 +903,26 @@ void DataProvider::DumpEventTable() {
 
     // print the event table data
     int skip_count = 0;
-    for (const auto& row : m_event_table_data) {
+    for(const auto& row : m_event_table_data)
+    {
         int col_count = 0;
-        for (const auto& column : row) {
+        for(const auto& column : row)
+        {
             str_collector << column;
             str_collector << " ";
             col_count++;
         }
-        if(col_count == 0) {
+        if(col_count == 0)
+        {
             skip_count++;
             continue;
         }
-        if(skip_count > 0) {
+        if(skip_count > 0)
+        {
             spdlog::debug("Skipped {} empty rows", skip_count);
             skip_count = 0;
         }
-        
+
         spdlog::debug("{}", str_collector.str());
         str_collector.str("");
         str_collector.clear();
@@ -934,7 +1125,7 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
     }
 
     m_event_table_header = std::move(column_names);
-    m_event_table_data = std::move(table_data);
+    m_event_table_data   = std::move(table_data);
 
     // free the array
     if(req.request_array)

@@ -1,6 +1,6 @@
 Metric,Avg,Min,Max,Unit
 CPF Utilization,100.0,100.0,100.0,Pct
-CPF Stall,0.16,0.0,0.48,Pct
-CPF-L2 Utilization,8.7,0.62,27.76,Pct
+CPF Stall,0.22,0.0,0.64,Pct
+CPF-L2 Utilization,4.53,0.2,14.87,Pct
 CPF-L2 Stall,0.0,0.0,0.0,Pct
-CPF-UTCL1 Stall,0.15,0.0,0.52,Pct
+CPF-UTCL1 Stall,0.22,0.0,0.84,Pct

@@ -1,56 +1,56 @@
 Metric,Value
-Wavefront Occupancy,7.0
-Wave Life,268478.0
-SALU,3234.0
+Wavefront Occupancy,15.0
+Wave Life,213095.0
+SALU,3149.0
 SMEM,174.0
-VALU,6618.0
+VALU,6492.0
 MFMA,0.0
-VMEM,700.0
+VMEM,644.0
 LDS,94.0
 GWS,0.0
-BR,152.0
-Active CUs,19.0
-Num CUs,304.0
+BR,159.0
+Active CUs,36.0
+Num CUs,80.0
 VGPR,32.0
-SGPR,46.0
+SGPR,48.0
 LDS Allocation,1088.0
-Scratch Allocation,592.0
+Scratch Allocation,512.0
 Wavefronts,3586.0
 Workgroups,896.0
 LDS Req,94.0
-LDS Util,0.0
-LDS Latency,21338.0
-VL1 Rd,19619.0
-VL1 Wr,18398.0
+LDS Util,7.0
+LDS Latency,18819.0
+VL1 Rd,17257.0
+VL1 Wr,16102.0
 VL1 Atomic,0.0
 VL1 Hit,43.0
 VL1 Lat,
 VL1 Coalesce,42.0
-VL1 Stall,1.0
-VL1_L2 Rd,260.0
-VL1_L2 Wr,1757.0
+VL1 Stall,2.0
+VL1_L2 Rd,275.0
+VL1_L2 Wr,1579.0
 VL1_L2 Atomic,0.0
 VL1D Rd,238.0
-VL1D Hit,58.0
+VL1D Hit,65.0
 VL1D Lat,
-VL1D_L2 Rd,4.0
+VL1D_L2 Rd,12.0
 VL1D_L2 Wr,0.0
 VL1D_L2 Atomic,0.0
-IL1 Fetch,2078.0
+IL1 Fetch,2042.0
 IL1 Hit,99.0
-IL1 Lat,14006.0
-IL1_L2 Rd,58.0
-L2 Rd,331.0
-L2 Wr,1757.0
+IL1 Lat,11557.0
+IL1_L2 Rd,51.0
+L2 Rd,345.0
+L2 Wr,1579.0
 L2 Atomic,0.0
-L2 Hit,69.0
+L2 Hit,71.0
 L2 Rd Lat,
 L2 Wr Lat,
-Fabric_L2 Rd,263.0
-Fabric_L2 Wr,1154.0
+Fabric_L2 Rd,255.0
+Fabric_L2 Wr,907.0
 Fabric_L2 Atomic,0.0
-Fabric Rd Lat,1001.0
-Fabric Wr Lat,480.0
+Fabric Rd Lat,378.0
+Fabric Wr Lat,306.0
 Fabric Atomic Lat,0.0
-HBM Rd,264.0
-HBM Wr,1153.0
+HBM Rd,255.0
+HBM Wr,904.0

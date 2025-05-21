@@ -1,2 +1,2 @@
 Metric,Avg,Std Dev,Min,Max,Unit
-L2 Cache Hit Rate,68.49,13.49,49.38,84.55,Pct
+L2 Cache Hit Rate,71.35,15.38,49.67,91.64,Pct

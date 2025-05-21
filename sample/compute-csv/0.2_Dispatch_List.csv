@@ -8,22 +8,22 @@ stributionIfjEEEEv4dim3SA_SA_SA_PN14rocrand_device13xorwow_engineEjPT1_mT2_EES7_
 fLb0EJSD_jPfmS9_EEEvDpT3_.kd",2
 2,__amd_rocclr_initHeap.kd,2
 3,"void rocprim::detail::block_reduce_kernel<false, rocprim::detail::wrapped_reduce
-_config<rocprim::default_config, int>, int, hipcub::TransformInputIterator<bool,
- conversion_op, hipcub::CountingInputIterator<int, long>, long>, int*, int, hipc
-ub::detail::convert_binary_result_type_wrapper<int, hipcub::TransformInputIte...",2
+_config<rocprim::default_config, int>, int, rocprim::transform_iterator<rocprim:
+:counting_iterator<int, long>, conversion_op, bool>, int*, int, hipcub::detail::
+convert_binary_result_type_wrapper<int, rocprim::transform_iterator<rocprim::...",2
 4,"void rocprim::detail::block_reduce_kernel<true, rocprim::detail::wrapped_reduce_
 config<rocprim::default_config, int>, int, int*, int*, int, hipcub::detail::conv
-ert_binary_result_type_wrapper<int, hipcub::TransformInputIterator<bool, convers
-ion_op, hipcub::CountingInputIterator<int, long>, long>, int*, hipcub::Sum> >...",2
+ert_binary_result_type_wrapper<int, rocprim::transform_iterator<rocprim::countin
+g_iterator<int, long>, conversion_op, bool>, int*, hipcub::Sum> >(int*, unsig...",2
 5,"void rocrand_impl::host::generate_sobol_kernel<1u, false, rocrand_device::sobol3
 2_engine<true>, unsigned int, float, rocrand_impl::host::sobol_uniform_distribut
 ion<float>, 256>(float*, unsigned long, unsigned int const*, unsigned int const*
 , unsigned int, rocrand_impl::host::sobol_uniform_distribution<float>) [clone...",2
 6,"void rocprim::detail::block_reduce_kernel<false, rocprim::detail::wrapped_reduce
-_config<rocprim::default_config, int>, int, hipcub::TransformInputIterator<bool,
- conversion_op, hipcub::CountingInputIterator<int, long>, long>, int*, int, hipc
-ub::detail::convert_binary_result_type_wrapper<int, hipcub::TransformInputIte...",2
+_config<rocprim::default_config, int>, int, rocprim::transform_iterator<rocprim:
+:counting_iterator<int, long>, conversion_op, bool>, int*, int, hipcub::detail::
+convert_binary_result_type_wrapper<int, rocprim::transform_iterator<rocprim::...",2
 7,"void rocprim::detail::block_reduce_kernel<true, rocprim::detail::wrapped_reduce_
 config<rocprim::default_config, int>, int, int*, int*, int, hipcub::detail::conv
-ert_binary_result_type_wrapper<int, hipcub::TransformInputIterator<bool, convers
-ion_op, hipcub::CountingInputIterator<int, long>, long>, int*, hipcub::Sum> >...",2
+ert_binary_result_type_wrapper<int, rocprim::transform_iterator<rocprim::countin
+g_iterator<int, long>, conversion_op, bool>, int*, hipcub::Sum> >(int*, unsig...",2

@@ -23,14 +23,8 @@ public:
     void SetHighlightedRegion(std::pair<float, float> region);
 
 private:
-    double                  m_viewport_start_position;
     std::pair<float, float> m_highlighted_region;
     Settings&               m_settings;
-    double                  m_viewport_end_position;
-    float                   m_content_size_x;
-    float                   m_sidebar_size;
-    float                   m_scale_x;
-    float                   m_min_x;
 };
 
 }  // namespace View

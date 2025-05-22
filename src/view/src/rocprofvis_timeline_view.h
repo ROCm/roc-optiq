@@ -69,7 +69,7 @@ private:
     double                                m_movement;
     double                                m_scrubber_position;
     double                                m_v_width;
-    double                                m_scale_x;
+    double                                m_pixels_per_ns;
     double                                m_original_v_max_x;
     bool                                  m_capture_og_v_max_x;
     double                                m_scroll_position;
@@ -84,6 +84,8 @@ private:
     bool                                  m_resize_activity;
     double                                m_scroll_position_x;
     bool                                  m_calibrated;
+    double m_v_past_width;
+    bool m_stop_zooming;
     double                                m_scrollbar_location_as_percentage;
     bool                                  m_artifical_scrollbar_active;
     bool                                  m_buffer_right_hit;

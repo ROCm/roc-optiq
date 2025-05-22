@@ -72,13 +72,23 @@ FlameTrackItem::ExtractPointsFromData()
 {
     const RawTrackData*      rtd         = m_data_provider.GetRawTrackData(m_id);
     const RawTrackEventData* event_track = dynamic_cast<const RawTrackEventData*>(rtd);
+    
+    
     if(!event_track)
     {
         spdlog::debug("Invalid track data type for track {}", m_id);
         return false;
     }
 
+    if(event_track->GetData().empty())
+    {
+        spdlog::debug("No data for track {}", m_id);
+        return false;
+    }
+    
+    
     m_flames = event_track->GetData();
+    
     return true;
 }
 

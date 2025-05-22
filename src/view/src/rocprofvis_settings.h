@@ -9,7 +9,7 @@ namespace RocProfVis
 {
 namespace View
 {
-    
+
 enum class Colors
 {
     kMetaDataColor,
@@ -26,7 +26,7 @@ enum class Colors
     kScrollBarColor,
     kHighlightChart,
     // Used to get the size of the enum, insert new colors before this line
-    __kLastColor  
+    __kLastColor
 };
 
 class Settings
@@ -45,6 +45,8 @@ public:
     void DarkMode();
     void LightMode();
     bool IsDarkMode() const;
+    bool HorizontalRender();
+    bool IsHorizontalRender();
 
 private:
     Settings();
@@ -53,6 +55,7 @@ private:
     std::vector<ImU32> m_flame_color_wheel;
     float              m_DPI;
     bool               m_use_dark_mode;
+    bool               m_use_horizontal_rendering;
 };
 
 }  // namespace View

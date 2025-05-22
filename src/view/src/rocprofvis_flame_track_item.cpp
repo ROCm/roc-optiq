@@ -15,6 +15,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr int MIN_LABEL_WIDTH = 40;
+
 FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float zoom,
                                float movement, double min_x, double max_x, float scale_x)
 : TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
@@ -32,7 +34,6 @@ FlameTrackItem::SetRandomColorFlag(bool set_color)
 std::tuple<double, double>
 FlameTrackItem::FindMaxMinFlame()
 {
-   
     return std::make_tuple(m_min_x, m_max_x);
 }
 
@@ -43,7 +44,7 @@ FlameTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digit
 bool
 FlameTrackItem::HasData()
 {
-    return !m_flames.empty();
+    return m_data_provider.GetRawTrackData(m_id) != nullptr;
 }
 
 void
@@ -71,13 +72,23 @@ FlameTrackItem::ExtractPointsFromData()
 {
     const RawTrackData*      rtd         = m_data_provider.GetRawTrackData(m_id);
     const RawTrackEventData* event_track = dynamic_cast<const RawTrackEventData*>(rtd);
+    
+    
     if(!event_track)
     {
         spdlog::debug("Invalid track data type for track {}", m_id);
         return false;
     }
 
+    if(event_track->GetData().empty())
+    {
+        spdlog::debug("No data for track {}", m_id);
+        return false;
+    }
+    
+    
     m_flames = event_track->GetData();
+    
     return true;
 }
 
@@ -112,10 +123,13 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
     }
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
-    draw_list->PushClipRect(rectMin, rectMax, true);
-    draw_list->AddText(rectMin, IM_COL32_BLACK, flame.m_name.c_str());
-    draw_list->PopClipRect();
-
+    // don't render label if box is too small
+    if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH)
+    {
+        draw_list->PushClipRect(rectMin, rectMax, true);
+        draw_list->AddText(rectMin, IM_COL32_BLACK, flame.m_name.c_str());
+        draw_list->PopClipRect();
+    }
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
     {
         ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f ", flame.m_name.c_str(),
@@ -174,7 +188,10 @@ FlameTrackItem::RenderChart(float graph_width)
 
     for(const auto& flame : m_flames)
     {
-        double normalized_start = (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
+        ImVec2 container_pos = ImGui::GetWindowPos();
+
+        double normalized_start =
+            container_pos.x + (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
 
         // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
         double normalized_end = flame.m_duration * m_scale_x;
@@ -194,9 +211,9 @@ FlameTrackItem::RenderChart(float graph_width)
 }
 
 void
-FlameTrackItem::Render()
+FlameTrackItem::Render(double width)
 {
-    TrackItem::Render();
+    TrackItem::Render(width);
 }
 
 }  // namespace View

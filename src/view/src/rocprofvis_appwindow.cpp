@@ -148,6 +148,7 @@ AppWindow::Render()
         }
         
         RenderSettingsMenu();
+        RenderDeveloperMenu();
         ImGui::EndMenuBar();
     }
     ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
@@ -254,6 +255,21 @@ AppWindow::RenderSettingsMenu()
         {
             Settings::GetInstance().DarkMode();
         }
+
+        ImGui::EndMenu();
+    }
+}
+
+void
+AppWindow::RenderDeveloperMenu()
+{
+    if(ImGui::BeginMenu("Developer Options"))
+    {
+        if(ImGui::MenuItem("Horizontal Render", nullptr, Settings::GetInstance().IsHorizontalRender()))
+        {
+            Settings::GetInstance().HorizontalRender();
+        }
+ 
 
         ImGui::EndMenu();
     }

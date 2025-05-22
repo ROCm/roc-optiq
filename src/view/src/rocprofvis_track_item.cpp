@@ -1,5 +1,7 @@
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_settings.h"
+#include "spdlog/spdlog.h"
+
 using namespace RocProfVis::View;
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -103,7 +105,7 @@ TrackItem::UpdateMovement(float zoom, float movement, double& min_x, double& max
 }
 
 void
-TrackItem::Render()
+TrackItem::Render(double width)
 {
     m_metadata_bg_color = m_settings.GetColor(static_cast<int>(Colors::kMetaDataColor));
     ImGuiWindowFlags window_flags =
@@ -113,7 +115,7 @@ TrackItem::Render()
        window_flags)
     {
         ImVec2 parent_size = ImGui::GetContentRegionAvail();
-        float  graph_width = parent_size.x - s_metadata_width;
+        float  graph_width = width;
 
         RenderMetaArea();
         ImGui::SameLine();
@@ -161,12 +163,19 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 }
 
 void
-TrackItem::RequestData()
+TrackItem::RequestData(double min, double max, float width)
 {
     if(m_request_state == TrackDataRequestState::kIdle)
     {
         m_request_state = TrackDataRequestState::kRequesting;
-        m_data_provider.FetchTrack(m_id, m_data_provider.GetStartTime(),
-                                   m_data_provider.GetEndTime(), 1000, 0);
+        m_data_provider.FetchTrack(m_id, min, max, width, 0);
+
+        spdlog::debug("Fetching from {} to {} ( {} ) at zoom {}",
+                      min - m_data_provider.GetStartTime(),
+                      max - m_data_provider.GetStartTime(), max - min, m_zoom);
+    }
+    else 
+    {
+        spdlog::debug("Request Data rejected, already pending...");
     }
 }

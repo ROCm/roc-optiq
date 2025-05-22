@@ -443,7 +443,8 @@ TimelineView::RenderGraphView()
                                                          // viewport worth of buffer.
                     graph_objects.second.chart->RequestData(
                         (m_movement - buffer_distance) + m_min_x,
-                        (m_movement + m_v_width + buffer_distance) + m_min_x,m_graph_size.x);
+                        (m_movement + m_v_width + buffer_distance) + m_min_x,m_graph_size.x * 3);
+
                 }
                 if(m_settings.IsHorizontalRender())
                 {
@@ -457,7 +458,7 @@ TimelineView::RenderGraphView()
                         graph_objects.second.chart->RequestData(
                             (m_movement - buffer_distance) + m_min_x,
                             (m_movement + m_v_width + buffer_distance) + m_min_x,
-                            m_graph_size.x);
+                            m_graph_size.x * 3);
                     }
                 }
 

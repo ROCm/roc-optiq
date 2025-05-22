@@ -1,8 +1,8 @@
 Metric,Avg,Min,Max,Unit
-VALU,6618.4,69.5,33491.67,Instr per wave
-VMEM,700.22,2.0,1757.75,Instr per wave
+VALU,6492.02,69.5,33491.67,Instr per wave
+VMEM,644.09,2.0,1543.0,Instr per wave
 LDS,94.28,0.0,738.0,Instr per wave
 MFMA,0.0,0.0,0.0,Instr per wave
-SALU,3234.25,8.0,11056.5,Instr per wave
+SALU,3149.15,9.0,11101.42,Instr per wave
 SMEM,174.0,0.0,1365.0,Instr per wave
-Branch,151.86,2.0,724.92,Instr per wave
+Branch,158.99,2.0,724.92,Instr per wave

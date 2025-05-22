@@ -1,8 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include <numeric>
-#include "imgui.h"
+#include <regex>
 #include "implot.h"
 #include "rocprofvis_compute_data_provider.h"
 #include "widgets/rocprofvis_widget.h"
@@ -43,6 +42,7 @@ class ComputeMetricGroup : public RocWidget
 public:
     void Render();
     void Update();
+    void Search(const std::string& term);
     ComputeMetricGroup(std::shared_ptr<ComputeDataProvider> data_provider, std::string metric_category, 
                   compute_metric_group_render_flags_t render_flags = kComputeMetricTable, std::vector<int> pie_data_index = {0}, std::vector<int> bar_data_index = {0});
     ~ComputeMetricGroup();
@@ -54,6 +54,23 @@ private:
     rocprofvis_compute_metrics_group_t* m_metric_data;
     std::vector<int> m_bar_data_index;
     std::vector<int> m_pie_data_index;
+};
+
+class ComputeMetricRoofline : public RocWidget
+{
+public:
+    roofline_grouping_mode_t GetGroupMode();
+    void SetGroupMode(roofline_grouping_mode_t grouping);
+    void Render();
+    void Update();
+    ComputeMetricRoofline(std::shared_ptr<ComputeDataProvider> data_provider, roofline_grouping_mode_t grouping);
+    ~ComputeMetricRoofline();
+
+private:
+    std::shared_ptr<ComputeDataProvider> m_data_provider;
+    rocprofvis_compute_metrics_group_t* m_roof_data;
+    rocprofvis_compute_metrics_group_t* m_intensity_data;
+    roofline_grouping_mode_t m_group_mode;
 };
 
 }  // namespace View

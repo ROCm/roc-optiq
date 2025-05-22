@@ -1,8 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include "imgui.h"
 #include "rocprofvis_compute_data_provider.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_compute_metric.h"
 #include "widgets/rocprofvis_widget.h"
 
@@ -29,6 +29,33 @@ typedef enum table_view_category_t
     kTableCategoryCount
 } table_view_category_t;
 
+struct PrefixTreeNode {
+    char m_char;
+    std::array<std::unique_ptr<PrefixTreeNode>, 128> m_next;
+};
+
+typedef struct table_view_category_info_t
+{
+    table_view_category_t m_category;
+    std::string m_name;
+    std::vector<std::string> m_content_ids;
+} table_view_category_info_t;
+
+class ComputeTableCategory : public RocWidget
+{
+public:
+    void Render();
+    void Update();
+    ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category);
+    ~ComputeTableCategory();
+
+private:
+    void OnSearchChanged(std::shared_ptr<RocEvent> event);
+
+    std::vector<std::unique_ptr<ComputeMetricGroup>> m_metrics;
+    EventManager::SubscriptionToken m_search_event_token;
+};
+
 class ComputeTableView : public RocWidget
 {
 public:
@@ -39,9 +66,10 @@ public:
 
 private:
     void RenderMenuBar();
-    void RenderMetricsTab(table_view_category_t category);
 
-    std::unordered_map<table_view_category_t, std::vector<std::unique_ptr<ComputeMetricGroup>>> m_metrics_map;
+    bool m_search_edited;
+    char m_search_term[32];
+    std::shared_ptr<TabContainer> m_tab_container;
 };
 
 }  // namespace View

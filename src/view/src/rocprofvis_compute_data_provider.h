@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
+#include <algorithm>
 #include <filesystem>
 #include <unordered_map>
 #include "rocprofvis_core_assert.h"
@@ -15,30 +16,38 @@ namespace View
 typedef struct rocprofvis_compute_metric_t
 {
     std::string m_name;
-    float m_value;
+    double m_value;
     std::string m_unit;
 } rocprofvis_compute_metric_t;
 
 typedef struct rocprofvis_compute_metric_plot_axis_t
 {
-    std::string m_label;
-    float m_max;
-    float m_min;
+    std::string m_name;
+    std::vector<const char*> m_tick_labels;
+    double m_max;
+    double m_min;
 } rocprofvis_compute_metric_plot_axis_t;
+
+typedef struct rocprofvis_compute_metric_plot_series_t
+{
+    std::string m_name;
+    std::vector<double> m_x_values;
+    std::vector<double> m_y_values;
+} rocprofvis_compute_metric_plot_series_t;
 
 typedef struct rocprofvis_compute_metrics_plot_t
 {
     std::string m_title;
-    std::vector<const char*> m_series_names;
     rocprofvis_compute_metric_plot_axis_t m_x_axis;
     rocprofvis_compute_metric_plot_axis_t m_y_axis;
-    std::vector<float> m_values;
+    std::vector<rocprofvis_compute_metric_plot_series_t> m_series;
 } rocprofvis_compute_metric_plot_t;
 
 typedef struct rocprofvis_compute_metrics_table_cell_t
 {
     std::string m_value;
     bool m_colorize;
+    bool m_highlight;
     rocprofvis_compute_metric_t* m_metric;
 } rocprofvis_compute_metrics_table_cell_t;
 
@@ -75,26 +84,63 @@ typedef struct metric_group_info_t
     std::vector<metric_plot_info_t> m_plot_infos;
 } metric_category_info_t;
 
+typedef enum roofline_grouping_mode_t
+{
+    kRooflineGroupByDispatch = 0,
+    kRooflineGroupByKernel
+} roofline_grouping_mode_t;
+
+typedef enum roofline_number_format_t
+{
+    kRooflineNumberformatFP32 = 0,
+    kRooflineNumberformatFP64,
+    kRooflineNumberformatFP16,
+    kRooflineNumberformatINT8,
+    kRooflineNumberformatCount
+} roofline_number_format_t;
+
+typedef enum roofline_pipe_t
+{
+    kRooflinePipeVALU = 0,
+    kRooflinePipeMFMA
+} roofline_pipe_t;
+
+typedef struct roofline_format_info_t
+{
+    std::string m_name;
+    roofline_number_format_t m_format;
+    std::unordered_map<roofline_pipe_t, std::string> m_supported_pipes;
+} roofline_format_info_t;
+
+typedef struct metric_roofline_info_t
+{
+    std::vector<std::string> m_memory_levels;
+    std::array<roofline_format_info_t, kRooflineNumberformatCount> m_number_formats;
+} metric_roofline_info_t;
+
 class ComputeDataProvider
 {
 public:
-   rocprofvis_compute_metrics_group_t* GetMetricGroup(std::string &group_id);
+    rocprofvis_compute_metrics_group_t* GetMetricGroup(std::string &group_id);
     rocprofvis_compute_metric_t* GetMetric(std::string &group_id, std::string &metric_id);
 
-    void SetMetricsPath(std::filesystem::path& path);
-    void LoadMetricsFromCSV();
-    bool MetricsLoaded();
+    void SetProfilePath(std::filesystem::path& path);
+    void LoadProfile();
+    bool ProfileLoaded();
 
     ComputeDataProvider();
     ~ComputeDataProvider();
 
 private:
+    void LoadSystemInfo(std::filesystem::directory_entry csv_entry);
     void BuildPlots();
+    void BuildRoofline();
+    void FreePlotLabels();
 
-    csv::CSVFormat csv_format;
-    bool m_metrics_loaded;
-    bool m_attempt_metrics_load;
-    std::filesystem::path m_metrics_path;
+    csv::CSVFormat m_csv_format;
+    bool m_profile_loaded;
+    bool m_attempt_profile_load;
+    std::filesystem::path m_profile_path;
 
     std::unordered_map<std::string, std::unique_ptr<rocprofvis_compute_metrics_group_t>> m_metrics_group_map;
 };

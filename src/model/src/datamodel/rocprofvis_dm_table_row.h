@@ -51,7 +51,9 @@ class TableRow : public DmBase {
 
         // Return table object context pointer
         // @return context pointer
-        Table*                     Ctx() {return m_ctx;};
+        Table*                          Ctx() {return m_ctx;};
+
+        std::shared_mutex*              Mutex() override;
 
         // Method to read TableRow object property as uint64
         // @param property - property enumeration rocprofvis_dm_table_row_property_t

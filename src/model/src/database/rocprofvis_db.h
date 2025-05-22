@@ -43,6 +43,8 @@ typedef std::map<uint32_t, rocprofvis_dm_slice_t> slice_array_t;
 
 class Database;
 
+
+
 // Helper class to manage cached information tables (node, agent, queue, process, thread information)
 class DatabaseCache 
 {

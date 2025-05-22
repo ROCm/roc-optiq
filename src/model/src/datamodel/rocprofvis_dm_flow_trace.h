@@ -62,6 +62,8 @@ class FlowTrace : public DmBase {
         // Returns event id
         // @return 60-bit event id and 4-bit operation type
         rocprofvis_dm_event_id_t        EventId() {return m_event_id;}
+        // Returns class mutex
+        std::shared_mutex* Mutex() override { return &m_lock; }
 
         // Method to read FlowTrace object property as uint64
         // @param property - property enumeration rocprofvis_dm_flowtrace_property_t
@@ -86,6 +88,8 @@ class FlowTrace : public DmBase {
         Trace*                                  m_ctx;
         // vector array of flow trace records
         std::vector<FlowRecord>                 m_flows;
+        // object mutex, for shared access
+        mutable std::shared_mutex               m_lock;
 
         // Method to get flow trace record timestamp at provided record index
         // @param index - record index

@@ -149,6 +149,12 @@ typedef rocprofvis_dm_result_t (*rocprofvis_db_find_cached_table_value_func_t) (
                                                                                 const rocprofvis_dm_id_t id, rocprofvis_dm_charptr_t column, rocprofvis_dm_charptr_t* value);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_event_level_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id, uint8_t level);
 
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_slice_exists_t) (const rocprofvis_dm_trace_t object, 
+                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_event_property_exists_t) (const rocprofvis_dm_trace_t object, 
+                                                                    rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_table_exists_t) (const rocprofvis_dm_trace_t object,  const rocprofvis_dm_table_id_t table_id);
+
 typedef struct 
 {
         rocprofvis_dm_trace_t trace_object;                             // trace handle
@@ -169,5 +175,7 @@ typedef struct
         rocprofvis_dm_add_table_row_cell_func_t FuncAddTableRowCell;    // Called by database query callback to add new cell to a table row
         rocprofvis_db_find_cached_table_value_func_t FuncFindCachedTableValue; // Get value from tables cached in database component (tables like rocpd_node, rocpd_process, rocpd_thread, rocpd_agent, rocpd_queue, rocpd_stream, etc. )
         rocprofvis_dm_add_event_level_func_t FuncAddEventLevel;         // Called by database query callback to add event level to a map array located in trace object
-
+        rocprofvis_dm_check_slice_exists_t FuncCheckSliceExists;        // Called by database async interface before quering a slice with the same parameters
+        rocprofvis_dm_check_event_property_exists_t FuncCheckEventPropertyExists;        // Called by database async interface before quering an event property with the same parameters
+        rocprofvis_dm_check_table_exists_t FuncCheckTableExists;        // Called by database async interface before quering a table with the same parameters
 } rocprofvis_dm_db_bind_struct;

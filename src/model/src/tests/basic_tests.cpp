@@ -31,6 +31,14 @@ std::string g_input_file="../../../sample/trace_70b_1024_32.rpd";
 bool        g_all_tracks=false;
 bool        g_full_range=false;
 
+void
+ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
+              rocprofvis_dm_timestamp_t start_time, uint32_t accessInMillisec,
+              rocprofvis_db_future_t object2wait);
+void
+DeleteSliceData(rocprofvis_dm_trace_t trace, rocprofvis_dm_timestamp_t start_time,
+                rocprofvis_dm_timestamp_t end_time, uint32_t accessInMillisec);
+
 int main(int argc, char** argv)
 {
   rocprofvis_core_enable_log();
@@ -115,6 +123,7 @@ void GenerateRandomSlice(   rocprofvis_dm_trace_t trace,
                             rocprofvis_dm_timestamp_t & end_time)
 {
     static std::vector<uint32_t> v;
+    v.clear();
     uint64_t num_tracks = rocprofvis_dm_get_property_as_uint64(trace, kRPVDMNumberOfTracksUInt64, 0);
     if (g_all_tracks) {
         for (int i = 0; i < num_tracks; i++) {
@@ -128,7 +137,7 @@ void GenerateRandomSlice(   rocprofvis_dm_trace_t trace,
         while (rand_num_tracks == 0) rand_num_tracks = std::rand() % num_tracks;
         for (int i = 0; i < rand_num_tracks; i++) {
             while (true) {
-                uint32_t track_id1 = std::rand() % num_tracks;
+                uint32_t track_id1 = std::rand() % std::max(num_tracks,(uint64_t)10);
                 if (std::find_if(v.begin(), v.end(), [track_id1](uint32_t track_id2) {return track_id2 == track_id1; }) == v.end())
                 {
                     v.push_back(track_id1);
@@ -256,11 +265,13 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
         }
     }
 
+    uint32_t total_num_tracks = num_tracks;
+
     SECTION("Whole Trace Read")
     {
         double   whole_trace_readtime = 0;
         uint32_t total_num_rows       = 0;
-        uint32_t total_num_tracks     = num_tracks;
+        
         GenerateRandomSlice(m_trace, num_tracks, tracks_selection, start_time, end_time);
         for(int i = 0; i < total_num_tracks; i++)
         {
@@ -708,8 +719,10 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
         rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(db_progress);
         REQUIRE(nullptr != object2wait);
         PrintHeader("Test SQL table read");
+        const char* query = "select * from top;";
         auto query_result = rocprofvis_db_execute_query_async(
-            m_db, "select * from top;", "Kernel execution summary", object2wait);
+            m_db, query, "Kernel execution summary", object2wait);
+        rocprofvis_dm_table_id_t id = std::hash<std::string>{}(query);
         REQUIRE(kRocProfVisDmResultSuccess == query_result);
         if(kRocProfVisDmResultSuccess == query_result)
         {
@@ -722,7 +735,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                 if(num_tables > 0)
                 {
                     rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(
-                        m_trace, kRPVDMTableHandleIndexed, 0);
+                        m_trace, kRPVDMTableHandleByID, id);
                     REQUIRE(table);
                     if(nullptr != table)
                     {
@@ -801,10 +814,130 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
         rocprofvis_db_future_free(object2wait);
     }
 
+    
+    SECTION("Thread safety test")
+    {
+        g_full_range = true;
+        for(int test_count = 0; test_count < 10; test_count++)
+        {
+            start_time =
+                rocprofvis_dm_get_property_as_uint64(m_trace, kRPVDMStartTimeUInt64, 0);
+            end_time =
+                rocprofvis_dm_get_property_as_uint64(m_trace, kRPVDMEndTimeUInt64, 0);
+
+            GenerateRandomSlice(m_trace, num_tracks, tracks_selection, start_time,
+                                end_time);
+            
+            PrintHeader("Allocate future");
+            rocprofvis_db_future_t object2wait =
+                rocprofvis_db_future_alloc(db_progress);
+            REQUIRE(nullptr != object2wait);
+
+            auto read_slice_issue = rocprofvis_db_read_trace_slice_async(
+                m_db, start_time, end_time, num_tracks, tracks_selection,
+                object2wait);
+            REQUIRE(kRocProfVisDmResultSuccess == read_slice_issue);
+            if(kRocProfVisDmResultSuccess == read_slice_issue)
+            {
+                PrintHeader("Access data while loaded");
+                std::thread access_slice(ReadSliceData, m_trace, total_num_tracks,
+                                         start_time, num_tracks * 20, object2wait);               
+                access_slice.join();
+                
+
+                auto read_wait =
+                    rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+                REQUIRE(kRocProfVisDmResultSuccess == read_wait);
+                if(kRocProfVisDmResultSuccess == read_wait)
+                {
+                    PrintHeader("Access data while deleted");
+                    std::thread delete_slice(DeleteSliceData, m_trace, start_time,
+                                             end_time,100);
+                    
+                    std::thread access_slice(ReadSliceData, m_trace, total_num_tracks,
+                                             start_time,99,  nullptr);
+                    delete_slice.join();
+                    access_slice.join();
+
+                }
+            }
+
+            PrintHeader("Free future");
+            rocprofvis_db_future_free(object2wait);
+
+        }
+
+    }
+
     SECTION("Delete trace")
     {
         CheckMemoryFootprint(m_trace);
         PrintHeader("Delete trace");
         rocprofvis_dm_delete_trace(m_trace);
     }
+}
+
+
+
+void
+ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
+              rocprofvis_dm_timestamp_t start_time, uint32_t accessInMillisec,
+              rocprofvis_db_future_t object2wait)
+{
+    uint32_t num_rows=0;
+    if(object2wait != nullptr)
+    {
+        for(int i = 0; i < accessInMillisec; i++)
+        {
+            num_rows =
+                ((RocProfVis::DataModel::Future*) object2wait)->GetProcessedRowsCount();
+            if(num_rows > 1000)
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::microseconds(1000));
+        }
+        spdlog::info(ANSI_COLOR_MAGENTA
+                     "{0} rows processed or {1} milliseconds passed. Start "
+                     "accessing data" ANSI_COLOR_RESET,
+                     num_rows, accessInMillisec);
+    }
+    else
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(accessInMillisec));
+        spdlog::info(ANSI_COLOR_MAGENTA
+                     "{0} milliseconds passed. Start "
+                     "accessing data" ANSI_COLOR_RESET,
+                     accessInMillisec);
+    }
+
+    for(int i = 0; i < num_tracks; i++)
+    {
+        rocprofvis_dm_track_t track =
+            rocprofvis_dm_get_property_as_handle(trace, kRPVDMTrackHandleIndexed, i);
+        REQUIRE(track != nullptr);
+
+        rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
+            track, kRPVDMSliceHandleTimed, start_time);
+        if(slice != nullptr)
+        {
+            uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
+                slice, kRPVDMNumberOfRecordsUInt64, 0);
+            spdlog::info(ANSI_COLOR_MAGENTA "Track({0}) Slice({1}) has {2} records" ANSI_COLOR_RESET,
+                         track, start_time, num_records);
+        }
+    }
+}
+
+void
+DeleteSliceData(rocprofvis_dm_trace_t trace,
+                rocprofvis_dm_timestamp_t start_time,
+                rocprofvis_dm_timestamp_t end_time, 
+                uint32_t accessInMillisec)
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(accessInMillisec));
+    spdlog::info(ANSI_COLOR_MAGENTA "{0} milliseconds passed. Start "
+                                    "deleting slice({1})" ANSI_COLOR_RESET,
+                 accessInMillisec, start_time);
+    rocprofvis_dm_delete_time_slice(trace, start_time, end_time);
 }

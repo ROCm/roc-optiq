@@ -79,8 +79,9 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
                 dm_handle, kRPVDMNumberOfTablesUInt64, 0);
             if(num_tables > 0)
             {
+                rocprofvis_dm_table_id_t id = std::hash<std::string>{}(fetch_query);
                 rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(
-                    dm_handle, kRPVDMTableHandleIndexed, 0);
+                    dm_handle, kRPVDMTableHandleByID, id);
                 if(nullptr != table)
                 {
                     char* table_description = rocprofvis_dm_get_property_as_charptr(
@@ -330,8 +331,9 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
                 dm_handle, kRPVDMNumberOfTablesUInt64, 0);
             if(num_tables > 0)
             {
+                rocprofvis_dm_table_id_t id    = std::hash<std::string>{}(count_query);
                 rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(
-                    dm_handle, kRPVDMTableHandleIndexed, 0);
+                    dm_handle, kRPVDMTableHandleByID, 0);
                 if(nullptr != table)
                 {
                     char* table_description = rocprofvis_dm_get_property_as_charptr(

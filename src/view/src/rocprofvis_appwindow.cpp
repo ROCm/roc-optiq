@@ -8,6 +8,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 #include "widgets/rocprofvis_debug_window.h"
+#include "imgui_spectrum_dynamic.h"
 
 using namespace RocProfVis::View;
 
@@ -168,6 +169,12 @@ AppWindow::Render()
         ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
         ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
+
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, GRAY500);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, GRAY400);
+    ImGui::PushStyleColor(ImGuiCol_Header, GRAY300);
+    ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, GRAY300);
+
     if(ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
     {
         if(ImGuiFileDialog::Instance()->IsOk())
@@ -215,6 +222,8 @@ AppWindow::Render()
 
         ImGuiFileDialog::Instance()->Close();
     }
+
+    ImGui::PopStyleColor(4);
 
     ImGui::SetNextWindowPos(
         ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),

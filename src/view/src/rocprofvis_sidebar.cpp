@@ -3,6 +3,7 @@
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_settings.h"
 #include "imgui.h"
+#include "imgui_spectrum_dynamic.h"
 #include "rocprofvis_structs.h"
 #include <iostream>
 #include <map>
@@ -45,7 +46,10 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
     {
         for(auto& tree_item : *tree)
         {
-            ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(static_cast<int>(
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, GRAY900);
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, GRAY800);
+            ImGui::PushStyleColor(ImGuiCol_Header, GRAY700);
+            /*ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(static_cast<int>(
                                                        Colors::kTransparent)));
             ImGui::PushStyleColor(
                 ImGuiCol_HeaderHovered,
@@ -54,6 +58,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
             ImGui::PushStyleColor(
                 ImGuiCol_HeaderActive,
                 m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+            */
 
             if(ImGui::CollapsingHeader(("Chart #" + std::to_string(tree_item.first) +
                                         ": " + tree_item.second.chart->GetName())

@@ -153,6 +153,7 @@ rocprofvis_dm_result_t  rocprofvis_db_read_event_property_async(
  * @param query SQL query string
  * @param description description of a table
  * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @param id new id is assigned to the table and returned using this reference pointer
  * @return status of operation
  *
  * @note Object will stay in trace memory until deleted.
@@ -163,7 +164,8 @@ rocprofvis_dm_result_t  rocprofvis_db_execute_query_async(
                                     rocprofvis_dm_database_t,                                                                
                                     rocprofvis_dm_charptr_t,
                                     rocprofvis_dm_charptr_t,
-                                    rocprofvis_db_future_t);
+                                    rocprofvis_db_future_t,
+                                    rocprofvis_dm_table_id_t*);
 
 /************************************Data model trace interface*************************************/
 

@@ -62,7 +62,8 @@ class StackTrace : public DmBase {
         // Returns event id
         // @return 60-bit event id and 4-bit operation type
         rocprofvis_dm_event_id_t        EventId() {return m_event_id;}
-
+        // Returns class mutex
+        std::shared_mutex* Mutex() override { return &m_lock; }
 
         // Method to read StackTrace object property as uint64
         // @param property - property enumeration rocprofvis_dm_stacktrace_property_t
@@ -93,6 +94,8 @@ class StackTrace : public DmBase {
         Trace*                                  m_ctx;
         // vector array of stack trace records
         std::vector<StackFrameRecord>           m_stack_frames;
+        // object mutex, for shared access
+        mutable std::shared_mutex               m_lock;
 
         // Method to get pointer to stack frame symbol string at provided index
         // @param index - record index

@@ -29,6 +29,7 @@
 #include <vector> 
 #include <memory> 
 #include <map>
+#include <mutex>
 
 namespace RocProfVis
 {
@@ -59,6 +60,8 @@ class Trace : public DmBase{
         rocprofvis_dm_database_t                        Database() { return m_db; }
         // Returns pointer to database binding structure 
         rocprofvis_dm_db_bind_struct*                   BindingInfo() {return &m_binding_info;}
+        // Returns class mutex
+        std::shared_mutex*                              Mutex() override { return &m_lock; }
 
         // Method to bind database object
         // @param db - pointer to database
@@ -85,7 +88,7 @@ class Trace : public DmBase{
         // Method to delete table object at provided index
         // @param index of table
         // @return status of operation 
-        rocprofvis_dm_result_t                          DeleteTableAt(rocprofvis_dm_index_t index);
+        rocprofvis_dm_result_t                          DeleteTableAt(rocprofvis_dm_table_id_t id);
         // Method to delete all table objects
         // @return status of operation 
         rocprofvis_dm_result_t                          DeleteAllTables();
@@ -139,10 +142,10 @@ class Trace : public DmBase{
         // @return status of operation  
         rocprofvis_dm_result_t                          GetExtInfoHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_extdata_t & extinfo);
         // Method to get queried table handle at specified index  
-        // @param index - index of queried table
+        // @param id - id of queried table
         // @param extinfo - reference to table handle
         // @return status of operation  
-        rocprofvis_dm_result_t                          GetTableHandle(rocprofvis_dm_property_index_t index, rocprofvis_dm_table_t & table);
+        rocprofvis_dm_result_t                          GetTableHandle(rocprofvis_dm_table_id_t id, rocprofvis_dm_table_t & table);
         // Method to get amount of memory used by Trace object, includes memory footprint of all other data model objects
         // @return used memory size        
         rocprofvis_dm_size_t                            GetMemoryFootprint();
@@ -225,6 +228,10 @@ class Trace : public DmBase{
         // @return status of operation
         static rocprofvis_dm_result_t                   AddEventLevel(const rocprofvis_dm_trace_t object,  const rocprofvis_dm_event_id_t event_id, rocprofvis_dm_event_level_t level);
 
+        static rocprofvis_dm_result_t                   CheckSliceExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
+        static rocprofvis_dm_result_t                   CheckEventPropertyExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
+        static rocprofvis_dm_result_t                   CheckTableExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_table_id_t table_id);
+
         // trace parameters structure
         rocprofvis_dm_trace_params_t                    m_parameters;
         // binding info structure
@@ -234,17 +241,19 @@ class Trace : public DmBase{
         // vector array of Track objects
         std::vector<std::unique_ptr<Track>>             m_tracks;
         // vector array of Flow trace objects
-        std::vector<std::unique_ptr<FlowTrace>>         m_flow_traces;
+        std::vector<std::shared_ptr<FlowTrace>>         m_flow_traces;
         // vector array of Stack trace objects
-        std::vector<std::unique_ptr<StackTrace>>        m_stack_traces;
+        std::vector<std::shared_ptr<StackTrace>>        m_stack_traces;
         // vector array of Extended data objects
-        std::vector<std::unique_ptr<ExtData>>           m_ext_data;
+        std::vector<std::shared_ptr<ExtData>>           m_ext_data;
         // vector array of Table objects
-        std::vector<std::unique_ptr<Table>>             m_tables;
+        std::vector<std::shared_ptr<Table>>             m_tables;
         // vector array of strings
         std::vector<std::string>                        m_strings;
         // map of every event level in graph
         event_level_map_t                               m_event_level_map;
+        // object mutex, for shared access
+        mutable std::shared_mutex                       m_lock;
 
 };
 

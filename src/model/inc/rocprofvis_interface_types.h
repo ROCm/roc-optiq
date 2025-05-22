@@ -43,6 +43,7 @@ typedef     uint32_t                      rocprofvis_dm_property_t;             
 typedef     uint64_t                      rocprofvis_dm_property_index_t;               // index of an indexed property
 typedef     const char*                   rocprofvis_dm_json_blob_t;                    // json blob string
 typedef     uint32_t                      rocprofvis_dm_track_id_t;                     // track id
+typedef     uint64_t                      rocprofvis_dm_table_id_t;                     // table id
 
 
 typedef     const char*                   rocprofvis_db_filename_t;                     // input file name
@@ -153,7 +154,7 @@ typedef enum  rocprofvis_dm_trace_property_t {
     // Extended handle by specified event id (60-bit event id and 4-bit operation type)
     kRPVDMExtInfoHandleByEventID,
     // Handle of a SQL query result table, by specified index  
-    kRPVDMTableHandleIndexed,
+    kRPVDMTableHandleByID,
     // Database handle
 	kRPVDMDatabaseHandle
 } rocprofvis_dm_trace_property_t;
@@ -272,6 +273,8 @@ typedef enum rocprofvis_dm_extdata_property_t {
 
 // Table object properties
 typedef enum rocprofvis_dm_table_property_t {
+    // Table id
+    kRPVDMNumberOfTableIdUInt64,
     // Number of columns
     kRPVDMNumberOfTableColumnsUInt64,
     // Number of rows

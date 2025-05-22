@@ -287,6 +287,7 @@ rocprofvis_dm_result_t  rocprofvis_db_read_event_property_async(
  * @param query SQL query string
  * @param description description of a table
  * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @param id new id is assigned to the table and returned using this reference pointer
  * @return status of operation
  * 
  * @note Object will stay in trace memory until deleted. 
@@ -297,13 +298,15 @@ rocprofvis_dm_result_t  rocprofvis_db_execute_query_async(
                                         rocprofvis_dm_database_t database,                                                                
                                         rocprofvis_dm_charptr_t query,
                                         rocprofvis_dm_charptr_t description,
-                                        rocprofvis_db_future_t object){
+                                        rocprofvis_db_future_t object, 
+                                        rocprofvis_dm_table_id_t* id)
+{
     PROFILE;
     ROCPROFVIS_ASSERT_MSG_RETURN(database,
                                  RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
-    return db->ExecuteQueryAsync(query, description, object);
+    return db->ExecuteQueryAsync(query, description, object, id);
 }
 
 /*******************************************TRACE INTERFACE*****************************************/
@@ -455,7 +458,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_all_event_properties_for(
 }    
 
 /****************************************************************************************************
- * @brief Delete a table by specified table index. 
+ * @brief Delete a table by specified table id. 
  *        Table is created when executed SQL query using rocprofvis_db_execute_query_async method
  *                                                     
  * @param trace trace object handle created with rocprofvis_dm_create_trace()
@@ -467,11 +470,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_all_event_properties_for(
  ***************************************************************************************************/
 rocprofvis_dm_result_t  rocprofvis_dm_delete_table_at( 
                                         rocprofvis_dm_trace_t trace,
-                                        rocprofvis_dm_index_t index){
+                                        rocprofvis_dm_table_id_t id){
     PROFILE;
     ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
-    return ((RocProfVis::DataModel::Trace*)trace)->DeleteTableAt(index);
+    return ((RocProfVis::DataModel::Trace*)trace)->DeleteTableAt(id);
 }
 
 /****************************************************************************************************
@@ -517,7 +520,13 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_uint64(
                                         rocprofvis_dm_property_index_t index,
                                         uint64_t* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
-    return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsUint64(property, index, value);
+    RocProfVis::DataModel::DmBase* object = (RocProfVis::DataModel::DmBase*) handle;
+    std::shared_lock<std::shared_mutex> lock;
+    if (object->Mutex() != nullptr)
+    {
+        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+    }
+    return object->GetPropertyAsUint64(property, index, value);
 }                                      
 
 /****************************************************************************************************
@@ -537,7 +546,13 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_int64(
                                         rocprofvis_dm_property_index_t index,
                                         int64_t* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
-    return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsInt64(property, index, value);
+    RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
+    std::shared_lock<std::shared_mutex> lock;
+    if(object->Mutex() != nullptr)
+    {
+        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+    }
+    return object->GetPropertyAsInt64(property, index, value);
 }                                      
 
 /****************************************************************************************************
@@ -557,7 +572,13 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_double(
                                         rocprofvis_dm_property_index_t index,
                                         double* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
-    return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsDouble(property, index, value);
+    RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
+    std::shared_lock<std::shared_mutex> lock;
+    if(object->Mutex() != nullptr)
+    {
+        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+    }
+    return object->GetPropertyAsDouble(property, index, value);
 }                                       
 
 /****************************************************************************************************
@@ -577,7 +598,13 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_charptr(
                                         rocprofvis_dm_property_index_t index,
                                         char** value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
-    return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsCharPtr(property, index, value);
+    RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
+    std::shared_lock<std::shared_mutex> lock;
+    if(object->Mutex() != nullptr)
+    {
+        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+    }
+    return object->GetPropertyAsCharPtr(property, index, value);
 }                                       
 
 /****************************************************************************************************
@@ -597,7 +624,13 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_handle(
                                         rocprofvis_dm_property_index_t index,
                                         rocprofvis_dm_handle_t* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
-    return ((RocProfVis::DataModel::DmBase*)handle)->GetPropertyAsHandle(property, index, value);
+    RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
+    std::shared_lock<std::shared_mutex> lock;
+    if(object->Mutex() != nullptr)
+    {
+        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+    }
+    return object->GetPropertyAsHandle(property, index, value);
 }  
 
 

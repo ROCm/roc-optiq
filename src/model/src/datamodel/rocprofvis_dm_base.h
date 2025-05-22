@@ -21,6 +21,7 @@
 #pragma once
 
 #include "rocprofvis_common_types.h"
+#include "shared_mutex"
 
 namespace RocProfVis
 {
@@ -62,6 +63,8 @@ public:
     // @param value - pointer reference to handle (aka void*) return value
     // @return status of operation
     virtual rocprofvis_dm_result_t GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value);
+    // Returns class mutex
+    virtual std::shared_mutex* Mutex() { return nullptr; }
 #ifdef TEST
     // Virtual method to get property symbol for testing/debugging
     // @param property - property enumeration rocprofvis_dm_extdata_property_t

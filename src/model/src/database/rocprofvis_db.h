@@ -43,6 +43,8 @@ typedef std::map<uint32_t, rocprofvis_dm_slice_t> slice_array_t;
 
 class Database;
 
+
+
 // Helper class to manage cached information tables (node, agent, queue, process, thread information)
 class DatabaseCache 
 {
@@ -133,11 +135,13 @@ class Database
         // @param query - database query 
         // @param description - database description
         // @param object - future object providing asynchronous execution mechanism 
+        // @param id new id is assigned to the table and returned using this reference pointer
         // @return status of operation
         rocprofvis_dm_result_t          ExecuteQueryAsync(
                                                                 rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t description,
-                                                                rocprofvis_db_future_t object);
+                                                                rocprofvis_db_future_t object,
+                                                                rocprofvis_dm_table_id_t* id);
 
        virtual rocprofvis_dm_result_t BuildTableQuery(
                                                                 rocprofvis_dm_timestamp_t start, 

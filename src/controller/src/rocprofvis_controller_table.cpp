@@ -60,10 +60,11 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
             db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), sort_column,
             count,
             index, false, &fetch_query);
+        rocprofvis_dm_table_id_t table_id = 0;
         if(dm_result == kRocProfVisDmResultSuccess)
         {
             dm_result = rocprofvis_db_execute_query_async(
-                db, fetch_query, "Fetch table content", object2wait);
+                db, fetch_query, "Fetch table content", object2wait, &table_id);
         }
 
         if(dm_result == kRocProfVisDmResultSuccess)
@@ -80,7 +81,7 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
             if(num_tables > 0)
             {
                 rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(
-                    dm_handle, kRPVDMTableHandleIndexed, 0);
+                    dm_handle, kRPVDMTableHandleByID, table_id);
                 if(nullptr != table)
                 {
                     char* table_description = rocprofvis_dm_get_property_as_charptr(
@@ -310,10 +311,11 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
         rocprofvis_dm_result_t dm_result   = rocprofvis_db_build_table_query(
             db, start_ts, end_ts, tracks.size(), tracks.data(), nullptr, 0,
             0, true, &count_query);
+        rocprofvis_dm_table_id_t table_id = 0;
         if(dm_result == kRocProfVisDmResultSuccess)
         {
             dm_result = rocprofvis_db_execute_query_async(
-                db, count_query, "Calculate table count", object2wait);
+                db, count_query, "Calculate table count", object2wait, &table_id);
         }
 
         if(dm_result == kRocProfVisDmResultSuccess)
@@ -331,7 +333,7 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
             if(num_tables > 0)
             {
                 rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(
-                    dm_handle, kRPVDMTableHandleIndexed, 0);
+                    dm_handle, kRPVDMTableHandleByID, table_id);
                 if(nullptr != table)
                 {
                     char* table_description = rocprofvis_dm_get_property_as_charptr(

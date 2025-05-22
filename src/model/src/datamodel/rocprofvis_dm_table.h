@@ -39,8 +39,7 @@ class Table : public DmBase {
         // @param description - pointer to table description string
         // @param query - pointer to table query string
 
-        Table(  Trace* ctx, rocprofvis_dm_charptr_t description, rocprofvis_dm_charptr_t query) : 
-                                                        m_ctx(ctx), m_query(query), m_description(description) {}; 
+        Table(  Trace* ctx, rocprofvis_dm_charptr_t description, rocprofvis_dm_charptr_t query); 
         // Table class destructor, not required unless declared as virtual
         ~Table(){}
         // Method to add column name to a vector array of columns
@@ -59,12 +58,16 @@ class Table : public DmBase {
         // @return used memory size
         rocprofvis_dm_size_t                    GetMemoryFootprint();
 
+        // Returns table id
+        uint32_t                                Id() { return m_id; };
         // Returns trace context pointer
-        Trace*                             Ctx() {return m_ctx;};
+        Trace*                                  Ctx() {return m_ctx;};
         // Returns pointer to query string
         rocprofvis_dm_charptr_t                 Query() {return m_query.c_str();}
         // Returns pointer to description string
         rocprofvis_dm_charptr_t                 Description() {return m_description.c_str();}
+        // Returns class mutex
+        std::shared_mutex*                      Mutex() override { return &m_lock; }
 
         // Method to read Table object property as uint64
         // @param property - property enumeration rocprofvis_dm_table_property_t
@@ -98,6 +101,8 @@ class Table : public DmBase {
 #endif
 
     private:
+        // table id
+        uint64_t                                       m_id;
         // pointer to Trace context object
         Trace*                                         m_ctx;
         // vector array of column names
@@ -108,6 +113,8 @@ class Table : public DmBase {
         std::string                                         m_query;
         // table description string
         std::string                                         m_description;
+        // object mutex, for shared access
+        mutable std::shared_mutex                       m_lock;
 
         // Method to get pointer to column name at provided index
         // @param index - column index

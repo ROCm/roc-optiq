@@ -128,9 +128,11 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
                 m_settings.GetColor(static_cast<int>(Colors::kSelection)));
         }
 
-        int rectangle_render_count = 0;
-        for(double raw_position_points_x = min_x - (steps);
-            raw_position_points_x < max_x + (steps); raw_position_points_x += steps)
+        // Calculate a better starting point so that we don't enumerate too much of the graph
+        double pos = (floor((v_min_x - min_x) / steps) * steps) + min_x;
+
+        for(double raw_position_points_x = pos;
+            raw_position_points_x < v_max_x + (steps); raw_position_points_x += steps)
         {
             // loop through min-max and create appropriate number of scale markers with
             // marker value printed at bottom.

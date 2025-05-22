@@ -418,6 +418,9 @@ TimelineView::RenderGraphView()
 
             if(is_visible)
             {
+                float content_width =
+                    (ImGui::GetContentRegionAvail().x - m_sidebar_size);
+
                 // Request data for the chart if it doesn't have data
                 if(!graph_objects.second.chart->HasData() &&
                    graph_objects.second.chart->GetRequestState() ==
@@ -427,7 +430,8 @@ TimelineView::RenderGraphView()
                                                          // viewport worth of buffer.
                     graph_objects.second.chart->RequestData(
                         (m_movement - buffer_distance) + m_min_x,
-                        (m_movement + m_v_width + buffer_distance) + m_min_x);
+                        (m_movement + m_v_width + buffer_distance) + m_min_x,
+                        content_width * 3);
                 }
                 if(m_settings.IsHorizontalRender())
                 {
@@ -440,7 +444,8 @@ TimelineView::RenderGraphView()
 
                         graph_objects.second.chart->RequestData(
                             (m_movement - buffer_distance) + m_min_x,
-                            (m_movement + m_v_width + buffer_distance) + m_min_x);
+                            (m_movement + m_v_width + buffer_distance) + m_min_x,
+                            content_width * 3);
                     }
                 }
 

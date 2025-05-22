@@ -3,25 +3,21 @@
 #include "rocprofvis_grid.h"
 #include "imgui.h"
 #include "rocprofvis_settings.h"
+#include "widgets/rocprofvis_debug_window.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
+
 namespace RocProfVis
 {
 namespace View
 {
 
 Grid::Grid()
-: m_viewport_start_position(std::numeric_limits<double>::lowest())
-, m_highlighted_region({ -1.f, -1.f })
+: m_highlighted_region({ -1.f, -1.f })
 , m_settings(Settings::GetInstance())
-, m_viewport_end_position(std::numeric_limits<double>::max())
-, m_content_size_x()
-, m_sidebar_size()
-, m_scale_x()
-, m_min_x()
 {}
 Grid::~Grid() {}
 
@@ -37,26 +33,24 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
                  ImVec2 graph_size)
 {
     ImVec2 container_pos =
-        ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
+        ImVec2(ImGui::GetWindowPos().x + sidebar_size, ImGui::GetWindowPos().y);
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImVec2(graph_size.x, graph_size.y - 50);
     double range           = (v_max_x + movement) - (v_min_x + movement);
     ImVec2 displaySize     = graph_size;
 
-    m_content_size_x = content_size.x;
-    m_sidebar_size   = sidebar_size;
-    m_scale_x        = scale_x;
-    m_min_x          = min_x;
-
-    double steps = 0;
+    double stepSize = 0;
+    double steps    = 0;
     {
         char label[32];
         snprintf(label, sizeof(label), "%.0f", max_x);
         ImVec2 labelSize = ImGui::CalcTextSize(label);
 
         // amount the loop which generates the grid iterates by.
-        steps = labelSize.x / scale_x;
+        steps = displaySize.x / labelSize.x;
+
+        stepSize = labelSize.x;
     }
 
     ImGuiWindowFlags window_flags =
@@ -67,14 +61,6 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
     if(ImGui::BeginChild("Grid"), ImVec2(displaySize.x, displaySize.y - 30.0f), true,
        window_flags)
     {
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(static_cast<int>(
-                                                    Colors::kFillerColor)));
-        ImGui::BeginChild("background component",
-                          ImVec2(displaySize.x, displaySize.y - 30.0f), true);
-
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
-
         ImGui::SetCursorPos(ImVec2(0, 0));
 
         ImGui::BeginChild("main component", ImVec2(displaySize.x, displaySize.y - 30.0f),
@@ -92,7 +78,6 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
         double normalized_start_box =
             container_pos.x + (min_x - (min_x + movement)) * scale_x;
 
-        ///////Code below is for selection visuals.
         if(m_highlighted_region.first != -1)
         {
             double normalized_start_box_highlighted =
@@ -128,68 +113,47 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
                 m_settings.GetColor(static_cast<int>(Colors::kSelection)));
         }
 
-        int rectangle_render_count = 0;
-        for(double raw_position_points_x = min_x - (steps);
-            raw_position_points_x < max_x + (steps); raw_position_points_x += steps)
+        int    rectangle_render_count = 0;
+        double m_v_width              = (max_x - min_x) / zoom;
+
+        double drag = (movement / m_v_width) * displaySize.x;
+        drag        = (int) drag % (int) stepSize;
+
+        // for(double raw_position_points_x = min_x - (steps);
+        // raw_position_points_x < max_x + (steps); raw_position_points_x += steps)
+        for(float i = 0; i < steps + 1; i++)
         {
-            // loop through min-max and create appropriate number of scale markers with
-            // marker value printed at bottom.
+            float linePos = stepSize * i;
 
-            double normalized_start =
-                container_pos.x + (raw_position_points_x - (min_x + movement)) *
-                                      scale_x;  // this value takes the raw value of the
-                                                // output and converts them into positions
-                                                // on the chart which is scaled by scale_x
+            linePos -= drag;
 
-            double normalized_end =
-                container_pos.x + ((raw_position_points_x + steps) - (min_x + movement)) *
-                                      scale_x;  // this value takes the raw value of the
-                                                // output and converts them into positions
-                                                // on the chart which is scaled by scale_x
+            float cursor_screen_percentage = (linePos) / displaySize.x;
 
-            bool is_visible = false;
+            double normalized_start = container_pos.x + linePos;
 
-            // IsRectVisible checks overlaping with windows coordinates. So we have to add
-            // child_win.x to normalized_start to see smaller traces.
-            if(ImGui::IsRectVisible(
-                   ImVec2(normalized_start, cursor_position.y),
-                   ImVec2(normalized_end,
-                          cursor_position.y + content_size.y - grid_size)))
-            {
-                is_visible = true;
-            }
-            else
-            {
-                is_visible = false;
-            }
+            DebugWindow::GetInstance()->AddDebugMessage(
+                "what a drag: " + std::to_string(drag) + " movement: " +
+                std::to_string(movement) + " zoom: " + std::to_string(zoom));
 
-            // Only render visible grid lines or the clipping time is excessive when
-            // zooming in to large traces
-            if(is_visible)
-            {
-                draw_list->AddRect(
-                    ImVec2(normalized_start, cursor_position.y),
-                    ImVec2(normalized_end,
-                           cursor_position.y + content_size.y - grid_size),
-                    m_settings.GetColor(static_cast<int>(Colors::kBoundBox)), 0.5f);
+            draw_list->AddLine(
+                ImVec2(normalized_start, cursor_position.y),
+                ImVec2(normalized_start, cursor_position.y + content_size.y - grid_size),
+                m_settings.GetColor(static_cast<int>(Colors::kBoundBox)), 0.5f);
 
-                char label[32];
-                snprintf(label, sizeof(label), "%.0f", raw_position_points_x - min_x);
-                // All though the gridlines are drawn based on where they should be on the
-                // scale the raw values are used to represent them.
-                ImVec2 labelSize = ImGui::CalcTextSize(label);
-                ImVec2 labelPos =
-                    ImVec2(normalized_start - labelSize.x / 2,
-                           cursor_position.y + content_size.y - labelSize.y - 5);
-                draw_list->AddText(
-                    labelPos, m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
-                    label);
-            }
+            char label[32];
+            snprintf(label, sizeof(label), "%.0f",
+                     movement + (cursor_screen_percentage * m_v_width));
+            // All though the gridlines are drawn based on where they should be on the
+            // scale the raw values are used to represent them.
+            ImVec2 labelSize = ImGui::CalcTextSize(label);
+            ImVec2 labelPos =
+                ImVec2(normalized_start - labelSize.x / 2,
+                       cursor_position.y + content_size.y - labelSize.y - 5);
+            draw_list->AddText(labelPos,
+                               m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
+                               label);
         }
 
-        ImVec2 windowPos  = ImGui::GetWindowPos();
-        ImVec2 windowSize = ImGui::GetWindowSize();
-        float  boxWidth   = 300.0f;  // Specify the width of the box
         draw_list->PopClipRect();
         ImGui::EndChild();
 

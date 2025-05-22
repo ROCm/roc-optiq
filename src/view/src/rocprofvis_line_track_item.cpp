@@ -274,6 +274,10 @@ LineTrackItem::ExtractPointsFromData()
         spdlog::debug("Invalid track data type for track {}", m_id);
         return false;
     }
+    if (sample_track->GetData().empty()) {
+        spdlog::debug("No data for track {}", m_id);
+        return false;
+    }
 
     std::vector<rocprofvis_data_point_t> aggregated_points;
 

@@ -163,13 +163,12 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 }
 
 void
-TrackItem::RequestData(double min, double max)
+TrackItem::RequestData(double min, double max, float width)
 {
     if(m_request_state == TrackDataRequestState::kIdle)
     {
         m_request_state = TrackDataRequestState::kRequesting;
-        m_data_provider.FetchTrack(m_id, min,
-                                   max, 500, 0);
+        m_data_provider.FetchTrack(m_id, min, max, width, 0);
 
         spdlog::debug("Fetching from {} to {} ( {} ) at zoom {}",
                       min - m_data_provider.GetStartTime(),

@@ -134,12 +134,14 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
 rocprofvis_dm_result_t  Database::ExecuteQueryAsync(
                                                     rocprofvis_dm_charptr_t query,
                                                     rocprofvis_dm_charptr_t description,
-                                                    rocprofvis_db_future_t object){
+                                                    rocprofvis_db_future_t object, 
+                                                    rocprofvis_dm_table_id_t* id)
+{
     Future* future = (Future*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
-    rocprofvis_dm_table_id_t id = std::hash<std::string>{}(query);
-    rocprofvis_dm_result_t   result = BindObject()->FuncCheckTableExists(BindObject()->trace_object, id);
+    *id = std::hash<std::string>{}(query);
+    rocprofvis_dm_result_t   result = BindObject()->FuncCheckTableExists(BindObject()->trace_object, *id);
     if(result != kRocProfVisDmResultNotLoaded)
     {
         return future->SetPromise(result);

@@ -392,12 +392,16 @@ int main(int argc, char** argv)
                 CheckMemoryFootprint(trace);
 
                 PrintHeader("Test SQL table read");
-                if (kRocProfVisDmResultSuccess == rocprofvis_db_execute_query_async(db, "select * from top;", "Kernel execution summary", object2wait))
+                uint64_t table_id = 0;
+                if(kRocProfVisDmResultSuccess ==
+                   rocprofvis_db_execute_query_async(db, "select * from top;",
+                                                     "Kernel execution summary",
+                                                     object2wait, &table_id))
                 {
                     if (kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object2wait, 10)) {
                         uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(trace, kRPVDMNumberOfTablesUInt64, 0);
                         if (num_tables > 0){
-                            rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(trace, kRPVDMTableHandleIndexed, 0);
+                            rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(trace, kRPVDMTableHandleByID, table_id);
                             if (nullptr != table) {
                                 char* table_description = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableDescriptionCharPtr, 0);
                                 char* table_query = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableQueryCharPtr, 0);

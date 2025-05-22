@@ -717,12 +717,12 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
 
         PrintHeader("Allocate future");
         rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(db_progress);
+        rocprofvis_dm_table_id_t table_id = 0;
         REQUIRE(nullptr != object2wait);
         PrintHeader("Test SQL table read");
-        const char* query = "select * from top;";
         auto query_result = rocprofvis_db_execute_query_async(
-            m_db, query, "Kernel execution summary", object2wait);
-        rocprofvis_dm_table_id_t id = std::hash<std::string>{}(query);
+            m_db, "select * from top;", "Kernel execution summary", object2wait, &table_id);
+        
         REQUIRE(kRocProfVisDmResultSuccess == query_result);
         if(kRocProfVisDmResultSuccess == query_result)
         {
@@ -735,7 +735,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                 if(num_tables > 0)
                 {
                     rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(
-                        m_trace, kRPVDMTableHandleByID, id);
+                        m_trace, kRPVDMTableHandleByID, table_id);
                     REQUIRE(table);
                     if(nullptr != table)
                     {

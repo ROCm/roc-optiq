@@ -34,7 +34,6 @@ FlameTrackItem::SetRandomColorFlag(bool set_color)
 std::tuple<double, double>
 FlameTrackItem::FindMaxMinFlame()
 {
-   
     return std::make_tuple(m_min_x, m_max_x);
 }
 
@@ -179,7 +178,10 @@ FlameTrackItem::RenderChart(float graph_width)
 
     for(const auto& flame : m_flames)
     {
-        double normalized_start = (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
+        ImVec2 container_pos = ImGui::GetWindowPos();
+
+        double normalized_start =
+            container_pos.x + (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
 
         // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
         double normalized_end = flame.m_duration * m_scale_x;
@@ -199,9 +201,9 @@ FlameTrackItem::RenderChart(float graph_width)
 }
 
 void
-FlameTrackItem::Render()
+FlameTrackItem::Render(double width)
 {
-    TrackItem::Render();
+    TrackItem::Render(width);
 }
 
 }  // namespace View

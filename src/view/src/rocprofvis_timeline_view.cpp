@@ -60,8 +60,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_buffer_right_hit(false)
 , m_new_track_token(-1)
 , m_settings(Settings::GetInstance())
-, m_viewport_start(0)
-, m_viewport_end(0)
+
 , m_viewport_past_position(0)
 , m_graph_size()
 {
@@ -82,31 +81,12 @@ TimelineView::~TimelineView()
 void
 TimelineView::CalibratePosition()
 {
-    double current_position = m_grid.GetViewportStartPosition();
-    double end_position     = m_grid.GetViewportEndPosition();
-
-    m_viewport_start = current_position;
-    m_viewport_end   = end_position + m_min_x;
-
-    m_scroll_position_x = (current_position - m_min_x) /
-                          (m_max_x - m_min_x);  // Finds where the chart is at.
+    m_scroll_position_x =
+        (m_movement) / (m_max_x - m_min_x);  // Finds where the chart is at.
     double scrollback = (m_max_x - m_min_x) * m_scroll_position_x;
-    if(m_calibrated)
-    {
-        double scrollback =
-            (m_max_x - m_min_x) *
-            m_scroll_position_x;  // Moves the graph back to start at the beggining.
-                                  // Represents how much to go back to starting
-        // This is used to start the chart at the beggining on initial load.
-        m_movement   = m_movement - scrollback;
-        m_calibrated = false;
-    }
+
     if(m_artifical_scrollbar_active == true)
     {
-        double scrollback =
-            (m_max_x - m_min_x) *
-            m_scroll_position_x;  // Moves the graph back to start at the beggining.
-                                  // Represents how much to go back to starting
         double value_to_begginging =
             m_movement - scrollback;  // how to get back to initial/first value accounting
                                       // for current movement.
@@ -240,8 +220,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     ImVec2 display_size    = ImGui::GetWindowSize();
     float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    ImGui::SetNextWindowSize(ImVec2(display_size.x - scrollbar_width, display_size.y),
-                             ImGuiCond_Always);
+    ImGui::SetNextWindowSize(m_graph_size, ImGuiCond_Always);
     ImGui::SetCursorPos(
         ImVec2(m_sidebar_size, 0));  // Meta Data size will be universal next PR.
 
@@ -254,9 +233,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     ImGui::SetItemAllowOverlap();
 
-    ImDrawList* draw_list      = ImGui::GetWindowDrawList();
-    ImVec2      window_size    = ImGui::GetContentRegionAvail();
-    float       mouse_relative = window_size.x - ImGui::GetMousePos().x;
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     ImVec2 window_position = ImGui::GetWindowPos();
     ImVec2 mouse_position  = ImGui::GetMousePos();
@@ -266,17 +243,17 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(
-           window_position,
-           ImVec2(window_position.x + display_size.x - m_sidebar_size - scrollbar_width,
-                  window_position.y + window_size.y)))
+           window_position, ImVec2(window_position.x + m_graph_size.x - scrollbar_width,
+                                   window_position.y + m_graph_size.y)))
     {
         ImVec2 mouse_position = ImGui::GetMousePos();
 
         ImVec2 containerPos = ImGui::GetWindowPos();
 
+        float cursor_screen_percentage =
+            (mouse_position.x - window_position.x) / m_graph_size.x;
         char text[20];
-        sprintf(text, "%.0f",
-                m_grid.GetCursorPosition(mouse_position.x - containerPos.x + 2));
+        sprintf(text, "%.0f", m_movement + (cursor_screen_percentage * m_v_width));
         ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28);
 
         ImVec2 rect_pos = ImVec2(mouse_position.x + 50 * Settings::GetInstance().GetDPI(),
@@ -297,13 +274,13 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             if(m_highlighted_region.first == -1)
             {
                 m_highlighted_region.first =
-                    m_grid.GetCursorPosition(mouse_position.x - containerPos.x);
+                    m_movement + (cursor_screen_percentage * m_v_width);
                 m_grid.SetHighlightedRegion(m_highlighted_region);
             }
             else if(m_highlighted_region.second == -1)
             {
                 m_highlighted_region.second =
-                    m_grid.GetCursorPosition(mouse_position.x - containerPos.x);
+                    m_movement + (cursor_screen_percentage * m_v_width);
                 m_grid.SetHighlightedRegion(m_highlighted_region);
             }
             else
@@ -326,16 +303,14 @@ TimelineView::GetGraphMap()
 }
 
 void
-TimelineView::RenderGrid(float width)
+TimelineView::RenderGrid()
 {
     /*This section makes the grid for the charts*/
 
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
-    ImVec2 display_size = ImGui::GetWindowSize();
-
-    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(m_graph_size, ImGuiCond_Always);
 
     ImGui::SetCursorPos(ImVec2(0, 0));
 
@@ -345,7 +320,7 @@ TimelineView::RenderGrid(float width)
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     m_grid.RenderGrid(m_min_x, m_max_x, m_movement, m_zoom, m_scale_x, m_v_max_x,
-                      m_v_min_x, m_grid_size, m_sidebar_size);
+                      m_v_min_x, m_grid_size, m_sidebar_size, m_graph_size);
 
     ImGui::PopStyleColor();
 }
@@ -398,7 +373,7 @@ TimelineView::RenderGraphView()
         ImGui::SetScrollY(m_scroll_position);
     }
 
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = m_graph_size;
 
     DebugWindow::GetInstance()->AddDebugMessage(
         "Window Height: " + std::to_string(window_size.y) +
@@ -413,8 +388,6 @@ TimelineView::RenderGraphView()
     {
         m_viewport_past_position = m_movement;
         request_horizontal_data  = true;
-        RenderGrid(m_graph_size);
-        CalibratePosition();
     }
     for(const auto& graph_objects : m_graph_map)
     {
@@ -433,7 +406,7 @@ TimelineView::RenderGraphView()
                               track_bottom;  // Positive if the track is above the view
             float delta_bottom =
                 track_top - (m_scroll_position +
-                             window_size.y);  // Positive if the track is below the view
+                             m_graph_size.y);  // Positive if the track is below the view
 
             // Save distance for book keeping
             graph_objects.second.chart->SetDistanceToView(
@@ -441,7 +414,7 @@ TimelineView::RenderGraphView()
 
             // Check if the track is visible
             bool is_visible = (track_bottom >= m_scroll_position &&
-                               track_top <= m_scroll_position + window_size.y);
+                               track_top <= m_scroll_position + m_graph_size.y);
 
             if(is_visible)
             {
@@ -450,12 +423,11 @@ TimelineView::RenderGraphView()
                    graph_objects.second.chart->GetRequestState() ==
                        TrackDataRequestState::kIdle)
                 {
-                    double buffer_distance =
-                        (m_viewport_end - m_viewport_start);  // Essentially creates one
-                                                              // viewport worth of buffer.
+                    double buffer_distance = m_v_width;  // Essentially creates one
+                                                         // viewport worth of buffer.
                     graph_objects.second.chart->RequestData(
-                        m_viewport_start - buffer_distance,
-                        m_viewport_end + buffer_distance);
+                        (m_movement - buffer_distance) + m_min_x,
+                        (m_movement + m_v_width + buffer_distance) + m_min_x);
                 }
                 if(m_settings.IsHorizontalRender())
                 {
@@ -463,14 +435,12 @@ TimelineView::RenderGraphView()
                        graph_objects.second.chart->GetRequestState() ==
                            TrackDataRequestState::kIdle)
                     {
-                        double buffer_distance =
-                            (m_viewport_end -
-                             m_viewport_start);  // Essentially creates one viewport worth
-                                                 // of buffer.
+                        double buffer_distance = m_v_width;  // Essentially creates one
+                                                             // viewport worth of buffer.
 
                         graph_objects.second.chart->RequestData(
-                            m_viewport_start - buffer_distance,
-                            m_viewport_end + buffer_distance);
+                            (m_movement - buffer_distance) + m_min_x,
+                            (m_movement + m_v_width + buffer_distance) + m_min_x);
                     }
                 }
 
@@ -554,7 +524,7 @@ TimelineView::RenderGraphView()
                     m_zoom, m_movement, m_min_x, m_max_x, m_scale_x, m_scroll_position);
 
                 m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
-                graph_objects.second.chart->Render();
+                graph_objects.second.chart->Render(m_graph_size.x);
                 ImGui::PopStyleColor();
 
                 ImGui::EndChild();
@@ -584,10 +554,6 @@ TimelineView::RenderGraphView()
             }
         }
     }
-
-    // CalibratePosition();
-
-    // Set the sidebar size at the end of render loop.
 
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
@@ -710,7 +676,8 @@ TimelineView::RenderGraphPoints()
         ImVec2 screen_pos                = ImGui::GetCursorScreenPos();
         ImVec2 subcomponent_size_main    = ImGui::GetWindowSize();
         int    artificial_scrollbar_size = 30;
-        m_graph_size                     = subcomponent_size_main.x;
+        m_graph_size =
+            ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
 
         ImGui::BeginChild(
             "Grid View 2",
@@ -718,19 +685,16 @@ TimelineView::RenderGraphPoints()
                    subcomponent_size_main.y - artificial_scrollbar_size),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-        ImVec2 graph_view_size = ImGui::GetContentRegionAvail();
-
         DebugWindow::GetInstance()->AddDebugMessage(
-            "graph_view_size: " + std::to_string(graph_view_size.y) +
+            "graph_view_size: " + std::to_string(m_graph_size.y) +
             " Grid View 2 Height raw: " + std::to_string(subcomponent_size_main.y) +
             " Grid View 2 Height: " + std::to_string(ImGui::GetWindowSize().y));
 
         // Scale used in all graphs computer here.
         m_v_width = (m_max_x - m_min_x) / m_zoom;
-
         m_v_min_x = m_min_x + m_movement;
         m_v_max_x = m_v_min_x + m_v_width;
-        m_scale_x = (graph_view_size.x - m_sidebar_size) / (m_v_max_x - m_v_min_x);
+        m_scale_x = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
 
         if(m_capture_og_v_max_x)
         {
@@ -738,7 +702,7 @@ TimelineView::RenderGraphPoints()
             m_capture_og_v_max_x = false;
         }
 
-        RenderGrid(subcomponent_size_main.x);
+        RenderGrid();
 
         if(m_meta_map_made)
         {
@@ -749,7 +713,7 @@ TimelineView::RenderGraphPoints()
         m_is_control_held = io.KeyCtrl;
         if(!m_is_control_held)
         {
-            RenderSplitter(screen_pos);
+            // RenderSplitter(screen_pos);
             RenderScrubber(screen_pos);
 
             if(m_resize_activity == false)
@@ -770,7 +734,6 @@ TimelineView::RenderGraphPoints()
                           ImVec2(subcomponent_size_main.x, artificial_scrollbar_size),
                           true, ImGuiWindowFlags_NoScrollbar);
 
-        ImGui::Dummy(ImVec2(m_sidebar_size, 10));
         ImGui::SameLine();
 
         float current_pos = m_scroll_position_x * (subcomponent_size_main.x * m_zoom);
@@ -814,19 +777,6 @@ TimelineView::RenderGraphPoints()
         else
         {
             m_artifical_scrollbar_active = false;
-            if(m_scrollbar_location_as_percentage > 1)
-            {
-                m_buffer_right_hit = true;
-            }
-            else if(m_scrollbar_location_as_percentage < -0.10)
-            {
-                m_buffer_left_hit = true;
-            }
-            else
-            {
-                m_buffer_right_hit = false;
-                m_buffer_left_hit  = false;
-            }
         }
 
         ImGui::EndChild();
@@ -894,17 +844,17 @@ TimelineView::HandleTopSurfaceTouch()
             float view_width = (m_max_x - m_min_x) / m_zoom;
 
             // Left side
-            if((drag / ImGui::GetContentRegionAvail().x) * view_width < 0)
+            if((drag / m_graph_size.x) * view_width < 0)
             {
-                m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                m_movement -= (drag / m_graph_size.x) * view_width;
             }
 
             // Right side
-            if((drag / ImGui::GetContentRegionAvail().x) * view_width > 0)
+            if((drag / m_graph_size.x) * view_width > 0)
             {
                 if(m_buffer_left_hit == false)
                 {
-                    m_movement -= (drag / ImGui::GetContentRegionAvail().x) * view_width;
+                    m_movement -= (drag / m_graph_size.x) * view_width;
                 }
             }
         }

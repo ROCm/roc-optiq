@@ -13,16 +13,6 @@ namespace RocProfVis
 namespace View
 {
 
-double
-Grid::GetViewportStartPosition()
-{
-    return m_viewport_start_position;
-}
-double
-Grid::GetViewportEndPosition()
-{
-    return GetCursorPosition(m_content_size_x);
-}
 Grid::Grid()
 : m_viewport_start_position(std::numeric_limits<double>::lowest())
 , m_highlighted_region({ -1.f, -1.f })
@@ -35,12 +25,6 @@ Grid::Grid()
 {}
 Grid::~Grid() {}
 
-double
-Grid::GetCursorPosition(float mouse_position)
-{
-    return (m_viewport_start_position + ((mouse_position) * (1 / m_scale_x)) - m_min_x);
-}
-
 void
 Grid::SetHighlightedRegion(std::pair<float, float> region)
 {
@@ -49,12 +33,16 @@ Grid::SetHighlightedRegion(std::pair<float, float> region)
 
 void
 Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float scale_x,
-                 double v_max_x, double v_min_x, int grid_size, int sidebar_size)
+                 double v_max_x, double v_min_x, int grid_size, int sidebar_size,
+                 ImVec2 graph_size)
 {
+    ImVec2 container_pos =
+        ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
+
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_size    = ImGui::GetContentRegionAvail();
+    ImVec2 content_size    = ImVec2(graph_size.x, graph_size.y - 50);
     double range           = (v_max_x + movement) - (v_min_x + movement);
-    ImVec2 displaySize     = ImGui::GetIO().DisplaySize;
+    ImVec2 displaySize     = graph_size;
 
     m_content_size_x = content_size.x;
     m_sidebar_size   = sidebar_size;
@@ -71,45 +59,44 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
         steps = labelSize.x / scale_x;
     }
 
-    
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
 
     ImGui::SetCursorPos(ImVec2(sidebar_size, 0));
 
-    if(ImGui::BeginChild("Grid"),
-       ImVec2(displaySize.x - sidebar_size, displaySize.y - 30.0f), true, window_flags)
+    if(ImGui::BeginChild("Grid"), ImVec2(displaySize.x, displaySize.y - 30.0f), true,
+       window_flags)
     {
         ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(static_cast<int>(
                                                     Colors::kFillerColor)));
         ImGui::BeginChild("background component",
-                          ImVec2(displaySize.x - sidebar_size, displaySize.y - 30.0f),
-                          true);
+                          ImVec2(displaySize.x, displaySize.y - 30.0f), true);
 
         ImGui::EndChild();
         ImGui::PopStyleColor();
 
         ImGui::SetCursorPos(ImVec2(0, 0));
 
-        ImGui::BeginChild("main component",
-                          ImVec2(displaySize.x - sidebar_size, displaySize.y - 30.0f),
+        ImGui::BeginChild("main component", ImVec2(displaySize.x, displaySize.y - 30.0f),
                           false);
         ImVec2 child_win  = ImGui::GetWindowPos();
         ImVec2 child_size = ImGui::GetWindowSize();
 
         // Define the clipping rectangle to match the child window
         ImVec2 clip_min = child_win;
-        ImVec2 clip_max = ImVec2(child_win.x + content_size.x, child_win.y + content_size.y);
+        ImVec2 clip_max =
+            ImVec2(child_win.x + content_size.x, child_win.y + content_size.y);
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
         draw_list->PushClipRect(clip_min, clip_max, true);
 
-        double normalized_start_box = (min_x - (min_x + movement)) * scale_x;
+        double normalized_start_box =
+            container_pos.x + (min_x - (min_x + movement)) * scale_x;
 
         ///////Code below is for selection visuals.
         if(m_highlighted_region.first != -1)
         {
             double normalized_start_box_highlighted =
-                (m_highlighted_region.first - movement) * scale_x;
+                container_pos.x + (m_highlighted_region.first - movement) * scale_x;
 
             draw_list->AddLine(
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
@@ -120,7 +107,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
         if(m_highlighted_region.first != -1)
         {
             double normalized_start_box_highlighted_end =
-                (m_highlighted_region.second - movement) * scale_x;
+                container_pos.x + (m_highlighted_region.second - movement) * scale_x;
 
             draw_list->AddLine(
                 ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
@@ -131,9 +118,9 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
         if(m_highlighted_region.first != -1 && m_highlighted_region.second != -1)
         {
             double normalized_start_box_highlighted =
-                (m_highlighted_region.first - movement) * scale_x;
+                container_pos.x + (m_highlighted_region.first - movement) * scale_x;
             double normalized_start_box_highlighted_end =
-                (m_highlighted_region.second - movement) * scale_x;
+                container_pos.x + (m_highlighted_region.second - movement) * scale_x;
             draw_list->AddRectFilled(
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted_end,
@@ -141,21 +128,7 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
                 m_settings.GetColor(static_cast<int>(Colors::kSelection)));
         }
 
-        draw_list->AddRectFilled(
-            ImVec2(normalized_start_box, cursor_position.y),
-            ImVec2(normalized_start_box - 1500.0f,
-                   cursor_position.y + content_size.y - grid_size),
-            m_settings.GetColor(static_cast<int>(Colors::kBoundBox)));
-
-        double normalized_start_box_end = (max_x - (min_x + movement)) * scale_x;
-        draw_list->AddRectFilled(
-            ImVec2(normalized_start_box_end, cursor_position.y),
-            ImVec2(normalized_start_box_end + content_size.x,
-                   cursor_position.y + content_size.y - grid_size),
-            m_settings.GetColor(static_cast<int>(Colors::kBoundBox)));
-        bool   has_been_seen = false;
-        double last_been_seen;
-        int    rectangle_render_count = 0;
+        int rectangle_render_count = 0;
         for(double raw_position_points_x = min_x - (steps);
             raw_position_points_x < max_x + (steps); raw_position_points_x += steps)
         {
@@ -163,14 +136,16 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
             // marker value printed at bottom.
 
             double normalized_start =
-                (raw_position_points_x - (min_x + movement)) *
-                scale_x;  // this value takes the raw value of the output and converts
-                          // them into positions on the chart which is scaled by scale_x
+                container_pos.x + (raw_position_points_x - (min_x + movement)) *
+                                      scale_x;  // this value takes the raw value of the
+                                                // output and converts them into positions
+                                                // on the chart which is scaled by scale_x
 
             double normalized_end =
-                ((raw_position_points_x + steps) - (min_x + movement)) *
-                scale_x;  // this value takes the raw value of the output and converts
-                          // them into positions on the chart which is scaled by scale_x
+                container_pos.x + ((raw_position_points_x + steps) - (min_x + movement)) *
+                                      scale_x;  // this value takes the raw value of the
+                                                // output and converts them into positions
+                                                // on the chart which is scaled by scale_x
 
             bool is_visible = false;
 
@@ -182,22 +157,6 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
                           cursor_position.y + content_size.y - grid_size)))
             {
                 is_visible = true;
-                if(has_been_seen == false)
-                {
-                    // First one thats visible.
-
-                    rectangle_render_count = rectangle_render_count + 1;
-                    m_viewport_start_position =
-                        (raw_position_points_x -
-                         (steps * (1 - ((clip_min.x - normalized_start) /
-                                        (normalized_end - normalized_start))))) +
-                        steps;
-                    has_been_seen = true;
-                }
-                last_been_seen = (raw_position_points_x +
-                                  (steps * (1 - ((clip_min.x - normalized_start) /
-                                                 (normalized_end - normalized_start))))) +
-                                 steps;
             }
             else
             {

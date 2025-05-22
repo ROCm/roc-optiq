@@ -454,16 +454,18 @@ LineTrackItem::RenderChart(float graph_width)
 }
 
 void
-LineTrackItem::Render()
+LineTrackItem::Render(double width)
 {
-    TrackItem::Render();
+    TrackItem::Render(width);
 }
 
 ImVec2
 LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
                        ImVec2& content_size, float scaleX, float scaleY)
 {
-    double x = (point.x_value - (m_min_x + m_movement)) * scaleX;
+    ImVec2 container_pos = ImGui::GetWindowPos();
+
+    double x = container_pos.x + (point.x_value - (m_min_x + m_movement)) * scaleX;
     double y = cursor_position.y + content_size.y - (point.y_value - m_min_y) * scaleY;
 
     return ImVec2(x, y);

@@ -41,7 +41,7 @@ public:
 
 private:
     void RenderGraphPoints();
-    void RenderGrid(float width);
+    void RenderGrid();
     void RenderScrubber(ImVec2 screen_pos);
     void RenderSplitter(ImVec2 screen_pos);
 
@@ -94,10 +94,8 @@ private:
     std::pair<double, double>             m_highlighted_region;
     Settings&                             m_settings;
     EventManager::SubscriptionToken       m_new_track_token;
-    double                                m_viewport_start;
-    double                                m_viewport_end;
     double                                m_viewport_past_position;
-    float                                 m_graph_size;
+    ImVec2                                 m_graph_size;
 };
 
 }  // namespace View

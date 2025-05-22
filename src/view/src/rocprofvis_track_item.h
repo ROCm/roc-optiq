@@ -27,7 +27,7 @@ public:
     void               SetID(int id);
     int                GetID();
     virtual float      GetTrackHeight();
-    virtual void       Render();
+    virtual void       Render(double width);
     const std::string& GetName();
 
     virtual void UpdateMovement(float zoom, float movement, double& min_x, double& max_x,

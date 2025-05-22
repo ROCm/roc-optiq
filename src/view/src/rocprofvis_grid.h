@@ -16,13 +16,11 @@ public:
     Grid();
     ~Grid();
 
-    void   RenderGrid(double min_x, double max_x, double movement, float zoom,
-                      float scale_x, double v_max_x, double v_min_x, int grid_size,
-                      int sidebar_size);
-    double  GetCursorPosition(float mouse_position);
-    double GetViewportStartPosition();
-    double GetViewportEndPosition();
-    void   SetHighlightedRegion(std::pair<float, float> region);
+    void RenderGrid(double min_x, double max_x, double movement, float zoom,
+                    float scale_x, double v_max_x, double v_min_x, int grid_size,
+                    int sidebar_size, ImVec2 graph_size);
+
+    void SetHighlightedRegion(std::pair<float, float> region);
 
 private:
     double                  m_viewport_start_position;

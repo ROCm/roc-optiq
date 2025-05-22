@@ -105,7 +105,7 @@ TrackItem::UpdateMovement(float zoom, float movement, double& min_x, double& max
 }
 
 void
-TrackItem::Render()
+TrackItem::Render(double width)
 {
     m_metadata_bg_color = m_settings.GetColor(static_cast<int>(Colors::kMetaDataColor));
     ImGuiWindowFlags window_flags =
@@ -115,7 +115,7 @@ TrackItem::Render()
        window_flags)
     {
         ImVec2 parent_size = ImGui::GetContentRegionAvail();
-        float  graph_width = parent_size.x - s_metadata_width;
+        float  graph_width = width;
 
         RenderMetaArea();
         ImGui::SameLine();

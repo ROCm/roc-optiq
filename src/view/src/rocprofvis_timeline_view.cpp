@@ -63,7 +63,6 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_settings(Settings::GetInstance())
 , m_v_past_width(0)
 , m_v_width(0)
-
 , m_viewport_past_position(0)
 , m_graph_size()
 {
@@ -172,7 +171,6 @@ TimelineView::Render()
 void
 TimelineView::RenderSplitter(ImVec2 screen_pos)
 {
-    // Scrubber Line
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -445,6 +443,9 @@ TimelineView::RenderGraphView()
                         (m_movement - buffer_distance) + m_min_x,
                         (m_movement + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
+                    request_horizontal_data =
+                        true;  // This is here because as new tracks are loaded all graphs
+                               // should have data to fill the viewport.
                 }
                 if(m_settings.IsHorizontalRender())
                 {
@@ -740,7 +741,7 @@ TimelineView::RenderGraphPoints()
         m_is_control_held = io.KeyCtrl;
         if(!m_is_control_held)
         {
-            // RenderSplitter(screen_pos);
+            RenderSplitter(screen_pos);
             RenderScrubber(screen_pos);
 
             if(m_resize_activity == false)
@@ -867,37 +868,19 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 m_can_drag_to_pan = true;
             }
+            else if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                m_can_drag_to_pan = false;
+            }
 
-            float drag = 0;
             if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
             {
-                std::cout << "left";
-                drag = 1;
+                m_movement -= (1 / m_graph_size.x) * m_v_width;
             }
             if(ImGui::IsKeyPressed(ImGuiKey_RightArrow))
             {
-                drag = -1;
+                m_movement -= (-1 / m_graph_size.x) * m_v_width;
             }
-
-            // Left side
-            if((drag / m_graph_size.x) * m_v_width < 0)
-            {
-                m_movement -= (drag / m_graph_size.x) * m_v_width;
-            }
-
-            // Right side
-            if((drag / m_graph_size.x) * m_v_width > 0)
-            {
-                if(m_buffer_left_hit == false)
-                {
-                    m_movement -= (drag / m_graph_size.x) * m_v_width;
-                }
-            }
-        }
-
-        if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-        {
-            m_can_drag_to_pan = false;
         }
 
         // Handle Panning

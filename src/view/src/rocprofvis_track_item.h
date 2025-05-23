@@ -53,6 +53,8 @@ public:
 
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
+    bool IsMetaAreaClicked() const { return m_meta_area_clicked; }
+    
 protected:
     virtual void RenderMetaArea()               = 0;
     virtual void RenderChart(float graph_width) = 0;
@@ -77,6 +79,7 @@ protected:
     DataProvider&         m_data_provider;
     TrackDataRequestState m_request_state;
     Settings&             m_settings;
+    bool                  m_meta_area_clicked;
     static float          s_metadata_width;
 };
 

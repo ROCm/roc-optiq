@@ -84,14 +84,14 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
                     dm_handle, kRPVDMTableHandleByID, table_id);
                 if(nullptr != table)
                 {
-                    char* table_description = rocprofvis_dm_get_property_as_charptr(
-                        table, kRPVDMExtTableDescriptionCharPtr, 0);
+                    char* table_query = rocprofvis_dm_get_property_as_charptr(
+                        table, kRPVDMExtTableQueryCharPtr, 0);
                     uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(
                         table, kRPVDMNumberOfTableColumnsUInt64, 0);
                     uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(
                         table, kRPVDMNumberOfTableRowsUInt64, 0);
                     num_records = num_rows;
-                    if(strcmp(table_description, fetch_query) == 0)
+                    if(strcmp(table_query, fetch_query) == 0)
                     {
                         m_columns.clear();
                         m_columns.resize(num_columns);

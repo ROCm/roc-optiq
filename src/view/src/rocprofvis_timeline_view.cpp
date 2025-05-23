@@ -739,7 +739,7 @@ TimelineView::RenderGraphPoints()
         m_is_control_held = io.KeyCtrl;
         if(!m_is_control_held)
         {
-            // RenderSplitter(screen_pos);
+            RenderSplitter(screen_pos);
             RenderScrubber(screen_pos);
 
             if(m_resize_activity == false)

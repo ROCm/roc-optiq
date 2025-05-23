@@ -396,6 +396,7 @@ TimelineView::RenderGraphView()
         " Content Max Y: " + std::to_string(m_content_max_y_scoll) +
         " Previous Scroll Position: " + std::to_string(m_previous_scroll_position));
 
+    bool selection_changed = false;
     for(const auto& graph_objects : m_graph_map)
     {
         if(graph_objects.second.display)
@@ -514,6 +515,13 @@ TimelineView::RenderGraphView()
 
                 m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
                 graph_objects.second.chart->Render();
+
+                //check for mouse click
+                if(graph_objects.second.chart->IsMetaAreaClicked()) {
+                    m_graph_map[graph_objects.second.chart->GetID()].selected = !graph_objects.second.selected;
+                    selection_changed = true;
+                }
+
                 ImGui::PopStyleColor();
 
                 ImGui::EndChild();
@@ -547,10 +555,29 @@ TimelineView::RenderGraphView()
     CalibratePosition();
 
     // Set the sidebar size at the end of render loop.
-
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
+
+    if(selection_changed)
+    {
+        std::vector<uint64_t> selected_graphs;
+        for(const auto& graph_objects : m_graph_map)
+        {
+            if(graph_objects.second.selected)
+            {
+                selected_graphs.push_back(graph_objects.first);
+            }
+        }
+        if(selected_graphs.empty())
+        {
+            m_data_provider.ClearEventTable();
+        }
+        else
+        {
+            m_data_provider.FetchMultiTrackEventTable(selected_graphs, m_min_x, m_max_x);
+        }
+    }
 }
 
 void

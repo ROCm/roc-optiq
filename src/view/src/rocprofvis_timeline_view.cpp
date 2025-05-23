@@ -759,7 +759,7 @@ TimelineView::RenderGraphPoints()
         ImGui::BeginChild("scrollbar",
                           ImVec2(subcomponent_size_main.x, artificial_scrollbar_size),
                           true, ImGuiWindowFlags_NoScrollbar);
-
+        ImGui::Dummy(ImVec2(m_sidebar_size, 10));
         ImGui::SameLine();
 
         float current_pos = m_scroll_position_x * (subcomponent_size_main.x * m_zoom);

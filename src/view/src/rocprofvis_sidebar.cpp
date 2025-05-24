@@ -41,14 +41,15 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
     {
         return;
     }
+
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, GRAY900);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, GRAY800);
+    ImGui::PushStyleColor(ImGuiCol_Header, GRAY700);
     
     if(ImGui::CollapsingHeader("Project 1"))
     {
         for(auto& tree_item : *tree)
         {
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, GRAY900);
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, GRAY800);
-            ImGui::PushStyleColor(ImGuiCol_Header, GRAY700);
             /*ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(static_cast<int>(
                                                        Colors::kTransparent)));
             ImGui::PushStyleColor(
@@ -148,7 +149,8 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
             {
                 // tree_item.second.selected = false;
             }
-            ImGui::PopStyleColor(3);
         }
     }
+
+    ImGui::PopStyleColor(3);
 }

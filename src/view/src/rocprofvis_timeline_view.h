@@ -29,9 +29,9 @@ class TimelineView : public RocWidget
 public:
     TimelineView(DataProvider& dp);
     ~TimelineView();
-    virtual void Render();
-    void         Update();
-    void         MakeGraphView();
+    virtual void                           Render();
+    void                                   Update();
+    void                                   MakeGraphView();
     void                                   ResetView();
     void                                   DestroyGraphs();
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
@@ -73,13 +73,13 @@ private:
     bool                                  m_is_control_held;
     bool                                  m_resize_activity;
     double                                m_scroll_position_x;
-    bool                                  m_calibrated;
     double                                m_v_past_width;
     bool                                  m_stop_zooming;
     double                                m_scrollbar_location_as_percentage;
     bool                                  m_artifical_scrollbar_active;
     float                                 m_unload_track_distance;
     float                                 m_universal_content_size;
+    double                                m_range_x;
     DataProvider&                         m_data_provider;
     std::pair<double, double>             m_highlighted_region;
     Settings&                             m_settings;

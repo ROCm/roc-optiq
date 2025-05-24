@@ -58,6 +58,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_v_width(0)
 , m_viewport_past_position(0)
 , m_graph_size()
+, m_range_x(0.0f)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -76,9 +77,8 @@ TimelineView::~TimelineView()
 void
 TimelineView::CalibratePosition()
 {
-    m_scroll_position_x =
-        (m_movement) / (m_max_x - m_min_x);  // Finds where the chart is at.
-    double scrollback = (m_max_x - m_min_x) * m_scroll_position_x;
+    m_scroll_position_x = (m_movement) / (m_range_x);  // Finds where the chart is at.
+    double scrollback   = (m_range_x) *m_scroll_position_x;
 
     if(m_artifical_scrollbar_active == true)
     {
@@ -87,7 +87,7 @@ TimelineView::CalibratePosition()
                                       // for current movement.
         m_movement =
             value_to_begginging +
-            ((m_max_x - m_min_x) *
+            ((m_range_x) *
              m_scrollbar_location_as_percentage);  // initial/first value + position where
                                                    // scrollbar is.
     }
@@ -579,10 +579,11 @@ TimelineView::MakeGraphView()
     DestroyGraphs();
     ResetView();
 
-    m_min_x = m_data_provider.GetStartTime();
-    m_max_x = m_data_provider.GetEndTime();
+    m_min_x   = m_data_provider.GetStartTime();
+    m_max_x   = m_data_provider.GetEndTime();
+    m_range_x = m_max_x - m_min_x;
 
-    m_v_width      = (m_max_x - m_min_x) / m_zoom;
+    m_v_width      = (m_range_x) / m_zoom;
     m_v_past_width = m_v_width;
 
     /*This section makes the charts both line and flamechart are constructed here*/
@@ -691,7 +692,7 @@ TimelineView::RenderGraphPoints()
             " Grid View 2 Height: " + std::to_string(ImGui::GetWindowSize().y));
 
         // Scale used in all graphs computer here.
-        m_v_width       = (m_max_x - m_min_x) / m_zoom;
+        m_v_width       = (m_range_x) / m_zoom;
         m_v_min_x       = m_min_x + m_movement;
         m_v_max_x       = m_v_min_x + m_v_width;
         m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
@@ -809,7 +810,7 @@ TimelineView::HandleTopSurfaceTouch()
             float scroll_wheel = ImGui::GetIO().MouseWheel;
             if(scroll_wheel != 0.0f)
             {
-                float       view_width = (m_max_x - m_min_x) / m_zoom;
+                float       view_width = (m_range_x) / m_zoom;
                 const float zoom_speed = 0.1f;
                 // m_zoom *=
                 //     (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
@@ -828,8 +829,8 @@ TimelineView::HandleTopSurfaceTouch()
 
                 m_zoom = m_zoom;
                 m_zoom = std::max(m_zoom, 0.9f);
-                m_movement += m_v_width - ((m_max_x - m_min_x) / m_zoom);
-                m_v_width = (m_max_x - m_min_x) / m_zoom;
+                m_movement += m_v_width - (view_width);
+                m_v_width = view_width;
                 m_v_min_x = m_min_x + m_movement;
                 m_v_max_x = m_v_min_x + m_v_width;
             }
@@ -851,7 +852,7 @@ TimelineView::HandleTopSurfaceTouch()
             m_scroll_position =
                 clamp(m_scroll_position - drag_y, 0.0, m_content_max_y_scoll);
             float drag       = ImGui::GetIO().MouseDelta.x;
-            float view_width = (m_max_x - m_min_x) / m_zoom;
+            float view_width = (m_range_x) / m_zoom;
 
             float user_requested_move = (drag / m_graph_size.x) * view_width;
             // if user_requested_move is negative they are going right to range max.
@@ -860,7 +861,7 @@ TimelineView::HandleTopSurfaceTouch()
 
             if(user_requested_move < 0)
             {
-                if(m_movement < (m_max_x - m_min_x))
+                if(m_movement < (m_range_x))
                 {
                     m_movement -= user_requested_move;
                 }

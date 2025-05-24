@@ -23,6 +23,7 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 , m_resize_grip_thickness(4.0f)
 , m_request_state(TrackDataRequestState::kIdle)
 , m_is_resize(false)
+, m_meta_area_clicked(false)
 , m_settings(Settings::GetInstance())
 {
     m_metadata_bg_color = m_settings.GetColor(static_cast<int>(Colors::kMetaDataColor));

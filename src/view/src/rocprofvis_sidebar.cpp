@@ -64,7 +64,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                                         ": " + tree_item.second.chart->GetName())
                                            .c_str()))
             {
-                tree_item.second.selected = true;
+                // tree_item.second.selected = true;
                 
                 if(ImGui::Checkbox(
                        (" Enable/Disable Chart #" + std::to_string((tree_item.first)))
@@ -146,7 +146,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
             }
             else
             {
-                tree_item.second.selected = false;
+                // tree_item.second.selected = false;
             }
             ImGui::PopStyleColor(3);
         }

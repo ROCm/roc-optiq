@@ -119,8 +119,6 @@ Grid::RenderGrid(double min_x, double max_x, double movement, float zoom, float 
         double drag = (movement / m_v_width) * displaySize.x;
         drag        = (int) drag % (int) stepSize;
 
-        // for(double raw_position_points_x = min_x - (steps);
-        // raw_position_points_x < max_x + (steps); raw_position_points_x += steps)
         for(float i = 0; i < steps + 1; i++)
         {
             float linePos = stepSize * i;

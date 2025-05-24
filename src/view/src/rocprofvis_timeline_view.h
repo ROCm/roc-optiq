@@ -29,14 +29,11 @@ class TimelineView : public RocWidget
 public:
     TimelineView(DataProvider& dp);
     ~TimelineView();
-
     virtual void Render();
     void         Update();
     void         MakeGraphView();
-
     void                                   ResetView();
     void                                   DestroyGraphs();
-    void                                   GetScreenPosition();
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
 
 private:
@@ -44,12 +41,7 @@ private:
     void RenderGrid();
     void RenderScrubber(ImVec2 screen_pos);
     void RenderSplitter(ImVec2 screen_pos);
-
     void RenderGraphView();
-    void HandleGraphResize(int chart_id);
-    void FindMaxMinFlame(std::vector<rocprofvis_trace_event_t> m_flame_event);
-    void RenderFlameCharts(int chart_id, float scale_x);
-    void RenderGraphCustomizationWindow(int graph_number);
     void HandleTopSurfaceTouch();
     void CalibratePosition();
     void HandleNewTrackData(std::shared_ptr<RocEvent> e);
@@ -71,7 +63,6 @@ private:
     double                                m_v_width;
     double                                m_pixels_per_ns;
     double                                m_original_v_max_x;
-    bool                                  m_capture_og_v_max_x;
     double                                m_scroll_position;
     double                                m_content_max_y_scoll;
     double                                m_previous_scroll_position;
@@ -80,16 +71,13 @@ private:
     bool                                  m_has_zoom_happened;
     bool                                  m_show_graph_customization_window;
     bool                                  m_is_control_held;
-    bool                                  m_can_drag_to_pan;
     bool                                  m_resize_activity;
     double                                m_scroll_position_x;
     bool                                  m_calibrated;
-    double m_v_past_width;
-    bool m_stop_zooming;
+    double                                m_v_past_width;
+    bool                                  m_stop_zooming;
     double                                m_scrollbar_location_as_percentage;
     bool                                  m_artifical_scrollbar_active;
-    bool                                  m_buffer_right_hit;
-    bool                                  m_buffer_left_hit;
     float                                 m_unload_track_distance;
     float                                 m_universal_content_size;
     DataProvider&                         m_data_provider;
@@ -97,7 +85,7 @@ private:
     Settings&                             m_settings;
     EventManager::SubscriptionToken       m_new_track_token;
     double                                m_viewport_past_position;
-    ImVec2                                 m_graph_size;
+    ImVec2                                m_graph_size;
 };
 
 }  // namespace View

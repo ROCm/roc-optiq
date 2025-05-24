@@ -2,6 +2,7 @@
 
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_data_provider.h"
+#include "imgui_spectrum_dynamic.h"
 
 using namespace RocProfVis::View;
 
@@ -19,6 +20,11 @@ void
 AnalysisView::Render()
 {
     ImGui::BeginChild("Event Data", ImVec2(0, 0), true);
+
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, GRAY500);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, GRAY400);
+    ImGui::PushStyleColor(ImGuiCol_Header, GRAY300);
+    ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, GRAY300);
 
     const std::vector<std::vector<std::string>>& table_data =
         m_data_provider.GetEventTableData();
@@ -51,5 +57,8 @@ AnalysisView::Render()
     {
         ImGui::Text("No Event Data Available");
     }
+
+    ImGui::PopStyleColor(4);
+
     ImGui::EndChild();
 }

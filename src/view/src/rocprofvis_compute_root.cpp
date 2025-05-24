@@ -8,79 +8,53 @@ namespace View
 {
 
 ComputeRoot::ComputeRoot()
-: m_compute_summary_view(nullptr)
-, m_compute_block_view(nullptr)
-, m_compute_table_view(nullptr)
-, m_compute_data_provider(nullptr)
-, m_normalization_unit(kPerWave)
-, m_dispatch_filter(0)
-, m_kernel_filter(0)
+: m_compute_data_provider(nullptr)
+, m_tab_container(nullptr)
 {
     m_compute_data_provider = std::make_shared<ComputeDataProvider>();
 
-    m_compute_summary_view = std::make_shared<ComputeSummaryView>(m_compute_data_provider);
-    m_compute_block_view = std::make_shared<ComputeBlockView>(m_compute_data_provider);
-    m_compute_table_view = std::make_shared<ComputeTableView>(m_compute_data_provider);
+    m_tab_container = std::make_shared<TabContainer>();
+    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Roofline View", "compute_roofline_view", std::make_shared<ComputeRooflineView>(m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Block View", "compute_block_view", std::make_shared<ComputeBlockView>(m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_compute_data_provider), false});
 }
 
 ComputeRoot::~ComputeRoot() {}
 
 void ComputeRoot::Update()
 {
-    if (!m_compute_data_provider->MetricsLoaded())
+    if (!m_compute_data_provider->ProfileLoaded())
     {
-        m_compute_data_provider->LoadMetricsFromCSV();
+        m_compute_data_provider->LoadProfile();
 
-        if (m_compute_data_provider->MetricsLoaded())
+        if (m_compute_data_provider->ProfileLoaded())
         {
-            if (m_compute_summary_view)
+            if (m_tab_container)
             {
-                m_compute_summary_view->Update();
-            }
-            if (m_compute_table_view)
-            {
-                m_compute_table_view->Update();
-            }
-            if (m_compute_block_view)
-            {
-                m_compute_block_view->Update();
+                m_tab_container->Update();
             }
         }
     }
 }
 
-void ComputeRoot::SetMetricsPath(std::filesystem::path path)
+void ComputeRoot::SetProfilePath(std::filesystem::path path)
 {
-    m_compute_data_provider->SetMetricsPath(path);
+    m_compute_data_provider->SetProfilePath(path);
 }
 
-bool ComputeRoot::MetricsLoaded()
+bool ComputeRoot::ProfileLoaded()
 {
-    return m_compute_data_provider->MetricsLoaded();
+    return m_compute_data_provider->ProfileLoaded();
 }
 
 void ComputeRoot::Render()
 {
-    if (m_compute_data_provider->MetricsLoaded())
+    if (m_compute_data_provider->ProfileLoaded())
     {
-        if(ImGui::BeginTabBar("compute_root_tab_bar", ImGuiTabBarFlags_None))
+        if (m_tab_container)
         {
-            if(ImGui::BeginTabItem("Summary View") && m_compute_summary_view)
-            {
-                m_compute_summary_view->Render();
-                ImGui::EndTabItem();
-            }
-            if(ImGui::BeginTabItem("Block View") && m_compute_block_view)
-            {
-                m_compute_block_view->Render();
-                ImGui::EndTabItem();
-            }
-            if(ImGui::BeginTabItem("Table View") && m_compute_table_view)
-            {
-                m_compute_table_view->Render();
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
+            m_tab_container->Render();
         }
     }
 }

@@ -85,8 +85,19 @@ const std::unordered_map<std::string, metric_group_info_t> METRIC_GROUP_DEFINITI
     {"18.8_L2-Fabric_Atomic_Latency_(Cycles).csv", metric_group_info_t{metric_table_info_t{"L2 Cache - Fabric Atomic Latency Per Channel"}, {}}},
     {"18.9_L2-Fabric_Read_Stall_(Cycles_per_normUnit).csv", metric_group_info_t{metric_table_info_t{"L2 Cache - Fabric Read Stall Per Channel"}, {}}},
     {"18.10_L2-Fabric_Write_and_Atomic_Stall_(Cycles_per_normUnit).csv", metric_group_info_t{metric_table_info_t{"L2 Cache - Fabric Detailed Transaction Breakdown"}, {}}},
-    {"18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv", metric_group_info_t{metric_table_info_t{"L2 Cache - Fabric 128B Read Requests Per Channel"}, {}}}
+    {"18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv", metric_group_info_t{metric_table_info_t{"L2 Cache - Fabric 128B Read Requests Per Channel"}, {}}},
+    {"pmc_perf.csv", metric_group_info_t{metric_table_info_t{}, {}}}, 
+    {"roofline.csv", metric_group_info_t{metric_table_info_t{}, {}}}
 };
+
+metric_roofline_info_t ROOFLINE_DEFINITIONS {{"HBM", "L2", "L1", "LDS"}, {
+    roofline_format_info_t{"FP32", kRooflineNumberformatFP32, {{kRooflinePipeVALU, "FP32Flops"}, {kRooflinePipeMFMA, "MFMAF32Flops"}}},
+    roofline_format_info_t{"FP64", kRooflineNumberformatFP64, {{kRooflinePipeVALU, "FP64Flops"}, {kRooflinePipeMFMA, "MFMAF64Flops"}}},
+    roofline_format_info_t{"FP16", kRooflineNumberformatFP16, {{kRooflinePipeMFMA, "MFMAF16Flops"}}},
+    roofline_format_info_t{"INT8", kRooflineNumberformatINT8, {{kRooflinePipeMFMA, "MFMAFI8Ops"}}}
+}};
+
+constexpr int PLOT_LABEL_MAX_LENGTH = 40;
 
 rocprofvis_compute_metrics_group_t* ComputeDataProvider::GetMetricGroup(std::string& group_id)
 {
@@ -109,29 +120,37 @@ rocprofvis_compute_metric_t* ComputeDataProvider::GetMetric(std::string& group_i
     return metric;
 }
 
-void ComputeDataProvider::SetMetricsPath(std::filesystem::path& path)
+void ComputeDataProvider::SetProfilePath(std::filesystem::path& path)
 {
-    if (m_metrics_loaded)
+    if (m_profile_loaded)
     {
+        FreePlotLabels();
         m_metrics_group_map.clear();
-        m_metrics_loaded = false;
+        m_profile_loaded = false;
     }
-    m_metrics_path = path;
-    m_attempt_metrics_load = true;
+    m_profile_path = path;
+    m_attempt_profile_load = true;
 }
 
-void ComputeDataProvider::LoadMetricsFromCSV()
+void ComputeDataProvider::LoadProfile()
 {
-    if (!m_metrics_loaded && m_attempt_metrics_load)
+    if (!m_profile_loaded && m_attempt_profile_load)
     {
-        if (std::filesystem::exists(m_metrics_path) && std::filesystem::is_directory(m_metrics_path))
+        if (std::filesystem::exists(m_profile_path) && std::filesystem::is_directory(m_profile_path))
         {        
-            for (auto& entry : std::filesystem::directory_iterator{m_metrics_path})
+            for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator{m_profile_path})
             {
                 if (entry.path().extension() == ".csv" && METRIC_GROUP_DEFINITIONS.count(entry.path().filename().string()) > 0)
                 {
-                    spdlog::info("ComputeDataProvider::LoadMetricsFromCSV() - Loading {}", entry.path().string());
-                    csv::CSVReader csv(entry.path().string(), csv_format);
+                    spdlog::info("ComputeDataProvider::LoadProfile() - Loading {}", entry.path().string());
+
+                    if (entry.path().filename().string() == "1.1.csv")
+                    {
+                        LoadSystemInfo(entry);
+                        continue;
+                    }
+
+                    csv::CSVReader csv(entry.path().string(), m_csv_format);
                     
                     std::unique_ptr metric_group = std::make_unique<rocprofvis_compute_metrics_group_t>();
                     
@@ -151,6 +170,7 @@ void ComputeDataProvider::LoadMetricsFromCSV()
                             table_cell.m_value = row[col].get();
                             table_cell.m_metric = nullptr;
                             table_cell.m_colorize = false;
+                            table_cell.m_highlight = false;
 
                             size_t pct_pos = table_cell.m_value.find("%");
                             if (pct_pos != std::string::npos)
@@ -161,9 +181,21 @@ void ComputeDataProvider::LoadMetricsFromCSV()
                             if (!row[col].is_str())
                             {
                                 rocprofvis_compute_metric_t metric;
-                                std::string key = row[0].get().append(" ").append(table.m_column_names[col]);
-                                metric.m_name = row[0].get();
-                                metric.m_value = row[col].is_num() ? row[col].get<float>() : 0;
+                                // Key is the identifier of the metric that can be used later to retrieve it from the map.
+                                std::string key;
+                                if (col == 0)
+                                {
+                                    // First column contain headers for each row, not metrics.
+                                    key = "";
+                                    metric.m_name = "";
+                                }
+                                else
+                                {
+                                    // Key is for any metric is [row header][space][column header].
+                                    key = row[0].get().append(" ").append(table.m_column_names[col]);
+                                    metric.m_name = row[0].get();
+                                }
+                                metric.m_value = row[col].is_num() ? row[col].get<double>() : 0;
 
                                 if (table.m_column_names[col] == "Pct of Peak")
                                 {
@@ -200,7 +232,6 @@ void ComputeDataProvider::LoadMetricsFromCSV()
                                         unit = "";
                                     }
                                 }
-
                                 metric.m_unit = unit;
                                 metric_group->m_metrics[key] = metric;
 
@@ -221,15 +252,43 @@ void ComputeDataProvider::LoadMetricsFromCSV()
                     m_metrics_group_map[entry.path().filename().string()] = std::move(metric_group);
                 }
             }
+
             BuildPlots();
-            m_metrics_loaded = true;
+            BuildRoofline();
         }
-        else
-        {
-            spdlog::info("ComputeDataProvider::LoadMetricsFromCSV() - Invalid path");
-        }
+
+        m_profile_loaded = !m_metrics_group_map.empty();
+        m_attempt_profile_load = false;
     }
-    m_attempt_metrics_load = false;
+}
+
+void ComputeDataProvider::LoadSystemInfo(std::filesystem::directory_entry csv_entry)
+{
+    // Pulled from MI308X, others may have different fields/ordering.
+    const std::array field_names = {
+        "Workload Name", "Command", "IP Blocks", "Timestamp", "Version", "Host Name", "CPU Model", "SBIOS", "Linux Distro", "Linux Kernel Version", "AMD GPU Kernel Version",
+        "CPU Memory", "GPU Memory", "ROCm Version", "VBIOS", "Compute Partition", "Memory Partition", "GPU Series", "GPU Model", "GPU Arch", "GPU L1", "GPU L2", "CU per GPU", 
+        "SIMD per CU", "SE per CU", "Wave Size", "Workgroup Max Size", "Chip ID", "Max Waves per CU", "Max SCLK", "Max MCLK", "Current SCLK", "Current MCLK", "Total L2 Channels", 
+        "LDS Banks per CU", "SQC per GPU", "Pipes per GPU", "HBM Bandwidth", "Number of XCD"
+    };
+
+    std::unique_ptr metric_group = std::make_unique<rocprofvis_compute_metrics_group_t>();
+
+    csv::CSVReader csv(csv_entry.path().string(), m_csv_format);
+    rocprofvis_compute_metrics_table_t table;
+    table.m_title = METRIC_GROUP_DEFINITIONS.at(csv_entry.path().filename().string()).m_table_info.m_title;
+    table.m_column_names = {"Field", "Info"};
+
+    for (csv::CSVRow& row : csv)
+    {
+        std::vector<rocprofvis_compute_metrics_table_cell_t> table_row;
+        table_row.push_back(rocprofvis_compute_metrics_table_cell_t{field_names[csv.n_rows() - 1], false, false, nullptr});
+        table_row.push_back(rocprofvis_compute_metrics_table_cell_t{row[0].get(), false, false, nullptr});
+        table.m_values.push_back(table_row);
+    }
+    metric_group->m_table = table;
+    m_metrics_group_map[csv_entry.path().filename().string()] = std::move(metric_group);
+
 }
 
 void ComputeDataProvider::BuildPlots()
@@ -245,79 +304,276 @@ void ComputeDataProvider::BuildPlots()
             const std::string& y_axis_label = plot.y_axis_label;
             const std::vector<std::string>& metric_keys = plot.m_metric_names;
 
-            rocprofvis_compute_metrics_plot_t p;
-            p.m_title = std::string(title).append("##" + csv_name + std::to_string(m_metrics_group_map[csv_name]->m_plots.size()));
-            p.m_x_axis.m_label = x_axis_label; 
-            p.m_x_axis.m_min = 0;
-            p.m_x_axis.m_max = 0;
-            p.m_y_axis.m_label = y_axis_label.empty() ? "Metric" : y_axis_label;
-
-            std::unordered_map<std::string, rocprofvis_compute_metric_t>& metrics = m_metrics_group_map[csv_name]->m_metrics;
-            for (const std::string& m_key : metric_keys)
+            if (m_metrics_group_map.count(csv_name) > 0)
             {
-                if (metrics.count(m_key) > 0)
+                rocprofvis_compute_metrics_plot_t p;
+                p.m_title = std::string(title).append("##" + csv_name + std::to_string(m_metrics_group_map[csv_name]->m_plots.size()));
+                p.m_x_axis.m_name = x_axis_label; 
+                p.m_x_axis.m_min = 0;
+                p.m_x_axis.m_max = 0;
+                p.m_y_axis.m_name = y_axis_label.empty() ? "Metric" : y_axis_label;
+
+                rocprofvis_compute_metric_plot_series_t s;
+
+                std::unordered_map<std::string, rocprofvis_compute_metric_t>& metrics_map = m_metrics_group_map[csv_name]->m_metrics;
+                int count = 0;
+
+                for (const std::string& m_key : metric_keys)
                 {
-                    p.m_series_names.push_back(metrics[m_key].m_name.c_str());
-                    p.m_values.push_back(metrics[m_key].m_value);
-                    if (p.m_values.back() > p.m_x_axis.m_max)
+                    std::vector<rocprofvis_compute_metric_t*> matches;
+                    if (metrics_map.count(m_key) > 0)
                     {
-                        p.m_x_axis.m_max = p.m_values.back() * 1.01f;
+                        matches = {&metrics_map[m_key]};
                     }
-                    if (p.m_x_axis.m_label.empty())
+                    else if (m_key.back() == '#')
                     {
-                        p.m_x_axis.m_label = metrics[m_key].m_unit;
-                    }
-                }
-                else if (m_key.back() == '#')
-                {
-                    std::string search_metric = m_key;
-                    search_metric.pop_back();
-                    for (auto& metric : metrics)
-                    {
-                        if (metric.first.find(search_metric) != std::string::npos)
+                        std::string search_metric = m_key;
+                        search_metric.pop_back();
+                        for (auto& metric : metrics_map)
                         {
-                            p.m_series_names.push_back(metric.second.m_name.c_str());
-                            p.m_values.push_back(metric.second.m_value);
-                            if (p.m_values.back() > p.m_x_axis.m_max)
+                            if (metric.first.find(search_metric) != std::string::npos)
                             {
-                                p.m_x_axis.m_max = p.m_values.back() * 1.01f;
-                            }
-                            if (p.m_x_axis.m_label.empty())
-                            {
-                                p.m_x_axis.m_label = metric.second.m_unit;
+                                matches.push_back(&metric.second);
                             }
                         }
                     }
+                    else
+                    {
+                        spdlog::error("ComputeDataProvider::BuildPlots() - Invalid metric {}, {}", csv_name, m_key);
+                    }
+                    for (int i = 0; i < matches.size(); i ++)
+                    {
+                        std::string short_name = (matches[i]->m_name.length() > PLOT_LABEL_MAX_LENGTH) ? matches[i]->m_name.substr(0, PLOT_LABEL_MAX_LENGTH) + "..." : matches[i]->m_name;
+                        char* short_name_cstr = new char[short_name.length() + 1];
+                        strcpy(short_name_cstr, short_name.c_str());
+                        p.m_y_axis.m_tick_labels.push_back(short_name_cstr);
+                        s.m_x_values.push_back(matches[i]->m_value);
+                        s.m_y_values.push_back(count ++);
+                        p.m_x_axis.m_max = std::max(p.m_x_axis.m_max, s.m_x_values.back() * 1.01f);
+                        if (p.m_x_axis.m_name.empty())
+                        {
+                            p.m_x_axis.m_name = matches[i]->m_unit;
+                        }
+                        p.m_series = {s};
+                    }
                 }
-                else
+                if (p.m_x_axis.m_name.find('%') != std::string::npos || p.m_x_axis.m_max == 0)
                 {
-                    spdlog::error("ComputeDataProvider::BuildPlots() - Invalid metric {}, {}", csv_name, m_key);
+                    p.m_x_axis.m_max = 100;
                 }
+
+                m_metrics_group_map[csv_name]->m_plots.push_back(p);
             }
-            if (p.m_x_axis.m_label.find('%') != std::string::npos || p.m_x_axis.m_max == 0)
-            {
-                p.m_x_axis.m_max = 100;
-            }
-            m_metrics_group_map[csv_name]->m_plots.push_back(p);
         }
     }
 }
 
-bool ComputeDataProvider::MetricsLoaded()
+void ComputeDataProvider::BuildRoofline()
 {
-    return m_metrics_loaded;
+    if (m_metrics_group_map.count("roofline.csv") > 0 && m_metrics_group_map.count("pmc_perf.csv") > 0)
+    {
+        const int kernel_name_column = 1;
+        const int dispatch_column = 0;
+
+        std::array sort_groups = {
+            std::unordered_map<std::string, std::vector<std::string>> {},
+            std::unordered_map<std::string, std::vector<std::string>> {}
+        };
+
+        for (int r = 0; r < m_metrics_group_map["pmc_perf.csv"]->m_table.m_values.size(); r ++)
+        {
+            std::string& kernel_name = m_metrics_group_map["pmc_perf.csv"]->m_table.m_values[r][kernel_name_column].m_value;
+            std::string& dispatch_id = m_metrics_group_map["pmc_perf.csv"]->m_table.m_values[r][dispatch_column].m_value;
+            sort_groups[kRooflineGroupByDispatch]["Dispatch ID:" + dispatch_id + ":" + kernel_name] = {dispatch_id};
+            sort_groups[kRooflineGroupByKernel]["Kernel:" + kernel_name].push_back(dispatch_id);
+        }
+
+        int series_count = 1;
+        double x_max = 1000;
+        double x_min = 0.01;
+        double y_max = DBL_MIN;
+        double y_min = DBL_MAX;
+        for (std::unordered_map<std::string, std::vector<std::string>> group : sort_groups)
+        {
+            rocprofvis_compute_metrics_plot_t p;
+            for (auto& it : group)
+            {
+                double flops = 0;
+                double l2_data = 0;
+                double l1_data = 0;
+                double hbm_data = 0; 
+                double duration = 0;
+
+                const std::string& label = it.first;
+                const std::vector<std::string>& dispatch_list = it.second;
+
+                for (const std::string& dispatch_id : dispatch_list)
+                {
+                    flops += 64 * (m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_ADD_F16"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_MUL_F16"].m_value
+                                    + 2 * m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_FMA_F16"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_TRANS_F16"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_ADD_F32"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_MUL_F32"].m_value
+                                    + 2 * m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_FMA_F32"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_TRANS_F32"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_ADD_F64"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_MUL_F64"].m_value
+                                    + 2 * m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_FMA_F64"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_TRANS_F64"].m_value)
+                            + 512 * (m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_MFMA_MOPS_F16"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_MFMA_MOPS_BF16"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_MFMA_MOPS_F32"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " SQ_INSTS_VALU_MFMA_MOPS_F64"].m_value);
+                    l2_data += 64 * (m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCP_TCC_WRITE_REQ_sum"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCP_TCC_ATOMIC_WITH_RET_REQ_sum"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCP_TCC_ATOMIC_WITHOUT_RET_REQ_sum"].m_value
+                                    + m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCP_TCC_READ_REQ_sum"].m_value);
+                    l1_data += 64 * m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCP_TOTAL_CACHE_ACCESSES_sum"].m_value;
+                    // HBM is calculated differently on MI200 vs all others. Below is none-MI200 equation.
+                    hbm_data += 32 * (m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCC_EA0_RDREQ_32B_sum"].m_value
+                                    + (m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCC_EA0_WRREQ_sum"].m_value
+                                    - m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCC_EA0_WRREQ_64B_sum"].m_value))
+                            + 64 * (m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCC_EA0_WRREQ_64B_sum"].m_value
+                                    + (m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCC_EA0_RDREQ_sum"].m_value
+                                    - m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCC_BUBBLE_sum"].m_value
+                                    - m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCC_EA0_RDREQ_32B_sum"].m_value))
+                            + 128 * m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " TCC_BUBBLE_sum"].m_value;
+                    duration += m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " End_Timestamp"].m_value
+                                    - m_metrics_group_map["pmc_perf.csv"]->m_metrics[dispatch_id + " Start_Timestamp"].m_value;
+                }
+
+                if (flops > 0 && duration > 0)
+                {
+                    const int& num_dispatches = dispatch_list.size();
+                    std::string short_name = (label.length() > PLOT_LABEL_MAX_LENGTH) ? label.substr(0, PLOT_LABEL_MAX_LENGTH) + "..." : label;
+                    std::string id = std::to_string(series_count);
+                    std::array intensity_definitions = {
+                        std::make_pair(std::string("L1"), l1_data), 
+                        std::make_pair(std::string("L2"), l2_data), 
+                        std::make_pair(std::string("HBM"), hbm_data)
+                    };
+
+                    for (std::pair<std::string, double>& intensity : intensity_definitions)
+                    {
+                        if (intensity.second > 0)
+                        {
+                            double x = flops / num_dispatches / intensity.second / num_dispatches;
+                            double y = flops / num_dispatches / duration / num_dispatches;
+                            p.m_series.push_back(rocprofvis_compute_metric_plot_series_t{short_name + "-" + intensity.first + "##" + id, {x}, {y}});
+                        
+                            x_max = std::max(x_max, x * 2);
+                            x_min = std::min(x_min, x / 2);
+                            y_max = std::max(y_max, y * 2);
+                            y_min = std::min(y_min, y / 2);
+                        }
+                    }
+                }
+
+                series_count ++;
+            }
+            m_metrics_group_map["pmc_perf.csv"]->m_plots.push_back(p);
+        }
+
+        const std::string device_id = "0";
+        for (roofline_format_info_t& format : ROOFLINE_DEFINITIONS.m_number_formats)
+        {
+            double max_bw = 0;
+
+            rocprofvis_compute_metrics_plot_t p;
+            p.m_title = "Emperical Roofline Analysis (" + format.m_name + ")";
+            if (format.m_format == kRooflineNumberformatINT8)
+            {
+                p.m_x_axis.m_name = "Arithmetic Intensity (IOP/Byte)";
+                p.m_y_axis.m_name = "Performance (GIOP/s)";
+            }
+            else
+            {
+                p.m_x_axis.m_name = "Arithmetic Intensity (FLOP/Byte)";
+                p.m_y_axis.m_name = "Performance (GFLOP/s)";
+            }
+
+            for (std::string& level : ROOFLINE_DEFINITIONS.m_memory_levels)
+            {
+                double& bw = m_metrics_group_map["roofline.csv"]->m_metrics[device_id + " " + level + "Bw"].m_value;
+                rocprofvis_compute_metric_plot_series_t s{level + "-" + format.m_name, {0.01f}, {0.01f * bw}};
+                max_bw = std::max(bw, max_bw);
+
+                double max_ops = 0;
+                for(auto& it : format.m_supported_pipes)
+                {
+                    max_ops = std::max(m_metrics_group_map["roofline.csv"]->m_metrics[device_id + " " + it.second].m_value, max_ops);
+                }
+                double x = max_ops / bw;
+                double& y = max_ops;
+
+                p.m_x_axis.m_max = std::max(x_max, x * 2);
+                p.m_x_axis.m_min = std::min(x > 0 ? x_min, x / 2 : x_min, x_min);
+                p.m_y_axis.m_max = std::max(y_max, y * 2);
+                p.m_y_axis.m_min = std::min(y > 0 ? y_min, y / 2 : y_min, y_min);
+
+                s.m_x_values.push_back(x);
+                s.m_y_values.push_back(y);
+                p.m_series.push_back(s);
+            }
+
+            for (auto& it : format.m_supported_pipes)
+            {
+                double& ops =  m_metrics_group_map["roofline.csv"]->m_metrics[device_id + " " + it.second].m_value;
+                p.m_series.push_back(
+                    rocprofvis_compute_metric_plot_series_t{(it.first == kRooflinePipeVALU ? "Peak VALU-" : "Peak MFMA-") + format.m_name, {ops / max_bw, 1000}, {ops, ops}}
+                );
+            }
+
+            m_metrics_group_map["roofline.csv"]->m_plots.push_back(p);
+        }
+    }
+    else
+    {
+        spdlog::info("ComputeDataProvider::BuildRoofline() - Roofline skipped");
+    }
+}
+
+bool ComputeDataProvider::ProfileLoaded()
+{
+    return m_profile_loaded;
+}
+
+void ComputeDataProvider::FreePlotLabels()
+{
+    for (auto& group : m_metrics_group_map)
+    {
+        for (rocprofvis_compute_metrics_plot_t& plot : group.second->m_plots)
+        {
+            for (const char* label : plot.m_x_axis.m_tick_labels)
+            {
+                if (label)
+                {
+                    delete[] label;
+                }                   
+            }
+            for (const char* label : plot.m_y_axis.m_tick_labels)
+            {
+                if (label)
+                {
+                    delete[] label;
+                }                    
+            }
+        }
+    }
 }
 
 ComputeDataProvider::ComputeDataProvider() 
-: m_metrics_loaded(false)
-, m_attempt_metrics_load(true)
-, m_metrics_path(std::filesystem::path("C:/Users/drchen/OneDrive - Advanced Micro Devices Inc/Documents/Notes/workloads/monte_carlo/MI308X/analyze/dfs"))
+: m_profile_loaded(false)
+, m_attempt_profile_load(true)
 {
-    csv_format.delimiter(',');
-    csv_format.header_row(0);
+    m_csv_format.delimiter(',');
+    m_csv_format.header_row(0);
 }
 
-ComputeDataProvider::~ComputeDataProvider() {}
+ComputeDataProvider::~ComputeDataProvider() {
+    FreePlotLabels();
+}
 
 }  // namespace View
 }  // namespace RocProfVis

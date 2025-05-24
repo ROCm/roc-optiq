@@ -97,20 +97,6 @@ private:
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
     static int CallBackAddString(void *data, int argc, char **argv, char **azColName);
-    // sqlite3_exec callback to process event information query and add event object to time slice container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackAddEventRecord(void *data, int argc, char **argv, char **azColName);
-    // sqlite3_exec callback to process performance counters information query and add pmc object to time slice container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackAddPmcRecord(void *data, int argc, char **argv, char **azColName);
     // sqlite3_exec callback to process stack trace information query and add stack trace object to StackTrace container
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query

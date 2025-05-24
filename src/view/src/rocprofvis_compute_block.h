@@ -1,7 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include "imgui.h"
 #include <list>
 #include "widgets/rocprofvis_widget.h"
 #include "rocprofvis_compute_data_provider.h"

@@ -68,6 +68,8 @@ class TrackSlice : public DmBase {
         rocprofvis_dm_timestamp_t       StartTime() {return m_start_timestamp;}
         // Returns end timestamp
         rocprofvis_dm_timestamp_t       EndTime() {return m_end_timestamp;}
+        // Returns class mutex
+        std::shared_mutex*              Mutex() override { return &m_lock; }
 
         // Pure virtual method to get event timestamp value by provided index of record
         // @param index - index of the record
@@ -170,7 +172,9 @@ class TrackSlice : public DmBase {
         // time slice end
         rocprofvis_dm_timestamp_t                    m_end_timestamp;
         // context pointer
-        Track*                                  m_ctx;
+        Track*                                      m_ctx;
+        // object mutex, for shared access
+        mutable std::shared_mutex                   m_lock;
 };
 
 }  // namespace DataModel

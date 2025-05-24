@@ -121,9 +121,9 @@ private:
     // pointer to track parameters structure, shared with database component
     rocprofvis_dm_track_params_t*                       m_track_params;     // track essential parameters are shared between data model and database
     // array of time slice objects
-    std::vector<std::unique_ptr<TrackSlice>>       m_slices;
+    std::vector<std::shared_ptr<TrackSlice>>       m_slices;
     // track extended data object 
-    ExtData                                        m_ext_data;
+    std::unique_ptr <ExtData>                      m_ext_data;
 
 };
 

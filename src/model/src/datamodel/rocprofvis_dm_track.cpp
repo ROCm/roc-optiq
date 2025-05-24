@@ -33,8 +33,8 @@ Track::Track( Trace* ctx,
                 m_ctx(ctx),
                 m_track_params(params) {
                     rocprofvis_dm_event_id_t id = { 0 };
-                    m_ext_data = ExtData(ctx,id);
-                    params->extdata = &m_ext_data;
+                    m_ext_data = std::make_unique<ExtData>(ctx,id);
+                    params->extdata = m_ext_data.get();
                 };
 
 rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
@@ -44,7 +44,7 @@ rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofv
     if (m_track_params->track_category == kRocProfVisDmPmcTrack)
     {
         try{
-            m_slices.push_back(std::make_unique<PmcTrackSlice>(this, start, end));
+            m_slices.push_back(std::make_shared<PmcTrackSlice>(this, start, end));
         }
         catch(std::exception ex)
         {
@@ -54,7 +54,7 @@ rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofv
     } else
     {
         try{
-            m_slices.push_back(std::make_unique<EventTrackSlice>(this, start, end));
+            m_slices.push_back(std::make_shared<EventTrackSlice>(this, start, end));
         }
         catch(std::exception ex)
         {
@@ -138,7 +138,7 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
             *value = NumberOfSlices();
             return kRocProfVisDmResultSuccess;
         case kRPVDMNumberOfTrackExtDataRecordsUInt64:
-            *value = m_ext_data.GetNumberOfRecords();
+            *value = m_ext_data.get()->GetNumberOfRecords();
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackMemoryFootprintUInt64:
             *value = GetMemoryFootprint();
@@ -164,11 +164,11 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
     switch(property)
     {
         case kRPVDMTrackExtDataCategoryCharPtrIndexed:
-            return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataCategoryCharPtrIndexed, index, value);
+            return m_ext_data.get()->GetPropertyAsCharPtr(kRPVDMExtDataCategoryCharPtrIndexed, index, value);
 	    case kRPVDMTrackExtDataNameCharPtrIndexed:
-            return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataNameCharPtrIndexed, index, value);
+            return m_ext_data.get()->GetPropertyAsCharPtr(kRPVDMExtDataNameCharPtrIndexed, index, value);
         case kRPVDMTrackExtDataValueCharPtrIndexed:
-            return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataValueCharPtrIndexed, index, value);
+            return m_ext_data.get()->GetPropertyAsCharPtr(kRPVDMExtDataValueCharPtrIndexed, index, value);
         case kRPVDMTrackInfoJsonCharPtr:
             return GetExtendedInfoAsJsonBlob(*(rocprofvis_dm_json_blob_t*)value);
         case kRPVDMTrackMainProcessNameCharPtr:
@@ -211,7 +211,7 @@ rocprofvis_dm_result_t  Track::GetPropertyAsHandle(rocprofvis_dm_property_t prop
 rocprofvis_dm_result_t Track::GetExtendedInfoAsJsonBlob(rocprofvis_dm_json_blob_t & json) {
     ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
     ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params->extdata, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
-    return m_ext_data.GetPropertyAsCharPtr(kRPVDMExtDataJsonBlobCharPtr, 0, (char**) & json);
+    return m_ext_data.get()->GetPropertyAsCharPtr(kRPVDMExtDataJsonBlobCharPtr, 0, (char**) & json);
 }
 
 

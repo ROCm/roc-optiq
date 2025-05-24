@@ -25,6 +25,16 @@ namespace RocProfVis
 namespace DataModel
 {
 
+Table::Table(   Trace* ctx, 
+                rocprofvis_dm_charptr_t description,
+                rocprofvis_dm_charptr_t query)
+: m_ctx(ctx)
+, m_query(query)
+, m_description(description)
+{
+    m_id = std::hash<std::string>{}(m_query);
+}
+
 rocprofvis_dm_size_t Table::GetMemoryFootprint(){
     size_t size = sizeof(Table);
     for (int i=0; i < m_rows.size(); i++) size+=m_rows[i].GetMemoryFootprint();
@@ -72,6 +82,9 @@ rocprofvis_dm_result_t Table::GetPropertyAsUint64(rocprofvis_dm_property_t prope
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
+        case kRPVDMNumberOfTableIdUInt64: 
+            *value = Id();
+            return kRocProfVisDmResultSuccess;
         case kRPVDMNumberOfTableColumnsUInt64:
             *value = GetNumberOfColumns();
             return kRocProfVisDmResultSuccess;
@@ -115,6 +128,8 @@ rocprofvis_dm_result_t  Table::GetPropertyAsHandle(rocprofvis_dm_property_t prop
 const char*  Table::GetPropertySymbol(rocprofvis_dm_property_t property) {
     switch(property)
     {
+        case kRPVDMNumberOfTableIdUInt64:
+            return "kRPVDMNumberOfTableIdUInt64";
         case kRPVDMNumberOfTableColumnsUInt64:
             return "kRPVDMNumberOfTableColumnsUInt64";        
         case kRPVDMNumberOfTableRowsUInt64:

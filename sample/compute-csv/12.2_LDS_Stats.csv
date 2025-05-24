@@ -1,9 +1,9 @@
 Metric,Avg,Min,Max,Unit
 LDS Instrs,94.28,0.0,738.0,Instr per wave
-Theoretical Bandwidth,198552.0,0.0,461120.0,Bytes per wave
-LDS Latency,21338.18,42.47,41944.5,Cycles
+Theoretical Bandwidth,176280.0,0.0,372032.0,Bytes per wave
+LDS Latency,18819.32,42.46,34359.48,Cycles
 Bank Conflicts/Access,0.15,0.0,0.88,Conflicts/access
-Index Accesses,1722.94,0.0,3602.5,Cycles per wave
+Index Accesses,1548.94,0.0,2928.0,Cycles per wave
 Atomic Return Cycles,0.0,0.0,0.0,Cycles per wave
 Bank Conflict,171.75,0.0,1374.0,Cycles per wave
 Addr Conflict,0.5,0.0,1.0,Cycles per wave

@@ -167,7 +167,7 @@ void ComputeBlockDetails::Update()
 
 void ComputeBlockDetails::OnNavigationChanged(std::shared_ptr<RocEvent> event)
 {
-    std::shared_ptr<ComputeBlockNavitionEvent> navigation_event = std::dynamic_pointer_cast<ComputeBlockNavitionEvent>(event);
+    std::shared_ptr<ComputeBlockNavigationEvent> navigation_event = std::dynamic_pointer_cast<ComputeBlockNavigationEvent>(event);
     m_current_location.m_level = static_cast<block_diagram_level_t>(navigation_event->GetLevel());
     m_current_location.m_block = static_cast<block_diagram_block_id_t>(navigation_event->GetBlock());
     m_navigation_changed = true;
@@ -201,7 +201,7 @@ void ComputeBlockDiagramNavHelper::GoBack()
         m_previous_levels.pop_back();
         m_current_location.m_block = kBlockDiagramBlockNone;
         EventManager::GetInstance()->AddEvent(
-            std::make_shared<ComputeBlockNavitionEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
+            std::make_shared<ComputeBlockNavigationEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
         );
     }
 }
@@ -215,7 +215,7 @@ void ComputeBlockDiagramNavHelper::GoForward()
         m_next_levels.pop_back();
         m_current_location.m_block = kBlockDiagramBlockNone;
         EventManager::GetInstance()->AddEvent(
-            std::make_shared<ComputeBlockNavitionEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
+            std::make_shared<ComputeBlockNavigationEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
         );
     }
 }
@@ -233,7 +233,7 @@ void ComputeBlockDiagramNavHelper::Go(block_diagram_level_t level)
         }
         m_current_location.m_block = kBlockDiagramBlockNone;
         EventManager::GetInstance()->AddEvent(
-            std::make_shared<ComputeBlockNavitionEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
+            std::make_shared<ComputeBlockNavigationEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
         );
     }
 }
@@ -249,7 +249,7 @@ void ComputeBlockDiagramNavHelper::Select(block_diagram_block_id_t block)
         m_current_location.m_block = kBlockDiagramBlockNone;
     }
     EventManager::GetInstance()->AddEvent(
-        std::make_shared<ComputeBlockNavitionEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
+        std::make_shared<ComputeBlockNavigationEvent>(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_current_location.m_level, m_current_location.m_block)
     );
 }
 
@@ -277,8 +277,7 @@ ComputeBlockDiagram::ComputeBlockDiagram(std::shared_ptr<ComputeDataProvider> da
 
 ComputeBlockDiagram::~ComputeBlockDiagram() {}
 
-bool
-RocProfVis::View::ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, ImVec2 rel_pos, ImVec2 rel_size, block_diagram_block_option_flags options)
+bool ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, ImVec2 rel_pos, ImVec2 rel_size, block_diagram_block_option_flags options)
 {
     const ImVec2 abs_size(rel_size * m_content_region);
     const ImVec2 abs_pos(m_content_region_center + m_content_region * rel_pos - abs_size / 2);
@@ -302,7 +301,9 @@ RocProfVis::View::ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, 
         ImGui::PopStyleVar();
     }
     ImGui::SetCursorScreenPos(abs_pos + m_content_region * 0.01f);
+    ImGui::PushTextWrapPos(ImGui::GetCursorScreenPos().x + abs_size.x);
     ImGui::Text(name);
+    ImGui::PopTextWrapPos();
     if (options & kBlockDiagramBlockOption_LabelMetrics)
     {    
         float label_pos_y = abs_pos.y + (abs_size.y - ImGui::GetTextLineHeightWithSpacing() * m_block_metrics[id].size()) / 2;
@@ -450,7 +451,7 @@ void ComputeBlockDiagram::RenderComputeUnitLevel()
 
 void ComputeBlockDiagram::RenderCacheLevel()
 {
-    BlockButton(kBlockDiagramBlockGPU, ImVec2(-0.1f, 0), ImVec2(0.8f, 1), kBLockDiagramBlockOption_None);
+    BlockButton(kBlockDiagramBlockGPU, ImVec2(-0.06f, 0), ImVec2(0.9f, 1), kBLockDiagramBlockOption_None);
     BlockButton(kBlockDiagramBlockCP, ImVec2(-0.35f, -0.275f), ImVec2(0.2f, 0.35f));
     BlockButton(kBlockDiagramBlockCPC, ImVec2(-0.35f, -0.35f), ImVec2(0.1f, 0.1f));
     BlockButton(kBlockDiagramBlockCPF, ImVec2(-0.35f, -0.20f), ImVec2(0.1f, 0.1f));
@@ -465,11 +466,11 @@ void ComputeBlockDiagram::RenderCacheLevel()
     BlockButton(kBlockDiagramBlockvL1D, ImVec2(-0.325f, 0.05f), ImVec2(0.15f, 0.1f));
     BlockButton(kBlockDiagramBlocksL1D, ImVec2(-0.325f, 0.2f), ImVec2(0.15f, 0.1f));
     BlockButton(kBlockDiagramBlockL1I, ImVec2(-0.325f, 0.35f), ImVec2(0.15f, 0.1f));
-    BlockButton(kBlockDiagramBlockL2, ImVec2(-0.0375f, 0), ImVec2(0.125f, 0.9f));
-    BlockButton(kBlockDiagramBlockFabric, ImVec2(0.19f, 0), ImVec2(0.125f, 0.55f));
-    BlockButton(kBlockDiagramBlockHBM, ImVec2(0.425f, -0.2f), ImVec2(0.15f, 0.15f));
-    BlockButton(kBlockDiagramBlockPCIe, ImVec2(0.425f, 0), ImVec2(0.15f, 0.15f));
-    BlockButton(kBlockDiagramBlockDRAM, ImVec2(0.425f, 0.2f), ImVec2(0.15f, 0.15f));
+    BlockButton(kBlockDiagramBlockL2, ImVec2(-0.025f, 0), ImVec2(0.15f, 0.9f));
+    BlockButton(kBlockDiagramBlockFabric, ImVec2(0.25f, 0), ImVec2(0.15f, 0.55f));
+    BlockButton(kBlockDiagramBlockHBM, ImVec2(0.475f, -0.2f), ImVec2(0.05f, 0.15f));
+    BlockButton(kBlockDiagramBlockPCIe, ImVec2(0.475f, 0), ImVec2(0.05f, 0.15f));
+    BlockButton(kBlockDiagramBlockDRAM, ImVec2(0.475f, 0.2f), ImVec2(0.05f, 0.15f));
 
     Link(kBlockDiagramLinkCPC_L2, ImVec2(-0.3f, -0.35f), ImVec2(-0.1f, -0.35f), ImGuiDir_None);
     Link(kBlockDiagramLinkCPF_L2, ImVec2(-0.3f, -0.2f), ImVec2(-0.1f, -0.2f), ImGuiDir_None);
@@ -480,15 +481,15 @@ void ComputeBlockDiagram::RenderCacheLevel()
     Link(kBlockDiagramLinksL1D_L2_Write, ImVec2(-0.25f, 0.2f), ImVec2(-0.1f, 0.2f), ImGuiDir_Right);
     Link(kBlockDiagramLinksL1D_L2_Atomic, ImVec2(-0.25f, 0.235f), ImVec2(-0.1f, 0.235f), ImGuiDir_None);
     Link(kBlockDiagramLinkL1I_L2, ImVec2(-0.25f, 0.35f), ImVec2(-0.1f, 0.35f), ImGuiDir_Left);
-    Link(kBlockDiagramLinkL2_Fabric_Read, ImVec2(0.025, -0.035f), ImVec2(0.125f, -0.035f), ImGuiDir_Left);
-    Link(kBlockDiagramLinkL2_Fabric_Write, ImVec2(0.025, 0), ImVec2(0.125f, 0), ImGuiDir_Right);
-    Link(kBlockDiagramLinkL2_Fabric_Atomic, ImVec2(0.025, 0.035f), ImVec2(0.125f, 0.035f), ImGuiDir_None);
-    Link(kBlockDiagramLinkFabric_DRAM_Read, ImVec2(0.25f, 0.175f), ImVec2(0.35f, 0.175f), ImGuiDir_Left);
-    Link(kBlockDiagramLinkFabric_DRAM_Write, ImVec2(0.25f, 0.225f), ImVec2(0.35f, 0.225f), ImGuiDir_Right);
-    Link(kBlockDiagramLinkFabric_PCIe_Read, ImVec2(0.25f, -0.0175f), ImVec2(0.35f, -0.0175f), ImGuiDir_Left);
-    Link(kBlockDiagramLinkFabric_PCIe_Write, ImVec2(0.25f, 0.0175f), ImVec2(0.35f, 0.0175f), ImGuiDir_Right);
-    Link(kBlockDiagramLinkFabric_HBM_Read, ImVec2(0.25f, -0.2175f), ImVec2(0.35f, -0.2175f), ImGuiDir_Left);
-    Link(kBlockDiagramLinkFabric_HBM_Write, ImVec2(0.25f, -0.1825f), ImVec2(0.35f, -0.1825f), ImGuiDir_Right);
+    Link(kBlockDiagramLinkL2_Fabric_Read, ImVec2(0.05f, -0.035f), ImVec2(0.175f, -0.035f), ImGuiDir_Left);
+    Link(kBlockDiagramLinkL2_Fabric_Write, ImVec2(0.05f, 0), ImVec2(0.175f, 0), ImGuiDir_Right);
+    Link(kBlockDiagramLinkL2_Fabric_Atomic, ImVec2(0.05f, 0.035f), ImVec2(0.175f, 0.035f), ImGuiDir_None);
+    Link(kBlockDiagramLinkFabric_DRAM_Read, ImVec2(0.325f, 0.175f), ImVec2(0.45f, 0.175f), ImGuiDir_Left);
+    Link(kBlockDiagramLinkFabric_DRAM_Write, ImVec2(0.325f, 0.225f), ImVec2(0.45f, 0.225f), ImGuiDir_Right);
+    Link(kBlockDiagramLinkFabric_PCIe_Read, ImVec2(0.325f, -0.0175f), ImVec2(0.45f, -0.0175f), ImGuiDir_Left);
+    Link(kBlockDiagramLinkFabric_PCIe_Write, ImVec2(0.325f, 0.0175f), ImVec2(0.45f, 0.0175f), ImGuiDir_Right);
+    Link(kBlockDiagramLinkFabric_HBM_Read, ImVec2(0.325f, -0.2175f), ImVec2(0.45f, -0.2175f), ImGuiDir_Left);
+    Link(kBlockDiagramLinkFabric_HBM_Write, ImVec2(0.325f, -0.1825f), ImVec2(0.45f, -0.1825f), ImGuiDir_Right);
 }
 
 void ComputeBlockDiagram::Render()

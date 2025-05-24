@@ -1,10 +1,10 @@
 Metric,Avg,Min,Max,Unit
-Not-scheduled Rate (Workgroup Manager),0.08,0.0,0.56,Pct
-Not-scheduled Rate (Scheduler-Pipe),0.06,0.0,0.49,Pct
-Scheduler-Pipe Stall Rate,0.05,0.0,0.36,Pct
+Not-scheduled Rate (Workgroup Manager),1.44,0.0,9.36,Pct
+Not-scheduled Rate (Scheduler-Pipe),6.64,0.0,17.83,Pct
+Scheduler-Pipe Stall Rate,5.99,0.0,18.84,Pct
 Scratch Stall Rate,0.0,0.0,0.0,Pct
-Insufficient SIMD Waveslots,0.08,0.0,0.64,Pct
-Insufficient SIMD VGPRs,0.0,0.0,0.0,Pct
+Insufficient SIMD Waveslots,3.79,0.0,30.35,Pct
+Insufficient SIMD VGPRs,9.07,0.0,38.98,Pct
 Insufficient SIMD SGPRs,0.0,0.0,0.0,Pct
 Insufficient CU LDS,0.0,0.0,0.0,Pct
 Insufficient CU Barriers,0.0,0.0,0.0,Pct

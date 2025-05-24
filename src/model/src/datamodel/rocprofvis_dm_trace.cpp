@@ -55,29 +55,43 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddTableColumn = AddTableColumn;
     m_binding_info.FuncAddTableRowCell = AddTableRowCell;
     m_binding_info.FuncAddEventLevel = AddEventLevel;
+    m_binding_info.FuncCheckEventPropertyExists = CheckEventPropertyExists;
+    m_binding_info.FuncCheckSliceExists = CheckSliceExists;
+    m_binding_info.FuncCheckTableExists = CheckTableExists;
     bind_data = &m_binding_info;
     m_db = db;
     return kRocProfVisDmResultSuccess;
 }
     
 rocprofvis_dm_result_t Trace::DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end){
+    rocprofvis_dm_result_t result = CheckSliceExists(this, start, end);
 
+    if(result != kRocProfVisDmResultSuccess) return result;
+    std::unique_lock lock(*Mutex());
     for (int i=0; i < m_tracks.size(); i++)
     {
-        rocprofvis_dm_slice_t slice = nullptr;
-        rocprofvis_dm_result_t result = m_tracks[i].get()->GetSliceAtTime(start, slice);
+        rocprofvis_dm_slice_t object = nullptr;
+        rocprofvis_dm_result_t result = m_tracks[i].get()->GetSliceAtTime(start, object);
         if (result == kRocProfVisDmResultSuccess)
         {
-            ROCPROFVIS_ASSERT_MSG_RETURN(slice, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-            if (kRocProfVisDmResultSuccess != m_tracks[i].get()->DeleteSlice(slice)) return kRocProfVisDmResultUnknownError;
+            ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
+            TrackSlice* slice = (TrackSlice*) object;
+            if(slice->EndTime() == end)
+            {
+                if(kRocProfVisDmResultSuccess != m_tracks[i].get()->DeleteSlice(slice))
+                    return kRocProfVisDmResultUnknownError;
+            }
+            else
+            {
+                return kRocProfVisDmResultSuccess;
+            }
         }
-        else
-            return result;
     }
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllSlices(){
+    std::unique_lock lock(*Mutex());
     for (int i=0; i < m_tracks.size(); i++)
     {
         size_t num_slices = m_tracks[i].get()->NumberOfSlices();
@@ -97,6 +111,7 @@ rocprofvis_dm_result_t Trace::DeleteAllSlices(){
 
 rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_property_type_t type,
                                                                 rocprofvis_dm_event_id_t event_id) {
+    std::unique_lock lock(*Mutex());
     switch (type)
     {
         case kRPVDMEventFlowTrace:
@@ -143,28 +158,43 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
 }
 
 rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_property_type_t type){
+    std::unique_lock lock(*Mutex());
     switch (type)
     {
         case kRPVDMEventFlowTrace:
+        {
             m_flow_traces.clear();
             return kRocProfVisDmResultSuccess;
+        }
         case kRPVDMEventStackTrace:
+        {
             m_stack_traces.clear();
             return kRocProfVisDmResultSuccess;
+        }
         case kRPVDMEventExtData:
+        {
             m_ext_data.clear();
             return kRocProfVisDmResultSuccess;
+        }
     }
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
 }
 
-rocprofvis_dm_result_t Trace::DeleteTableAt(rocprofvis_dm_index_t index){
-    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_tables.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultInvalidParameter);
-    m_tables.erase(m_tables.begin()+index);
+rocprofvis_dm_result_t Trace::DeleteTableAt(rocprofvis_dm_table_id_t id){
+    std::unique_lock lock(*Mutex());
+    auto it = std::find_if(m_tables.begin(), m_tables.end(),
+                           [&id](std::shared_ptr<Table>& x) {
+                               return x.get()->Id() >= id;
+                           });
+    if(it != m_tables.end())
+    {      
+        m_tables.erase(it);
+    }
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllTables(){
+    std::unique_lock lock(*Mutex());
     m_tables.clear();
     return kRocProfVisDmResultSuccess;
 }
@@ -220,6 +250,7 @@ rocprofvis_dm_result_t Trace::AddTrack(const rocprofvis_dm_trace_t object, rocpr
 rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
+    std::unique_lock  lock(*trace->Mutex());
     rocprofvis_dm_track_t track = nullptr;
     rocprofvis_dm_result_t result = trace->GetTrackAtIndex(track_id, track);
     if (result == kRocProfVisDmResultSuccess)
@@ -234,6 +265,7 @@ rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const 
 rocprofvis_dm_result_t Trace::AddRecord(const rocprofvis_dm_slice_t object, rocprofvis_db_record_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     TrackSlice* slice = (TrackSlice*) object;
+    std::unique_lock lock(*slice->Mutex());
     return slice->AddRecord(data);
 }      
 
@@ -254,14 +286,16 @@ rocprofvis_dm_index_t Trace::AddString(const rocprofvis_dm_trace_t object,  cons
 rocprofvis_dm_result_t Trace::AddFlow(const rocprofvis_dm_flowtrace_t object, rocprofvis_db_flow_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_FLOW_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     FlowTrace* flowtrace = (FlowTrace*) object;
+    std::unique_lock lock(*flowtrace->Mutex());
     return flowtrace->AddRecord(data);
 }
 
 rocprofvis_dm_flowtrace_t Trace::AddFlowTrace(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
+    std::unique_lock lock(*trace->Mutex());
     try{
-        trace->m_flow_traces.push_back(std::make_unique<FlowTrace>(trace, event_id));
+        trace->m_flow_traces.push_back(std::make_shared<FlowTrace>(trace, event_id));
     }
     catch(std::exception ex)
     {
@@ -273,14 +307,16 @@ rocprofvis_dm_flowtrace_t Trace::AddFlowTrace(const rocprofvis_dm_trace_t object
 rocprofvis_dm_result_t Trace::AddStackFrame(const rocprofvis_dm_stacktrace_t object, rocprofvis_db_stack_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_STACK_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     StackTrace* stacktrace = (StackTrace*) object;
+    std::unique_lock lock(*stacktrace->Mutex());
     return stacktrace->AddRecord(data);
 }
 
 rocprofvis_dm_stacktrace_t Trace::AddStackTrace(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
+    std::unique_lock lock(*trace->Mutex());
     try{
-        trace->m_stack_traces.push_back(std::make_unique<StackTrace>(trace, event_id));
+        trace->m_stack_traces.push_back(std::make_shared<StackTrace>(trace, event_id));
     }
     catch(std::exception ex)
     {
@@ -292,8 +328,9 @@ rocprofvis_dm_stacktrace_t Trace::AddStackTrace(const rocprofvis_dm_trace_t obje
 rocprofvis_dm_extdata_t  Trace::AddExtData(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
+    std::unique_lock lock(*trace->Mutex());
     try{
-        trace->m_ext_data.push_back(std::make_unique<ExtData>(trace,event_id));
+        trace->m_ext_data.push_back(std::make_shared<ExtData>(trace,event_id));
     }
     catch(std::exception ex)
     {
@@ -322,6 +359,7 @@ rocprofvis_dm_result_t Trace::AddEventLevel(const rocprofvis_dm_trace_t object, 
 rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_EXT_DATA_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ExtData* ext_data = (ExtData*) object;
+    std::unique_lock lock(*ext_data->Mutex());
     if (!ext_data->HasRecord(data)){
         return ext_data->AddRecord(data);   
     }
@@ -332,8 +370,9 @@ rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t ob
 rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*) object;
+    std::unique_lock lock(*trace->Mutex());
     try{
-        trace->m_tables.push_back(std::make_unique<Table>(trace,query,description));
+        trace->m_tables.push_back(std::make_shared<Table>(trace,description, query));
     }
     catch(std::exception ex)
     {
@@ -345,19 +384,124 @@ rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocpro
 rocprofvis_dm_table_row_t Trace::AddTableRow(const rocprofvis_dm_table_t object){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_CANNOT_BE_NULL, nullptr);
     Table* table = (Table*) object;
+    std::unique_lock lock(*table->Mutex());
     return table->AddRow();
 }
 
 rocprofvis_dm_result_t Trace::AddTableColumn(const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t column_name){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     Table* table = (Table*) object;
+    std::unique_lock lock(*table->Mutex());
     return table->AddColumn(column_name);
 }
 
 rocprofvis_dm_result_t Trace::AddTableRowCell(const rocprofvis_dm_table_row_t object, rocprofvis_dm_charptr_t cell_value){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_ROW_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     TableRow* table_row = (TableRow*) object;
+    std::unique_lock lock(*table_row->Mutex());
     return table_row->AddCellValue(cell_value);
+}
+
+rocprofvis_dm_result_t Trace::CheckSliceExists(
+                        const rocprofvis_dm_trace_t     object,
+                        const rocprofvis_dm_timestamp_t start,
+                        const rocprofvis_dm_timestamp_t end)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    Trace* trace = (Trace*) object;
+    std::shared_lock lock(*trace->Mutex());
+    bool found = false;
+    for(int i = 0; i < trace->m_tracks.size(); i++)
+    {
+        rocprofvis_dm_slice_t  object = nullptr;
+        rocprofvis_dm_result_t result = trace->m_tracks[i].get()->GetSliceAtTime(start, object);
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
+                                         kRocProfVisDmResultUnknownError);
+            TrackSlice* slice = (TrackSlice*) object;
+            if(slice->EndTime() == end)
+            {
+                return kRocProfVisDmResultSuccess;
+            }
+        }
+    }
+    return kRocProfVisDmResultNotLoaded;
+}
+
+rocprofvis_dm_result_t Trace::CheckEventPropertyExists(
+                        const rocprofvis_dm_trace_t     object,
+                        const rocprofvis_dm_event_property_type_t type,
+                        const rocprofvis_dm_event_id_t event_id)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    Trace* trace = (Trace*) object;
+    std::shared_lock lock(*trace->Mutex());
+    switch(type)
+    {
+        case kRPVDMEventFlowTrace:
+        {
+            
+            auto it = std::find_if(trace->m_flow_traces.begin(), trace->m_flow_traces.end(),
+                                      [&event_id](std::shared_ptr<FlowTrace>& x) {
+                                       return x.get()->EventId().value == event_id.value;
+                                   });
+            if(it != trace->m_flow_traces.end())
+            {
+                return kRocProfVisDmResultResourceBusy;
+            }
+        }
+        break;
+        case kRPVDMEventStackTrace:
+        {
+            auto it =
+                std::find_if(trace->m_stack_traces.begin(), trace->m_stack_traces.end(),
+                             [&event_id](std::shared_ptr<StackTrace>& x) {
+                                 return x.get()->EventId().value == event_id.value;
+                             });
+
+            if(it != trace->m_stack_traces.end())
+            {
+                return kRocProfVisDmResultSuccess;
+            }
+        }
+        break;
+        case kRPVDMEventExtData:
+        {
+            auto it = std::find_if(trace->m_ext_data.begin(), trace->m_ext_data.end(),
+                                   [&event_id](std::shared_ptr<ExtData>& x) {
+                                 return x.get()->EventId().value == event_id.value;
+                             });
+
+            if(it != trace->m_ext_data.end())
+            {
+                return kRocProfVisDmResultSuccess;
+            }
+        }
+        break;
+    }
+    return kRocProfVisDmResultNotLoaded;
+}
+
+rocprofvis_dm_result_t Trace::CheckTableExists(
+    const rocprofvis_dm_trace_t object,
+    const rocprofvis_dm_table_id_t table_id)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    Trace* trace = (Trace*) object;
+    std::shared_lock lock(*trace->Mutex());
+    auto it =
+        std::find_if(trace->m_tables.begin(), trace->m_tables.end(),
+        [&table_id](std::shared_ptr<Table>& x) { return x.get()->Id() == table_id; });
+    if(it != trace->m_tables.end())
+    {
+       return kRocProfVisDmResultSuccess;
+    }
+    
+    return kRocProfVisDmResultNotLoaded;
 }
 
 rocprofvis_dm_charptr_t Trace::GetStringAt(rocprofvis_dm_index_t index){
@@ -412,8 +556,8 @@ rocprofvis_dm_result_t    Trace::GetPropertyAsHandle(rocprofvis_dm_property_t pr
             return GetStackTraceHandle(*(rocprofvis_dm_event_id_t*)&index, *value);
         case kRPVDMExtInfoHandleByEventID:
             return GetExtInfoHandle(*(rocprofvis_dm_event_id_t*)&index, *value);
-        case kRPVDMTableHandleIndexed:
-            return GetTableHandle(index, *value);
+        case kRPVDMTableHandleByID:
+            return GetTableHandle(*(rocprofvis_dm_table_id_t*) &index, *value);
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -453,8 +597,11 @@ const char*  Trace::GetPropertySymbol(rocprofvis_dm_property_t property) {
 
 
 rocprofvis_dm_result_t Trace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_extdata_t & extinfo){
-    auto it = find_if(m_ext_data.begin(), m_ext_data.end(), [&](std::unique_ptr<ExtData>& ft){
-        return ft.get()->EventId().value == event_id.value;
+    std::shared_lock lock(*Mutex());
+    auto it =
+        find_if(m_ext_data.begin(), m_ext_data.end(), 
+                        [&](std::shared_ptr<ExtData>& x) {
+        return x.get()->EventId().value == event_id.value;
     });
     if (it != m_ext_data.end())
     {
@@ -465,8 +612,10 @@ rocprofvis_dm_result_t Trace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id
 }
 
 rocprofvis_dm_result_t Trace::GetFlowTraceHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_flowtrace_t & flowtrace){
-    auto it = find_if(m_flow_traces.begin(), m_flow_traces.end(), [&](std::unique_ptr<FlowTrace>& ft){
-        return ft.get()->EventId().value == event_id.value;
+    std::shared_lock lock(*Mutex());
+    auto it = find_if(m_flow_traces.begin(), m_flow_traces.end(),
+                      [&](std::shared_ptr<FlowTrace>& x) {
+        return x.get()->EventId().value == event_id.value;
     });
     if (it != m_flow_traces.end())
     {
@@ -477,8 +626,10 @@ rocprofvis_dm_result_t Trace::GetFlowTraceHandle(rocprofvis_dm_event_id_t event_
 }
 
 rocprofvis_dm_result_t Trace::GetStackTraceHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_stacktrace_t & stacktrace){
-    auto it = find_if(m_stack_traces.begin(), m_stack_traces.end(), [&](std::unique_ptr<StackTrace>& ft) {
-        return ft.get()->EventId().value == event_id.value;
+    std::shared_lock lock(*Mutex());
+    auto it = find_if(m_stack_traces.begin(), m_stack_traces.end(),
+                      [&](std::shared_ptr<StackTrace>& x) {
+        return x.get()->EventId().value == event_id.value;
         });
     if (it != m_stack_traces.end())
     {
@@ -488,10 +639,18 @@ rocprofvis_dm_result_t Trace::GetStackTraceHandle(rocprofvis_dm_event_id_t event
     return kRocProfVisDmResultNotLoaded;
 }
 
-rocprofvis_dm_result_t Trace::GetTableHandle(rocprofvis_dm_property_index_t index, rocprofvis_dm_table_t & table){
-    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_tables.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    table = m_tables[index].get();
-    return kRocProfVisDmResultSuccess;
+rocprofvis_dm_result_t Trace::GetTableHandle(rocprofvis_dm_table_id_t id, rocprofvis_dm_table_t & table){
+    std::shared_lock lock(*Mutex());
+    auto  it = find_if(m_tables.begin(), m_tables.end(),
+                      [&](std::shared_ptr<Table>& x) {
+                          return x.get()->Id() == id;
+                      });
+    if(it != m_tables.end())
+    {
+        table = it->get();
+        return kRocProfVisDmResultSuccess;
+    }
+    return kRocProfVisDmResultNotLoaded;
 
 }
 

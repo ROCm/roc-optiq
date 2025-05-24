@@ -19,11 +19,17 @@
 // SOFTWARE.
 
 #include "rocprofvis_dm_table_row.h"
+#include "rocprofvis_dm_table.h"
 
 namespace RocProfVis
 {
 namespace DataModel
 {
+
+std::shared_mutex* TableRow::Mutex()
+{
+    return m_ctx->Mutex();
+}
 
 rocprofvis_dm_size_t  TableRow::GetMemoryFootprint(){
     size_t size = sizeof(TableRow);

@@ -85,11 +85,11 @@ class Future
         // progress callback method pointer 
         rocprofvis_db_progress_callback_t m_progress_callback;
         // progress value in percent
-        double m_progress;
+        std::atomic<double> m_progress;
         // worker thread
         std::thread m_worker;
         // number of rows processed by query
-        uint32_t m_processed_rows;
+        std::atomic<uint32_t> m_processed_rows;
 };
 
 }  // namespace DataModel

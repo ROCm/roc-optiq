@@ -59,7 +59,7 @@ class Table : public DmBase {
         rocprofvis_dm_size_t                    GetMemoryFootprint();
 
         // Returns table id
-        uint32_t                                Id() { return m_id; };
+        uint64_t                                Id() { return m_id; };
         // Returns trace context pointer
         Trace*                                  Ctx() {return m_ctx;};
         // Returns pointer to query string

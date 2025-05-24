@@ -40,25 +40,18 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_pixels_per_ns(0.0f)
 , m_stop_zooming(false)
 , m_meta_map_made(false)
-, m_user_adjusting_graph_height(false)
 , m_previous_scroll_position(0.0f)
-, m_show_graph_customization_window(false)
 , m_graph_map({})
 , m_is_control_held(false)
-, m_can_drag_to_pan(false)
 , m_original_v_max_x(0.0f)
-, m_capture_og_v_max_x(true)
 , m_grid_size(50)
 , m_unload_track_distance(1000.0f)
 , m_sidebar_size(400)
 , m_resize_activity(false)
 , m_scroll_position_x(0)
-, m_calibrated(true)
 , m_scrollbar_location_as_percentage(0)
 , m_artifical_scrollbar_active(false)
 , m_highlighted_region({ -1, -1 })
-, m_buffer_left_hit(false)
-, m_buffer_right_hit(false)
 , m_new_track_token(-1)
 , m_settings(Settings::GetInstance())
 , m_v_past_width(0)
@@ -103,19 +96,18 @@ TimelineView::CalibratePosition()
 void
 TimelineView::ResetView()
 {
-    m_zoom               = 1.0f;
-    m_movement           = 0.0f;
-    m_min_x              = std::numeric_limits<double>::max();
-    m_max_x              = std::numeric_limits<double>::lowest();
-    m_min_y              = std::numeric_limits<double>::max();
-    m_max_y              = std::numeric_limits<double>::lowest();
-    m_scroll_position    = 0.0f;
-    m_scrubber_position  = 0.0f;
-    m_v_min_x            = 0.0f;
-    m_v_max_x            = 0.0f;
-    m_pixels_per_ns      = 0.0f;
-    m_original_v_max_x   = 0.0f;
-    m_capture_og_v_max_x = true;
+    m_zoom              = 1.0f;
+    m_movement          = 0.0f;
+    m_min_x             = std::numeric_limits<double>::max();
+    m_max_x             = std::numeric_limits<double>::lowest();
+    m_min_y             = std::numeric_limits<double>::max();
+    m_max_y             = std::numeric_limits<double>::lowest();
+    m_scroll_position   = 0.0f;
+    m_scrubber_position = 0.0f;
+    m_v_min_x           = 0.0f;
+    m_v_max_x           = 0.0f;
+    m_pixels_per_ns     = 0.0f;
+    m_original_v_max_x  = 0.0f;
 }
 
 void
@@ -326,21 +318,6 @@ TimelineView::RenderGrid()
                       m_v_min_x, m_grid_size, m_sidebar_size, m_graph_size);
 
     ImGui::PopStyleColor();
-}
-
-void
-TimelineView::RenderGraphCustomizationWindow(int graph_id)
-{
-    if(ImGui::Begin((std::to_string(graph_id)).c_str(), nullptr,
-                    ImGuiWindowFlags_AlwaysAutoResize))
-    {
-        ImGui::Text("This is a popout window!");
-        if(ImGui::Button((std::to_string(graph_id)).c_str()))
-        {
-            m_show_graph_customization_window = false;
-        }
-        ImGui::End();
-    }
 }
 
 void
@@ -724,12 +701,6 @@ TimelineView::RenderGraphPoints()
             m_stop_zooming = true;
         }
 
-        if(m_capture_og_v_max_x)
-        {
-            m_original_v_max_x   = m_v_max_x;  // Used to set bounds
-            m_capture_og_v_max_x = false;
-        }
-
         RenderGrid();
 
         if(m_meta_map_made)
@@ -863,16 +834,6 @@ TimelineView::HandleTopSurfaceTouch()
                 m_v_max_x = m_v_min_x + m_v_width;
             }
 
-            // Detect drag start
-            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-            {
-                m_can_drag_to_pan = true;
-            }
-            else if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-            {
-                m_can_drag_to_pan = false;
-            }
-
             if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
             {
                 m_movement -= (1 / m_graph_size.x) * m_v_width;
@@ -884,7 +845,7 @@ TimelineView::HandleTopSurfaceTouch()
         }
 
         // Handle Panning
-        if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
             float drag_y = ImGui::GetIO().MouseDelta.y;
             m_scroll_position =

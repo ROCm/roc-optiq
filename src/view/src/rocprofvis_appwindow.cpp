@@ -107,6 +107,11 @@ AppWindow::Render()
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 #endif
 
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, GRAY500);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, GRAY400);
+    ImGui::PushStyleColor(ImGuiCol_Header, GRAY300);
+    ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, GRAY300);
+
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
@@ -170,11 +175,6 @@ AppWindow::Render()
         ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
 
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, GRAY500);
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, GRAY400);
-    ImGui::PushStyleColor(ImGuiCol_Header, GRAY300);
-    ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, GRAY300);
-
     if(ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
     {
         if(ImGuiFileDialog::Instance()->IsOk())
@@ -223,8 +223,6 @@ AppWindow::Render()
         ImGuiFileDialog::Instance()->Close();
     }
 
-    ImGui::PopStyleColor(4);
-
     ImGui::SetNextWindowPos(
         ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
         ImGuiCond_Appearing);
@@ -251,6 +249,8 @@ AppWindow::Render()
     {
         RenderProviderTest(m_data_provider);
     }
+
+    ImGui::PopStyleColor(4);
 }
 
 void

@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_compute_roofline.h"
+#include "imgui_spectrum_dynamic.h"
 
 namespace RocProfVis
 {
@@ -63,9 +64,15 @@ void ComputeRooflineView::Render()
 {
     RenderMenuBar();
 
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, GRAY900);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, GRAY800);
+    ImGui::PushStyleColor(ImGuiCol_Header, GRAY700);
+
     ImGui::BeginChild("compute_roofline", ImVec2(-1, -1), ImGuiChildFlags_Borders);
     m_roofline->Render();
     ImGui::EndChild();
+
+    ImGui::PopStyleColor(3);
 }
 
 }  // namespace View

@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_compute_block.h"
+#include "imgui_spectrum_dynamic.h"
 
 namespace RocProfVis
 {
@@ -127,6 +128,10 @@ ComputeBlockDetails::~ComputeBlockDetails()
 
 void ComputeBlockDetails::Render() 
 {
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, GRAY900);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, GRAY800);
+    ImGui::PushStyleColor(ImGuiCol_Header, GRAY700);
+
     for (const block_diagram_block_info_t& block : BLOCK_DEFINITIONS)
     {
         if (block.m_levels & m_current_location.m_level)
@@ -151,6 +156,9 @@ void ComputeBlockDetails::Render()
             }
         }
     }
+
+    ImGui::PopStyleColor(3);
+
     m_navigation_changed = false;
 }
 
@@ -287,9 +295,12 @@ bool ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, ImVec2 rel_po
 
     ImGui::SetCursorScreenPos(abs_pos);
     ImGui::SetNextItemAllowOverlap();
+    ImVec4 Red400 = ImGui::ColorConvertU32ToFloat4(RED400);
+    Red400.w      = 0.6;
+    ImGui::PushStyleColor(ImGuiCol_Button, Red400);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,ImGui::GetStyleColorVec4(ImGuiCol_Button));
     bool pressed = ImGui::Button(std::string("##").append(name).c_str(), abs_size);
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(2);
     if (m_navigation->Current().m_block == id || ImGui::IsItemHovered())
     {
         m_draw_list->AddRect(abs_pos, abs_pos + abs_size, IM_COL32(0, 0, 0, 255));

@@ -281,7 +281,11 @@ rocprofvis_dm_size_t Database::GetMemoryFootprint()
 }
 
 
-bool Database::TrackExist( rocprofvis_dm_track_params_t & newprops, rocprofvis_dm_charptr_t newquery){
+bool
+Database::TrackExist(rocprofvis_dm_track_params_t& newprops,
+                     rocprofvis_dm_charptr_t       newquery,
+                     rocprofvis_dm_charptr_t       newtablequery)
+{
     std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator it = 
         std::find_if(TrackPropertiesBegin(), TrackPropertiesEnd(), [newprops] (std::unique_ptr<rocprofvis_dm_track_params_t> & params) {
                 if(params.get()->track_category == newprops.track_category)
@@ -310,9 +314,17 @@ bool Database::TrackExist( rocprofvis_dm_track_params_t & newprops, rocprofvis_d
             if (s == it->get()->query.end()) {
                 it->get()->query.push_back(newquery);
             }
+            s = std::find_if(
+                it->get()->table_query.begin(), it->get()->table_query.end(),
+                [newtablequery](rocprofvis_dm_string_t& str) { return str == newtablequery; });
+            if(s == it->get()->table_query.end())
+            {
+                it->get()->table_query.push_back(newtablequery);
+            }
         return true;
     } 
     newprops.query.push_back(newquery);
+    newprops.table_query.push_back(newtablequery);
     return false;    
 }
 

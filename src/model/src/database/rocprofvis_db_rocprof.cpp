@@ -77,7 +77,9 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **
         }        
     }
     
-    if (!db->TrackExist(track_params, callback_params->subquery)){
+    if(!db->TrackExist(track_params, callback_params->subquery,
+                       callback_params->table_subquery))
+    {
         db->find_track_map[track_params.process_id[TRACK_ID_NODE]][track_params.process_id[TRACK_ID_PID_OR_AGENT]][track_params.process_id[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
         if (track_params.track_category == kRocProfVisDmRegionTrack) {
             track_params.process_name[TRACK_ID_PID] = ProcessNameSuffixFor(track_params.track_category);
@@ -196,49 +198,58 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as node, pid, tid, 2 as category from rocpd_region;", 
-                    "select 1 as op, R.start, R.end, E.category_id, R.name_id, R.id, R.nid as node, R.pid, R.tid from rocpd_region R INNER JOIN rocpd_event E ON E.id = R.event_id " , 
+                    "select DISTINCT nid as nodeId, pid, tid, 2 as category from rocpd_region;", 
+                    "select 1 as op, R.start, R.end, E.category_id, R.name_id, R.id, R.nid as nodeId, R.pid, R.tid from rocpd_region R INNER JOIN rocpd_event E ON E.id = R.event_id " , 
+                    "select id, category, name, nid as nodeId, pid, tid, start, end, duration from regions " ,
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Kernel Dispatch tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as node, agent_id as agent, queue_id as queue, 3 as category from rocpd_kernel_dispatch;", 
-                    "select 2 as op, KD.start, KD.end, E.category_id, KD.kernel_id, KD.id, KD.nid as node, KD.agent_id as agent, KD.queue_id as queue from rocpd_kernel_dispatch KD INNER JOIN rocpd_event E ON E.id = KD.event_id ", 
+                    "select DISTINCT nid as nodeId, agent_id as agentId, queue_id as queueId, 3 as category from rocpd_kernel_dispatch;", 
+                    "select 2 as op, KD.start, KD.end, E.category_id, KD.kernel_id, KD.id, KD.nid as nodeId, KD.agent_id as agentId, KD.queue_id as queueId from rocpd_kernel_dispatch KD INNER JOIN rocpd_event E ON E.id = KD.event_id ", 
+                    "select id, category, name, nid as nodeId, coalesce(agent_abs_index,0) as agentId, queue_id as queueId, coalesce(stream_id,0) as stream, coalesce(pid,0) as pid, coalesce(tid,0) as tid, start, end, duration from kernels " ,
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Memory Allocation tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as node, coalesce(agent_id, 0) as agent, coalesce(queue_id,0) as queue, 3 as category from rocpd_memory_allocate;", 
-                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as node, coalesce(MA.agent_id,0) as agent, coalesce(MA.queue_id,0) as queue from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id ", 
+                    "select DISTINCT nid as nodeId, coalesce(agent_id, 0) as agentId, coalesce(queue_id,0) as queueId, 3 as category from rocpd_memory_allocate;", 
+                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as nodeId, coalesce(MA.agent_id,0) as agentId, coalesce(MA.queue_id,0) as queueId from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id ", 
+                    "select id, category, type as name, nid as nodeId, coalesce(agent_abs_index,0) as agentId, coalesce(queue_id,0) as queueId, coalesce(stream_id,0) as stream, coalesce(pid,0) as pid, coalesce(tid,0) as tid, start, end, duration from memory_allocations " ,
                     &CallBackAddTrack)) break;
         /*
 // This will not work if full track is not requested
 // Comment out for now. Will need to fetch all data, then cut samples outside of time frame.
         ShowProgress(5, "Adding Memory allocation graph tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as node, coalesce(agent_id, 0) as agent, -1 as const, 1 as category from rocpd_memory_allocate;", 
-                    "select 0 as op, start, sum(CASE WHEN type = 'FREE' THEN (select -size from rocpd_memory_allocate MA1 where MA.address == MA1.address limit 1) ELSE size END) over (ORDER BY start ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as current, start as end, 0, 0, nid as node, coalesce(agent_id, 0) as agent, -1 as queue  from rocpd_memory_allocate MA ", 
+                    "select DISTINCT nid as nodeId, coalesce(agent_id, 0) as agentId, -1 as const, 1 as category from rocpd_memory_allocate;", 
+                    "select 0 as op, start, sum(CASE WHEN type = 'FREE' THEN (select -size from rocpd_memory_allocate MA1 where MA.address == MA1.address limit 1) ELSE size END) over (ORDER BY start ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as current, start as end, 0, 0, nid as nodeId, coalesce(agent_id, 0) as agentId, -1 as queue  from rocpd_memory_allocate MA ", 
                     &CallBackAddTrack)) break;
 */
    
         ShowProgress(5, "Adding Memory Copy tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as node, dst_agent_id as agent, coalesce(queue_id,0) as queue, 3 as category from rocpd_memory_copy;", 
-                    "select 4 as op, MC.start, MC.end, E.category_id, MC.name_id, MC.id, MC.nid as node, MC.dst_agent_id as agent, coalesce(MC.queue_id,0) as queue from rocpd_memory_copy MC INNER JOIN rocpd_event E ON E.id = MC.event_id ", 
+                    "select DISTINCT nid as nodeId, dst_agent_id as agentId, coalesce(queue_id,0) as queueId, 3 as category from rocpd_memory_copy;", 
+                    "select 4 as op, MC.start, MC.end, E.category_id, MC.name_id, MC.id, MC.nid as nodeId, MC.dst_agent_id as agentId, coalesce(MC.queue_id,0) as queueId from rocpd_memory_copy MC INNER JOIN rocpd_event E ON E.id = MC.event_id ",
+                    "select id, category, name, nid as nodeId, coalesce(dst_agent_abs_index,0) as agentId, coalesce(queue_id,0) as queueId, coalesce(stream_id,0) as stream, coalesce(pid,0) as pid, coalesce(tid,0) as tid, start, end, duration from memory_copies " ,
                     &CallBackAddTrack)) break;
         
         // PMC schema is not fully defined yet
         ShowProgress(5, "Adding PMC tracks", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,   "select DISTINCT K.nid as node, K.agent_id as agent, PMC_I.id AS counter_id, 1 as category FROM rocpd_pmc_event PMC_E "
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,   "select DISTINCT K.nid as nodeId, K.agent_id as agentId, PMC_I.id AS counter_id, 1 as category FROM rocpd_pmc_event PMC_E "
                                                                     "INNER JOIN "
                                                                     "rocpd_info_pmc PMC_I ON PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid "
                                                                     "INNER JOIN "
-                                                                    "rocpd_kernel_dispatch K ON K.event_id = PMC_E.event_id AND K.guid = PMC_E.guid ", 
-                                                                    "select 0 as op, K.start, PMC_E.value AS counter_value, K.end, 0, 0, K.nid as node, K.agent_id as agent, PMC_I.id AS counter_id FROM rocpd_pmc_event PMC_E "
+                                                                    "rocpd_kernel_dispatch K ON K.event_id = PMC_E.event_id AND K.guid = PMC_E.guid ",                                  
+                                                                    "select 0 as op, K.start, PMC_E.value AS counter_value, K.end, 0, 0, K.nid as nodeId, K.agent_id as agentId, PMC_I.id AS counter_id FROM rocpd_pmc_event PMC_E "
                                                                     "INNER JOIN "
                                                                     "rocpd_info_pmc PMC_I ON PMC_I.id = PMC_E.pmc_id AND  PMC_I.guid = PMC_E.guid "
                                                                     "INNER JOIN "
-                                                                    "rocpd_kernel_dispatch K ON K.event_id = PMC_E.event_id AND K.guid = PMC_E.guid ",   
+                                                                    "rocpd_kernel_dispatch K ON K.event_id = PMC_E.event_id AND K.guid = PMC_E.guid ",
+                                                                    "select 0 as op, K.start, PMC_E.value AS counter_value, K.end, 0, 0, K.nid as nodeId, K.agent_id as agentId, PMC_I.id AS counter_id FROM rocpd_pmc_event PMC_E "
+                                                                    "INNER JOIN "
+                                                                    "rocpd_info_pmc PMC_I ON PMC_I.id = PMC_E.pmc_id AND  PMC_I.guid = PMC_E.guid "
+                                                                    "INNER JOIN "
+                                                                    "rocpd_kernel_dispatch K ON K.event_id = PMC_E.event_id AND K.guid = PMC_E.guid ",
                                                                     &CallBackAddTrack)) break;
                                                                     
 

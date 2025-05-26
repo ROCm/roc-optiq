@@ -330,7 +330,8 @@ class Database
         // @return True if exists
         bool                            TrackExist(
                                                                 rocprofvis_dm_track_params_t & newprops, 
-                                                                rocprofvis_dm_charptr_t newquery);
+                                                                rocprofvis_dm_charptr_t newquery,
+                                                                rocprofvis_dm_charptr_t newtablequery);
         // calls Future object callback method, if provided. The callback method is optionally provided by caller in order to display or save current database progress.
         // @param step - approximate percentage of single database operation
         // @param action - database operation description

@@ -54,6 +54,7 @@ const std::array TAB_DEFINITIONS = {
 };
 
 ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category)
+: m_search_event_token(-1)
 {
     for (const std::string& content : TAB_DEFINITIONS[category].m_content_ids)
     {

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "../rocprofvis_utils.h"
+#include "rocprofvis_utils.h"
 #include "rocprofvis_widget.h"
 #include <string>
 #include <vector>

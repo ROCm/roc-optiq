@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_settings.h"
+#include "rocprofvis_core.h"
 #include "imgui.h"
 #include <algorithm>
 #include <iostream>
@@ -67,7 +68,7 @@ bool
 Settings::HorizontalRender()
 {
     m_use_horizontal_rendering = !m_use_horizontal_rendering;
-    std::cout << m_use_horizontal_rendering << std::endl;
+    spdlog::info("Enable Dynamic Loading: {0}", (uint32_t)m_use_horizontal_rendering);
     return m_use_horizontal_rendering;
 }
 

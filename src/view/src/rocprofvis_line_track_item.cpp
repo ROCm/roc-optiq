@@ -59,6 +59,7 @@ LineTrackItem::LineTrackRender(float graph_width)
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
+    ImVec2 container_pos   = ImGui::GetWindowPos();
 
     float scale_y = content_size.y / (m_max_y - m_min_y);
 
@@ -83,6 +84,13 @@ LineTrackItem::LineTrackRender(float graph_width)
         ImVec2 point_2 =
             MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
         ImU32 LineColor = generic_black;
+
+        if(point_2.x < container_pos.x || point_1.x > container_pos.x + content_size.x)
+        {
+            // Skip rendering if the points are outside the visible area.
+            continue;
+        }
+
         if(m_is_color_value_existant)
         {
             // Code below enables user to define problematic regions in LineChart.
@@ -185,6 +193,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
+    ImVec2 container_pos   = ImGui::GetWindowPos();
 
     float scale_y = content_size.y / (m_max_y - m_min_y);
 
@@ -209,6 +218,12 @@ LineTrackItem::BoxPlotRender(float graph_width)
         ImVec2 point_2 =
             MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
         ImU32 LineColor = generic_black;
+
+        if(point_2.x < container_pos.x || point_1.x > container_pos.x + content_size.x)
+        {
+            // Skip rendering if the points are outside the visible area.
+            continue;
+        }
 
         float bottom_of_chart =
             cursor_position.y + content_size.y - (m_min_y - m_min_y) * scale_y;
@@ -274,7 +289,8 @@ LineTrackItem::ExtractPointsFromData()
         spdlog::debug("Invalid track data type for track {}", m_id);
         return false;
     }
-    if (sample_track->GetData().empty()) {
+    if(sample_track->GetData().empty())
+    {
         spdlog::debug("No data for track {}", m_id);
         return false;
     }

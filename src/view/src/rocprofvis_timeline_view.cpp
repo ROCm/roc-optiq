@@ -59,6 +59,8 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_viewport_past_position(0)
 , m_graph_size()
 , m_range_x(0.0f)
+, m_can_drag_to_pan(false)
+
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -87,9 +89,9 @@ TimelineView::CalibratePosition()
                                       // for current movement.
         m_movement =
             value_to_begginging +
-            ((m_range_x) *
-             m_scrollbar_location_as_percentage);  // initial/first value + position where
-                                                   // scrollbar is.
+            ((m_range_x) *m_scrollbar_location_as_percentage);  // initial/first value +
+                                                                // position where
+                                                                // scrollbar is.
     }
 }
 
@@ -835,6 +837,12 @@ TimelineView::HandleTopSurfaceTouch()
 
         if(is_mouse_inside)
         {
+            // Prevent mouse from controlling anything outside of graphs.
+            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            {
+                m_can_drag_to_pan = true;
+            }
+
             // Handle Zoom
             float scroll_wheel = ImGui::GetIO().MouseWheel;
             if(scroll_wheel != 0.0f)
@@ -872,6 +880,11 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 m_movement -= (-1 / m_graph_size.x) * m_v_width;
             }
+        }
+
+        if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        {
+            m_can_drag_to_pan = false;
         }
 
         // Handle Panning

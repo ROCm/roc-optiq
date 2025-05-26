@@ -67,6 +67,7 @@ protected:
     double                m_scale_x;
     int                   m_id;
     float                 m_track_height;
+    float                 m_min_track_height;
     bool                  m_is_in_view_vertical;
     float                 m_distance_to_view_y;
     float                 m_metadata_width;

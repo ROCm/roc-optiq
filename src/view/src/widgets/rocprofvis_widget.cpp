@@ -1,11 +1,12 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_widget.h"
-#include "../rocprofvis_settings.h"
-#include "../rocprofvis_utils.h"
+#include "rocprofvis_core.h"
+#include "rocprofvis_settings.h"
+#include "rocprofvis_utils.h"
 #include "imgui.h"
 #include "rocprofvis_debug_window.h"
-#include "../rocprofvis_event_manager.h"
+#include "rocprofvis_event_manager.h"
 
 #include <iostream>
 #include <sstream>
@@ -34,7 +35,10 @@ LayoutItem::LayoutItem(float w, float h)
 {}
 
 //------------------------------------------------------------------
-RocWidget::~RocWidget() { std::cout << "RocWidget object destroyed" << std::endl; }
+RocWidget::~RocWidget()
+{ 
+    spdlog::info("RocWidget object destroyed");
+}
 
 void
 RocWidget::Render()

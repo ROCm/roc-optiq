@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
- #include "imgui.h"
+#include "imgui.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
@@ -42,6 +42,9 @@ private:
     float                                 m_sidebar_size;
     rocprofvis_color_by_value_t           m_is_color_value_existant;
     bool                                  m_request_random_color;
+    ImVec2                                m_text_padding;
+    float                                 m_flame_height;
+    float                                 m_scale_area_width;
 };
 
 }  // namespace View

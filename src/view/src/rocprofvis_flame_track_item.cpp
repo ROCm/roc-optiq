@@ -22,7 +22,9 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float
 : TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_is_color_value_existant()
 , m_request_random_color(true)
-
+, m_text_padding(ImVec2(4.0f, 2.0f))
+, m_flame_height(40.0f)
+, m_scale_area_width(70.0f)
 {}
 
 void
@@ -72,8 +74,7 @@ FlameTrackItem::ExtractPointsFromData()
 {
     const RawTrackData*      rtd         = m_data_provider.GetRawTrackData(m_id);
     const RawTrackEventData* event_track = dynamic_cast<const RawTrackEventData*>(rtd);
-    
-    
+
     if(!event_track)
     {
         spdlog::debug("Invalid track data type for track {}", m_id);
@@ -85,41 +86,35 @@ FlameTrackItem::ExtractPointsFromData()
         spdlog::debug("No data for track {}", m_id);
         return false;
     }
-    
-    
+
     m_flames = event_track->GetData();
-    
     return true;
 }
 
 void
-FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
+FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
                         rocprofvis_trace_event_t flame, float duration,
                         ImDrawList* draw_list)
 {
-    ImGui::PushID(static_cast<int>(boxplot_box_id));
-
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
     // Define the start and end positions for the rectangle
-
     ImVec2 rectMin =
         ImVec2(start_position.x,
                start_position.y + cursor_position.y);  // Start position (top-left corner)
     ImVec2 rectMax = ImVec2(start_position.x + duration,
-                            start_position.y + 40 +
+                            start_position.y + m_flame_height +
                                 cursor_position.y);  // End position (bottom-right corner)
 
     ImU32 rectColor;
     if(m_request_random_color)
     {
-        rectColor = m_settings.GetColorWheel()[boxplot_box_id % 10];
+        rectColor = m_settings.GetColorWheel()[color_index];
     }
     else
     {
-        rectColor = m_settings.GetColor(
-            static_cast<int>(Colors::kFlameChartColor));  // Black colored box.
+        rectColor = m_settings.GetColor(static_cast<int>(Colors::kFlameChartColor));
     }
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
@@ -127,16 +122,21 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int boxplot_box_id,
     if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH)
     {
         draw_list->PushClipRect(rectMin, rectMax, true);
-        draw_list->AddText(rectMin, IM_COL32_BLACK, flame.m_name.c_str());
+        ImVec2 textPos =
+            ImVec2(rectMin.x + m_text_padding.x, rectMin.y + m_text_padding.y);
+        draw_list->AddText(textPos, IM_COL32_BLACK, flame.m_name.c_str());
         draw_list->PopClipRect();
     }
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
     {
-        ImGui::SetTooltip("%s\nStart: %.2f\nDuration: %.2f ", flame.m_name.c_str(),
-                          flame.m_start_ts - m_min_x, flame.m_duration);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding); // Add padding
+        ImGui::BeginTooltip();
+        ImGui::Text("%s", flame.m_name.c_str());
+        ImGui::Text("Start: %.2f", flame.m_start_ts - m_min_x);
+        ImGui::Text("Duration: %.2f", flame.m_duration);
+        ImGui::EndTooltip();
+        ImGui::PopStyleVar();        
     }
-
-    ImGui::PopID();
 }
 
 void
@@ -168,7 +168,7 @@ FlameTrackItem::RenderMetaArea()
     // Adjust content size to account for padding
     content_size.x -= m_metadata_padding.x * 2;
     content_size.y -= m_metadata_padding.x * 2;
-    ImGui::BeginChild("MetaData Content", ImVec2(content_size.x - 70.0f, content_size.y),
+    ImGui::BeginChild("MetaData Content", ImVec2(content_size.x - m_scale_area_width, content_size.y),
                       ImGuiChildFlags_None);
     ImGui::Text(m_name.c_str());
     if(ImGui::IsItemVisible())
@@ -184,7 +184,7 @@ FlameTrackItem::RenderMetaArea()
 
     ImGui::SameLine();
 
-    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, content_size.y),
+    ImGui::BeginChild("MetaData Scale", ImVec2(m_scale_area_width, content_size.y),
                       ImGuiChildFlags_None);
 
     ImGui::EndChild();
@@ -199,8 +199,11 @@ FlameTrackItem::RenderChart(float graph_width)
     ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    int boxplot_box_id = 0;
+    auto colorCount = m_settings.GetColorWheel().size();
+    ROCPROFVIS_ASSERT(colorCount > 0, "Color wheel should have at least one color for "
+                                      "rendering flames in FlameTrackItem");
 
+    int color_index = 0;
     for(const auto& flame : m_flames)
     {
         ImVec2 container_pos = ImGui::GetWindowPos();
@@ -208,20 +211,24 @@ FlameTrackItem::RenderChart(float graph_width)
         double normalized_start =
             container_pos.x + (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
 
-        // float duration = static_cast<float>(flame.m_duration * zoom) * scale_x;
-        double normalized_end = flame.m_duration * m_scale_x;
-
-        double fullBoxSize = normalized_start + normalized_end;
+        double normalized_duration = flame.m_duration * m_scale_x;
+        double normalized_end      = normalized_start + normalized_duration;
 
         ImVec2 start_position;
-        ImVec2 end_position;
 
-        // Scale the start time for better visualization
-        start_position = ImVec2(normalized_start, flame.m_level * 40);
-        DrawBox(start_position, boxplot_box_id, flame, normalized_end, draw_list);
+        // Calculate the start position based on the normalized start time and level
+        start_position = ImVec2(normalized_start, flame.m_level * m_flame_height);
 
-        boxplot_box_id = boxplot_box_id + 1;
+        if(normalized_end < container_pos.x ||
+           normalized_start > container_pos.x + graph_width)
+        {
+            continue;  // Skip if the flame is not visible in the current view
+        }
+
+        color_index = static_cast<long long>(flame.m_start_ts) % colorCount;
+        DrawBox(start_position, color_index, flame, normalized_duration, draw_list);
     }
+
     ImGui::EndChild();
 }
 

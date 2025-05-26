@@ -320,7 +320,7 @@ bool ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, ImVec2 rel_po
     ImGui::PopStyleColor();
     if (m_navigation->Current().m_block == id || ImGui::IsItemHovered())
     {
-        m_draw_list->AddRect(abs_pos, abs_pos + abs_size, IM_COL32(0, 0, 0, 255));
+        m_draw_list->AddRect(abs_pos, abs_pos + abs_size, ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     }
     if (strlen(tooltip) > 0)
     {
@@ -352,7 +352,7 @@ bool ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, ImVec2 rel_po
                    abs_pos.y + 0.01f * m_content_region.y),
             ImVec2(abs_pos.x + abs_size.x - 0.01f * m_content_region.x,
                    abs_pos.y + 0.02f * m_content_region.y),
-            IM_COL32(0, 0, 0, 255));
+            ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     }
     else if (pressed)
     {
@@ -366,7 +366,7 @@ void ComputeBlockDiagram::Link(block_diagram_link_id_t id, ImVec2 rel_left, ImVe
     const ImVec2 abs_left(m_content_region_center + m_content_region * rel_left);
     const ImVec2 abs_right(m_content_region_center + m_content_region * rel_right);
 
-    m_draw_list->AddLine(abs_left, abs_right, IM_COL32(0, 0, 0, 255));
+    m_draw_list->AddLine(abs_left, abs_right, ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     if(direction == ImGuiDir_Left || direction == ImGuiDir_None)
     {
         m_draw_list->AddTriangleFilled(
@@ -375,7 +375,7 @@ void ComputeBlockDiagram::Link(block_diagram_link_id_t id, ImVec2 rel_left, ImVe
                 abs_left.y - 0.005f * m_content_region.y),
         ImVec2(abs_left.x + 0.005f * m_content_region.x,
                 abs_left.y + 0.005f * m_content_region.y),
-        IM_COL32(0, 0, 0, 255));
+        ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     }
     if(direction == ImGuiDir_Right || direction == ImGuiDir_None)
     {
@@ -385,16 +385,18 @@ void ComputeBlockDiagram::Link(block_diagram_link_id_t id, ImVec2 rel_left, ImVe
                 abs_right.y - 0.005f * m_content_region.y),
         ImVec2(abs_right.x - 0.005f * m_content_region.x,
                 abs_right.y + 0.005f * m_content_region.y),
-        IM_COL32(0, 0, 0, 255));
+        ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     }
 
     if (m_link_metrics[id] && !m_link_metrics[id]->FormattedString().empty())
     {
         const ImVec2 label_size = ImGui::CalcTextSize(m_link_metrics[id]->FormattedString().c_str());
         const ImVec2 label_pos = ImVec2(abs_left.x + (abs_right.x - abs_left.x - label_size.x) / 2, abs_left.y - label_size.y);
-        m_draw_list->AddRectFilled(ImVec2(label_pos.x - 2, label_pos.y), ImVec2(label_pos.x + label_size.x + 1, label_pos.y + label_size.y), IM_COL32(0, 0, 0, 255));
+        m_draw_list->AddRectFilled(ImVec2(label_pos.x - 2, label_pos.y), ImVec2(label_pos.x + label_size.x + 1, label_pos.y + label_size.y), ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
         ImGui::SetCursorScreenPos(label_pos);
-        ImGui::TextColored(ImVec4(1, 1, 1, 1), m_link_metrics[id]->FormattedString().c_str());
+        ImVec4 text_color = ImVec4(1, 1, 1, 1) - ImGui::GetStyleColorVec4(ImGuiCol_Text);
+        text_color.w = 1;
+        ImGui::TextColored(text_color, m_link_metrics[id]->FormattedString().c_str());
     }
 }
 
@@ -467,9 +469,11 @@ void ComputeBlockDiagram::RenderComputeUnitLevel()
     BlockButton(kBlockDiagramBlockBranch, ImVec2(0.05f, 0.075f), ImVec2(0.1f, 0.75f));
     BlockButton(kBlockDiagramBlockLDS, ImVec2(0.375f, 0.2375f), ImVec2(0.15f, 0.425f));
 
+    ImVec4 divider_color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+    divider_color.w = 0.5f;
     m_draw_list->AddLine(ImVec2(m_content_region_center.x + 0.16f * m_content_region.x, m_content_region_center.y - 0.5f * m_content_region.y), 
                          ImVec2(m_content_region_center.x + 0.16f * m_content_region.x, m_content_region_center.y + 0.5f * m_content_region.y),
-                         IM_COL32(0, 0, 0, 64));
+                         ImGui::GetColorU32(divider_color));
 
     Link(kBlockDiagramLinkCU_vL1D_Read, ImVec2(0.16f, -0.2725f), ImVec2(0.3f, -0.2725f), ImGuiDir_Left);
     Link(kBlockDiagramLinkCU_vL1D_Write, ImVec2(0.16f, -0.2375f), ImVec2(0.3f, -0.2375f), ImGuiDir_Right);

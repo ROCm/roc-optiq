@@ -65,6 +65,7 @@ private:
     double                                m_original_v_max_x;
     double                                m_scroll_position;
     double                                m_content_max_y_scoll;
+    bool                                  m_can_drag_to_pan;
     double                                m_previous_scroll_position;
     bool                                  m_user_adjusting_graph_height;
     bool                                  m_meta_map_made;

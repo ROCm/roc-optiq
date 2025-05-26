@@ -813,10 +813,6 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 m_can_drag_to_pan = true;
             }
-            else if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-            {
-                m_can_drag_to_pan = false;
-            }
 
             // Handle Zoom
             float scroll_wheel = ImGui::GetIO().MouseWheel;
@@ -855,6 +851,11 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 m_movement -= (-1 / m_graph_size.x) * m_v_width;
             }
+        }
+
+        if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        {
+            m_can_drag_to_pan = false;
         }
 
         // Handle Panning

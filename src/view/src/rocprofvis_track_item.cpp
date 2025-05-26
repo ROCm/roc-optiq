@@ -17,6 +17,7 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 , m_scale_x(scale_x)
 , m_name(name)
 , m_track_height(75.0f)
+, m_min_track_height(10.0f)
 , m_is_in_view_vertical(false)
 , m_metadata_bg_color()
 , m_metadata_padding(ImVec2(4.0f, 4.0f))
@@ -150,6 +151,11 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
         m_track_height    = m_track_height + (drag_delta.y);
+        if(m_track_height < m_min_track_height)
+        {
+            m_track_height = m_min_track_height;
+        }
+
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
         m_is_resize = true;

@@ -251,8 +251,8 @@ rocprofvis_dm_result_t ProfileDatabase::BuildTableQuery(rocprofvis_dm_timestamp_
     slice_query_t slice_query_map;
     for (int i = 0; i < num; i++){
         rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
-        for (int j = 0; j < props->query.size(); j++) {
-            std::string q = props->query[j]; 
+        for (int j = 0; j < props->table_query.size(); j++) {
+            std::string q = props->table_query[j]; 
             std::string tuple = "(";
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
                 if (props->process_tag[k] != "const") {

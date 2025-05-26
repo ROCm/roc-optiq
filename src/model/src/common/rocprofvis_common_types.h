@@ -86,6 +86,8 @@ typedef struct {
     bool process_id_numeric[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
     // SQL query to get data for this track, may have multiple sub-queries
     std::vector<rocprofvis_dm_string_t> query;  
+    // SQL query to get table data for this track, may have multiple sub-queries
+    std::vector<rocprofvis_dm_string_t> table_query;  
     // track category enumeration (PMC, Region, Kernel, SQQT, NIC, etc)
     rocprofvis_dm_track_category_t track_category;   
     // handle of extended data object  

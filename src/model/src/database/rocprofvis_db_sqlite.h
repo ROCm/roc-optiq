@@ -44,6 +44,7 @@ typedef struct{
     rocprofvis_dm_charptr_t query;
     // multi-use string  
     rocprofvis_dm_charptr_t subquery;
+    rocprofvis_dm_charptr_t table_subquery;
 } rocprofvis_db_sqlite_callback_parameters;
 
 // class for any Sqlite database methods and properties 
@@ -148,6 +149,20 @@ class SqliteDatabase : public Database
                                                 const char* subquery,
                                                 rocprofvis_dm_handle_t handle, 
                                                 RpvSqliteExecuteQueryCallback callback);
+        // Method for SQL query execution for requesting track information and building track related data.
+        // Used for callbacks storing data into container with rocprofvis_dm_handle_t
+        // handle
+        // @param future - future object for asynchronous execution status
+        // @param query - SQL query
+        // @param timeline_subquery - timeline view events or samples subquery
+        // @param table_subquery - table view events or samples subquery
+        // @param handle - handle of a container processed rows to be stored
+        // @param callback - sqlite3_exec callback method for data processing
+        // @return status of operation
+        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query,
+                                               const char* timeline_subquery,
+                                               const char* table_subquery,
+                                               RpvSqliteExecuteQueryCallback callback);
 
         // Method to check if table exists in database
         // @param db - pointer to sqlite3 object built from the sqlite3 amalgamation

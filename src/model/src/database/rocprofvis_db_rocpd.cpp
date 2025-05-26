@@ -102,7 +102,9 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **az
             track_params.process_name[i] = argv[i];
         }
     }
-    if (!db->TrackExist(track_params, callback_params->subquery)) {
+    if(!db->TrackExist(track_params, callback_params->subquery,
+                       callback_params->table_subquery))
+    {
 
         track_params.process_name[TRACK_ID_PID_OR_AGENT] = ProcessNameSuffixFor(track_params.track_category);
         track_params.process_name[TRACK_ID_PID_OR_AGENT] += argv[TRACK_ID_PID_OR_AGENT];
@@ -204,18 +206,21 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                         "select DISTINCT 0 as const, pid, tid, 2 as category from rocpd_api;", 
                         "select 1 as op, start, end, apiName_id, args_id, id, 0, pid, tid from rocpd_api ",
+                        "select id, apiName, args, start, end, pid, tid from api ",
                         &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding GPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                         "select DISTINCT 0 as const, gpuId, queueId, 3 as category from rocpd_op;",
                         "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId  from rocpd_op ",
+                        "select id, opType, description, start, end,  gpuId, queueId  from op ",
                         &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding PMC tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                         "select DISTINCT 0 as const, deviceId, monitorType, 1 as category from rocpd_monitor where deviceId > 0;", 
                         "select 0 as op, start, value, start as end, 0, 0, 0, deviceId, monitorType from rocpd_monitor ",
+                        "select id, monitorType, value, start, start as end, deviceId  from rocpd_monitor ",
                         &CallBackAddTrack)) break;
 
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );

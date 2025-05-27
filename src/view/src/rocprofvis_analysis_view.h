@@ -20,9 +20,11 @@ public:
     void Update() override;
 
 private:
+    void RenderEventTable();
+    void RenderSampleTable();
     DataProvider& m_data_provider;
     
-    
+    std::shared_ptr<TabContainer> m_tab_container;
 };
 
 }  // namespace View

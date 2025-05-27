@@ -333,12 +333,12 @@ RenderProviderTest(DataProvider& provider)
     uint64_t row_count = std::atoi(row_count_buffer);
 
 
-    if(ImGui::Button("Fetch Single Track Table"))
+    if(ImGui::Button("Fetch Single Track Event Table"))
     {
-        provider.FetchEventTable(index, provider.GetStartTime(), provider.GetEndTime(),start_row,
+        provider.FetchSingleTrackEventTable(index, provider.GetStartTime(), provider.GetEndTime(),start_row,
                                  row_count);
     }
-    if(ImGui::Button("Fetch Multi Track Table"))
+    if(ImGui::Button("Fetch Multi Track Event Table"))
     {
         int end_index = std::atoi(end_track_index_buffer);
         std::vector<uint64_t> vect;
@@ -352,7 +352,29 @@ RenderProviderTest(DataProvider& provider)
     if(ImGui::Button("Print Event Table"))
     {
         provider.DumpEventTable();
-    }    
+    }
+    
+    if(ImGui::Button("Fetch Single Track Sample Table"))
+    {
+        provider.FetchSingleTrackSampleTable(index, provider.GetStartTime(), provider.GetEndTime(),start_row,
+                                 row_count);
+    }
+    if(ImGui::Button("Fetch Multi Track Sample Table"))
+    {
+        int end_index = std::atoi(end_track_index_buffer);
+        std::vector<uint64_t> vect;
+        for(int i = index; i < end_index; ++i)
+        {
+            vect.push_back(i);
+        }
+        provider.FetchMultiTrackSampleTable(vect, provider.GetStartTime(), provider.GetEndTime(),start_row,
+                                 row_count);
+    }
+    if(ImGui::Button("Print Sample Table"))
+    {
+        provider.DumpSampleTable();
+    }
+    
     ImGui::Separator();
 
     if(ImGui::Button("Fetch Track"))

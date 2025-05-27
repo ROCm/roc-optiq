@@ -139,7 +139,7 @@ rocprofvis_result_t Table::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index
                     {
                         dm_result = kRocProfVisDmResultUnknownError;
                     }
-                    rocprofvis_dm_delete_all_tables(dm_handle);
+                    rocprofvis_dm_delete_table_at(dm_handle, table_id);
                 }
                 else
                 {
@@ -368,7 +368,7 @@ rocprofvis_result_t Table::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& arg
                             }
                         }
                     }
-                    rocprofvis_dm_delete_all_tables(dm_handle);
+                    rocprofvis_dm_delete_table_at(dm_handle, table_id);
                 }
             }
         }

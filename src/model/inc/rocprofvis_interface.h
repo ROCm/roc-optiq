@@ -276,7 +276,7 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_all_event_properties_for(
  ***************************************************************************************************/
 rocprofvis_dm_result_t  rocprofvis_dm_delete_table_at( 
                                     rocprofvis_dm_trace_t,
-                                    rocprofvis_dm_index_t); 
+                                    rocprofvis_dm_table_id_t); 
 
 /****************************************************************************************************
  * @brief Delete all tables.

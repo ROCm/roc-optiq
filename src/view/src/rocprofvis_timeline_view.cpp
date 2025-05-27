@@ -25,7 +25,6 @@ namespace View
 
 constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
 
-
 TimelineView::TimelineView(DataProvider& dp)
 : m_data_provider(dp)
 , m_zoom(1.0f)
@@ -301,7 +300,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             {
                 m_highlighted_region.first  = INVALID_SELECTION_TIME;
                 m_highlighted_region.second = INVALID_SELECTION_TIME;
-                m_region_selection_changed = true;                
+                m_region_selection_changed  = true;
             }
         }
     }
@@ -332,7 +331,7 @@ TimelineView::RenderGrid()
         ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - 50);
+    ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - 30.0f);
     double range           = (m_v_max_x + m_movement) - (m_v_min_x + m_movement);
 
     double stepSize = 0;
@@ -394,7 +393,8 @@ TimelineView::RenderGrid()
                        cursor_position.y + content_size.y - m_grid_size),
                 m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)), 3.0f);
         }
-        if(m_highlighted_region.first != INVALID_SELECTION_TIME && m_highlighted_region.second != INVALID_SELECTION_TIME)
+        if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
+           m_highlighted_region.second != INVALID_SELECTION_TIME)
         {
             double normalized_start_box_highlighted =
                 container_pos.x +
@@ -443,10 +443,9 @@ TimelineView::RenderGrid()
         }
 
         draw_list->PopClipRect();
-        ImGui::EndChild(); // End of main component
+        ImGui::EndChild();  // End of main component
     }
-    ImGui::EndChild(); // End of Grid
-
+    ImGui::EndChild();  // End of Grid
 }
 
 void
@@ -482,8 +481,8 @@ TimelineView::RenderGraphView()
         ImGui::SetScrollY(m_scroll_position);
     }
 
-    ImVec2 window_size = m_graph_size;
-    bool request_horizontal_data = false;
+    ImVec2 window_size             = m_graph_size;
+    bool   request_horizontal_data = false;
 
     if(std::abs(m_movement - m_viewport_past_position) > m_v_width)
     {
@@ -647,9 +646,11 @@ TimelineView::RenderGraphView()
                 m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
                 graph_objects.second.chart->Render(m_graph_size.x);
 
-                //check for mouse click
-                if(graph_objects.second.chart->IsMetaAreaClicked()) {
-                    m_graph_map[graph_objects.second.chart->GetID()].selected = !graph_objects.second.selected;
+                // check for mouse click
+                if(graph_objects.second.chart->IsMetaAreaClicked())
+                {
+                    m_graph_map[graph_objects.second.chart->GetID()].selected =
+                        !graph_objects.second.selected;
                     selection_changed = true;
                 }
 
@@ -682,7 +683,7 @@ TimelineView::RenderGraphView()
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
-    if(selection_changed || m_region_selection_changed) 
+    if(selection_changed || m_region_selection_changed)
     {
         m_region_selection_changed = false;
         std::vector<uint64_t> selected_graphs;
@@ -704,8 +705,12 @@ TimelineView::RenderGraphView()
             if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
                m_highlighted_region.second != INVALID_SELECTION_TIME)
             {
-                min_x = std::min(m_highlighted_region.first, m_highlighted_region.second) + m_min_x;
-                max_x = std::max(m_highlighted_region.first, m_highlighted_region.second) + m_min_x;
+                min_x =
+                    std::min(m_highlighted_region.first, m_highlighted_region.second) +
+                    m_min_x;
+                max_x =
+                    std::max(m_highlighted_region.first, m_highlighted_region.second) +
+                    m_min_x;
             }
             m_data_provider.FetchMultiTrackEventTable(selected_graphs, min_x, max_x);
         }

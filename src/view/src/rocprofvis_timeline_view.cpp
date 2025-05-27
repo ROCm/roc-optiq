@@ -330,8 +330,9 @@ TimelineView::RenderGrid()
     ImVec2 container_pos =
         ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
 
+    int    ruler_size      = 30;
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - 30.0f);
+    ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - ruler_size);
     double range           = (m_v_max_x + m_movement) - (m_v_min_x + m_movement);
 
     double stepSize = 0;
@@ -349,13 +350,14 @@ TimelineView::RenderGrid()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    if(ImGui::BeginChild("Grid"), ImVec2(m_graph_size.x, m_graph_size.y - 30.0f), true,
+    if(ImGui::BeginChild("Grid"), ImVec2(m_graph_size.x, m_graph_size.y - ruler_size),
+       true,
        window_flags)
     {
         ImGui::SetCursorPos(ImVec2(0, 0));
 
         ImGui::BeginChild("main component",
-                          ImVec2(m_graph_size.x, m_graph_size.y - 30.0f), false);
+                          ImVec2(m_graph_size.x, m_graph_size.y - ruler_size), false);
         ImVec2 child_win  = ImGui::GetWindowPos();
         ImVec2 child_size = ImGui::GetWindowSize();
 

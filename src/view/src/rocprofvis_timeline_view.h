@@ -7,7 +7,6 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_flame_track_item.h"
-#include "rocprofvis_grid.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_structs.h"
@@ -48,7 +47,6 @@ private:
 
 private:
     std::map<int, rocprofvis_graph_map_t> m_graph_map;
-    Grid                                  m_grid;
     int                                   m_grid_size;
     double                                m_v_min_x;
     double                                m_v_max_x;
@@ -86,6 +84,7 @@ private:
     Settings&                             m_settings;
     EventManager::SubscriptionToken       m_new_track_token;
     double                                m_viewport_past_position;
+    int                                   m_artificial_scrollbar_size;
     ImVec2                                m_graph_size;
 };
 

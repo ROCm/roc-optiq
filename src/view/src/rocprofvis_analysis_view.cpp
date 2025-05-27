@@ -16,13 +16,15 @@ AnalysisView::AnalysisView(DataProvider& dp)
     tab_item.m_label     = "Event Details";
     tab_item.m_id        = "event_details";
     tab_item.m_can_close = false;
-    tab_item.m_widget    = std::make_shared<RocCustomWidget>([this]() { this->RenderEventTable(); });
+    tab_item.m_widget =
+        std::make_shared<RocCustomWidget>([this]() { this->RenderEventTable(); });
     m_tab_container->AddTab(tab_item);
 
     tab_item.m_label     = "Sample Details";
     tab_item.m_id        = "sample_details";
     tab_item.m_can_close = false;
-    tab_item.m_widget    = std::make_shared<RocCustomWidget>([this]() { this->RenderSampleTable(); });
+    tab_item.m_widget =
+        std::make_shared<RocCustomWidget>([this]() { this->RenderSampleTable(); });
     m_tab_container->AddTab(tab_item);
 
     m_tab_container->SetAllowToolTips(false);
@@ -61,6 +63,7 @@ AnalysisView::RenderEventTable()
             ImGui::TableSetupColumn(col.c_str());
         }
         ImGui::TableHeadersRow();
+        int count = 0;
         for(const auto& row : table_data)
         {
             ImGui::TableNextRow();
@@ -70,6 +73,11 @@ AnalysisView::RenderEventTable()
                 ImGui::TableSetColumnIndex(column);
                 ImGui::Text(col.c_str());
                 column++;
+            }
+            count++;
+            if(count > m_max_displayed_rows)
+            {
+                break;  // Limit the number of displayed rows
             }
         }
         ImGui::EndTable();
@@ -81,7 +89,8 @@ AnalysisView::RenderEventTable()
     ImGui::EndChild();
 }
 
-void AnalysisView::RenderSampleTable()
+void
+AnalysisView::RenderSampleTable()
 {
     ImGui::BeginChild("Sample Data", ImVec2(0, 0), true);
 
@@ -92,12 +101,15 @@ void AnalysisView::RenderSampleTable()
     if(table_data.size() > 0)
     {
         ImGui::Text("Total Samples: %d", static_cast<int>(table_data.size()));
-        ImGui::BeginTable("Sample Data Table", column_names.size(), ImGuiTableFlags_RowBg);
+        ImGui::BeginTable("Sample Data Table", column_names.size(),
+                          ImGuiTableFlags_RowBg);
         for(const auto& col : column_names)
         {
             ImGui::TableSetupColumn(col.c_str());
         }
         ImGui::TableHeadersRow();
+
+        int count = 0;
         for(const auto& row : table_data)
         {
             ImGui::TableNextRow();
@@ -107,6 +119,11 @@ void AnalysisView::RenderSampleTable()
                 ImGui::TableSetColumnIndex(column);
                 ImGui::Text(col.c_str());
                 column++;
+            }
+            count++;
+            if(count > m_max_displayed_rows)
+            {
+                break;  // Limit the number of displayed rows
             }
         }
         ImGui::EndTable();

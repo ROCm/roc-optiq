@@ -42,7 +42,7 @@ LineTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits
 bool
 LineTrackItem::HasData()
 {
-    return !m_data.empty();
+    return m_data_provider.GetRawTrackData(m_id) != nullptr;
 }
 
 void
@@ -59,6 +59,7 @@ LineTrackItem::LineTrackRender(float graph_width)
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
+    ImVec2 container_pos   = ImGui::GetWindowPos();
 
     float scale_y = content_size.y / (m_max_y - m_min_y);
 
@@ -83,6 +84,13 @@ LineTrackItem::LineTrackRender(float graph_width)
         ImVec2 point_2 =
             MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
         ImU32 LineColor = generic_black;
+
+        if(point_2.x < container_pos.x || point_1.x > container_pos.x + content_size.x)
+        {
+            // Skip rendering if the points are outside the visible area.
+            continue;
+        }
+
         if(m_is_color_value_existant)
         {
             // Code below enables user to define problematic regions in LineChart.
@@ -185,6 +193,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
+    ImVec2 container_pos   = ImGui::GetWindowPos();
 
     float scale_y = content_size.y / (m_max_y - m_min_y);
 
@@ -209,6 +218,12 @@ LineTrackItem::BoxPlotRender(float graph_width)
         ImVec2 point_2 =
             MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
         ImU32 LineColor = generic_black;
+
+        if(point_2.x < container_pos.x || point_1.x > container_pos.x + content_size.x)
+        {
+            // Skip rendering if the points are outside the visible area.
+            continue;
+        }
 
         float bottom_of_chart =
             cursor_position.y + content_size.y - (m_min_y - m_min_y) * scale_y;
@@ -274,6 +289,11 @@ LineTrackItem::ExtractPointsFromData()
         spdlog::debug("Invalid track data type for track {}", m_id);
         return false;
     }
+    if(sample_track->GetData().empty())
+    {
+        spdlog::debug("No data for track {}", m_id);
+        return false;
+    }
 
     std::vector<rocprofvis_data_point_t> aggregated_points;
 
@@ -326,7 +346,8 @@ LineTrackItem::ExtractPointsFromData()
                 bin_count = 1;
             }
         }
-        else {
+        else
+        {
             rocprofvis_data_point_t binned_point;
             binned_point.x_value = track_data[i].m_start_ts;
             binned_point.y_value = track_data[i].m_value;
@@ -349,22 +370,23 @@ LineTrackItem::ExtractPointsFromData()
 std::tuple<double, double>
 LineTrackItem::FindMaxMin()
 {
-    m_min_y = m_data[0].y_value;
-    m_max_y = m_data[0].y_value;
-
-
-    for(const auto& point : m_data)
+    if(m_data.size() > 0)
     {
-        if(point.y_value < m_min_y)
+        m_min_y = m_data[0].y_value;
+        m_max_y = m_data[0].y_value;
+
+        for(const auto& point : m_data)
         {
-            m_min_y = point.y_value;
-        }
-        if(point.y_value > m_max_y)
-        {
-            m_max_y = point.y_value;
+            if(point.y_value < m_min_y)
+            {
+                m_min_y = point.y_value;
+            }
+            if(point.y_value > m_max_y)
+            {
+                m_max_y = point.y_value;
+            }
         }
     }
-
     return std::make_tuple(m_min_x, m_max_x);
 }
 
@@ -452,16 +474,18 @@ LineTrackItem::RenderChart(float graph_width)
 }
 
 void
-LineTrackItem::Render()
+LineTrackItem::Render(double width)
 {
-    TrackItem::Render();
+    TrackItem::Render(width);
 }
 
 ImVec2
 LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
                        ImVec2& content_size, float scaleX, float scaleY)
 {
-    double x = (point.x_value - (m_min_x + m_movement)) * scaleX;
+    ImVec2 container_pos = ImGui::GetWindowPos();
+
+    double x = container_pos.x + (point.x_value - (m_min_x + m_movement)) * scaleX;
     double y = cursor_position.y + content_size.y - (point.y_value - m_min_y) * scaleY;
 
     return ImVec2(x, y);

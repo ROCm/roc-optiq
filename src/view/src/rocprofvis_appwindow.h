@@ -29,6 +29,7 @@ private:
 
     void RenderDebugOuput();
     void RenderSettingsMenu();    
+    void RenderDeveloperMenu();  
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
 
     static AppWindow* s_instance;

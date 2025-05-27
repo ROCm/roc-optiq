@@ -27,7 +27,7 @@ public:
     void               SetID(int id);
     int                GetID();
     virtual float      GetTrackHeight();
-    virtual void       Render();
+    virtual void       Render(double width);
     const std::string& GetName();
 
     virtual void UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
@@ -49,7 +49,7 @@ public:
 
     virtual bool HasData()     = 0;
     virtual void ReleaseData() = 0;
-    virtual void RequestData();
+    virtual void RequestData(double min, double max, float width);
 
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
@@ -65,6 +65,7 @@ protected:
     double                m_scale_x;
     int                   m_id;
     float                 m_track_height;
+    float                 m_min_track_height;
     bool                  m_is_in_view_vertical;
     float                 m_distance_to_view_y;
     float                 m_metadata_width;

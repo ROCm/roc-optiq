@@ -162,6 +162,11 @@ public:
 
     ProviderState GetState();
 
+    const std::vector<std::string>& GetEventTableHeader();
+    const std::vector<std::vector<std::string>>& GetEventTableData();
+
+    void ClearEventTable();
+
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&)>& callback);
     void SetTraceLoadedCallback(const std::function<void(const std::string&)>& callback);

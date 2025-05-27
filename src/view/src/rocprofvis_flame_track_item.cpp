@@ -147,6 +147,21 @@ FlameTrackItem::RenderMetaArea()
                       ImGuiChildFlags_None);
     ImVec2 content_size = ImGui::GetContentRegionAvail();
 
+    // handle mouse click 
+    ImVec2 container_pos  = ImGui::GetWindowPos();
+    ImVec2 container_size = ImGui::GetWindowSize();
+
+    bool is_mouse_inside = ImGui::IsMouseHoveringRect(
+    container_pos, ImVec2(container_pos.x + container_size.x,
+                            container_pos.y + container_size.y));
+
+    m_meta_area_clicked = false;
+    if(is_mouse_inside) {
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            m_meta_area_clicked = true;
+        }
+    }
+    
     // Set padding for the child window (Note this done using SetCursorPos
     // because ImGuiStyleVar_WindowPadding has no effect on child windows without borders)
     ImGui::SetCursorPos(m_metadata_padding);
@@ -185,8 +200,7 @@ FlameTrackItem::RenderChart(float graph_width)
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     auto colorCount = m_settings.GetColorWheel().size();
-    ROCPROFVIS_ASSERT(colorCount > 0, "Color wheel should have at least one color for "
-                                      "rendering flames in FlameTrackItem");
+    ROCPROFVIS_ASSERT(colorCount > 0);
 
     int color_index = 0;
     for(const auto& flame : m_flames)

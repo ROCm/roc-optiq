@@ -86,6 +86,7 @@ private:
     double                                m_viewport_past_position;
     int                                   m_artificial_scrollbar_size;
     ImVec2                                m_graph_size;
+    bool                                  m_region_selection_changed;
 };
 
 }  // namespace View

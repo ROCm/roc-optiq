@@ -23,6 +23,9 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
+
+
 TimelineView::TimelineView(DataProvider& dp)
 : m_data_provider(dp)
 , m_zoom(1.0f)
@@ -50,7 +53,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_scroll_position_x(0)
 , m_scrollbar_location_as_percentage(0)
 , m_artifical_scrollbar_active(false)
-, m_highlighted_region({ -1, -1 })
+, m_highlighted_region({ INVALID_SELECTION_TIME, INVALID_SELECTION_TIME })
 , m_new_track_token(-1)
 , m_settings(Settings::GetInstance())
 , m_v_past_width(0)
@@ -59,8 +62,8 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_graph_size()
 , m_range_x(0.0f)
 , m_can_drag_to_pan(false)
+, m_region_selection_changed(false)
 , m_artificial_scrollbar_size(30)
-
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -283,20 +286,22 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         // Code below is for select
         if(ImGui::IsMouseDoubleClicked(0))
         {  // 0 is for the left mouse button
-            if(m_highlighted_region.first == -1)
+            if(m_highlighted_region.first == INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.first =
                     m_movement + (cursor_screen_percentage * m_v_width);
             }
-            else if(m_highlighted_region.second == -1)
+            else if(m_highlighted_region.second == INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.second =
                     m_movement + (cursor_screen_percentage * m_v_width);
+                m_region_selection_changed = true;
             }
             else
             {
-                m_highlighted_region.first  = -1;
-                m_highlighted_region.second = -1;
+                m_highlighted_region.first  = INVALID_SELECTION_TIME;
+                m_highlighted_region.second = INVALID_SELECTION_TIME;
+                m_region_selection_changed = true;                
             }
         }
     }
@@ -365,7 +370,7 @@ TimelineView::RenderGrid()
         double normalized_start_box =
             container_pos.x + (m_min_x - (m_min_x + m_movement)) * m_pixels_per_ns;
 
-        if(m_highlighted_region.first != -1)
+        if(m_highlighted_region.first != INVALID_SELECTION_TIME)
         {
             double normalized_start_box_highlighted =
                 container_pos.x +
@@ -377,7 +382,7 @@ TimelineView::RenderGrid()
                        cursor_position.y + content_size.y - m_grid_size),
                 m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)), 3.0f);
         }
-        if(m_highlighted_region.first != -1)
+        if(m_highlighted_region.first != INVALID_SELECTION_TIME)
         {
             double normalized_start_box_highlighted_end =
                 container_pos.x +
@@ -389,7 +394,7 @@ TimelineView::RenderGrid()
                        cursor_position.y + content_size.y - m_grid_size),
                 m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)), 3.0f);
         }
-        if(m_highlighted_region.first != -1 && m_highlighted_region.second != -1)
+        if(m_highlighted_region.first != INVALID_SELECTION_TIME && m_highlighted_region.second != INVALID_SELECTION_TIME)
         {
             double normalized_start_box_highlighted =
                 container_pos.x +
@@ -407,22 +412,16 @@ TimelineView::RenderGrid()
         int    rectangle_render_count = 0;
         double m_v_width              = (m_max_x - m_min_x) / m_zoom;
 
-        double drag = (m_movement / m_v_width) * m_graph_size.x;
-        drag        = (int) drag % (int) stepSize;
+        double x_offset = (m_movement / m_v_width) * m_graph_size.x;
+        x_offset        = (int) x_offset % (int) stepSize;
 
         for(float i = 0; i < steps + 1; i++)
         {
             float linePos = stepSize * i;
-
-            linePos -= drag;
-
+            linePos -= x_offset;
             float cursor_screen_percentage = (linePos) / m_graph_size.x;
 
             double normalized_start = container_pos.x + linePos;
-
-            DebugWindow::GetInstance()->AddDebugMessage(
-                "what a drag: " + std::to_string(drag) + " movement: " +
-                std::to_string(m_movement) + " zoom: " + std::to_string(m_zoom));
 
             draw_list->AddLine(ImVec2(normalized_start, cursor_position.y),
                                ImVec2(normalized_start,
@@ -444,10 +443,10 @@ TimelineView::RenderGrid()
         }
 
         draw_list->PopClipRect();
-        ImGui::EndChild();
-
-        ImGui::EndChild();
+        ImGui::EndChild(); // End of main component
     }
+    ImGui::EndChild(); // End of Grid
+
 }
 
 void
@@ -484,13 +483,6 @@ TimelineView::RenderGraphView()
     }
 
     ImVec2 window_size = m_graph_size;
-
-    DebugWindow::GetInstance()->AddDebugMessage(
-        "Window Height: " + std::to_string(window_size.y) +
-        "Parent Height: " + std::to_string(display_size.y) + " Scroll Position: " +
-        std::to_string(m_scroll_position) + " Zoom: " + std::to_string(m_zoom) +
-        " X Scale: " + std::to_string(m_pixels_per_ns));
-
     bool request_horizontal_data = false;
 
     if(std::abs(m_movement - m_viewport_past_position) > m_v_width)
@@ -510,6 +502,7 @@ TimelineView::RenderGraphView()
         m_v_past_width = m_v_width;
     }
 
+    bool selection_changed = false;
     for(const auto& graph_objects : m_graph_map)
     {
         if(graph_objects.second.display)
@@ -653,6 +646,13 @@ TimelineView::RenderGraphView()
 
                 m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
                 graph_objects.second.chart->Render(m_graph_size.x);
+
+                //check for mouse click
+                if(graph_objects.second.chart->IsMetaAreaClicked()) {
+                    m_graph_map[graph_objects.second.chart->GetID()].selected = !graph_objects.second.selected;
+                    selection_changed = true;
+                }
+
                 ImGui::PopStyleColor();
 
                 ImGui::EndChild();
@@ -674,11 +674,6 @@ TimelineView::RenderGraphView()
 
                 // Render dummy to maintain layout
                 ImGui::Dummy(ImVec2(0, track_height));
-                DebugWindow::GetInstance()->AddDebugMessage(
-                    "Dummy for: " + std::to_string(graph_objects.second.chart->GetID()) +
-                    " " +
-                    std::to_string(graph_objects.second.chart->GetDistanceToView()) +
-                    " " + std::to_string(m_scroll_position));
             }
         }
     }
@@ -686,6 +681,35 @@ TimelineView::RenderGraphView()
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
+
+    if(selection_changed || m_region_selection_changed) 
+    {
+        m_region_selection_changed = false;
+        std::vector<uint64_t> selected_graphs;
+        for(const auto& graph_objects : m_graph_map)
+        {
+            if(graph_objects.second.selected)
+            {
+                selected_graphs.push_back(graph_objects.first);
+            }
+        }
+        if(selected_graphs.empty())
+        {
+            m_data_provider.ClearEventTable();
+        }
+        else
+        {
+            double min_x = m_min_x;
+            double max_x = m_max_x;
+            if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
+               m_highlighted_region.second != INVALID_SELECTION_TIME)
+            {
+                min_x = std::min(m_highlighted_region.first, m_highlighted_region.second) + m_min_x;
+                max_x = std::max(m_highlighted_region.first, m_highlighted_region.second) + m_min_x;
+            }
+            m_data_provider.FetchMultiTrackEventTable(selected_graphs, min_x, max_x);
+        }
+    }
 }
 
 void
@@ -816,11 +840,6 @@ TimelineView::RenderGraphPoints()
             ImVec2(subcomponent_size_main.x,
                    subcomponent_size_main.y - m_artificial_scrollbar_size),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-        DebugWindow::GetInstance()->AddDebugMessage(
-            "graph_view_size: " + std::to_string(m_graph_size.y) +
-            " Grid View 2 Height raw: " + std::to_string(subcomponent_size_main.y) +
-            " Grid View 2 Height: " + std::to_string(ImGui::GetWindowSize().y));
 
         // Scale used in all graphs computer here.
         m_v_width       = (m_range_x) / m_zoom;

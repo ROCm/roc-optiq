@@ -119,6 +119,19 @@ DataProvider::GetState()
     return m_state;
 }
 
+const std::vector<std::string>& DataProvider::GetEventTableHeader() {
+    return m_event_table_header;
+}
+
+const std::vector<std::vector<std::string>>& DataProvider::GetEventTableData() {
+    return m_event_table_data;
+}
+
+void DataProvider::ClearEventTable() {
+    m_event_table_header.clear();
+    m_event_table_data.clear();
+}
+
 void
 DataProvider::SetTrackDataReadyCallback(
     const std::function<void(uint64_t, const std::string&)>& callback)

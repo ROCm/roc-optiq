@@ -80,7 +80,7 @@ TraceView::CreateView()
     auto       split_container = std::make_shared<VSplitContainer>(top, bottom);
     split_container->SetSplit(0.75);
     traceArea.m_item = split_container;
-    traceArea.m_bg_color = IM_COL32(255, 0, 0, 255);
+    traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
 
     m_container = std::make_shared<HSplitContainer>(left, traceArea);
     m_container->SetSplit(0.2);

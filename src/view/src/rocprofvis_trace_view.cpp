@@ -1,5 +1,6 @@
 #pragma once
 #include "rocprofvis_trace_view.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "imgui.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_event_manager.h"
@@ -7,6 +8,7 @@
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_timeline_view.h"
 #include "spdlog/spdlog.h"
+
 using namespace RocProfVis::View;
 
 TraceView::TraceView()
@@ -79,8 +81,8 @@ TraceView::CreateView()
     LayoutItem traceArea;
     auto       split_container = std::make_shared<VSplitContainer>(top, bottom);
     split_container->SetSplit(0.75);
-    traceArea.m_item = split_container;
-    traceArea.m_bg_color = IM_COL32(255, 0, 0, 255);
+    traceArea.m_item     = split_container;
+    traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
 
     m_container = std::make_shared<HSplitContainer>(left, traceArea);
     m_container->SetSplit(0.2);
@@ -120,7 +122,7 @@ TraceView::Render()
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
         // Use global DPI to adjust font. Reactivate later.
-        // ImGui::GetIO().FontGlobalScale = Settings::GetInstance().GetDPI() -
+        //ImGui::GetIO().FontGlobalScale = Settings::GetInstance().GetDPI() -
         //                                 0.20;  // Scale font by DPI. -0.20 should be
                                                 // removed once font lib is in place.
         m_container->Render();
@@ -138,7 +140,34 @@ TraceView::Render()
         ImGui::SetNextWindowSize(ImVec2(300, 200));
         if(ImGui::BeginPopupModal("Loading"))
         {
-            ImGui::Text("Please wait...");
+            const char* label      = "Please wait...";
+            ImVec2      label_size = ImGui::CalcTextSize(label);
+
+            int item_spacing = 10.0f;
+
+            float  dot_radius  = 5.0f;
+            int    num_dots    = 3;
+            float  dot_spacing = 5.0f;
+            ImVec2 dot_size =
+                MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
+
+            ImVec2 available_space = ImGui::GetContentRegionAvail();
+            ImVec2 pos             = ImGui::GetCursorScreenPos();
+            ImVec2 center_pos      = ImVec2(
+                pos.x + (available_space.x - label_size.x) * 0.5f,
+                pos.y + (available_space.y - (label_size.y + dot_size.y + item_spacing)) *
+                            0.5f);
+            ImGui::SetCursorScreenPos(center_pos);
+
+            ImGui::Text(label);
+
+            pos            = ImGui::GetCursorScreenPos();
+            ImVec2 dot_pos = ImVec2(pos.x + (available_space.x - dot_size.x) * 0.5f,
+                                    pos.y + item_spacing);
+            ImGui::SetCursorScreenPos(dot_pos);
+
+            RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
+                                 ImVec4(0.3f, 0.3f, 0.3f, 1.0f), 5.0f);
             ImGui::EndPopup();
         }
     }

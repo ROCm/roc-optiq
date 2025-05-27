@@ -51,6 +51,5 @@ AnalysisView::Render()
     {
         ImGui::Text("No Event Data Available");
     }
-
     ImGui::EndChild();
 }

@@ -1,0 +1,18 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
+#pragma once
+#include "imgui.h"
+
+namespace RocProfVis
+{
+namespace View
+{
+
+void
+RenderLoadingIndicatorDots(float dot_radius, int num_dots, float spacing,
+                           const ImVec4& color, float speed);
+ImVec2
+MeasureLoadingIndicatorDots(float dot_radius, int num_dots, float spacing);
+
+}  // namespace View
+}  // namespace RocProfVis

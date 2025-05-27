@@ -200,8 +200,7 @@ FlameTrackItem::RenderChart(float graph_width)
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     auto colorCount = m_settings.GetColorWheel().size();
-    ROCPROFVIS_ASSERT(colorCount > 0, "Color wheel should have at least one color for "
-                                      "rendering flames in FlameTrackItem");
+    ROCPROFVIS_ASSERT(colorCount > 0);
 
     int color_index = 0;
     for(const auto& flame : m_flames)

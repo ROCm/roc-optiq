@@ -1,6 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_compute_table.h"
+#include "rocprofvis_navigation_manager.h"
+#include "rocprofvis_navigation_url.h"
 
 namespace RocProfVis
 {
@@ -94,19 +96,24 @@ void ComputeTableCategory::Update()
     }
 }
 
-ComputeTableView::ComputeTableView(std::shared_ptr<ComputeDataProvider> data_provider) 
+ComputeTableView::ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider) 
 : m_tab_container(nullptr)
 , m_search_term("")
 , m_search_edited(false)
+, m_owner_id(owner_id)
 {
     m_tab_container = std::make_shared<TabContainer>();
     for (const table_view_category_info_t& category : TAB_DEFINITIONS)
     {
         m_tab_container->AddTab(TabItem{category.m_name, "compute_table_tab_" + category.m_name, std::make_shared<ComputeTableCategory>(data_provider, category.m_category), false});
     }
+
+    NavigationManager::GetInstance()->RegisterContainer(m_tab_container, COMPUTE_TABLE_VIEW_URL, m_owner_id);
 }
 
-ComputeTableView::~ComputeTableView() {}
+ComputeTableView::~ComputeTableView() {
+    NavigationManager::GetInstance()->UnregisterContainer(m_tab_container, COMPUTE_TABLE_VIEW_URL, m_owner_id);
+}
 
 void ComputeTableView::Update()
 {

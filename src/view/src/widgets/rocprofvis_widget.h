@@ -157,7 +157,7 @@ public:
     void SetActiveTab(int index);
     void SetActiveTab(const std::string& id);
 
-
+    const std::vector<const TabItem*> GetTabs();
 private:
     std::vector<TabItem> m_tabs;
     int                  m_active_tab_index; // index of the currently active tab

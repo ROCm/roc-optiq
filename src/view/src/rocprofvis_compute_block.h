@@ -129,7 +129,7 @@ class ComputeBlockDetails : public RocWidget
 public:
     void Render();
     void Update();
-    ComputeBlockDetails(std::shared_ptr<ComputeDataProvider> data_provider);
+    ComputeBlockDetails(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
     ~ComputeBlockDetails();
 
 private:
@@ -139,6 +139,7 @@ private:
     EventManager::SubscriptionToken m_block_navigation_event_token;
     block_diagram_navigation_location_t m_current_location;
     bool m_navigation_changed;
+    std::string m_owner_id;
 };
 
 class ComputeBlockDiagramNavHelper
@@ -193,7 +194,7 @@ class ComputeBlockView : public RocWidget
 public:
     void Render();
     void Update();
-    ComputeBlockView(std::shared_ptr<ComputeDataProvider> data_provider);
+    ComputeBlockView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
     ~ComputeBlockView();
 
 private:
@@ -202,6 +203,7 @@ private:
     std::shared_ptr<ComputeBlockDiagram> m_block_diagram;
     std::shared_ptr<ComputeBlockDetails> m_details_panel;
     std::shared_ptr<HSplitContainer> m_container;
+    std::string m_owner_id;
 };
 
 }  // namespace View

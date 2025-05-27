@@ -1,6 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_compute_block.h"
+#include "rocprofvis_navigation_manager.h"
+#include "rocprofvis_navigation_url.h"
 
 namespace RocProfVis
 {
@@ -99,10 +101,11 @@ const std::array LINK_DEFINITIONS {
 constexpr int WINDOW_PADDING_DEFAULT = 8;
 constexpr int LEVEL_HISTORY_LIMIT = 5;
 
-ComputeBlockDetails::ComputeBlockDetails(std::shared_ptr<ComputeDataProvider> data_provider)
+ComputeBlockDetails::ComputeBlockDetails(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
 : m_block_navigation_event_token(-1)
 , m_navigation_changed(true)
 , m_current_location(block_diagram_navigation_location_t{kBlockDiagramLevelGPU, kBlockDiagramBlockNone})
+, m_owner_id(owner_id)
 {
     for (const block_diagram_block_info_t& block : BLOCK_DEFINITIONS)
     {
@@ -543,13 +546,14 @@ ComputeBlockDiagramNavHelper* ComputeBlockDiagram::Navigation()
     return navigation;
 }
 
-ComputeBlockView::ComputeBlockView(std::shared_ptr<ComputeDataProvider> data_provider)
+ComputeBlockView::ComputeBlockView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
 : m_block_diagram(nullptr)
 , m_details_panel(nullptr)
 , m_container(nullptr)
+, m_owner_id(owner_id)
 {
     m_block_diagram = std::make_shared<ComputeBlockDiagram>(data_provider);
-    m_details_panel = std::make_shared<ComputeBlockDetails>(data_provider);
+    m_details_panel = std::make_shared<ComputeBlockDetails>(m_owner_id, data_provider);
 
     LayoutItem left;
     left.m_item = m_block_diagram;

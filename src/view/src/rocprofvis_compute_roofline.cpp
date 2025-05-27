@@ -7,8 +7,9 @@ namespace RocProfVis
 namespace View
 {
 
-ComputeRooflineView::ComputeRooflineView(std::shared_ptr<ComputeDataProvider> data_provider) 
+ComputeRooflineView::ComputeRooflineView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider) 
 : m_roofline(nullptr)
+, m_owner_id(owner_id)
 {
     m_roofline = std::make_unique<ComputeMetricRoofline>(data_provider, kRooflineGroupByKernel);
 }

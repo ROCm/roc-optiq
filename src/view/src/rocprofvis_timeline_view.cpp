@@ -60,7 +60,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_graph_size()
 , m_range_x(0.0f)
 , m_can_drag_to_pan(false)
-
+, m_region_selection_changed(false)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -279,12 +279,14 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                 m_highlighted_region.second =
                     m_movement + (cursor_screen_percentage * m_v_width);
                 m_grid.SetHighlightedRegion(m_highlighted_region);
+                m_region_selection_changed = true;
             }
             else
             {
                 m_highlighted_region.first  = -1;
                 m_highlighted_region.second = -1;
                 m_grid.SetHighlightedRegion(m_highlighted_region);
+                m_region_selection_changed = true;
             }
         }
     }
@@ -566,8 +568,9 @@ TimelineView::RenderGraphView()
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
-    if(selection_changed)
+    if(selection_changed || m_region_selection_changed) 
     {
+        m_region_selection_changed = false;
         std::vector<uint64_t> selected_graphs;
         for(const auto& graph_objects : m_graph_map)
         {
@@ -582,7 +585,15 @@ TimelineView::RenderGraphView()
         }
         else
         {
-            m_data_provider.FetchMultiTrackEventTable(selected_graphs, m_min_x, m_max_x);
+            double min_x = m_min_x;
+            double max_x = m_max_x;
+            if(m_highlighted_region.first != -1 &&
+               m_highlighted_region.second != -1)
+            {
+                min_x = std::min(m_highlighted_region.first, m_highlighted_region.second) + m_min_x;
+                max_x = std::max(m_highlighted_region.first, m_highlighted_region.second) + m_min_x;
+            }
+            m_data_provider.FetchMultiTrackEventTable(selected_graphs, min_x, max_x);
         }
     }
 }

@@ -87,6 +87,7 @@ private:
     EventManager::SubscriptionToken       m_new_track_token;
     double                                m_viewport_past_position;
     ImVec2                                m_graph_size;
+    bool                                  m_region_selection_changed;
 };
 
 }  // namespace View

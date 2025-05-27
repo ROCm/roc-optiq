@@ -437,7 +437,9 @@ TabContainer::Render()
                 // show tooltip for inactive tabs if header is hovered
                 else if(ImGui::IsItemHovered())
                 {
-                    ImGui::SetTooltip("%s", tab.m_id.c_str());
+                    if(m_allow_tool_tips) {
+                        ImGui::SetTooltip("%s", tab.m_id.c_str());
+                    }
                 }
 
                 if(p_open && !is_open)

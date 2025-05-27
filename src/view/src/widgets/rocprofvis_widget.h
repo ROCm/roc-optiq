@@ -19,7 +19,7 @@ public:
     virtual ~RocWidget();
     virtual void Render();
     virtual void Update() {}
-    std::string GenUniqueName(std::string name);
+    std::string  GenUniqueName(std::string name);
 
 protected:
     std::string m_widget_name;
@@ -157,11 +157,14 @@ public:
     void SetActiveTab(int index);
     void SetActiveTab(const std::string& id);
 
+    void SetAllowToolTips(bool allow_tool_tips);
+    bool GetAllowToolTips() const;
 
 private:
     std::vector<TabItem> m_tabs;
-    int                  m_active_tab_index; // index of the currently active tab
-    int                  m_set_active_tab_index; // used to programmatically set the active tab
+    int                  m_active_tab_index;  // index of the currently active tab
+    int  m_set_active_tab_index;  // used to programmatically set the active tab
+    bool m_allow_tool_tips;       // whether to show tooltips for tabs
 };
 
 }  // namespace View

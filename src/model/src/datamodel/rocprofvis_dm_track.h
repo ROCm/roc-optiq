@@ -76,9 +76,10 @@ public:
     // @param slice - handle to slice
     // @return status of operation 
     rocprofvis_dm_result_t                              GetSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_slice_t & slice);
-    // Method to get slice handle for provided start and end timestamp
+    // Method to get slice index for provided start and end timestamp
     // @param start - slice start timestamp
-    // @param slice - handle to slice
+    // @param start - slice end timestamp
+    // @param index - index to slice
     // @return status of operation
     rocprofvis_dm_result_t                              GetSliceIndexAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
                                                                                             rocprofvis_dm_index_t& index);

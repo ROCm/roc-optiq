@@ -421,8 +421,7 @@ TabContainer::Render()
                 {
                     p_open = nullptr;
                 }
-                if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open,
-                                       ImGuiTabBarFlags_None))
+                if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags))
                 {
                     // show tooltip for the active tab if header is hovered
                     if(ImGui::IsItemHovered())

@@ -10,12 +10,12 @@ namespace View
 {
 
 const std::array BLOCK_DEFINITIONS {
-    block_diagram_block_info_t{kBlockDiagramBlockGPU, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "GPU", "GPU", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockCP, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CP", "Command Processor", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockCPC, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CPC", "Command Processor Packet Processor", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockCPF, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CPF", "Command Processor Fetcher", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockSE, kBlockDiagramLevelGPU | kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "SE", "Shader Engine", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockL2, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "L2", "L2 Cache", "", { 
+    block_diagram_block_info_t{kBlockDiagramBlockGPU, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "GPU", "GPU", "", ""},
+    block_diagram_block_info_t{kBlockDiagramBlockCP, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CP", "Command Processor", "", COMPUTE_TABLE_COMMAND_PROCESSOR_URL},
+    block_diagram_block_info_t{kBlockDiagramBlockCPC, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CPC", "Command Processor Packet Processor", "", COMPUTE_TABLE_COMMAND_PROCESSOR_URL},
+    block_diagram_block_info_t{kBlockDiagramBlockCPF, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CPF", "Command Processor Fetcher", "", COMPUTE_TABLE_COMMAND_PROCESSOR_URL},
+    block_diagram_block_info_t{kBlockDiagramBlockSE, kBlockDiagramLevelGPU | kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "SE", "Shader Engine", "", ""},
+    block_diagram_block_info_t{kBlockDiagramBlockL2, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "L2", "L2 Cache", "", COMPUTE_TABLE_L2_CACHE_URL, { 
         block_diagram_plot_info_t{"17.1_Speed-of-Light.csv", {0, 1}}, 
         block_diagram_plot_info_t{"17.4_L2_-_Fabric_Interface_Stalls.csv", {0, 1}}
     }, {
@@ -24,22 +24,22 @@ const std::array BLOCK_DEFINITIONS {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Atomic", "L2 Atomic Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Hit", "L2 Hit Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockFabric, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "Fabric", "Infinity Fabric", "", {}, {
+    block_diagram_block_info_t{kBlockDiagramBlockFabric, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "Fabric", "Infinity Fabric", "", "", {}, {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Rd", "Fabric Rd Lat Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Wr", "Fabric Wr Lat Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Atomic", "Fabric Atomic Lat Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockCU, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelComputeUnit | kBlockDiagramLevelCache, "CU", "Compute Unit", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockCU, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelComputeUnit | kBlockDiagramLevelCache, "CU", "Compute Unit", "", COMPUTE_TABLE_COMPUTE_PIPELINE_URL, {
         block_diagram_plot_info_t{"10.1_Overall_Instruction_Mix.csv", {0}}, 
         block_diagram_plot_info_t{"11.1_Speed-of-Light.csv", {0}}
     }, {}},
-    block_diagram_block_info_t{kBlockDiagramBlockSPI, kBlockDiagramlevelShaderEngine, "SPI", "Workgroup Manager", "", {}, {}},
-    block_diagram_block_info_t{kBlockDiagramBlocksL1D, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "sL1D", "Scalar L1 Data Cache", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockSPI, kBlockDiagramlevelShaderEngine, "SPI", "Workgroup Manager", "", COMPUTE_TABLE_WORKGROUP_MANAGER_URL},
+    block_diagram_block_info_t{kBlockDiagramBlocksL1D, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "sL1D", "Scalar L1 Data Cache", "", COMPUTE_TABLE_SCALAR_CACHE_URL, {
         block_diagram_plot_info_t{"14.1_Speed-of-Light.csv", {0}}     
     }, {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Hit", "VL1D Hit Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockvL1D, kBlockDiagramLevelComputeUnit | kBlockDiagramLevelCache, "vL1D", "Vector L1 Data Cache", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockvL1D, kBlockDiagramLevelComputeUnit | kBlockDiagramLevelCache, "vL1D", "Vector L1 Data Cache", "", COMPUTE_TABLE_VECTOR_CACHE_URL, {
         block_diagram_plot_info_t{"16.1_Speed-of-Light.csv", {0}},
         block_diagram_plot_info_t{"16.4_L1D_-_L2_Transactions.csv", {0, 1, 2, 3}}
     }, {
@@ -47,20 +47,20 @@ const std::array BLOCK_DEFINITIONS {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Coales", "VL1 Coalesce Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Stall", "VL1 Stall Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockL1I, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "L1I", "L1 Instruction Cache", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockL1I, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "L1I", "L1 Instruction Cache", "", COMPUTE_TABLE_INSTRUCTION_CACHE_URL, {
         block_diagram_plot_info_t{"13.1_Speed-of-Light.csv", {0}}
     }, {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Hit", "IL1 Hit Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Lat", "IL1 Lat Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockScheduler, kBlockDiagramLevelComputeUnit, "Scheduler", "Scheduler", "", {}, {}},
-    block_diagram_block_info_t{kBlockDiagramBlockVALU, kBlockDiagramLevelComputeUnit, "VALU", "Vector Arithmetic Logic Unit", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockScheduler, kBlockDiagramLevelComputeUnit, "Scheduler", "Scheduler", "", COMPUTE_TABLE_WAVEFRONT_URL},
+    block_diagram_block_info_t{kBlockDiagramBlockVALU, kBlockDiagramLevelComputeUnit, "VALU", "Vector Arithmetic Logic Unit", "", COMPUTE_TABLE_INSTRUCTION_MIX_URL, {
         block_diagram_plot_info_t{"10.2_VALU_Arithmetic_Instr_Mix.csv", {0}}
     }, {}},
     block_diagram_block_info_t{kBlockDiagramBlockSALU, kBlockDiagramLevelComputeUnit, "SALU", "Scalar Arithmetic Logic Unit", "", {}, {}},
     block_diagram_block_info_t{kBlockDiagramBlockMFMA, kBlockDiagramLevelComputeUnit, "MFMA", "Matrix Fused Multiply-Add", "", {}, {}},
     block_diagram_block_info_t{kBlockDiagramBlockBranch, kBlockDiagramLevelComputeUnit, "Branch", "Branch", "", {}, {}},
-    block_diagram_block_info_t{kBlockDiagramBlockLDS, kBlockDiagramLevelComputeUnit, "LDS", "Local Data Share", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockLDS, kBlockDiagramLevelComputeUnit, "LDS", "Local Data Share", "", COMPUTE_TABLE_LOCAL_DATA_STORE_URL, {
         block_diagram_plot_info_t{"12.1_Speed-of-Light.csv", {0}}
     }, {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Util", "LDS Util Value"},
@@ -130,27 +130,52 @@ ComputeBlockDetails::~ComputeBlockDetails()
 
 void ComputeBlockDetails::Render() 
 {
-    for (const block_diagram_block_info_t& block : BLOCK_DEFINITIONS)
+    for (int i = 0; i < BLOCK_DEFINITIONS.size(); i ++)
     {
+        const block_diagram_block_info_t& block = BLOCK_DEFINITIONS[i];
         if (block.m_levels & m_current_location.m_level)
-        {
+        {            
             if (m_navigation_changed)
             {
                 ImGui::SetNextItemOpen(m_current_location.m_block == kBlockDiagramBlockNone || m_current_location.m_block == block.m_id);
-            }           
+            }
+            bool empty = (m_metrics_map.count(block.m_id) == 0);
+            ImVec2 table_shortcut_size(ImGui::CalcTextSize("View Table", NULL, true).x + 3 * ImGui::GetStyle().FramePadding.x, ImGui::GetFrameHeightWithSpacing());
+            ImGui::SetNextItemAllowOverlap();
             if (ImGui::CollapsingHeader(block.m_full_name.c_str()))
             {
-                if (m_metrics_map.count(block.m_id) == 0)
+                if (empty)
                 {
                     ImGui::Text("TBD");
                 }
                 else
-                {
+                {   
+                    ImGui::SameLine();
+                    ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - table_shortcut_size.x , table_shortcut_size.y));
+                    ImGui::SameLine();
+                    ImGui::PushID(i);
+                    if (ImGui::SmallButton("View Table"))
+                    {
+                        NavigationManager::GetInstance()->Go(m_owner_id + "/" + COMPUTE_TABLE_VIEW_URL + "/" + block.m_table_url);                 
+                    }
                     for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics_map[block.m_id])
                     {
                         metric->Render();
                     }
+                    ImGui::PopID();
                 }
+            }
+            else if (!empty)
+            {           
+                ImGui::SameLine();
+                ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - table_shortcut_size.x , table_shortcut_size.y));
+                ImGui::SameLine();
+                ImGui::PushID(i);
+                if (ImGui::SmallButton("View Table"))
+                {
+                    NavigationManager::GetInstance()->Go(m_owner_id + "/" + COMPUTE_TABLE_VIEW_URL + "/" + block.m_table_url);
+                }
+                ImGui::PopID();
             }
         }
     }

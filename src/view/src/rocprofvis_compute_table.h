@@ -33,6 +33,7 @@ typedef struct table_view_category_info_t
 {
     table_view_category_t m_category;
     std::string m_name;
+    std::string m_id;
     std::vector<std::string> m_content_ids;
 } table_view_category_info_t;
 

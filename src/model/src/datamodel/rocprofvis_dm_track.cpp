@@ -37,6 +37,11 @@ Track::Track( Trace* ctx,
                     params->extdata = m_ext_data.get();
                 };
 
+std::shared_mutex* Track::Mutex()
+{
+    return m_ctx->Mutex();
+}
+
 rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, nullptr);
@@ -64,17 +69,11 @@ rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofv
     }
 }
 
-rocprofvis_dm_result_t Track::DeleteSlice(rocprofvis_dm_slice_t slice)
+rocprofvis_dm_result_t Track::DeleteSliceAt(rocprofvis_dm_index_t& index)
 {
-    for (int i = 0; i < m_slices.size(); i++)
-    {
-        if (slice == m_slices[i].get())
-        {
-            m_slices.erase(m_slices.begin()+i);
-            return kRocProfVisDmResultSuccess;
-        }
-    }
-    return kRocProfVisDmResultNotLoaded;
+    std::unique_lock lock(*m_slices[index].get()->Mutex());
+    m_slices.erase(m_slices.begin() + index);
+    return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t Track::GetSliceAtIndex(rocprofvis_dm_property_index_t index,  rocprofvis_dm_slice_t & slice)
@@ -91,6 +90,20 @@ rocprofvis_dm_result_t Track::GetSliceAtTime(rocprofvis_dm_timestamp_t start,  r
         if (start == m_slices[i]->StartTime())
         {
             slice = m_slices[i].get();
+            return kRocProfVisDmResultSuccess;
+        }
+    }
+    return kRocProfVisDmResultNotLoaded;
+}
+
+rocprofvis_dm_result_t Track::GetSliceIndexAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
+                                                                                     rocprofvis_dm_index_t& index)
+{
+    for (int i = 0; i < m_slices.size(); i++)
+    {
+        if(start == m_slices[i]->StartTime() && end == m_slices[i]->EndTime())
+        {
+            index = i;
             return kRocProfVisDmResultSuccess;
         }
     }

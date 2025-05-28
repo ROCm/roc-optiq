@@ -64,46 +64,29 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
 }
     
 rocprofvis_dm_result_t Trace::DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end){
-    rocprofvis_dm_result_t result = CheckSliceExists(this, start, end);
-
-    if(result != kRocProfVisDmResultSuccess) return result;
-    std::unique_lock lock(*Mutex());
     for (int i=0; i < m_tracks.size(); i++)
     {
-        rocprofvis_dm_slice_t object = nullptr;
-        rocprofvis_dm_result_t result = m_tracks[i].get()->GetSliceAtTime(start, object);
-        if (result == kRocProfVisDmResultSuccess)
+        rocprofvis_dm_index_t index = 0;
         {
-            ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-            TrackSlice* slice = (TrackSlice*) object;
-            if(slice->EndTime() == end)
-            {
-                if(kRocProfVisDmResultSuccess != m_tracks[i].get()->DeleteSlice(slice))
-                    return kRocProfVisDmResultUnknownError;
-            }
-            else
-            {
-                return kRocProfVisDmResultSuccess;
-            }
+            std::unique_lock  lock(*Mutex());
+            rocprofvis_dm_result_t result = m_tracks[i].get()->GetSliceIndexAtTime(start, end, index);
+            if(result != kRocProfVisDmResultSuccess) return result;     
         }
+        return  m_tracks[i].get()->DeleteSliceAt(index);
     }
-    return kRocProfVisDmResultSuccess;
+    return kRocProfVisDmResultNotLoaded;
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllSlices(){
-    std::unique_lock lock(*Mutex());
     for (int i=0; i < m_tracks.size(); i++)
     {
+        std::unique_lock lock(*Mutex());
         size_t num_slices = m_tracks[i].get()->NumberOfSlices();
-        for (int j=0; j < num_slices; j++)
+        for(rocprofvis_dm_index_t j = 0; j < num_slices; j++)
         {
-            rocprofvis_dm_slice_t slice = nullptr;
-            rocprofvis_dm_result_t result = m_tracks[i].get()->GetSliceAtIndex(j, slice);
-            if (result == kRocProfVisDmResultSuccess)
-            {
-                ROCPROFVIS_ASSERT_MSG_RETURN(slice, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-                if (kRocProfVisDmResultSuccess != m_tracks[i].get()->DeleteSlice(slice)) return kRocProfVisDmResultUnknownError;
-            }
+            lock.unlock();
+            m_tracks[i].get()->DeleteSliceAt(j);
+            lock.lock();
         }
     }
     return kRocProfVisDmResultSuccess;
@@ -111,44 +94,64 @@ rocprofvis_dm_result_t Trace::DeleteAllSlices(){
 
 rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_property_type_t type,
                                                                 rocprofvis_dm_event_id_t event_id) {
-    std::unique_lock lock(*Mutex());
     switch (type)
     {
         case kRPVDMEventFlowTrace:
         {
-            size_t num = m_flow_traces.size();
-            for (size_t i=0; i < num; i++)
+            auto it = m_flow_traces.end();
             {
-                if (m_flow_traces[i].get()->EventId().value == event_id.value) {
-                    m_flow_traces.erase(m_flow_traces.begin()+i);
-                    return kRocProfVisDmResultSuccess;
-                }
+                std::unique_lock lock(*Mutex());
+                auto it = std::find_if(
+                    m_flow_traces.begin(), m_flow_traces.end(),
+                                       [&event_id](std::shared_ptr<FlowTrace>& x) {
+                                           return x.get()->EventId().value == event_id.value;
+                                       });
+            }
+            if(it != m_flow_traces.end())
+            {
+                std::unique_lock lock(*it->get()->Mutex());
+                m_flow_traces.erase(it);
+                return kRocProfVisDmResultSuccess;
             }
             return kRocProfVisDmResultNotLoaded;
         }
         break;
         case kRPVDMEventStackTrace:
         {
-            size_t num = m_stack_traces.size();
-            for (size_t i=0; i < num; i++)
+            auto it = m_stack_traces.end();
             {
-                if (m_stack_traces[i].get()->EventId().value == event_id.value) {
-                    m_stack_traces.erase(m_stack_traces.begin()+i);
-                    return kRocProfVisDmResultSuccess;
-                }
+                std::unique_lock lock(*Mutex());
+                auto             it =
+                    std::find_if(m_stack_traces.begin(), m_stack_traces.end(),
+                                 [&event_id](std::shared_ptr<StackTrace>& x) {
+                                     return x.get()->EventId().value == event_id.value;
+                                 });
+            }
+            if(it != m_stack_traces.end())
+            {
+                std::unique_lock lock(*it->get()->Mutex());
+                m_stack_traces.erase(it);
+                return kRocProfVisDmResultSuccess;
             }
             return kRocProfVisDmResultNotLoaded;
         }
         break;
         case kRPVDMEventExtData:
         {
-            size_t num = m_ext_data.size();
-            for (size_t i=0; i < num; i++)
+            auto it = m_ext_data.end();
             {
-                if (m_ext_data[i].get()->EventId().value == event_id.value) {
-                    m_ext_data.erase(m_ext_data.begin()+i);
-                    return kRocProfVisDmResultSuccess;
-                }
+                std::unique_lock lock(*Mutex());
+                auto             it =
+                    std::find_if(m_ext_data.begin(), m_ext_data.end(),
+                                 [&event_id](std::shared_ptr<ExtData>& x) {
+                                     return x.get()->EventId().value == event_id.value;
+                                 });
+            }
+            if(it != m_ext_data.end())
+            {
+                std::unique_lock lock(*it->get()->Mutex());
+                m_ext_data.erase(it);
+                return kRocProfVisDmResultSuccess;
             }
             return kRocProfVisDmResultNotLoaded;
         }  
@@ -158,44 +161,61 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
 }
 
 rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_property_type_t type){
-    std::unique_lock lock(*Mutex());
-    switch (type)
+    switch(type)
     {
         case kRPVDMEventFlowTrace:
         {
-            m_flow_traces.clear();
+            for(int i = m_flow_traces.size()-1; i >=0; i--)
+            {
+                DeleteEventPropertyFor(type, m_flow_traces[i].get()->EventId());
+            }
             return kRocProfVisDmResultSuccess;
         }
+        break;
         case kRPVDMEventStackTrace:
         {
-            m_stack_traces.clear();
+            for(int i = m_stack_traces.size() - 1; i >= 0; i--)
+            {
+                DeleteEventPropertyFor(type, m_stack_traces[i].get()->EventId());
+            }
             return kRocProfVisDmResultSuccess;
         }
+        break;
         case kRPVDMEventExtData:
         {
-            m_ext_data.clear();
+            for(int i = m_ext_data.size() - 1; i >= 0; i--)
+            {
+                DeleteEventPropertyFor(type, m_ext_data[i].get()->EventId());
+            }
             return kRocProfVisDmResultSuccess;
         }
+        break;  
     }
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
 }
 
 rocprofvis_dm_result_t Trace::DeleteTableAt(rocprofvis_dm_table_id_t id){
-    std::unique_lock lock(*Mutex());
-    auto it = std::find_if(m_tables.begin(), m_tables.end(),
-                           [&id](std::shared_ptr<Table>& x) {
-                               return x.get()->Id() >= id;
-                           });
+    auto it = m_tables.end();
+    {
+        std::unique_lock lock(*Mutex());
+        auto             it = std::find_if(
+            m_tables.begin(), m_tables.end(),
+            [&id](std::shared_ptr<Table>& x) { return x.get()->Id() == id; });
+    } 
     if(it != m_tables.end())
-    {      
+    {
+        std::unique_lock lock(*it->get()->Mutex());
         m_tables.erase(it);
+        return kRocProfVisDmResultSuccess;
     }
-    return kRocProfVisDmResultSuccess;
+    return kRocProfVisDmResultNotLoaded;
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllTables(){
-    std::unique_lock lock(*Mutex());
-    m_tables.clear();
+    for(int i = m_tables.size()-1; i >= 0; i--)
+    {
+        DeleteTableAt(m_tables[i].get()->Id());
+    }
     return kRocProfVisDmResultSuccess;
 }
 
@@ -450,7 +470,7 @@ rocprofvis_dm_result_t Trace::CheckEventPropertyExists(
                                    });
             if(it != trace->m_flow_traces.end())
             {
-                return kRocProfVisDmResultResourceBusy;
+                return kRocProfVisDmResultSuccess;
             }
         }
         break;

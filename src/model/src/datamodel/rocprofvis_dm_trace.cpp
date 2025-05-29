@@ -66,94 +66,82 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
 rocprofvis_dm_result_t Trace::DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end){
     for (int i=0; i < m_tracks.size(); i++)
     {
-        rocprofvis_dm_index_t index = 0;
-        {
-            std::unique_lock  lock(*Mutex());
-            rocprofvis_dm_result_t result = m_tracks[i].get()->GetSliceIndexAtTime(start, end, index);
-            if(result != kRocProfVisDmResultSuccess) return result;     
-        }
-        return  m_tracks[i].get()->DeleteSliceAt(index);
+        m_tracks[i].get()->DeleteSliceAtTime(start, end);
     }
     return kRocProfVisDmResultNotLoaded;
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllSlices(){
-    for (int i=0; i < m_tracks.size(); i++)
+   
+    for(int i = 0; i < m_tracks.size(); i++)
     {
-        std::unique_lock lock(*Mutex());
-        size_t num_slices = m_tracks[i].get()->NumberOfSlices();
-        for(rocprofvis_dm_index_t j = 0; j < num_slices; j++)
-        {
-            lock.unlock();
-            m_tracks[i].get()->DeleteSliceAt(j);
-            lock.lock();
-        }
+        m_tracks[i].get()->DeleteAllSlices();
     }
     return kRocProfVisDmResultSuccess;
 }
-
+ 
 rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_property_type_t type,
                                                                 rocprofvis_dm_event_id_t event_id) {
     switch (type)
     {
         case kRPVDMEventFlowTrace:
         {
-            auto it = m_flow_traces.end();
+            std::shared_ptr<FlowTrace> item;
             {
-                std::unique_lock lock(*Mutex());
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
                 auto it = std::find_if(
                     m_flow_traces.begin(), m_flow_traces.end(),
                                        [&event_id](std::shared_ptr<FlowTrace>& x) {
                                            return x.get()->EventId().value == event_id.value;
                                        });
-            }
-            if(it != m_flow_traces.end())
-            {
-                std::unique_lock lock(*it->get()->Mutex());
+                if (it == m_flow_traces.end())
+                {
+                    return kRocProfVisDmResultNotLoaded;
+                }
+                item    = *it;
                 m_flow_traces.erase(it);
-                return kRocProfVisDmResultSuccess;
             }
-            return kRocProfVisDmResultNotLoaded;
+            return kRocProfVisDmResultSuccess;
         }
         break;
         case kRPVDMEventStackTrace:
         {
-            auto it = m_stack_traces.end();
+            std::shared_ptr<StackTrace> item;
             {
-                std::unique_lock lock(*Mutex());
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
                 auto             it =
                     std::find_if(m_stack_traces.begin(), m_stack_traces.end(),
                                  [&event_id](std::shared_ptr<StackTrace>& x) {
                                      return x.get()->EventId().value == event_id.value;
                                  });
-            }
-            if(it != m_stack_traces.end())
-            {
-                std::unique_lock lock(*it->get()->Mutex());
+                if(it == m_stack_traces.end())
+                {
+                    return kRocProfVisDmResultNotLoaded;
+                }
+                item = *it;
                 m_stack_traces.erase(it);
-                return kRocProfVisDmResultSuccess;
             }
-            return kRocProfVisDmResultNotLoaded;
+            return kRocProfVisDmResultSuccess;
         }
         break;
         case kRPVDMEventExtData:
         {
-            auto it = m_ext_data.end();
+            std::shared_ptr<ExtData> item;
             {
-                std::unique_lock lock(*Mutex());
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
                 auto             it =
                     std::find_if(m_ext_data.begin(), m_ext_data.end(),
                                  [&event_id](std::shared_ptr<ExtData>& x) {
                                      return x.get()->EventId().value == event_id.value;
                                  });
-            }
-            if(it != m_ext_data.end())
-            {
-                std::unique_lock lock(*it->get()->Mutex());
+                if(it == m_ext_data.end())
+                {
+                    return kRocProfVisDmResultNotLoaded;
+                }
+                item = *it;
                 m_ext_data.erase(it);
-                return kRocProfVisDmResultSuccess;
             }
-            return kRocProfVisDmResultNotLoaded;
+            return kRocProfVisDmResultSuccess;
         }  
         break;   
     }
@@ -195,20 +183,20 @@ rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_p
 }
 
 rocprofvis_dm_result_t Trace::DeleteTableAt(rocprofvis_dm_table_id_t id){
-    auto it = m_tables.end();
+    std::shared_ptr<Table> item = nullptr;
     {
-        std::unique_lock lock(*Mutex());
+        TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
         auto             it = std::find_if(
             m_tables.begin(), m_tables.end(),
             [&id](std::shared_ptr<Table>& x) { return x.get()->Id() == id; });
-    } 
-    if(it != m_tables.end())
-    {
-        std::unique_lock lock(*it->get()->Mutex());
+        if(it == m_tables.end())
+        {
+            return kRocProfVisDmResultNotLoaded;
+        }
+        item = *it;
         m_tables.erase(it);
-        return kRocProfVisDmResultSuccess;
     }
-    return kRocProfVisDmResultNotLoaded;
+    return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllTables(){
@@ -270,7 +258,7 @@ rocprofvis_dm_result_t Trace::AddTrack(const rocprofvis_dm_trace_t object, rocpr
 rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    std::unique_lock  lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     rocprofvis_dm_track_t track = nullptr;
     rocprofvis_dm_result_t result = trace->GetTrackAtIndex(track_id, track);
     if (result == kRocProfVisDmResultSuccess)
@@ -285,7 +273,7 @@ rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const 
 rocprofvis_dm_result_t Trace::AddRecord(const rocprofvis_dm_slice_t object, rocprofvis_db_record_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     TrackSlice* slice = (TrackSlice*) object;
-    std::unique_lock lock(*slice->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*slice->Mutex(), __func__, slice);
     return slice->AddRecord(data);
 }      
 
@@ -306,14 +294,14 @@ rocprofvis_dm_index_t Trace::AddString(const rocprofvis_dm_trace_t object,  cons
 rocprofvis_dm_result_t Trace::AddFlow(const rocprofvis_dm_flowtrace_t object, rocprofvis_db_flow_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_FLOW_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     FlowTrace* flowtrace = (FlowTrace*) object;
-    std::unique_lock lock(*flowtrace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*flowtrace->Mutex(), __func__, flowtrace);
     return flowtrace->AddRecord(data);
 }
 
 rocprofvis_dm_flowtrace_t Trace::AddFlowTrace(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    std::unique_lock lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
         trace->m_flow_traces.push_back(std::make_shared<FlowTrace>(trace, event_id));
     }
@@ -327,14 +315,14 @@ rocprofvis_dm_flowtrace_t Trace::AddFlowTrace(const rocprofvis_dm_trace_t object
 rocprofvis_dm_result_t Trace::AddStackFrame(const rocprofvis_dm_stacktrace_t object, rocprofvis_db_stack_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_STACK_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     StackTrace* stacktrace = (StackTrace*) object;
-    std::unique_lock lock(*stacktrace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*stacktrace->Mutex(), __func__, stacktrace);
     return stacktrace->AddRecord(data);
 }
 
 rocprofvis_dm_stacktrace_t Trace::AddStackTrace(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    std::unique_lock lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
         trace->m_stack_traces.push_back(std::make_shared<StackTrace>(trace, event_id));
     }
@@ -348,7 +336,7 @@ rocprofvis_dm_stacktrace_t Trace::AddStackTrace(const rocprofvis_dm_trace_t obje
 rocprofvis_dm_extdata_t  Trace::AddExtData(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    std::unique_lock lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
         trace->m_ext_data.push_back(std::make_shared<ExtData>(trace,event_id));
     }
@@ -379,7 +367,7 @@ rocprofvis_dm_result_t Trace::AddEventLevel(const rocprofvis_dm_trace_t object, 
 rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_EXT_DATA_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ExtData* ext_data = (ExtData*) object;
-    std::unique_lock lock(*ext_data->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*ext_data->Mutex(), __func__, ext_data);
     if (!ext_data->HasRecord(data)){
         return ext_data->AddRecord(data);   
     }
@@ -390,7 +378,7 @@ rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t ob
 rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*) object;
-    std::unique_lock lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
         trace->m_tables.push_back(std::make_shared<Table>(trace,description, query));
     }
@@ -404,21 +392,21 @@ rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocpro
 rocprofvis_dm_table_row_t Trace::AddTableRow(const rocprofvis_dm_table_t object){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_CANNOT_BE_NULL, nullptr);
     Table* table = (Table*) object;
-    std::unique_lock lock(*table->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*table->Mutex(), __func__, table);
     return table->AddRow();
 }
 
 rocprofvis_dm_result_t Trace::AddTableColumn(const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t column_name){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     Table* table = (Table*) object;
-    std::unique_lock lock(*table->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*table->Mutex(), __func__, table);
     return table->AddColumn(column_name);
 }
 
 rocprofvis_dm_result_t Trace::AddTableRowCell(const rocprofvis_dm_table_row_t object, rocprofvis_dm_charptr_t cell_value){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_ROW_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     TableRow* table_row = (TableRow*) object;
-    std::unique_lock lock(*table_row->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*table_row->Mutex(), __func__, table_row);
     return table_row->AddCellValue(cell_value);
 }
 
@@ -430,7 +418,7 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     Trace* trace = (Trace*) object;
-    std::shared_lock lock(*trace->Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     bool found = false;
     for(int i = 0; i < trace->m_tracks.size(); i++)
     {
@@ -458,7 +446,7 @@ rocprofvis_dm_result_t Trace::CheckEventPropertyExists(
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     Trace* trace = (Trace*) object;
-    std::shared_lock lock(*trace->Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     switch(type)
     {
         case kRPVDMEventFlowTrace:
@@ -512,7 +500,7 @@ rocprofvis_dm_result_t Trace::CheckTableExists(
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     Trace* trace = (Trace*) object;
-    std::shared_lock lock(*trace->Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     auto it =
         std::find_if(trace->m_tables.begin(), trace->m_tables.end(),
         [&table_id](std::shared_ptr<Table>& x) { return x.get()->Id() == table_id; });
@@ -617,7 +605,7 @@ const char*  Trace::GetPropertySymbol(rocprofvis_dm_property_t property) {
 
 
 rocprofvis_dm_result_t Trace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_extdata_t & extinfo){
-    std::shared_lock lock(*Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     auto it =
         find_if(m_ext_data.begin(), m_ext_data.end(), 
                         [&](std::shared_ptr<ExtData>& x) {
@@ -632,7 +620,7 @@ rocprofvis_dm_result_t Trace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id
 }
 
 rocprofvis_dm_result_t Trace::GetFlowTraceHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_flowtrace_t & flowtrace){
-    std::shared_lock lock(*Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     auto it = find_if(m_flow_traces.begin(), m_flow_traces.end(),
                       [&](std::shared_ptr<FlowTrace>& x) {
         return x.get()->EventId().value == event_id.value;
@@ -646,7 +634,7 @@ rocprofvis_dm_result_t Trace::GetFlowTraceHandle(rocprofvis_dm_event_id_t event_
 }
 
 rocprofvis_dm_result_t Trace::GetStackTraceHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_stacktrace_t & stacktrace){
-    std::shared_lock lock(*Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     auto it = find_if(m_stack_traces.begin(), m_stack_traces.end(),
                       [&](std::shared_ptr<StackTrace>& x) {
         return x.get()->EventId().value == event_id.value;
@@ -660,7 +648,7 @@ rocprofvis_dm_result_t Trace::GetStackTraceHandle(rocprofvis_dm_event_id_t event
 }
 
 rocprofvis_dm_result_t Trace::GetTableHandle(rocprofvis_dm_table_id_t id, rocprofvis_dm_table_t & table){
-    std::shared_lock lock(*Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     auto  it = find_if(m_tables.begin(), m_tables.end(),
                       [&](std::shared_ptr<Table>& x) {
                           return x.get()->Id() == id;

@@ -83,10 +83,13 @@ public:
     // @return status of operation
     rocprofvis_dm_result_t                              GetSliceIndexAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
                                                                                             rocprofvis_dm_index_t& index);
-    // Method to delete slice with provided index
+    // Method to delete slice with provided time
     // @param slice - handle to slice
     // @return status of operation 
-    rocprofvis_dm_result_t                              DeleteSliceAt(rocprofvis_dm_index_t& index);
+    rocprofvis_dm_result_t                              DeleteSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
+    // Method to delete all slices
+    // @return status of operation
+    rocprofvis_dm_result_t                              DeleteAllSlices();
     // Method to add empty slice object
     // @param start - slice start timestamp
     // @param start - slice end timestamp

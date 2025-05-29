@@ -69,10 +69,27 @@ rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofv
     }
 }
 
-rocprofvis_dm_result_t Track::DeleteSliceAt(rocprofvis_dm_index_t& index)
+rocprofvis_dm_result_t Track::DeleteSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
 {
-    std::unique_lock lock(*m_slices[index].get()->Mutex());
-    m_slices.erase(m_slices.begin() + index);
+    std::shared_ptr<TrackSlice>  slice = nullptr;
+    {
+        TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+        rocprofvis_dm_index_t                          index = 0;
+        rocprofvis_dm_result_t result = GetSliceIndexAtTime(start, end, index);
+        if(result != kRocProfVisDmResultSuccess) return result;
+        slice = m_slices[index];
+        m_slices.erase(m_slices.begin() + index);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t Track::DeleteAllSlices()
+{
+    std::vector<std::shared_ptr<TrackSlice>> slices;
+    {
+        TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+        slices.swap(m_slices);
+    }
     return kRocProfVisDmResultSuccess;
 }
 

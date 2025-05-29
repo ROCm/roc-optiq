@@ -516,8 +516,8 @@ void ComputeBlockDiagram::RenderCacheLevel()
     Link(kBlockDiagramLinkL2_Fabric_Read, ImVec2(0.05f, -0.035f), ImVec2(0.175f, -0.035f), ImGuiDir_Left);
     Link(kBlockDiagramLinkL2_Fabric_Write, ImVec2(0.05f, 0), ImVec2(0.175f, 0), ImGuiDir_Right);
     Link(kBlockDiagramLinkL2_Fabric_Atomic, ImVec2(0.05f, 0.035f), ImVec2(0.175f, 0.035f), ImGuiDir_None);
-    Link(kBlockDiagramLinkFabric_DRAM_Read, ImVec2(0.325f, 0.175f), ImVec2(0.45f, 0.175f), ImGuiDir_Left);
-    Link(kBlockDiagramLinkFabric_DRAM_Write, ImVec2(0.325f, 0.225f), ImVec2(0.45f, 0.225f), ImGuiDir_Right);
+    Link(kBlockDiagramLinkFabric_DRAM_Read, ImVec2(0.325f, 0.1825f), ImVec2(0.45f, 0.1825f), ImGuiDir_Left);
+    Link(kBlockDiagramLinkFabric_DRAM_Write, ImVec2(0.325f, 0.2175f), ImVec2(0.45f, 0.2175f), ImGuiDir_Right);
     Link(kBlockDiagramLinkFabric_PCIe_Read, ImVec2(0.325f, -0.0175f), ImVec2(0.45f, -0.0175f), ImGuiDir_Left);
     Link(kBlockDiagramLinkFabric_PCIe_Write, ImVec2(0.325f, 0.0175f), ImVec2(0.45f, 0.0175f), ImGuiDir_Right);
     Link(kBlockDiagramLinkFabric_HBM_Read, ImVec2(0.325f, -0.2175f), ImVec2(0.45f, -0.2175f), ImGuiDir_Left);

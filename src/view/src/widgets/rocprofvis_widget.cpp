@@ -526,3 +526,16 @@ TabContainer::SetActiveTab(const std::string& id)
         m_set_active_tab_index = std::distance(m_tabs.begin(), it);
     }
 }
+
+// Gets a read only list of tabs.
+const std::vector<const TabItem*>
+TabContainer::GetTabs()
+{
+    std::vector<const TabItem*> tabs;
+    for (TabItem& tab : m_tabs)
+    {
+        const TabItem* t = &tab;
+        tabs.push_back(t);
+    }
+    return tabs;
+}

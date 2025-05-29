@@ -20,12 +20,13 @@ public:
     void Update() override;
     void SetProfilePath(std::filesystem::path path);
     bool ProfileLoaded();
-    ComputeRoot();
+    ComputeRoot(std::string owner_id);
     ~ComputeRoot();
 
 private:
     std::shared_ptr<TabContainer> m_tab_container;
     std::shared_ptr<ComputeDataProvider> m_compute_data_provider;
+    std::string m_owner_id;
 };
 
 }  // namespace View

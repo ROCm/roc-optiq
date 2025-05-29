@@ -71,10 +71,11 @@ ComputeSummaryRight::ComputeSummaryRight(std::shared_ptr<ComputeDataProvider> da
 
 ComputeSummaryRight::~ComputeSummaryRight() {}
 
-ComputeSummaryView::ComputeSummaryView(std::shared_ptr<ComputeDataProvider> data_provider)
+ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
 : m_container(nullptr)
 , m_left_view(nullptr)
 , m_right_view(nullptr)
+, m_owner_id(owner_id)
 {
     m_left_view = std::make_shared<ComputeSummaryLeft>(data_provider);
     m_right_view = std::make_shared<ComputeSummaryRight>(data_provider);

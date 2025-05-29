@@ -2,6 +2,8 @@
 
 #include "rocprofvis_settings.h"
 #include "rocprofvis_core.h"
+#include "rocprofvis_core_assert.h"
+
 #include "imgui.h"
 #include <algorithm>
 #include <iostream>
@@ -13,6 +15,59 @@ namespace RocProfVis
 {
 namespace View
 {
+
+bool
+FontManager::Init()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    ImFontConfig config;
+
+    ImFont* font = nullptr;
+    if(io.Fonts->Fonts.empty())
+    {
+        font = io.Fonts->AddFontDefault();  // Adds ProggyClean @ 13px
+    }
+    else
+    {
+        font = io.Fonts->Fonts[0];  // Assume the first one is the default
+    }
+    ROCPROFVIS_ASSERT(font != nullptr);
+
+    // Store the default font in the manager also known as "Medium" font
+    m_fonts.resize(static_cast<int>(FontType::__kLastFont));
+    m_fonts[static_cast<int>(FontType::kDefault)] = font;
+
+    // Small font
+    config.SizePixels = 10.0f;
+    font              = io.Fonts->AddFontDefault(&config);
+    ROCPROFVIS_ASSERT(font != nullptr);
+    m_fonts[static_cast<int>(FontType::kSmall)] = font;
+
+    // Medium large font
+    config.SizePixels = 16.0f;
+    font              = io.Fonts->AddFontDefault(&config);
+    ROCPROFVIS_ASSERT(font != nullptr);
+    m_fonts[static_cast<int>(FontType::kMedLarge)] = font;
+
+    // Large font
+    config.SizePixels = 20.0f;
+    font              = io.Fonts->AddFontDefault(&config);
+    ROCPROFVIS_ASSERT(font != nullptr);
+    m_fonts[static_cast<int>(FontType::kLarge)] = font;
+
+    return io.Fonts->Build();
+}
+
+ImFont*
+FontManager::GetFont(FontType font_type)
+{
+    if(static_cast<int>(font_type) < 0 ||
+       static_cast<int>(font_type) >= static_cast<int>(FontType::__kLastFont))
+    {
+        return nullptr;  // Invalid font type
+    }
+    return m_fonts[static_cast<int>(font_type)];
+}
 
 const std::vector<ImU32> DARK_THEME_COLORS = []() {
     std::vector<ImU32> colors(static_cast<int>(Colors::__kLastColor));
@@ -60,7 +115,6 @@ Settings::GetInstance()
 bool
 Settings::IsHorizontalRender()
 {
-   
     return m_use_horizontal_rendering;
 }
 
@@ -68,7 +122,7 @@ bool
 Settings::HorizontalRender()
 {
     m_use_horizontal_rendering = !m_use_horizontal_rendering;
-    spdlog::info("Enable Dynamic Loading: {0}", (uint32_t)m_use_horizontal_rendering);
+    spdlog::info("Enable Dynamic Loading: {0}", (uint32_t) m_use_horizontal_rendering);
     return m_use_horizontal_rendering;
 }
 

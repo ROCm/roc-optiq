@@ -60,6 +60,13 @@ AppWindow::Init()
 {
     ImPlot::CreateContext();
 
+    // setup fonts
+    bool result = Settings::GetInstance().GetFontManager().Init();
+    if(!result)
+    {
+        spdlog::warn("Failed to initialize fonts");
+    }
+
     LayoutItem status_bar_item(-1, 30.0f);
     status_bar_item.m_item = std::make_shared<RocWidget>();
     LayoutItem main_area_item(-1, -30.0f);
@@ -81,7 +88,8 @@ AppWindow::Init()
     };
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
-    return true;
+
+    return result;
 }
 
 void

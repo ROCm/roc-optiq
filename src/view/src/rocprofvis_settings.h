@@ -3,6 +3,7 @@
 #pragma once
 
 #include "imgui.h"
+
 #include <utility>
 #include <vector>
 namespace RocProfVis
@@ -29,6 +30,37 @@ enum class Colors
     __kLastColor
 };
 
+enum class FontType
+{
+    kSmall,
+    kMedium,
+    kMedLarge,
+    kLarge,
+    // Used to get the size of the enum, insert new fonts before this line
+    __kLastFont,
+    kDefault = kMedium
+};
+
+class FontManager
+{
+public:
+    FontManager() = default;
+    ~FontManager() = default;
+    FontManager(const FontManager&)            = delete;
+    FontManager& operator=(const FontManager&) = delete;
+    
+    /*
+     * Called to initialize the font manager. Should be once called after ImGui context is
+     * created, but before the first frame.
+     */
+    bool Init();
+
+    ImFont* GetFont(FontType font_type);
+
+private:
+    std::vector<ImFont*> m_fonts;
+};
+
 class Settings
 {
 public:
@@ -48,6 +80,8 @@ public:
     bool HorizontalRender();
     bool IsHorizontalRender();
 
+    FontManager& GetFontManager() { return m_font_manager; }
+
 private:
     Settings();
     ~Settings();
@@ -56,6 +90,7 @@ private:
     float              m_DPI;
     bool               m_use_dark_mode;
     bool               m_use_horizontal_rendering;
+    FontManager        m_font_manager;
 };
 
 }  // namespace View

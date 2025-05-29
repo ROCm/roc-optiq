@@ -32,13 +32,13 @@ enum class Colors
 
 enum class FontType
 {
-    kDefault,
-    kMedium = kDefault,
     kSmall,
+    kMedium,
     kMedLarge,
     kLarge,
     // Used to get the size of the enum, insert new fonts before this line
-    __kLastFont
+    __kLastFont,
+    kDefault = kMedium
 };
 
 class FontManager

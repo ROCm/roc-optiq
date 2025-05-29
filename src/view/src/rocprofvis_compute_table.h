@@ -29,15 +29,11 @@ typedef enum table_view_category_t
     kTableCategoryCount
 } table_view_category_t;
 
-struct PrefixTreeNode {
-    char m_char;
-    std::array<std::unique_ptr<PrefixTreeNode>, 128> m_next;
-};
-
 typedef struct table_view_category_info_t
 {
     table_view_category_t m_category;
     std::string m_name;
+    std::string m_id;
     std::vector<std::string> m_content_ids;
 } table_view_category_info_t;
 

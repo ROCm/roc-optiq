@@ -120,6 +120,7 @@ typedef struct block_diagram_block_info_t
     std::string m_short_name;
     std::string m_full_name;
     std::string m_tooltip;
+    std::string m_table_url;
     std::vector<block_diagram_plot_info_t> m_plot_infos;
     std::vector<block_diagram_metric_info_t> m_metric_infos;
 } block_diagram_block_info_t;

@@ -5,6 +5,7 @@
 #include "rocprofvis_core_assert.h"
 
 #include "imgui.h"
+#include "implot.h"
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -131,6 +132,7 @@ Settings::DarkMode()
 {
     m_color_store = DARK_THEME_COLORS;
     ImGui::StyleColorsDark();
+    ImPlot::StyleColorsDark();
     m_use_dark_mode = true;
 }
 
@@ -139,6 +141,7 @@ Settings::LightMode()
 {
     m_color_store = LIGHT_THEME_COLORS;
     ImGui::StyleColorsLight();
+    ImPlot::StyleColorsLight();
     m_use_dark_mode = false;
 }
 

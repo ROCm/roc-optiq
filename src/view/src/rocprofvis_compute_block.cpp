@@ -10,12 +10,12 @@ namespace View
 {
 
 const std::array BLOCK_DEFINITIONS {
-    block_diagram_block_info_t{kBlockDiagramBlockGPU, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "GPU", "GPU", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockCP, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CP", "Command Processor", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockCPC, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CPC", "Command Processor Packet Processor", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockCPF, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CPF", "Command Processor Fetcher", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockSE, kBlockDiagramLevelGPU | kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "SE", "Shader Engine", ""},
-    block_diagram_block_info_t{kBlockDiagramBlockL2, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "L2", "L2 Cache", "", { 
+    block_diagram_block_info_t{kBlockDiagramBlockGPU, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "GPU", "GPU", "", ""},
+    block_diagram_block_info_t{kBlockDiagramBlockCP, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CP", "Command Processor", "", COMPUTE_TABLE_COMMAND_PROCESSOR_URL},
+    block_diagram_block_info_t{kBlockDiagramBlockCPC, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CPC", "Command Processor Packet Processor", "", COMPUTE_TABLE_COMMAND_PROCESSOR_URL},
+    block_diagram_block_info_t{kBlockDiagramBlockCPF, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "CPF", "Command Processor Fetcher", "", COMPUTE_TABLE_COMMAND_PROCESSOR_URL},
+    block_diagram_block_info_t{kBlockDiagramBlockSE, kBlockDiagramLevelGPU | kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "SE", "Shader Engine", "", ""},
+    block_diagram_block_info_t{kBlockDiagramBlockL2, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "L2", "L2 Cache", "", COMPUTE_TABLE_L2_CACHE_URL, { 
         block_diagram_plot_info_t{"17.1_Speed-of-Light.csv", {0, 1}}, 
         block_diagram_plot_info_t{"17.4_L2_-_Fabric_Interface_Stalls.csv", {0, 1}}
     }, {
@@ -24,22 +24,22 @@ const std::array BLOCK_DEFINITIONS {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Atomic", "L2 Atomic Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Hit", "L2 Hit Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockFabric, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "Fabric", "Infinity Fabric", "", {}, {
+    block_diagram_block_info_t{kBlockDiagramBlockFabric, kBlockDiagramLevelGPU | kBlockDiagramLevelCache, "Fabric", "Infinity Fabric", "", "", {}, {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Rd", "Fabric Rd Lat Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Wr", "Fabric Wr Lat Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Atomic", "Fabric Atomic Lat Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockCU, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelComputeUnit | kBlockDiagramLevelCache, "CU", "Compute Unit", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockCU, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelComputeUnit | kBlockDiagramLevelCache, "CU", "Compute Unit", "", COMPUTE_TABLE_COMPUTE_PIPELINE_URL, {
         block_diagram_plot_info_t{"10.1_Overall_Instruction_Mix.csv", {0}}, 
         block_diagram_plot_info_t{"11.1_Speed-of-Light.csv", {0}}
     }, {}},
-    block_diagram_block_info_t{kBlockDiagramBlockSPI, kBlockDiagramlevelShaderEngine, "SPI", "Workgroup Manager", "", {}, {}},
-    block_diagram_block_info_t{kBlockDiagramBlocksL1D, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "sL1D", "Scalar L1 Data Cache", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockSPI, kBlockDiagramlevelShaderEngine, "SPI", "Workgroup Manager", "", COMPUTE_TABLE_WORKGROUP_MANAGER_URL},
+    block_diagram_block_info_t{kBlockDiagramBlocksL1D, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "sL1D", "Scalar L1 Data Cache", "", COMPUTE_TABLE_SCALAR_CACHE_URL, {
         block_diagram_plot_info_t{"14.1_Speed-of-Light.csv", {0}}     
     }, {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Hit", "VL1D Hit Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockvL1D, kBlockDiagramLevelComputeUnit | kBlockDiagramLevelCache, "vL1D", "Vector L1 Data Cache", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockvL1D, kBlockDiagramLevelComputeUnit | kBlockDiagramLevelCache, "vL1D", "Vector L1 Data Cache", "", COMPUTE_TABLE_VECTOR_CACHE_URL, {
         block_diagram_plot_info_t{"16.1_Speed-of-Light.csv", {0}},
         block_diagram_plot_info_t{"16.4_L1D_-_L2_Transactions.csv", {0, 1, 2, 3}}
     }, {
@@ -47,20 +47,20 @@ const std::array BLOCK_DEFINITIONS {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Coales", "VL1 Coalesce Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Stall", "VL1 Stall Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockL1I, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "L1I", "L1 Instruction Cache", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockL1I, kBlockDiagramlevelShaderEngine | kBlockDiagramLevelCache, "L1I", "L1 Instruction Cache", "", COMPUTE_TABLE_INSTRUCTION_CACHE_URL, {
         block_diagram_plot_info_t{"13.1_Speed-of-Light.csv", {0}}
     }, {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Hit", "IL1 Hit Value"},
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Lat", "IL1 Lat Value"}
     }},
-    block_diagram_block_info_t{kBlockDiagramBlockScheduler, kBlockDiagramLevelComputeUnit, "Scheduler", "Scheduler", "", {}, {}},
-    block_diagram_block_info_t{kBlockDiagramBlockVALU, kBlockDiagramLevelComputeUnit, "VALU", "Vector Arithmetic Logic Unit", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockScheduler, kBlockDiagramLevelComputeUnit, "Scheduler", "Scheduler", "", COMPUTE_TABLE_WAVEFRONT_URL},
+    block_diagram_block_info_t{kBlockDiagramBlockVALU, kBlockDiagramLevelComputeUnit, "VALU", "Vector Arithmetic Logic Unit", "", COMPUTE_TABLE_INSTRUCTION_MIX_URL, {
         block_diagram_plot_info_t{"10.2_VALU_Arithmetic_Instr_Mix.csv", {0}}
     }, {}},
     block_diagram_block_info_t{kBlockDiagramBlockSALU, kBlockDiagramLevelComputeUnit, "SALU", "Scalar Arithmetic Logic Unit", "", {}, {}},
     block_diagram_block_info_t{kBlockDiagramBlockMFMA, kBlockDiagramLevelComputeUnit, "MFMA", "Matrix Fused Multiply-Add", "", {}, {}},
     block_diagram_block_info_t{kBlockDiagramBlockBranch, kBlockDiagramLevelComputeUnit, "Branch", "Branch", "", {}, {}},
-    block_diagram_block_info_t{kBlockDiagramBlockLDS, kBlockDiagramLevelComputeUnit, "LDS", "Local Data Share", "", {
+    block_diagram_block_info_t{kBlockDiagramBlockLDS, kBlockDiagramLevelComputeUnit, "LDS", "Local Data Share", "", COMPUTE_TABLE_LOCAL_DATA_STORE_URL, {
         block_diagram_plot_info_t{"12.1_Speed-of-Light.csv", {0}}
     }, {
         block_diagram_metric_info_t{"3.1_Memory_Chart.csv", "Util", "LDS Util Value"},
@@ -130,27 +130,52 @@ ComputeBlockDetails::~ComputeBlockDetails()
 
 void ComputeBlockDetails::Render() 
 {
-    for (const block_diagram_block_info_t& block : BLOCK_DEFINITIONS)
+    for (int i = 0; i < BLOCK_DEFINITIONS.size(); i ++)
     {
+        const block_diagram_block_info_t& block = BLOCK_DEFINITIONS[i];
         if (block.m_levels & m_current_location.m_level)
-        {
+        {            
             if (m_navigation_changed)
             {
                 ImGui::SetNextItemOpen(m_current_location.m_block == kBlockDiagramBlockNone || m_current_location.m_block == block.m_id);
-            }           
+            }
+            bool empty = (m_metrics_map.count(block.m_id) == 0);
+            ImVec2 table_shortcut_size(ImGui::CalcTextSize("View Table", NULL, true).x + 3 * ImGui::GetStyle().FramePadding.x, ImGui::GetFrameHeightWithSpacing());
+            ImGui::SetNextItemAllowOverlap();
             if (ImGui::CollapsingHeader(block.m_full_name.c_str()))
             {
-                if (m_metrics_map.count(block.m_id) == 0)
+                if (empty)
                 {
                     ImGui::Text("TBD");
                 }
                 else
-                {
+                {   
+                    ImGui::SameLine();
+                    ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - table_shortcut_size.x , table_shortcut_size.y));
+                    ImGui::SameLine();
+                    ImGui::PushID(i);
+                    if (ImGui::SmallButton("View Table"))
+                    {
+                        NavigationManager::GetInstance()->Go(m_owner_id + "/" + COMPUTE_TABLE_VIEW_URL + "/" + block.m_table_url);                 
+                    }
                     for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics_map[block.m_id])
                     {
                         metric->Render();
                     }
+                    ImGui::PopID();
                 }
+            }
+            else if (!empty)
+            {           
+                ImGui::SameLine();
+                ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - table_shortcut_size.x , table_shortcut_size.y));
+                ImGui::SameLine();
+                ImGui::PushID(i);
+                if (ImGui::SmallButton("View Table"))
+                {
+                    NavigationManager::GetInstance()->Go(m_owner_id + "/" + COMPUTE_TABLE_VIEW_URL + "/" + block.m_table_url);
+                }
+                ImGui::PopID();
             }
         }
     }
@@ -295,7 +320,7 @@ bool ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, ImVec2 rel_po
     ImGui::PopStyleColor();
     if (m_navigation->Current().m_block == id || ImGui::IsItemHovered())
     {
-        m_draw_list->AddRect(abs_pos, abs_pos + abs_size, IM_COL32(0, 0, 0, 255));
+        m_draw_list->AddRect(abs_pos, abs_pos + abs_size, ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     }
     if (strlen(tooltip) > 0)
     {
@@ -327,7 +352,7 @@ bool ComputeBlockDiagram::BlockButton(block_diagram_block_id_t id, ImVec2 rel_po
                    abs_pos.y + 0.01f * m_content_region.y),
             ImVec2(abs_pos.x + abs_size.x - 0.01f * m_content_region.x,
                    abs_pos.y + 0.02f * m_content_region.y),
-            IM_COL32(0, 0, 0, 255));
+            ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     }
     else if (pressed)
     {
@@ -341,7 +366,7 @@ void ComputeBlockDiagram::Link(block_diagram_link_id_t id, ImVec2 rel_left, ImVe
     const ImVec2 abs_left(m_content_region_center + m_content_region * rel_left);
     const ImVec2 abs_right(m_content_region_center + m_content_region * rel_right);
 
-    m_draw_list->AddLine(abs_left, abs_right, IM_COL32(0, 0, 0, 255));
+    m_draw_list->AddLine(abs_left, abs_right, ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     if(direction == ImGuiDir_Left || direction == ImGuiDir_None)
     {
         m_draw_list->AddTriangleFilled(
@@ -350,7 +375,7 @@ void ComputeBlockDiagram::Link(block_diagram_link_id_t id, ImVec2 rel_left, ImVe
                 abs_left.y - 0.005f * m_content_region.y),
         ImVec2(abs_left.x + 0.005f * m_content_region.x,
                 abs_left.y + 0.005f * m_content_region.y),
-        IM_COL32(0, 0, 0, 255));
+        ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     }
     if(direction == ImGuiDir_Right || direction == ImGuiDir_None)
     {
@@ -360,16 +385,18 @@ void ComputeBlockDiagram::Link(block_diagram_link_id_t id, ImVec2 rel_left, ImVe
                 abs_right.y - 0.005f * m_content_region.y),
         ImVec2(abs_right.x - 0.005f * m_content_region.x,
                 abs_right.y + 0.005f * m_content_region.y),
-        IM_COL32(0, 0, 0, 255));
+        ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
     }
 
     if (m_link_metrics[id] && !m_link_metrics[id]->FormattedString().empty())
     {
         const ImVec2 label_size = ImGui::CalcTextSize(m_link_metrics[id]->FormattedString().c_str());
         const ImVec2 label_pos = ImVec2(abs_left.x + (abs_right.x - abs_left.x - label_size.x) / 2, abs_left.y - label_size.y);
-        m_draw_list->AddRectFilled(ImVec2(label_pos.x - 2, label_pos.y), ImVec2(label_pos.x + label_size.x + 1, label_pos.y + label_size.y), IM_COL32(0, 0, 0, 255));
+        m_draw_list->AddRectFilled(ImVec2(label_pos.x - 2, label_pos.y), ImVec2(label_pos.x + label_size.x + 1, label_pos.y + label_size.y), ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
         ImGui::SetCursorScreenPos(label_pos);
-        ImGui::TextColored(ImVec4(1, 1, 1, 1), m_link_metrics[id]->FormattedString().c_str());
+        ImVec4 text_color = ImVec4(1, 1, 1, 1) - ImGui::GetStyleColorVec4(ImGuiCol_Text);
+        text_color.w = 1;
+        ImGui::TextColored(text_color, m_link_metrics[id]->FormattedString().c_str());
     }
 }
 
@@ -442,9 +469,11 @@ void ComputeBlockDiagram::RenderComputeUnitLevel()
     BlockButton(kBlockDiagramBlockBranch, ImVec2(0.05f, 0.075f), ImVec2(0.1f, 0.75f));
     BlockButton(kBlockDiagramBlockLDS, ImVec2(0.375f, 0.2375f), ImVec2(0.15f, 0.425f));
 
+    ImVec4 divider_color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+    divider_color.w = 0.5f;
     m_draw_list->AddLine(ImVec2(m_content_region_center.x + 0.16f * m_content_region.x, m_content_region_center.y - 0.5f * m_content_region.y), 
                          ImVec2(m_content_region_center.x + 0.16f * m_content_region.x, m_content_region_center.y + 0.5f * m_content_region.y),
-                         IM_COL32(0, 0, 0, 64));
+                         ImGui::GetColorU32(divider_color));
 
     Link(kBlockDiagramLinkCU_vL1D_Read, ImVec2(0.16f, -0.2725f), ImVec2(0.3f, -0.2725f), ImGuiDir_Left);
     Link(kBlockDiagramLinkCU_vL1D_Write, ImVec2(0.16f, -0.2375f), ImVec2(0.3f, -0.2375f), ImGuiDir_Right);
@@ -487,8 +516,8 @@ void ComputeBlockDiagram::RenderCacheLevel()
     Link(kBlockDiagramLinkL2_Fabric_Read, ImVec2(0.05f, -0.035f), ImVec2(0.175f, -0.035f), ImGuiDir_Left);
     Link(kBlockDiagramLinkL2_Fabric_Write, ImVec2(0.05f, 0), ImVec2(0.175f, 0), ImGuiDir_Right);
     Link(kBlockDiagramLinkL2_Fabric_Atomic, ImVec2(0.05f, 0.035f), ImVec2(0.175f, 0.035f), ImGuiDir_None);
-    Link(kBlockDiagramLinkFabric_DRAM_Read, ImVec2(0.325f, 0.175f), ImVec2(0.45f, 0.175f), ImGuiDir_Left);
-    Link(kBlockDiagramLinkFabric_DRAM_Write, ImVec2(0.325f, 0.225f), ImVec2(0.45f, 0.225f), ImGuiDir_Right);
+    Link(kBlockDiagramLinkFabric_DRAM_Read, ImVec2(0.325f, 0.1825f), ImVec2(0.45f, 0.1825f), ImGuiDir_Left);
+    Link(kBlockDiagramLinkFabric_DRAM_Write, ImVec2(0.325f, 0.2175f), ImVec2(0.45f, 0.2175f), ImGuiDir_Right);
     Link(kBlockDiagramLinkFabric_PCIe_Read, ImVec2(0.325f, -0.0175f), ImVec2(0.45f, -0.0175f), ImGuiDir_Left);
     Link(kBlockDiagramLinkFabric_PCIe_Write, ImVec2(0.325f, 0.0175f), ImVec2(0.45f, 0.0175f), ImGuiDir_Right);
     Link(kBlockDiagramLinkFabric_HBM_Read, ImVec2(0.325f, -0.2175f), ImVec2(0.45f, -0.2175f), ImGuiDir_Left);

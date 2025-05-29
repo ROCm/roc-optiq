@@ -557,7 +557,7 @@ DataProvider::SetupEventTableCommonArguments(
 
 bool
 DataProvider::FetchSingleTrackSampleTable(uint64_t index, double start_ts, double end_ts,
-                                         uint64_t start_row, uint64_t req_row_count)
+                                          uint64_t start_row, uint64_t req_row_count)
 {
     return FetchSingleTrackTable(index, kRPVControllerTableTypeSamples, start_ts, end_ts,
                                  start_row, req_row_count);
@@ -1514,6 +1514,11 @@ DataProvider::CreateRawEventData(uint64_t                       index,
         result                               = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &event);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
+
+        uint64_t id = 0;
+        result = rocprofvis_controller_get_uint64(event, kRPVControllerEventId, 0, &id);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        trace_event.m_id = id;
 
         double start_ts = 0;
         result          = rocprofvis_controller_get_double(

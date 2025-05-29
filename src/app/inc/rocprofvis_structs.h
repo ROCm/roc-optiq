@@ -10,6 +10,7 @@
 
 typedef struct rocprofvis_trace_event_t
 {
+    uint64_t    m_id;
     std::string m_name;
     double      m_start_ts;
     double      m_duration;

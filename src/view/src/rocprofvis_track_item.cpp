@@ -29,7 +29,11 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 {
     m_metadata_bg_color = m_settings.GetColor(static_cast<int>(Colors::kMetaDataColor));
 }
-
+const std::string&
+TrackItem::GetName()
+{
+    return m_name;
+}
 bool
 TrackItem::GetResizeStatus()
 {
@@ -175,13 +179,12 @@ TrackItem::RequestData(double min, double max, float width)
     if(m_request_state == TrackDataRequestState::kIdle)
     {
         m_request_state = TrackDataRequestState::kRequesting;
-        m_data_provider.FetchTrack(m_id, min,
-                                   max, width, 0);
+        m_data_provider.FetchTrack(m_id, min, max, width, 0);
         spdlog::debug("Fetching from {} to {} ( {} ) at zoom {}",
                       min - m_data_provider.GetStartTime(),
                       max - m_data_provider.GetStartTime(), max - min, m_zoom);
     }
-    else 
+    else
     {
         spdlog::debug("Request Data rejected, already pending...");
     }

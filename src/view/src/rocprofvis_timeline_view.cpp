@@ -648,6 +648,9 @@ TimelineView::RenderGraphView()
 
                 m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
                 graph_objects.second.chart->Render(m_graph_size.x);
+                if (ImGui::Button("132847239")) {
+
+                }
 
                 // check for mouse click
                 if(graph_objects.second.chart->IsMetaAreaClicked())
@@ -719,6 +722,47 @@ TimelineView::RenderGraphView()
         }
     }
 }
+
+
+int
+TimelineView::FindChartIdByName(const std::string& name)
+{
+    for(const auto& pair : m_graph_map)
+    {
+        if(pair.second.chart && pair.second.chart->GetName() == name)
+        {
+            return pair.first;
+        }
+    }
+    return -1;
+}
+
+float
+TimelineView::CalculateChartOffsetY(int chart_id)
+{
+    float offset = 0.0f;
+    for(const auto& pair : m_graph_map)
+    {
+        if(pair.first == chart_id) break;
+        if(pair.second.display && pair.second.chart)
+        {
+            offset += pair.second.chart->GetTrackHeight();
+        }
+    }
+    return offset;
+}
+
+void
+TimelineView::ScrollToChartByName(const std::string& name)
+{
+    int chart_id = FindChartIdByName(name);
+    if(chart_id == -1) return;
+
+    float offset      = CalculateChartOffsetY(chart_id);
+    m_scroll_position = offset;
+    ImGui::SetScrollY(m_scroll_position);
+}
+
 
 void
 TimelineView::DestroyGraphs()

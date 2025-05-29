@@ -22,7 +22,7 @@ class TrackItem
 public:
     TrackItem(DataProvider& dp, int id, std::string name, float zoom, float movement,
               double& min_x, double& max_x, float scale_x);
-
+    const std::string& GetName();
     virtual ~TrackItem() {}
     void               SetID(int id);
     int                GetID();

@@ -88,7 +88,6 @@ private:
     ImVec2                                m_graph_size;
     bool                                  m_region_selection_changed;
     double                                m_scubber_position;
-    bool                                  m_did_zoom_happen;
 };
 
 }  // namespace View

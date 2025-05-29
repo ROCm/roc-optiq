@@ -63,7 +63,6 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_can_drag_to_pan(false)
 , m_region_selection_changed(false)
 , m_artificial_scrollbar_size(30)
-, m_did_zoom_happen(false)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -268,12 +267,6 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             (mouse_position.x - window_position.x) / m_graph_size.x;
         char   text[20];
         double scrubber_position = m_movement + (cursor_screen_percentage * m_v_width);
-        if(m_did_zoom_happen == false)
-        {
-            // zoom then some offset but stays at first viewport min so each zoom we add
-            // how much it is offset from the scrubber
-            m_scrubber_position = (cursor_screen_percentage * m_v_width);
-        }
 
         sprintf(text, "%.0f", scrubber_position);
         ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28);
@@ -978,8 +971,6 @@ TimelineView::HandleTopSurfaceTouch()
             float scroll_wheel = ImGui::GetIO().MouseWheel;
             if(scroll_wheel != 0.0f)
             {
-                m_did_zoom_happen = true;
-
                 // 1. Get mouse position relative to graph area
                 ImVec2 mouse_pos        = ImGui::GetMousePos();
                 ImVec2 graph_pos        = container_pos;
@@ -1013,10 +1004,6 @@ TimelineView::HandleTopSurfaceTouch()
                 m_v_width = new_v_width;
                 m_v_min_x = m_min_x + m_movement;
                 m_v_max_x = m_v_min_x + m_v_width;
-            }
-            else
-            {
-                m_did_zoom_happen = false;
             }
 
             if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))

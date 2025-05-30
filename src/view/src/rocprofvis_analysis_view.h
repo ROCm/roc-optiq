@@ -20,9 +20,12 @@ public:
     void Update() override;
 
 private:
+    void RenderEventTable();
+    void RenderSampleTable();
     DataProvider& m_data_provider;
     
-    
+    std::shared_ptr<TabContainer> m_tab_container;
+    int m_max_displayed_rows = 1000;  // Maximum number of rows to display in the table
 };
 
 }  // namespace View

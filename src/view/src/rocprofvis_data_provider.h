@@ -26,7 +26,8 @@ enum class RequestType
 {
     kFetchTrack,
     kFetchGraph,
-    kFetchTrackEventTable
+    kFetchTrackEventTable,
+    kFetchTrackSampleTable
 };
 
 typedef struct track_info_t
@@ -88,28 +89,53 @@ public:
      * @param start_ts: The start timestamp of the track
      * @param end_ts: The end timestamp of the track
      * @param horz_pixel_range: The horizontal pixel range of the view
-     * @param lod: The level of detail to use
      */
-    bool FetchTrack(uint64_t index, double start_ts, double end_ts, int horz_pixel_range,
-                    int lod);
+    bool FetchTrack(uint64_t index, double start_ts, double end_ts,
+                    uint32_t horz_pixel_range);
 
     bool FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
-                         int horz_pixel_range, int lod);
+                         uint32_t horz_pixel_range);
 
     /*
      * Fetches an event table from the controller for a single track.
      * @param index: The index of the track to select
      * @param start_ts: The start timestamp of the event table
      * @param end_ts: The end timestamp of the event table
+     * @param start_row: The starting row of the sample table
+     * @param req_row_count: The number of rows to request
      */
-    // bool FetchEventTable(uint64_t index, double start_ts, double end_ts);
-    bool FetchEventTable(uint64_t index, double start_ts, double end_ts,
-                         uint64_t start_row = -1, uint64_t req_row_count = -1);
+    bool FetchSingleTrackEventTable(uint64_t index, double start_ts, double end_ts,
+                                    uint64_t start_row = -1, uint64_t req_row_count = -1);
+
+    /*
+     * Fetches a sample table from the controller for a single track.
+     * @param index: The index of the track to select
+     * @param start_ts: The start timestamp of the sample table
+     * @param end_ts: The end timestamp of the sample table
+     * @param start_row: The starting row of the sample table
+     * @param req_row_count: The number of rows to request
+     */
+    bool FetchSingleTrackSampleTable(uint64_t index, double start_ts, double end_ts,
+                                     uint64_t start_row     = -1,
+                                     uint64_t req_row_count = -1);
+
+    bool FetchSingleTrackTable(uint64_t                           index,
+                               rocprofvis_controller_table_type_t table_type,
+                               double start_ts, double end_ts, uint64_t start_row = -1,
+                               uint64_t req_row_count = -1);
+
+    bool FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_indices,
+                                    double start_ts, double end_ts,
+                                    uint64_t start_row = -1, uint64_t req_row_count = -1);
 
     bool FetchMultiTrackEventTable(const std::vector<uint64_t>& track_indices,
                                    double start_ts, double end_ts,
                                    uint64_t start_row = -1, uint64_t req_row_count = -1);
 
+    bool FetchMultiTrackTable(const std::vector<uint64_t>&       track_indices,
+                              rocprofvis_controller_table_type_t table_type,
+                              double start_ts, double end_ts, uint64_t start_row = -1,
+                              uint64_t req_row_count = -1);
     /*
      * Release memory buffer holding raw data for selected track
      * @param index: The index of the track to select
@@ -128,6 +154,10 @@ public:
     bool DumpTrack(uint64_t index);
 
     void DumpEventTable();
+    void DumpSampleTable();
+
+    void DumpTable(const std::vector<std::string>&              header,
+                   const std::vector<std::vector<std::string>>& data);
 
     /*
      * Performs all data processing.  Call this from the "game loop".
@@ -162,10 +192,13 @@ public:
 
     ProviderState GetState();
 
-    const std::vector<std::string>& GetEventTableHeader();
+    const std::vector<std::string>&              GetEventTableHeader();
     const std::vector<std::vector<std::string>>& GetEventTableData();
+    const std::vector<std::string>&              GetSampleTableHeader();
+    const std::vector<std::vector<std::string>>& GetSampleTableData();
 
     void ClearEventTable();
+    void ClearSampleTable();
 
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&)>& callback);
@@ -182,6 +215,7 @@ private:
     void ProcessEventTableRequest(data_req_info_t& req);
 
     bool SetupEventTableCommonArguments(rocprofvis_controller_arguments_t* args,
+                                        rocprofvis_controller_table_type_t table_type,
                                         double start_ts, double end_ts,
                                         uint64_t start_row, uint64_t req_row_count);
 
@@ -206,6 +240,8 @@ private:
 
     std::vector<std::string>              m_event_table_header;
     std::vector<std::vector<std::string>> m_event_table_data;
+    std::vector<std::string>              m_sample_table_header;
+    std::vector<std::vector<std::string>> m_sample_table_data;
 
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 

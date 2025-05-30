@@ -134,6 +134,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
         ImGui::Text("%s", flame.m_name.c_str());
         ImGui::Text("Start: %.2f", flame.m_start_ts - m_min_x);
         ImGui::Text("Duration: %.2f", flame.m_duration);
+        ImGui::Text("Id: %llu", flame.m_id);
         ImGui::EndTooltip();
         ImGui::PopStyleVar();        
     }

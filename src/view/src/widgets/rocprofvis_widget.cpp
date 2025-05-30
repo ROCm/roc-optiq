@@ -1,16 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_widget.h"
-#include "rocprofvis_core.h"
-#include "rocprofvis_settings.h"
-#include "rocprofvis_utils.h"
 #include "imgui.h"
+#include "rocprofvis_core.h"
 #include "rocprofvis_debug_window.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_settings.h"
+#include "rocprofvis_utils.h"
 
 #include <iostream>
 #include <sstream>
-
 
 using namespace RocProfVis::View;
 
@@ -35,10 +34,7 @@ LayoutItem::LayoutItem(float w, float h)
 {}
 
 //------------------------------------------------------------------
-RocWidget::~RocWidget()
-{ 
-    spdlog::info("RocWidget object destroyed");
-}
+RocWidget::~RocWidget() { spdlog::info("RocWidget object destroyed"); }
 
 void
 RocWidget::Render()
@@ -377,6 +373,7 @@ VSplitContainer::Render()
 TabContainer::TabContainer()
 : m_active_tab_index(-1)
 , m_set_active_tab_index(-1)
+, m_allow_tool_tips(true)
 {
     m_widget_name = GenUniqueName("TabContainer");
 }
@@ -424,7 +421,7 @@ TabContainer::Render()
                 if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags))
                 {
                     // show tooltip for the active tab if header is hovered
-                    if(ImGui::IsItemHovered())
+                    if(m_allow_tool_tips && ImGui::IsItemHovered())
                     {
                         ImGui::SetTooltip("%s", tab.m_id.c_str());
                     }
@@ -439,7 +436,9 @@ TabContainer::Render()
                 // show tooltip for inactive tabs if header is hovered
                 else if(ImGui::IsItemHovered())
                 {
-                    ImGui::SetTooltip("%s", tab.m_id.c_str());
+                    if(m_allow_tool_tips) {
+                        ImGui::SetTooltip("%s", tab.m_id.c_str());
+                    }
                 }
 
                 if(p_open && !is_open)
@@ -465,7 +464,6 @@ TabContainer::Render()
         {
             RemoveTab(index_to_remove);
         }
-
     }
     ImGui::EndChild();
 }
@@ -485,9 +483,10 @@ TabContainer::RemoveTab(const std::string& id)
     if(it != m_tabs.end())
     {
         // notify the event manager of the tab removal
-        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(static_cast<int>(RocEvents::kTabClosed), it->m_id);
+        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(
+            static_cast<int>(RocEvents::kTabClosed), it->m_id);
         EventManager::GetInstance()->AddEvent(e);
-                
+
         m_tabs.erase(it, m_tabs.end());
     }
 }
@@ -498,10 +497,11 @@ TabContainer::RemoveTab(int index)
     if(index >= 0 && index < static_cast<int>(m_tabs.size()))
     {
         // notify the event manager of the tab removal
-        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id);
+        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(
+            static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id);
         EventManager::GetInstance()->AddEvent(e);
 
-        m_tabs.erase(m_tabs.begin() + index);        
+        m_tabs.erase(m_tabs.begin() + index);
     }
 }
 
@@ -525,6 +525,18 @@ TabContainer::SetActiveTab(const std::string& id)
     {
         m_set_active_tab_index = std::distance(m_tabs.begin(), it);
     }
+}
+
+void
+TabContainer::SetAllowToolTips(bool allow_tool_tips)
+{
+    m_allow_tool_tips = allow_tool_tips;
+}
+
+bool
+TabContainer::GetAllowToolTips() const
+{
+    return m_allow_tool_tips;
 }
 
 // Gets a read only list of tabs.

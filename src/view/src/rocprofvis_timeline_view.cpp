@@ -700,6 +700,7 @@ TimelineView::RenderGraphView()
         if(selected_graphs.empty())
         {
             m_data_provider.ClearEventTable();
+            m_data_provider.ClearSampleTable();
         }
         else
         {
@@ -716,6 +717,7 @@ TimelineView::RenderGraphView()
                     m_min_x;
             }
             m_data_provider.FetchMultiTrackEventTable(selected_graphs, min_x, max_x);
+            m_data_provider.FetchMultiTrackSampleTable(selected_graphs, min_x, max_x);
         }
     }
 }

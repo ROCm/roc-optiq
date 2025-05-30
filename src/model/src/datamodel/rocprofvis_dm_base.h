@@ -23,9 +23,11 @@
 #include "rocprofvis_common_types.h"
 #include "shared_mutex"
 
-#define LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US 100
+#define LOCK_WAITED_TOO_LONG_WARNING_TIME_LIMIT_US 100
+#define LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US 1000
 
-#ifdef LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US
+
+#if defined(LOCK_WAITED_TOO_LONG_WARNING_TIME_LIMIT_US) || defined(LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US)
 #include "spdlog/spdlog.h"
 #endif
 
@@ -87,35 +89,49 @@ public:
     TimedLock() = default;
     template <typename MutexType>
     TimedLock(MutexType& mtx, const char* func_name, DmBase* object)
-#ifdef LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US
+#if defined(LOCK_WAITED_TOO_LONG_WARNING_TIME_LIMIT_US) || defined(LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US)
     : m_start(std::chrono::high_resolution_clock::now())
     , m_func_name(func_name)
     , m_owner_object(object)
 #endif
     , m_lock(mtx)
     {
-#ifdef LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US
+#ifdef LOCK_WAITED_TOO_LONG_WARNING_TIME_LIMIT_US
         uint64_t us =
             std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - m_start)
                 .count();
-        if(us >= LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US)
+        if(us >= LOCK_WAITED_TOO_LONG_WARNING_TIME_LIMIT_US)
         {
             spdlog::debug("Lock waited {}us for {}, class {}", us, m_func_name, typeid(*m_owner_object).name());
         }
 #endif
     }
 
-    void lock()
-    {
-#ifdef LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US
-        m_start = clock::now();
-#endif
-        m_lock.lock();
+    ~TimedLock() {
 #ifdef LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US
         uint64_t us =
             std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - m_start)
                 .count();
         if(us >= LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US)
+        {
+            spdlog::debug("Lock was held for {}us by {}, class {}", us,
+                          m_func_name, typeid(*m_owner_object).name());
+        }
+
+#endif
+    }
+
+    void lock()
+    {
+#ifdef LOCK_WAITED_TOO_LONG_WARNING_TIME_LIMIT_US
+        m_start = clock::now();
+#endif
+        m_lock.lock();
+#ifdef LOCK_WAITED_TOO_LONG_WARNING_TIME_LIMIT_US
+        uint64_t us =
+            std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - m_start)
+                .count();
+        if(us >= LOCK_WAITED_TOO_LONG_WARNING_TIME_LIMIT_US)
         {
             spdlog::debug("Manual lock waited {}us for {}, class {}", us, m_func_name, typeid(*m_owner_object).name());
         }
@@ -123,12 +139,30 @@ public:
 #endif
     }
 
-    void unlock() { m_lock.unlock(); }
+    void unlock() { 
+#ifdef LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US
+        uint64_t us =
+            std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - m_start)
+                .count();
+        if(us >= LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US)
+        {
+            spdlog::debug("Manual lock was held for {}us by {}, class {}", us, m_func_name,
+                          typeid(*m_owner_object).name());
+        }
+
+#endif
+        m_lock.unlock(); 
+    }
 
     bool owns_lock() const { return m_lock.owns_lock(); }
 
+    TimedLock(const TimedLock&)            = delete;
+    TimedLock& operator=(const TimedLock&) = delete;
+    TimedLock(TimedLock&&)                 = default;
+    TimedLock& operator=(TimedLock&&)      = default;
+
 private:
-#ifdef LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US
+#if defined(LOCK_WAITED_TOO_LONG_WARNING_TIME_LIMIT_US) || defined(LOCK_HELD_TOO_LONG_WARNING_TIME_LIMIT_US)
     std::chrono::high_resolution_clock::time_point m_start;
     const char*                                    m_func_name;
     DmBase*                                        m_owner_object;

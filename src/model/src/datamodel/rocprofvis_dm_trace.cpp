@@ -153,27 +153,30 @@ rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_p
     {
         case kRPVDMEventFlowTrace:
         {
-            for(int i = m_flow_traces.size()-1; i >=0; i--)
+            std::vector<std::shared_ptr<FlowTrace>> flow_traces;
             {
-                DeleteEventPropertyFor(type, m_flow_traces[i].get()->EventId());
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                flow_traces.swap(m_flow_traces);
             }
             return kRocProfVisDmResultSuccess;
         }
         break;
         case kRPVDMEventStackTrace:
         {
-            for(int i = m_stack_traces.size() - 1; i >= 0; i--)
+            std::vector<std::shared_ptr<StackTrace>> stack_traces;
             {
-                DeleteEventPropertyFor(type, m_stack_traces[i].get()->EventId());
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__,this);
+                stack_traces.swap(m_stack_traces);
             }
             return kRocProfVisDmResultSuccess;
         }
         break;
         case kRPVDMEventExtData:
         {
-            for(int i = m_ext_data.size() - 1; i >= 0; i--)
+            std::vector<std::shared_ptr<ExtData>> ext_data;
             {
-                DeleteEventPropertyFor(type, m_ext_data[i].get()->EventId());
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                ext_data.swap(m_ext_data);
             }
             return kRocProfVisDmResultSuccess;
         }
@@ -200,9 +203,10 @@ rocprofvis_dm_result_t Trace::DeleteTableAt(rocprofvis_dm_table_id_t id){
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllTables(){
-    for(int i = m_tables.size()-1; i >= 0; i--)
+    std::vector<std::shared_ptr<Table>> tables;
     {
-        DeleteTableAt(m_tables[i].get()->Id());
+        TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+        tables.swap(m_tables);
     }
     return kRocProfVisDmResultSuccess;
 }

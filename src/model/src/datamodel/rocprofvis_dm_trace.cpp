@@ -64,93 +64,90 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
 }
     
 rocprofvis_dm_result_t Trace::DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end){
-    rocprofvis_dm_result_t result = CheckSliceExists(this, start, end);
-
-    if(result != kRocProfVisDmResultSuccess) return result;
-    std::unique_lock lock(*Mutex());
     for (int i=0; i < m_tracks.size(); i++)
     {
-        rocprofvis_dm_slice_t object = nullptr;
-        rocprofvis_dm_result_t result = m_tracks[i].get()->GetSliceAtTime(start, object);
-        if (result == kRocProfVisDmResultSuccess)
-        {
-            ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-            TrackSlice* slice = (TrackSlice*) object;
-            if(slice->EndTime() == end)
-            {
-                if(kRocProfVisDmResultSuccess != m_tracks[i].get()->DeleteSlice(slice))
-                    return kRocProfVisDmResultUnknownError;
-            }
-            else
-            {
-                return kRocProfVisDmResultSuccess;
-            }
-        }
+        m_tracks[i].get()->DeleteSliceAtTime(start, end);
     }
-    return kRocProfVisDmResultSuccess;
+    return kRocProfVisDmResultNotLoaded;
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllSlices(){
-    std::unique_lock lock(*Mutex());
-    for (int i=0; i < m_tracks.size(); i++)
+   
+    for(int i = 0; i < m_tracks.size(); i++)
     {
-        size_t num_slices = m_tracks[i].get()->NumberOfSlices();
-        for (int j=0; j < num_slices; j++)
-        {
-            rocprofvis_dm_slice_t slice = nullptr;
-            rocprofvis_dm_result_t result = m_tracks[i].get()->GetSliceAtIndex(j, slice);
-            if (result == kRocProfVisDmResultSuccess)
-            {
-                ROCPROFVIS_ASSERT_MSG_RETURN(slice, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-                if (kRocProfVisDmResultSuccess != m_tracks[i].get()->DeleteSlice(slice)) return kRocProfVisDmResultUnknownError;
-            }
-        }
+        m_tracks[i].get()->DeleteAllSlices();
     }
     return kRocProfVisDmResultSuccess;
 }
-
+ 
 rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_property_type_t type,
                                                                 rocprofvis_dm_event_id_t event_id) {
-    std::unique_lock lock(*Mutex());
     switch (type)
     {
         case kRPVDMEventFlowTrace:
         {
-            size_t num = m_flow_traces.size();
-            for (size_t i=0; i < num; i++)
+            // To delete single vector array element thread-safe, we must retain a local copy 
+            // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+            std::shared_ptr<FlowTrace> item;
             {
-                if (m_flow_traces[i].get()->EventId().value == event_id.value) {
-                    m_flow_traces.erase(m_flow_traces.begin()+i);
-                    return kRocProfVisDmResultSuccess;
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                auto it = std::find_if(
+                    m_flow_traces.begin(), m_flow_traces.end(),
+                                       [&event_id](std::shared_ptr<FlowTrace>& x) {
+                                           return x.get()->EventId().value == event_id.value;
+                                       });
+                if (it == m_flow_traces.end())
+                {
+                    return kRocProfVisDmResultNotLoaded;
                 }
+                item    = *it;
+                m_flow_traces.erase(it);
             }
-            return kRocProfVisDmResultNotLoaded;
+            return kRocProfVisDmResultSuccess;
         }
         break;
         case kRPVDMEventStackTrace:
         {
-            size_t num = m_stack_traces.size();
-            for (size_t i=0; i < num; i++)
+            // To delete single vector array element thread-safe, we must retain a local copy 
+            // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+            std::shared_ptr<StackTrace> item;
             {
-                if (m_stack_traces[i].get()->EventId().value == event_id.value) {
-                    m_stack_traces.erase(m_stack_traces.begin()+i);
-                    return kRocProfVisDmResultSuccess;
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                auto             it =
+                    std::find_if(m_stack_traces.begin(), m_stack_traces.end(),
+                                 [&event_id](std::shared_ptr<StackTrace>& x) {
+                                     return x.get()->EventId().value == event_id.value;
+                                 });
+                if(it == m_stack_traces.end())
+                {
+                    return kRocProfVisDmResultNotLoaded;
                 }
+                item = *it;
+                m_stack_traces.erase(it);
             }
-            return kRocProfVisDmResultNotLoaded;
+            return kRocProfVisDmResultSuccess;
         }
         break;
         case kRPVDMEventExtData:
         {
-            size_t num = m_ext_data.size();
-            for (size_t i=0; i < num; i++)
+            // To delete single vector array element thread-safe, we must retain a local copy 
+            // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+            std::shared_ptr<ExtData> item;
             {
-                if (m_ext_data[i].get()->EventId().value == event_id.value) {
-                    m_ext_data.erase(m_ext_data.begin()+i);
-                    return kRocProfVisDmResultSuccess;
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                auto             it =
+                    std::find_if(m_ext_data.begin(), m_ext_data.end(),
+                                 [&event_id](std::shared_ptr<ExtData>& x) {
+                                     return x.get()->EventId().value == event_id.value;
+                                 });
+                if(it == m_ext_data.end())
+                {
+                    return kRocProfVisDmResultNotLoaded;
                 }
+                item = *it;
+                m_ext_data.erase(it);
             }
-            return kRocProfVisDmResultNotLoaded;
+            return kRocProfVisDmResultSuccess;
         }  
         break;   
     }
@@ -158,44 +155,75 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
 }
 
 rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_property_type_t type){
-    std::unique_lock lock(*Mutex());
-    switch (type)
+    switch(type)
     {
         case kRPVDMEventFlowTrace:
         {
-            m_flow_traces.clear();
+            // To delete all vector array elements thread-safe, we must swap its content with local array while protected by main mutex
+            // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
+            std::vector<std::shared_ptr<FlowTrace>> flow_traces;
+            {
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                flow_traces.swap(m_flow_traces);
+            }
             return kRocProfVisDmResultSuccess;
         }
+        break;
         case kRPVDMEventStackTrace:
         {
-            m_stack_traces.clear();
+            // To delete all vector array elements thread-safe, we must swap its content with local array while protected by main mutex
+            // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
+            std::vector<std::shared_ptr<StackTrace>> stack_traces;
+            {
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__,this);
+                stack_traces.swap(m_stack_traces);
+            }
             return kRocProfVisDmResultSuccess;
         }
+        break;
         case kRPVDMEventExtData:
         {
-            m_ext_data.clear();
+            // To delete all vector array elements thread-safe, we must swap its content with local array while protected by main mutex
+            // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
+            std::vector<std::shared_ptr<ExtData>> ext_data;
+            {
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                ext_data.swap(m_ext_data);
+            }
             return kRocProfVisDmResultSuccess;
         }
+        break;  
     }
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
 }
 
 rocprofvis_dm_result_t Trace::DeleteTableAt(rocprofvis_dm_table_id_t id){
-    std::unique_lock lock(*Mutex());
-    auto it = std::find_if(m_tables.begin(), m_tables.end(),
-                           [&id](std::shared_ptr<Table>& x) {
-                               return x.get()->Id() >= id;
-                           });
-    if(it != m_tables.end())
-    {      
+    // To delete single vector array element thread-safe, we must retain a local copy 
+    // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+    std::shared_ptr<Table> item = nullptr;
+    {
+        TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+        auto             it = std::find_if(
+            m_tables.begin(), m_tables.end(),
+            [&id](std::shared_ptr<Table>& x) { return x.get()->Id() == id; });
+        if(it == m_tables.end())
+        {
+            return kRocProfVisDmResultNotLoaded;
+        }
+        item = *it;
         m_tables.erase(it);
     }
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllTables(){
-    std::unique_lock lock(*Mutex());
-    m_tables.clear();
+    // To delete all vector array elements thread-safe, we must swap its content with local array while protected by main mutex
+    // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
+    std::vector<std::shared_ptr<Table>> tables;
+    {
+        TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+        tables.swap(m_tables);
+    }
     return kRocProfVisDmResultSuccess;
 }
 
@@ -250,7 +278,7 @@ rocprofvis_dm_result_t Trace::AddTrack(const rocprofvis_dm_trace_t object, rocpr
 rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    std::unique_lock  lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     rocprofvis_dm_track_t track = nullptr;
     rocprofvis_dm_result_t result = trace->GetTrackAtIndex(track_id, track);
     if (result == kRocProfVisDmResultSuccess)
@@ -265,7 +293,7 @@ rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const 
 rocprofvis_dm_result_t Trace::AddRecord(const rocprofvis_dm_slice_t object, rocprofvis_db_record_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     TrackSlice* slice = (TrackSlice*) object;
-    std::unique_lock lock(*slice->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*slice->Mutex(), __func__, slice);
     return slice->AddRecord(data);
 }      
 
@@ -286,14 +314,14 @@ rocprofvis_dm_index_t Trace::AddString(const rocprofvis_dm_trace_t object,  cons
 rocprofvis_dm_result_t Trace::AddFlow(const rocprofvis_dm_flowtrace_t object, rocprofvis_db_flow_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_FLOW_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     FlowTrace* flowtrace = (FlowTrace*) object;
-    std::unique_lock lock(*flowtrace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*flowtrace->Mutex(), __func__, flowtrace);
     return flowtrace->AddRecord(data);
 }
 
 rocprofvis_dm_flowtrace_t Trace::AddFlowTrace(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    std::unique_lock lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
         trace->m_flow_traces.push_back(std::make_shared<FlowTrace>(trace, event_id));
     }
@@ -307,14 +335,14 @@ rocprofvis_dm_flowtrace_t Trace::AddFlowTrace(const rocprofvis_dm_trace_t object
 rocprofvis_dm_result_t Trace::AddStackFrame(const rocprofvis_dm_stacktrace_t object, rocprofvis_db_stack_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_STACK_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     StackTrace* stacktrace = (StackTrace*) object;
-    std::unique_lock lock(*stacktrace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*stacktrace->Mutex(), __func__, stacktrace);
     return stacktrace->AddRecord(data);
 }
 
 rocprofvis_dm_stacktrace_t Trace::AddStackTrace(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    std::unique_lock lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
         trace->m_stack_traces.push_back(std::make_shared<StackTrace>(trace, event_id));
     }
@@ -328,7 +356,7 @@ rocprofvis_dm_stacktrace_t Trace::AddStackTrace(const rocprofvis_dm_trace_t obje
 rocprofvis_dm_extdata_t  Trace::AddExtData(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    std::unique_lock lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
         trace->m_ext_data.push_back(std::make_shared<ExtData>(trace,event_id));
     }
@@ -359,7 +387,7 @@ rocprofvis_dm_result_t Trace::AddEventLevel(const rocprofvis_dm_trace_t object, 
 rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t & data){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_EXT_DATA_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ExtData* ext_data = (ExtData*) object;
-    std::unique_lock lock(*ext_data->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*ext_data->Mutex(), __func__, ext_data);
     if (!ext_data->HasRecord(data)){
         return ext_data->AddRecord(data);   
     }
@@ -370,7 +398,7 @@ rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t ob
 rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*) object;
-    std::unique_lock lock(*trace->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
         trace->m_tables.push_back(std::make_shared<Table>(trace,description, query));
     }
@@ -384,21 +412,21 @@ rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocpro
 rocprofvis_dm_table_row_t Trace::AddTableRow(const rocprofvis_dm_table_t object){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_CANNOT_BE_NULL, nullptr);
     Table* table = (Table*) object;
-    std::unique_lock lock(*table->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*table->Mutex(), __func__, table);
     return table->AddRow();
 }
 
 rocprofvis_dm_result_t Trace::AddTableColumn(const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t column_name){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     Table* table = (Table*) object;
-    std::unique_lock lock(*table->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*table->Mutex(), __func__, table);
     return table->AddColumn(column_name);
 }
 
 rocprofvis_dm_result_t Trace::AddTableRowCell(const rocprofvis_dm_table_row_t object, rocprofvis_dm_charptr_t cell_value){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_ROW_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     TableRow* table_row = (TableRow*) object;
-    std::unique_lock lock(*table_row->Mutex());
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*table_row->Mutex(), __func__, table_row);
     return table_row->AddCellValue(cell_value);
 }
 
@@ -410,7 +438,7 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     Trace* trace = (Trace*) object;
-    std::shared_lock lock(*trace->Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     bool found = false;
     for(int i = 0; i < trace->m_tracks.size(); i++)
     {
@@ -438,7 +466,7 @@ rocprofvis_dm_result_t Trace::CheckEventPropertyExists(
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     Trace* trace = (Trace*) object;
-    std::shared_lock lock(*trace->Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     switch(type)
     {
         case kRPVDMEventFlowTrace:
@@ -450,7 +478,7 @@ rocprofvis_dm_result_t Trace::CheckEventPropertyExists(
                                    });
             if(it != trace->m_flow_traces.end())
             {
-                return kRocProfVisDmResultResourceBusy;
+                return kRocProfVisDmResultSuccess;
             }
         }
         break;
@@ -492,7 +520,7 @@ rocprofvis_dm_result_t Trace::CheckTableExists(
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     Trace* trace = (Trace*) object;
-    std::shared_lock lock(*trace->Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     auto it =
         std::find_if(trace->m_tables.begin(), trace->m_tables.end(),
         [&table_id](std::shared_ptr<Table>& x) { return x.get()->Id() == table_id; });
@@ -597,7 +625,7 @@ const char*  Trace::GetPropertySymbol(rocprofvis_dm_property_t property) {
 
 
 rocprofvis_dm_result_t Trace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_extdata_t & extinfo){
-    std::shared_lock lock(*Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     auto it =
         find_if(m_ext_data.begin(), m_ext_data.end(), 
                         [&](std::shared_ptr<ExtData>& x) {
@@ -612,7 +640,7 @@ rocprofvis_dm_result_t Trace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id
 }
 
 rocprofvis_dm_result_t Trace::GetFlowTraceHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_flowtrace_t & flowtrace){
-    std::shared_lock lock(*Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     auto it = find_if(m_flow_traces.begin(), m_flow_traces.end(),
                       [&](std::shared_ptr<FlowTrace>& x) {
         return x.get()->EventId().value == event_id.value;
@@ -626,7 +654,7 @@ rocprofvis_dm_result_t Trace::GetFlowTraceHandle(rocprofvis_dm_event_id_t event_
 }
 
 rocprofvis_dm_result_t Trace::GetStackTraceHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_stacktrace_t & stacktrace){
-    std::shared_lock lock(*Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     auto it = find_if(m_stack_traces.begin(), m_stack_traces.end(),
                       [&](std::shared_ptr<StackTrace>& x) {
         return x.get()->EventId().value == event_id.value;
@@ -640,7 +668,7 @@ rocprofvis_dm_result_t Trace::GetStackTraceHandle(rocprofvis_dm_event_id_t event
 }
 
 rocprofvis_dm_result_t Trace::GetTableHandle(rocprofvis_dm_table_id_t id, rocprofvis_dm_table_t & table){
-    std::shared_lock lock(*Mutex());
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     auto  it = find_if(m_tables.begin(), m_tables.end(),
                       [&](std::shared_ptr<Table>& x) {
                           return x.get()->Id() == id;

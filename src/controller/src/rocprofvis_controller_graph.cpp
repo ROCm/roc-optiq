@@ -257,7 +257,9 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                                     }
                                 }
 
-                                Event* event = new Event(0, event_start, event_end);
+                                uint64_t event_id=0;
+                                events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);
+                                Event* event = new Event(event_id, event_start, event_end);
                                 ROCPROFVIS_ASSERT(level != UINT64_MAX);
                                 event->SetUInt64(kRPVControllerEventLevel, 0, level);
                                 event->SetString(kRPVControllerEventName, 0,
@@ -315,7 +317,9 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                         }
                     }
 
-                    Event* event = new Event(0, event_start, event_end);
+                    uint64_t event_id = 0;
+                    events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);
+                    Event* event = new Event(event_id, event_start, event_end);
                     ROCPROFVIS_ASSERT(level != UINT64_MAX);
                     event->SetUInt64(kRPVControllerEventLevel, 0, level);
                     event->SetString(kRPVControllerEventName, 0, combined_name.c_str(),

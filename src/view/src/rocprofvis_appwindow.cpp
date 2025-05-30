@@ -50,7 +50,7 @@ AppWindow::~AppWindow()
 {
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
                                              m_tabclosed_event_token);
-    m_open_views.clear();                                             
+    m_open_views.clear();
 }
 
 bool
@@ -146,7 +146,7 @@ AppWindow::Render()
             }
             ImGui::EndMenu();
         }
-        
+
         RenderSettingsMenu();
         RenderDeveloperMenu();
         ImGui::EndMenuBar();
@@ -267,11 +267,11 @@ AppWindow::RenderDeveloperMenu()
 {
     if(ImGui::BeginMenu("Developer Options"))
     {
-        if(ImGui::MenuItem("Horizontal Render", nullptr, Settings::GetInstance().IsHorizontalRender()))
+        if(ImGui::MenuItem("Horizontal Render", nullptr,
+                           Settings::GetInstance().IsHorizontalRender()))
         {
             Settings::GetInstance().HorizontalRender();
         }
- 
 
         ImGui::EndMenu();
     }
@@ -296,8 +296,8 @@ RenderProviderTest(DataProvider& provider)
 {
     ImGui::Begin("Data Provider Test Window", nullptr, ImGuiWindowFlags_None);
 
-    static char track_index_buffer[64] = "0";
-    static char end_track_index_buffer[64] = "1"; // for setting table track range
+    static char track_index_buffer[64]     = "0";
+    static char end_track_index_buffer[64] = "1";  // for setting table track range
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
@@ -319,74 +319,73 @@ RenderProviderTest(DataProvider& provider)
 
     ImGui::Separator();
     ImGui::Text("Table Parameters");
-    ImGui::InputText("End Track index", end_track_index_buffer, IM_ARRAYSIZE(end_track_index_buffer),
-                    ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
+    ImGui::InputText("End Track index", end_track_index_buffer,
+                     IM_ARRAYSIZE(end_track_index_buffer),
+                     ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
 
     static char row_start_buffer[64] = "-1";
     ImGui::InputText("Start Row", row_start_buffer, IM_ARRAYSIZE(row_start_buffer),
-                    ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
+                     ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
     uint64_t start_row = std::atoi(row_start_buffer);
-    
-    static char row_count_buffer[64] = "-1";  
-    ImGui::InputText("Row Count", row_count_buffer, IM_ARRAYSIZE(row_count_buffer),
-                    ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
-    uint64_t row_count = std::atoi(row_count_buffer);
 
+    static char row_count_buffer[64] = "-1";
+    ImGui::InputText("Row Count", row_count_buffer, IM_ARRAYSIZE(row_count_buffer),
+                     ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
+    uint64_t row_count = std::atoi(row_count_buffer);
 
     if(ImGui::Button("Fetch Single Track Event Table"))
     {
-        provider.FetchSingleTrackEventTable(index, provider.GetStartTime(), provider.GetEndTime(),start_row,
-                                 row_count);
+        provider.FetchSingleTrackEventTable(index, provider.GetStartTime(),
+                                            provider.GetEndTime(), start_row, row_count);
     }
     if(ImGui::Button("Fetch Multi Track Event Table"))
     {
-        int end_index = std::atoi(end_track_index_buffer);
+        int                   end_index = std::atoi(end_track_index_buffer);
         std::vector<uint64_t> vect;
         for(int i = index; i < end_index; ++i)
         {
             vect.push_back(i);
         }
-        provider.FetchMultiTrackEventTable(vect, provider.GetStartTime(), provider.GetEndTime(),start_row,
-                                 row_count);
+        provider.FetchMultiTrackEventTable(vect, provider.GetStartTime(),
+                                           provider.GetEndTime(), start_row, row_count);
     }
     if(ImGui::Button("Print Event Table"))
     {
         provider.DumpEventTable();
     }
-    
+
     if(ImGui::Button("Fetch Single Track Sample Table"))
     {
-        provider.FetchSingleTrackSampleTable(index, provider.GetStartTime(), provider.GetEndTime(),start_row,
-                                 row_count);
+        provider.FetchSingleTrackSampleTable(index, provider.GetStartTime(),
+                                             provider.GetEndTime(), start_row, row_count);
     }
     if(ImGui::Button("Fetch Multi Track Sample Table"))
     {
-        int end_index = std::atoi(end_track_index_buffer);
+        int                   end_index = std::atoi(end_track_index_buffer);
         std::vector<uint64_t> vect;
         for(int i = index; i < end_index; ++i)
         {
             vect.push_back(i);
         }
-        provider.FetchMultiTrackSampleTable(vect, provider.GetStartTime(), provider.GetEndTime(),start_row,
-                                 row_count);
+        provider.FetchMultiTrackSampleTable(vect, provider.GetStartTime(),
+                                            provider.GetEndTime(), start_row, row_count);
     }
     if(ImGui::Button("Print Sample Table"))
     {
         provider.DumpSampleTable();
     }
-    
+
     ImGui::Separator();
 
     if(ImGui::Button("Fetch Track"))
     {
-        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
-                            0);
+        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000);
     }
 
     if(ImGui::Button("Fetch Whole Track"))
     {
         provider.FetchWholeTrack(index, provider.GetStartTime(), provider.GetEndTime(),
-                                 1000, 0);
+                                 1000);
     }
     if(ImGui::Button("Delete Track"))
     {
@@ -400,7 +399,6 @@ RenderProviderTest(DataProvider& provider)
     {
         provider.DumpMetaData();
     }
-
 
     ImGui::End();
 }

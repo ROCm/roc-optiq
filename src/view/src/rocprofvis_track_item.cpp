@@ -176,7 +176,7 @@ TrackItem::RequestData(double min, double max, float width)
     {
         m_request_state = TrackDataRequestState::kRequesting;
         m_data_provider.FetchTrack(m_id, min,
-                                   max, width, 0);
+                                   max, width);
         spdlog::debug("Fetching from {} to {} ( {} ) at zoom {}",
                       min - m_data_provider.GetStartTime(),
                       max - m_data_provider.GetStartTime(), max - min, m_zoom);

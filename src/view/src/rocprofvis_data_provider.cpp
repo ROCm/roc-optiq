@@ -387,7 +387,7 @@ DataProvider::HandleLoadTrackMetaData()
 
 bool
 DataProvider::FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
-                              int horz_pixel_range, int lod)
+                              uint32_t  horz_pixel_range)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -448,7 +448,7 @@ DataProvider::FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
 
 bool
 DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
-                         int horz_pixel_range, int lod)
+                         uint32_t  horz_pixel_range)
 {
     if(m_state != ProviderState::kReady)
     {

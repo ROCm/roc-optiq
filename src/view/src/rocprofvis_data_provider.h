@@ -89,13 +89,12 @@ public:
      * @param start_ts: The start timestamp of the track
      * @param end_ts: The end timestamp of the track
      * @param horz_pixel_range: The horizontal pixel range of the view
-     * @param lod: The level of detail to use
      */
-    bool FetchTrack(uint64_t index, double start_ts, double end_ts, int horz_pixel_range,
-                    int lod);
+    bool FetchTrack(uint64_t index, double start_ts, double end_ts,
+                    uint32_t horz_pixel_range);
 
     bool FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
-                         int horz_pixel_range, int lod);
+                         uint32_t horz_pixel_range);
 
     /*
      * Fetches an event table from the controller for a single track.

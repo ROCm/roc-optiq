@@ -71,6 +71,8 @@ rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofv
 
 rocprofvis_dm_result_t Track::DeleteSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
 {
+    // To delete single vector array element thread-safe, we must retain a local copy 
+    // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
     std::shared_ptr<TrackSlice>  slice = nullptr;
     {
         TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
@@ -85,6 +87,8 @@ rocprofvis_dm_result_t Track::DeleteSliceAtTime(rocprofvis_dm_timestamp_t start,
 
 rocprofvis_dm_result_t Track::DeleteAllSlices()
 {
+    // To delete all vector array elements thread-safe, we must swap its content with local array while protected by main mutex
+    // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
     std::vector<std::shared_ptr<TrackSlice>> slices;
     {
         TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);

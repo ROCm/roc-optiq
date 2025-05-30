@@ -86,6 +86,8 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
     {
         case kRPVDMEventFlowTrace:
         {
+            // To delete single vector array element thread-safe, we must retain a local copy 
+            // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
             std::shared_ptr<FlowTrace> item;
             {
                 TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
@@ -106,6 +108,8 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
         break;
         case kRPVDMEventStackTrace:
         {
+            // To delete single vector array element thread-safe, we must retain a local copy 
+            // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
             std::shared_ptr<StackTrace> item;
             {
                 TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
@@ -126,6 +130,8 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
         break;
         case kRPVDMEventExtData:
         {
+            // To delete single vector array element thread-safe, we must retain a local copy 
+            // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
             std::shared_ptr<ExtData> item;
             {
                 TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
@@ -153,6 +159,8 @@ rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_p
     {
         case kRPVDMEventFlowTrace:
         {
+            // To delete all vector array elements thread-safe, we must swap its content with local array while protected by main mutex
+            // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
             std::vector<std::shared_ptr<FlowTrace>> flow_traces;
             {
                 TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
@@ -163,6 +171,8 @@ rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_p
         break;
         case kRPVDMEventStackTrace:
         {
+            // To delete all vector array elements thread-safe, we must swap its content with local array while protected by main mutex
+            // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
             std::vector<std::shared_ptr<StackTrace>> stack_traces;
             {
                 TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__,this);
@@ -173,6 +183,8 @@ rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_p
         break;
         case kRPVDMEventExtData:
         {
+            // To delete all vector array elements thread-safe, we must swap its content with local array while protected by main mutex
+            // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
             std::vector<std::shared_ptr<ExtData>> ext_data;
             {
                 TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
@@ -186,6 +198,8 @@ rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_p
 }
 
 rocprofvis_dm_result_t Trace::DeleteTableAt(rocprofvis_dm_table_id_t id){
+    // To delete single vector array element thread-safe, we must retain a local copy 
+    // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
     std::shared_ptr<Table> item = nullptr;
     {
         TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
@@ -203,6 +217,8 @@ rocprofvis_dm_result_t Trace::DeleteTableAt(rocprofvis_dm_table_id_t id){
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllTables(){
+    // To delete all vector array elements thread-safe, we must swap its content with local array while protected by main mutex
+    // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
     std::vector<std::shared_ptr<Table>> tables;
     {
         TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);

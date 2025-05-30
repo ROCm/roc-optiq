@@ -108,7 +108,7 @@ class Table : public DmBase {
         // vector array of column names
         std::vector<std::string>                            m_columns;
         // vector array of row objects
-        std::vector<TableRow>                          m_rows;
+        std::vector<std::shared_ptr<TableRow>>              m_rows;
         // table query string
         std::string                                         m_query;
         // table description string

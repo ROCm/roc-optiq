@@ -37,7 +37,7 @@ Table::Table(   Trace* ctx,
 
 rocprofvis_dm_size_t Table::GetMemoryFootprint(){
     size_t size = sizeof(Table);
-    for (int i=0; i < m_rows.size(); i++) size+=m_rows[i].GetMemoryFootprint();
+    for (int i=0; i < m_rows.size(); i++) size+=m_rows[i].get()->GetMemoryFootprint();
     for (int i=0; i < m_columns.size(); i++) size+=m_columns[i].length();
     return size;
 }
@@ -55,13 +55,13 @@ rocprofvis_dm_result_t Table::AddColumn(rocprofvis_dm_charptr_t column_name){
 
 rocprofvis_dm_table_row_t Table::AddRow(){
     try{
-        m_rows.push_back(TableRow(this));
+        m_rows.push_back(std::make_shared<TableRow>(this));
     }
     catch(std::exception ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failure allocating table row object", nullptr);
     }
-    return &m_rows.back();
+    return m_rows.back().get();
 }
 
 rocprofvis_dm_result_t Table::GetColumnNameAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & name){
@@ -73,7 +73,7 @@ rocprofvis_dm_result_t Table::GetColumnNameAt(const rocprofvis_dm_property_index
 
 rocprofvis_dm_result_t   Table::GetRowHandleAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t & row){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_rows.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    row = &m_rows[index];
+    row = m_rows[index].get();
     return kRocProfVisDmResultSuccess;    
 }
 

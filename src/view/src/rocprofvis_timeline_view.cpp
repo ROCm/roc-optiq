@@ -25,7 +25,6 @@ namespace View
 
 constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
 
-
 TimelineView::TimelineView(DataProvider& dp)
 : m_data_provider(dp)
 , m_zoom(1.0f)
@@ -266,8 +265,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
         float cursor_screen_percentage =
             (mouse_position.x - window_position.x) / m_graph_size.x;
-        char text[20];
-        sprintf(text, "%.0f", m_movement + (cursor_screen_percentage * m_v_width));
+        char   text[20];
+        double scrubber_position = m_movement + (cursor_screen_percentage * m_v_width);
+
+        sprintf(text, "%.0f", scrubber_position);
         ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28);
 
         ImVec2 rect_pos =
@@ -301,7 +302,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             {
                 m_highlighted_region.first  = INVALID_SELECTION_TIME;
                 m_highlighted_region.second = INVALID_SELECTION_TIME;
-                m_region_selection_changed = true;                
+                m_region_selection_changed  = true;
             }
         }
     }
@@ -331,8 +332,9 @@ TimelineView::RenderGrid()
     ImVec2 container_pos =
         ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
 
+    int    ruler_size      = 30;
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - 50);
+    ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - ruler_size);
     double range           = (m_v_max_x + m_movement) - (m_v_min_x + m_movement);
 
     double stepSize = 0;
@@ -350,13 +352,13 @@ TimelineView::RenderGrid()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    if(ImGui::BeginChild("Grid"), ImVec2(m_graph_size.x, m_graph_size.y - 30.0f), true,
-       window_flags)
+    if(ImGui::BeginChild("Grid"), ImVec2(m_graph_size.x, m_graph_size.y - ruler_size),
+       true, window_flags)
     {
         ImGui::SetCursorPos(ImVec2(0, 0));
 
         ImGui::BeginChild("main component",
-                          ImVec2(m_graph_size.x, m_graph_size.y - 30.0f), false);
+                          ImVec2(m_graph_size.x, m_graph_size.y - ruler_size), false);
         ImVec2 child_win  = ImGui::GetWindowPos();
         ImVec2 child_size = ImGui::GetWindowSize();
 
@@ -394,7 +396,8 @@ TimelineView::RenderGrid()
                        cursor_position.y + content_size.y - m_grid_size),
                 m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)), 3.0f);
         }
-        if(m_highlighted_region.first != INVALID_SELECTION_TIME && m_highlighted_region.second != INVALID_SELECTION_TIME)
+        if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
+           m_highlighted_region.second != INVALID_SELECTION_TIME)
         {
             double normalized_start_box_highlighted =
                 container_pos.x +
@@ -443,10 +446,9 @@ TimelineView::RenderGrid()
         }
 
         draw_list->PopClipRect();
-        ImGui::EndChild(); // End of main component
+        ImGui::EndChild();  // End of main component
     }
-    ImGui::EndChild(); // End of Grid
-
+    ImGui::EndChild();  // End of Grid
 }
 
 void
@@ -482,8 +484,8 @@ TimelineView::RenderGraphView()
         ImGui::SetScrollY(m_scroll_position);
     }
 
-    ImVec2 window_size = m_graph_size;
-    bool request_horizontal_data = false;
+    ImVec2 window_size             = m_graph_size;
+    bool   request_horizontal_data = false;
 
     if(std::abs(m_movement - m_viewport_past_position) > m_v_width)
     {
@@ -647,9 +649,11 @@ TimelineView::RenderGraphView()
                 m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
                 graph_objects.second.chart->Render(m_graph_size.x);
 
-                //check for mouse click
-                if(graph_objects.second.chart->IsMetaAreaClicked()) {
-                    m_graph_map[graph_objects.second.chart->GetID()].selected = !graph_objects.second.selected;
+                // check for mouse click
+                if(graph_objects.second.chart->IsMetaAreaClicked())
+                {
+                    m_graph_map[graph_objects.second.chart->GetID()].selected =
+                        !graph_objects.second.selected;
                     selection_changed = true;
                 }
 
@@ -682,7 +686,7 @@ TimelineView::RenderGraphView()
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
-    if(selection_changed || m_region_selection_changed) 
+    if(selection_changed || m_region_selection_changed)
     {
         m_region_selection_changed = false;
         std::vector<uint64_t> selected_graphs;
@@ -705,8 +709,12 @@ TimelineView::RenderGraphView()
             if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
                m_highlighted_region.second != INVALID_SELECTION_TIME)
             {
-                min_x = std::min(m_highlighted_region.first, m_highlighted_region.second) + m_min_x;
-                max_x = std::max(m_highlighted_region.first, m_highlighted_region.second) + m_min_x;
+                min_x =
+                    std::min(m_highlighted_region.first, m_highlighted_region.second) +
+                    m_min_x;
+                max_x =
+                    std::max(m_highlighted_region.first, m_highlighted_region.second) +
+                    m_min_x;
             }
             m_data_provider.FetchMultiTrackEventTable(selected_graphs, min_x, max_x);
             m_data_provider.FetchMultiTrackSampleTable(selected_graphs, min_x, max_x);
@@ -945,10 +953,6 @@ TimelineView::RenderGraphPoints()
 void
 TimelineView::HandleTopSurfaceTouch()
 {
-    /*
-    This component enables the capture of user inputs and saves them as class
-    variable. Enables user interactions please dont touch.
-    */
     if(!m_is_control_held)
     {
         ImVec2 container_pos  = ImGui::GetWindowPos();
@@ -960,37 +964,46 @@ TimelineView::HandleTopSurfaceTouch()
 
         if(is_mouse_inside)
         {
-            // Prevent mouse from controlling anything outside of graphs.
             if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
                 m_can_drag_to_pan = true;
             }
 
-            // Handle Zoom
+            // Handle Zoom at Cursor
             float scroll_wheel = ImGui::GetIO().MouseWheel;
             if(scroll_wheel != 0.0f)
             {
-                float       view_width = (m_range_x) / m_zoom;
-                const float zoom_speed = 0.1f;
-                // m_zoom *=
-                //     (scroll_wheel > 0) ? (1.0f + zoom_speed) : (1.0f - zoom_speed);
+                // 1. Get mouse position relative to graph area
+                ImVec2 mouse_pos        = ImGui::GetMousePos();
+                ImVec2 graph_pos        = container_pos;
+                float  mouse_x_in_graph = mouse_pos.x - graph_pos.x - m_sidebar_size;
 
+                // 2. Calculate the world coordinate under the cursor before zoom
+                float  cursor_screen_percentage = mouse_x_in_graph / m_graph_size.x;
+                double x_under_cursor = m_movement + cursor_screen_percentage * m_v_width;
+
+                // 3. Apply zoom
+                const float zoom_speed = 0.1f;
+                float       new_zoom   = m_zoom;
                 if(scroll_wheel > 0)
                 {
-                    if(m_pixels_per_ns < 1.0)
-                    {
-                        m_zoom *= 1.0f + zoom_speed;
-                    }
+                    if(m_pixels_per_ns < 1.0) new_zoom *= 1.0f + zoom_speed;
                 }
                 else
                 {
-                    m_zoom *= 1.0f - zoom_speed;
+                    new_zoom *= 1.0f - zoom_speed;
                 }
+                new_zoom = std::max(new_zoom, 0.9f);
 
-                m_zoom = m_zoom;
-                m_zoom = std::max(m_zoom, 0.9f);
-                m_movement += m_v_width - (view_width);
-                m_v_width = view_width;
+                // 4. Calculate new view width
+                float new_v_width = m_range_x / new_zoom;
+
+                // 5. Adjust m_movement so the world_x_under_cursor stays under the cursor
+                m_movement = x_under_cursor - cursor_screen_percentage * new_v_width;
+
+                // 6. Update zoom and view width
+                m_zoom    = new_zoom;
+                m_v_width = new_v_width;
                 m_v_min_x = m_min_x + m_movement;
                 m_v_max_x = m_v_min_x + m_v_width;
             }
@@ -1010,7 +1023,7 @@ TimelineView::HandleTopSurfaceTouch()
             m_can_drag_to_pan = false;
         }
 
-        // Handle Panning
+        // Handle Panning (unchanged)
         if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
             float drag_y = ImGui::GetIO().MouseDelta.y;
@@ -1020,9 +1033,6 @@ TimelineView::HandleTopSurfaceTouch()
             float view_width = (m_range_x) / m_zoom;
 
             float user_requested_move = (drag / m_graph_size.x) * view_width;
-            // if user_requested_move is negative they are going right to range max.
-            // If user_requested_move is positive the user is going left to range min
-            // Code below is for bounding user to range.
 
             if(user_requested_move < 0)
             {

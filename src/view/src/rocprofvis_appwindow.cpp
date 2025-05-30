@@ -7,6 +7,7 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_navigation_manager.h"
 #include "widgets/rocprofvis_debug_window.h"
 
 using namespace RocProfVis::View;
@@ -50,7 +51,9 @@ AppWindow::~AppWindow()
 {
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
                                              m_tabclosed_event_token);
-    m_open_views.clear();
+
+    m_open_views.clear();                                           
+    NavigationManager::DestroyInstance();
 }
 
 bool
@@ -58,11 +61,19 @@ AppWindow::Init()
 {
     ImPlot::CreateContext();
 
+    // setup fonts
+    bool result = Settings::GetInstance().GetFontManager().Init();
+    if(!result)
+    {
+        spdlog::warn("Failed to initialize fonts");
+    }
+
     LayoutItem status_bar_item(-1, 30.0f);
     status_bar_item.m_item = std::make_shared<RocWidget>();
     LayoutItem main_area_item(-1, -30.0f);
 
     m_tab_container       = std::make_shared<TabContainer>();
+    NavigationManager::GetInstance()->RegisterRootContainer(m_tab_container);
     main_area_item.m_item = m_tab_container;
 
     std::vector<LayoutItem> layout_items;
@@ -78,7 +89,8 @@ AppWindow::Init()
     };
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
-    return true;
+
+    return result;
 }
 
 void
@@ -194,12 +206,13 @@ AppWindow::Render()
                 // Determine the type of view to create based on the file extension
                 if(file_path.extension().string() == ".csv")
                 {
-                    auto compute_view = std::make_shared<ComputeRoot>();
+                    auto compute_view = std::make_shared<ComputeRoot>(file_path_str);
                     compute_view->SetProfilePath(file_path.parent_path());
                     tab_item.m_widget = compute_view;
                     spdlog::info("Opening file: {}", file_path.string());
                     m_tab_container->AddTab(tab_item);
                     m_open_views[file_path_str] = tab_item;
+                    NavigationManager::GetInstance()->RefreshNavigationTree();
                 }
                 else
                 {
@@ -289,6 +302,7 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
             m_open_views.erase(it);
         }
     }
+    NavigationManager::GetInstance()->RefreshNavigationTree();
 }
 
 void

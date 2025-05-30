@@ -15,13 +15,14 @@ class ComputeRooflineView : public RocWidget
 public:
     void Render();
     void Update();
-    ComputeRooflineView(std::shared_ptr<ComputeDataProvider> data_provider);
+    ComputeRooflineView(std::string root_id, std::shared_ptr<ComputeDataProvider> data_provider);
     ~ComputeRooflineView();
 
 private:
     void RenderMenuBar();
 
     std::unique_ptr<ComputeMetricRoofline> m_roofline;
+    std::string m_owner_id;
 };
 
 }  // namespace View

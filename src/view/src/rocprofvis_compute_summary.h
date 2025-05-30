@@ -40,7 +40,7 @@ class ComputeSummaryView : public RocWidget
 public:
     void Render();
     void Update();
-    ComputeSummaryView(std::shared_ptr<ComputeDataProvider> data_provider);
+    ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
     ~ComputeSummaryView(); 
 
 private:
@@ -49,6 +49,7 @@ private:
     std::shared_ptr<HSplitContainer> m_container;
     std::shared_ptr<ComputeSummaryLeft> m_left_view;
     std::shared_ptr<ComputeSummaryRight> m_right_view;
+    std::string m_owner_id;
 };
 
 }  // namespace View

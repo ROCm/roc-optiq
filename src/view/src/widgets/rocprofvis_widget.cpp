@@ -418,8 +418,7 @@ TabContainer::Render()
                 {
                     p_open = nullptr;
                 }
-                if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open,
-                                       ImGuiTabBarFlags_None))
+                if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags))
                 {
                     // show tooltip for the active tab if header is hovered
                     if(m_allow_tool_tips && ImGui::IsItemHovered())
@@ -538,4 +537,17 @@ bool
 TabContainer::GetAllowToolTips() const
 {
     return m_allow_tool_tips;
+}
+
+// Gets a read only list of tabs.
+const std::vector<const TabItem*>
+TabContainer::GetTabs()
+{
+    std::vector<const TabItem*> tabs;
+    for (TabItem& tab : m_tabs)
+    {
+        const TabItem* t = &tab;
+        tabs.push_back(t);
+    }
+    return tabs;
 }

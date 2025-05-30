@@ -16,6 +16,7 @@ constexpr int TABLE_THRESHOLD_MID = 50;
 constexpr ImU32 TABLE_COLOR_HIGH = IM_COL32(255, 18, 10, 255);
 constexpr ImU32 TABLE_COLOR_MID = IM_COL32(255, 169, 10, 255);
 constexpr ImU32 TABLE_COLOR_SEARCH = IM_COL32(0, 255, 0, 255);
+constexpr ImVec4 TABLE_COLOR_SEARCH_TEXT = ImVec4(0, 0, 0, 1);
 
 const std::string ComputeMetric::FormattedString()
 {
@@ -145,7 +146,7 @@ void ComputeMetricGroup::Render()
                         ImPlot::SetupAxisLimits(ImAxis_X1, x_min, x_max, ImPlotCond_None);
                         ImPlot::SetupAxisLimits(ImAxis_Y1, -PLOT_BAR_SIZE, series_names.size() - 1 + PLOT_BAR_SIZE, ImPlotCond_None);
                         ImPlot::SetupAxisTicks(ImAxis_Y1, y_values.data(), y_values.size(), series_names.data());
-                        ImPlot::PushStyleColor(ImPlotCol_Line, IM_COL32(0, 0, 0, 255));
+                        ImPlot::PushStyleColor(ImPlotCol_Line, ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
                         for (int j = 0; j < x_values.size(); j ++)
                         {
                             double& value = x_values[j];
@@ -182,24 +183,25 @@ void ComputeMetricGroup::Render()
                     for (int c = 0; c < m_metric_data->m_table.m_values[r].size(); c ++)
                     {
                         ImGui::TableSetColumnIndex(c);
-
-                        if (m_metric_data->m_table.m_values[r][c].m_highlight)
+                        
+                        rocprofvis_compute_metrics_table_cell_t& cell = m_metric_data->m_table.m_values[r][c];
+                        if (cell.m_highlight)
                         {
                             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_SEARCH);
                         }
-                        else if (m_metric_data->m_table.m_values[r][c].m_colorize && m_metric_data->m_table.m_values[r][c].m_metric)
+                        else if (cell.m_colorize && cell.m_metric)
                         {
-                            if (m_metric_data->m_table.m_values[r][c].m_metric->m_value > TABLE_THRESHOLD_HIGH)
+                            if (cell.m_metric->m_value > TABLE_THRESHOLD_HIGH)
                             {
                                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_HIGH);
                             }
-                            else if (m_metric_data->m_table.m_values[r][c].m_metric->m_value > TABLE_THRESHOLD_MID)
+                            else if (cell.m_metric->m_value > TABLE_THRESHOLD_MID)
                             {
                                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_MID);
                             }
                         }
 
-                        ImGui::Text(m_metric_data->m_table.m_values[r][c].m_value.c_str());
+                        ImGui::TextColored(cell.m_highlight ? TABLE_COLOR_SEARCH_TEXT : ImGui::GetStyleColorVec4(ImGuiCol_Text), cell.m_value.c_str());
                     }
                 }
                 ImGui::EndTable();

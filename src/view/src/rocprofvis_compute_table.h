@@ -29,15 +29,11 @@ typedef enum table_view_category_t
     kTableCategoryCount
 } table_view_category_t;
 
-struct PrefixTreeNode {
-    char m_char;
-    std::array<std::unique_ptr<PrefixTreeNode>, 128> m_next;
-};
-
 typedef struct table_view_category_info_t
 {
     table_view_category_t m_category;
     std::string m_name;
+    std::string m_id;
     std::vector<std::string> m_content_ids;
 } table_view_category_info_t;
 
@@ -61,7 +57,7 @@ class ComputeTableView : public RocWidget
 public:
     void Render();
     void Update();
-    ComputeTableView(std::shared_ptr<ComputeDataProvider> data_provider);
+    ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
     ~ComputeTableView();
 
 private:
@@ -70,6 +66,7 @@ private:
     bool m_search_edited;
     char m_search_term[32];
     std::shared_ptr<TabContainer> m_tab_container;
+    std::string m_owner_id;
 };
 
 }  // namespace View

@@ -45,7 +45,9 @@ public:
     // Return number of slices
     rocprofvis_dm_size_t                                NumberOfSlices() { return m_slices.size(); }
     // Returns context pointer
-    Trace*                                         Ctx() { return m_ctx; }
+    Trace*                                              Ctx() { return m_ctx; }
+    // Returns class mutex
+    std::shared_mutex*                                  Mutex() override;
     // Returns track category enumeration value
     rocprofvis_dm_track_category_t                      Category() { return m_track_params->track_category; }
     // Returns track ID. Track id is currently equal to track index in array of tracks
@@ -69,15 +71,25 @@ public:
     // @param slice - handle to slice
     // @return status of operation 
     rocprofvis_dm_result_t                              GetSliceAtIndex(rocprofvis_dm_property_index_t index, rocprofvis_dm_slice_t & slice);
-    // Method to get slice handle at provided timestamp
+    // Method to get slice handle for provided start timestamp only (for property getters, since property getter has only one input parameter)
     // @param start - slice start timestamp
     // @param slice - handle to slice
     // @return status of operation 
     rocprofvis_dm_result_t                              GetSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_slice_t & slice);
-    // Method to delete slice with provided handle
+    // Method to get slice index for provided start and end timestamp
+    // @param start - slice start timestamp
+    // @param start - slice end timestamp
+    // @param index - index to slice
+    // @return status of operation
+    rocprofvis_dm_result_t                              GetSliceIndexAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
+                                                                                            rocprofvis_dm_index_t& index);
+    // Method to delete slice with provided time
     // @param slice - handle to slice
     // @return status of operation 
-    rocprofvis_dm_result_t                              DeleteSlice(rocprofvis_dm_slice_t slice);
+    rocprofvis_dm_result_t                              DeleteSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
+    // Method to delete all slices
+    // @return status of operation
+    rocprofvis_dm_result_t                              DeleteAllSlices();
     // Method to add empty slice object
     // @param start - slice start timestamp
     // @param start - slice end timestamp

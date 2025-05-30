@@ -1,6 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_compute_table.h"
+#include "rocprofvis_navigation_manager.h"
+#include "rocprofvis_navigation_url.h"
 
 namespace RocProfVis
 {
@@ -8,43 +10,43 @@ namespace View
 {
 
 const std::array TAB_DEFINITIONS = {
-    table_view_category_info_t{kTableCategorySystemSOL, "System Speed of Light", {
+    table_view_category_info_t{kTableCategorySystemSOL, "System Speed of Light", COMPUTE_TABLE_SPEED_OF_LIGHT_URL, {
         "2.1_Speed-of-Light.csv"
     }},
-    table_view_category_info_t{kTableCategoryCP, "Command Processor", {
+    table_view_category_info_t{kTableCategoryCP, "Command Processor", COMPUTE_TABLE_COMMAND_PROCESSOR_URL, {
         "5.1_Command_Processor_Fetcher.csv", "5.2_Packet_Processor.csv"
     }},
-    table_view_category_info_t{kTableCategorySPI, "Workgroup Manager", {
+    table_view_category_info_t{kTableCategorySPI, "Workgroup Manager", COMPUTE_TABLE_WORKGROUP_MANAGER_URL,{
         "6.1_Workgroup_Manager_Utilizations.csv", "6.2_Workgroup_Manager_-_Resource_Allocation.csv"
     }},
-    table_view_category_info_t{kTableCategoryWavefrontStats, "Wavefront", {
+    table_view_category_info_t{kTableCategoryWavefrontStats, "Wavefront", COMPUTE_TABLE_WAVEFRONT_URL, {
         "7.1_Wavefront_Launch_Stats.csv", "7.2_Wavefront_Runtime_Stats.csv"
     }},
-    table_view_category_info_t{kTableCategoryInstructionMix, "Instruction Mix", {
+    table_view_category_info_t{kTableCategoryInstructionMix, "Instruction Mix", COMPUTE_TABLE_INSTRUCTION_MIX_URL, {
         "10.1_Overall_Instruction_Mix.csv", "10.2_VALU_Arithmetic_Instr_Mix.csv", "10.3_VMEM_Instr_Mix.csv", "10.4_MFMA_Arithmetic_Instr_Mix.csv"
     }},
-    table_view_category_info_t{kTableCategoryCU, "Compute Pipeline", {
+    table_view_category_info_t{kTableCategoryCU, "Compute Pipeline", COMPUTE_TABLE_COMPUTE_PIPELINE_URL, {
         "11.1_Speed-of-Light.csv", "11.2_Pipeline_Stats.csv", "11.3_Arithmetic_Operations.csv"
     }},
-    table_view_category_info_t{kTableCategoryLDS, "Local Data Store", {
+    table_view_category_info_t{kTableCategoryLDS, "Local Data Store", COMPUTE_TABLE_LOCAL_DATA_STORE_URL, {
         "12.1_Speed-of-Light.csv", "12.2_LDS_Stats.csv"
     }},
-    table_view_category_info_t{kTableCategoryL1I, "L1 Instruction Cache", {
+    table_view_category_info_t{kTableCategoryL1I, "L1 Instruction Cache", COMPUTE_TABLE_INSTRUCTION_CACHE_URL, {
         "13.1_Speed-of-Light.csv", "13.2_Instruction_Cache_Accesses.csv", "13.3_Instruction_Cache_-_L2_Interface.csv"
     }},
-    table_view_category_info_t{kTableCategorySL1D, "Scalar L1 Data Cache", {
+    table_view_category_info_t{kTableCategorySL1D, "Scalar L1 Data Cache", COMPUTE_TABLE_SCALAR_CACHE_URL, {
         "14.1_Speed-of-Light.csv", "14.2_Scalar_L1D_Cache_Accesses.csv", "14.3_Scalar_L1D_Cache_-_L2_Interface.csv"
     }},
-    table_view_category_info_t{kTableCategoryAddressProcessingUnit, "Address Processing Unit & Data Return Path", {
+    table_view_category_info_t{kTableCategoryAddressProcessingUnit, "Address Processing Unit & Data Return Path", COMPUTE_TABLE_ADDRESS_PROCESSING_UNIT_URL, {
         "15.1_Address_Processing_Unit.csv", "15.2_Data-Return_Path.csv"
     }},
-    table_view_category_info_t{kTableCategoryVL1D, "Vector L1 Data Cache", {
+    table_view_category_info_t{kTableCategoryVL1D, "Vector L1 Data Cache", COMPUTE_TABLE_VECTOR_CACHE_URL, {
         "16.1_Speed-of-Light.csv", "16.2_L1D_Cache_Stalls_(%).csv", "16.3_L1D_Cache_Accesses.csv", "16.4_L1D_-_L2_Transactions.csv", "16.5_L1D_Addr_Translation.csv",
     }},
-    table_view_category_info_t{kTableCategoryL2, "L2 Cache", {
+    table_view_category_info_t{kTableCategoryL2, "L2 Cache", COMPUTE_TABLE_L2_CACHE_URL, {
         "17.1_Speed-of-Light.csv", "17.2_L2_-_Fabric_Transactions.csv", "17.3_L2_Cache_Accesses.csv", "17.4_L2_-_Fabric_Interface_Stalls.csv", "17.5_L2_-_Fabric_Detailed_Transaction_Breakdown.csv"
     }},
-    table_view_category_info_t{kTableCategoryL2PerChannel, "L2 Cache (Per Channel)", {
+    table_view_category_info_t{kTableCategoryL2PerChannel, "L2 Cache (Per Channel)", COMPUTE_TABLE_L2_CACHE_PER_CHANNEL_URL, {
         "18.1_Aggregate_Stats_(All_channels).csv", "18.2_L2_Cache_Hit_Rate_(pct)", "18.3_L2_Requests_(per_normUnit).csv", "18.4_L2_Requests_(per_normUnit).csv", 
         "18.5_L2-Fabric_Requests_(per_normUnit).csv", "18.6_L2-Fabric_Read_Latency_(Cycles).csv", "18.7_L2-Fabric_Write_and_Atomic_Latency_(Cycles).csv", "18.8_L2-Fabric_Atomic_Latency_(Cycles).csv", 
         "18.9_L2-Fabric_Read_Stall_(Cycles_per_normUnit).csv", "18.10_L2-Fabric_Write_and_Atomic_Stall_(Cycles_per_normUnit).csv", "18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv"
@@ -52,6 +54,7 @@ const std::array TAB_DEFINITIONS = {
 };
 
 ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category)
+: m_search_event_token(-1)
 {
     for (const std::string& content : TAB_DEFINITIONS[category].m_content_ids)
     {
@@ -94,19 +97,24 @@ void ComputeTableCategory::Update()
     }
 }
 
-ComputeTableView::ComputeTableView(std::shared_ptr<ComputeDataProvider> data_provider) 
+ComputeTableView::ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider) 
 : m_tab_container(nullptr)
 , m_search_term("")
 , m_search_edited(false)
+, m_owner_id(owner_id)
 {
     m_tab_container = std::make_shared<TabContainer>();
     for (const table_view_category_info_t& category : TAB_DEFINITIONS)
     {
-        m_tab_container->AddTab(TabItem{category.m_name, "compute_table_tab_" + category.m_name, std::make_shared<ComputeTableCategory>(data_provider, category.m_category), false});
+        m_tab_container->AddTab(TabItem{category.m_name, category.m_id, std::make_shared<ComputeTableCategory>(data_provider, category.m_category), false});
     }
+
+    NavigationManager::GetInstance()->RegisterContainer(m_tab_container, COMPUTE_TABLE_VIEW_URL, m_owner_id);
 }
 
-ComputeTableView::~ComputeTableView() {}
+ComputeTableView::~ComputeTableView() {
+    NavigationManager::GetInstance()->UnregisterContainer(m_tab_container, COMPUTE_TABLE_VIEW_URL, m_owner_id);
+}
 
 void ComputeTableView::Update()
 {

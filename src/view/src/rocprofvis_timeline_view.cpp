@@ -71,6 +71,46 @@ TimelineView::TimelineView(DataProvider& dp)
         static_cast<int>(RocEvents::kNewTrackData), new_track_data_handler);
 }
 
+int
+TimelineView::FindChartIdByName(const std::string& name)
+{
+    for(const auto& pair : m_graph_map)
+    {
+        if(pair.second.chart && pair.second.chart->GetName() == name)
+        {
+            return pair.first;
+        }
+    }
+    return -1;
+}
+
+float
+TimelineView::CalculateChartOffsetY(int chart_id)
+{
+    float offset = 0.0f;
+    for(const auto& pair : m_graph_map)
+    {
+        if(pair.first == chart_id) break;
+        if(pair.second.display && pair.second.chart)
+        {
+            offset += pair.second.chart->GetTrackHeight();
+        }
+    }
+    return offset;
+}
+
+void
+TimelineView::ScrollToChartByName(const std::string& name, double movement)
+{
+    m_movement   = movement;
+    int chart_id = FindChartIdByName(name);
+    if(chart_id == -1) return;
+
+    float offset      = CalculateChartOffsetY(chart_id);
+    m_scroll_position = offset;
+    ImGui::SetScrollY(m_scroll_position);
+}
+
 TimelineView::~TimelineView()
 {
     DestroyGraphs();
@@ -661,7 +701,10 @@ TimelineView::RenderGraphView()
 
                 ImGui::EndChild();
                 ImGui::PopStyleColor();
-
+                if(ImGui::Button(graph_objects.second.chart->GetName().c_str()))
+                {
+                    ScrollToChartByName(graph_objects.second.chart->GetName(), 3000000);
+                }
                 ImGui::Separator();
             }
             else

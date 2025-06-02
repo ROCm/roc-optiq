@@ -34,6 +34,9 @@ public:
     void                                   ResetView();
     void                                   DestroyGraphs();
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
+    int                                    FindChartIdByName(const std::string& name);
+    float                                  CalculateChartOffsetY(int chart_id);
+    void ScrollToChartByName(const std::string& name, double movement);
 
 private:
     void RenderGraphPoints();

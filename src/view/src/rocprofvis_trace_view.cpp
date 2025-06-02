@@ -1,6 +1,5 @@
 #pragma once
 #include "rocprofvis_trace_view.h"
-#include "widgets/rocprofvis_gui_helpers.h"
 #include "imgui.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_event_manager.h"
@@ -8,11 +7,12 @@
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_timeline_view.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 using namespace RocProfVis::View;
 
 TraceView::TraceView()
-: m_main_view(nullptr)
+: m_timeline_view(nullptr)
 , m_sidebar(nullptr)
 , m_container(nullptr)
 , m_view_created(false)
@@ -46,34 +46,34 @@ TraceView::Update()
     // new file loaded
     if(last_state != new_state && new_state == ProviderState::kReady)
     {
-        if(m_main_view)
+        if(m_timeline_view)
         {
-            m_main_view->MakeGraphView();
+            m_timeline_view->MakeGraphView();
             if(m_sidebar)
             {
-                m_sidebar->SetGraphMap(m_main_view->GetGraphMap());
+                m_sidebar->SetGraphMap(m_timeline_view->GetGraphMap());
             }
         }
     }
 
-    if(m_main_view)
+    if(m_timeline_view)
     {
-        m_main_view->Update();
+        m_timeline_view->Update();
     }
 }
 
 void
 TraceView::CreateView()
 {
-    m_sidebar   = std::make_shared<SideBar>(m_data_provider);
-    m_main_view = std::make_shared<TimelineView>(m_data_provider);
-    m_analysis  = std::make_shared<AnalysisView>(m_data_provider);
+    m_sidebar       = std::make_shared<SideBar>(m_data_provider);
+    m_timeline_view = std::make_shared<TimelineView>(m_data_provider);
+    m_analysis      = std::make_shared<AnalysisView>(m_data_provider);
 
     LayoutItem left;
     left.m_item = m_sidebar;
 
     LayoutItem top;
-    top.m_item = m_main_view;
+    top.m_item = m_timeline_view;
 
     LayoutItem bottom;
     bottom.m_item = m_analysis;
@@ -92,11 +92,11 @@ TraceView::CreateView()
 void
 TraceView::DestroyView()
 {
-    m_main_view    = nullptr;
-    m_sidebar      = nullptr;
-    m_container    = nullptr;
-    m_analysis     = nullptr;
-    m_view_created = false;
+    m_timeline_view = nullptr;
+    m_sidebar       = nullptr;
+    m_container     = nullptr;
+    m_analysis      = nullptr;
+    m_view_created  = false;
 }
 
 bool
@@ -109,8 +109,8 @@ TraceView::OpenFile(const std::string& file_path)
         m_open_loading_popup = true;
         if(m_view_created)
         {
-            m_main_view->ResetView();
-            m_main_view->DestroyGraphs();
+            m_timeline_view->ResetView();
+            m_timeline_view->DestroyGraphs();
         }
     }
     return result;
@@ -167,7 +167,7 @@ TraceView::Render()
             ImGui::SetCursorScreenPos(dot_pos);
 
             RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                                 ImVec4(0.3f, 0.3f, 0.3f, 1.0f), 5.0f);
+                                       ImVec4(0.3f, 0.3f, 0.3f, 1.0f), 5.0f);
             ImGui::EndPopup();
         }
     }

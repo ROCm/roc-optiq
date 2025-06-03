@@ -596,7 +596,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
 {
     if(m_state != ProviderState::kReady)
     {
-        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
+        spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
                       static_cast<int>(m_state));
         return false;
     }
@@ -620,7 +620,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
         if(table_params.m_table_type == kRPVControllerTableTypeEvents &&
            m_track_metadata[index].track_type != kRPVControllerTrackTypeEvents)
         {
-            spdlog::debug("Cannot fetch event table, track {} is not an event track",
+            spdlog::warn("Cannot fetch event table, track {} is not an event track",
                           index);
             return false;
         }
@@ -628,7 +628,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
         if(table_params.m_table_type == kRPVControllerTableTypeSamples &&
            m_track_metadata[index].track_type != kRPVControllerTrackTypeSamples)
         {
-            spdlog::debug("Cannot fetch sample table, track {} is not a sample track",
+            spdlog::warn("Cannot fetch sample table, track {} is not a sample track",
                           index);
             return false;
         }
@@ -683,18 +683,16 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
             }
             else
             {
-                spdlog::debug("Failed to setup event table common arguments");
+                spdlog::error("Failed to setup event table common arguments");
                 // free the args
                 rocprofvis_controller_arguments_free(args);
                 return false;
             }
 
             // prepare to fetch the table
-            spdlog::debug("Allocating table results array");
             rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
             ROCPROFVIS_ASSERT(array != nullptr);
 
-            spdlog::info("Allocating table request future");
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
             ROCPROFVIS_ASSERT(future != nullptr);
 
@@ -772,7 +770,7 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
 {
     if(m_state != ProviderState::kReady)
     {
-        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
+        spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
                       static_cast<int>(m_state));
         return false;
     }
@@ -868,6 +866,11 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
                     num_table_tracks++;
                     spdlog::debug("Adding track {} to table request", index);
                 }
+            } else {
+                spdlog::error("Failed to setup table common arguments");
+                // free the args
+                rocprofvis_controller_arguments_free(args);
+                return false;
             }
 
             if(num_table_tracks == 0)
@@ -884,11 +887,9 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             // prepare to fetch the table
-            spdlog::debug("Allocating table results array");
             rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
             ROCPROFVIS_ASSERT(array != nullptr);
 
-            spdlog::info("Allocating table request future");
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
             ROCPROFVIS_ASSERT(future != nullptr);
 
@@ -1171,18 +1172,16 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 {
     if(req.request_type == RequestType::kFetchGraph)
     {
-        spdlog::debug("Processing graph data {}", req.request_id);
         ProcessGraphRequest(req);
     }
     else if(req.request_type == RequestType::kFetchTrack)
     {
-        spdlog::debug("Processing track data {}", req.request_id);
         ProcessTrackRequest(req);
     }
     else if(req.request_type == RequestType::kFetchTrackEventTable ||
             req.request_type == RequestType::kFetchTrackSampleTable)
     {
-        spdlog::debug("Processing event table data {}", req.request_id);
+        spdlog::debug("Processing table data {}", req.request_id);
         ProcessTableRequest(req);
     }
     else

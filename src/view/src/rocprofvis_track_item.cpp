@@ -175,14 +175,21 @@ TrackItem::RequestData(double min, double max, float width)
     if(m_request_state == TrackDataRequestState::kIdle)
     {
         m_request_state = TrackDataRequestState::kRequesting;
-        m_data_provider.FetchTrack(m_id, min,
-                                   max, width);
-        spdlog::debug("Fetching from {} to {} ( {} ) at zoom {}",
+        bool result     = m_data_provider.FetchTrack(m_id, min, max, width);
+        if(!result)
+        {
+            m_request_state = TrackDataRequestState::kIdle;
+            spdlog::warn("Failed to request data for track {} from {} to {}", m_id,
+                          min - m_data_provider.GetStartTime(),
+                          max - m_data_provider.GetStartTime());
+        } else {
+            spdlog::debug("Fetching from {} to {} ( {} ) at zoom {} for track {}",
                       min - m_data_provider.GetStartTime(),
-                      max - m_data_provider.GetStartTime(), max - min, m_zoom);
+                      max - m_data_provider.GetStartTime(), max - min, m_zoom, m_id);
+        }
     }
-    else 
+    else
     {
-        spdlog::debug("Request Data rejected, already pending...");
+        spdlog::warn("Fetch request rejected for track {}, already pending...", m_id);
     }
 }

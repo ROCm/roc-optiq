@@ -307,6 +307,14 @@ typedef enum rocprofvis_dm_event_property_type_t {
     kRPVDMEventExtData,
 } rocprofvis_dm_event_property_type_t;
 
+// Type for sort order
+typedef enum rocprofvis_dm_sort_order_t {
+    // Ascending sort order
+    kRPVDMSortOrderAsc,
+    // Descending sort order
+    kRPVDMSortOrderDesc,
+} rocprofvis_dm_sort_order_t;
+
 // Event id structure
 typedef union { 
     struct {

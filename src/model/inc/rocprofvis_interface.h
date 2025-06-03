@@ -122,7 +122,8 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_database_t database, rocprofvis_dm_timestamp_t start,
     rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num,
     rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t sort_column,
-    uint64_t max_count, uint64_t offset, bool count_only, char** out_query);
+    rocprofvis_dm_sort_order_t sort_order, uint64_t max_count, uint64_t offset, 
+    bool count_only, char** out_query);
 
 /****************************************************************************************************
  * @brief Asynchronous call to read event property of specific type

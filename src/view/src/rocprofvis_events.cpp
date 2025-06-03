@@ -88,7 +88,8 @@ TrackDataEvent::GetTracePath()
     return m_trace_path;
 }
 
-ComputeBlockNavigationEvent::ComputeBlockNavigationEvent(int event_id, int level, int block)
+ComputeBlockNavigationEvent::ComputeBlockNavigationEvent(int event_id, int level,
+                                                         int block)
 : RocEvent(event_id)
 , m_level(level)
 , m_block(block)
@@ -129,6 +130,36 @@ TabClosedEvent::TabClosedEvent(int event_id, const std::string& tab_id)
 }
 
 const std::string&
-TabClosedEvent::GetTabId() {
+TabClosedEvent::GetTabId()
+{
     return m_tab_id;
+}
+
+TrackSelectionChangedEvent::TrackSelectionChangedEvent(int                   event_id,
+                                             std::vector<uint64_t> selected_tracks,
+                                             double start_ns, double end_ns)
+{
+    m_event_id        = event_id;
+    m_event_type      = RocEventType::kTimelineSelectionChangedEvent;
+    m_selected_tracks = std::move(selected_tracks);
+    m_start_ns        = start_ns;
+    m_end_ns          = end_ns;
+}
+
+const std::vector<uint64_t>&
+TrackSelectionChangedEvent::GetSelectedTracks() const
+{
+    return m_selected_tracks;
+}
+
+double
+TrackSelectionChangedEvent::GetStartNs() const
+{
+    return m_start_ns;
+}
+
+double
+TrackSelectionChangedEvent::GetEndNs() const
+{
+    return m_end_ns;
 }

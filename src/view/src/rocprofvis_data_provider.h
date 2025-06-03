@@ -41,22 +41,88 @@ typedef struct track_info_t
     uint64_t                           num_entries;  // number of entries in the track
 } track_info_t;
 
+class RequestParamsBase
+{
+public:
+    virtual ~RequestParamsBase() = default;
+};
+
+// Track request parameters
+class TrackRequestParams : public RequestParamsBase
+{
+public:
+    uint64_t m_index;             // index of track that is being requested
+    double   m_start_ts;          // start time stamp of data being requested
+    double   m_end_ts;            // end time stamp of data being requested
+    uint32_t m_horz_pixel_range;  // horizontal pixel range for the request
+
+    TrackRequestParams(uint64_t index, double start_ts, double end_ts,
+                       uint32_t horz_pixel_range)
+    : m_index(index)
+    , m_start_ts(start_ts)
+    , m_end_ts(end_ts)
+    , m_horz_pixel_range(horz_pixel_range)
+    {}
+};
+
+// Table request parameters
+class TableRequestParams : public RequestParamsBase
+{
+public:
+    rocprofvis_controller_table_type_t m_table_type;  // type of the table
+    std::vector<uint64_t> m_track_indices;  // indices of the tracks in the table
+    double                m_start_ts;   // starting time stamp of the data in the table
+    double                m_end_ts;     // ending time stamp of the data in the table
+    uint64_t              m_start_row;  // starting row of the data in the table
+    uint64_t              m_req_row_count;            // number of rows requested
+    uint64_t              m_sort_column_index;        // index of the column to sort by
+    rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
+
+    TableRequestParams(const TableRequestParams& table_params)            = default;
+    TableRequestParams& operator=(const TableRequestParams& table_params) = default;
+
+    TableRequestParams(
+        rocprofvis_controller_table_type_t table_type,
+        const std::vector<uint64_t>& track_indices, double start_ts, double end_ts,
+        uint64_t start_row = -1, uint64_t req_row_count = -1,
+        uint64_t                           sort_column_index = 0,
+        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending)
+    : m_table_type(table_type)
+    , m_track_indices(track_indices)
+    , m_start_ts(start_ts)
+    , m_end_ts(end_ts)
+    , m_start_row(start_row)
+    , m_req_row_count(req_row_count)
+    , m_sort_column_index(sort_column_index)
+    , m_sort_order(sort_order)
+    {}
+};
+
 typedef struct data_req_info_t
 {
-    uint64_t                           index;  // index of track that is being requested
+    uint64_t                           request_id;      // unique id of the request
     rocprofvis_controller_future_t*    request_future;  // future for the request
     rocprofvis_controller_array_t*     request_array;   // array of data for the request
     rocprofvis_handle_t*               request_obj_handle;  // object for the request
     rocprofvis_controller_arguments_t* request_args;        // arguments for the request
     ProviderState                      loading_state;       // state of the request
     RequestType                        request_type;        // type of request
-    double start_ts;  // start time stamp of data being requested
-    double end_ts;    // end time stamp of data being requested
+    std::shared_ptr<RequestParamsBase> custom_params;       // custom request parameters
 } data_req_info_t;
+
+typedef struct table_info_t
+{
+    std::shared_ptr<TableRequestParams>   table_params;
+    std::vector<std::string>              table_header;
+    std::vector<std::vector<std::string>> table_data;
+} table_info_t;
 
 class DataProvider
 {
 public:
+    static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = -1;
+    static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = -2;
+
     DataProvider();
     ~DataProvider();
 
@@ -103,9 +169,13 @@ public:
      * @param end_ts: The end timestamp of the event table
      * @param start_row: The starting row of the sample table
      * @param req_row_count: The number of rows to request
+     * @param sort_column_index: The index of the column to sort by
+     * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackEventTable(uint64_t index, double start_ts, double end_ts,
-                                    uint64_t start_row = -1, uint64_t req_row_count = -1);
+    bool FetchSingleTrackEventTable(
+        uint64_t index, double start_ts, double end_ts, uint64_t start_row = -1,
+        uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
+        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
     /*
      * Fetches a sample table from the controller for a single track.
@@ -114,28 +184,36 @@ public:
      * @param end_ts: The end timestamp of the sample table
      * @param start_row: The starting row of the sample table
      * @param req_row_count: The number of rows to request
+     * @param sort_column_index: The index of the column to sort by
+     * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackSampleTable(uint64_t index, double start_ts, double end_ts,
-                                     uint64_t start_row     = -1,
-                                     uint64_t req_row_count = -1);
+    bool FetchSingleTrackSampleTable(
+        uint64_t index, double start_ts, double end_ts, uint64_t start_row = -1,
+        uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
+        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    bool FetchSingleTrackTable(uint64_t                           index,
-                               rocprofvis_controller_table_type_t table_type,
-                               double start_ts, double end_ts, uint64_t start_row = -1,
-                               uint64_t req_row_count = -1);
+    /*
+     * Fetches a table from the controller for a single track.
+     * @param table_params: The parameters for the table request
+     */
+    bool FetchSingleTrackTable(const TableRequestParams& table_params);
 
-    bool FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_indices,
-                                    double start_ts, double end_ts,
-                                    uint64_t start_row = -1, uint64_t req_row_count = -1);
+    bool FetchMultiTrackSampleTable(
+        const std::vector<uint64_t>& track_indices, double start_ts, double end_ts,
+        uint64_t start_row = -1, uint64_t req_row_count = -1,
+        uint64_t                           sort_column_index = 0,
+        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    bool FetchMultiTrackEventTable(const std::vector<uint64_t>& track_indices,
-                                   double start_ts, double end_ts,
-                                   uint64_t start_row = -1, uint64_t req_row_count = -1);
+    bool FetchMultiTrackEventTable(
+        const std::vector<uint64_t>& track_indices, double start_ts, double end_ts,
+        uint64_t start_row = -1, uint64_t req_row_count = -1,
+        uint64_t                           sort_column_index = 0,
+        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    bool FetchMultiTrackTable(const std::vector<uint64_t>&       track_indices,
-                              rocprofvis_controller_table_type_t table_type,
-                              double start_ts, double end_ts, uint64_t start_row = -1,
-                              uint64_t req_row_count = -1);
+    bool FetchMultiTrackTable(const TableRequestParams& table_params);
+
+    bool IsRequestPending(uint64_t request_id);
+
     /*
      * Release memory buffer holding raw data for selected track
      * @param index: The index of the track to select
@@ -194,8 +272,11 @@ public:
 
     const std::vector<std::string>&              GetEventTableHeader();
     const std::vector<std::vector<std::string>>& GetEventTableData();
+    std::shared_ptr<TableRequestParams>          GetEventTableParams();
+
     const std::vector<std::string>&              GetSampleTableHeader();
     const std::vector<std::vector<std::string>>& GetSampleTableData();
+    std::shared_ptr<TableRequestParams>          GetSampleTableParams();
 
     void ClearEventTable();
     void ClearSampleTable();
@@ -212,12 +293,10 @@ private:
     void ProcessRequest(data_req_info_t& req);
     void ProcessGraphRequest(data_req_info_t& req);
     void ProcessTrackRequest(data_req_info_t& req);
-    void ProcessEventTableRequest(data_req_info_t& req);
+    void ProcessTableRequest(data_req_info_t& req);
 
-    bool SetupEventTableCommonArguments(rocprofvis_controller_arguments_t* args,
-                                        rocprofvis_controller_table_type_t table_type,
-                                        double start_ts, double end_ts,
-                                        uint64_t start_row, uint64_t req_row_count);
+    bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
+                                   const TableRequestParams&          table_params);
 
     void CreateRawEventData(uint64_t index, rocprofvis_controller_array_t* track_data,
                             double min_ts, double max_ts);
@@ -238,10 +317,8 @@ private:
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;
 
-    std::vector<std::string>              m_event_table_header;
-    std::vector<std::vector<std::string>> m_event_table_data;
-    std::vector<std::string>              m_sample_table_header;
-    std::vector<std::vector<std::string>> m_sample_table_data;
+    table_info_t m_event_table_info;
+    table_info_t m_sample_table_info;
 
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 

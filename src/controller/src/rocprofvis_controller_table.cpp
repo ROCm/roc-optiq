@@ -485,7 +485,7 @@ rocprofvis_result_t Table::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerTableNumRows:
             {
-                *value = m_rows.size();
+                *value = m_num_items;
                 result = kRocProfVisResultSuccess;
                 break;
             }

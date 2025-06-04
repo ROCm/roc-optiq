@@ -34,9 +34,10 @@ public:
     void                                   ResetView();
     void                                   DestroyGraphs();
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
-    int                                    FindChartIdByName(const std::string& name);
-    float                                  CalculateChartOffsetY(int chart_id);
-    void ScrollToChartByName(const std::string& name, double movement);
+    int                                    FindTrackIdByName(const std::string& name);
+    void                                   ScrollToTrack(uint64_t position);
+    float                                  CalculateTrackOffsetY(int chart_id);
+    void                                   ScrollToTrackByName(const std::string& name);
     void SetViewTimePosition(double time_pos_ns, bool center);
     void RenderGraphPoints();
     void RenderGrid();

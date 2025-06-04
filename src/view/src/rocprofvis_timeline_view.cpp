@@ -72,7 +72,7 @@ TimelineView::TimelineView(DataProvider& dp)
 }
 
 int
-TimelineView::FindChartIdByName(const std::string& name)
+TimelineView::FindTrackIdByName(const std::string& name)
 {
     for(const auto& pair : m_graph_map)
     {
@@ -98,12 +98,18 @@ TimelineView::CalculateTrackOffsetY(int chart_id)
     }
     return offset;
 }
+void
+TimelineView::ScrollToTrack(uint64_t position)
+{
+    float offset      = CalculateTrackOffsetY(position);
+    m_scroll_position = offset;
+    ImGui::SetScrollY(m_scroll_position);
+}
 
 void
-TimelineView::ScrollToTrackByName(const std::string& name, double movement)
+TimelineView::ScrollToTrackByName(const std::string& name)
 {
-    m_view_time_offset_ns = movement;
-    int chart_id          = FindChartIdByName(name);
+    int chart_id = FindTrackIdByName(name);
     if(chart_id == -1) return;
 
     float offset      = CalculateTrackOffsetY(chart_id);

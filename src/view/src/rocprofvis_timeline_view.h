@@ -34,8 +34,11 @@ public:
     void                                   ResetView();
     void                                   DestroyGraphs();
     std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
-
-private:
+    int                                    FindTrackIdByName(const std::string& name);
+    void                                   ScrollToTrack(uint64_t position);
+    float                                  CalculateTrackOffsetY(int chart_id);
+    void                                   ScrollToTrackByName(const std::string& name);
+    void SetViewTimePosition(double time_pos_ns, bool center);
     void RenderGraphPoints();
     void RenderGrid();
     void RenderScrubber(ImVec2 screen_pos);
@@ -56,7 +59,7 @@ private:
     double                                m_max_y;
     float                                 m_zoom;
     int                                   m_sidebar_size;
-    double                                m_movement;
+    double                                m_view_time_offset_ns;
     double                                m_scrubber_position;
     double                                m_v_width;
     double                                m_pixels_per_ns;

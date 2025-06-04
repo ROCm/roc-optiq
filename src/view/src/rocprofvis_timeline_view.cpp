@@ -28,7 +28,7 @@ constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
 TimelineView::TimelineView(DataProvider& dp)
 : m_data_provider(dp)
 , m_zoom(1.0f)
-, m_movement(0.0f)
+, m_view_time_offset_ns(0.0f)
 , m_min_x(std::numeric_limits<double>::max())
 , m_max_x(std::numeric_limits<double>::lowest())
 , m_min_y(std::numeric_limits<double>::max())
@@ -71,6 +71,65 @@ TimelineView::TimelineView(DataProvider& dp)
         static_cast<int>(RocEvents::kNewTrackData), new_track_data_handler);
 }
 
+int
+TimelineView::FindTrackIdByName(const std::string& name)
+{
+    for(const auto& pair : m_graph_map)
+    {
+        if(pair.second.chart && pair.second.chart->GetName() == name)
+        {
+            return pair.first;
+        }
+    }
+    return -1;
+}
+
+float
+TimelineView::CalculateTrackOffsetY(int chart_id)
+{
+    float offset = 0.0f;
+    for(const auto& pair : m_graph_map)
+    {
+        if(pair.first == chart_id) break;
+        if(pair.second.display && pair.second.chart)
+        {
+            offset += pair.second.chart->GetTrackHeight();
+        }
+    }
+    return offset;
+}
+void
+TimelineView::ScrollToTrack(uint64_t position)
+{
+    float offset      = CalculateTrackOffsetY(position);
+    m_scroll_position = offset;
+    ImGui::SetScrollY(m_scroll_position);
+}
+
+void
+TimelineView::ScrollToTrackByName(const std::string& name)
+{
+    int chart_id = FindTrackIdByName(name);
+    if(chart_id == -1) return;
+
+    float offset      = CalculateTrackOffsetY(chart_id);
+    m_scroll_position = offset;
+    ImGui::SetScrollY(m_scroll_position);
+}
+void
+TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
+{
+    if(center)
+    {
+        // Center the movement value in the current view
+        // m_v_width is the width of the visible window in timeline units
+        m_view_time_offset_ns = time_pos_ns - (m_v_width / 2.0);
+    }
+    else
+    {
+        m_view_time_offset_ns = time_pos_ns;
+    }
+}
 TimelineView::~TimelineView()
 {
     DestroyGraphs();
@@ -81,15 +140,16 @@ TimelineView::~TimelineView()
 void
 TimelineView::CalibratePosition()
 {
-    m_scroll_position_x = (m_movement) / (m_range_x);  // Finds where the chart is at.
-    double scrollback   = (m_range_x) *m_scroll_position_x;
+    m_scroll_position_x =
+        (m_view_time_offset_ns) / (m_range_x);  // Finds where the chart is at.
+    double scrollback = (m_range_x) *m_scroll_position_x;
 
     if(m_artifical_scrollbar_active == true)
     {
         double value_to_begginging =
-            m_movement - scrollback;  // how to get back to initial/first value accounting
-                                      // for current movement.
-        m_movement =
+            m_view_time_offset_ns - scrollback;  // how to get back to initial/first value
+                                                 // accounting for current movement.
+        m_view_time_offset_ns =
             value_to_begginging +
             ((m_range_x) *m_scrollbar_location_as_percentage);  // initial/first value +
                                                                 // position where
@@ -100,18 +160,18 @@ TimelineView::CalibratePosition()
 void
 TimelineView::ResetView()
 {
-    m_zoom              = 1.0f;
-    m_movement          = 0.0f;
-    m_min_x             = std::numeric_limits<double>::max();
-    m_max_x             = std::numeric_limits<double>::lowest();
-    m_min_y             = std::numeric_limits<double>::max();
-    m_max_y             = std::numeric_limits<double>::lowest();
-    m_scroll_position   = 0.0f;
-    m_scrubber_position = 0.0f;
-    m_v_min_x           = 0.0f;
-    m_v_max_x           = 0.0f;
-    m_pixels_per_ns     = 0.0f;
-    m_original_v_max_x  = 0.0f;
+    m_zoom                = 1.0f;
+    m_view_time_offset_ns = 0.0f;
+    m_min_x               = std::numeric_limits<double>::max();
+    m_max_x               = std::numeric_limits<double>::lowest();
+    m_min_y               = std::numeric_limits<double>::max();
+    m_max_y               = std::numeric_limits<double>::lowest();
+    m_scroll_position     = 0.0f;
+    m_scrubber_position   = 0.0f;
+    m_v_min_x             = 0.0f;
+    m_v_max_x             = 0.0f;
+    m_pixels_per_ns       = 0.0f;
+    m_original_v_max_x    = 0.0f;
 }
 
 void
@@ -194,8 +254,9 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
         m_sidebar_size    = clamp(m_sidebar_size + drag_delta.x, 100.0f, 600.0f);
-        m_movement -= (drag_delta.x / display_size.x) *
-                      m_v_width;  // Prevents chart from moving in unexpected way.
+        m_view_time_offset_ns -=
+            (drag_delta.x / display_size.x) *
+            m_v_width;  // Prevents chart from moving in unexpected way.
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
         m_resize_activity |= true;
@@ -266,7 +327,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         float cursor_screen_percentage =
             (mouse_position.x - window_position.x) / m_graph_size.x;
         char   text[20];
-        double scrubber_position = m_movement + (cursor_screen_percentage * m_v_width);
+        double scrubber_position =
+            m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
         sprintf(text, "%.0f", scrubber_position);
         ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28);
@@ -290,12 +352,12 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             if(m_highlighted_region.first == INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.first =
-                    m_movement + (cursor_screen_percentage * m_v_width);
+                    m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
             }
             else if(m_highlighted_region.second == INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.second =
-                    m_movement + (cursor_screen_percentage * m_v_width);
+                    m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
                 m_region_selection_changed = true;
             }
             else
@@ -335,7 +397,8 @@ TimelineView::RenderGrid()
     int    ruler_size      = 30;
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - ruler_size);
-    double range           = (m_v_max_x + m_movement) - (m_v_min_x + m_movement);
+    double range =
+        (m_v_max_x + m_view_time_offset_ns) - (m_v_min_x + m_view_time_offset_ns);
 
     double stepSize = 0;
     double steps    = 0;
@@ -370,13 +433,14 @@ TimelineView::RenderGrid()
         draw_list->PushClipRect(clip_min, clip_max, true);
 
         double normalized_start_box =
-            container_pos.x + (m_min_x - (m_min_x + m_movement)) * m_pixels_per_ns;
+            container_pos.x +
+            (m_min_x - (m_min_x + m_view_time_offset_ns)) * m_pixels_per_ns;
 
         if(m_highlighted_region.first != INVALID_SELECTION_TIME)
         {
             double normalized_start_box_highlighted =
                 container_pos.x +
-                (m_highlighted_region.first - m_movement) * m_pixels_per_ns;
+                (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
 
             draw_list->AddLine(
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
@@ -388,7 +452,7 @@ TimelineView::RenderGrid()
         {
             double normalized_start_box_highlighted_end =
                 container_pos.x +
-                (m_highlighted_region.second - m_movement) * m_pixels_per_ns;
+                (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
 
             draw_list->AddLine(
                 ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
@@ -401,10 +465,10 @@ TimelineView::RenderGrid()
         {
             double normalized_start_box_highlighted =
                 container_pos.x +
-                (m_highlighted_region.first - m_movement) * m_pixels_per_ns;
+                (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
             double normalized_start_box_highlighted_end =
                 container_pos.x +
-                (m_highlighted_region.second - m_movement) * m_pixels_per_ns;
+                (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
             draw_list->AddRectFilled(
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted_end,
@@ -415,7 +479,7 @@ TimelineView::RenderGrid()
         int    rectangle_render_count = 0;
         double m_v_width              = (m_max_x - m_min_x) / m_zoom;
 
-        double x_offset = (m_movement / m_v_width) * m_graph_size.x;
+        double x_offset = (m_view_time_offset_ns / m_v_width) * m_graph_size.x;
         x_offset        = (int) x_offset % (int) stepSize;
 
         for(float i = 0; i < steps + 1; i++)
@@ -434,7 +498,7 @@ TimelineView::RenderGrid()
 
             char label[32];
             snprintf(label, sizeof(label), "%.0f",
-                     m_movement + (cursor_screen_percentage * m_v_width));
+                     m_view_time_offset_ns + (cursor_screen_percentage * m_v_width));
             // All though the gridlines are drawn based on where they should be on the
             // scale the raw values are used to represent them.
             ImVec2 labelSize = ImGui::CalcTextSize(label);
@@ -455,6 +519,7 @@ void
 TimelineView::RenderGraphView()
 {
     CalibratePosition();
+
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -487,9 +552,9 @@ TimelineView::RenderGraphView()
     ImVec2 window_size             = m_graph_size;
     bool   request_horizontal_data = false;
 
-    if(std::abs(m_movement - m_viewport_past_position) > m_v_width)
+    if(std::abs(m_view_time_offset_ns - m_viewport_past_position) > m_v_width)
     {
-        m_viewport_past_position = m_movement;
+        m_viewport_past_position = m_view_time_offset_ns;
         request_horizontal_data  = true;
     }
     // for zooming out
@@ -542,8 +607,8 @@ TimelineView::RenderGraphView()
                     double buffer_distance = m_v_width;  // Essentially creates one
                                                          // viewport worth of buffer.
                     graph_objects.second.chart->RequestData(
-                        (m_movement - buffer_distance) + m_min_x,
-                        (m_movement + m_v_width + buffer_distance) + m_min_x,
+                        (m_view_time_offset_ns - buffer_distance) + m_min_x,
+                        (m_view_time_offset_ns + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
                     request_horizontal_data =
                         true;  // This is here because as new tracks are loaded all
@@ -559,8 +624,9 @@ TimelineView::RenderGraphView()
                                                              // viewport worth of buffer.
 
                         graph_objects.second.chart->RequestData(
-                            (m_movement - buffer_distance) + m_min_x,
-                            (m_movement + m_v_width + buffer_distance) + m_min_x,
+                            (m_view_time_offset_ns - buffer_distance) + m_min_x,
+                            (m_view_time_offset_ns + m_v_width + buffer_distance) +
+                                m_min_x,
                             m_graph_size.x * 3);
                     }
                 }
@@ -642,9 +708,9 @@ TimelineView::RenderGraphView()
                     }
                 }
 
-                graph_objects.second.chart->UpdateMovement(m_zoom, m_movement, m_min_x,
-                                                           m_max_x, m_pixels_per_ns,
-                                                           m_scroll_position);
+                graph_objects.second.chart->UpdateMovement(
+                    m_zoom, m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns,
+                    m_scroll_position);
 
                 m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
                 graph_objects.second.chart->Render(m_graph_size.x);
@@ -771,7 +837,7 @@ TimelineView::MakeGraphView()
                 // Create FlameChart
                 FlameTrackItem* flame = new FlameTrackItem(
                     m_data_provider, track_info->index, track_info->name, m_zoom,
-                    m_movement, m_min_x, m_max_x, scale_x);
+                    m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -794,7 +860,7 @@ TimelineView::MakeGraphView()
                 // Linechart
                 LineTrackItem* line = new LineTrackItem(
                     m_data_provider, track_info->index, track_info->name, m_zoom,
-                    m_movement, m_min_x, m_max_x, m_pixels_per_ns);
+                    m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -853,7 +919,7 @@ TimelineView::RenderGraphPoints()
 
         // Scale used in all graphs computer here.
         m_v_width       = (m_range_x) / m_zoom;
-        m_v_min_x       = m_min_x + m_movement;
+        m_v_min_x       = m_min_x + m_view_time_offset_ns;
         m_v_max_x       = m_v_min_x + m_v_width;
         m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
 
@@ -980,7 +1046,8 @@ TimelineView::HandleTopSurfaceTouch()
 
                 // 2. Calculate the world coordinate under the cursor before zoom
                 float  cursor_screen_percentage = mouse_x_in_graph / m_graph_size.x;
-                double x_under_cursor = m_movement + cursor_screen_percentage * m_v_width;
+                double x_under_cursor =
+                    m_view_time_offset_ns + cursor_screen_percentage * m_v_width;
 
                 // 3. Apply zoom
                 const float zoom_speed = 0.1f;
@@ -999,22 +1066,23 @@ TimelineView::HandleTopSurfaceTouch()
                 float new_v_width = m_range_x / new_zoom;
 
                 // 5. Adjust m_movement so the world_x_under_cursor stays under the cursor
-                m_movement = x_under_cursor - cursor_screen_percentage * new_v_width;
+                m_view_time_offset_ns =
+                    x_under_cursor - cursor_screen_percentage * new_v_width;
 
                 // 6. Update zoom and view width
                 m_zoom    = new_zoom;
                 m_v_width = new_v_width;
-                m_v_min_x = m_min_x + m_movement;
+                m_v_min_x = m_min_x + m_view_time_offset_ns;
                 m_v_max_x = m_v_min_x + m_v_width;
             }
 
             if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
             {
-                m_movement -= (1 / m_graph_size.x) * m_v_width;
+                m_view_time_offset_ns -= (1 / m_graph_size.x) * m_v_width;
             }
             if(ImGui::IsKeyPressed(ImGuiKey_RightArrow))
             {
-                m_movement -= (-1 / m_graph_size.x) * m_v_width;
+                m_view_time_offset_ns -= (-1 / m_graph_size.x) * m_v_width;
             }
         }
 
@@ -1036,16 +1104,16 @@ TimelineView::HandleTopSurfaceTouch()
 
             if(user_requested_move < 0)
             {
-                if(m_movement < (m_range_x))
+                if(m_view_time_offset_ns < (m_range_x))
                 {
-                    m_movement -= user_requested_move;
+                    m_view_time_offset_ns -= user_requested_move;
                 }
             }
             else
             {
-                if(m_movement > 0)
+                if(m_view_time_offset_ns > 0)
                 {
-                    m_movement -= user_requested_move;
+                    m_view_time_offset_ns -= user_requested_move;
                 }
             }
         }

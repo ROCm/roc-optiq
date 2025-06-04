@@ -1520,14 +1520,16 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
     std::vector<rocprofvis_trace_counter_t> buffer;
     buffer.reserve(count);
 
-    rocprofvis_trace_counter_t trace_counter;
-
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_sample_t* sample = nullptr;
         result                                 = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &sample);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
+
+        // Construct rocprofvis_trace_counter_t item in-place
+        buffer.emplace_back();
+        rocprofvis_trace_counter_t& trace_counter = buffer.back();
 
         double start_ts = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
@@ -1541,8 +1543,6 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
 
         trace_counter.m_start_ts = start_ts;
         trace_counter.m_value    = value;
-
-        buffer.push_back(trace_counter);
     }
 
     raw_sample_data->SetData(std::move(buffer));
@@ -1572,8 +1572,6 @@ DataProvider::CreateRawEventData(uint64_t                       index,
     std::vector<rocprofvis_trace_event_t> buffer;
     buffer.reserve(count);
 
-    rocprofvis_trace_event_t trace_event;
-
     size_t str_buffer_length = 128;
     char*  str_buffer        = new char[str_buffer_length];
 
@@ -1584,6 +1582,10 @@ DataProvider::CreateRawEventData(uint64_t                       index,
             track_data, kRPVControllerArrayEntryIndexed, i, &event);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
 
+        // Construct rocprofvis_trace_event_t item in-place
+        buffer.emplace_back();
+        rocprofvis_trace_event_t& trace_event = buffer.back();
+        
         uint64_t id = 0;
         result = rocprofvis_controller_get_uint64(event, kRPVControllerEventId, 0, &id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -1624,8 +1626,7 @@ DataProvider::CreateRawEventData(uint64_t                       index,
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   str_buffer, &length);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        trace_event.m_name = std::string(str_buffer);
-        buffer.push_back(trace_event);
+        trace_event.m_name.assign(str_buffer);
     }
 
     delete[] str_buffer;

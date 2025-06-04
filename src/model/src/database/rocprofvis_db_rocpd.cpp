@@ -220,7 +220,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                         "select DISTINCT 0 as const, deviceId, monitorType, 1 as category from rocpd_monitor where deviceId > 0;", 
                         "select 0 as op, start, value, start as end, 0, 0, 0, deviceId, monitorType from rocpd_monitor ",
-                        "select id, monitorType, value, start, start as end, deviceId  from rocpd_monitor ",
+                        "select id, monitorType, CAST(value AS REAL) as value, start, start as end, deviceId  from rocpd_monitor ",
                         &CallBackAddTrack)) break;
 
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );

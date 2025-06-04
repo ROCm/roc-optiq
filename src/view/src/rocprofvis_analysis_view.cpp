@@ -83,9 +83,12 @@ AnalysisView::RenderEventTable()
         table_flags |= ImGuiTableFlags_Sortable;
     }
 
+    uint64_t total_row_count = m_data_provider.GetEventTableTotalRowCount();
     if(table_data.size() > 0)
     {
-        ImGui::Text("Total Events: %d", static_cast<int>(table_data.size()));
+        ImGui::Text("Showing %d of %d events",
+                    std::min(static_cast<int>(table_data.size()), m_max_displayed_rows),
+                    static_cast<int>(total_row_count));
 
         ImGui::BeginTable("Event Data Table", column_names.size(), table_flags);
         for(const auto& col : column_names)
@@ -178,9 +181,12 @@ AnalysisView::RenderSampleTable()
         table_flags |= ImGuiTableFlags_Sortable;
     }
 
+    uint64_t total_row_count = m_data_provider.GetSampleTableTotalRowCount();
     if(table_data.size() > 0)
     {
-        ImGui::Text("Total Samples: %d", static_cast<int>(table_data.size()));
+        ImGui::Text("Showing %d of %d samples",
+                    std::min(static_cast<int>(table_data.size()), m_max_displayed_rows),
+                    static_cast<int>(total_row_count));
         ImGui::BeginTable("Sample Data Table", column_names.size(), table_flags);
         for(const auto& col : column_names)
         {
@@ -257,7 +263,8 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
 {
     if(e && e->GetType() == RocEventType::kTimelineSelectionChangedEvent)
     {
-        auto selection_changed_event = std::static_pointer_cast<TrackSelectionChangedEvent>(e);
+        auto selection_changed_event =
+            std::static_pointer_cast<TrackSelectionChangedEvent>(e);
         if(selection_changed_event)
         {
             const std::vector<uint64_t>& tracks =

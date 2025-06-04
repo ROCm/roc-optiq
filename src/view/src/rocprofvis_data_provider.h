@@ -115,6 +115,8 @@ typedef struct table_info_t
     std::shared_ptr<TableRequestParams>   table_params;
     std::vector<std::string>              table_header;
     std::vector<std::vector<std::string>> table_data;
+    uint64_t                              total_row_count;
+
 } table_info_t;
 
 class DataProvider
@@ -273,10 +275,12 @@ public:
     const std::vector<std::string>&              GetEventTableHeader();
     const std::vector<std::vector<std::string>>& GetEventTableData();
     std::shared_ptr<TableRequestParams>          GetEventTableParams();
+    uint64_t                                     GetEventTableTotalRowCount();
 
     const std::vector<std::string>&              GetSampleTableHeader();
     const std::vector<std::vector<std::string>>& GetSampleTableData();
     std::shared_ptr<TableRequestParams>          GetSampleTableParams();
+    uint64_t                                     GetSampleTableTotalRowCount();
 
     void ClearEventTable();
     void ClearSampleTable();

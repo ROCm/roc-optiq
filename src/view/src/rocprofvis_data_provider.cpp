@@ -137,6 +137,12 @@ DataProvider::GetEventTableParams()
     return m_event_table_info.table_params;
 }
 
+uint64_t
+DataProvider::GetEventTableTotalRowCount()
+{
+    return m_event_table_info.total_row_count;
+}
+
 const std::vector<std::string>&
 DataProvider::GetSampleTableHeader()
 {
@@ -153,6 +159,12 @@ std::shared_ptr<TableRequestParams>
 DataProvider::GetSampleTableParams()
 {
     return m_sample_table_info.table_params;
+}
+
+uint64_t
+DataProvider::GetSampleTableTotalRowCount()
+{
+    return m_sample_table_info.total_row_count;
 }
 
 void
@@ -526,7 +538,6 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
     }
 }
 
-
 bool
 DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                         const TableRequestParams&          table_params)
@@ -597,7 +608,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
     if(m_state != ProviderState::kReady)
     {
         spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
-                      static_cast<int>(m_state));
+                     static_cast<int>(m_state));
         return false;
     }
 
@@ -621,7 +632,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
            m_track_metadata[index].track_type != kRPVControllerTrackTypeEvents)
         {
             spdlog::warn("Cannot fetch event table, track {} is not an event track",
-                          index);
+                         index);
             return false;
         }
         // check if track is a sample track
@@ -629,7 +640,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
            m_track_metadata[index].track_type != kRPVControllerTrackTypeSamples)
         {
             spdlog::warn("Cannot fetch sample table, track {} is not a sample track",
-                          index);
+                         index);
             return false;
         }
 
@@ -771,7 +782,7 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
     if(m_state != ProviderState::kReady)
     {
         spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
-                      static_cast<int>(m_state));
+                     static_cast<int>(m_state));
         return false;
     }
 
@@ -866,7 +877,9 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
                     num_table_tracks++;
                     spdlog::debug("Adding track {} to table request", index);
                 }
-            } else {
+            }
+            else
+            {
                 spdlog::error("Failed to setup table common arguments");
                 // free the args
                 rocprofvis_controller_arguments_free(args);
@@ -1194,7 +1207,6 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 void
 DataProvider::ProcessTableRequest(data_req_info_t& req)
 {
-    
     // free arguments
     if(req.request_args)
     {
@@ -1235,8 +1247,8 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     ROCPROFVIS_ASSERT(table_handle);
 
-    uint64_t num_columns = 0;
-    uint64_t num_rows    = 0;
+    uint64_t num_columns    = 0;
+    uint64_t total_num_rows = 0;
 
     // get the number of columns and rows in the table
     result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumColumns,
@@ -1244,7 +1256,7 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumRows, 0,
-                                              &num_rows);
+                                              &total_num_rows);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     // get the column names
@@ -1267,6 +1279,14 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
 
         column_names.push_back(std::move(name));
     }
+
+    uint64_t num_rows = 0;
+    ROCPROFVIS_ASSERT(req.request_array);
+
+    result = rocprofvis_controller_get_uint64(
+        req.request_array, kRPVControllerArrayNumEntries, 0, &num_rows);
+    spdlog::debug("Table request returned {0} rows", num_rows);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     // get row data
     std::vector<std::vector<std::string>> table_data;
@@ -1352,16 +1372,18 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
     if(table_type == kRPVControllerTableTypeEvents)
     {
         // store the event table data
-        m_event_table_info.table_header = std::move(column_names);
-        m_event_table_info.table_data   = std::move(table_data);
-        m_event_table_info.table_params = table_params;
+        m_event_table_info.table_header    = std::move(column_names);
+        m_event_table_info.table_data      = std::move(table_data);
+        m_event_table_info.table_params    = table_params;
+        m_event_table_info.total_row_count = total_num_rows;
     }
     else if(table_type == kRPVControllerTableTypeSamples)
     {
         // store the sample table data
-        m_sample_table_info.table_header = std::move(column_names);
-        m_sample_table_info.table_data   = std::move(table_data);
-        m_sample_table_info.table_params = table_params;
+        m_sample_table_info.table_header    = std::move(column_names);
+        m_sample_table_info.table_data      = std::move(table_data);
+        m_sample_table_info.table_params    = table_params;
+        m_sample_table_info.total_row_count = total_num_rows;
     }
     else
     {
@@ -1585,7 +1607,7 @@ DataProvider::CreateRawEventData(uint64_t                       index,
         // Construct rocprofvis_trace_event_t item in-place
         buffer.emplace_back();
         rocprofvis_trace_event_t& trace_event = buffer.back();
-        
+
         uint64_t id = 0;
         result = rocprofvis_controller_get_uint64(event, kRPVControllerEventId, 0, &id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);

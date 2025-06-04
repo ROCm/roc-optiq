@@ -9,9 +9,6 @@
 
 using namespace RocProfVis::View;
 
-constexpr uint64_t EVENT_TABLE_REQUEST_ID  = -1;
-constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = -2;
-
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
 , m_trace_future(nullptr)
@@ -125,39 +122,63 @@ DataProvider::GetState()
 const std::vector<std::string>&
 DataProvider::GetEventTableHeader()
 {
-    return m_event_table_header;
+    return m_event_table_info.table_header;
 }
 
 const std::vector<std::vector<std::string>>&
 DataProvider::GetEventTableData()
 {
-    return m_event_table_data;
+    return m_event_table_info.table_data;
+}
+
+std::shared_ptr<TableRequestParams>
+DataProvider::GetEventTableParams()
+{
+    return m_event_table_info.table_params;
+}
+
+uint64_t
+DataProvider::GetEventTableTotalRowCount()
+{
+    return m_event_table_info.total_row_count;
 }
 
 const std::vector<std::string>&
 DataProvider::GetSampleTableHeader()
 {
-    return m_sample_table_header;
+    return m_sample_table_info.table_header;
 }
 
 const std::vector<std::vector<std::string>>&
 DataProvider::GetSampleTableData()
 {
-    return m_sample_table_data;
+    return m_sample_table_info.table_data;
+}
+
+std::shared_ptr<TableRequestParams>
+DataProvider::GetSampleTableParams()
+{
+    return m_sample_table_info.table_params;
+}
+
+uint64_t
+DataProvider::GetSampleTableTotalRowCount()
+{
+    return m_sample_table_info.total_row_count;
 }
 
 void
 DataProvider::ClearEventTable()
 {
-    m_event_table_header.clear();
-    m_event_table_data.clear();
+    m_event_table_info.table_header.clear();
+    m_event_table_info.table_data.clear();
 }
 
 void
 DataProvider::ClearSampleTable()
 {
-    m_sample_table_header.clear();
-    m_sample_table_data.clear();
+    m_sample_table_info.table_header.clear();
+    m_sample_table_info.table_data.clear();
 }
 
 void
@@ -387,7 +408,7 @@ DataProvider::HandleLoadTrackMetaData()
 
 bool
 DataProvider::FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
-                              uint32_t  horz_pixel_range)
+                              uint32_t horz_pixel_range)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -422,12 +443,15 @@ DataProvider::FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
             request_info.request_future     = track_future;
             request_info.request_obj_handle = track_handle;
             request_info.request_args       = nullptr;
-            request_info.index              = index;
+            request_info.request_id         = index;
             request_info.loading_state      = ProviderState::kLoading;
             request_info.request_type       = RequestType::kFetchTrack;
-            request_info.start_ts           = start_ts;
-            request_info.end_ts             = end_ts;
-            m_requests.emplace(request_info.index, request_info);
+
+            auto params = std::make_shared<TrackRequestParams>(index, start_ts, end_ts,
+                                                               horz_pixel_range);
+            request_info.custom_params = params;
+
+            m_requests.emplace(request_info.request_id, request_info);
 
             spdlog::debug("Fetching track graph data {}", index);
             return true;
@@ -448,7 +472,7 @@ DataProvider::FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
 
 bool
 DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
-                         uint32_t  horz_pixel_range)
+                         uint32_t horz_pixel_range)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -486,12 +510,15 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
             request_info.request_future     = graph_future;
             request_info.request_obj_handle = graph_obj;
             request_info.request_args       = nullptr;
-            request_info.index              = index;
+            request_info.request_id         = index;
             request_info.loading_state      = ProviderState::kLoading;
             request_info.request_type       = RequestType::kFetchGraph;
-            request_info.start_ts           = start_ts;
-            request_info.end_ts             = end_ts;
-            m_requests.emplace(request_info.index, request_info);
+
+            auto params = std::make_shared<TrackRequestParams>(index, start_ts, end_ts,
+                                                               horz_pixel_range);
+            request_info.custom_params = params;
+
+            m_requests.emplace(request_info.request_id, request_info);
 
             spdlog::debug("Fetching track data {} from controller {}", index,
                           reinterpret_cast<unsigned long long>(m_trace_controller));
@@ -512,44 +539,42 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
 }
 
 bool
-DataProvider::SetupEventTableCommonArguments(
-    rocprofvis_controller_arguments_t* args,
-    rocprofvis_controller_table_type_t table_type, double start_ts, double end_ts,
-    uint64_t start_row, uint64_t req_row_count)
+DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
+                                        const TableRequestParams&          table_params)
 {
     ROCPROFVIS_ASSERT(args != nullptr);
 
     rocprofvis_result_t result = rocprofvis_controller_set_uint64(
-        args, kRPVControllerTableArgsType, 0, table_type);
+        args, kRPVControllerTableArgsType, 0, table_params.m_table_type);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime, 0,
-                                              start_ts);
+                                              table_params.m_start_ts);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result =
-        rocprofvis_controller_set_double(args, kRPVControllerTableArgsEndTime, 0, end_ts);
+    result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsEndTime, 0,
+                                              table_params.m_end_ts);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result =
-        rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortColumn, 0, 0);
+    result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortColumn, 0,
+                                              table_params.m_sort_column_index);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder, 0,
-                                              kRPVControllerSortOrderAscending);
+                                              table_params.m_sort_order);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    if(start_row != -1)
+    if(table_params.m_start_row != -1)
     {
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex,
-                                                  0, start_row);
+                                                  0, table_params.m_start_row);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     }
 
-    if(req_row_count != -1)
+    if(table_params.m_req_row_count != -1)
     {
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartCount,
-                                                  0, req_row_count);
+                                                  0, table_params.m_req_row_count);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     }
     return true;
@@ -557,56 +582,65 @@ DataProvider::SetupEventTableCommonArguments(
 
 bool
 DataProvider::FetchSingleTrackSampleTable(uint64_t index, double start_ts, double end_ts,
-                                          uint64_t start_row, uint64_t req_row_count)
+                                          uint64_t start_row, uint64_t req_row_count,
+                                          uint64_t sort_column_index,
+                                          rocprofvis_controller_sort_order_t sort_order)
 {
-    return FetchSingleTrackTable(index, kRPVControllerTableTypeSamples, start_ts, end_ts,
-                                 start_row, req_row_count);
+    return FetchSingleTrackTable(
+        TableRequestParams(kRPVControllerTableTypeSamples, { index }, start_ts, end_ts,
+                           start_row, req_row_count, sort_column_index, sort_order));
 }
 
 bool
 DataProvider::FetchSingleTrackEventTable(uint64_t index, double start_ts, double end_ts,
-                                         uint64_t start_row, uint64_t req_row_count)
+                                         uint64_t start_row, uint64_t req_row_count,
+                                         uint64_t sort_column_index,
+                                         rocprofvis_controller_sort_order_t sort_order)
 {
-    return FetchSingleTrackTable(index, kRPVControllerTableTypeEvents, start_ts, end_ts,
-                                 start_row, req_row_count);
+    return FetchSingleTrackTable(
+        TableRequestParams(kRPVControllerTableTypeEvents, { index }, start_ts, end_ts,
+                           start_row, req_row_count, sort_column_index, sort_order));
 }
 
 bool
-DataProvider::FetchSingleTrackTable(uint64_t                           index,
-                                    rocprofvis_controller_table_type_t table_type,
-
-                                    double start_ts, double end_ts, uint64_t start_row,
-                                    uint64_t req_row_count)
+DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
 {
     if(m_state != ProviderState::kReady)
     {
-        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
-                      static_cast<int>(m_state));
+        spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
+                     static_cast<int>(m_state));
         return false;
     }
 
+    if(table_params.m_track_indices.empty())
+    {
+        spdlog::debug("Cannot fetch table, no track indices provided");
+        return false;
+    }
+
+    uint64_t index = table_params.m_track_indices[0];
     if(index < m_track_metadata.size())
     {
-        uint64_t request_id = table_type == kRPVControllerTableTypeEvents
+        uint64_t request_id = table_params.m_table_type == kRPVControllerTableTypeEvents
                                   ? EVENT_TABLE_REQUEST_ID
                                   : SAMPLE_TABLE_REQUEST_ID;
 
         auto it = m_requests.find(request_id);
 
         // check if track is an event track
-        if(table_type == kRPVControllerTableTypeEvents &&
+        if(table_params.m_table_type == kRPVControllerTableTypeEvents &&
            m_track_metadata[index].track_type != kRPVControllerTrackTypeEvents)
         {
-            spdlog::debug("Cannot fetch event table, track {} is not an event track",
-                          index);
+            spdlog::warn("Cannot fetch event table, track {} is not an event track",
+                         index);
             return false;
         }
         // check if track is a sample track
-        if(table_type == kRPVControllerTableTypeSamples &&
+        if(table_params.m_table_type == kRPVControllerTableTypeSamples &&
            m_track_metadata[index].track_type != kRPVControllerTrackTypeSamples)
         {
-            spdlog::debug("Cannot fetch sample table, track {} is not a sample track",
-                          index);
+            spdlog::warn("Cannot fetch sample table, track {} is not a sample track",
+                         index);
             return false;
         }
 
@@ -617,19 +651,20 @@ DataProvider::FetchSingleTrackTable(uint64_t                           index,
             rocprofvis_handle_t* table_handle = nullptr;
             rocprofvis_result_t  result       = kRocProfVisResultUnknownError;
 
-            if(table_type == kRPVControllerTableTypeEvents)
+            if(table_params.m_table_type == kRPVControllerTableTypeEvents)
             {
                 result = rocprofvis_controller_get_object(
                     m_trace_controller, kRPVControllerEventTable, 0, &table_handle);
             }
-            else if(table_type == kRPVControllerTableTypeSamples)
+            else if(table_params.m_table_type == kRPVControllerTableTypeSamples)
             {
                 result = rocprofvis_controller_get_object(
                     m_trace_controller, kRPVControllerSampleTable, 0, &table_handle);
             }
             else
             {
-                spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
+                spdlog::error("Unsupported table type: {}",
+                              static_cast<int>(table_params.m_table_type));
                 return false;
             }
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -647,8 +682,7 @@ DataProvider::FetchSingleTrackTable(uint64_t                           index,
                 rocprofvis_controller_arguments_alloc();
             ROCPROFVIS_ASSERT(args != nullptr);
 
-            if(SetupEventTableCommonArguments(args, table_type, start_ts, end_ts,
-                                              start_row, req_row_count))
+            if(SetupCommonTableArguments(args, table_params))
             {
                 result = rocprofvis_controller_set_uint64(
                     args, kRPVControllerTableArgsNumTracks, 0, 1);
@@ -660,18 +694,16 @@ DataProvider::FetchSingleTrackTable(uint64_t                           index,
             }
             else
             {
-                spdlog::debug("Failed to setup event table common arguments");
+                spdlog::error("Failed to setup event table common arguments");
                 // free the args
                 rocprofvis_controller_arguments_free(args);
                 return false;
             }
 
             // prepare to fetch the table
-            spdlog::debug("Allocating table results array");
             rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
             ROCPROFVIS_ASSERT(array != nullptr);
 
-            spdlog::info("Allocating table request future");
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
             ROCPROFVIS_ASSERT(future != nullptr);
 
@@ -685,17 +717,22 @@ DataProvider::FetchSingleTrackTable(uint64_t                           index,
             request_info.request_future     = future;
             request_info.request_obj_handle = nullptr;
             request_info.request_args       = args;
-            request_info.index              = index;
+            request_info.request_id         = request_id;
             request_info.loading_state      = ProviderState::kLoading;
-            request_info.request_type = (table_type == kRPVControllerTableTypeEvents)
-                                            ? RequestType::kFetchTrackEventTable
-                                            : RequestType::kFetchTrackSampleTable;
-            request_info.start_ts     = start_ts;
-            request_info.end_ts       = end_ts;
+            request_info.request_type =
+                (table_params.m_table_type == kRPVControllerTableTypeEvents)
+                    ? RequestType::kFetchTrackEventTable
+                    : RequestType::kFetchTrackSampleTable;
+
+            std::vector<uint64_t> track_indices;
+            track_indices.push_back(index);
+
+            auto params = std::make_shared<TableRequestParams>(table_params);
             m_requests.emplace(request_id, request_info);
             spdlog::debug("Fetching {} table data",
-                          (table_type == kRPVControllerTableTypeEvents) ? "event"
-                                                                        : "sample");
+                          (table_params.m_table_type == kRPVControllerTableTypeEvents)
+                              ? "event"
+                              : "sample");
 
             return true;
         }
@@ -703,7 +740,7 @@ DataProvider::FetchSingleTrackTable(uint64_t                           index,
         {
             // request for item already exists
             spdlog::debug("Request for this table, tyoe {}, is already pending",
-                          static_cast<uint64_t>(table_type));
+                          static_cast<uint64_t>(table_params.m_table_type));
             return false;
         }
     }
@@ -717,37 +754,42 @@ DataProvider::FetchSingleTrackTable(uint64_t                           index,
 bool
 DataProvider::FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_indices,
                                          double start_ts, double end_ts,
-                                         uint64_t start_row, uint64_t req_row_count)
+                                         uint64_t start_row, uint64_t req_row_count,
+                                         uint64_t sort_column_index,
+                                         rocprofvis_controller_sort_order_t sort_order)
 {
-    return FetchMultiTrackTable(track_indices, kRPVControllerTableTypeSamples, start_ts,
-                                end_ts, start_row, req_row_count);
+    return FetchMultiTrackTable(TableRequestParams(
+        kRPVControllerTableTypeSamples, track_indices, start_ts, end_ts, start_row,
+        req_row_count, sort_column_index, sort_order));
 }
 
 bool
 DataProvider::FetchMultiTrackEventTable(const std::vector<uint64_t>& track_indices,
                                         double start_ts, double end_ts,
-                                        uint64_t start_row, uint64_t req_row_count)
+                                        uint64_t start_row, uint64_t req_row_count,
+                                        uint64_t sort_column_index,
+                                        rocprofvis_controller_sort_order_t sort_order)
+
 {
-    return FetchMultiTrackTable(track_indices, kRPVControllerTableTypeEvents, start_ts,
-                                end_ts, start_row, req_row_count);
+    return FetchMultiTrackTable(
+        TableRequestParams(kRPVControllerTableTypeEvents, track_indices, start_ts, end_ts,
+                           start_row, req_row_count, sort_column_index, sort_order));
 }
 
 bool
-DataProvider::FetchMultiTrackTable(const std::vector<uint64_t>&       track_indices,
-                                   rocprofvis_controller_table_type_t table_type,
-                                   double start_ts, double end_ts, uint64_t start_row,
-                                   uint64_t req_row_count)
+DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
 {
     if(m_state != ProviderState::kReady)
     {
-        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
-                      static_cast<int>(m_state));
+        spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
+                     static_cast<int>(m_state));
         return false;
     }
 
-    if(!track_indices.empty())
+    std::vector<uint64_t> filtered_track_indices;
+    if(!table_params.m_track_indices.empty())
     {
-        uint64_t request_id = table_type == kRPVControllerTableTypeEvents
+        uint64_t request_id = table_params.m_table_type == kRPVControllerTableTypeEvents
                                   ? EVENT_TABLE_REQUEST_ID
                                   : SAMPLE_TABLE_REQUEST_ID;
 
@@ -759,19 +801,20 @@ DataProvider::FetchMultiTrackTable(const std::vector<uint64_t>&       track_indi
             rocprofvis_handle_t* table_handle = nullptr;
             rocprofvis_result_t  result       = kRocProfVisResultUnknownError;
 
-            if(table_type == kRPVControllerTableTypeEvents)
+            if(table_params.m_table_type == kRPVControllerTableTypeEvents)
             {
                 result = rocprofvis_controller_get_object(
                     m_trace_controller, kRPVControllerEventTable, 0, &table_handle);
             }
-            else if(table_type == kRPVControllerTableTypeSamples)
+            else if(table_params.m_table_type == kRPVControllerTableTypeSamples)
             {
                 result = rocprofvis_controller_get_object(
                     m_trace_controller, kRPVControllerSampleTable, 0, &table_handle);
             }
             else
             {
-                spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
+                spdlog::error("Unsupported table type: {}",
+                              static_cast<int>(table_params.m_table_type));
                 return false;
             }
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -783,10 +826,9 @@ DataProvider::FetchMultiTrackTable(const std::vector<uint64_t>&       track_indi
             ROCPROFVIS_ASSERT(args != nullptr);
 
             uint32_t num_table_tracks = 0;
-            if(SetupEventTableCommonArguments(args, table_type, start_ts, end_ts,
-                                              start_row, req_row_count))
+            if(SetupCommonTableArguments(args, table_params))
             {
-                for(const auto& index : track_indices)
+                for(const auto& index : table_params.m_track_indices)
                 {
                     // skip track if index is out of range
                     if(index >= m_track_metadata.size())
@@ -797,7 +839,7 @@ DataProvider::FetchMultiTrackTable(const std::vector<uint64_t>&       track_indi
                     }
 
                     // check if track is an event track
-                    if(table_type == kRPVControllerTableTypeEvents &&
+                    if(table_params.m_table_type == kRPVControllerTableTypeEvents &&
                        m_track_metadata[index].track_type !=
                            kRPVControllerTrackTypeEvents)
                     {
@@ -808,7 +850,7 @@ DataProvider::FetchMultiTrackTable(const std::vector<uint64_t>&       track_indi
                     }
 
                     // check if track is a sample track
-                    if(table_type == kRPVControllerTableTypeSamples &&
+                    if(table_params.m_table_type == kRPVControllerTableTypeSamples &&
                        m_track_metadata[index].track_type !=
                            kRPVControllerTrackTypeSamples)
                     {
@@ -831,9 +873,17 @@ DataProvider::FetchMultiTrackTable(const std::vector<uint64_t>&       track_indi
                         track_handle);
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+                    filtered_track_indices.push_back(index);
                     num_table_tracks++;
                     spdlog::debug("Adding track {} to table request", index);
                 }
+            }
+            else
+            {
+                spdlog::error("Failed to setup table common arguments");
+                // free the args
+                rocprofvis_controller_arguments_free(args);
+                return false;
             }
 
             if(num_table_tracks == 0)
@@ -850,11 +900,9 @@ DataProvider::FetchMultiTrackTable(const std::vector<uint64_t>&       track_indi
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             // prepare to fetch the table
-            spdlog::debug("Allocating table results array");
             rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
             ROCPROFVIS_ASSERT(array != nullptr);
 
-            spdlog::info("Allocating table request future");
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
             ROCPROFVIS_ASSERT(future != nullptr);
 
@@ -868,24 +916,29 @@ DataProvider::FetchMultiTrackTable(const std::vector<uint64_t>&       track_indi
             request_info.request_future     = future;
             request_info.request_obj_handle = nullptr;
             request_info.request_args       = args;
-            request_info.index              = track_indices[0];
+            request_info.request_id         = request_id;
             request_info.loading_state      = ProviderState::kLoading;
-            request_info.request_type = (table_type == kRPVControllerTableTypeEvents)
-                                            ? RequestType::kFetchTrackEventTable
-                                            : RequestType::kFetchTrackSampleTable;
-            request_info.start_ts     = start_ts;
-            request_info.end_ts       = end_ts;
+            request_info.request_type =
+                (table_params.m_table_type == kRPVControllerTableTypeEvents)
+                    ? RequestType::kFetchTrackEventTable
+                    : RequestType::kFetchTrackSampleTable;
+
+            auto params             = std::make_shared<TableRequestParams>(table_params);
+            params->m_track_indices = std::move(filtered_track_indices);
+            request_info.custom_params = params;
+
             m_requests.emplace(request_id, request_info);
             spdlog::debug("Fetching {} table data",
-                          (table_type == kRPVControllerTableTypeEvents) ? "event"
-                                                                        : "sample");
+                          (table_params.m_table_type == kRPVControllerTableTypeEvents)
+                              ? "event"
+                              : "sample");
             return true;
         }
         else
         {
             // request for item already exists
             spdlog::debug("Request for this table, tyoe {}, is already pending",
-                          static_cast<uint64_t>(table_type));
+                          static_cast<uint64_t>(table_params.m_table_type));
             return false;
         }
     }
@@ -894,6 +947,17 @@ DataProvider::FetchMultiTrackTable(const std::vector<uint64_t>&       track_indi
         spdlog::debug("Cannot fetch table, no track indices provided");
         return false;
     }
+}
+
+bool
+DataProvider::IsRequestPending(uint64_t request_id)
+{
+    auto it = m_requests.find(request_id);
+    if(it != m_requests.end())
+    {
+        return true;
+    }
+    return false;
 }
 
 const RawTrackData*
@@ -1033,13 +1097,13 @@ DataProvider::DumpTrack(uint64_t index)
 void
 DataProvider::DumpEventTable()
 {
-    DumpTable(m_event_table_header, m_event_table_data);
+    DumpTable(m_event_table_info.table_header, m_event_table_info.table_data);
 }
 
 void
 DataProvider::DumpSampleTable()
 {
-    DumpTable(m_sample_table_header, m_sample_table_data);
+    DumpTable(m_event_table_info.table_header, m_event_table_info.table_data);
 }
 
 void
@@ -1121,19 +1185,17 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 {
     if(req.request_type == RequestType::kFetchGraph)
     {
-        spdlog::debug("Processing graph data {}", req.index);
         ProcessGraphRequest(req);
     }
     else if(req.request_type == RequestType::kFetchTrack)
     {
-        spdlog::debug("Processing track data {}", req.index);
         ProcessTrackRequest(req);
     }
     else if(req.request_type == RequestType::kFetchTrackEventTable ||
             req.request_type == RequestType::kFetchTrackSampleTable)
     {
-        spdlog::debug("Processing event table data {}", req.index);
-        ProcessEventTableRequest(req);
+        spdlog::debug("Processing table data {}", req.request_id);
+        ProcessTableRequest(req);
     }
     else
     {
@@ -1143,15 +1205,8 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 }
 
 void
-DataProvider::ProcessEventTableRequest(data_req_info_t& req)
+DataProvider::ProcessTableRequest(data_req_info_t& req)
 {
-    if(req.index >= m_track_metadata.size())
-    {
-        spdlog::debug("Cannot process event table data, index out of range {}",
-                      req.index);
-        return;
-    }
-
     // free arguments
     if(req.request_args)
     {
@@ -1192,8 +1247,8 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     ROCPROFVIS_ASSERT(table_handle);
 
-    uint64_t num_columns = 0;
-    uint64_t num_rows    = 0;
+    uint64_t num_columns    = 0;
+    uint64_t total_num_rows = 0;
 
     // get the number of columns and rows in the table
     result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumColumns,
@@ -1201,7 +1256,7 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumRows, 0,
-                                              &num_rows);
+                                              &total_num_rows);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     // get the column names
@@ -1224,6 +1279,14 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
 
         column_names.push_back(std::move(name));
     }
+
+    uint64_t num_rows = 0;
+    ROCPROFVIS_ASSERT(req.request_array);
+
+    result = rocprofvis_controller_get_uint64(
+        req.request_array, kRPVControllerArrayNumEntries, 0, &num_rows);
+    spdlog::debug("Table request returned {0} rows", num_rows);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     // get row data
     std::vector<std::vector<std::string>> table_data;
@@ -1298,17 +1361,29 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
         table_data.push_back(std::move(row_data));
     }
 
+    std::shared_ptr<TableRequestParams> table_params =
+        std::dynamic_pointer_cast<TableRequestParams>(req.custom_params);
+    if(!table_params)
+    {
+        spdlog::warn("Table request params are not set or invalid");
+        table_params = nullptr;
+    }
+
     if(table_type == kRPVControllerTableTypeEvents)
     {
         // store the event table data
-        m_event_table_header = std::move(column_names);
-        m_event_table_data   = std::move(table_data);
+        m_event_table_info.table_header    = std::move(column_names);
+        m_event_table_info.table_data      = std::move(table_data);
+        m_event_table_info.table_params    = table_params;
+        m_event_table_info.total_row_count = total_num_rows;
     }
     else if(table_type == kRPVControllerTableTypeSamples)
     {
         // store the sample table data
-        m_sample_table_header = std::move(column_names);
-        m_sample_table_data   = std::move(table_data);
+        m_sample_table_info.table_header    = std::move(column_names);
+        m_sample_table_info.table_data      = std::move(table_data);
+        m_sample_table_info.table_params    = table_params;
+        m_sample_table_info.total_row_count = total_num_rows;
     }
     else
     {
@@ -1327,20 +1402,29 @@ DataProvider::ProcessEventTableRequest(data_req_info_t& req)
 void
 DataProvider::ProcessTrackRequest(data_req_info_t& req)
 {
-    spdlog::debug("Processing track data {}", req.index);
+    spdlog::debug("Processing track data {}", req.request_id);
+
+    auto track_params = std::dynamic_pointer_cast<TrackRequestParams>(req.custom_params);
+    if(!track_params)
+    {
+        spdlog::error("Track request params are not set or invalid");
+        return;
+    }
 
     // use the track type to determine what type of data is present in the graph array
-    ROCPROFVIS_ASSERT(req.index < m_track_metadata.size());
-    switch(m_track_metadata[req.index].track_type)
+    ROCPROFVIS_ASSERT(track_params->m_index < m_track_metadata.size());
+    switch(m_track_metadata[track_params->m_index].track_type)
     {
         case kRPVControllerTrackTypeEvents:
         {
-            CreateRawEventData(req.index, req.request_array, req.start_ts, req.end_ts);
+            CreateRawEventData(track_params->m_index, req.request_array,
+                               track_params->m_start_ts, track_params->m_end_ts);
             break;
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(req.index, req.request_array, req.start_ts, req.end_ts);
+            CreateRawSampleData(track_params->m_index, req.request_array,
+                                track_params->m_start_ts, track_params->m_end_ts);
             break;
         }
         default:
@@ -1359,14 +1443,21 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
     // call the new data ready callback
     if(m_track_data_ready_callback)
     {
-        m_track_data_ready_callback(req.index, m_trace_file_path);
+        m_track_data_ready_callback(track_params->m_index, m_trace_file_path);
     }
 }
 
 void
 DataProvider::ProcessGraphRequest(data_req_info_t& req)
 {
-    spdlog::debug("Processing graph data {}", req.index);
+    spdlog::debug("Processing graph data {}", req.request_id);
+
+    auto track_params = std::dynamic_pointer_cast<TrackRequestParams>(req.custom_params);
+    if(!track_params)
+    {
+        spdlog::error("Track request params are not set or invalid");
+        return;
+    }
 
     uint64_t graph_type = 0;
     auto     graph      = req.request_obj_handle;
@@ -1390,21 +1481,21 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
                                               &item_count);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    spdlog::debug("{} Graph item count {} min ts {} max ts {}", req.index, item_count,
-                  min_ts, max_ts);
+    spdlog::debug("{} Graph item count {} min ts {} max ts {}", track_params->m_index,
+                  item_count, min_ts, max_ts);
 
     // use the track type to determine what type of data is present in the graph array
-    ROCPROFVIS_ASSERT(req.index < m_track_metadata.size());
-    switch(m_track_metadata[req.index].track_type)
+    ROCPROFVIS_ASSERT(track_params->m_index < m_track_metadata.size());
+    switch(m_track_metadata[track_params->m_index].track_type)
     {
         case kRPVControllerTrackTypeEvents:
         {
-            CreateRawEventData(req.index, req.request_array, min_ts, max_ts);
+            CreateRawEventData(track_params->m_index, req.request_array, min_ts, max_ts);
             break;
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(req.index, req.request_array, min_ts, max_ts);
+            CreateRawSampleData(track_params->m_index, req.request_array, min_ts, max_ts);
             break;
         }
         default:
@@ -1423,7 +1514,7 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
     // call the new data ready callback
     if(m_track_data_ready_callback)
     {
-        m_track_data_ready_callback(req.index, m_trace_file_path);
+        m_track_data_ready_callback(track_params->m_index, m_trace_file_path);
     }
 }
 
@@ -1451,14 +1542,16 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
     std::vector<rocprofvis_trace_counter_t> buffer;
     buffer.reserve(count);
 
-    rocprofvis_trace_counter_t trace_counter;
-
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_sample_t* sample = nullptr;
         result                                 = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &sample);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
+
+        // Construct rocprofvis_trace_counter_t item in-place
+        buffer.emplace_back();
+        rocprofvis_trace_counter_t& trace_counter = buffer.back();
 
         double start_ts = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
@@ -1472,8 +1565,6 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
 
         trace_counter.m_start_ts = start_ts;
         trace_counter.m_value    = value;
-
-        buffer.push_back(trace_counter);
     }
 
     raw_sample_data->SetData(std::move(buffer));
@@ -1503,8 +1594,6 @@ DataProvider::CreateRawEventData(uint64_t                       index,
     std::vector<rocprofvis_trace_event_t> buffer;
     buffer.reserve(count);
 
-    rocprofvis_trace_event_t trace_event;
-
     size_t str_buffer_length = 128;
     char*  str_buffer        = new char[str_buffer_length];
 
@@ -1514,6 +1603,10 @@ DataProvider::CreateRawEventData(uint64_t                       index,
         result                               = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &event);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
+
+        // Construct rocprofvis_trace_event_t item in-place
+        buffer.emplace_back();
+        rocprofvis_trace_event_t& trace_event = buffer.back();
 
         uint64_t id = 0;
         result = rocprofvis_controller_get_uint64(event, kRPVControllerEventId, 0, &id);
@@ -1555,8 +1648,7 @@ DataProvider::CreateRawEventData(uint64_t                       index,
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   str_buffer, &length);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        trace_event.m_name = std::string(str_buffer);
-        buffer.push_back(trace_event);
+        trace_event.m_name.assign(str_buffer);
     }
 
     delete[] str_buffer;

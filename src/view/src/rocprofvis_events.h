@@ -3,6 +3,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -15,7 +16,8 @@ enum class RocEvents
     kNewTrackData,
     kComputeBlockNavigationChanged,
     kComputeTableSearchChanged,
-    kTabClosed
+    kTabClosed,
+    kTimelineSelectionChanged,
 };
 
 enum class RocEventType
@@ -24,7 +26,8 @@ enum class RocEventType
     kTrackDataEvent,
     kComputeBlockNavigationEvent,
     kComputeTableSearchEvent,
-    kTabEvent
+    kTabEvent,
+    kTimelineSelectionChangedEvent,
 };
 
 class RocEvent
@@ -91,6 +94,21 @@ public:
     const std::string& GetTabId();  
 private:
     std::string m_tab_id;
+};
+
+class TrackSelectionChangedEvent : public RocEvent
+{
+public:
+    TrackSelectionChangedEvent(int event_id, std::vector<uint64_t> selected_tracks,
+                          double start_ns, double end_ns);
+    const std::vector<uint64_t>& GetSelectedTracks() const;
+    double GetStartNs() const;  
+    double GetEndNs() const;
+
+private:
+    std::vector<uint64_t> m_selected_tracks;  // indices of selected tracks
+    double                m_start_ns;         // start time in nanoseconds
+    double                m_end_ns;           // end time in nanoseconds
 };
 
 }  // namespace View

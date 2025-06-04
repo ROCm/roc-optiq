@@ -763,28 +763,24 @@ TimelineView::RenderGraphView()
                 selected_graphs.push_back(graph_objects.first);
             }
         }
-        if(selected_graphs.empty())
+
+        double start_ns = m_min_x;
+        double end_ns   = m_max_x;
+        if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
+           m_highlighted_region.second != INVALID_SELECTION_TIME)
         {
-            m_data_provider.ClearEventTable();
-            m_data_provider.ClearSampleTable();
+            start_ns = std::min(m_highlighted_region.first, m_highlighted_region.second) +
+                       m_min_x;
+            end_ns = std::max(m_highlighted_region.first, m_highlighted_region.second) +
+                     m_min_x;
         }
-        else
-        {
-            double min_x = m_min_x;
-            double max_x = m_max_x;
-            if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
-               m_highlighted_region.second != INVALID_SELECTION_TIME)
-            {
-                min_x =
-                    std::min(m_highlighted_region.first, m_highlighted_region.second) +
-                    m_min_x;
-                max_x =
-                    std::max(m_highlighted_region.first, m_highlighted_region.second) +
-                    m_min_x;
-            }
-            m_data_provider.FetchMultiTrackEventTable(selected_graphs, min_x, max_x);
-            m_data_provider.FetchMultiTrackSampleTable(selected_graphs, min_x, max_x);
-        }
+
+        // notify the event manager of the section change
+        std::shared_ptr<TrackSelectionChangedEvent> e =
+            std::make_shared<TrackSelectionChangedEvent>(
+                static_cast<int>(RocEvents::kTimelineSelectionChanged), std::move(selected_graphs),
+                start_ns, end_ns);
+        EventManager::GetInstance()->AddEvent(e);
     }
 }
 

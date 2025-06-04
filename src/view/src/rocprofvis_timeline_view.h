@@ -37,8 +37,7 @@ public:
     int                                    FindChartIdByName(const std::string& name);
     float                                  CalculateChartOffsetY(int chart_id);
     void ScrollToChartByName(const std::string& name, double movement);
-
-private:
+    void SetMovement(double movement, bool center);
     void RenderGraphPoints();
     void RenderGrid();
     void RenderScrubber(ImVec2 screen_pos);

@@ -110,7 +110,20 @@ TimelineView::ScrollToChartByName(const std::string& name, double movement)
     m_scroll_position = offset;
     ImGui::SetScrollY(m_scroll_position);
 }
-
+void
+TimelineView::SetMovement(double movement, bool center)
+{
+    if(center)
+    {
+        // Center the movement value in the current view
+        // m_v_width is the width of the visible window in timeline units
+        m_movement = movement - (m_v_width / 2.0);
+    }
+    else
+    {
+        m_movement = movement;
+    }
+}
 TimelineView::~TimelineView()
 {
     DestroyGraphs();
@@ -495,6 +508,7 @@ void
 TimelineView::RenderGraphView()
 {
     CalibratePosition();
+
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -701,10 +715,7 @@ TimelineView::RenderGraphView()
 
                 ImGui::EndChild();
                 ImGui::PopStyleColor();
-                if(ImGui::Button(graph_objects.second.chart->GetName().c_str()))
-                {
-                    ScrollToChartByName(graph_objects.second.chart->GetName(), 3000000);
-                }
+
                 ImGui::Separator();
             }
             else

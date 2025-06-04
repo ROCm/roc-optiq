@@ -45,7 +45,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_graph_map({})
 , m_is_control_held(false)
 , m_original_v_max_x(0.0f)
-, m_grid_size(50)
+, m_grid_size(30)
 , m_unload_track_distance(1000.0f)
 , m_sidebar_size(400)
 , m_resize_activity(false)
@@ -210,9 +210,8 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
 
     // Horizontal Splitter
     ImGui::SetNextWindowSize(ImVec2(display_size.x, 1.0f), ImGuiCond_Always);
-    ImGui::SetCursorPos(ImVec2(m_sidebar_size, m_graph_size.y - m_grid_size -
+    ImGui::SetCursorPos(ImVec2(0, m_graph_size.y - m_grid_size -
                                                    m_artificial_scrollbar_size));
-
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_settings.GetColor(static_cast<int>(Colors::kScrollBarColor)));
 
@@ -332,17 +331,19 @@ TimelineView::RenderGrid()
     ImVec2 container_pos =
         ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
 
-    int    ruler_size      = 30;
+    //int    ruler_size      = 30;
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - ruler_size);
+    ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - m_grid_size);
     double range           = (m_v_max_x + m_movement) - (m_v_min_x + m_movement);
 
     double stepSize = 0;
     double steps    = 0;
     {
-        char label[32];
-        snprintf(label, sizeof(label), "%.0f", m_max_x);
-        ImVec2 labelSize = ImGui::CalcTextSize(label);
+        // char label[32];
+        // snprintf(label, sizeof(label), "%.0f", m_max_x);
+
+        std::string label = format_nanosecond_timepoint(m_max_x) + "gap";
+        ImVec2 labelSize = ImGui::CalcTextSize(label.c_str());
 
         // amount the loop which generates the grid iterates by.
         steps = m_graph_size.x / labelSize.x;
@@ -352,13 +353,13 @@ TimelineView::RenderGrid()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    if(ImGui::BeginChild("Grid"), ImVec2(m_graph_size.x, m_graph_size.y - ruler_size),
+    if(ImGui::BeginChild("Grid"), ImVec2(m_graph_size.x, m_graph_size.y - m_grid_size),
        true, window_flags)
     {
         ImGui::SetCursorPos(ImVec2(0, 0));
 
         ImGui::BeginChild("main component",
-                          ImVec2(m_graph_size.x, m_graph_size.y - ruler_size), false);
+                          ImVec2(m_graph_size.x, m_graph_size.y - m_grid_size), false);
         ImVec2 child_win  = ImGui::GetWindowPos();
         ImVec2 child_size = ImGui::GetWindowSize();
 
@@ -418,6 +419,12 @@ TimelineView::RenderGrid()
         double x_offset = (m_movement / m_v_width) * m_graph_size.x;
         x_offset        = (int) x_offset % (int) stepSize;
 
+        draw_list->AddRectFilled(
+            ImVec2(container_pos.x, cursor_position.y + content_size.y - m_grid_size),
+            ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
+            IM_COL32(250,250,220,255));  // Background for the grid
+            //m_settings.GetColor(static_cast<int>(Colors::kGridRed)));
+
         for(float i = 0; i < steps + 1; i++)
         {
             float linePos = stepSize * i;
@@ -432,17 +439,20 @@ TimelineView::RenderGrid()
                                m_settings.GetColor(static_cast<int>(Colors::kBoundBox)),
                                0.5f);
 
-            char label[32];
-            snprintf(label, sizeof(label), "%.0f",
-                     m_movement + (cursor_screen_percentage * m_v_width));
+            // char label[32];
+            // snprintf(label, sizeof(label), "%.0f",
+            //          m_movement + (cursor_screen_percentage * m_v_width));
+
+            std::string label = format_nanosecond_timepoint(
+                m_movement + (cursor_screen_percentage * m_v_width));
             // All though the gridlines are drawn based on where they should be on the
             // scale the raw values are used to represent them.
-            ImVec2 labelSize = ImGui::CalcTextSize(label);
+            ImVec2 labelSize = ImGui::CalcTextSize(label.c_str());
             ImVec2 labelPos  = ImVec2(normalized_start - labelSize.x / 2,
                                       cursor_position.y + content_size.y - labelSize.y);
             draw_list->AddText(labelPos,
                                m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
-                               label);
+                               label.c_str());
         }
 
         draw_list->PopClipRect();

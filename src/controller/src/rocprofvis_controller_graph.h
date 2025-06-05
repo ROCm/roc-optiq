@@ -44,7 +44,7 @@ class Graph : public Handle
 
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts, std::vector<Data>& entries);
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start, double end);
-    void Insert(uint32_t lod, double timestamp, Handle* object);
+    void Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object);
 
 public:
     Graph(rocprofvis_controller_graph_type_t type, uint64_t id);

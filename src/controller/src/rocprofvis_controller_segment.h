@@ -20,6 +20,22 @@ class Sample;
 
 constexpr double kSegmentDuration = 1000000000.0;
 
+struct SegmentItemKey
+{
+    double  m_timestamp;
+    uint8_t m_level;
+
+    SegmentItemKey(double timestamp, uint8_t level)
+    : m_timestamp(timestamp)
+    , m_level(level) {};
+
+    bool operator<(const SegmentItemKey& other) const
+    {
+        if(m_timestamp != other.m_timestamp) return m_timestamp < other.m_timestamp;
+        return m_level < other.m_level;
+    }
+};
+
 class Segment
 {
 public:
@@ -40,14 +56,14 @@ public:
 
     void SetMaxTimestamp(double value);
 
-    void Insert(double timestamp, Handle* event);
+    void Insert(double timestamp, uint8_t level, Handle* event);
 
     rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index);
 
     rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
 
 private:
-    std::map<double, Handle*>           m_entries;
+    std::map<SegmentItemKey, Handle*>  m_entries;
     double m_start_timestamp;
     double m_end_timestamp;
     double m_min_timestamp;

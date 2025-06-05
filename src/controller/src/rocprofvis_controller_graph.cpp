@@ -66,7 +66,7 @@ Graph::LOD::SetValidRange(double start, double end)
 }
 
 void
-Graph::Insert(uint32_t lod, double timestamp, Handle* object)
+Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
 {
     ROCPROFVIS_ASSERT(object);
     ROCPROFVIS_ASSERT(m_lods.find(lod) != m_lods.end());
@@ -134,7 +134,7 @@ Graph::Insert(uint32_t lod, double timestamp, Handle* object)
                 object->GetDouble(kRPVControllerEventEndTimestamp, 0, &max_timestamp);
             }
             segment->SetMaxTimestamp(std::max(segment->GetMaxTimestamp(), max_timestamp));
-            segment->Insert(timestamp, object);
+            segment->Insert(timestamp, level, object);
         }
     }
     else
@@ -265,7 +265,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                                 event->SetString(kRPVControllerEventName, 0,
                                                  combined_name.c_str(),
                                                  combined_name.size());
-                                Insert(lod_to_generate, event_start, event);
+                                Insert(lod_to_generate, event_start, level, event);
                             }
 
                             // Create a new event & increment the search
@@ -324,7 +324,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                     event->SetUInt64(kRPVControllerEventLevel, 0, level);
                     event->SetString(kRPVControllerEventName, 0, combined_name.c_str(),
                                      combined_name.size());
-                    Insert(lod_to_generate, event_start, event);
+                    Insert(lod_to_generate, event_start, level, event);
                 }
             }
         }
@@ -372,7 +372,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                                 SampleLOD* new_sample = new SampleLOD(
                                     (rocprofvis_controller_primitive_type_t) type, 0,
                                     sample_start, samples);
-                                Insert(lod_to_generate, sample_start, new_sample);
+                                Insert(lod_to_generate, sample_start, 0, new_sample);
                             }
 
                             // Create a new event & increment the search
@@ -402,7 +402,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 SampleLOD* new_sample =
                     new SampleLOD((rocprofvis_controller_primitive_type_t) type, 0,
                                   sample_start, samples);
-                Insert(lod_to_generate, sample_start, new_sample);
+                Insert(lod_to_generate, sample_start, 0, new_sample);
             }
         }
     }

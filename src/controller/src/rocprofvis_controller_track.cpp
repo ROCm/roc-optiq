@@ -560,8 +560,10 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                     || ((m_type == kRPVControllerTrackTypeSamples) && (object_type == kRPVControllerObjectTypeSample)))
                 {
                     rocprofvis_property_t property;
+                    uint64_t              level = 0;
                     if (object_type == kRPVControllerObjectTypeEvent)
-                    {
+                    {  
+                        result = object->GetUInt64(kRPVControllerEventLevel, 0, &level);
                         property = kRPVControllerEventStartTimestamp;
                     }
                     else
@@ -614,7 +616,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                     object->GetDouble(kRPVControllerEventEndTimestamp, 0, &end_timestamp); 
                                 }
                                 segment->SetMaxTimestamp(std::max(segment->GetMaxTimestamp(), end_timestamp));
-                                segment->Insert(timestamp, object);
+                                segment->Insert(timestamp, level, object);
                             }
                         }
                         else

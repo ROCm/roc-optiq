@@ -470,13 +470,9 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                             GraphLODArgs*       pair   = (GraphLODArgs*) user_ptr;
                             rocprofvis_result_t result = kRocProfVisResultSuccess;
 
-                            if(pair->m_valid_range.first >= segment.GetStartTimestamp() ||
-                               pair->m_valid_range.second <= segment.GetMaxTimestamp())
-                            {
-                                result = segment.Fetch(start, end, pair->m_entries,
-                                                                   pair->m_index);
-                                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                            }
+                            result = segment.Fetch(start, end, pair->m_entries,
+                                                                pair->m_index);
+                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                             return result;
                         });
 

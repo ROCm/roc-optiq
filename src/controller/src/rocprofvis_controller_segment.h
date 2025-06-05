@@ -47,7 +47,7 @@ public:
     rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
 
 private:
-    std::multimap<double, Handle*>           m_entries;
+    std::map<double, Handle*>           m_entries;
     double m_start_timestamp;
     double m_end_timestamp;
     double m_min_timestamp;

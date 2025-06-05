@@ -134,7 +134,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
             auto& entries = m_entries; 
             rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type = kRPVControllerTrackTypeEvents) ? kRPVControllerEventEndTimestamp : kRPVControllerSampleTimestamp);
             
-            std::multimap<double, Handle*>::iterator lower = entries.end();
+            std::map<double, Handle*>::iterator lower = entries.end();
             auto it = entries.begin();
             for (; it != entries.end(); ++it)
             {
@@ -148,7 +148,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 }
             }
 
-            std::multimap<double, Handle*>::iterator upper = entries.end();
+            std::map<double, Handle*>::iterator upper = entries.end();
             for (; it != entries.end(); ++it)
             {
                 double min_ts = it->first;

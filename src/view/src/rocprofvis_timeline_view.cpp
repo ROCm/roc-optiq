@@ -778,8 +778,8 @@ TimelineView::RenderGraphView()
         // notify the event manager of the section change
         std::shared_ptr<TrackSelectionChangedEvent> e =
             std::make_shared<TrackSelectionChangedEvent>(
-                static_cast<int>(RocEvents::kTimelineSelectionChanged), std::move(selected_graphs),
-                start_ns, end_ns);
+                static_cast<int>(RocEvents::kTimelineSelectionChanged),
+                std::move(selected_graphs), start_ns, end_ns);
         EventManager::GetInstance()->AddEvent(e);
     }
 }
@@ -1020,11 +1020,40 @@ TimelineView::HandleTopSurfaceTouch()
         ImVec2 container_pos  = ImGui::GetWindowPos();
         ImVec2 container_size = ImGui::GetWindowSize();
 
-        bool is_mouse_inside = ImGui::IsMouseHoveringRect(
-            container_pos, ImVec2(container_pos.x + container_size.x,
-                                  container_pos.y + container_size.y));
+        // Define sidebar and graph areas
+        ImVec2 sidebar_min = container_pos;
+        ImVec2 sidebar_max =
+            ImVec2(container_pos.x + m_sidebar_size, container_pos.y + m_graph_size.y);
 
-        if(is_mouse_inside)
+        ImVec2 graph_area_min = ImVec2(container_pos.x + m_sidebar_size, container_pos.y);
+        ImVec2 graph_area_max = ImVec2(container_pos.x + m_sidebar_size + m_graph_size.x,
+                                       container_pos.y + m_graph_size.y);
+
+        bool is_mouse_in_sidebar = ImGui::IsMouseHoveringRect(sidebar_min, sidebar_max);
+        bool is_mouse_in_graph =
+            ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
+
+        ImGuiIO& io = ImGui::GetIO();
+
+        // Sidebar: scroll wheel pans vertically
+        if(is_mouse_in_sidebar)
+        {
+            float scroll_wheel = io.MouseWheel;
+            if(scroll_wheel != 0.0f)
+            {
+                // Adjust scroll speed as needed (here, 40.0f per scroll step)
+                float scroll_speed = 100.0f;
+                m_scroll_position  = clamp(
+                    static_cast<float>(m_scroll_position - scroll_wheel * scroll_speed),
+                    0.0f, static_cast<float>(m_content_max_y_scoll));
+                // Optionally, update ImGui's scroll position if needed:
+                ImGui::SetScrollY(m_scroll_position);
+            }
+            return;  // Do not allow drag/zoom in sidebar
+        }
+
+        // Graph area: allow full interaction
+        if(is_mouse_in_graph)
         {
             if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
@@ -1032,13 +1061,13 @@ TimelineView::HandleTopSurfaceTouch()
             }
 
             // Handle Zoom at Cursor
-            float scroll_wheel = ImGui::GetIO().MouseWheel;
+            float scroll_wheel = io.MouseWheel;
             if(scroll_wheel != 0.0f)
             {
                 // 1. Get mouse position relative to graph area
                 ImVec2 mouse_pos        = ImGui::GetMousePos();
-                ImVec2 graph_pos        = container_pos;
-                float  mouse_x_in_graph = mouse_pos.x - graph_pos.x - m_sidebar_size;
+                ImVec2 graph_pos        = graph_area_min;
+                float  mouse_x_in_graph = mouse_pos.x - graph_pos.x;
 
                 // 2. Calculate the world coordinate under the cursor before zoom
                 float  cursor_screen_percentage = mouse_x_in_graph / m_graph_size.x;
@@ -1087,14 +1116,15 @@ TimelineView::HandleTopSurfaceTouch()
             m_can_drag_to_pan = false;
         }
 
-        // Handle Panning (unchanged)
-        if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        // Handle Panning (unchanged, but only if in graph area)
+        if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
+           is_mouse_in_graph)
         {
-            float drag_y = ImGui::GetIO().MouseDelta.y;
-            m_scroll_position =
-                clamp(m_scroll_position - drag_y, 0.0, m_content_max_y_scoll);
-            float drag       = ImGui::GetIO().MouseDelta.x;
-            float view_width = (m_range_x) / m_zoom;
+            float drag_y      = io.MouseDelta.y;
+            m_scroll_position = clamp(static_cast<float>(m_scroll_position - drag_y),
+                                      0.0f, static_cast<float>(m_content_max_y_scoll));
+            float drag        = io.MouseDelta.x;
+            float view_width  = (m_range_x) / m_zoom;
 
             float user_requested_move = (drag / m_graph_size.x) * view_width;
 

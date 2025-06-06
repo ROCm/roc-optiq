@@ -521,6 +521,8 @@ typedef enum rocprofvis_controller_table_properties_t
     // Notionally would give you an array for all the cells in the row
     // But this needs to be Async if we separate the Front/Back end
     kRPVControllerTableRowIndexed = 0xA0000006,
+    // Table title
+    kRPVControllerTableTitle = 0xA0000007,
 } rocprofvis_controller_table_properties_t;
 /* JSON: RPVTable
 {

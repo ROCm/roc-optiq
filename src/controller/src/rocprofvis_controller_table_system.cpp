@@ -492,6 +492,7 @@ rocprofvis_result_t SystemTable::GetUInt64(rocprofvis_property_t property, uint6
             case kRPVControllerTableColumnHeaderIndexed:
             case kRPVControllerTableRowHeaderIndexed:
             case kRPVControllerTableRowIndexed:
+            case kRPVControllerTableTitle:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -548,6 +549,7 @@ rocprofvis_result_t SystemTable::GetString(rocprofvis_property_t property, uint6
             case kRPVControllerTableColumnTypeIndexed:
             case kRPVControllerTableRowHeaderIndexed:
             case kRPVControllerTableRowIndexed:
+            case kRPVControllerTableTitle:
             {
                 result = kRocProfVisResultInvalidType;
                 break;

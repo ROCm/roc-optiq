@@ -181,7 +181,6 @@ class ProfileDatabase : public SqliteDatabase
     // offset of kernel symbols in string table
         uint32_t m_symbols_offset;
 
-    private:
     // vector array to keep current events stack
         std::vector<rocprofvis_event_timing_params_t> m_event_timing_params;
 };

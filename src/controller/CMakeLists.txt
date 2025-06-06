@@ -20,6 +20,7 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_string_table.cpp
     src/rocprofvis_controller_timeline.cpp
     src/rocprofvis_controller_trace.cpp
+	src/rocprofvis_controller_trace_compute.cpp
     src/rocprofvis_controller_track.cpp
     src/rocprofvis_controller_table.cpp
 	src/rocprofvis_controller_table_system.cpp

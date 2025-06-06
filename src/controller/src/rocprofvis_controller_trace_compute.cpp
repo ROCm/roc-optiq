@@ -3,10 +3,6 @@
 #include "rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_controller_compute_metrics.h"
 #include "rocprofvis_controller_table_compute.h"
-#include "rocprofvis_controller_reference.h"
-#include "rocprofvis_controller_future.h"
-#include "rocprofvis_controller_id.h"
-#include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_core_assert.h"
 #include <filesystem>
 
@@ -14,8 +10,6 @@ namespace RocProfVis
 {
 namespace Controller
 {
-
-typedef Reference<rocprofvis_controller_table_t, ComputeTable, kRPVControllerObjectTypeTable> EventTableRef;
 
 ComputeTrace::ComputeTrace()
 {

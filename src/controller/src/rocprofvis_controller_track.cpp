@@ -36,41 +36,46 @@ rocprofvis_dm_track_t Track::GetDmHandle(void){
     return m_dm_handle;
 }
 
-rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
+rocprofvis_result_t
+Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(m_start_timestamp <= end && m_end_timestamp >= start)
     {
-        result = m_segments.FetchSegments(start, end, user_ptr, func);
+        bool dm_fetched = false;
+        while(true)
+        {
+            result = m_segments.FetchSegments(start, end, user_ptr, func);
+            if(result == kRocProfVisResultSuccess || dm_fetched)
+            {
+                break;
+            }
+            else if(result == kRocProfVisResultOutOfRange)
+            {
+                if(kRocProfVisResultSuccess != FetchFromDataModel(start, end))
+                {
+                    return kRocProfVisResultUnknownError;
+                }
+                dm_fetched = true;
+            }
+        }
     }
+
     return result;
 }
 
 rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_t& index)
 {
     std::pair<Array&, uint64_t&> pair(array, index);
-    rocprofvis_result_t  result = kRocProfVisResultUnknownError;
-    bool dm_fetched = false;
-    while(true)
+
+    rocprofvis_result_t result = FetchSegments(start, end, &pair, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t
     {
-        rocprofvis_result_t result = FetchSegments(start, end, &pair, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t
-        {
-            std::pair<Array&, uint64_t&>* pair = (std::pair<Array&, uint64_t&>*)user_ptr;
-            rocprofvis_result_t result = segment.Fetch(start, end, pair->first.GetVector(), pair->second);
-            return result;
-        });
-        if (result == kRocProfVisResultSuccess || dm_fetched)
-        {
-            break;
-        } 
-        else if(result == kRocProfVisResultOutOfRange)
-        {
-            if (kRocProfVisResultSuccess != FetchFromDataModel(start, end)) {
-                return kRocProfVisResultUnknownError;
-            }
-            dm_fetched = true;
-        }
-    }
+        std::pair<Array&, uint64_t&>* pair = (std::pair<Array&, uint64_t&>*)user_ptr;
+        rocprofvis_result_t result = segment.Fetch(start, end, pair->first.GetVector(), pair->second);
+        return result;
+    });
+        
+
     return result;
 }
 

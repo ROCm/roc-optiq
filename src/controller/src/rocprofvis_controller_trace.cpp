@@ -468,6 +468,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                             // This block is asynchronously loading full trace
                             // todo : remove following block after  UI implemented segmented loading
                             // or : use this code for preloading some segments at the load time. start and end has to be calculated considering preloaded segment boundaries  
+                            /*
                             for(int i = 0; i < num_tracks; i++)
                             {                               
                                 RocProfVis::Controller::Array* array = (RocProfVis::Controller::Array*)rocprofvis_controller_array_alloc(32);
@@ -481,6 +482,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                 rocprofvis_controller_future_free(
                                     (rocprofvis_controller_future_t*) future);
                             }
+                            */
                         }
                         else
                         {

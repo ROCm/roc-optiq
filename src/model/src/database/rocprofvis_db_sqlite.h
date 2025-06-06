@@ -62,6 +62,10 @@ class SqliteDatabase : public Database
         // Method to open sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Open() override;
+        // Method to open sqlite database connection
+        // @connection - pointer to connection
+        // @return status of operation
+        rocprofvis_dm_result_t OpenConnection(sqlite3** connection);
         // Method to close sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Close() override;
@@ -125,6 +129,20 @@ class SqliteDatabase : public Database
                                                 const char* query,
                                                 rocprofvis_dm_handle_t handle, 
                                                 RpvSqliteExecuteQueryCallback callback);
+        // Method for SQL query execution with specified database connection and handle parameter.
+        // Used for callbacks storing data into container with rocprofvis_dm_handle_t
+        // handle
+        // @param db_conn - database connection
+        // @param future - future object for asynchronous execution status
+        // @param query - SQL query
+        // @param handle - handle of a container processed rows to be stored
+        // @param callback - sqlite3_exec callback method for data processing
+        // @return status of operation
+        rocprofvis_dm_result_t ExecuteSQLQuery(sqlite3* db_conn, 
+                                               Future*  future,
+                                               const char*                   query,
+                                               rocprofvis_dm_handle_t        handle,
+                                               RpvSqliteExecuteQueryCallback callback);
          // Method for SQL query execution with multi-use subquery parameter. 
         // Used for callbacks storing data into container with rocprofvis_dm_handle_t handle
         // @param future - future object for asynchronous execution status
@@ -200,9 +218,10 @@ class SqliteDatabase : public Database
         int m_db_status;
 
         // method to run SQL query
+        // @param db_conn - database connection 
         // @param query - SQL query
         // @param params - set of parameters to be passed to sqlite3_exec callback
-        rocprofvis_dm_result_t ExecuteSQLQuery(const char* query, rocprofvis_db_sqlite_callback_parameters * params);
+        rocprofvis_dm_result_t ExecuteSQLQuery(sqlite3 *db_conn, const char* query, rocprofvis_db_sqlite_callback_parameters * params);
 
 };
 

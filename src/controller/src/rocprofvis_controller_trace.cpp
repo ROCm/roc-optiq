@@ -8,7 +8,7 @@
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_graph.h"
-#include "rocprofvis_controller_table.h"
+#include "rocprofvis_controller_table_system.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
 #include "rocprofvis_controller_arguments.h"
@@ -25,7 +25,7 @@ namespace Controller
 
 static IdGenerator<Trace> s_trace_id;
 
-typedef Reference<rocprofvis_controller_table_t, Table, kRPVControllerObjectTypeTable> TableRef;
+typedef Reference<rocprofvis_controller_table_t, SystemTable, kRPVControllerObjectTypeTable> SystemTableRef;
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 typedef Reference<rocprofvis_controller_timeline_t, Timeline, kRPVControllerObjectTypeTimeline> TimelineRef;
 
@@ -36,10 +36,10 @@ Trace::Trace()
 , m_sample_table(nullptr)
 , m_dm_handle(nullptr)
 {
-    m_event_table = new Table(0);
+    m_event_table = new SystemTable(0);
     ROCPROFVIS_ASSERT(m_event_table);
 
-    m_sample_table = new Table(1);
+    m_sample_table = new SystemTable(1);
     ROCPROFVIS_ASSERT(m_sample_table);
 }
 
@@ -956,7 +956,7 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerEventTable:
             {
-                TableRef table(value);
+                SystemTableRef table(value);
                 if(table.IsValid())
                 {
                     m_event_table = table.Get();
@@ -966,7 +966,7 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerSampleTable:
             {
-                TableRef table(value);
+                SystemTableRef table(value);
                 if(table.IsValid())
                 {
                     m_sample_table = table.Get();

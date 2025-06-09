@@ -1,64 +1,97 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_compute_table.h"
+#include "rocprofvis_compute_data_provider2.h"
 #include "rocprofvis_navigation_manager.h"
 #include "rocprofvis_navigation_url.h"
+#include "widgets/rocprofvis_compute_widget.h"
+#include <array>
 
 namespace RocProfVis
 {
 namespace View
 {
 
-const std::array TAB_DEFINITIONS = {
+const std::array TAB_DEFINITIONS {
     table_view_category_info_t{kTableCategorySystemSOL, "System Speed of Light", COMPUTE_TABLE_SPEED_OF_LIGHT_URL, {
-        "2.1_Speed-of-Light.csv"
+        kRPVControllerComputeTableTypeSpeedOfLight
     }},
     table_view_category_info_t{kTableCategoryCP, "Command Processor", COMPUTE_TABLE_COMMAND_PROCESSOR_URL, {
-        "5.1_Command_Processor_Fetcher.csv", "5.2_Packet_Processor.csv"
+        kRPVControllerComputeTableTypeCPFetcher, 
+        kRPVControllerComputeTableTypeCPPacketProcessor
     }},
-    table_view_category_info_t{kTableCategorySPI, "Workgroup Manager", COMPUTE_TABLE_WORKGROUP_MANAGER_URL,{
-        "6.1_Workgroup_Manager_Utilizations.csv", "6.2_Workgroup_Manager_-_Resource_Allocation.csv"
+    table_view_category_info_t{kTableCategorySPI, "Workgroup Manager", COMPUTE_TABLE_WORKGROUP_MANAGER_URL, {
+        kRPVControllerComputeTableTypeWorkgroupMngrUtil, 
+        kRPVControllerComputeTableTypeWorkgroupMngrRescAlloc
     }},
     table_view_category_info_t{kTableCategoryWavefrontStats, "Wavefront", COMPUTE_TABLE_WAVEFRONT_URL, {
-        "7.1_Wavefront_Launch_Stats.csv", "7.2_Wavefront_Runtime_Stats.csv"
+        kRPVControllerComputeTableTypeWavefrontLaunch, 
+        kRPVControllerComputeTableTypeWavefrontRuntime
     }},
     table_view_category_info_t{kTableCategoryInstructionMix, "Instruction Mix", COMPUTE_TABLE_INSTRUCTION_MIX_URL, {
-        "10.1_Overall_Instruction_Mix.csv", "10.2_VALU_Arithmetic_Instr_Mix.csv", "10.3_VMEM_Instr_Mix.csv", "10.4_MFMA_Arithmetic_Instr_Mix.csv"
+        kRPVControllerComputeTableTypeInstrMix, 
+        kRPVControllerComputeTableTypeVALUInstrMix, 
+        kRPVControllerComputeTableTypeVMEMInstrMix, 
+        kRPVControllerComputeTableTypeMFMAInstrMix
     }},
     table_view_category_info_t{kTableCategoryCU, "Compute Pipeline", COMPUTE_TABLE_COMPUTE_PIPELINE_URL, {
-        "11.1_Speed-of-Light.csv", "11.2_Pipeline_Stats.csv", "11.3_Arithmetic_Operations.csv"
+        kRPVControllerComputeTableTypeCUSpeedOfLight, 
+        kRPVControllerComputeTableTypeCUPipelineStats, 
+        kRPVControllerComputeTableTypeCUOps
     }},
     table_view_category_info_t{kTableCategoryLDS, "Local Data Store", COMPUTE_TABLE_LOCAL_DATA_STORE_URL, {
-        "12.1_Speed-of-Light.csv", "12.2_LDS_Stats.csv"
+        kRPVControllerComputeTableTypeLDSSpeedOfLight, 
+        kRPVControllerComputeTableTypeLDSStats
     }},
     table_view_category_info_t{kTableCategoryL1I, "L1 Instruction Cache", COMPUTE_TABLE_INSTRUCTION_CACHE_URL, {
-        "13.1_Speed-of-Light.csv", "13.2_Instruction_Cache_Accesses.csv", "13.3_Instruction_Cache_-_L2_Interface.csv"
+        kRPVControllerComputeTableTypeInstrCacheSpeedOfLight, 
+        kRPVControllerComputeTableTypeInstrCacheAccesses, 
+        kRPVControllerComputeTableTypeInstrCacheL2Interface
     }},
     table_view_category_info_t{kTableCategorySL1D, "Scalar L1 Data Cache", COMPUTE_TABLE_SCALAR_CACHE_URL, {
-        "14.1_Speed-of-Light.csv", "14.2_Scalar_L1D_Cache_Accesses.csv", "14.3_Scalar_L1D_Cache_-_L2_Interface.csv"
+        kRPVControllerComputeTableTypeSL1CacheSpeedOfLight, 
+        kRPVControllerComputeTableTypeSL1CacheAccesses, 
+        kRPVControllerComputeTableTypeSL1CacheL2Transactions
     }},
     table_view_category_info_t{kTableCategoryAddressProcessingUnit, "Address Processing Unit & Data Return Path", COMPUTE_TABLE_ADDRESS_PROCESSING_UNIT_URL, {
-        "15.1_Address_Processing_Unit.csv", "15.2_Data-Return_Path.csv"
+        kRPVControllerComputeTableTypeAddrProcessorStats, 
+        kRPVControllerComputeTableTypeAddrProcessorReturnPath
     }},
     table_view_category_info_t{kTableCategoryVL1D, "Vector L1 Data Cache", COMPUTE_TABLE_VECTOR_CACHE_URL, {
-        "16.1_Speed-of-Light.csv", "16.2_L1D_Cache_Stalls_(%).csv", "16.3_L1D_Cache_Accesses.csv", "16.4_L1D_-_L2_Transactions.csv", "16.5_L1D_Addr_Translation.csv",
+        kRPVControllerComputeTableTypeVL1CacheSpeedOfLight, 
+        kRPVControllerComputeTableTypeVL1CacheStalls, 
+        kRPVControllerComputeTableTypeVL1CacheAccesses, 
+        kRPVControllerComputeTableTypeVL1CacheL2Transactions, 
+        kRPVControllerComputeTableTypeVL1CacheAddrTranslations
     }},
     table_view_category_info_t{kTableCategoryL2, "L2 Cache", COMPUTE_TABLE_L2_CACHE_URL, {
-        "17.1_Speed-of-Light.csv", "17.2_L2_-_Fabric_Transactions.csv", "17.3_L2_Cache_Accesses.csv", "17.4_L2_-_Fabric_Interface_Stalls.csv", "17.5_L2_-_Fabric_Detailed_Transaction_Breakdown.csv"
+        kRPVControllerComputeTableTypeL2CacheSpeedOfLight, 
+        kRPVControllerComputeTableTypeL2CacheFabricTransactions, 
+        kRPVControllerComputeTableTypeL2CacheAccesses, 
+        kRPVControllerComputeTableTypeL2CacheFabricStalls, 
+        kRPVControllerComputeTableTypeL2CacheFabricTransactionsDetailed
     }},
     table_view_category_info_t{kTableCategoryL2PerChannel, "L2 Cache (Per Channel)", COMPUTE_TABLE_L2_CACHE_PER_CHANNEL_URL, {
-        "18.1_Aggregate_Stats_(All_channels).csv", "18.2_L2_Cache_Hit_Rate_(pct)", "18.3_L2_Requests_(per_normUnit).csv", "18.4_L2_Requests_(per_normUnit).csv", 
-        "18.5_L2-Fabric_Requests_(per_normUnit).csv", "18.6_L2-Fabric_Read_Latency_(Cycles).csv", "18.7_L2-Fabric_Write_and_Atomic_Latency_(Cycles).csv", "18.8_L2-Fabric_Atomic_Latency_(Cycles).csv", 
-        "18.9_L2-Fabric_Read_Stall_(Cycles_per_normUnit).csv", "18.10_L2-Fabric_Write_and_Atomic_Stall_(Cycles_per_normUnit).csv", "18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv"
-    }},
+        kRPVControllerComputeTableTypeL2CacheStats, 
+        kRPVControllerComputeTableTypeL2CacheHitRate, 
+        kRPVControllerComputeTableTypeL2CacheReqs1, 
+        kRPVControllerComputeTableTypeL2CacheReqs2,
+        kRPVControllerComputeTableTypeL2CacheFabricReqs, 
+        kRPVControllerComputeTableTypeL2CacheFabricRdLat, 
+        kRPVControllerComputeTableTypeL2CacheFabricWrAtomLat, 
+        kRPVControllerComputeTableTypeL2CacheFabricAtomLat,
+        kRPVControllerComputeTableTypeL2CacheRdStalls, 
+        kRPVControllerComputeTableTypeL2CacheWrAtomStalls, 
+        kRPVControllerComputeTableTypeL2Cache128Reqs
+    }}
 };
 
-ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category)
+ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider2> data_provider, table_view_category_t category)
 : m_search_event_token(-1)
 {
-    for (const std::string& content : TAB_DEFINITIONS[category].m_content_ids)
+    for (const rocprofvis_controller_compute_table_types_t& table : TAB_DEFINITIONS[category].m_table_types)
     {
-        m_metrics.push_back(std::make_unique<ComputeMetricGroup>(data_provider, content));
+        m_tables.push_back(std::make_unique<ComputeTable>(data_provider, table));
     }
 
     auto search_event_handler = [this](std::shared_ptr<RocEvent> event) 
@@ -68,36 +101,34 @@ ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> 
     m_search_event_token = EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kComputeTableSearchChanged), search_event_handler);
 }
 
-ComputeTableCategory::~ComputeTableCategory() {}
-
 void ComputeTableCategory::OnSearchChanged(std::shared_ptr<RocEvent> event)
 {
     std::shared_ptr<ComputeTableSearchEvent> navigation_event = std::dynamic_pointer_cast<ComputeTableSearchEvent>(event);
-    for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics)
+    for (std::unique_ptr<ComputeTable>& table : m_tables)
     {
-        metric->Search(navigation_event->GetSearchTerm());
+        table->Search(navigation_event->GetSearchTerm());
     }
 }
 
 void ComputeTableCategory::Render()
 {
     ImGui::BeginChild("", ImVec2(-1, -1));
-    for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics)
+    for (std::unique_ptr<ComputeTable>& table : m_tables)
     {
-        metric->Render();
+        table->Render();
     }
     ImGui::EndChild();
 }
 
 void ComputeTableCategory::Update()
 {
-    for (std::unique_ptr<ComputeMetricGroup>& metric : m_metrics)
+    for (std::unique_ptr<ComputeTable>& table : m_tables)
     {
-        metric->Update();
+        table->Update();
     }
 }
 
-ComputeTableView::ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider) 
+ComputeTableView::ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider) 
 : m_tab_container(nullptr)
 , m_search_term("")
 , m_search_edited(false)
@@ -140,7 +171,7 @@ void ComputeTableView::RenderMenuBar()
     ImGui::Text("Search");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(350 - ImGui::CalcTextSize("Search").x);
-    ImGui::InputTextWithHint("##compute_table_search_bar", "Metric Name", m_search_term, ARRAYSIZE(m_search_term), 
+    ImGui::InputTextWithHint("##compute_table_search_bar", "Metric Name", m_search_term, IM_ARRAYSIZE(m_search_term), 
                              ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_CallbackEdit, 
                              [](ImGuiInputTextCallbackData* data) -> int 
                              {

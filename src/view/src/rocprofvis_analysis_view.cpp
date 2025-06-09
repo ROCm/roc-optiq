@@ -3,7 +3,7 @@
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
-
+#include "rocprofvis_events_view.h"
 #include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
@@ -30,6 +30,18 @@ AnalysisView::AnalysisView(DataProvider& dp)
     tab_item.m_widget =
         std::make_shared<RocCustomWidget>([this]() { this->RenderSampleTable(); });
     m_tab_container->AddTab(tab_item);
+
+
+     m_events_view = std::make_shared<EventsView>();
+
+      // Add EventsView tab
+    tab_item.m_label     = "Events View";
+    tab_item.m_id        = "events_view";
+    tab_item.m_can_close = false;
+    tab_item.m_widget =
+        std::make_shared<RocCustomWidget>([this]() { m_events_view->Render(); });
+    m_tab_container->AddTab(tab_item);
+
 
     m_tab_container->SetAllowToolTips(false);
     m_tab_container->SetActiveTab(0);

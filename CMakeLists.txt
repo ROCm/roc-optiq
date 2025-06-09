@@ -23,6 +23,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.h 
     src/view/src/rocprofvis_track_item.cpp 
     src/view/src/rocprofvis_flame_track_item.cpp 
+    src/view/src/rocprofvis_events_view.cpp 
     src/view/src/rocprofvis_settings.cpp 
     src/view/src/rocprofvis_analysis_view.cpp 
     src/view/src/rocprofvis_trace_view.cpp 

@@ -5,6 +5,8 @@
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_events_view.h"
+
 #include "widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -31,6 +33,7 @@ private:
     std::shared_ptr<TabContainer> m_tab_container;
     int m_max_displayed_rows;  // Maximum number of rows to display in the table
     EventManager::SubscriptionToken m_time_line_selection_changed_token;
+    std::shared_ptr<EventsView>     m_events_view;  
 };
 
 }  // namespace View

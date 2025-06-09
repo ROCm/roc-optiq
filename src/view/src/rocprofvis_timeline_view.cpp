@@ -54,6 +54,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_artifical_scrollbar_active(false)
 , m_highlighted_region({ INVALID_SELECTION_TIME, INVALID_SELECTION_TIME })
 , m_new_track_token(-1)
+, m_scroll_to_track_token(-1)
 , m_settings(Settings::GetInstance())
 , m_v_past_width(0)
 , m_v_width(0)
@@ -69,6 +70,18 @@ TimelineView::TimelineView(DataProvider& dp)
     };
     m_new_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kNewTrackData), new_track_data_handler);
+
+    // Used to move to track when tree view clicks on it.
+    auto scroll_to_track_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<ScrollToTrackByNameEvent>(e);
+        if(evt)
+        {
+            this->ScrollToTrackByName(evt->GetTrackName());
+        }
+    };
+    m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+        scroll_to_track_handler);
 }
 
 int
@@ -135,6 +148,9 @@ TimelineView::~TimelineView()
     DestroyGraphs();
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTrackData),
                                              m_new_track_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+        m_scroll_to_track_token);
 }
 
 void

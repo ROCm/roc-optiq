@@ -69,6 +69,18 @@ TimelineView::TimelineView(DataProvider& dp)
     };
     m_new_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kNewTrackData), new_track_data_handler);
+
+    // Used to move to track when tree view clicks on it.
+    auto scroll_to_track_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<ScrollToTrackByNameEvent>(e);
+        if(evt)
+        {
+            this->ScrollToTrackByName(evt->GetTrackName());
+        }
+    };
+    EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+        scroll_to_track_handler);
 }
 
 int
@@ -115,6 +127,7 @@ TimelineView::ScrollToTrackByName(const std::string& name)
     float offset      = CalculateTrackOffsetY(chart_id);
     m_scroll_position = offset;
     ImGui::SetScrollY(m_scroll_position);
+
 }
 void
 TimelineView::SetViewTimePosition(double time_pos_ns, bool center)

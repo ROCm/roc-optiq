@@ -18,6 +18,8 @@ enum class RocEvents
     kComputeTableSearchChanged,
     kTabClosed,
     kTimelineSelectionChanged,
+    kHandleUserGraphNavigationEvent
+
 };
 
 enum class RocEventType
@@ -28,6 +30,7 @@ enum class RocEventType
     kComputeTableSearchEvent,
     kTabEvent,
     kTimelineSelectionChangedEvent,
+    kScrollToTrackByNameEvent
 };
 
 class RocEvent
@@ -77,6 +80,21 @@ private:
     int m_block;
 };
 
+class ScrollToTrackByNameEvent : public RocEvent
+{
+public:
+    ScrollToTrackByNameEvent(int event_id, const std::string& track_name)
+    : RocEvent(event_id)
+    , m_track_name(track_name)
+    {
+        m_event_type = RocEventType::kScrollToTrackByNameEvent;
+    }
+    const std::string& GetTrackName() const { return m_track_name; }
+
+private:
+    std::string m_track_name;
+};
+
 class ComputeTableSearchEvent : public RocEvent
 {
 public:
@@ -91,7 +109,8 @@ class TabClosedEvent : public RocEvent
 {
 public:
     TabClosedEvent(int event_id, const std::string& tab_id);
-    const std::string& GetTabId();  
+    const std::string& GetTabId();
+
 private:
     std::string m_tab_id;
 };
@@ -100,10 +119,10 @@ class TrackSelectionChangedEvent : public RocEvent
 {
 public:
     TrackSelectionChangedEvent(int event_id, std::vector<uint64_t> selected_tracks,
-                          double start_ns, double end_ns);
+                               double start_ns, double end_ns);
     const std::vector<uint64_t>& GetSelectedTracks() const;
-    double GetStartNs() const;  
-    double GetEndNs() const;
+    double                       GetStartNs() const;
+    double                       GetEndNs() const;
 
 private:
     std::vector<uint64_t> m_selected_tracks;  // indices of selected tracks

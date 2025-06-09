@@ -1,8 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_sidebar.h"
-#include "rocprofvis_settings.h"
 #include "imgui.h"
+#include "rocprofvis_settings.h"
 #include "rocprofvis_structs.h"
 #include <iostream>
 #include <map>
@@ -40,7 +40,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
     {
         return;
     }
-    
+
     if(ImGui::CollapsingHeader("Project 1"))
     {
         for(auto& tree_item : *tree)
@@ -55,12 +55,20 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                 ImGuiCol_HeaderActive,
                 m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
 
-            if(ImGui::CollapsingHeader(("Chart #" + std::to_string(tree_item.first) +
-                                        ": " + tree_item.second.chart->GetName())
-                                           .c_str()))
+            std::string header_label = "Chart #" + std::to_string(tree_item.first) +
+                                       ": " + tree_item.second.chart->GetName();
+            bool open = ImGui::CollapsingHeader(header_label.c_str());
+
+            if(ImGui::IsItemClicked())  // Only fire event when user clicks the header
             {
-                // tree_item.second.selected = true;
-                
+                auto evt = std::make_shared<ScrollToTrackByNameEvent>(
+                    static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+                    tree_item.second.chart->GetName());
+                EventManager::GetInstance()->AddEvent(evt);
+            }
+
+            if(open)
+            {
                 if(ImGui::Checkbox(
                        (" Enable/Disable Chart #" + std::to_string((tree_item.first)))
                            .c_str(),
@@ -69,8 +77,9 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                 }
                 if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_FLAMECHART)
                 {
-                    if(ImGui::Checkbox( ("Turn off color #" + std::to_string(tree_item.first)).c_str(),
-                                       &tree_item.second.colorful_flamechart))
+                    if(ImGui::Checkbox(
+                           ("Turn off color #" + std::to_string(tree_item.first)).c_str(),
+                           &tree_item.second.colorful_flamechart))
 
                     {
                         static_cast<FlameTrackItem*>(tree_item.second.chart)

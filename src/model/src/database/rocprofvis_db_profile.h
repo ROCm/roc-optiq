@@ -27,15 +27,6 @@ namespace RocProfVis
 namespace DataModel
 {
 
-
-typedef struct
-{
-    uint64_t process_id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
-    uint64_t start_time;
-    uint64_t end_time;
-    uint32_t level;
-} rocprofvis_event_timing_params_t;
-
 // class for methods and members common for all RocPd-based schemas
 class ProfileDatabase : public SqliteDatabase
 {
@@ -100,12 +91,10 @@ class ProfileDatabase : public SqliteDatabase
     protected:
 
     // method to build a query to read time slice of records for single track 
-    // @param track_properties_only - true if getting only track properties, no records 
     // @param index - track index 
     // @param query - reference to query string  
     // @return status of operation
         rocprofvis_dm_result_t BuildTrackQuery(
-                            bool track_properties_only,
                             rocprofvis_dm_index_t index,
                             rocprofvis_dm_string_t& query) override;
     // method to build a query to read time slice of records for all tracks in one shot 
@@ -135,6 +124,13 @@ class ProfileDatabase : public SqliteDatabase
                             uint64_t offset,
                             bool count_only, 
                             rocprofvis_dm_string_t& query) override;
+
+        rocprofvis_dm_result_t ExecuteQueryForAllTracksAsync(
+                            rocprofvis_dm_charptr_t prefix, 
+                            rocprofvis_dm_charptr_t suffix,
+                            RpvSqliteExecuteQueryCallback callback, 
+                            std::function<const char*(rocprofvis_dm_track_params_t*)> func_query,
+                            std::function<void(rocprofvis_dm_track_params_t*)> func_clear);
 
     protected:
     // sqlite3_exec callback to add flowtrace record to FlowTrace container.
@@ -168,21 +164,10 @@ class ProfileDatabase : public SqliteDatabase
     // @return SQLITE_OK if successful
         static int CallbackGetTrackProperties(void* data, int argc, char** argv,
                                               char** azColName);
-    // sqlite3_exec callback to collect minimum and maximum timestamps of the trace
-    // minimum/maximum timestamps. Used in all-selected-tracks time slice query
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-       static int CallbackGetTraceProperties(void* data, int argc, char** argv,
-                                             char** azColName);
+
     protected:
     // offset of kernel symbols in string table
         uint32_t m_symbols_offset;
-
-    // vector array to keep current events stack
-        std::vector<rocprofvis_event_timing_params_t> m_event_timing_params;
 };
 
 }  // namespace DataModel

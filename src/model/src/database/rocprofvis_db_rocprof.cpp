@@ -181,20 +181,6 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ExecuteSQLQuery(future,"SELECT * from rocpd_info_pmc;", "PMC", (rocprofvis_dm_handle_t)CachedTables(), &CallbackCacheTable);
 
         CachedTables()->AddTableCell("PMC", -1, "name", "MALLOC");
-
-        ShowProgress(1, "Get minimum and maximum timestamps", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT MIN(start), MAX(end) FROM ("
-                                                                                                " SELECT start, end FROM rocpd_region"
-                                                                                                " UNION ALL"
-                                                                                                " SELECT timestamp as start, timestamp as end FROM rocpd_sample"
-                                                                                                " UNION ALL"
-                                                                                                " SELECT start, end FROM rocpd_kernel_dispatch"
-                                                                                                " UNION ALL"
-                                                                                                " SELECT start, end FROM rocpd_memory_allocate"
-                                                                                                " UNION ALL"
-                                                                                                " SELECT start, end FROM rocpd_memory_copy"
-                                                                                                " );", CallbackGetTraceProperties)) break;
-
                 
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
@@ -259,33 +245,39 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT COUNT(*) FROM rocpd_string;", &CallbackGetValue, m_symbols_offset)) break;
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT display_name FROM rocpd_info_kernel_symbol;", &CallBackAddString)) break;
 
-        ShowProgress(10, "Calculate levels for CPU events", kRPVDbBusy, future);
-        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT nid, pid, tid, 1 as op, id, start, end FROM rocpd_region ORDER BY start", &CalculateEventLevels)) break;
-        m_event_timing_params.clear();
+        ShowProgress(10, "Calculate event levels", kRPVDbBusy, future);
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteQueryForAllTracksAsync(
+               "SELECT ", " ORDER BY start", &CalculateEventLevels,
+               [](rocprofvis_dm_track_params_t* params) {
+                   if(params->track_category == kRocProfVisDmRegionTrack)
+                   {
+                       return "nodeId, pid, tid, 1 as op, id, start, end, ";
+                   }
+                   else if(params->track_category == kRocProfVisDmKernelTrack)
+                   {
+                       return "nodeId, agentId, queueId, 2 as op, id, start, end, ";
+                   }
+                   return "";
+               },
+               [](rocprofvis_dm_track_params_t* params) {
+                   params->m_event_timing_params.clear();
+                   params->m_event_timing_params.shrink_to_fit();
+               }))
+        {
+            break;
+        }
 
-        ShowProgress(10, "Calculate levels for Kernel events", kRPVDbBusy, future);
-        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT gpu.nid, gpu.agent_id, gpu.queue_id, gpu.op, gpu.id, gpu.start, gpu.end FROM("
-                                                                                                                   " SELECT nid, agent_id, queue_id, 2 as op, id, start, end FROM rocpd_kernel_dispatch"
-                                                                                                                   " UNION ALL"
-                                                                                                                   " SELECT nid, coalesce(agent_id,0), coalesce(queue_id,0), 3 as op, id, start, end FROM rocpd_memory_allocate"
-                                                                                                                   " UNION ALL"
-                                                                                                                   " SELECT nid, coalesce(dst_agent_id,0), coalesce(queue_id,0), 4 as op, id, start, end FROM rocpd_memory_copy"
-                                                                                                                   " ) gpu ORDER BY gpu.start;", &CalculateEventLevels)) break;
-        m_event_timing_params.clear();
 
         ShowProgress(5, "Count records per track", kRPVDbBusy, future);
-        for(int i = 0; i < NumTracks(); i++)
+
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteQueryForAllTracksAsync(
+               "SELECT COUNT(*), MIN(start), MAX(end), ", "", &CallbackGetTrackProperties,
+               [](rocprofvis_dm_track_params_t* params) { return " "; },
+               [](rocprofvis_dm_track_params_t* params) {}))
         {
-            std::string query;
-            if(BuildTrackQuery(true, i, query) != kRocProfVisDmResultSuccess)
-            {
-                break;
-            }
-            if(kRocProfVisDmResultSuccess !=
-               ExecuteSQLQuery(future, query.c_str(), &CallbackGetTrackProperties))
-            {
-                break;
-            }
+            break;
         }
 
         TraceProperties()->metadata_loaded=true;

@@ -88,6 +88,16 @@ class SqliteDatabase : public Database
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
                                                 const char* query, 
                                                 RpvSqliteExecuteQueryCallback callback);
+
+        // Method for SQL query execution with specified database connection and callback to process table rows
+        // @param future - future object for asynchronous execution status
+        // @param query - SQL query
+        // @param callback - sqlite3_exec callback method for data processing
+        // @return status of operation
+        rocprofvis_dm_result_t ExecuteSQLQuery(sqlite3* db_conn, 
+                                               Future* future,
+                                               const char*                   query,
+                                               RpvSqliteExecuteQueryCallback callback);
         // Method for single row and column SQL query execution returning result of the query as string 
         // @param future - future object for asynchronous execution status
         // @param query - SQL query
@@ -202,6 +212,13 @@ class SqliteDatabase : public Database
         // @return SQLITE_OK if successful
         static int CallbackRunQuery(void *data, int argc, char **argv, char **azColName); 
 
+        static rocprofvis_dm_result_t ExecuteSQLQueryStatic(
+            SqliteDatabase* db, 
+            rocprofvis_db_connection_t conn,
+            Future* future, 
+            const char* query,
+            RpvSqliteExecuteQueryCallback callback);
+
     private:     
 
         // sqlite3_exec callback to succeed if table exists in database and fail otherwise
@@ -222,6 +239,15 @@ class SqliteDatabase : public Database
         // @param query - SQL query
         // @param params - set of parameters to be passed to sqlite3_exec callback
         rocprofvis_dm_result_t ExecuteSQLQuery(sqlite3 *db_conn, const char* query, rocprofvis_db_sqlite_callback_parameters * params);
+
+        // method to mimic slite3_exec using sqlite3_prepare_v2
+        // @param db - database connection
+        // @param query - SQL query
+        // @param callback - sqlite3_exec type callback
+        // @param user_data - user parameters
+        int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
+                                        int (*callback)(void*, int, char**, char**),
+                                        void* user_data);
 
 };
 

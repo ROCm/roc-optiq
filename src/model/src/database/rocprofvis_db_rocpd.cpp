@@ -191,17 +191,6 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(10, "Create PMC tracks indexes", kRPVDbBusy, future );
         ExecuteSQLQuery(future,"CREATE INDEX monitorTypeIdx on rocpd_monitor(monitorType);");
 
-        ShowProgress(1, "Getting minimum and maximum timestamps", kRPVDbBusy, future );
-        if(kRocProfVisDmResultSuccess !=
-           ExecuteSQLQuery(future,
-                           "SELECT MIN(start), MAX(end) FROM (SELECT start, end FROM rocpd_api "
-                           "UNION ALL SELECT start, end FROM rocpd_op UNION ALL SELECT "
-                           "start, start as end FROM rocpd_monitor);",
-                           &CallbackGetTraceProperties))
-        {
-            break;
-        }
-
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                         "select DISTINCT 0 as const, pid, tid, 2 as category from rocpd_api;", 
@@ -226,28 +215,46 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT string, GROUP_CONCAT(id) AS ids FROM rocpd_string GROUP BY string;", &CallBackAddString)) break;
 
-        ShowProgress(10, "Calculate levels for HIP API events", kRPVDbBusy, future);
-        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT 0, pid, tid, 1 as op, id, start, end FROM rocpd_api ORDER BY start", &CalculateEventLevels)) break;
-        m_event_timing_params.clear();
-
-        ShowProgress(10, "Calculate levels for Kernel events", kRPVDbBusy, future);
-        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT 0, gpuId, queueId, 2 as op, id, start, end FROM rocpd_op ORDER BY start", &CalculateEventLevels)) break;
-        m_event_timing_params.clear();
-
-        ShowProgress(5, "Count records per track", kRPVDbBusy, future);
-        for (int i = 0; i < NumTracks(); i++)
+        ShowProgress(10, "Calculate event levels", kRPVDbBusy, future);
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteQueryForAllTracksAsync("SELECT ",
+                                         " ORDER BY start", &CalculateEventLevels, 
+                                         [](rocprofvis_dm_track_params_t* params) { 
+                                            if(params->track_category == kRocProfVisDmRegionTrack)
+                                            {
+                                                return "0, pid, tid, 1 as op, id, start, end, ";
+                                            }
+                                            else if (params->track_category == kRocProfVisDmKernelTrack)
+                                            {
+                                                return "0, gpuId, queueId, 2 as op, id, start, end, ";
+                                            }
+                                            return "";
+                                         },
+                                         [](rocprofvis_dm_track_params_t* params) {
+                                             params->m_event_timing_params.clear();
+                                             params->m_event_timing_params.shrink_to_fit();
+                                         }))
         {
-            std::string query;
-            if(BuildTrackQuery(true, i, query) != kRocProfVisDmResultSuccess)
-            {
-                break;
-            }
-            if(kRocProfVisDmResultSuccess !=
-               ExecuteSQLQuery(future, query.c_str(), &CallbackGetTrackProperties))
-            {
-                break;
-            }
+            break;
         }
+        
+
+        ShowProgress(5, "Collect track items count, minimum and maximum timestamps", kRPVDbBusy, future);
+        TraceProperties()->start_time = UINT64_MAX;
+        TraceProperties()->end_time   = 0;
+
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteQueryForAllTracksAsync(
+               "SELECT COUNT(*), MIN(start), MAX(end), ", "", &CallbackGetTrackProperties,
+               [](rocprofvis_dm_track_params_t* params) {
+                   return " ";
+               },
+               [](rocprofvis_dm_track_params_t* params) {
+               }))
+        {
+            break;
+        }
+        
 
         TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );

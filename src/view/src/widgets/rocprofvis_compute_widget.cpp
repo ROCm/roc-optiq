@@ -44,31 +44,13 @@ void ComputeTable::Render()
         ImGui::SeparatorText(m_model->m_title.c_str());
         ImGui::PopStyleVar(); 
         std::vector<std::vector<ComputeTableCellModel>>& cells = m_model->m_cells;
-        if (ImGui::BeginTable(m_id.c_str(), cells[0].size(), ImGuiTableFlags_Borders | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortTristate))
+        if (ImGui::BeginTable(m_id.c_str(), cells[0].size(), ImGuiTableFlags_Borders))
         {
             for (std::string& c : m_model->m_column_names)
             {
                 ImGui::TableSetupColumn(c.c_str());
             }
             ImGui::TableHeadersRow();
-                
-            ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs();
-            if (sort_specs && sort_specs->SpecsDirty)
-            {
-                int sort_column;
-                rocprofvis_controller_sort_order_t sort_order;
-                if (sort_specs > 0 && sort_specs->Specs)
-                {
-                    sort_column = sort_specs->Specs->ColumnIndex;
-                    sort_order = (sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending) ? kRPVControllerSortOrderAscending : kRPVControllerSortOrderDescending;
-                }
-                else
-                {
-                    sort_column = 0;
-                    sort_order = kRPVControllerSortOrderNone;
-                }
-                sort_specs->SpecsDirty = false;
-            }
 
             for (int r = 0; r < cells.size(); r ++)
             {

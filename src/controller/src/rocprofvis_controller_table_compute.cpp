@@ -54,19 +54,7 @@ rocprofvis_result_t ComputeTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_
 
 rocprofvis_result_t ComputeTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args)
 {
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    uint64_t sort_column = 0;
-    uint64_t sort_order  = 0;
-    result = args.GetUInt64(kRPVControllerTableArgsSortColumn, 0, &sort_column);
-    if (result == kRocProfVisResultSuccess)
-    {
-        result = args.GetUInt64(kRPVControllerTableArgsSortOrder, 0, &sort_order);
-        if (result == kRocProfVisResultSuccess)
-        {
-            m_sort_column = sort_column;
-            m_sort_order = static_cast<rocprofvis_controller_sort_order_t>(sort_order);
-        }
-    }
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
     return result;
 }
 
@@ -307,51 +295,6 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
     }
 
     result = kRocProfVisResultSuccess;
-    return result;
-}
-
-bool ComputeTable::RowSorter(std::vector<Data>& a, std::vector<Data>& b)
-{
-    bool result = false;
-    ROCPROFVIS_ASSERT(m_sort_column < m_columns.size());
-    switch (m_columns[m_sort_column].m_type)
-    {
-        case kRPVControllerPrimitiveTypeString:
-        {
-            uint32_t length = -1;
-            ROCPROFVIS_ASSERT(a[m_sort_column].GetString(nullptr, &length) == kRocProfVisResultSuccess);
-            ROCPROFVIS_ASSERT(length >= 0);
-            char* data_a = new char[length + 1];
-            data_a[length] = '\0';
-            ROCPROFVIS_ASSERT(a[m_sort_column].GetString(data_a, &length) == kRocProfVisResultSuccess);
-            ROCPROFVIS_ASSERT(b[m_sort_column].GetString(nullptr, &length) == kRocProfVisResultSuccess);
-            ROCPROFVIS_ASSERT(length >= 0);
-            char* data_b = new char[length + 1];
-            data_b[length] = '\0';
-            ROCPROFVIS_ASSERT(a[m_sort_column].GetString(data_b, &length) == kRocProfVisResultSuccess);
-            result = (m_sort_order == kRPVControllerSortOrderAscending) ? (strcmp(data_a, data_b) < 0) : (strcmp(data_a, data_b) > 0);
-            delete[] data_a;
-            delete[] data_b;
-        }
-        case kRPVControllerPrimitiveTypeDouble:
-        {
-            double data_a;
-            ROCPROFVIS_ASSERT(a[m_sort_column].GetDouble(&data_a) == kRocProfVisResultSuccess);
-            double data_b;
-            ROCPROFVIS_ASSERT(b[m_sort_column].GetDouble(&data_b) == kRocProfVisResultSuccess);
-            result = (m_sort_order == kRPVControllerSortOrderAscending) ? (data_a < data_b) : (data_a > data_b);
-            break;
-        }
-        case kRPVControllerPrimitiveTypeUInt64:
-        {
-            uint64_t data_a;
-            ROCPROFVIS_ASSERT(a[m_sort_column].GetUInt64(&data_a) == kRocProfVisResultSuccess);
-            uint64_t data_b;
-            ROCPROFVIS_ASSERT(b[m_sort_column].GetUInt64(&data_b) == kRocProfVisResultSuccess);
-            result = (m_sort_order == kRPVControllerSortOrderAscending) ? (data_a < data_b) : (data_a > data_b);
-            break;
-        }
-    }
     return result;
 }
 

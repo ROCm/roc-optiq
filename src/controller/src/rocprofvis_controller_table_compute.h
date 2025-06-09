@@ -39,7 +39,6 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
     rocprofvis_result_t Load(const std::string& csv_file);
-    bool RowSorter(std::vector<Data>& a, std::vector<Data>& b);
 
 private:
     rocprofvis_controller_compute_table_types_t m_type;

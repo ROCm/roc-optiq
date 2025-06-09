@@ -54,6 +54,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_artifical_scrollbar_active(false)
 , m_highlighted_region({ INVALID_SELECTION_TIME, INVALID_SELECTION_TIME })
 , m_new_track_token(-1)
+, m_scroll_to_track_token(-1)
 , m_settings(Settings::GetInstance())
 , m_v_past_width(0)
 , m_v_width(0)
@@ -78,7 +79,7 @@ TimelineView::TimelineView(DataProvider& dp)
             this->ScrollToTrackByName(evt->GetTrackName());
         }
     };
-    EventManager::GetInstance()->Subscribe(
+    m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         scroll_to_track_handler);
 }
@@ -127,7 +128,6 @@ TimelineView::ScrollToTrackByName(const std::string& name)
     float offset      = CalculateTrackOffsetY(chart_id);
     m_scroll_position = offset;
     ImGui::SetScrollY(m_scroll_position);
-
 }
 void
 TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
@@ -148,6 +148,9 @@ TimelineView::~TimelineView()
     DestroyGraphs();
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTrackData),
                                              m_new_track_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+        m_scroll_to_track_token);
 }
 
 void

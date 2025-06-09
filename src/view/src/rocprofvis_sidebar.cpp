@@ -59,16 +59,17 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                                        ": " + tree_item.second.chart->GetName();
             bool open = ImGui::CollapsingHeader(header_label.c_str());
 
-            if(ImGui::IsItemClicked())  // Only fire event when user clicks the header
-            {
-                auto evt = std::make_shared<ScrollToTrackByNameEvent>(
-                    static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                    tree_item.second.chart->GetName());
-                EventManager::GetInstance()->AddEvent(evt);
-            }
-
             if(open)
             {
+                std::string btn_id =
+                    "Go To Track###GoToTrackBtn" + tree_item.second.chart->GetName();
+                if(ImGui::Button(btn_id.c_str()))
+                {
+                    auto evt = std::make_shared<ScrollToTrackByNameEvent>(
+                        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+                        tree_item.second.chart->GetName());
+                    EventManager::GetInstance()->AddEvent(evt);
+                }
                 if(ImGui::Checkbox(
                        (" Enable/Disable Chart #" + std::to_string((tree_item.first)))
                            .c_str(),

@@ -1,11 +1,9 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-//#include "rocprofvis_controller_enums.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace RocProfVis
 {

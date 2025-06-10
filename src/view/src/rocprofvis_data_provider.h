@@ -30,6 +30,13 @@ enum class RequestType
     kFetchTrackSampleTable
 };
 
+enum class TableType
+{
+    kSampleTable,    
+    kEventTable,
+    __kTableTypeCount
+};
+
 typedef struct track_info_t
 {
     uint64_t                           index;  // index of the track in the controller
@@ -239,8 +246,7 @@ public:
      */
     bool DumpTrack(uint64_t index);
 
-    void DumpEventTable();
-    void DumpSampleTable();
+    void DumpTable(TableType type);
 
     void DumpTable(const std::vector<std::string>&              header,
                    const std::vector<std::vector<std::string>>& data);
@@ -278,18 +284,11 @@ public:
 
     ProviderState GetState();
 
-    const std::vector<std::string>&              GetEventTableHeader();
-    const std::vector<std::vector<std::string>>& GetEventTableData();
-    std::shared_ptr<TableRequestParams>          GetEventTableParams();
-    uint64_t                                     GetEventTableTotalRowCount();
-
-    const std::vector<std::string>&              GetSampleTableHeader();
-    const std::vector<std::vector<std::string>>& GetSampleTableData();
-    std::shared_ptr<TableRequestParams>          GetSampleTableParams();
-    uint64_t                                     GetSampleTableTotalRowCount();
-
-    void ClearEventTable();
-    void ClearSampleTable();
+    const std::vector<std::string>&              GetTableHeader(TableType type);
+    const std::vector<std::vector<std::string>>& GetTableData(TableType type);
+    std::shared_ptr<TableRequestParams>          GetTableParams(TableType type);
+    uint64_t                                     GetTableTotalRowCount(TableType type);
+    void                                         ClearTable(TableType type);
 
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&)>& callback);
@@ -328,8 +327,8 @@ private:
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;
 
-    table_info_t m_event_table_info;
-    table_info_t m_sample_table_info;
+    // Store table_info_t for each TableType in a vector
+    std::vector<table_info_t> m_table_infos;
 
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 

@@ -6,8 +6,8 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events_view.h"
-
 #include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_infinite_scroll_table.h"
 
 namespace RocProfVis
 {
@@ -30,8 +30,10 @@ private:
 
     DataProvider& m_data_provider;
 
-    std::shared_ptr<TabContainer> m_tab_container;
-    int m_max_displayed_rows;  // Maximum number of rows to display in the table
+    std::shared_ptr<InfiniteScrollTable> m_event_table;
+    std::shared_ptr<InfiniteScrollTable> m_sample_table;
+
+    std::shared_ptr<TabContainer>   m_tab_container;
     EventManager::SubscriptionToken m_time_line_selection_changed_token;
     std::shared_ptr<EventsView>     m_events_view;  
 };

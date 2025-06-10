@@ -367,7 +367,7 @@ RenderProviderTest(DataProvider& provider)
     }
     if(ImGui::Button("Print Event Table"))
     {
-        provider.DumpEventTable();
+        provider.DumpTable(TableType::kEventTable);
     }
 
     if(ImGui::Button("Fetch Single Track Sample Table"))
@@ -388,7 +388,7 @@ RenderProviderTest(DataProvider& provider)
     }
     if(ImGui::Button("Print Sample Table"))
     {
-        provider.DumpSampleTable();
+        provider.DumpTable(TableType::kSampleTable);
     }
 
     ImGui::Separator();

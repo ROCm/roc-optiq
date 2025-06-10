@@ -79,6 +79,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeProcessor = 14,
     // Extended data object
     kRPVControllerObjectTypeExtData = 15,
+    // Compute trace object
+    kRPVControllerObjectTypeComputeTrace = 16,
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -121,6 +123,8 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerTrackIndexed = 0x00000008,
     // Global sample table controller
     kRPVControllerSampleTable = 0x00000009,
+    // Compute trace controller
+    kRPVControllerComputeTrace = 0x00000010,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {
@@ -521,6 +525,8 @@ typedef enum rocprofvis_controller_table_properties_t
     // Notionally would give you an array for all the cells in the row
     // But this needs to be Async if we separate the Front/Back end
     kRPVControllerTableRowIndexed = 0xA0000006,
+    // Table title
+    kRPVControllerTableTitle = 0xA0000007,
 } rocprofvis_controller_table_properties_t;
 /* JSON: RPVTable
 {
@@ -604,3 +610,57 @@ typedef enum rocprofvis_controller_sort_order_t
     kRPVControllerSortOrderAscending,
     kRPVControllerSortOrderDescending,
 } rocprofvis_controller_sort_order_t;
+
+typedef enum rocprofvis_controller_compute_table_types_t
+{
+    kRPVControllerComputeTableTypeKernelList = 0,
+    kRPVControllerComputeTableTypeDispatchList,
+    kRPVControllerComputeTableTypeSysInfo,
+    kRPVControllerComputeTableTypeSpeedOfLight,
+    kRPVControllerComputeTableTypeMemoryChart,
+    kRPVControllerComputeTableTypeCPFetcher,
+    kRPVControllerComputeTableTypeCPPacketProcessor,
+    kRPVControllerComputeTableTypeWorkgroupMngrUtil,
+    kRPVControllerComputeTableTypeWorkgroupMngrRescAlloc,
+    kRPVControllerComputeTableTypeWavefrontLaunch,
+    kRPVControllerComputeTableTypeWavefrontRuntime,
+    kRPVControllerComputeTableTypeInstrMix,
+    kRPVControllerComputeTableTypeVALUInstrMix,
+    kRPVControllerComputeTableTypeVMEMInstrMix,
+    kRPVControllerComputeTableTypeMFMAInstrMix,
+    kRPVControllerComputeTableTypeCUSpeedOfLight,
+    kRPVControllerComputeTableTypeCUPipelineStats,
+    kRPVControllerComputeTableTypeCUOps,
+    kRPVControllerComputeTableTypeLDSSpeedOfLight,
+    kRPVControllerComputeTableTypeLDSStats,
+    kRPVControllerComputeTableTypeInstrCacheSpeedOfLight,
+    kRPVControllerComputeTableTypeInstrCacheAccesses,
+    kRPVControllerComputeTableTypeInstrCacheL2Interface,
+    kRPVControllerComputeTableTypeSL1CacheSpeedOfLight,
+    kRPVControllerComputeTableTypeSL1CacheAccesses,
+    kRPVControllerComputeTableTypeSL1CacheL2Transactions,
+    kRPVControllerComputeTableTypeAddrProcessorStats,
+    kRPVControllerComputeTableTypeAddrProcessorReturnPath,
+    kRPVControllerComputeTableTypeVL1CacheSpeedOfLight,
+    kRPVControllerComputeTableTypeVL1CacheStalls,
+    kRPVControllerComputeTableTypeVL1CacheAccesses,
+    kRPVControllerComputeTableTypeVL1CacheL2Transactions,
+    kRPVControllerComputeTableTypeVL1CacheAddrTranslations,
+    kRPVControllerComputeTableTypeL2CacheSpeedOfLight,
+    kRPVControllerComputeTableTypeL2CacheFabricTransactions,
+    kRPVControllerComputeTableTypeL2CacheAccesses,
+    kRPVControllerComputeTableTypeL2CacheFabricStalls,
+    kRPVControllerComputeTableTypeL2CacheFabricTransactionsDetailed,
+    kRPVControllerComputeTableTypeL2CacheStats,
+    kRPVControllerComputeTableTypeL2CacheHitRate,
+    kRPVControllerComputeTableTypeL2CacheReqs1,
+    kRPVControllerComputeTableTypeL2CacheReqs2,
+    kRPVControllerComputeTableTypeL2CacheFabricReqs,
+    kRPVControllerComputeTableTypeL2CacheFabricRdLat,
+    kRPVControllerComputeTableTypeL2CacheFabricWrAtomLat,
+    kRPVControllerComputeTableTypeL2CacheFabricAtomLat,
+    kRPVControllerComputeTableTypeL2CacheRdStalls,
+    kRPVControllerComputeTableTypeL2CacheWrAtomStalls,
+    kRPVControllerComputeTableTypeL2Cache128Reqs,
+    kRPVControllerComputeTableTypeCount
+} rocprofvis_controller_compute_table_types_t;

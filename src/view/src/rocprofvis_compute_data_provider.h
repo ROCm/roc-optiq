@@ -124,7 +124,7 @@ public:
     rocprofvis_compute_metrics_group_t* GetMetricGroup(std::string &group_id);
     rocprofvis_compute_metric_t* GetMetric(std::string &group_id, std::string &metric_id);
 
-    void SetProfilePath(std::filesystem::path& path);
+    void SetProfilePath(const std::string& path);
     void LoadProfile();
     bool ProfileLoaded();
 

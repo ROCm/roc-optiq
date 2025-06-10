@@ -22,3 +22,4 @@ typedef rocprofvis_handle_t rocprofvis_controller_array_t;
 typedef rocprofvis_handle_t rocprofvis_controller_arguments_t;
 typedef rocprofvis_handle_t rocprofvis_controller_node_t;
 typedef rocprofvis_handle_t rocprofvis_controller_processor_t;
+typedef rocprofvis_handle_t rocprofvis_controller_compute_trace_t;

@@ -14,6 +14,7 @@ enum class RocEvents
 {
     kInvalidEvent = -1,
     kNewTrackData,
+    kComputeDataDirty,
     kComputeBlockNavigationChanged,
     kComputeTableSearchChanged,
     kTabClosed,

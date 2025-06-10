@@ -22,6 +22,8 @@ class Event;
 class Table;
 class SystemTable;
 
+class ComputeTrace;
+
 class Trace : public Handle
 {
 public:
@@ -66,6 +68,8 @@ private:
     SystemTable* m_event_table;
     SystemTable* m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
+
+    ComputeTrace* m_compute_trace;
 
 private:
 #ifdef JSON_SUPPORT

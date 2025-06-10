@@ -79,44 +79,19 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                         std::vector<std::vector<ComputeTableCellModel>> cells;
                         std::unordered_map<std::string, ComputeTableNumericMetricModel> metrics_map;
                         uint64_t unit_column = -1;
-                        uint32_t length = -1;
-                        result = rocprofvis_controller_get_string(table_handle, kRPVControllerTableTitle, 0, nullptr, &length);
-                        if (result == kRocProfVisResultSuccess)
-                        {
-                            ROCPROFVIS_ASSERT(length >= 0);
-                            char* data = new char[length + 1];
-                            data[length] = '\0';
-                            result = rocprofvis_controller_get_string(table_handle, kRPVControllerTableTitle, 0, data, &length);
-                            if (result == kRocProfVisResultSuccess)
-                            {
-                                title = data;
-                            }
-                            delete[] data;
-                        }
+                        GetStringPropertyFromHandle(table_handle, kRPVControllerTableTitle, 0, title);
                         uint64_t columns = 0;
                         result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumColumns, 0, &columns);
                         if (result == kRocProfVisResultSuccess)
                         {
                             ROCPROFVIS_ASSERT(columns > 0);
+                            column_names.resize(columns);
                             for (uint64_t c = 0; c < columns; c ++)
                             {
-                                uint32_t length = -1;
-                                result = rocprofvis_controller_get_string(table_handle, kRPVControllerTableColumnHeaderIndexed, c, nullptr, &length);
-                                if (result == kRocProfVisResultSuccess)
+                                result = GetStringPropertyFromHandle(table_handle, kRPVControllerTableColumnHeaderIndexed, c, column_names[c]);
+                                if (result == kRocProfVisResultSuccess && column_names[c] == "Unit")
                                 {
-                                    ROCPROFVIS_ASSERT(length >= 0);
-                                    char* data = new char[length + 1];
-                                    data[length] = '\0';
-                                    result = rocprofvis_controller_get_string(table_handle, kRPVControllerTableColumnHeaderIndexed, c, data, &length);
-                                    if (result == kRocProfVisResultSuccess)
-                                    {
-                                        column_names.push_back(data);
-                                        if (strcmp(data, "Unit") == 0)
-                                        {
-                                            unit_column = c;
-                                        }
-                                    }
-                                    delete[] data;
+                                    unit_column = c;
                                 }
                             }
                             uint64_t rows = 0;
@@ -146,17 +121,9 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                 std::vector<ComputeTableCellModel> cell_row;
                                                 std::string unit;
                                                 uint32_t length = -1;
-                                                if (unit_column >= 0 && kRocProfVisResultSuccess == rocprofvis_controller_get_string(row, kRPVControllerArrayEntryIndexed, unit_column, nullptr, &length))
+                                                if (unit_column >= 0)
                                                 {
-                                                    ROCPROFVIS_ASSERT(length >= 0);
-                                                    char* data = new char[length + 1];
-                                                    data[length] = '\0';
-                                                    result = rocprofvis_controller_get_string(row, kRPVControllerArrayEntryIndexed, unit_column, data, &length);
-                                                    if (result == kRocProfVisResultSuccess)
-                                                    {
-                                                        unit = data;
-                                                    }
-                                                    delete[] data;
+                                                    GetStringPropertyFromHandle(row, kRPVControllerArrayEntryIndexed, unit_column, unit);
                                                 }
                                                 for (uint64_t c = 0; c < columns; c ++)
                                                 {
@@ -208,20 +175,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                             }
                                                             case kRPVControllerPrimitiveTypeString:
                                                             {
-                                                                uint32_t length = -1;
-                                                                result = rocprofvis_controller_get_string(row, kRPVControllerArrayEntryIndexed, c, nullptr, &length);
-                                                                if (result == kRocProfVisResultSuccess)
-                                                                {
-                                                                    ROCPROFVIS_ASSERT(length >= 0);
-                                                                    char* data = new char[length + 1];
-                                                                    data[length] = '\0';
-                                                                    result = rocprofvis_controller_get_string(row, kRPVControllerArrayEntryIndexed, c, data, &length);
-                                                                    if (result == kRocProfVisResultSuccess)
-                                                                    {
-                                                                        value = data;
-                                                                    }
-                                                                    delete[] data;
-                                                                }
+                                                                result = GetStringPropertyFromHandle(row, kRPVControllerArrayEntryIndexed, c, value);
                                                                 break;
                                                             }
                                                             default:
@@ -265,6 +219,25 @@ ComputeTableModel* ComputeDataProvider2::GetTableModel(const rocprofvis_controll
         table = m_tables[type].get();
     }
     return table;
+}
+
+rocprofvis_result_t ComputeDataProvider2::GetStringPropertyFromHandle(rocprofvis_handle_t* handle, const rocprofvis_property_t property, const uint64_t index, std::string& output)
+{
+    uint32_t length = -1;
+    rocprofvis_result_t result = rocprofvis_controller_get_string(handle, property, index, nullptr, &length);
+    if (result == kRocProfVisResultSuccess)
+    {
+        ROCPROFVIS_ASSERT(length >= 0);
+        char* data = new char[length + 1];
+        data[length] = '\0';
+        result = rocprofvis_controller_get_string(handle, property, index, data, &length);
+        if (result == kRocProfVisResultSuccess)
+        {
+            output = data;
+        }
+        delete[] data;
+    }
+    return result;
 }
 
 std::string ComputeDataProvider2::TrimDecimalPlaces(std::string& double_str, const int decimal_places)

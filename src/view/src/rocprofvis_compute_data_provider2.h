@@ -49,6 +49,7 @@ public:
     ComputeTableModel* GetTableModel(const rocprofvis_controller_compute_table_types_t type);
 
 private:
+    rocprofvis_result_t GetStringPropertyFromHandle(rocprofvis_handle_t* handle, const rocprofvis_property_t property, const uint64_t index, std::string& output);
     std::string TrimDecimalPlaces(std::string& double_str, const int decimal_places);
 
     rocprofvis_controller_t* m_controller;

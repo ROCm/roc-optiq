@@ -13,8 +13,8 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
 , m_last_total_row_count(0)
-, m_fetch_chunk_size(100)  // Number of items to fetch in one go
-, m_fetch_pad_items(30)  // Number of items to pad the fetch range
+, m_fetch_chunk_size(100)      // Number of items to fetch in one go
+, m_fetch_pad_items(30)        // Number of items to pad the fetch range
 , m_fetch_threshold_items(10)  // Number of items from the edge to trigger a fetch
 , m_last_table_size(0, 0)
 , m_track_selection_event_to_handle(nullptr)
@@ -59,7 +59,7 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
         {
             m_data_provider.ClearTable(m_table_type);
             // clear any pending track selection event
-            m_track_selection_event_to_handle = nullptr; 
+            m_track_selection_event_to_handle = nullptr;
         }
         else
         {
@@ -73,25 +73,28 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
             {
                 spdlog::error("Failed to fetch table data for tracks: {}",
                               filtered_tracks.size());
-                //save this selection event to reprocess it later (it's ok to replace the previous one as the new one reflects the current selection)
+                // save this selection event to reprocess it later (it's ok to replace the
+                // previous one as the new one reflects the current selection)
                 m_track_selection_event_to_handle = selection_changed_event;
-            } else {
+            }
+            else
+            {
                 // clear any pending track selection event
-                m_track_selection_event_to_handle = nullptr; 
+                m_track_selection_event_to_handle = nullptr;
             }
         }
     }
 }
 
-void InfiniteScrollTable::Update()
+void
+InfiniteScrollTable::Update()
 {
     // Handle track selection changed event
     if(m_track_selection_event_to_handle)
     {
-        if(!m_data_provider.IsRequestPending(
-               m_table_type == TableType::kEventTable
-                   ? DataProvider::EVENT_TABLE_REQUEST_ID
-                   : DataProvider::SAMPLE_TABLE_REQUEST_ID))
+        if(!m_data_provider.IsRequestPending(m_table_type == TableType::kEventTable
+                                                 ? DataProvider::EVENT_TABLE_REQUEST_ID
+                                                 : DataProvider::SAMPLE_TABLE_REQUEST_ID))
         {
             // try to repocess the deferred track selection event
             spdlog::debug(
@@ -105,9 +108,9 @@ void InfiniteScrollTable::Update()
 void
 InfiniteScrollTable::Render()
 {
-    float row_height = ImGui::GetTextLineHeightWithSpacing();
-    ImGuiStyle& style = ImGui::GetStyle();                    
-    float row_padding_v = style.CellPadding.y * 2.0f;
+    float       row_height    = ImGui::GetTextLineHeightWithSpacing();
+    ImGuiStyle& style         = ImGui::GetStyle();
+    float       row_padding_v = style.CellPadding.y * 2.0f;
     // Adjust row height to include padding
     row_height += row_padding_v;
 
@@ -128,17 +131,17 @@ InfiniteScrollTable::Render()
     // This is so we can recalulate the table size with the new total row count
     if(m_last_total_row_count != total_row_count)
     {
-        m_skip_data_fetch      = true;  
+        m_skip_data_fetch      = true;
         m_last_total_row_count = total_row_count;
     }
 
-    uint64_t row_count = 0;
-    uint64_t start_row = 0;
+    uint64_t row_count            = 0;
+    uint64_t start_row            = 0;
     uint64_t selected_track_count = 0;
     if(event_table_params)
     {
-        row_count = event_table_params->m_req_row_count;
-        start_row = event_table_params->m_start_row;
+        row_count            = event_table_params->m_req_row_count;
+        start_row            = event_table_params->m_start_row;
         selected_track_count = event_table_params->m_track_indices.size();
     }
     uint64_t end_row = start_row + row_count;
@@ -175,17 +178,20 @@ InfiniteScrollTable::Render()
                     total_row_count, selected_track_count);
 
         ImVec2 outer_size = ImVec2(0.0f, ImGui::GetContentRegionAvail().y);
-        if(outer_size.y != m_last_table_size.y )        {
-            // If the outer size has changed, we need to recalulate the number of items to fetch
-            int visible_rows = outer_size.y / row_height;
+        if(outer_size.y != m_last_table_size.y)
+        {
+            // If the outer size has changed, we need to recalulate the number of items to
+            // fetch
+            int visible_rows   = outer_size.y / row_height;
             m_fetch_chunk_size = std::max(visible_rows * 4, 100);
-            m_fetch_pad_items = clamp(visible_rows / 2, 10, 30);
-            m_last_table_size = outer_size;
+            m_fetch_pad_items  = clamp(visible_rows / 2, 10, 30);
+            m_last_table_size  = outer_size;
 
-            spdlog::debug("Recalculated fetch chunk size: {}, fetch pad items: {}, visible rows: {}, outer size: {}",
-                          m_fetch_chunk_size, m_fetch_pad_items, visible_rows, outer_size.y);
+            spdlog::debug("Recalculated fetch chunk size: {}, fetch pad items: {}, "
+                          "visible rows: {}, outer size: {}",
+                          m_fetch_chunk_size, m_fetch_pad_items, visible_rows,
+                          outer_size.y);
         }
-        
 
         if(ImGui::BeginTable("Event Data Table", column_names.size(), table_flags,
                              outer_size))
@@ -248,7 +254,7 @@ InfiniteScrollTable::Render()
                         if(column == 0)
                         {
                             // Handle row selection and click events
-                            std::string selectable_label = std::to_string(row_n + start_row) + " " +
+                            std::string selectable_label =
                                 col + "##" + std::to_string(row_n);
 
                             bool is_selected = false;
@@ -309,9 +315,10 @@ InfiniteScrollTable::Render()
                             new_start_pos -= m_fetch_pad_items;
                         }
 
-                        spdlog::debug(
-                            "Fetching more data for start row, new start pos: {}, frame count: {}, chunk size: {}, scroll y: {}",
-                            new_start_pos, frame_count, m_fetch_chunk_size, scroll_y);
+                        spdlog::debug("Fetching more data for start row, new start pos: "
+                                      "{}, frame count: {}, chunk size: {}, scroll y: {}",
+                                      new_start_pos, frame_count, m_fetch_chunk_size,
+                                      scroll_y);
 
                         m_data_provider.FetchMultiTrackTable(TableRequestParams(
                             m_req_table_type, event_table_params->m_track_indices,
@@ -323,10 +330,9 @@ InfiniteScrollTable::Render()
                     else if((scroll_y + ImGui::GetWindowHeight() >
                              end_row_position - m_fetch_threshold_items * row_height) &&
                             (end_row != total_row_count - 1) && (scroll_max_y > 0.0f))
-                    {   
+                    {
                         // fetch data for the end row
-                        uint64_t new_start_pos =
-                            (scroll_y) / row_height;
+                        uint64_t new_start_pos = (scroll_y) / row_height;
 
                         // Ensure start position does not go below zero
                         // (this can happen if the start_row is close to the beginning of
@@ -340,9 +346,10 @@ InfiniteScrollTable::Render()
                             new_start_pos -= m_fetch_pad_items;
                         }
 
-                        spdlog::debug(
-                            "Fetching more data for end row, new start pos: {}, frame count: {}, chunk size: {}, scroll y: {}",
-                            new_start_pos, frame_count, m_fetch_chunk_size, scroll_y);
+                        spdlog::debug("Fetching more data for end row, new start pos: "
+                                      "{}, frame count: {}, chunk size: {}, scroll y: {}",
+                                      new_start_pos, frame_count, m_fetch_chunk_size,
+                                      scroll_y);
 
                         m_data_provider.FetchMultiTrackTable(TableRequestParams(
                             m_req_table_type, event_table_params->m_track_indices,
@@ -370,9 +377,7 @@ InfiniteScrollTable::Render()
             event_table_params->m_sort_column_index = sort_colunn_index;
             event_table_params->m_sort_order        = sort_order;
 
-            spdlog::debug(
-                "Fetching data for sort, frame count: {}",
-                frame_count);
+            spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
             // Fetch the event table with the updated params
             m_data_provider.FetchMultiTrackTable(TableRequestParams(

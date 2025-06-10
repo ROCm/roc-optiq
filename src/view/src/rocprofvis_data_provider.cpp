@@ -20,6 +20,7 @@ DataProvider::DataProvider()
 , m_min_ts(0)
 , m_max_ts(0)
 , m_trace_file_path("")
+, m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
@@ -120,65 +121,36 @@ DataProvider::GetState()
 }
 
 const std::vector<std::string>&
-DataProvider::GetEventTableHeader()
+DataProvider::GetTableHeader(TableType type)
 {
-    return m_event_table_info.table_header;
+    return m_table_infos[static_cast<size_t>(type)].table_header;
 }
 
 const std::vector<std::vector<std::string>>&
-DataProvider::GetEventTableData()
+DataProvider::GetTableData(TableType type)
 {
-    return m_event_table_info.table_data;
+    return m_table_infos[static_cast<size_t>(type)].table_data;
 }
 
 std::shared_ptr<TableRequestParams>
-DataProvider::GetEventTableParams()
+DataProvider::GetTableParams(TableType type)
 {
-    return m_event_table_info.table_params;
+    return m_table_infos[static_cast<size_t>(type)].table_params;
 }
 
 uint64_t
-DataProvider::GetEventTableTotalRowCount()
+DataProvider::GetTableTotalRowCount(TableType type)
 {
-    return m_event_table_info.total_row_count;
-}
-
-const std::vector<std::string>&
-DataProvider::GetSampleTableHeader()
-{
-    return m_sample_table_info.table_header;
-}
-
-const std::vector<std::vector<std::string>>&
-DataProvider::GetSampleTableData()
-{
-    return m_sample_table_info.table_data;
-}
-
-std::shared_ptr<TableRequestParams>
-DataProvider::GetSampleTableParams()
-{
-    return m_sample_table_info.table_params;
-}
-
-uint64_t
-DataProvider::GetSampleTableTotalRowCount()
-{
-    return m_sample_table_info.total_row_count;
+    return m_table_infos[static_cast<size_t>(type)].total_row_count;
 }
 
 void
-DataProvider::ClearEventTable()
+DataProvider::ClearTable(TableType type)
 {
-    m_event_table_info.table_header.clear();
-    m_event_table_info.table_data.clear();
-}
-
-void
-DataProvider::ClearSampleTable()
-{
-    m_sample_table_info.table_header.clear();
-    m_sample_table_info.table_data.clear();
+    m_table_infos[static_cast<size_t>(type)].table_header.clear();
+    m_table_infos[static_cast<size_t>(type)].table_data.clear();
+    m_table_infos[static_cast<size_t>(type)].total_row_count = 0;
+    m_table_infos[static_cast<size_t>(type)].table_params.reset();
 }
 
 void
@@ -1095,15 +1067,10 @@ DataProvider::DumpTrack(uint64_t index)
 }
 
 void
-DataProvider::DumpEventTable()
+DataProvider::DumpTable(TableType type)
 {
-    DumpTable(m_event_table_info.table_header, m_event_table_info.table_data);
-}
-
-void
-DataProvider::DumpSampleTable()
-{
-    DumpTable(m_event_table_info.table_header, m_event_table_info.table_data);
+    DumpTable(m_table_infos[static_cast<size_t>(type)].table_header,
+              m_table_infos[static_cast<size_t>(type)].table_data);
 }
 
 void
@@ -1371,19 +1338,23 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
 
     if(table_type == kRPVControllerTableTypeEvents)
     {
+        table_info_t& table_info =
+            m_table_infos[static_cast<size_t>(TableType::kEventTable)];
         // store the event table data
-        m_event_table_info.table_header    = std::move(column_names);
-        m_event_table_info.table_data      = std::move(table_data);
-        m_event_table_info.table_params    = table_params;
-        m_event_table_info.total_row_count = total_num_rows;
+        table_info.table_header    = std::move(column_names);
+        table_info.table_data      = std::move(table_data);
+        table_info.table_params    = table_params;
+        table_info.total_row_count = total_num_rows;
     }
     else if(table_type == kRPVControllerTableTypeSamples)
     {
         // store the sample table data
-        m_sample_table_info.table_header    = std::move(column_names);
-        m_sample_table_info.table_data      = std::move(table_data);
-        m_sample_table_info.table_params    = table_params;
-        m_sample_table_info.total_row_count = total_num_rows;
+        table_info_t& table_info =
+            m_table_infos[static_cast<size_t>(TableType::kSampleTable)];
+        table_info.table_header    = std::move(column_names);
+        table_info.table_data      = std::move(table_data);
+        table_info.table_params    = table_params;
+        table_info.total_row_count = total_num_rows;
     }
     else
     {

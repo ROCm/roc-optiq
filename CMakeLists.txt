@@ -45,6 +45,7 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
+    src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
 )
 
 add_executable(rocprof-visualizer 

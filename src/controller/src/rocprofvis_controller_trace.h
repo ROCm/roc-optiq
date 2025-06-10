@@ -20,6 +20,7 @@ class Graph;
 class Timeline;
 class Event;
 class Table;
+class SystemTable;
 
 class Trace : public Handle
 {
@@ -62,8 +63,8 @@ private:
     std::vector<Track*> m_tracks;
     uint64_t m_id;
     Timeline* m_timeline;
-    Table* m_event_table;
-    Table* m_sample_table;
+    SystemTable* m_event_table;
+    SystemTable* m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
 
 private:

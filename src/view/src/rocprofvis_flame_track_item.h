@@ -32,7 +32,7 @@ public:
 
     bool HasData() override;
     void ReleaseData() override;
-
+ 
 protected:
     void RenderMetaArea() override;
     void RenderChart(float graph_width) override;
@@ -44,7 +44,9 @@ private:
     bool                                  m_request_random_color;
     ImVec2                                m_text_padding;
     float                                 m_flame_height;
+    uint64_t                              m_selected_event_id; 
     float                                 m_scale_area_width;
+    DataProvider&                         m_dp;
 };
 
 }  // namespace View

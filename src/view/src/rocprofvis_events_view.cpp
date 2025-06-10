@@ -16,7 +16,8 @@ namespace View
 {
 
 EventsView::EventsView(DataProvider& dp)
-: m_data_provider(dp)  // Initialize with DataProvider reference
+: RocCustomWidget([] {})
+, m_data_provider(dp)  // Initialize with DataProvider reference
 {}
 
 EventsView::~EventsView() {}

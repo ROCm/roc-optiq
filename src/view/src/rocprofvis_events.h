@@ -2,9 +2,9 @@
 
 #pragma once
 #include <cstdint>
+#include <iostream>
 #include <string>
 #include <vector>
-
 namespace RocProfVis
 {
 namespace View
@@ -18,7 +18,7 @@ enum class RocEvents
     kComputeTableSearchChanged,
     kTabClosed,
     kTimelineSelectionChanged,
-    kHandleUserGraphNavigationEvent
+    kHandleUserGraphNavigationEvent,
 
 };
 
@@ -30,7 +30,7 @@ enum class RocEventType
     kComputeTableSearchEvent,
     kTabEvent,
     kTimelineSelectionChangedEvent,
-    kScrollToTrackByNameEvent
+    kScrollToTrackByNameEvent,
 };
 
 class RocEvent

@@ -2,7 +2,7 @@
 
 #include "rocprofvis_events_view.h"
 #include "imgui.h"
-
+#include "rocprofvis_data_provider.h"
 #include <algorithm>
 #include <iostream>
 #include <limits>
@@ -15,7 +15,9 @@ namespace RocProfVis
 namespace View
 {
 
-EventsView::EventsView() {}
+EventsView::EventsView(DataProvider& dp)
+: m_data_provider(dp)  // Initialize with DataProvider reference
+{}
 
 EventsView::~EventsView() {}
 
@@ -23,7 +25,7 @@ void
 EventsView::Render()
 {
     ImGui::BeginChild("EventsView", ImVec2(0, 0), true);
-    ImGui::Text("Events View Content");
+    ImGui::Text(std::to_string(m_data_provider.GetSelectedEvent()).c_str());
     ImGui::EndChild();
 }
 

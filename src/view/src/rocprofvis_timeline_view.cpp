@@ -127,7 +127,6 @@ TimelineView::ScrollToTrackByName(const std::string& name)
     float offset      = CalculateTrackOffsetY(chart_id);
     m_scroll_position = offset;
     ImGui::SetScrollY(m_scroll_position);
-
 }
 void
 TimelineView::SetViewTimePosition(double time_pos_ns, bool center)

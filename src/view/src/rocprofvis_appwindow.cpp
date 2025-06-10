@@ -9,6 +9,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_navigation_manager.h"
 #include "widgets/rocprofvis_debug_window.h"
+#include <filesystem>
 
 using namespace RocProfVis::View;
 
@@ -207,7 +208,8 @@ AppWindow::Render()
                 if(file_path.extension().string() == ".csv")
                 {
                     auto compute_view = std::make_shared<ComputeRoot>(file_path_str);
-                    compute_view->SetProfilePath(file_path.parent_path());
+                    compute_view->SetProfilePath(file_path.parent_path().string());
+                    compute_view->OpenTrace(file_path.parent_path().string());
                     tab_item.m_widget = compute_view;
                     spdlog::info("Opening file: {}", file_path.string());
                     m_tab_container->AddTab(tab_item);

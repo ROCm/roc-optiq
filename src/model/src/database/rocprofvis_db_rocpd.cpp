@@ -118,7 +118,7 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **az
             track_params.process_name[TRACK_ID_TID_OR_QUEUE] = argv[TRACK_ID_TID_OR_QUEUE];
             db->find_track_pmc_map[track_params.process_id[TRACK_ID_PID_OR_AGENT]][track_params.process_name[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
         }
-
+        db->OpenConnection((sqlite3**) &track_params.db_connection);
         if (kRocProfVisDmResultSuccess != db->AddTrackProperties(track_params)) return 1;
         if (db->BindObject()->FuncAddTrack(db->BindObject()->trace_object, db->TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1;  
         if (track_params.track_category == kRocProfVisDmRegionTrack) {
@@ -228,9 +228,11 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(10, "Calculate levels for HIP API events", kRPVDbBusy, future);
         if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT 0, pid, tid, 1 as op, id, start, end FROM rocpd_api ORDER BY start", &CalculateEventLevels)) break;
+        m_event_timing_params.clear();
 
         ShowProgress(10, "Calculate levels for Kernel events", kRPVDbBusy, future);
         if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT 0, gpuId, queueId, 2 as op, id, start, end FROM rocpd_op ORDER BY start", &CalculateEventLevels)) break;
+        m_event_timing_params.clear();
 
         ShowProgress(5, "Count records per track", kRPVDbBusy, future);
         for (int i = 0; i < NumTracks(); i++)

@@ -120,7 +120,7 @@ rocprofvis_compute_metric_t* ComputeDataProvider::GetMetric(std::string& group_i
     return metric;
 }
 
-void ComputeDataProvider::SetProfilePath(std::filesystem::path& path)
+void ComputeDataProvider::SetProfilePath(const std::string& path)
 {
     if (m_profile_loaded)
     {

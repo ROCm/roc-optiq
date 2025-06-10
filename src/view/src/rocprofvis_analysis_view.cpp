@@ -3,7 +3,7 @@
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
-
+#include "rocprofvis_events_view.h"
 #include "spdlog/spdlog.h"
 
 #include "widgets/rocprofvis_debug_window.h"
@@ -30,6 +30,15 @@ AnalysisView::AnalysisView(DataProvider& dp)
     tab_item.m_id        = "sample_details";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_sample_table;
+    m_tab_container->AddTab(tab_item);
+
+    m_events_view = std::make_shared<EventsView>(m_data_provider);
+
+    // Add EventsView tab
+    tab_item.m_label     = "Events View";
+    tab_item.m_id        = "events_view";
+    tab_item.m_can_close = false;
+    tab_item.m_widget    = m_events_view;
     m_tab_container->AddTab(tab_item);
 
     m_tab_container->SetAllowToolTips(false);

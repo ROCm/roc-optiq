@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-
+ 
 namespace RocProfVis
 {
 namespace View

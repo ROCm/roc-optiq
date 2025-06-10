@@ -21,9 +21,22 @@ DataProvider::DataProvider()
 , m_max_ts(0)
 , m_trace_file_path("")
 , m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
+, m_selected_event(std::numeric_limits<uint64_t>::max())
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
+
+void
+DataProvider::SetSelectedEvent(uint64_t id)
+{
+    m_selected_event = id;
+}
+
+uint64_t
+DataProvider::GetSelectedEvent()
+{
+    return m_selected_event;
+}
 
 void
 DataProvider::CloseController()

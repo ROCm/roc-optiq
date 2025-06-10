@@ -20,8 +20,11 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_string_table.cpp
     src/rocprofvis_controller_timeline.cpp
     src/rocprofvis_controller_trace.cpp
+	src/rocprofvis_controller_trace_compute.cpp
     src/rocprofvis_controller_track.cpp
     src/rocprofvis_controller_table.cpp
+	src/rocprofvis_controller_table_system.cpp
+	src/rocprofvis_controller_table_compute.cpp
     src/rocprofvis_controller.cpp
     src/rocprofvis_controller_flow_control.cpp
     src/rocprofvis_controller_call_stack.cpp
@@ -50,6 +53,7 @@ endif(JSON_SUPPORT)
 target_link_libraries(rocprof-visualizer-controller PUBLIC rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer-controller PUBLIC datamodel)
 target_link_libraries(rocprof-visualizer-controller PUBLIC spdlog)
+target_link_libraries(rocprof-visualizer-controller PUBLIC csv)
 target_include_directories(rocprof-visualizer-controller PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../model/inc)
 target_include_directories(rocprof-visualizer-controller PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
 

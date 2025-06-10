@@ -5,8 +5,9 @@
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "widgets/rocprofvis_infinite_scroll_table.h"
+#include "rocprofvis_events_view.h"
 #include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_infinite_scroll_table.h"
 
 namespace RocProfVis
 {
@@ -34,6 +35,7 @@ private:
 
     std::shared_ptr<TabContainer>   m_tab_container;
     EventManager::SubscriptionToken m_time_line_selection_changed_token;
+    std::shared_ptr<EventsView>     m_events_view;  
 };
 
 }  // namespace View

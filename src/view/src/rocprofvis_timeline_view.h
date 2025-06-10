@@ -75,6 +75,7 @@ private:
     bool                                  m_is_control_held;
     bool                                  m_resize_activity;
     double                                m_scroll_position_x;
+    EventManager::SubscriptionToken       m_scroll_to_track_token;
     double                                m_v_past_width;
     bool                                  m_stop_zooming;
     double                                m_scrollbar_location_as_percentage;

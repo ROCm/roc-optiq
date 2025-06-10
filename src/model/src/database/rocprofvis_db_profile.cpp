@@ -362,7 +362,8 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
                 << " and end < " << end
                 << " ORDER BY start;";
             ShowProgress(step, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), slice, TrackPropertiesAt(i)->track_category == kRocProfVisDmPmcTrack ? &CallbackAddPmcRecord : &CallbackAddEventRecord)) break;
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(TrackPropertiesAt(tracks[i])->db_connection,
+                    future, query.str().c_str(), slice, TrackPropertiesAt(i)->track_category == kRocProfVisDmPmcTrack ? &CallbackAddPmcRecord : &CallbackAddEventRecord)) break;
         }
 
         if (i < num) break;
@@ -371,7 +372,8 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
         slice_array_t slices;
         if (BuildSliceQuery(start, end, num, tracks, query, slices) != kRocProfVisDmResultSuccess) break;
         ShowProgress(100, query.c_str(), kRPVDbBusy, future);
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), &slices , &CallbackAddAnyRecord)) break;
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery((sqlite3*) TrackPropertiesAt(tracks[0])->db_connection, 
+                future, query.c_str(), &slices , &CallbackAddAnyRecord)) break;
 #endif
         ShowProgress(100 - future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);
         return future->SetPromise(kRocProfVisDmResultSuccess);

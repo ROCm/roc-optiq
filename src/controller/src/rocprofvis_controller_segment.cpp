@@ -118,9 +118,9 @@ void Segment::SetMaxTimestamp(double value)
     m_max_timestamp = value;
 }
 
-void Segment::Insert(double timestamp, Handle* event)
+void Segment::Insert(double timestamp, uint8_t level, Handle* event)
 {
-    m_entries.insert(std::make_pair(timestamp, event));
+    m_entries.insert(std::make_pair(SegmentItemKey(timestamp,level), event));
 }
 
 rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index)
@@ -134,12 +134,12 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
             auto& entries = m_entries; 
             rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type = kRPVControllerTrackTypeEvents) ? kRPVControllerEventEndTimestamp : kRPVControllerSampleTimestamp);
             
-            std::multimap<double, Handle*>::iterator lower = entries.end();
+            std::map<SegmentItemKey, Handle*>::iterator lower = entries.end();
             auto it = entries.begin();
             for (; it != entries.end(); ++it)
             {
-                double min_ts = it->first;
-                double max_ts = it->first;
+                double min_ts = it->first.m_timestamp;
+                double max_ts = it->first.m_timestamp;
                 it->second->GetDouble(property, 0, &max_ts);
                 if(min_ts <= end && max_ts >= start)
                 {
@@ -148,10 +148,10 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 }
             }
 
-            std::multimap<double, Handle*>::iterator upper = entries.end();
+            std::map<SegmentItemKey, Handle*>::iterator upper = entries.end();
             for (; it != entries.end(); ++it)
             {
-                double min_ts = it->first;
+                double min_ts = it->first.m_timestamp;
                 if(min_ts > end)
                 {
                     upper = it;
@@ -161,8 +161,8 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
 
             while(lower != upper && lower != entries.end())
             {
-                double min_ts = lower->first;
-                double max_ts = lower->first;
+                double min_ts = lower->first.m_timestamp;
+                double max_ts = lower->first.m_timestamp;
                 lower->second->GetDouble(property, 0, &max_ts);
 
                 if(min_ts <= end && max_ts >= start)

@@ -76,6 +76,7 @@ rocprofvis_dm_result_t Future::SetPromise(rocprofvis_dm_result_t status) {
 void Future::ShowProgress(rocprofvis_dm_charptr_t db_name, double step, rocprofvis_dm_charptr_t action, rocprofvis_db_status_t status){
     m_progress = m_progress+step; 
     if (m_progress_callback) m_progress_callback(db_name, (int)m_progress, status, action);
+    spdlog::debug("{}%-{}", std::to_string(m_progress), action);
 }
 
 }  // namespace DataModel

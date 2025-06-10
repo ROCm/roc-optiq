@@ -40,7 +40,8 @@ typedef uint32_t                          rocprofvis_dm_op_t;
 typedef int64_t                           rocprofvis_dm_duration_t;
 typedef uint64_t                          rocprofvis_dm_id_t;
 typedef double                            rocprofvis_dm_value_t;
-typedef uint64_t                          rocprofvis_db_timeout_ms_t;                    // asynchronous call wait timeout (milliseconds)                           
+typedef uint64_t                          rocprofvis_db_timeout_ms_t;                    // asynchronous call wait timeout (milliseconds)     
+typedef void*                             rocprofvis_db_connection_t; 
 
 
 /*******************************Structures******************************/
@@ -98,6 +99,8 @@ typedef struct {
     rocprofvis_dm_timestamp_t min_ts;
     // maximum timestamp
     rocprofvis_dm_timestamp_t max_ts;
+    // sqlite connection handler
+    rocprofvis_db_connection_t db_connection;
 } rocprofvis_dm_track_params_t;
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model and database. Physically located in trace object and referenced by a pointer in binding structure.

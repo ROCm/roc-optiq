@@ -25,6 +25,8 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float
 , m_text_padding(ImVec2(4.0f, 2.0f))
 , m_flame_height(40.0f)
 , m_scale_area_width(70.0f)
+, m_selected_event_id(std::numeric_limits<uint64_t>::max())
+, m_dp(dp)
 {}
 
 void
@@ -55,7 +57,6 @@ FlameTrackItem::ReleaseData()
     m_flames.clear();
     m_flames = {};
 }
-
 bool
 FlameTrackItem::HandleTrackDataChanged()
 {
@@ -99,13 +100,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
-    // Define the start and end positions for the rectangle
-    ImVec2 rectMin =
-        ImVec2(start_position.x,
-               start_position.y + cursor_position.y);  // Start position (top-left corner)
+    ImVec2 rectMin = ImVec2(start_position.x, start_position.y + cursor_position.y);
     ImVec2 rectMax = ImVec2(start_position.x + duration,
-                            start_position.y + m_flame_height +
-                                cursor_position.y);  // End position (bottom-right corner)
+                            start_position.y + m_flame_height + cursor_position.y);
 
     ImU32 rectColor;
     if(m_request_random_color)
@@ -118,7 +115,17 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
     }
 
     draw_list->AddRectFilled(rectMin, rectMax, rectColor);
-    // don't render label if box is too small
+
+    // Highlight with blue outline if selected
+    if(flame.m_id == m_selected_event_id)
+    {
+        if(m_selected_event_id == m_dp.GetSelectedEvent())
+        {
+            ImU32 blue = IM_COL32(0, 120, 255, 255);
+            draw_list->AddRect(rectMin, rectMax, blue, 0.0f, 0, 3.0f);
+        }
+    }
+
     if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH)
     {
         draw_list->PushClipRect(rectMin, rectMax, true);
@@ -129,14 +136,21 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
     }
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding); // Add padding
+        // Select on click
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_selected_event_id = flame.m_id;
+            m_dp.SetSelectedEvent(m_selected_event_id);
+        }
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
         ImGui::BeginTooltip();
         ImGui::Text("%s", flame.m_name.c_str());
         ImGui::Text("Start: %.2f", flame.m_start_ts - m_min_x);
         ImGui::Text("Duration: %.2f", flame.m_duration);
         ImGui::Text("Id: %llu", flame.m_id);
         ImGui::EndTooltip();
-        ImGui::PopStyleVar();        
+        ImGui::PopStyleVar();
     }
 }
 
@@ -148,28 +162,31 @@ FlameTrackItem::RenderMetaArea()
                       ImGuiChildFlags_None);
     ImVec2 content_size = ImGui::GetContentRegionAvail();
 
-    // handle mouse click 
+    // handle mouse click
     ImVec2 container_pos  = ImGui::GetWindowPos();
     ImVec2 container_size = ImGui::GetWindowSize();
 
     bool is_mouse_inside = ImGui::IsMouseHoveringRect(
-    container_pos, ImVec2(container_pos.x + container_size.x,
-                            container_pos.y + container_size.y));
+        container_pos,
+        ImVec2(container_pos.x + container_size.x, container_pos.y + container_size.y));
 
     m_meta_area_clicked = false;
-    if(is_mouse_inside) {
-        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    if(is_mouse_inside)
+    {
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
             m_meta_area_clicked = true;
         }
     }
-    
+
     // Set padding for the child window (Note this done using SetCursorPos
     // because ImGuiStyleVar_WindowPadding has no effect on child windows without borders)
     ImGui::SetCursorPos(m_metadata_padding);
     // Adjust content size to account for padding
     content_size.x -= m_metadata_padding.x * 2;
     content_size.y -= m_metadata_padding.x * 2;
-    ImGui::BeginChild("MetaData Content", ImVec2(content_size.x - m_scale_area_width, content_size.y),
+    ImGui::BeginChild("MetaData Content",
+                      ImVec2(content_size.x - m_scale_area_width, content_size.y),
                       ImGuiChildFlags_None);
     ImGui::Text(m_name.c_str());
     if(ImGui::IsItemVisible())

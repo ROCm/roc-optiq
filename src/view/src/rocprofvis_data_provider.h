@@ -135,6 +135,12 @@ public:
     DataProvider();
     ~DataProvider();
 
+    //Set user selected event.
+    void SetSelectedEvent(uint64_t id);
+
+    //Get user selected event.
+    uint64_t GetSelectedEvent();
+
     /*
      *   Close the controller.
      */
@@ -316,6 +322,7 @@ private:
     double      m_min_ts;           // timeline start point
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
+    uint64_t    m_selected_event;
 
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;

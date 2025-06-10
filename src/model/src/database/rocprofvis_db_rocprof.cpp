@@ -99,7 +99,7 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **
                 }
                 
             }
-
+        db->OpenConnection((sqlite3**) &track_params.db_connection);
         if (kRocProfVisDmResultSuccess != db->AddTrackProperties(track_params)) return 1;
         if (db->BindObject()->FuncAddTrack(db->BindObject()->trace_object, db->TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1;  
         if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Node", track_params.process_id[TRACK_ID_NODE]) != kRocProfVisDmResultSuccess) return 1;
@@ -261,6 +261,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(10, "Calculate levels for CPU events", kRPVDbBusy, future);
         if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT nid, pid, tid, 1 as op, id, start, end FROM rocpd_region ORDER BY start", &CalculateEventLevels)) break;
+        m_event_timing_params.clear();
 
         ShowProgress(10, "Calculate levels for Kernel events", kRPVDbBusy, future);
         if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT gpu.nid, gpu.agent_id, gpu.queue_id, gpu.op, gpu.id, gpu.start, gpu.end FROM("
@@ -270,6 +271,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                                                                                                                    " UNION ALL"
                                                                                                                    " SELECT nid, coalesce(dst_agent_id,0), coalesce(queue_id,0), 4 as op, id, start, end FROM rocpd_memory_copy"
                                                                                                                    " ) gpu ORDER BY gpu.start;", &CalculateEventLevels)) break;
+        m_event_timing_params.clear();
 
         ShowProgress(5, "Count records per track", kRPVDbBusy, future);
         for(int i = 0; i < NumTracks(); i++)

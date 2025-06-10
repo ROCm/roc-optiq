@@ -26,7 +26,14 @@ void
 EventsView::Render()
 {
     ImGui::BeginChild("EventsView", ImVec2(0, 0), true);
-    ImGui::Text(std::to_string(m_data_provider.GetSelectedEvent()).c_str());
+    if(m_data_provider.GetSelectedEvent() == std::numeric_limits<uint64_t>::max())
+    {
+        ImGui::Text("No event selected.");
+    }
+    else
+    {
+        ImGui::Text("Event ID: %llu", m_data_provider.GetSelectedEvent());
+    }   
     ImGui::EndChild();
 }
 

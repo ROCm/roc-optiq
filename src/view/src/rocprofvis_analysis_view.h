@@ -29,8 +29,8 @@ private:
 
     DataProvider& m_data_provider;
 
-    InfiniteScrollTable m_event_table;
-    InfiniteScrollTable m_sample_table;
+    std::shared_ptr<InfiniteScrollTable> m_event_table;
+    std::shared_ptr<InfiniteScrollTable> m_sample_table;
 
     std::shared_ptr<TabContainer>   m_tab_container;
     EventManager::SubscriptionToken m_time_line_selection_changed_token;

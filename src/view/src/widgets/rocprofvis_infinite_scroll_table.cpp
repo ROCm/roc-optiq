@@ -58,6 +58,8 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
         if(filtered_tracks.empty())
         {
             m_data_provider.ClearTable(m_table_type);
+            // clear any pending track selection event
+            m_track_selection_event_to_handle = nullptr; 
         }
         else
         {
@@ -71,7 +73,31 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
             {
                 spdlog::error("Failed to fetch table data for tracks: {}",
                               filtered_tracks.size());
+                //save this selection event to reprocess it later (it's ok to replace the previous one as the new one reflects the current selection)
+                m_track_selection_event_to_handle = selection_changed_event;
+            } else {
+                // clear any pending track selection event
+                m_track_selection_event_to_handle = nullptr; 
             }
+        }
+    }
+}
+
+void InfiniteScrollTable::Update()
+{
+    // Handle track selection changed event
+    if(m_track_selection_event_to_handle)
+    {
+        if(!m_data_provider.IsRequestPending(
+               m_table_type == TableType::kEventTable
+                   ? DataProvider::EVENT_TABLE_REQUEST_ID
+                   : DataProvider::SAMPLE_TABLE_REQUEST_ID))
+        {
+            // try to repocess the deferred track selection event
+            spdlog::debug(
+                "Reprocessing deferred track selection changed event for table type: {}",
+                m_table_type == TableType::kEventTable ? "Event Table" : "Sample Table");
+            HandleTrackSelectionChanged(m_track_selection_event_to_handle);
         }
     }
 }
@@ -80,21 +106,14 @@ void
 InfiniteScrollTable::Render()
 {
     float row_height = ImGui::GetTextLineHeightWithSpacing();
-    float font_size = ImGui::GetFontSize();            
     ImGuiStyle& style = ImGui::GetStyle();                    
     float row_padding_v = style.CellPadding.y * 2.0f;
-    float y_spacing = style.ItemSpacing.y;
+    // Adjust row height to include padding
+    row_height += row_padding_v;
 
+    // track the frame number for debugging purposes
     static uint64_t frame_count = 0;
     frame_count++;
-
-    DebugWindow::GetInstance()->AddDebugMessage("row_height: " +
-                                               std::to_string(row_height) +
-                                               ", font_size: " + std::to_string(font_size) +
-                                               ", row_padding_v: " + std::to_string(row_padding_v) +
-                                               ", y_spacing: " + std::to_string(y_spacing));
-
-    row_height += row_padding_v;
 
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), true);
 
@@ -115,10 +134,12 @@ InfiniteScrollTable::Render()
 
     uint64_t row_count = 0;
     uint64_t start_row = 0;
+    uint64_t selected_track_count = 0;
     if(event_table_params)
     {
         row_count = event_table_params->m_req_row_count;
         start_row = event_table_params->m_start_row;
+        selected_track_count = event_table_params->m_track_indices.size();
     }
     uint64_t end_row = start_row + row_count;
     if(end_row >= total_row_count)
@@ -150,8 +171,8 @@ InfiniteScrollTable::Render()
 
     if(table_data.size() > 0)
     {
-        ImGui::Text("Cached %d to %d of %d events", start_row, end_row,
-                    static_cast<int>(total_row_count));
+        ImGui::Text("Cached %d to %d of %d events for %d tracks", start_row, end_row,
+                    total_row_count, selected_track_count);
 
         ImVec2 outer_size = ImVec2(0.0f, ImGui::GetContentRegionAvail().y);
         if(outer_size.y != m_last_table_size.y )        {

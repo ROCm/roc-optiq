@@ -12,8 +12,8 @@ using namespace RocProfVis::View;
 
 AnalysisView::AnalysisView(DataProvider& dp)
 : m_data_provider(dp)
-, m_event_table(dp, TableType::kEventTable)
-, m_sample_table(dp, TableType::kSampleTable)
+, m_event_table(std::make_shared<InfiniteScrollTable>(dp, TableType::kEventTable))
+, m_sample_table(std::make_shared<InfiniteScrollTable>(dp, TableType::kSampleTable))
 {
     m_widget_name = GenUniqueName("Analysis View");
 
@@ -23,15 +23,13 @@ AnalysisView::AnalysisView(DataProvider& dp)
     tab_item.m_label     = "Event Details";
     tab_item.m_id        = "event_details";
     tab_item.m_can_close = false;
-    tab_item.m_widget =
-        std::make_shared<RocCustomWidget>([this]() { this->RenderEventTable(); });
+    tab_item.m_widget    = m_event_table;
     m_tab_container->AddTab(tab_item);
 
     tab_item.m_label     = "Sample Details";
     tab_item.m_id        = "sample_details";
     tab_item.m_can_close = false;
-    tab_item.m_widget =
-        std::make_shared<RocCustomWidget>([this]() { this->RenderSampleTable(); });
+    tab_item.m_widget    = m_sample_table;
     m_tab_container->AddTab(tab_item);
 
     m_tab_container->SetAllowToolTips(false);
@@ -67,18 +65,6 @@ AnalysisView::Render()
 }
 
 void
-AnalysisView::RenderEventTable()
-{
-    m_event_table.Render();
-}
-
-void
-AnalysisView::RenderSampleTable()
-{
-    m_sample_table.Render();
-}
-
-void
 AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
 {
     if(e && e->GetType() == RocEventType::kTimelineSelectionChangedEvent)
@@ -87,8 +73,14 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
             std::static_pointer_cast<TrackSelectionChangedEvent>(e);
         if(selection_changed_event)
         {
-            m_event_table.HandleTrackSelectionChanged(selection_changed_event);
-            m_sample_table.HandleTrackSelectionChanged(selection_changed_event);
+            if(m_event_table)
+            {
+                m_event_table->HandleTrackSelectionChanged(selection_changed_event);
+            }
+            if(m_sample_table)
+            {
+                m_sample_table->HandleTrackSelectionChanged(selection_changed_event);
+            }
         }
     }
 }

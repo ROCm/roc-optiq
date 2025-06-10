@@ -19,6 +19,7 @@ class InfiniteScrollTable : public RocWidget
 public:
     InfiniteScrollTable(DataProvider& dp, TableType table_type = TableType::kEventTable);
 
+    void Update() override;
     void Render() override;
     void SetTableType(TableType type) { m_table_type = type; }
 

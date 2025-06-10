@@ -60,6 +60,15 @@ TraceView::Update()
     {
         m_timeline_view->Update();
     }
+    if(m_analysis)
+    {
+        m_analysis->Update();
+    }
+    if(m_sidebar)
+    {
+        m_sidebar->Update();
+    }
+    
 }
 
 void

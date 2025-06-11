@@ -538,11 +538,6 @@ rocprofvis_dm_charptr_t Trace::GetStringAt(rocprofvis_dm_index_t index){
     return m_strings[index].c_str();
 }
 
-rocprofvis_dm_event_level_t Trace::GetEventLevelAt(rocprofvis_dm_event_id_t event_id){
-    ROCPROFVIS_ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, 0);
-    return m_event_level_map[*(uint64_t*)&event_id];
-}
-
 rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)

@@ -27,17 +27,17 @@ namespace RocProfVis
 namespace DataModel
 {
 
-int SqliteDatabase::CallbackGetValue(void* data, int argc, char** argv, char** azColName){
+int SqliteDatabase::CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, char** azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     std::string * string_ptr = (rocprofvis_dm_string_t*)callback_params->handle;
     ROCPROFVIS_ASSERT_MSG_RETURN(string_ptr, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    *string_ptr = argv[0];
+    *string_ptr = (char*) sqlite3_column_text(stmt,0);
     return 0;
 } 
 
-int SqliteDatabase::CallbackRunQuery(void *data, int argc, char **argv, char **azColName){
+int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     SqliteDatabase* db = (SqliteDatabase*)callback_params->db;
@@ -53,7 +53,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, char **argv, char **a
     ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
     for (int i=0; i < argc; i++)
     {
-        if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, argv[i])) return 1;
+        if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, (char*) sqlite3_column_text(stmt,i))) return 1;
     }
     callback_params->future->CountThisRow();
     return 0;
@@ -71,16 +71,16 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQueryStatic(
     );
 }
 
-int SqliteDatabase::CallbackTableExists(void *data, int argc, char **argv, char **azColName){
+int SqliteDatabase::CallbackTableExists(void *data, int argc, char** argv, char **azColName){
     uint32_t num = std::stol(argv[0]);
     return num > 0 ? 0 : 1;
 }
 
-int SqliteDatabase::DetectTable(sqlite3 *db, const char* table){
+int SqliteDatabase::DetectTable(sqlite3 *db, const char* table, bool is_view){
     sqlite3_mutex_enter(sqlite3_db_mutex(db));
     std::stringstream query;
     char* zErrMsg = 0;
-    query << "SELECT COUNT(name) FROM sqlite_master WHERE type='view' AND name='" << table << "';";
+    query << "SELECT COUNT(name) FROM sqlite_master WHERE type=" << (is_view ? "'view'" : "'table'") << "AND name='" << table << "';";
     int rc = sqlite3_exec(db, query.str().c_str(), CallbackTableExists, db, &zErrMsg);
     sqlite3_mutex_leave(sqlite3_db_mutex(db));
     if (rc != SQLITE_OK) {
@@ -247,7 +247,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
 }
 
 int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
-                              int (*callback)(void*, int, char**, char**),
+                            int (*callback)(void*, int, sqlite3_stmt*, char**),
                               void* user_data)
 {
     int rc=0;
@@ -263,16 +263,7 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
 
     while(sqlite3_step(stmt) == SQLITE_ROW)
     {
-        char** row = new char*[cols];
-        for(int i = 0; i < cols; ++i)
-        {
-            const char* text = (const char*)sqlite3_column_text(stmt, i);
-            row[i] = (char*) (text ? text : "NULL");
-        }
-
-        rc = callback(user_data, cols, row, col_names);
-        delete[] row;
-
+        rc = callback(user_data, cols, stmt, col_names);
         if(rc != 0) break;  // respect early abort
     }
 
@@ -300,6 +291,92 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(sqlite3 *db_conn, const 
         return kRocProfVisDmResultSuccess;
     }
     return kRocProfVisDmResultNotLoaded;
+}
+
+rocprofvis_dm_result_t
+SqliteDatabase::CreateSQLTable(
+                                const char* table_name, 
+                                SQLInsertParams* parameters, 
+                                uint8_t num_cols, 
+                                size_t num_row,
+                                std::function<void(sqlite3_stmt* stmt, int index)> insert_func)
+{
+    std::string query = "DROP TABLE IF EXISTS ";
+    query += table_name;
+    query += ";"; 
+    if(sqlite3_exec(m_db, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
+    query = "CREATE TABLE IF NOT EXISTS ";
+    query += table_name;
+    query += "(";
+    for(int i = 0; i < num_cols; i++)
+    {
+        if (i > 0)
+        {
+            query += ", ";
+        }
+        query += parameters[i].column;
+        query += " ";
+        query += parameters[i].type;
+    }
+    query += ") WITHOUT ROWID;";
+    if (sqlite3_exec(m_db, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
+
+    if(sqlite3_exec(m_db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
+
+    query = "INSERT INTO ";
+    query += table_name;
+    query += "(";
+
+    for(int i = 0; i < num_cols; i++)
+    {
+        if(i > 0)
+        {
+            query += ", ";
+        }
+        query += parameters[i].column;
+    }
+    query += ") VALUES (";
+
+    for(int i = 0; i < num_cols; i++)
+    {
+        if(i > 0)
+        {
+            query += ", ";
+        }
+        query += "?";
+    }
+    query += ");";
+
+    sqlite3_stmt* stmt;
+    sqlite3_prepare_v2(m_db, query.c_str(), -1, &stmt, nullptr);
+
+    for(int i = 0; i < num_row; i++)
+    {
+        insert_func(stmt, i);
+        int rc = sqlite3_step(stmt);
+        if(rc != SQLITE_DONE)
+        {
+            spdlog::debug("Insert failed");
+        }
+        sqlite3_reset(stmt); 
+    }
+
+    sqlite3_finalize(stmt);
+
+    if(sqlite3_exec(m_db, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
+    return kRocProfVisDmResultSuccess;
 }
 
 }  // namespace DataModel

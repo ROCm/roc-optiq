@@ -115,10 +115,6 @@ class Trace : public DmBase{
         // @return pointer to property symbol string 
         const char*                                     GetPropertySymbol(rocprofvis_dm_property_t property) override;
 #endif
-        // Method returns graph level for event
-        // @param event_id - 60-bit event id and 4-bit operation type
-        // @return graph level value for the event 
-        rocprofvis_dm_event_level_t                     GetEventLevelAt(rocprofvis_dm_event_id_t event_id);
 
     private:
         // Method to get handle to a Track object at provided index

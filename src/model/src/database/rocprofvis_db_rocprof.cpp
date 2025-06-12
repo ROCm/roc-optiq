@@ -72,7 +72,7 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
         char* arg = (char*) sqlite3_column_text(stmt, i);
         track_params.process_id_numeric[i] = Database::IsNumber(arg);
         if (track_params.process_id_numeric[i]) {
-            track_params.process_id[i] = sqlite3_column_int(stmt, i);
+            track_params.process_id[i] = sqlite3_column_int64(stmt, i);
         } else {
             track_params.process_name[i] = arg;
         }        
@@ -257,7 +257,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         if(kRocProfVisDmResultSuccess !=
            ExecuteQueryForAllTracksAsync(true,
-               "SELECT COUNT(*), MIN(start), MAX(end), ", "", &CallbackGetTrackProperties,
+               "SELECT COUNT(*), MIN(start), MAX(end), op, ", "", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {}))
         {
             break;
@@ -288,7 +288,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 break;
             }
 
-            SQLInsertParams params[] = { { "eid", "INTEGER" }, { "level", "INTEGER" } };
+            SQLInsertParams params[] = { { "eid", "INTEGER PRIMARY KEY" }, { "level", "INTEGER" } };
             CreateSQLTable(
                 "event_levels_launch", params, 2,
                 m_event_levels[kRocProfVisDmOperationLaunch].size(),

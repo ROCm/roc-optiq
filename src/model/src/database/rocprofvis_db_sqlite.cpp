@@ -252,23 +252,24 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
 {
     int rc=0;
     sqlite3_stmt* stmt = nullptr;
+    sqlite3_mutex_enter(sqlite3_db_mutex(db));
     if(sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) return 1;
 
     int    cols     = sqlite3_column_count(stmt);
-    char** col_names = new char*[cols];
+    std::vector<char*> col_names;
     for(int i = 0; i < cols; ++i)
     {
-        col_names[i] = const_cast<char*>(sqlite3_column_name(stmt, i));
+        col_names.push_back(const_cast<char*>(sqlite3_column_name(stmt, i)));
     }
 
     while(sqlite3_step(stmt) == SQLITE_ROW)
     {
-        rc = callback(user_data, cols, stmt, col_names);
-        if(rc != 0) break;  // respect early abort
+        rc = callback(user_data, cols, stmt, col_names.data());
+        if(rc != 0) break;  
     }
 
-    delete[] col_names;
     sqlite3_finalize(stmt);
+    sqlite3_mutex_leave(sqlite3_db_mutex(db));
     return rc;
 }
 
@@ -277,11 +278,8 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(sqlite3 *db_conn, const 
     PROFILE;
     if (IsOpen())
     {
-
         char *zErrMsg = 0;
-        sqlite3_mutex_enter(sqlite3_db_mutex(db_conn));
-        int rc = Sqlite3Exec(db_conn, query, params->callback, params);
-        sqlite3_mutex_leave(sqlite3_db_mutex(db_conn));
+        int rc = Sqlite3Exec(db_conn, query, params->callback, params);       
         if( rc != SQLITE_OK ) {
             spdlog::debug("Query: "); spdlog::debug(query);
             spdlog::debug("SQL error "); spdlog::debug(std::to_string(rc).c_str()); spdlog::debug(":"); 

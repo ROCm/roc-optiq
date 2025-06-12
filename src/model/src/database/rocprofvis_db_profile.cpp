@@ -298,7 +298,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
             if (slice_query_map[q].length() > 0) slice_query_map[q] += ", ";
             slice_query_map[q] += tuple ;
         }
-        if (start > TrackPropertiesAt(tracks[i])->min_ts &&
+        if (start > TrackPropertiesAt(tracks[i])->min_ts ||
             end < TrackPropertiesAt(tracks[i])->max_ts)
         {
             timed_query = true;
@@ -312,10 +312,10 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
         query += ")";
         if(timed_query)
         {
-            query += " and start >= ";
-            query += std::to_string(start);
-            query += " and end < ";
+            query += " and start < ";
             query += std::to_string(end);
+            query += " and end > ";
+            query += std::to_string(start);
         }
     }
     query += ") ORDER BY start;";
@@ -436,8 +436,8 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
                kRocProfVisDmResultSuccess)
                 break;
             query << subquery
-                << " start >= " << start
-                << " and end < " << end
+                << " start < " << end
+                << " and end > " << start
                 << " ORDER BY start;";
             ShowProgress(step, query.str().c_str(),kRPVDbBusy, future);
             if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(TrackPropertiesAt(tracks[i])->db_connection,

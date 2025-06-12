@@ -7,7 +7,5 @@ include_directories(inc)
 
 file(GLOB COMMON_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
-add_subdirectory(../../thirdparty/spdlog thirdparty/spdlog)
-
 add_library(rocprof-visualizer-core ${COMMON_SRC})
 target_link_libraries(rocprof-visualizer-core PRIVATE spdlog)

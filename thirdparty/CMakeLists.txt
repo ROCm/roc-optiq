@@ -1,6 +1,9 @@
 find_package(Vulkan REQUIRED)
 set(VULKAN_LIB "Vulkan::Vulkan")
 
+add_subdirectory(spdlog)
+add_subdirectory(catch2)
+
 add_library(imgui STATIC
     imgui/imgui.cpp
     imgui/imgui_draw.cpp

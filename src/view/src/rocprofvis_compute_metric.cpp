@@ -240,8 +240,11 @@ void ComputeMetricRoofline::Update()
 {
     if (m_data_provider)
     {
-        m_roof_data = m_data_provider->GetMetricGroup(std::string("roofline.csv"));
-        m_intensity_data = m_data_provider->GetMetricGroup(std::string("pmc_perf.csv"));
+        std::string roof_str = std::string("roofline.csv");
+        std::string intensity_mode_str = std::string("pmc_perf.csv");
+
+        m_roof_data = m_data_provider->GetMetricGroup(roof_str);
+        m_intensity_data = m_data_provider->GetMetricGroup(intensity_mode_str);
     }
 }
 

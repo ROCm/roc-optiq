@@ -5,6 +5,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_event_manager.h"
 #include "spdlog/spdlog.h"
+#include <cfloat>
 
 namespace RocProfVis
 {
@@ -194,7 +195,8 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                                 result = rocprofvis_controller_get_double(row, kRPVControllerArrayEntryIndexed, c, &data);
                                                                 if (result == kRocProfVisResultSuccess && data != -1)
                                                                 {
-                                                                    value = TrimDecimalPlaces(std::to_string(data), 2);
+                                                                    auto data_str = std::to_string(data);
+                                                                    value = TrimDecimalPlaces(data_str, 2);
                                                                     if (c > 0)
                                                                     {
                                                                         colorize = ((unit == "Pct" || unit == "Pct of peak") && column_names[c] == "Avg") || column_names[c] == "Pct of Peak";

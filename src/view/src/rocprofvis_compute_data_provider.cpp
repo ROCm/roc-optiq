@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_compute_data_provider.h"
+#include <cfloat>
 
 namespace RocProfVis
 {

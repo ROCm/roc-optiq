@@ -18,7 +18,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_session.hpp>
-
+#include <cfloat>
 #include <iostream>
 
 #define MULTI_LINE_LOG_START auto multi_line_log = fmt::memory_buffer()

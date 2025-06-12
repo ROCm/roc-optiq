@@ -40,7 +40,7 @@ public:
 
     std::vector<std::string> Formatted()
     {
-        std::lock_guard<Mutex> lock(base_sink<Mutex>::mutex_);
+        std::lock_guard<Mutex> lock(spdlog::sinks::base_sink<Mutex>::mutex_);
         std::vector<std::string> ret;
         ret.reserve(m_elements.size());
         for (auto& entry : m_elements)

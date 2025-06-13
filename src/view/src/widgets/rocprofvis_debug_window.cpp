@@ -117,7 +117,24 @@ DebugWindow::RenderPersitent()
     ImGui::Separator();
     for(const std::string& message : m_persitent_debug_messages.GetContainer())
     {
-        ImGui::Text(message.c_str());
+        //need to escape text before printing, escape all printf style format specifiers
+        //  Escape text before printing, escape all printf style format specifiers
+        std::string escaped_message;
+        escaped_message.reserve(message.size());
+        for(char c : message)
+        {
+            if(c == '\\')
+            {
+                escaped_message.push_back('\\');
+            }
+            else if(c == '%' ){
+                escaped_message.push_back('%');
+            }
+            escaped_message.push_back(c);
+        }
+        ImGui::Text(escaped_message.c_str());
+
+       /// ImGui::Text(message.c_str());
     }
 }
 

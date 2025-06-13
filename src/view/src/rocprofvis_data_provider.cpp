@@ -1619,6 +1619,47 @@ DataProvider::CreateRawEventData(uint64_t                       index,
         uint32_t length = 0;
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   nullptr, &length);
+
+        auto future = rocprofvis_controller_future_alloc();
+        ROCPROFVIS_ASSERT(future != nullptr);
+        auto outArray = rocprofvis_controller_array_alloc(0);
+        ROCPROFVIS_ASSERT(outArray != nullptr);
+
+        //    // Load Event Flow control properties
+        // kRPVControllerEventDataFlowControl = 0xC0000000,
+        //// Load Event Callstack properties
+        //    kRPVControllerEventDataCallStack = 0xC0000001,
+        //// Load Event Extended data properties
+        //    kRPVControllerEventDataExtData = 0xC0000002,
+
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        rocprofvis_controller_get_indexed_property_async(m_trace_controller, event,
+                                                         kRPVControllerEventDataExtData,
+                                                         0, 1, future, outArray);
+
+        uint64_t prop_count = 0;
+        rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
+                                         &prop_count);
+
+        spdlog::debug(">>>>>>> Event {} has {} properties", i, prop_count);
+
+        for(auto j = 0; j < prop_count; j++)
+        {
+            uint64_t mem_usage_excl = 0;
+            rocprofvis_controller_get_uint64(
+                outArray, kRPVControllerCommonMemoryUsageInclusive, j, &mem_usage_excl);
+            uint64_t mem_usage_incl = 0;
+            rocprofvis_controller_get_uint64(
+                outArray, kRPVControllerCommonMemoryUsageInclusive, j, &mem_usage_incl);
+
+            spdlog::debug(">>>>>>> Event {} Memory Usage Excl: {}, Mem Usage Incl: {}", j,
+                          mem_usage_excl, mem_usage_incl);
+        }
+
+        // free future and array
+        rocprofvis_controller_future_free(future);
+        rocprofvis_controller_array_free(outArray);
+
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         if(length >= str_buffer_length)

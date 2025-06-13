@@ -224,6 +224,7 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
                                           *future, *array, index, count);
                 break;
             }
+           
             default:
             {
                 break;
@@ -232,6 +233,41 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
     }
     return error;
 }
+
+//////////////////////////NEW STUFF
+rocprofvis_result_t rocprofvis_controller_event_fetch_async(
+    rocprofvis_controller_t* controller, uint64_t event_id, double start_ts,
+    double end_ts, rocprofvis_property_t property, rocprofvis_controller_future_t* future,
+    rocprofvis_controller_array_t* array)
+{
+    using namespace RocProfVis::Controller;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+
+    TraceRef  trace(controller);
+    FutureRef future_ref(future);
+    ArrayRef  array_ref(array);
+    //property should be rocprofvis_controller_event_t
+    if(trace.IsValid() && future_ref.IsValid() && array_ref.IsValid())
+    {
+        Event* event = new Event(event_id, start_ts, end_ts);
+        if(event)
+        {
+     
+            result = trace->AsyncFetch(*event, *future_ref, *array_ref, property);
+
+            delete event;
+        }
+        else
+        {
+            result = kRocProfVisResultMemoryAllocError;
+        }
+    }
+    return result;
+}
+
+
+
+
 
 rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table,

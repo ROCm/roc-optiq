@@ -36,6 +36,7 @@ rocprofvis_controller_object_type_t Event::GetType(void)
     return kRPVControllerObjectTypeEvent;
 }
 
+ 
 
 rocprofvis_result_t
 Event::FetchDataModelFlowTraceProperty(Array&                array,

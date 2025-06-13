@@ -39,6 +39,7 @@ public:
     rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) override;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) override;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) override;
+    rocprofvis_result_t FindEventById(uint64_t event_id) ;
 
 private:
     uint64_t m_id;

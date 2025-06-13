@@ -82,11 +82,11 @@ int SqliteDatabase::DetectTable(sqlite3 *db, const char* table, bool is_view){
     char* zErrMsg = 0;
     query << "SELECT COUNT(name) FROM sqlite_master WHERE type=" << (is_view ? "'view'" : "'table'") << "AND name='" << table << "';";
     int rc = sqlite3_exec(db, query.str().c_str(), CallbackTableExists, db, &zErrMsg);
-    sqlite3_mutex_leave(sqlite3_db_mutex(db));
     if (rc != SQLITE_OK) {
         spdlog::debug("Detect table error "); spdlog::debug(std::to_string(rc).c_str()); spdlog::debug(":"); spdlog::debug(zErrMsg);
         sqlite3_free(zErrMsg);
     }
+    sqlite3_mutex_leave(sqlite3_db_mutex(db));
     return rc;
 }
 
@@ -124,6 +124,7 @@ rocprofvis_dm_result_t SqliteDatabase::OpenConnection(sqlite3** connection)
 
 rocprofvis_dm_result_t SqliteDatabase::Close()
 {
+    rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     if (IsOpen())
     {
         for (int i = 0; i < NumTracks(); i++)
@@ -133,19 +134,20 @@ rocprofvis_dm_result_t SqliteDatabase::Close()
                 if(sqlite3_close((sqlite3*)TrackPropertiesAt(i)->db_connection) != SQLITE_OK)
                 {
                     spdlog::debug("Can't close database connection:");
-                    spdlog::debug(sqlite3_errmsg(m_db));
+                    spdlog::debug(sqlite3_errmsg((sqlite3*)TrackPropertiesAt(i)->db_connection));
+                    result = kRocProfVisDmResultUnknownError;
                 }
             }
         }
-        if( sqlite3_close(m_db) != SQLITE_OK ) {
-
-            spdlog::debug("Can't close database:");
+        if(sqlite3_close(m_db) != SQLITE_OK)
+        {
+            spdlog::debug("Can't close database connection:");
             spdlog::debug(sqlite3_errmsg(m_db));
-            return kRocProfVisDmResultDbAccessFailed;
+            result = kRocProfVisDmResultUnknownError;
         }
-        return kRocProfVisDmResultSuccess;
+        result = kRocProfVisDmResultSuccess;
     }
-    return kRocProfVisDmResultNotLoaded;
+    return result;
 }
 
 
@@ -253,36 +255,38 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
     int rc=0;
     sqlite3_stmt* stmt = nullptr;
     sqlite3_mutex_enter(sqlite3_db_mutex(db));
-    if(sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) return 1;
-
-    int    cols     = sqlite3_column_count(stmt);
-    std::vector<char*> col_names;
-    for(int i = 0; i < cols; ++i)
+    rc = sqlite3_prepare_v2(db, query, -1, &stmt, nullptr);
+    if(rc == SQLITE_OK)
     {
-        col_names.push_back(const_cast<char*>(sqlite3_column_name(stmt, i)));
-    }
-
-    while(sqlite3_step(stmt) == SQLITE_ROW)
-    {
-        bool null_data_in_the_row = false;
-       
+        int                cols = sqlite3_column_count(stmt);
+        std::vector<char*> col_names;
         for(int i = 0; i < cols; ++i)
         {
-            if(sqlite3_column_type(stmt, i) == SQLITE_NULL)
+            col_names.push_back(const_cast<char*>(sqlite3_column_name(stmt, i)));
+        }
+
+        while(sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            bool null_data_in_the_row = false;
+
+            for(int i = 0; i < cols; ++i)
             {
-                null_data_in_the_row = true;
-                spdlog::debug("NULL data in column {}", col_names[i]);
-                break;
+                if(sqlite3_column_type(stmt, i) == SQLITE_NULL)
+                {
+                    null_data_in_the_row = true;
+                    spdlog::debug("NULL data in column {}", col_names[i]);
+                    break;
+                }
+            }
+            if(null_data_in_the_row == false)
+            {
+                rc = callback(user_data, cols, stmt, col_names.data());
+                if(rc != 0) break;
             }
         }
-        if(null_data_in_the_row == false)
-        {
-            rc = callback(user_data, cols, stmt, col_names.data());
-            if(rc != 0) break;
-        }   
-    }
 
-    sqlite3_finalize(stmt);
+        sqlite3_finalize(stmt);
+    }
     sqlite3_mutex_leave(sqlite3_db_mutex(db));
     return rc;
 }
@@ -297,7 +301,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(sqlite3 *db_conn, const 
         if( rc != SQLITE_OK ) {
             spdlog::debug("Query: "); spdlog::debug(query);
             spdlog::debug("SQL error "); spdlog::debug(std::to_string(rc).c_str()); spdlog::debug(":"); 
-            spdlog::debug(sqlite3_errmsg(m_db));
+            spdlog::debug(sqlite3_errmsg(db_conn));
             return kRocProfVisDmResultDbAccessFailed;
         } 
         return kRocProfVisDmResultSuccess;
@@ -313,81 +317,88 @@ SqliteDatabase::CreateSQLTable(
                                 size_t num_row,
                                 std::function<void(sqlite3_stmt* stmt, int index)> insert_func)
 {
-    std::string query = "DROP TABLE IF EXISTS ";
-    query += table_name;
-    query += ";"; 
-    if(sqlite3_exec(m_db, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
+    sqlite3_mutex_enter(sqlite3_db_mutex(m_db));
+    while(true)
     {
-        return kRocProfVisDmResultDbAccessFailed;
-    }
-    query = "CREATE TABLE IF NOT EXISTS ";
-    query += table_name;
-    query += "(";
-    for(int i = 0; i < num_cols; i++)
-    {
-        if (i > 0)
+        std::string query = "DROP TABLE IF EXISTS ";
+        query += table_name;
+        query += ";";
+        if(sqlite3_exec(m_db, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
         {
-            query += ", ";
+            break;
         }
-        query += parameters[i].column;
-        query += " ";
-        query += parameters[i].type;
-    }
-    query += ") WITHOUT ROWID;";
-    if (sqlite3_exec(m_db, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
-    {
-        return kRocProfVisDmResultDbAccessFailed;
-    }
-
-    if(sqlite3_exec(m_db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) != SQLITE_OK)
-    {
-        return kRocProfVisDmResultDbAccessFailed;
-    }
-
-    query = "INSERT INTO ";
-    query += table_name;
-    query += "(";
-
-    for(int i = 0; i < num_cols; i++)
-    {
-        if(i > 0)
+        query = "CREATE TABLE IF NOT EXISTS ";
+        query += table_name;
+        query += "(";
+        for(int i = 0; i < num_cols; i++)
         {
-            query += ", ";
+            if(i > 0)
+            {
+                query += ", ";
+            }
+            query += parameters[i].column;
+            query += " ";
+            query += parameters[i].type;
         }
-        query += parameters[i].column;
-    }
-    query += ") VALUES (";
-
-    for(int i = 0; i < num_cols; i++)
-    {
-        if(i > 0)
+        query += ") WITHOUT ROWID;";
+        if(sqlite3_exec(m_db, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
         {
-            query += ", ";
+            break;
         }
-        query += "?";
-    }
-    query += ");";
 
-    sqlite3_stmt* stmt;
-    sqlite3_prepare_v2(m_db, query.c_str(), -1, &stmt, nullptr);
-
-    for(int i = 0; i < num_row; i++)
-    {
-        insert_func(stmt, i);
-        int rc = sqlite3_step(stmt);
-        if(rc != SQLITE_DONE)
+        if(sqlite3_exec(m_db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) !=
+           SQLITE_OK)
         {
-            spdlog::debug("Insert failed");
+            break;
         }
-        sqlite3_reset(stmt); 
-    }
 
-    sqlite3_finalize(stmt);
+        query = "INSERT INTO ";
+        query += table_name;
+        query += "(";
 
-    if(sqlite3_exec(m_db, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
-    {
-        return kRocProfVisDmResultDbAccessFailed;
+        for(int i = 0; i < num_cols; i++)
+        {
+            if(i > 0)
+            {
+                query += ", ";
+            }
+            query += parameters[i].column;
+        }
+        query += ") VALUES (";
+
+        for(int i = 0; i < num_cols; i++)
+        {
+            if(i > 0)
+            {
+                query += ", ";
+            }
+            query += "?";
+        }
+        query += ");";
+
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(m_db, query.c_str(), -1, &stmt, nullptr);
+
+        for(int i = 0; i < num_row; i++)
+        {
+            insert_func(stmt, i);
+            int rc = sqlite3_step(stmt);
+            if(rc != SQLITE_DONE)
+            {
+                spdlog::debug("Insert failed");
+            }
+            sqlite3_reset(stmt);
+        }
+
+        sqlite3_finalize(stmt);
+
+        if(sqlite3_exec(m_db, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
+        {
+            break;
+        }
+        break;
     }
+    sqlite3_mutex_leave(sqlite3_db_mutex(m_db));
     return kRocProfVisDmResultSuccess;
 }
 

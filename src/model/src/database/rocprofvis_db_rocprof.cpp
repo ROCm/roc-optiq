@@ -194,30 +194,30 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as nodeId, agent_id as agentId, queue_id as queueId, 3 as category from rocpd_kernel_dispatch;", 
                     "select 2 as op, KD.start, KD.end, E.category_id, KD.kernel_id, KD.id, KD.nid as nodeId, KD.agent_id as agentId, KD.queue_id as queueId {,L.level} from rocpd_kernel_dispatch KD INNER JOIN rocpd_event E ON E.id = KD.event_id {INNER JOIN event_levels_dispatch L ON KD.id = L.eid} ", 
-                    "select id, category, name, nid as nodeId, coalesce(agent_abs_index,0) as agentId, queue_id as queueId, coalesce(stream_id,0) as stream, coalesce(pid,0) as pid, coalesce(tid,0) as tid, start, end, duration from kernels " ,
+                    "select id, category, name, nid as nodeId, agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from kernels " ,
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Memory Allocation tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as nodeId, coalesce(agent_id, 0) as agentId, coalesce(queue_id,0) as queueId, 3 as category from rocpd_memory_allocate;", 
-                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as nodeId, coalesce(MA.agent_id,0) as agentId, coalesce(MA.queue_id,0) as queueId {,L.level} from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id {INNER JOIN event_levels_mem_alloc L ON MA.id = L.eid} ", 
-                    "select id, category, type as name, nid as nodeId, coalesce(agent_abs_index,0) as agentId, coalesce(queue_id,0) as queueId, coalesce(stream_id,0) as stream, coalesce(pid,0) as pid, coalesce(tid,0) as tid, start, end, duration from memory_allocations " ,
+                    "select DISTINCT nid as nodeId, agent_id as agentId, queue_id as queueId, 3 as category from rocpd_memory_allocate;", 
+                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as nodeId, MA.agent_id as agentId, MA.queue_id as queueId {,L.level} from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id {INNER JOIN event_levels_mem_alloc L ON MA.id = L.eid} ", 
+                    "select id, category, type as name, nid as nodeId, agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from memory_allocations " ,
                     &CallBackAddTrack)) break;
         /*
 // This will not work if full track is not requested
 // Comment out for now. Will need to fetch all data, then cut samples outside of time frame.
         ShowProgress(5, "Adding Memory allocation graph tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as nodeId, coalesce(agent_id, 0) as agentId, -1 as const, 1 as category from rocpd_memory_allocate;", 
+                    "select DISTINCT nid as nodeId, agent_id as agentId, -1 as const, 1 as category from rocpd_memory_allocate;", 
                     "select 0 as op, start, sum(CASE WHEN type = 'FREE' THEN (select -size from rocpd_memory_allocate MA1 where MA.address == MA1.address limit 1) ELSE size END) over (ORDER BY start ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as current, start as end, 0, 0, nid as nodeId, coalesce(agent_id, 0) as agentId, -1 as queue  from rocpd_memory_allocate MA ", 
                     &CallBackAddTrack)) break;
 */
    
         ShowProgress(5, "Adding Memory Copy tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as nodeId, dst_agent_id as agentId, coalesce(queue_id,0) as queueId, 3 as category from rocpd_memory_copy;", 
-                    "select 4 as op, MC.start, MC.end, E.category_id, MC.name_id, MC.id, MC.nid as nodeId, MC.dst_agent_id as agentId, coalesce(MC.queue_id,0) as queueId {,L.level} from rocpd_memory_copy MC INNER JOIN rocpd_event E ON E.id = MC.event_id {INNER JOIN event_levels_mem_copy L ON MC.id = L.eid} ",
-                    "select id, category, name, nid as nodeId, coalesce(dst_agent_abs_index,0) as agentId, coalesce(queue_id,0) as queueId, coalesce(stream_id,0) as stream, coalesce(pid,0) as pid, coalesce(tid,0) as tid, start, end, duration from memory_copies " ,
+                    "select DISTINCT nid as nodeId, dst_agent_id as agentId, queue_id as queueId, 3 as category from rocpd_memory_copy;", 
+                    "select 4 as op, MC.start, MC.end, E.category_id, MC.name_id, MC.id, MC.nid as nodeId, MC.dst_agent_id as agentId, MC.queue_id as queueId {,L.level} from rocpd_memory_copy MC INNER JOIN rocpd_event E ON E.id = MC.event_id {INNER JOIN event_levels_mem_copy L ON MC.id = L.eid} ",
+                    "select id, category, name, nid as nodeId, dst_agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from memory_copies " ,
                     &CallBackAddTrack)) break;
         
         // PMC schema is not fully defined yet

@@ -276,9 +276,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
                 if (props->process_tag[k] != "const") {
                     if (tuple.length() > 1) tuple += ",";
-                    if(props->process_id_numeric[k]) tuple += "coalesce(";
                     tuple += props->process_tag[k];
-                    if(props->process_id_numeric[k]) tuple += ",0)";
                 }
             }
             tuple += ")";

@@ -264,8 +264,22 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
 
     while(sqlite3_step(stmt) == SQLITE_ROW)
     {
-        rc = callback(user_data, cols, stmt, col_names.data());
-        if(rc != 0) break;  
+        bool null_data_in_the_row = false;
+       
+        for(int i = 0; i < cols; ++i)
+        {
+            if(sqlite3_column_type(stmt, i) == SQLITE_NULL)
+            {
+                null_data_in_the_row = true;
+                spdlog::debug("NULL data in column {}", col_names[i]);
+                break;
+            }
+        }
+        if(null_data_in_the_row == false)
+        {
+            rc = callback(user_data, cols, stmt, col_names.data());
+            if(rc != 0) break;
+        }   
     }
 
     sqlite3_finalize(stmt);

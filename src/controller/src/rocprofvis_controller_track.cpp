@@ -10,6 +10,7 @@
 #include <cfloat>
 #include <cstring>
 #include <cmath>
+#include <set>
 
 namespace RocProfVis
 {
@@ -42,22 +43,28 @@ Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(m_start_timestamp <= end && m_end_timestamp >= start)
     {
-        bool dm_fetched = false;
-        while(true)
+        bool dm_fetch = true;
+        for(auto it = m_valid_segments.begin(); it != m_valid_segments.end(); ++it)
         {
-            result = m_segments.FetchSegments(start, end, user_ptr, func);
-            if(result == kRocProfVisResultSuccess || dm_fetched)
+            if (it->first <= start && it->second >= end)
             {
+                dm_fetch = false;
                 break;
             }
-            else if(result == kRocProfVisResultOutOfRange)
-            {
-                if(kRocProfVisResultSuccess != FetchFromDataModel(start, end))
-                {
-                    return kRocProfVisResultUnknownError;
-                }
-                dm_fetched = true;
-            }
+        }
+
+        if (dm_fetch)
+        {
+            result = FetchFromDataModel(start, end);
+        }
+        else
+        {
+            result = kRocProfVisResultSuccess;
+        }
+
+        if(result == kRocProfVisResultSuccess)
+        {
+            result = m_segments.FetchSegments(start, end, user_ptr, func);
         }
     }
 
@@ -209,6 +216,41 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                         }
                     }
                     rocprofvis_dm_delete_time_slice(trace, start, end);
+                    
+                    std::set<uint32_t> overlaps;
+                    double             start_segment = start;
+                    double             end_segment = end;
+                    for (uint32_t i = 0; i < m_valid_segments.size(); i++)
+                    {
+                        if (start <= m_valid_segments[i].second &&
+                            end >= m_valid_segments[i].first)
+                        {
+                            overlaps.insert(i);
+                            start_segment =
+                                std::min(m_valid_segments[i].first, start_segment);
+                            end_segment =
+                                std::max(m_valid_segments[i].second, end_segment);
+                        }
+                    }
+                    for (auto it = overlaps.rbegin(); it != overlaps.rend(); ++it)
+                    {
+                        m_valid_segments.erase(m_valid_segments.begin() + *it);
+                    }
+                    auto it = m_valid_segments.begin();
+                    for (; it != m_valid_segments.end(); ++it)
+                    {
+                        if (it->first > start_segment)
+                        {
+                            m_valid_segments.insert(
+                                it, std::make_pair(start_segment, end_segment));
+                            break;
+                        }
+                    }
+                    if (it == m_valid_segments.end())
+                    {
+                        m_valid_segments.push_back(
+                            std::make_pair(start_segment, end_segment));
+                    }
                 }
             }
         }

@@ -91,7 +91,7 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
             scale *= 10.0;
         }
 
-        double segment_duration = kSegmentDuration * scale;
+        double segment_duration = std::min(kSegmentDuration * scale, 60000000000.0);
         double relative         = (timestamp - start_timestamp);
         double num_segments     = floor(relative / segment_duration);
         double segment_start    = start_timestamp + (num_segments * segment_duration);
@@ -447,19 +447,20 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                 {
                     scale *= 10.0;
                 }
-                double segment_duration = kSegmentDuration * scale;
+                double segment_duration = std::min(std::min(kSegmentDuration * scale, max_ts - start), 60000000000.0);
 
                 start = std::max(start, min_ts);
                 end   = std::min(end, max_ts);
                 if(end > start)
                 {
-                    double fetch_start =
-                        min_ts +
+                    double fetch_start = min_ts + 
                         (floor((start - min_ts) / segment_duration) * segment_duration);
-                    double fetch_end =
-                        std::min(min_ts + (ceil((end - min_ts) / segment_duration) *
-                                           segment_duration),
-                                 max_ts);
+
+                    double zerod_end = end - min_ts;
+                    double divided_by_segment = zerod_end / segment_duration;
+                    double ceil_segment       = ceil(divided_by_segment);
+                    double rounded_segment    = ceil_segment * segment_duration;
+                    double       fetch_end = min_ts + rounded_segment;
                     GraphLODArgs args;
                     args.m_valid_range = range;
                     args.m_index       = 0;
@@ -480,7 +481,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                     {
                         result = GenerateLOD(lod_to_generate, start, end, args.m_entries);
                         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                        it->second.SetValidRange(start, end);
+                        it->second.SetValidRange(std::min(start, range.first),
+                                                 std::max(end, range.second));
                     }
                 }
             }

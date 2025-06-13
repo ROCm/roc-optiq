@@ -113,7 +113,9 @@ typedef enum rocprofvis_dm_event_operation_t {
     // Memory allocation event
     kRocProfVisDmOperationMemoryAllocate = 3,
     // Memory copy event
-    kRocProfVisDmOperationMemoryCopy = 4
+    kRocProfVisDmOperationMemoryCopy = 4,
+    // Number of operations
+    kRocProfVisDmNumOperation = kRocProfVisDmOperationMemoryCopy+1
 } rocprofvis_dm_event_operation_t;
 
 // Database type

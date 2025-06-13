@@ -27,7 +27,7 @@
 #include "rocprofvis_c_interface_types.h"
 #include "rocprofvis_error_handling.h"
 #include <algorithm>
-#include <vector>
+#include <list>
 
 /*******************************Types******************************/
 
@@ -55,6 +55,7 @@ typedef union{
         rocprofvis_dm_duration_t duration;          // signed 64-bit duration. Negative number should be invalidated by controller.
         rocprofvis_dm_id_t category;                // 32-bit category index of array of strings 
         rocprofvis_dm_id_t symbol;                  // 32-bit symbol index of array of strings 
+        rocprofvis_dm_event_level_t level;
     } event;
     struct pmc_record_t
     {
@@ -74,6 +75,14 @@ typedef union{
 #define TRACK_ID_TID_OR_QUEUE 2
 #define TRACK_ID_COUNTER 3
 #define TRACK_ID_CATEGORY 3
+
+typedef struct
+{
+    uint64_t start_time;
+    uint64_t end_time;
+    uint32_t level;
+} rocprofvis_event_timing_params_t;
+
 typedef struct {
     // 32-bit track id
     rocprofvis_dm_track_id_t track_id;   
@@ -101,12 +110,17 @@ typedef struct {
     rocprofvis_dm_timestamp_t max_ts;
     // sqlite connection handler
     rocprofvis_db_connection_t db_connection;
+    // list array to keep current events stack
+    std::list<rocprofvis_event_timing_params_t> m_event_timing_params;
+    // track query builing string, keep here for debugging purposes
+    std::string async_query;
 } rocprofvis_dm_track_params_t;
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model and database. Physically located in trace object and referenced by a pointer in binding structure.
 typedef struct {
     rocprofvis_dm_timestamp_t start_time;           // trace start time
     rocprofvis_dm_timestamp_t end_time;             // trace end time
+    rocprofvis_dm_timestamp_t events_count[kRocProfVisDmNumOperation];  // events count per operation
     bool metadata_loaded;                           // status of metadata being fully loaded
 } rocprofvis_dm_trace_params_t;
 

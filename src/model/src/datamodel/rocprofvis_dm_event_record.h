@@ -48,13 +48,15 @@ class EventRecord
                 const rocprofvis_dm_timestamp_t timestamp, 
                 const rocprofvis_dm_duration_t duration, 
                 const rocprofvis_dm_index_t category_index, 
-                const rocprofvis_dm_index_t symbol_index
+                const rocprofvis_dm_index_t symbol_index, 
+                const rocprofvis_dm_event_level_t event_level 
                 ):
                 m_event_id(event_id), 
                 m_timestamp(timestamp), 
                 m_duration(duration), 
                 m_category_index(category_index), 
-                m_symbol_index(symbol_index) {};
+                m_symbol_index(symbol_index),
+                m_event_level(event_level){};
 
         // Event ID getter
         // @return 60-bit event id
@@ -75,7 +77,9 @@ class EventRecord
         const rocprofvis_dm_index_t             SymbolIndex() {return m_symbol_index;}
         // Operation getter
         // @return 4-bit operation as rocprofvis_dm_event_operation_t enumeration value
-        const rocprofvis_dm_event_operation_t    Operation() {return (rocprofvis_dm_event_operation_t)m_event_id.bitfield.event_op;}
+        const rocprofvis_dm_event_operation_t   Operation() {return (rocprofvis_dm_event_operation_t)m_event_id.bitfield.event_op;}
+        // @return 8-bit event level
+        const rocprofvis_dm_id_t                EventLevel() { return m_event_level; }
 
     private:
         // 60-bit event id and 4-bit operation type , used as a search key for stacktrace, flowtrace and no-essential information
@@ -87,7 +91,9 @@ class EventRecord
         // 32-bit category index of array of strings                  
         rocprofvis_dm_index_t           m_category_index; 
         // 32-bit symbol index of array of strings               
-        rocprofvis_dm_index_t           m_symbol_index;                  
+        rocprofvis_dm_index_t           m_symbol_index;    
+        // 8-bit event level on a graph
+        rocprofvis_dm_event_level_t     m_event_level;
 };
 
 }  // namespace DataModel

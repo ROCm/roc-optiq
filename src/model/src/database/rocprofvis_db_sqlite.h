@@ -29,7 +29,13 @@ namespace DataModel
 {
 
 // type of sqlite3_exec callback function
-typedef int (*RpvSqliteExecuteQueryCallback)(void*,int,char**,char**);
+typedef int (*RpvSqliteExecuteQueryCallback)(void*, int, sqlite3_stmt*, char**);
+typedef struct SQLInsertParams
+{
+    const char* column;
+    const char* type;
+} SQLInsertParams;
+
 // structure to pass parameters to sqlite3_exec callbacks
 typedef struct{
     // pointer tp Database object
@@ -73,7 +79,20 @@ class SqliteDatabase : public Database
         // @return True if open
         bool IsOpen() override {return m_db != nullptr && m_db_status == SQLITE_OK;}
 
+        sqlite3* Connection() { return m_db; }
+
     protected:
+        // Method to create SQL table
+        // @param create_query - table creation query 
+        // @param insert_query - data insertion query 
+        // @param num_row - number of rows
+        // @param insert_func - lambda method for data insertion
+        // @return status of operation
+        rocprofvis_dm_result_t CreateSQLTable(const char* table_name, 
+                                              SQLInsertParams* parameters,
+                                              uint8_t num_cols,
+                                              size_t num_row,
+                                              std::function<void(sqlite3_stmt* stmt, int index)> insert_func);
         // Method for SQL query execution without any callback
         // @param future - future object for asynchronous execution status
         // @param query - SQL query
@@ -88,6 +107,16 @@ class SqliteDatabase : public Database
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
                                                 const char* query, 
                                                 RpvSqliteExecuteQueryCallback callback);
+
+        // Method for SQL query execution with specified database connection and callback to process table rows
+        // @param future - future object for asynchronous execution status
+        // @param query - SQL query
+        // @param callback - sqlite3_exec callback method for data processing
+        // @return status of operation
+        rocprofvis_dm_result_t ExecuteSQLQuery(sqlite3* db_conn, 
+                                               Future* future,
+                                               const char*                   query,
+                                               RpvSqliteExecuteQueryCallback callback);
         // Method for single row and column SQL query execution returning result of the query as string 
         // @param future - future object for asynchronous execution status
         // @param query - SQL query
@@ -184,8 +213,9 @@ class SqliteDatabase : public Database
 
         // Method to check if table exists in database
         // @param db - pointer to sqlite3 object built from the sqlite3 amalgamation
+        // @param is_view - true if view
         // @param table - name of the table
-        static int DetectTable(sqlite3 *db, const char* table);
+        static int DetectTable(sqlite3 *db, const char* table, bool is_view = true);
 
         // sqlite3_exec callback to read value from single column and single row
         // @param data - pointer to callback caller argument
@@ -193,14 +223,21 @@ class SqliteDatabase : public Database
         // @param argv - pointer to row values
         // @param azColName - pointer to column names  
         // @return SQLITE_OK if successful
-        static int CallbackGetValue(void* data, int argc, char** argv, char** azColName);  
+        static int CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, char** azColName);  
         // sqlite3_exec callback to store all requested rows into Table container
         // @param data - pointer to callback caller argument
         // @param argc - number of columns in the query
         // @param argv - pointer to row values
         // @param azColName - pointer to column names  
         // @return SQLITE_OK if successful
-        static int CallbackRunQuery(void *data, int argc, char **argv, char **azColName); 
+        static int CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, char **azColName); 
+
+        static rocprofvis_dm_result_t ExecuteSQLQueryStatic(
+            SqliteDatabase* db, 
+            rocprofvis_db_connection_t conn,
+            Future* future, 
+            const char* query,
+            RpvSqliteExecuteQueryCallback callback);
 
     private:     
 
@@ -210,7 +247,7 @@ class SqliteDatabase : public Database
         // @param argv - pointer to row values
         // @param azColName - pointer to column names  
         // @return SQLITE_OK if successful
-        static int CallbackTableExists(void *data, int argc, char **argv, char **azColName);
+        static int CallbackTableExists(void *data, int argc, char** argv, char **azColName);
 
         // pointer to sqlite3 object built from the sqlite3 amalgamation
         sqlite3 *m_db;
@@ -222,6 +259,15 @@ class SqliteDatabase : public Database
         // @param query - SQL query
         // @param params - set of parameters to be passed to sqlite3_exec callback
         rocprofvis_dm_result_t ExecuteSQLQuery(sqlite3 *db_conn, const char* query, rocprofvis_db_sqlite_callback_parameters * params);
+
+        // method to mimic slite3_exec using sqlite3_prepare_v2
+        // @param db - database connection
+        // @param query - SQL query
+        // @param callback - sqlite3_exec type callback
+        // @param user_data - user parameters
+        int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
+                                        int (*callback)(void*, int, sqlite3_stmt*, char**),
+                                        void* user_data);
 
 };
 

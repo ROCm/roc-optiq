@@ -29,7 +29,7 @@ namespace DataModel
 
 rocprofvis_dm_result_t EventTrackSlice::AddRecord(rocprofvis_db_record_data_t & data){
     try {
-        m_samples.push_back(std::make_unique<EventRecord>(data.event.id, data.event.timestamp, data.event.duration, data.event.category, data.event.symbol));
+        m_samples.push_back(std::make_unique<EventRecord>(data.event.id, data.event.timestamp, data.event.duration, data.event.category, data.event.symbol, data.event.level));
     }
     catch(std::exception ex)
     {
@@ -134,7 +134,7 @@ rocprofvis_dm_result_t EventTrackSlice::GetRecordGraphLevelAt(const rocprofvis_d
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACK_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
     ROCPROFVIS_ASSERT_MSG_RETURN(Ctx()->Ctx(), ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
-    level = Ctx()->Ctx()->GetEventLevelAt(m_samples[index].get()->EventIdFull());
+    level = m_samples[index].get()->EventLevel();
     return kRocProfVisDmResultSuccess;
 }
 

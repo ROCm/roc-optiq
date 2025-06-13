@@ -27,14 +27,11 @@ namespace RocProfVis
 namespace DataModel
 {
 
-
-typedef struct
+typedef struct EventLevel
 {
-    uint64_t process_id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
-    uint64_t start_time;
-    uint64_t end_time;
-    uint32_t level;
-} rocprofvis_event_timing_params_t;
+    uint64_t id;
+    uint8_t  level;
+} EventLevel;
 
 // class for methods and members common for all RocPd-based schemas
 class ProfileDatabase : public SqliteDatabase
@@ -81,33 +78,33 @@ class ProfileDatabase : public SqliteDatabase
     // @param argv - pointer to row values
     // @param azColName - pointer to column names  
     // @return SQLITE_OK if successful
-        static int CallbackAddEventRecord(void *data, int argc, char **argv, char **azColName);
+        static int CallbackAddEventRecord(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to add PMC record to time slice container. Used in per-track time slice query
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
     // @param argv - pointer to row values
     // @param azColName - pointer to column names 
     // @return SQLITE_OK if successful 
-        static int CallbackAddPmcRecord(void *data, int argc, char **argv, char **azColName);
+        static int CallbackAddPmcRecord(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to add any record (Event or PMC) to time slice container. Used in all-selected-tracks time slice query
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
     // @param argv - pointer to row values
     // @param azColName - pointer to column names  
     // @return SQLITE_OK if successful
-        static int CallbackAddAnyRecord(void* data, int argc, char** argv, char** azColName);
+        static int CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
     protected:
 
     // method to build a query to read time slice of records for single track 
-    // @param track_properties_only - true if getting only track properties, no records 
     // @param index - track index 
     // @param query - reference to query string  
+    // @param for_time_slice - specifies if query is used for retrieving time slice
     // @return status of operation
         rocprofvis_dm_result_t BuildTrackQuery(
-                            bool track_properties_only,
                             rocprofvis_dm_index_t index,
-                            rocprofvis_dm_string_t& query) override;
+                            rocprofvis_dm_string_t& query,
+                            bool for_time_slice) override;
     // method to build a query to read time slice of records for all tracks in one shot 
     // @param start - start timestamp of time slice 
     // @param end - end timestamp of time slice 
@@ -136,6 +133,13 @@ class ProfileDatabase : public SqliteDatabase
                             bool count_only, 
                             rocprofvis_dm_string_t& query) override;
 
+        rocprofvis_dm_result_t ExecuteQueryForAllTracksAsync(
+                            bool including_pmc,
+                            rocprofvis_dm_charptr_t prefix, 
+                            rocprofvis_dm_charptr_t suffix,
+                            RpvSqliteExecuteQueryCallback callback, 
+                            std::function<void(rocprofvis_dm_track_params_t*)> func_clear);
+
     protected:
     // sqlite3_exec callback to add flowtrace record to FlowTrace container.
     // @param data - pointer to callback caller argument
@@ -143,14 +147,14 @@ class ProfileDatabase : public SqliteDatabase
     // @param argv - pointer to row values
     // @param azColName - pointer to column names  
     // @return SQLITE_OK if successful
-        static int CallbackAddFlowTrace(void *data, int argc, char **argv, char **azColName);
+        static int CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to add extended info record ExtData container.
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
     // @param argv - pointer to row values
     // @param azColName - pointer to column names 
     // @return SQLITE_OK if successful
-        static int CallbackAddExtInfo(void* data, int argc, char** argv, char** azColName);
+        static int CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
     // sqlite3_exec callback to calculate graph level for an event and store it into trace object map array
     // @param data - pointer to callback caller argument
@@ -158,7 +162,7 @@ class ProfileDatabase : public SqliteDatabase
     // @param argv - pointer to row values
     // @param azColName - pointer to column names  
     // @return SQLITE_OK if successful
-       static int CalculateEventLevels(void* data, int argc, char** argv, char** azColName);
+       static int CalculateEventLevels(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
     // sqlite3_exec callback to collect number of records in te track and
     // minimum/maximum timestamps. Used in all-selected-tracks time slice query
     // @param data - pointer to callback caller argument
@@ -166,23 +170,14 @@ class ProfileDatabase : public SqliteDatabase
     // @param argv - pointer to row values
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
-        static int CallbackGetTrackProperties(void* data, int argc, char** argv,
+        static int CallbackGetTrackProperties(void* data, int argc, sqlite3_stmt* stmt,
                                               char** azColName);
-    // sqlite3_exec callback to collect minimum and maximum timestamps of the trace
-    // minimum/maximum timestamps. Used in all-selected-tracks time slice query
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-       static int CallbackGetTraceProperties(void* data, int argc, char** argv,
-                                             char** azColName);
+
     protected:
     // offset of kernel symbols in string table
         uint32_t m_symbols_offset;
-
-    // vector array to keep current events stack
-        std::vector<rocprofvis_event_timing_params_t> m_event_timing_params;
+        std::vector<EventLevel> m_event_levels[kRocProfVisDmNumOperation];
+        std::mutex   m_level_lock;
 };
 
 }  // namespace DataModel

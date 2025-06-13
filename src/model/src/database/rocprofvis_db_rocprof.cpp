@@ -58,7 +58,7 @@ rocprofvis_dm_result_t RocprofDatabase::RemapStringIds(rocprofvis_db_record_data
 }
 
 
-int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **azColName){
+int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS+1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_dm_track_params_t track_params = {0};
@@ -66,14 +66,15 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
     track_params.track_id = (rocprofvis_dm_track_id_t)db->NumTracks();
-    track_params.track_category = (rocprofvis_dm_track_category_t)std::stol(argv[TRACK_ID_CATEGORY]);
+    track_params.track_category = (rocprofvis_dm_track_category_t)sqlite3_column_int(stmt,TRACK_ID_CATEGORY);
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
         track_params.process_tag[i] = azColName[i];
-        track_params.process_id_numeric[i] = Database::IsNumber(argv[i]);
+        char* arg = (char*) sqlite3_column_text(stmt, i);
+        track_params.process_id_numeric[i] = Database::IsNumber(arg);
         if (track_params.process_id_numeric[i]) {
-            track_params.process_id[i] = std::stoll(argv[i]);
+            track_params.process_id[i] = sqlite3_column_int64(stmt, i);
         } else {
-            track_params.process_name[i] = argv[i];
+            track_params.process_name[i] = arg;
         }        
     }
     
@@ -83,9 +84,9 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **
         db->find_track_map[track_params.process_id[TRACK_ID_NODE]][track_params.process_id[TRACK_ID_PID_OR_AGENT]][track_params.process_id[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
         if (track_params.track_category == kRocProfVisDmRegionTrack) {
             track_params.process_name[TRACK_ID_PID] = ProcessNameSuffixFor(track_params.track_category);
-            track_params.process_name[TRACK_ID_PID] += argv[TRACK_ID_PID];
+            track_params.process_name[TRACK_ID_PID] += (char*) sqlite3_column_text(stmt,TRACK_ID_PID);
             track_params.process_name[TRACK_ID_TID] = SubProcessNameSuffixFor(track_params.track_category);
-            track_params.process_name[TRACK_ID_TID] += argv[TRACK_ID_TID];
+            track_params.process_name[TRACK_ID_TID] += (char*) sqlite3_column_text(stmt,TRACK_ID_TID);
 
         } else
             if (track_params.track_category == kRocProfVisDmKernelTrack || track_params.track_category == kRocProfVisDmPmcTrack) {
@@ -125,27 +126,27 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, char **argv, char **
     return 0;
 }
 
-int RocprofDatabase::CallBackAddString(void *data, int argc, char **argv, char **azColName){
+int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
-    uint32_t stringId = db->BindObject()->FuncAddString(db->BindObject()->trace_object, argv[0]);
+    uint32_t stringId = db->BindObject()->FuncAddString(db->BindObject()->trace_object, (char*) sqlite3_column_text(stmt,0));
     callback_params->future->CountThisRow();
     return 0;
 }
 
 
-int RocprofDatabase::CallbackCacheTable(void *data, int argc, char **argv, char **azColName){
+int RocprofDatabase::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     DatabaseCache * ref_tables = (DatabaseCache *)callback_params->handle;
-    uint64_t id = std::stoll( argv[0] );
+    uint64_t id = sqlite3_column_int64(stmt,0);
     for (int i=0; i < argc; i++)
     {
-        ref_tables->AddTableCell(callback_params->subquery, id, azColName[i], argv[i]);
+        ref_tables->AddTableCell(callback_params->subquery, id, azColName[i], (char*) sqlite3_column_text(stmt,i));
     }
     callback_params->future->CountThisRow();
     return 0;
@@ -181,56 +182,42 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ExecuteSQLQuery(future,"SELECT * from rocpd_info_pmc;", "PMC", (rocprofvis_dm_handle_t)CachedTables(), &CallbackCacheTable);
 
         CachedTables()->AddTableCell("PMC", -1, "name", "MALLOC");
-
-        ShowProgress(1, "Get minimum and maximum timestamps", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT MIN(start), MAX(end) FROM ("
-                                                                                                " SELECT start, end FROM rocpd_region"
-                                                                                                " UNION ALL"
-                                                                                                " SELECT timestamp as start, timestamp as end FROM rocpd_sample"
-                                                                                                " UNION ALL"
-                                                                                                " SELECT start, end FROM rocpd_kernel_dispatch"
-                                                                                                " UNION ALL"
-                                                                                                " SELECT start, end FROM rocpd_memory_allocate"
-                                                                                                " UNION ALL"
-                                                                                                " SELECT start, end FROM rocpd_memory_copy"
-                                                                                                " );", CallbackGetTraceProperties)) break;
-
                 
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as nodeId, pid, tid, 2 as category from rocpd_region;", 
-                    "select 1 as op, R.start, R.end, E.category_id, R.name_id, R.id, R.nid as nodeId, R.pid, R.tid from rocpd_region R INNER JOIN rocpd_event E ON E.id = R.event_id " , 
+                    "select 1 as op, R.start, R.end, E.category_id, R.name_id, R.id, R.nid as nodeId, R.pid, R.tid {,L.level} from rocpd_region R INNER JOIN rocpd_event E ON E.id = R.event_id {INNER JOIN event_levels_launch L ON R.id = L.eid} " , 
                     "select id, category, name, nid as nodeId, pid, tid, start, end, duration from regions " ,
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Kernel Dispatch tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as nodeId, agent_id as agentId, queue_id as queueId, 3 as category from rocpd_kernel_dispatch;", 
-                    "select 2 as op, KD.start, KD.end, E.category_id, KD.kernel_id, KD.id, KD.nid as nodeId, KD.agent_id as agentId, KD.queue_id as queueId from rocpd_kernel_dispatch KD INNER JOIN rocpd_event E ON E.id = KD.event_id ", 
-                    "select id, category, name, nid as nodeId, coalesce(agent_abs_index,0) as agentId, queue_id as queueId, coalesce(stream_id,0) as stream, coalesce(pid,0) as pid, coalesce(tid,0) as tid, start, end, duration from kernels " ,
+                    "select 2 as op, KD.start, KD.end, E.category_id, KD.kernel_id, KD.id, KD.nid as nodeId, KD.agent_id as agentId, KD.queue_id as queueId {,L.level} from rocpd_kernel_dispatch KD INNER JOIN rocpd_event E ON E.id = KD.event_id {INNER JOIN event_levels_dispatch L ON KD.id = L.eid} ", 
+                    "select id, category, name, nid as nodeId, agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from kernels " ,
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Memory Allocation tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as nodeId, coalesce(agent_id, 0) as agentId, coalesce(queue_id,0) as queueId, 3 as category from rocpd_memory_allocate;", 
-                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as nodeId, coalesce(MA.agent_id,0) as agentId, coalesce(MA.queue_id,0) as queueId from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id ", 
-                    "select id, category, type as name, nid as nodeId, coalesce(agent_abs_index,0) as agentId, coalesce(queue_id,0) as queueId, coalesce(stream_id,0) as stream, coalesce(pid,0) as pid, coalesce(tid,0) as tid, start, end, duration from memory_allocations " ,
+                    "select DISTINCT nid as nodeId, agent_id as agentId, queue_id as queueId, 3 as category from rocpd_memory_allocate;", 
+                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as nodeId, MA.agent_id as agentId, MA.queue_id as queueId {,L.level} from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id {INNER JOIN event_levels_mem_alloc L ON MA.id = L.eid} ", 
+                    "select id, category, type as name, nid as nodeId, agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from memory_allocations " ,
                     &CallBackAddTrack)) break;
         /*
 // This will not work if full track is not requested
 // Comment out for now. Will need to fetch all data, then cut samples outside of time frame.
         ShowProgress(5, "Adding Memory allocation graph tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as nodeId, coalesce(agent_id, 0) as agentId, -1 as const, 1 as category from rocpd_memory_allocate;", 
+                    "select DISTINCT nid as nodeId, agent_id as agentId, -1 as const, 1 as category from rocpd_memory_allocate;", 
                     "select 0 as op, start, sum(CASE WHEN type = 'FREE' THEN (select -size from rocpd_memory_allocate MA1 where MA.address == MA1.address limit 1) ELSE size END) over (ORDER BY start ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as current, start as end, 0, 0, nid as nodeId, coalesce(agent_id, 0) as agentId, -1 as queue  from rocpd_memory_allocate MA ", 
                     &CallBackAddTrack)) break;
 */
    
         ShowProgress(5, "Adding Memory Copy tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
-                    "select DISTINCT nid as nodeId, dst_agent_id as agentId, coalesce(queue_id,0) as queueId, 3 as category from rocpd_memory_copy;", 
-                    "select 4 as op, MC.start, MC.end, E.category_id, MC.name_id, MC.id, MC.nid as nodeId, MC.dst_agent_id as agentId, coalesce(MC.queue_id,0) as queueId from rocpd_memory_copy MC INNER JOIN rocpd_event E ON E.id = MC.event_id ",
-                    "select id, category, name, nid as nodeId, coalesce(dst_agent_abs_index,0) as agentId, coalesce(queue_id,0) as queueId, coalesce(stream_id,0) as stream, coalesce(pid,0) as pid, coalesce(tid,0) as tid, start, end, duration from memory_copies " ,
+                    "select DISTINCT nid as nodeId, dst_agent_id as agentId, queue_id as queueId, 3 as category from rocpd_memory_copy;", 
+                    "select 4 as op, MC.start, MC.end, E.category_id, MC.name_id, MC.id, MC.nid as nodeId, MC.dst_agent_id as agentId, MC.queue_id as queueId {,L.level} from rocpd_memory_copy MC INNER JOIN rocpd_event E ON E.id = MC.event_id {INNER JOIN event_levels_mem_copy L ON MC.id = L.eid} ",
+                    "select id, category, name, nid as nodeId, dst_agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from memory_copies " ,
                     &CallBackAddTrack)) break;
         
         // PMC schema is not fully defined yet
@@ -240,7 +227,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                                                                     "rocpd_info_pmc PMC_I ON PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid "
                                                                     "INNER JOIN "
                                                                     "rocpd_kernel_dispatch K ON K.event_id = PMC_E.event_id AND K.guid = PMC_E.guid ",                                  
-                                                                    "select 0 as op, K.start, PMC_E.value AS counter_value, K.end, 0, 0, K.nid as nodeId, K.agent_id as agentId, PMC_I.id AS counter_id FROM rocpd_pmc_event PMC_E "
+                                                                    "select 0 as op, K.start, PMC_E.value AS counter_value, K.end, 0, 0, K.nid as nodeId, K.agent_id as agentId, PMC_I.id AS counter_id {,0} FROM rocpd_pmc_event PMC_E "
                                                                     "INNER JOIN "
                                                                     "rocpd_info_pmc PMC_I ON PMC_I.id = PMC_E.pmc_id AND  PMC_I.guid = PMC_E.guid "
                                                                     "INNER JOIN "
@@ -259,33 +246,93 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT COUNT(*) FROM rocpd_string;", &CallbackGetValue, m_symbols_offset)) break;
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT display_name FROM rocpd_info_kernel_symbol;", &CallBackAddString)) break;
 
-        ShowProgress(10, "Calculate levels for CPU events", kRPVDbBusy, future);
-        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT nid, pid, tid, 1 as op, id, start, end FROM rocpd_region ORDER BY start", &CalculateEventLevels)) break;
-        m_event_timing_params.clear();
+        ShowProgress(5, "Collect track items count, minimum and maximum timestamps",
+                     kRPVDbBusy, future);
+        TraceProperties()->start_time                                   = UINT64_MAX;
+        TraceProperties()->end_time                                     = 0;
+        TraceProperties()->events_count[kRocProfVisDmOperationLaunch]   = 0;
+        TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
+        TraceProperties()->events_count[kRocProfVisDmOperationMemoryAllocate] = 0;
+        TraceProperties()->events_count[kRocProfVisDmOperationMemoryCopy] = 0;
 
-        ShowProgress(10, "Calculate levels for Kernel events", kRPVDbBusy, future);
-        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT gpu.nid, gpu.agent_id, gpu.queue_id, gpu.op, gpu.id, gpu.start, gpu.end FROM("
-                                                                                                                   " SELECT nid, agent_id, queue_id, 2 as op, id, start, end FROM rocpd_kernel_dispatch"
-                                                                                                                   " UNION ALL"
-                                                                                                                   " SELECT nid, coalesce(agent_id,0), coalesce(queue_id,0), 3 as op, id, start, end FROM rocpd_memory_allocate"
-                                                                                                                   " UNION ALL"
-                                                                                                                   " SELECT nid, coalesce(dst_agent_id,0), coalesce(queue_id,0), 4 as op, id, start, end FROM rocpd_memory_copy"
-                                                                                                                   " ) gpu ORDER BY gpu.start;", &CalculateEventLevels)) break;
-        m_event_timing_params.clear();
-
-        ShowProgress(5, "Count records per track", kRPVDbBusy, future);
-        for(int i = 0; i < NumTracks(); i++)
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteQueryForAllTracksAsync(true,
+               "SELECT COUNT(*), MIN(start), MAX(end), op, ", "", &CallbackGetTrackProperties,
+               [](rocprofvis_dm_track_params_t* params) {}))
         {
-            std::string query;
-            if(BuildTrackQuery(true, i, query) != kRocProfVisDmResultSuccess)
-            {
-                break;
-            }
+            break;
+        }
+
+        if(SQLITE_OK != DetectTable(Connection(), "event_levels_launch", false) ||
+           SQLITE_OK != DetectTable(Connection(), "event_levels_dispatch", false) ||
+           SQLITE_OK != DetectTable(Connection(), "event_levels_mem_alloc", false) ||
+           SQLITE_OK != DetectTable(Connection(), "event_levels_mem_copy", false))
+        {
+            m_event_levels[kRocProfVisDmOperationLaunch].reserve(
+                TraceProperties()->events_count[kRocProfVisDmOperationLaunch]);
+            m_event_levels[kRocProfVisDmOperationDispatch].reserve(
+                TraceProperties()->events_count[kRocProfVisDmOperationDispatch]);
+            m_event_levels[kRocProfVisDmOperationMemoryAllocate].reserve(
+                TraceProperties()->events_count[kRocProfVisDmOperationMemoryAllocate]);
+            m_event_levels[kRocProfVisDmOperationMemoryCopy].reserve(
+                TraceProperties()->events_count[kRocProfVisDmOperationMemoryCopy]);
+
+            ShowProgress(10, "Calculate event levels", kRPVDbBusy, future);
             if(kRocProfVisDmResultSuccess !=
-               ExecuteSQLQuery(future, query.c_str(), &CallbackGetTrackProperties))
+               ExecuteQueryForAllTracksAsync(
+                   false, "SELECT *, ", " ORDER BY start", &CalculateEventLevels,
+                   [](rocprofvis_dm_track_params_t* params) {
+                       params->m_event_timing_params.clear();
+                   }))
             {
                 break;
             }
+
+            SQLInsertParams params[] = { { "eid", "INTEGER PRIMARY KEY" }, { "level", "INTEGER" } };
+            CreateSQLTable(
+                "event_levels_launch", params, 2,
+                m_event_levels[kRocProfVisDmOperationLaunch].size(),
+                [&](sqlite3_stmt* stmt, int index) {
+                    sqlite3_bind_int64(
+                        stmt, 1, m_event_levels[kRocProfVisDmOperationLaunch][index].id);
+                    sqlite3_bind_int(
+                        stmt, 2,
+                        m_event_levels[kRocProfVisDmOperationLaunch][index].level);
+                });
+            CreateSQLTable(
+                "event_levels_dispatch", params, 2,
+                m_event_levels[kRocProfVisDmOperationDispatch].size(),
+                [&](sqlite3_stmt* stmt, int index) {
+                    sqlite3_bind_int64(
+                        stmt, 1,
+                        m_event_levels[kRocProfVisDmOperationDispatch][index].id);
+                    sqlite3_bind_int(
+                        stmt, 2,
+                        m_event_levels[kRocProfVisDmOperationDispatch][index].level);
+                });
+            CreateSQLTable(
+                "event_levels_mem_alloc", params, 2,
+                m_event_levels[kRocProfVisDmOperationMemoryAllocate].size(),
+                [&](sqlite3_stmt* stmt, int index) {
+                    sqlite3_bind_int64(
+                        stmt, 1,
+                        m_event_levels[kRocProfVisDmOperationMemoryAllocate][index].id);
+                    sqlite3_bind_int(
+                        stmt, 2,
+                        m_event_levels[kRocProfVisDmOperationMemoryAllocate][index]
+                            .level);
+                });
+            CreateSQLTable(
+                "event_levels_mem_copy", params, 2,
+                m_event_levels[kRocProfVisDmOperationMemoryCopy].size(),
+                [&](sqlite3_stmt* stmt, int index) {
+                    sqlite3_bind_int64(
+                        stmt, 1,
+                        m_event_levels[kRocProfVisDmOperationMemoryCopy][index].id);
+                    sqlite3_bind_int(
+                        stmt, 2,
+                        m_event_levels[kRocProfVisDmOperationMemoryCopy][index].level);
+                });
         }
 
         TraceProperties()->metadata_loaded=true;

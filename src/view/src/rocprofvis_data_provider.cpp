@@ -1637,23 +1637,70 @@ DataProvider::CreateRawEventData(uint64_t                       index,
                                                          kRPVControllerEventDataExtData,
                                                          0, 1, future, outArray);
 
-        uint64_t prop_count = 0;
-        rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
-                                         &prop_count);
-
-        spdlog::debug(">>>>>>> Event {} has {} properties", i, prop_count);
-
-        for(auto j = 0; j < prop_count; j++)
+        rocprofvis_result_t result = rocprofvis_controller_future_wait(future, FLT_MAX);
+        if(result == kRocProfVisResultSuccess)
         {
-            uint64_t mem_usage_excl = 0;
-            rocprofvis_controller_get_uint64(
-                outArray, kRPVControllerCommonMemoryUsageInclusive, j, &mem_usage_excl);
-            uint64_t mem_usage_incl = 0;
-            rocprofvis_controller_get_uint64(
-                outArray, kRPVControllerCommonMemoryUsageInclusive, j, &mem_usage_incl);
+            uint64_t prop_count = 0;
+            rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
+                                             &prop_count);
 
-            spdlog::debug(">>>>>>> Event {} Memory Usage Excl: {}, Mem Usage Incl: {}", j,
-                          mem_usage_excl, mem_usage_incl);
+            spdlog::debug(">>>>>>> Event {} has {} properties", i, prop_count);
+
+            for(auto j = 0; j < prop_count; j++)
+            {
+                rocprofvis_handle_t* ext_data_handle = nullptr;
+                result        = rocprofvis_controller_get_object(
+                    outArray, kRPVControllerArrayEntryIndexed, j, &ext_data_handle);
+
+                uint32_t length = -1;
+                result          = rocprofvis_controller_get_string(
+                    ext_data_handle, kRPVControllerExtDataCategory, 0, nullptr, &length);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    ROCPROFVIS_ASSERT(length >= 0);
+                    char* data   = new char[length + 1];
+                    data[length] = '\0';
+                    result       = rocprofvis_controller_get_string(
+                        ext_data_handle, kRPVControllerExtDataCategory, 0, data, &length);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        spdlog::debug(">>>>>>> Event {} Category: {}",j, data);
+                    }
+                    delete[] data;
+                }
+                length = -1;
+                result = rocprofvis_controller_get_string(
+                    ext_data_handle, kRPVControllerExtDataName, 0, nullptr, &length);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    ROCPROFVIS_ASSERT(length >= 0);
+                    char* data   = new char[length + 1];
+                    data[length] = '\0';
+                    result       = rocprofvis_controller_get_string(
+                        ext_data_handle, kRPVControllerExtDataName, 0, data, &length);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        spdlog::debug(">>>>>>> Event {} Name: {}",j, data);
+                    }
+                    delete[] data;
+                }
+                length = -1;
+                result = rocprofvis_controller_get_string(
+                    ext_data_handle, kRPVControllerExtDataValue, 0, nullptr, &length);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    ROCPROFVIS_ASSERT(length >= 0);
+                    char* data   = new char[length + 1];
+                    data[length] = '\0';
+                    result       = rocprofvis_controller_get_string(
+                        ext_data_handle, kRPVControllerExtDataValue, 0, data, &length);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        spdlog::debug(">>>>>>> Event {} Value: {}",j, data);
+                    }
+                    delete[] data;
+                }
+            }
         }
 
         // free future and array

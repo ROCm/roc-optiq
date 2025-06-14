@@ -73,6 +73,7 @@ Event::FetchDataModelFlowTraceProperty(Array&                array,
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     uint64_t id   = 0;
@@ -100,8 +101,6 @@ Event::FetchDataModelFlowTraceProperty(Array&                array,
                                             id, timestamp, track_id,
                                             dm_event_id.bitfield.event_op ==
                                                 kRocProfVisDmOperationLaunch ? 0 : 1);
-                                        result = array.SetUInt64(
-                                            kRPVControllerArrayNumEntries, 0, 1);
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(
@@ -166,6 +165,7 @@ Event::FetchDataModelStackTraceProperty(Array& array,
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     char* symbol = nullptr;
@@ -189,8 +189,6 @@ Event::FetchDataModelStackTraceProperty(Array& array,
                                     {
                                         CallStack* call_stack =
                                             new CallStack(symbol, args, codeline);
-                                        result = array.SetUInt64(
-                                            kRPVControllerArrayNumEntries, 0, 1);
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(
@@ -253,6 +251,7 @@ Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     char* category = nullptr;
@@ -266,18 +265,16 @@ Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm
                                        kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_extdata,
-                                               kRPVDMExtDataCategoryCharPtrIndexed, index,
+                                               kRPVDMExtDataNameCharPtrIndexed, index,
                                                &name) &&
                                        kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_extdata,
-                                               kRPVDMExtDataCategoryCharPtrIndexed, index,
+                                               kRPVDMExtDataValueCharPtrIndexed, index,
                                                &value))
                                     {
                                         ExtData* ext_data =
                                             new ExtData(category, name, value);
-                                        result = array.SetUInt64(
-                                            kRPVControllerArrayNumEntries, 0, 1);
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(

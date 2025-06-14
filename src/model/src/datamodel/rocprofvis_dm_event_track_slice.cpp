@@ -65,7 +65,7 @@ rocprofvis_dm_result_t EventTrackSlice::GetRecordTimestampAt(const rocprofvis_dm
 
 rocprofvis_dm_result_t EventTrackSlice::GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_id_t & id){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    id = m_samples[index].get()->EventId();
+    id = *(rocprofvis_dm_id_t*)&m_samples[index].get()->EventIdFull();
     return kRocProfVisDmResultSuccess;
 }
 

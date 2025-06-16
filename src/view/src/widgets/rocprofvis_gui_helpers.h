@@ -10,7 +10,7 @@ namespace View
 
 void
 RenderLoadingIndicatorDots(float dot_radius, int num_dots, float spacing,
-                           const ImVec4& color, float speed);
+                           ImU32 color, float speed);
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots, float spacing);
 

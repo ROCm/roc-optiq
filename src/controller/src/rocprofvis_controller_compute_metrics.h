@@ -42,7 +42,7 @@ typedef struct ComputePlotDefinition
 const std::unordered_map<std::string, ComputeTableDefinition> COMPUTE_TABLE_DEFINITIONS { 
     {"0.1_Top_Kernels.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeKernelList, "Kernel List"}},
     {"0.2_Dispatch_List.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeDispatchList, "Dispatch List"}},
-    {"1.1.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeSysInfo, "System Info"}},
+    {"sysinfo.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeSysInfo, "System Info"}},
     {"2.1_Speed-of-Light.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeSpeedOfLight, "System Speed of Light"}},
     {"3.1_Memory_Chart.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeMemoryChart, "Memory Chart"}},
     {"5.1_Command_Processor_Fetcher.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeCPFetcher, "Command Processor Fetcher"}},

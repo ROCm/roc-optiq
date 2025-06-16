@@ -43,6 +43,8 @@ public:
     rocprofvis_result_t GetMetricFuzzy(const std::string& key, std::vector<std::pair<std::string, Data*>>& metrics) const;
 
 private:
+    rocprofvis_result_t LoadSystemInfo(const std::string& csv_file);
+
     struct MetricMapEntry {
         std::string m_name;
         Data* m_data;

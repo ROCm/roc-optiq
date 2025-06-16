@@ -228,6 +228,12 @@ rocprofvis_result_t ComputeTable::SetString(rocprofvis_property_t property, uint
 
 rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
 {
+    if (m_type == kRPVControllerComputeTableTypeSysInfo)
+    {
+        // Special handling for system info; all values are on one row.
+        return LoadSystemInfo(csv_file);
+    }
+
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
 
     csv::CSVFormat format;
@@ -299,6 +305,40 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
         }
 
         row_count ++;
+    }
+
+    result = kRocProfVisResultSuccess;
+    return result;
+}
+
+rocprofvis_result_t ComputeTable::LoadSystemInfo(const std::string& csv_file)
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+
+    csv::CSVFormat format;
+    format.delimiter(',');
+    format.header_row(0);
+    csv::CSVReader csv(csv_file, format);
+    std::vector<std::string> column_names = csv.get_col_names();
+    m_columns = {ColumnDefintion{"Field", kRPVControllerPrimitiveTypeString}, ColumnDefintion{"Value", kRPVControllerPrimitiveTypeString}};
+
+    uint64_t row_count = 0;
+    csv::CSVRow csv_row;
+    if (csv.read_row(csv_row))
+    {     
+        for (uint32_t col = 0; col < csv_row.size(); col ++)
+        {            
+            Data field;
+            field.SetType(kRPVControllerPrimitiveTypeString);
+            std::replace(column_names[col].begin(), column_names[col].end(), '_', ' ');
+            column_names[col][0] = std::toupper(column_names[col][0]);
+            field.SetString(column_names[col].c_str());
+            Data value;
+            value.SetType(kRPVControllerPrimitiveTypeString);
+            value.SetString(csv_row[col].get().c_str());
+            m_rows[row_count] = {field, value};
+            row_count ++;
+        }
     }
 
     result = kRocProfVisResultSuccess;

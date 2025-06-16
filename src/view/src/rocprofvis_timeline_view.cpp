@@ -588,10 +588,13 @@ TimelineView::RenderGraphView()
     bool selection_changed = false;
     for(const auto& graph_objects : m_graph_map)
     {
-        if(graph_objects.second.display)
+        const rocprofvis_graph_map_t& track_item = graph_objects.second;
+
+        if(track_item.display)
         {
+            ROCPROFVIS_ASSERT(track_item.chart);
             // Get track height and position to check if the track is in view
-            float  track_height = graph_objects.second.chart->GetTrackHeight();
+            float  track_height = track_item.chart->GetTrackHeight();
             ImVec2 track_pos    = ImGui::GetCursorPos();
 
             // Calculate the track's position in the scrollable area
@@ -606,7 +609,7 @@ TimelineView::RenderGraphView()
                              m_graph_size.y);  // Positive if the track is below the view
 
             // Save distance for book keeping
-            graph_objects.second.chart->SetDistanceToView(
+            track_item.chart->SetDistanceToView(
                 std::max(std::max(delta_bottom, delta_top), 0.0f));
 
             // Check if the track is visible
@@ -616,9 +619,8 @@ TimelineView::RenderGraphView()
             if(is_visible)
             {
                 // Request data for the chart if it doesn't have data
-                if(!graph_objects.second.chart->HasData() &&
-                   graph_objects.second.chart->GetRequestState() ==
-                       TrackDataRequestState::kIdle)
+                if(!track_item.chart->HasData() &&
+                   track_item.chart->GetRequestState() == TrackDataRequestState::kIdle)
                 {
                     double buffer_distance = m_v_width;  // Essentially creates one
                                                          // viewport worth of buffer.
@@ -632,14 +634,13 @@ TimelineView::RenderGraphView()
                 }
                 if(m_settings.IsHorizontalRender())
                 {
-                    if(request_horizontal_data &&
-                       graph_objects.second.chart->GetRequestState() ==
-                           TrackDataRequestState::kIdle)
+                    if(request_horizontal_data && track_item.chart->GetRequestState() ==
+                                                      TrackDataRequestState::kIdle)
                     {
                         double buffer_distance = m_v_width;  // Essentially creates one
                                                              // viewport worth of buffer.
 
-                        graph_objects.second.chart->RequestData(
+                        track_item.chart->RequestData(
                             (m_view_time_offset_ns - buffer_distance) + m_min_x,
                             (m_view_time_offset_ns + m_v_width + buffer_distance) +
                                 m_min_x,
@@ -647,100 +648,96 @@ TimelineView::RenderGraphView()
                     }
                 }
 
-                if(graph_objects.second.color_by_value)
+                if(track_item.color_by_value)
                 {
-                    graph_objects.second.chart->SetColorByValue(
-                        graph_objects.second.color_by_value_digits);
+                    track_item.chart->SetColorByValue(track_item.color_by_value_digits);
                 }
 
-                if(graph_objects.second.graph_type == graph_objects.second.TYPE_LINECHART)
+                if(track_item.graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
                 {
-                    static_cast<LineTrackItem*>(graph_objects.second.chart)
-                        ->SetShowBoxplot(graph_objects.second.make_boxplot);
+                    static_cast<LineTrackItem*>(track_item.chart)
+                        ->SetShowBoxplot(track_item.make_boxplot);
                 }
 
-                ImVec4 selection_color = ImGui::ColorConvertU32ToFloat4(
-                    m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+                ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
                 if(graph_objects.second.selected)
                 {
-                    // TODO: move somewhere else don't need to create each loop
-                    selection_color = ImGui::ColorConvertU32ToFloat4(
-                        m_settings.GetColor(static_cast<int>(Colors::kHighlightChart)));
+                    selection_color = m_settings.GetColor(Colors::kHighlightChart);
                 }
+
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
-                ImGui::BeginChild(
-                    (std::to_string(graph_objects.first)).c_str(),
-                    ImVec2(0,
-                           track_height + 0.0f),  // TODO: magic number was 40.0f
-                    false,
-                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                        ImGuiWindowFlags_NoScrollWithMouse |
-                        ImGuiWindowFlags_NoScrollbar);
-
-                ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                                      ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
-                                          static_cast<int>(Colors::kTransparent))));
-
-                if(m_is_control_held)
+                if(ImGui::BeginChild((std::to_string(graph_objects.first)).c_str(),
+                                     ImVec2(0, track_height), false,
+                                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                         ImGuiWindowFlags_NoScrollWithMouse |
+                                         ImGuiWindowFlags_NoScrollbar))
                 {
-                    ImGui::Selectable(
-                        ("Move Position " + std::to_string(graph_objects.first)).c_str(),
-                        false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 20.0f));
+                    ImGui::PushStyleColor(
+                        ImGuiCol_ChildBg,
+                        ImGui::ColorConvertU32ToFloat4(
+                            m_settings.GetColor(static_cast<int>(Colors::kTransparent))));
 
-                    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+                    if(m_is_control_held)
                     {
-                        ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE",
-                                                  &graph_objects.second,
-                                                  sizeof(graph_objects.second));
-                        ImGui::EndDragDropSource();
-                    }
-                    if(ImGui::BeginDragDropTarget())
-                    {
-                        if(const ImGuiPayload* payload =
-                               ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
+                        ImGui::Selectable(
+                            ("Move Position " + std::to_string(graph_objects.first))
+                                .c_str(),
+                            false, ImGuiSelectableFlags_AllowDoubleClick,
+                            ImVec2(0, 20.0f));
+
+                        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
                         {
-                            // Handle the payload (here we just print it)
-
-                            rocprofvis_graph_map_t* payload_data =
-                                (rocprofvis_graph_map_t*)
-                                    payload->Data;  // incoming (being dragged)
-                            rocprofvis_graph_map_t payload_data_copy = *payload_data;
-                            int payload_position = payload_data_copy.chart->GetID();
-                            rocprofvis_graph_map_t outgoing_chart =
-                                m_graph_map[graph_objects.first];  // outgoing
-                                                                   // (getting
-                                                                   // replaced)
-                            int outgoing_position = outgoing_chart.chart->GetID();
-
-                            // Change position in object itself.
-                            payload_data_copy.chart->SetID(outgoing_position);
-                            outgoing_chart.chart->SetID(payload_position);
-
-                            // Swap Positions.
-                            m_graph_map[outgoing_position] = payload_data_copy;
-                            m_graph_map[payload_position]  = outgoing_chart;
+                            ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE",
+                                                      &graph_objects.second,
+                                                      sizeof(graph_objects.second));
+                            ImGui::EndDragDropSource();
                         }
-                        ImGui::EndDragDropTarget();
+                        if(ImGui::BeginDragDropTarget())
+                        {
+                            if(const ImGuiPayload* payload =
+                                   ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
+                            {
+                                // Handle the payload (here we just print it)
+
+                                rocprofvis_graph_map_t* payload_data =
+                                    (rocprofvis_graph_map_t*)
+                                        payload->Data;  // incoming (being dragged)
+                                rocprofvis_graph_map_t payload_data_copy = *payload_data;
+                                int payload_position = payload_data_copy.chart->GetID();
+                                rocprofvis_graph_map_t outgoing_chart =
+                                    m_graph_map[graph_objects.first];  // outgoing
+                                                                       // (getting
+                                                                       // replaced)
+                                int outgoing_position = outgoing_chart.chart->GetID();
+
+                                // Change position in object itself.
+                                payload_data_copy.chart->SetID(outgoing_position);
+                                outgoing_chart.chart->SetID(payload_position);
+
+                                // Swap Positions.
+                                m_graph_map[outgoing_position] = payload_data_copy;
+                                m_graph_map[payload_position]  = outgoing_chart;
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
                     }
+
+                    track_item.chart->UpdateMovement(m_zoom, m_view_time_offset_ns,
+                                                     m_min_x, m_max_x, m_pixels_per_ns,
+                                                     m_scroll_position);
+
+                    m_resize_activity |= track_item.chart->GetResizeStatus();
+                    track_item.chart->Render(m_graph_size.x);
+
+                    // check for mouse click
+                    if(track_item.chart->IsMetaAreaClicked())
+                    {
+                        m_graph_map[track_item.chart->GetID()].selected =
+                            !track_item.selected;
+                        selection_changed = true;
+                    }
+                    ImGui::PopStyleColor();
                 }
-
-                graph_objects.second.chart->UpdateMovement(
-                    m_zoom, m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns,
-                    m_scroll_position);
-
-                m_resize_activity |= graph_objects.second.chart->GetResizeStatus();
-                graph_objects.second.chart->Render(m_graph_size.x);
-
-                // check for mouse click
-                if(graph_objects.second.chart->IsMetaAreaClicked())
-                {
-                    m_graph_map[graph_objects.second.chart->GetID()].selected =
-                        !graph_objects.second.selected;
-                    selection_changed = true;
-                }
-
-                ImGui::PopStyleColor();
-
                 ImGui::EndChild();
                 ImGui::PopStyleColor();
 
@@ -750,12 +747,11 @@ TimelineView::RenderGraphView()
             {
                 // If the track is not visible past a certain distance, release its
                 // data to free up memory
-                if(graph_objects.second.chart->GetDistanceToView() >
-                       m_unload_track_distance &&
-                   graph_objects.second.chart->HasData())
+                if(track_item.chart->GetDistanceToView() > m_unload_track_distance &&
+                   track_item.chart->HasData())
                 {
-                    graph_objects.second.chart->ReleaseData();
-                    m_data_provider.FreeTrack(graph_objects.second.chart->GetID());
+                    track_item.chart->ReleaseData();
+                    m_data_provider.FreeTrack(track_item.chart->GetID());
                 }
 
                 // Render dummy to maintain layout

@@ -16,6 +16,7 @@ class Arguments;
 class Array;
 class Future;
 class ComputeTable;
+class ComputePlot;
 
 class ComputeTrace : public Handle
 {
@@ -41,7 +42,7 @@ public:
 
 private:
     std::unordered_map<rocprofvis_controller_compute_table_types_t, ComputeTable*> m_tables;
-
+    std::unordered_map<rocprofvis_controller_compute_plot_types_t, ComputePlot*> m_plots;
 };
 
 }

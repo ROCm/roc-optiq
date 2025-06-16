@@ -2,6 +2,7 @@
 
 #include "rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_controller_compute_metrics.h"
+#include "rocprofvis_controller_plot_compute.h"
 #include "rocprofvis_controller_table_compute.h"
 #include "rocprofvis_core_assert.h"
 #include <filesystem>
@@ -46,10 +47,41 @@ rocprofvis_result_t ComputeTrace::Load(char const* const directory)
                     result = table->Load(entry.path().string());
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                     m_tables[definition.m_type] = table;
-                    spdlog::info("ComputeTrace::Load - {}/{}", m_tables.size(), COMPUTE_TABLE_DEFINITIONS.size());
                 }
             }
         }
+        spdlog::info("ComputeTrace::Load - {}/{} Tables", m_tables.size(), COMPUTE_TABLE_DEFINITIONS.size());
+        for (const ComputePlotDefinition& definition : COMPUTE_PLOT_DEFINITIONS)
+        {
+            ComputePlot* plot = new ComputePlot(m_plots.size(), definition.m_title, definition.x_axis_label, definition.y_axis_label, definition.m_type);
+            ROCPROFVIS_ASSERT(plot);
+            for (const ComputePlotDataSeriesDefinition& series : definition.m_series)
+            {
+                for (const ComputePlotDataDefinition& data : series.m_values)
+                {
+                    if (m_tables.count(data.m_table_type) > 0)
+                    {
+                        result = plot->Load(m_tables[data.m_table_type], series.m_name, data.m_metric_keys);
+                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    }
+                    else
+                    {
+                        delete plot;
+                        result = kRocProfVisResultNotLoaded;
+                        break;
+                    }
+                }
+                if (result != kRocProfVisResultSuccess)
+                {
+                    break;
+                }
+            }
+            if (result == kRocProfVisResultSuccess)
+            {
+                m_plots[definition.m_type] = plot;
+            }
+        }
+        spdlog::info("ComputeTrace::Load - {}/{} Plots", m_plots.size(), COMPUTE_PLOT_DEFINITIONS.size());
     }
     return result;
 }
@@ -88,6 +120,19 @@ rocprofvis_result_t ComputeTrace::GetObject(rocprofvis_property_t property, uint
             {
                 result = kRocProfVisResultNotLoaded;
             }          
+        }
+        else if (kRPVControllerComputePlotTypeKernelDurationPercentage <= property && property < kRPVControllerComputePlotTypeCount)
+        {
+            rocprofvis_controller_compute_plot_types_t plot_type = static_cast<rocprofvis_controller_compute_plot_types_t>(property);
+            if (m_plots.count(plot_type) > 0)
+            {
+                *value = (rocprofvis_handle_t*)m_plots[static_cast<rocprofvis_controller_compute_plot_types_t>(property)];
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultNotLoaded;
+            }
         }
         else
         {

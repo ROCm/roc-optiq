@@ -139,16 +139,17 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
         // Select on click
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            if(m_selected_event_id != flame.m_id ||  m_dp.GetSelectedEvent() != flame.m_id)
+            if(m_selected_event_id != flame.m_id || m_dp.GetSelectedEvent() != flame.m_id)
             {
-                m_dp.SetSelectedEvent(flame.m_id);
+                m_dp.SetSelectedEvent(flame.m_id, flame.m_start_ts,
+                                      flame.m_start_ts + flame.m_duration);
                 m_selected_event_id = flame.m_id;
             }
             else
             {
-                m_dp.SetSelectedEvent(std::numeric_limits<uint64_t>::max());
+                m_dp.SetSelectedEvent(std::numeric_limits<uint64_t>::max(), 0, 0);
                 m_selected_event_id = std::numeric_limits<uint64_t>::max();
-            }            
+            }
         }
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);

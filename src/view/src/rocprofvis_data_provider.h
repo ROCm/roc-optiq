@@ -32,7 +32,7 @@ enum class RequestType
 
 enum class TableType
 {
-    kSampleTable,    
+    kSampleTable,
     kEventTable,
     __kTableTypeCount
 };
@@ -47,6 +47,14 @@ typedef struct track_info_t
     double                             max_ts;       // ending time stamp of track
     uint64_t                           num_entries;  // number of entries in the track
 } track_info_t;
+
+typedef struct event_info
+{
+    uint64_t id;        // id of the event
+    double   start_ts;  // start timestamp of the event
+    double   end_ts;    // end timestamp of the event
+
+} event_info;
 
 class RequestParamsBase
 {
@@ -129,16 +137,22 @@ typedef struct table_info_t
 class DataProvider
 {
 public:
+    uint64_t m_selected_event;
+    double   m_selected_event_start;
+    double   m_selected_event_end;
+
     static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = -1;
     static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = -2;
 
     DataProvider();
     ~DataProvider();
 
-    //Set user selected event.
-    void SetSelectedEvent(uint64_t id);
+    void GetEventInfo(uint64_t event_id, double start_ts, double end_ts);
 
-    //Get user selected event.
+    // Set user selected event.
+    void SetSelectedEvent(uint64_t id, double start, double end);
+
+    // Get user selected event.
     uint64_t GetSelectedEvent();
 
     /*
@@ -322,7 +336,7 @@ private:
     double      m_min_ts;           // timeline start point
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
-    uint64_t    m_selected_event;
+   
 
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;

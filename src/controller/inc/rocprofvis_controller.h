@@ -241,6 +241,12 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_
 }
 */
 
+rocprofvis_result_t rocprofvis_controller_event_fetch_async(
+    rocprofvis_controller_t* controller, rocprofvis_property_t property, uint64_t index,
+    uint32_t count, rocprofvis_controller_future_t* result,
+    rocprofvis_controller_array_t* output, uint64_t event_id, double start_ts,
+    double end_ts);
+
 void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* args);
 
 /*

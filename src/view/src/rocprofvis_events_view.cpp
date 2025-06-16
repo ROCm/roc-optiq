@@ -33,7 +33,11 @@ EventsView::Render()
     else
     {
         ImGui::Text("Event ID: %llu", m_data_provider.GetSelectedEvent());
-    }   
+        if(ImGui::Button("Find More Info"))
+        {
+            m_data_provider.GetEventInfo(m_data_provider.m_selected_event, m_data_provider.m_selected_event_start, m_data_provider.m_selected_event_end);
+        }
+    }
     ImGui::EndChild();
 }
 

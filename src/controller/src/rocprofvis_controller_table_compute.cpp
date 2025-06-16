@@ -234,7 +234,7 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
     format.delimiter(',');
     format.header_row(0);
     csv::CSVReader csv(csv_file, format);
-    std::vector<std::string>& column_names = csv.get_col_names();
+    std::vector<std::string> column_names = csv.get_col_names();
     uint64_t row_count = 0;
     for (csv::CSVRow& csv_row : csv)
     {

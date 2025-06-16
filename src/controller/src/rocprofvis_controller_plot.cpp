@@ -2,6 +2,7 @@
 
 #include "rocprofvis_controller_plot.h"
 #include "rocprofvis_controller_array.h"
+#include <cstring>
 
 namespace RocProfVis
 {

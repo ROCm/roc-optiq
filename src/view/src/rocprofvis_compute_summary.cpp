@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_compute_summary.h"
+#include "widgets/rocprofvis_compute_widget.h"
 
 namespace RocProfVis
 {
@@ -9,81 +10,36 @@ namespace View
 
 constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
 
-void ComputeSummaryLeft::Update()
-{
-    if (m_system_info)
-    {
-        m_system_info->Update();
-    }
-}
-
-void ComputeSummaryLeft::Render()
-{
-    if (m_system_info)
-    {
-        m_system_info->Render();
-    }
-}
-
-ComputeSummaryLeft::ComputeSummaryLeft(std::shared_ptr<ComputeDataProvider> data_provider)
-: m_system_info(nullptr)
-{
-    m_system_info = std::make_shared<ComputeMetricGroup>(data_provider, "1.1.csv");
-}
-
-ComputeSummaryLeft::~ComputeSummaryLeft() {}
-
-void ComputeSummaryRight::Update()
-{
-    if (m_kernel_list)
-    {
-        m_kernel_list->Update();
-    }
-    if (m_dispatch_list)
-    {
-        m_dispatch_list->Update();
-    }
-}
-
-void ComputeSummaryRight::Render()
-{    
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
-    ImGui::SeparatorText("Top Stats");
-    ImGui::PopStyleVar();
-
-    if (m_kernel_list)
-    {
-        m_kernel_list->Render();
-    }
-    if (m_dispatch_list)
-    {
-        m_dispatch_list->Render();
-    }
-}
-
-ComputeSummaryRight::ComputeSummaryRight(std::shared_ptr<ComputeDataProvider> data_provider)
-: m_kernel_list(nullptr)
-, m_dispatch_list(nullptr)
-{
-    m_kernel_list = std::make_shared<ComputeMetricGroup>(data_provider, "0.1_Top_Kernels.csv", kComputeMetricTable | kComputeMetricPie | kComputeMetricBar, std::vector<int>({0}), std::vector<int>({1}));
-    m_dispatch_list = std::make_shared<ComputeMetricGroup>(data_provider, "0.2_Dispatch_List.csv");
-}
-
-ComputeSummaryRight::~ComputeSummaryRight() {}
-
-ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
+ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider)
 : m_container(nullptr)
-, m_left_view(nullptr)
-, m_right_view(nullptr)
+, m_left_column(nullptr)
+, m_right_column(nullptr)
 , m_owner_id(owner_id)
+, m_sysinfo_table(nullptr)
+, m_kernel_pie(nullptr)
+, m_kernel_bar(nullptr)
+, m_kernel_table(nullptr)
+, m_dispatch_table(nullptr)
 {
-    m_left_view = std::make_shared<ComputeSummaryLeft>(data_provider);
-    m_right_view = std::make_shared<ComputeSummaryRight>(data_provider);
+    m_sysinfo_table = std::make_shared<ComputeTable>(data_provider, kRPVControllerComputeTableTypeSysInfo);
+    m_kernel_pie = std::make_shared<ComputePlotPie>(data_provider, kRPVControllerComputePlotTypeKernelDurationPercentage);
+    m_kernel_bar = std::make_shared<ComputePlotBar>(data_provider, kRPVControllerComputePlotTypeKernelDuration);
+    m_kernel_table = std::make_shared<ComputeTable>(data_provider, kRPVControllerComputeTableTypeKernelList);
+    m_dispatch_table = std::make_shared<ComputeTable>(data_provider, kRPVControllerComputeTableTypeDispatchList);
+
+    m_left_column = std::make_shared<RocCustomWidget>([this]()
+    {
+        this->RenderLeftColumn();
+    });
+    m_right_column = std::make_shared<RocCustomWidget>([this]()
+    {
+        this->RenderRightColumn();
+    });
 
     LayoutItem left;
-    left.m_item = m_left_view;
+    left.m_item = m_left_column;
     LayoutItem right;
-    right.m_item = m_right_view;
+    right.m_item = m_right_column;
     m_container = std::make_shared<HSplitContainer>(left, right);
     m_container->SetSplit(0.5f);
 }
@@ -104,15 +60,58 @@ void ComputeSummaryView::RenderMenuBar()
     ImGui::Dummy(ImVec2(content_region.x, ImGui::GetFrameHeightWithSpacing()));
 }
 
+void ComputeSummaryView::RenderLeftColumn()
+{
+    if (m_sysinfo_table)
+    {
+        m_sysinfo_table->Render();
+    }
+}
+
+void ComputeSummaryView::RenderRightColumn()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
+    ImGui::SeparatorText("Top Stats");
+    ImGui::PopStyleVar();
+    if (m_kernel_pie)
+    {
+        m_kernel_pie->Render();
+    }
+    if (m_kernel_bar)
+    {
+        m_kernel_bar->Render();
+    }
+    if (m_kernel_table)
+    {
+        m_kernel_table->Render();
+    }
+    if (m_dispatch_table)
+    {
+        m_dispatch_table->Render();
+    }
+}
+
 void ComputeSummaryView::Update()
 {
-    if (m_left_view)
+    if (m_sysinfo_table)
     {
-        m_left_view->Update();
+        m_sysinfo_table->Update();
     }
-    if (m_right_view)
+    if (m_kernel_pie)
     {
-        m_right_view->Update();
+        m_kernel_pie->Update();
+    }
+    if (m_kernel_bar)
+    {
+        m_kernel_bar->Update();
+    }
+    if (m_kernel_table)
+    {
+        m_kernel_table->Update();
+    }
+    if (m_dispatch_table)
+    {
+        m_dispatch_table->Update();
     }
 }
 

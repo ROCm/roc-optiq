@@ -12,6 +12,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr int PLOT_LABEL_MAX_LENGTH = 40;
+
 ComputeDataProvider2::ComputeDataProvider2()
 : m_controller(nullptr)
 , m_controller_future(nullptr)
@@ -23,6 +25,17 @@ ComputeDataProvider2::ComputeDataProvider2()
 ComputeDataProvider2::~ComputeDataProvider2() 
 {
     FreeController();
+    for (auto& it : m_plots)
+    {
+        for (const char* label : it.second->m_x_axis.m_tick_labels)
+        {
+            delete[] label;
+        }
+        for (const char* label : it.second->m_y_axis.m_tick_labels)
+        {
+            delete[] label;
+        }
+    }
 }
 
 void ComputeDataProvider2::InitController()
@@ -113,17 +126,17 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                     {
                                         for (uint64_t r = 0; r < rows; r ++)
                                         {
-                                            rocprofvis_handle_t* row = nullptr;
-                                            result = rocprofvis_controller_get_object(table_data, kRPVControllerArrayEntryIndexed, r, &row);
+                                            rocprofvis_handle_t* row_handle = nullptr;
+                                            result = rocprofvis_controller_get_object(table_data, kRPVControllerArrayEntryIndexed, r, &row_handle);
                                             if (result == kRocProfVisResultSuccess)
                                             {
-                                                ROCPROFVIS_ASSERT(row);
+                                                ROCPROFVIS_ASSERT(row_handle);
                                                 std::vector<ComputeTableCellModel> cell_row;
                                                 std::string unit;
                                                 uint32_t length = -1;
                                                 if (unit_column >= 0)
                                                 {
-                                                    GetStringPropertyFromHandle(row, kRPVControllerArrayEntryIndexed, unit_column, unit);
+                                                    GetStringPropertyFromHandle(row_handle, kRPVControllerArrayEntryIndexed, unit_column, unit);
                                                 }
                                                 for (uint64_t c = 0; c < columns; c ++)
                                                 {
@@ -143,7 +156,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                             case kRPVControllerPrimitiveTypeUInt64:
                                                             {
                                                                 uint64_t data = 0;
-                                                                result = rocprofvis_controller_get_uint64(row, kRPVControllerArrayEntryIndexed, c, &data);
+                                                                result = rocprofvis_controller_get_uint64(row_handle, kRPVControllerArrayEntryIndexed, c, &data);
                                                                 if (result == kRocProfVisResultSuccess && data != -1)
                                                                 {
                                                                     value = std::to_string(data);
@@ -159,7 +172,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                             case kRPVControllerPrimitiveTypeDouble:
                                                             {
                                                                 double data = 0;
-                                                                result = rocprofvis_controller_get_double(row, kRPVControllerArrayEntryIndexed, c, &data);
+                                                                result = rocprofvis_controller_get_double(row_handle, kRPVControllerArrayEntryIndexed, c, &data);
                                                                 if (result == kRocProfVisResultSuccess && data != -1)
                                                                 {
                                                                     auto data_str = std::to_string(data);
@@ -175,7 +188,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                             }
                                                             case kRPVControllerPrimitiveTypeString:
                                                             {
-                                                                result = GetStringPropertyFromHandle(row, kRPVControllerArrayEntryIndexed, c, value);
+                                                                result = GetStringPropertyFromHandle(row_handle, kRPVControllerArrayEntryIndexed, c, value);
                                                                 break;
                                                             }
                                                             default:
@@ -184,10 +197,16 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                                 break;
                                                             }
                                                         }
-                                                        cell_row.push_back(ComputeTableCellModel{std::move(value), std::move(colorize), false, std::move(metric)});                                                    
+                                                        if (result == kRocProfVisResultSuccess)
+                                                        {
+                                                            cell_row.emplace_back(ComputeTableCellModel{std::move(value), std::move(colorize), false, std::move(metric)}); 
+                                                        }                                                   
                                                     }
                                                 }
-                                                cells.push_back(std::move(cell_row));
+                                                if (result == kRocProfVisResultSuccess)
+                                                {
+                                                    cells.push_back(std::move(cell_row));
+                                                }                                                
                                             }
                                         }
                                     }
@@ -197,9 +216,142 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                 rocprofvis_controller_arguments_free(sort);
                             }
                         }
-                        m_tables[static_cast<rocprofvis_controller_compute_table_types_t>(table_type)] = std::make_unique<ComputeTableModel>(
-                            ComputeTableModel{std::move(title), std::move(column_names), std::move(cells), std::move(metrics_map)}
-                        );
+                        if (result == kRocProfVisResultSuccess)
+                        {
+                            m_tables[static_cast<rocprofvis_controller_compute_table_types_t>(table_type)] = std::make_unique<ComputeTableModel>(
+                                ComputeTableModel{std::move(title), std::move(column_names), std::move(cells), std::move(metrics_map)}
+                            );
+                        }
+                    }
+                }
+                rocprofvis_handle_t* plot_handle = nullptr;
+                for (uint64_t plot_type = kRPVControllerComputePlotTypeKernelDurationPercentage; plot_type < kRPVControllerComputePlotTypeCount; plot_type ++)
+                {
+                    result = rocprofvis_controller_get_object(m_trace, plot_type, 0, &plot_handle);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        ROCPROFVIS_ASSERT(plot_handle);
+                        std::string title;
+                        ComputePlotAxisModel x_axis;
+                        ComputePlotAxisModel y_axis;
+                        std::vector<ComputePlotSeriesModel> series_models;
+                        GetStringPropertyFromHandle(plot_handle, kRPVControllerPlotTitle, 0, title);
+                        GetStringPropertyFromHandle(plot_handle, kRPVControllerPlotXAxisTitle, 0, x_axis.m_name);
+                        GetStringPropertyFromHandle(plot_handle, kRPVControllerPlotYAxisTitle, 0, y_axis.m_name);
+                        uint64_t num_axis_labels = 0;
+                        result = rocprofvis_controller_get_uint64(plot_handle, kRPVControllerPlotNumXAxisLabels, 0, &num_axis_labels);
+                        if (result == kRocProfVisResultSuccess && num_axis_labels > 0)
+                        {
+                            x_axis.m_tick_labels.resize(num_axis_labels);
+                            for (int i = 0; i < num_axis_labels; i ++)
+                            {
+                                std::string data;
+                                result = GetStringPropertyFromHandle(plot_handle, kRPVControllerPlotXAxisLabelsIndexed, i, data);
+                                if (result == kRocProfVisResultSuccess)
+                                {
+                                    if (data.length() > PLOT_LABEL_MAX_LENGTH)
+                                    {
+                                        data = data.substr(0, PLOT_LABEL_MAX_LENGTH) + "...";
+                                    }
+                                    char* label = new char[data.length() + 1];
+                                    ROCPROFVIS_ASSERT(strcpy(label, data.c_str()));
+                                    x_axis.m_tick_labels[i] = label;
+                                }
+                            }
+                        }
+                        result = rocprofvis_controller_get_uint64(plot_handle, kRPVControllerPlotNumYAxisLabels, 0, &num_axis_labels);
+                        if (result == kRocProfVisResultSuccess && num_axis_labels > 0)
+                        {
+                            y_axis.m_tick_labels.resize(num_axis_labels);
+                            for (int i = 0; i < num_axis_labels; i ++)
+                            {
+                                std::string data;
+                                result = GetStringPropertyFromHandle(plot_handle, kRPVControllerPlotYAxisLabelsIndexed, i, data);
+                                if (result == kRocProfVisResultSuccess)
+                                {
+                                    char* label = new char[data.length() + 1];
+                                    if (data.length() > PLOT_LABEL_MAX_LENGTH)
+                                    {
+                                        data = data.substr(0, PLOT_LABEL_MAX_LENGTH) + "...";
+                                    }
+                                    ROCPROFVIS_ASSERT(strcpy(label, data.c_str()));
+                                    y_axis.m_tick_labels[i] = label;
+                                }
+                            }
+                        }
+                        uint64_t num_series = 0;
+                        result = rocprofvis_controller_get_uint64(plot_handle, kRPVControllerPlotNumSeries, 0, &num_series);
+                        if (result == kRocProfVisResultSuccess)
+                        {
+                            ROCPROFVIS_ASSERT(num_series > 0);
+                            rocprofvis_controller_array_t* plot_data = rocprofvis_controller_array_alloc(0);
+                            ROCPROFVIS_ASSERT(plot_data);
+                            rocprofvis_controller_future_t* plot_future = rocprofvis_controller_future_alloc();
+                            ROCPROFVIS_ASSERT(plot_future);
+                            rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+                            ROCPROFVIS_ASSERT(args);
+                            result = rocprofvis_controller_plot_fetch_async(m_controller, plot_handle, args, plot_future, plot_data);
+                            if (result == kRocProfVisResultSuccess)
+                            {
+                                result = rocprofvis_controller_future_wait(plot_future, FLT_MAX);
+                                if (result == kRocProfVisResultSuccess)
+                                {
+                                    for (uint64_t i = 0; i < num_series; i ++)
+                                    {
+                                        rocprofvis_handle_t* series_handle = nullptr;
+                                        result = rocprofvis_controller_get_object(plot_data, kRPVControllerArrayEntryIndexed, i, &series_handle);
+                                        if (result == kRocProfVisResultSuccess)
+                                        {
+                                            ROCPROFVIS_ASSERT(series_handle);
+                                            std::string name;
+                                            std::vector<double> x_values;
+                                            std::vector<double> y_values;
+                                            uint64_t num_values = 0;
+                                            result = rocprofvis_controller_get_uint64(series_handle, kRPVControllerPlotSeriesNumValues, 0, &num_values);
+                                            if (result == kRocProfVisResultSuccess)
+                                            {
+                                                ROCPROFVIS_ASSERT(num_values > 0);
+                                                x_values.resize(num_values);
+                                                y_values.resize(num_values);
+                                                x_axis.m_max = 0;
+                                                x_axis.m_min = 0;
+                                                y_axis.m_max = 0;
+                                                y_axis.m_min = 0;
+                                                for (uint64_t j = 0; j < num_values; j ++)
+                                                {
+                                                    result = rocprofvis_controller_get_double(series_handle, kRPVControllerPlotSeriesXValuesIndexed, j, &x_values[j]);
+                                                    if (result == kRocProfVisResultSuccess)
+                                                    {
+                                                        result = rocprofvis_controller_get_double(series_handle, kRPVControllerPlotSeriesYValuesIndexed, j, &y_values[j]);
+                                                        if (result == kRocProfVisResultSuccess)
+                                                        {
+                                                            result = GetStringPropertyFromHandle(series_handle, kRPVControllerPlotSeriesName, 0, name);
+                                                            x_axis.m_max = std::max(x_axis.m_max, x_values[j]);
+                                                            x_axis.m_min = std::min(x_axis.m_min, x_values[j]);
+                                                            y_axis.m_max = std::max(y_axis.m_max, y_values[j]);
+                                                            y_axis.m_min = std::min(y_axis.m_min, y_values[j]);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if (result == kRocProfVisResultSuccess)
+                                            {
+                                                series_models.emplace_back(ComputePlotSeriesModel{std::move(name), std::move(x_values), std::move(y_values)});
+                                            }
+                                        }
+                                    }
+                                    if (result == kRocProfVisResultSuccess)
+                                    {
+                                        m_plots[static_cast<rocprofvis_controller_compute_plot_types_t>(plot_type)] = std::make_unique<ComputePlotModel>(
+                                            ComputePlotModel{std::move(title), std::move(x_axis), std::move(y_axis), std::move(series_models)}
+                                        );
+                                    }
+                                }
+                            }
+                            rocprofvis_controller_array_free(plot_data);
+                            rocprofvis_controller_future_free(plot_future);
+                            rocprofvis_controller_arguments_free(args);
+                        }
                     }
                 }
             }
@@ -219,6 +371,16 @@ ComputeTableModel* ComputeDataProvider2::GetTableModel(const rocprofvis_controll
         table = m_tables[type].get();
     }
     return table;
+}
+
+ComputePlotModel* ComputeDataProvider2::GetPlotModel(const rocprofvis_controller_compute_plot_types_t type)
+{
+    ComputePlotModel* plot = nullptr;
+    if (m_plots.count(type) > 0)
+    {
+        plot = m_plots[type].get();
+    }
+    return plot;
 }
 
 rocprofvis_result_t ComputeDataProvider2::GetStringPropertyFromHandle(rocprofvis_handle_t* handle, const rocprofvis_property_t property, const uint64_t index, std::string& output)

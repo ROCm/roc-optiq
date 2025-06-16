@@ -494,11 +494,11 @@ TimelineView::RenderGrid()
         double x_offset = (m_view_time_offset_ns / m_v_width) * m_graph_size.x;
         x_offset        = (int) x_offset % (int) stepSize;
 
+        // Background for the grid
         draw_list->AddRectFilled(
             ImVec2(container_pos.x, cursor_position.y + content_size.y - m_grid_size),
             ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
-            IM_COL32(250,250,220,255));  // Background for the grid
-            //m_settings.GetColor(static_cast<int>(Colors::kGridRed)));
+            m_settings.GetColor(Colors::kRulerBgColor)); 
 
         for(float i = 0; i < steps + 1; i++)
         {

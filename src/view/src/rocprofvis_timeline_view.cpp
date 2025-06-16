@@ -1058,10 +1058,7 @@ TimelineView::HandleTopSurfaceTouch()
                 m_scroll_position  = clamp(
                     static_cast<float>(m_scroll_position - scroll_wheel * scroll_speed),
                     0.0f, static_cast<float>(m_content_max_y_scoll));
-                // Optionally, update ImGui's scroll position if needed:
-                ImGui::SetScrollY(m_scroll_position);
             }
-            return;  // Do not allow drag/zoom in sidebar
         }
 
         // Graph area: allow full interaction

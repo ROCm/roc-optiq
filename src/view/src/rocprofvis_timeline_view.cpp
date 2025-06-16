@@ -251,8 +251,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     ImGui::SetNextWindowSize(ImVec2(1.0f, display_size.y), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          m_settings.GetColor(static_cast<int>(Colors::kScrollBarColor)));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kScrollBarColor));
 
     ImGui::BeginChild("Splitter View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
 
@@ -290,8 +289,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, m_graph_size.y - m_grid_size -
                                                    m_artificial_scrollbar_size));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          m_settings.GetColor(static_cast<int>(Colors::kScrollBarColor)));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kScrollBarColor));
 
     ImGui::BeginChild("Splitter View Horizontal", ImVec2(0, 0), ImGuiChildFlags_None,
                       window_flags);
@@ -316,8 +314,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
     ImGui::BeginChild("Scrubber View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
 
@@ -352,15 +349,12 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         ImVec2 rect_pos =
             ImVec2(mouse_position.x + 100 * Settings::GetInstance().GetDPI(),
                    screen_pos.y + display_size.y - 5);
-        draw_list->AddRectFilled(
-            text_pos, rect_pos,
-            m_settings.GetColor(static_cast<int>(Colors::kGridColor)));
-        draw_list->AddText(
-            text_pos, m_settings.GetColor(static_cast<int>(Colors::kFillerColor)), text);
+        draw_list->AddRectFilled(text_pos, rect_pos,
+                                 m_settings.GetColor(Colors::kGridColor));
+        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), text);
         draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
                            ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28),
-                           m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
-                           2.0f);
+                           m_settings.GetColor(Colors::kGridColor), 2.0f);
 
         // Code below is for select
         if(ImGui::IsMouseDoubleClicked(0))
@@ -462,7 +456,7 @@ TimelineView::RenderGrid()
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted,
                        cursor_position.y + content_size.y - m_grid_size),
-                m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)), 3.0f);
+                m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
         }
         if(m_highlighted_region.first != INVALID_SELECTION_TIME)
         {
@@ -474,7 +468,7 @@ TimelineView::RenderGrid()
                 ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted_end,
                        cursor_position.y + content_size.y - m_grid_size),
-                m_settings.GetColor(static_cast<int>(Colors::kSelectionBorder)), 3.0f);
+                m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
         }
         if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
            m_highlighted_region.second != INVALID_SELECTION_TIME)
@@ -489,7 +483,7 @@ TimelineView::RenderGrid()
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted_end,
                        cursor_position.y + content_size.y - m_grid_size),
-                m_settings.GetColor(static_cast<int>(Colors::kSelection)));
+                m_settings.GetColor(Colors::kSelection));
         }
 
         int    rectangle_render_count = 0;
@@ -509,8 +503,7 @@ TimelineView::RenderGrid()
             draw_list->AddLine(ImVec2(normalized_start, cursor_position.y),
                                ImVec2(normalized_start,
                                       cursor_position.y + content_size.y - m_grid_size),
-                               m_settings.GetColor(static_cast<int>(Colors::kBoundBox)),
-                               0.5f);
+                               m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
             char label[32];
             snprintf(label, sizeof(label), "%.0f",
@@ -520,9 +513,7 @@ TimelineView::RenderGrid()
             ImVec2 labelSize = ImGui::CalcTextSize(label);
             ImVec2 labelPos  = ImVec2(normalized_start - labelSize.x / 2,
                                       cursor_position.y + content_size.y - labelSize.y);
-            draw_list->AddText(labelPos,
-                               m_settings.GetColor(static_cast<int>(Colors::kGridColor)),
-                               label);
+            draw_list->AddText(labelPos, m_settings.GetColor(Colors::kGridColor), label);
         }
 
         draw_list->PopClipRect();
@@ -546,8 +537,7 @@ TimelineView::RenderGraphView()
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
     ImGuiIO& io           = ImGui::GetIO();
     m_is_control_held     = io.KeyCtrl;
@@ -672,10 +662,8 @@ TimelineView::RenderGraphView()
                                          ImGuiWindowFlags_NoScrollWithMouse |
                                          ImGuiWindowFlags_NoScrollbar))
                 {
-                    ImGui::PushStyleColor(
-                        ImGuiCol_ChildBg,
-                        ImGui::ColorConvertU32ToFloat4(
-                            m_settings.GetColor(static_cast<int>(Colors::kTransparent))));
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                                          m_settings.GetColor(Colors::kTransparent));
 
                     if(m_is_control_held)
                     {
@@ -959,8 +947,8 @@ TimelineView::RenderGraphPoints()
 
         ImGui::EndChild();
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(static_cast<int>(
-                                                    Colors::kTransparent)));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                              m_settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
 
@@ -982,10 +970,10 @@ TimelineView::RenderGraphPoints()
                                              static_cast<float>(available_width * 0.90));
         style.GrabRounding           = 3.0f;
 
-        ImVec4 scroll_color = ImGui::ColorConvertU32ToFloat4(
-            m_settings.GetColor(static_cast<int>(Colors::kFillerColor)));
-        ImVec4 grab_color = ImGui::ColorConvertU32ToFloat4(
-            m_settings.GetColor(static_cast<int>(Colors::kScrollBarColor)));
+        ImVec4 scroll_color =
+            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kFillerColor));
+        ImVec4 grab_color =
+            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kScrollBarColor));
 
         style.Colors[ImGuiCol_SliderGrab]       = grab_color;
         style.Colors[ImGuiCol_SliderGrabActive] = grab_color;

@@ -3,6 +3,12 @@
 #pragma once
 #include <iostream>
 #include <deque>
+#include <string>  
+
+namespace RocProfVis
+{
+namespace View
+{
 
 template <typename T>
 T
@@ -86,3 +92,20 @@ private:
     std::deque<T> m_buffer;
     size_t m_max_capacity;
 };
+
+
+  
+/**  
+ * @brief Formats a time point, originally from a double representing nanoseconds (can be negative),  
+ *        into a human-readable [+-]HH:MM:SS.nanoseconds string.  
+ *  
+ * @param double_ns_duration The time point in nanoseconds, stored as a double.  
+ * @param round_before_cast If true, std::round will be applied to the absolute value  
+ *                          before casting to integer nanoseconds. Otherwise, it truncates.  
+ * @return std::string The formatted duration string. Handles positive, negative, and zero values.  
+ *                     Also handles NaN and Inf.  
+ */ 
+std::string format_nanosecond_timepoint(double double_ns_duration, bool round_before_cast = false);
+
+} // namespace View
+} // namespace RocProfVis

@@ -32,20 +32,16 @@ public:
 
     bool HasData() override;
     void ReleaseData() override;
- 
+
 protected:
-    void RenderMetaArea() override;
     void RenderChart(float graph_width) override;
 
 private:
     std::vector<rocprofvis_trace_event_t> m_flames;
-    float                                 m_sidebar_size;
-    rocprofvis_color_by_value_t           m_is_color_value_existant;
     bool                                  m_request_random_color;
     ImVec2                                m_text_padding;
     float                                 m_flame_height;
-    uint64_t                              m_selected_event_id; 
-    float                                 m_scale_area_width;
+    uint64_t                              m_selected_event_id;
     DataProvider&                         m_dp;
 };
 

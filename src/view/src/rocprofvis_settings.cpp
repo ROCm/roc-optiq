@@ -20,7 +20,7 @@ namespace View
 bool
 FontManager::Init()
 {
-    ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO&     io = ImGui::GetIO();
     ImFontConfig config;
 
     ImFont* font = nullptr;
@@ -72,37 +72,39 @@ FontManager::GetFont(FontType font_type)
 
 const std::vector<ImU32> DARK_THEME_COLORS = []() {
     std::vector<ImU32> colors(static_cast<int>(Colors::__kLastColor));
-    colors[static_cast<int>(Colors::kMetaDataColor)]   = IM_COL32(20, 20, 20, 255);
-    colors[static_cast<int>(Colors::kTransparent)]     = IM_COL32(0, 0, 0, 0);
-    colors[static_cast<int>(Colors::kTextError)]       = IM_COL32(255, 0, 0, 255);
-    colors[static_cast<int>(Colors::kTextSuccess)]     = IM_COL32(0, 255, 0, 255);
-    colors[static_cast<int>(Colors::kFlameChartColor)] = IM_COL32(128, 128, 128, 255);
-    colors[static_cast<int>(Colors::kGridColor)]       = IM_COL32(255, 255, 255, 255);
-    colors[static_cast<int>(Colors::kGridRed)]         = IM_COL32(255, 0, 0, 255);
-    colors[static_cast<int>(Colors::kSelectionBorder)] = IM_COL32(0, 0, 200, 255);
-    colors[static_cast<int>(Colors::kHighlightChart)]  = IM_COL32(0, 0, 200, 100);
-    colors[static_cast<int>(Colors::kSelection)]       = IM_COL32(0, 0, 100, 80);
-    colors[static_cast<int>(Colors::kBoundBox)]        = IM_COL32(180, 180, 180, 255);
-    colors[static_cast<int>(Colors::kFillerColor)]     = IM_COL32(0, 0, 0, 255);
-    colors[static_cast<int>(Colors::kScrollBarColor)]  = IM_COL32(255, 255, 255, 50);
+    colors[static_cast<int>(Colors::kMetaDataColor)]     = IM_COL32(20, 20, 20, 255);
+    colors[static_cast<int>(Colors::kMetaDataSeparator)] = IM_COL32(48, 48, 48, 255);
+    colors[static_cast<int>(Colors::kTransparent)]       = IM_COL32(0, 0, 0, 0);
+    colors[static_cast<int>(Colors::kTextError)]         = IM_COL32(255, 0, 0, 255);
+    colors[static_cast<int>(Colors::kTextSuccess)]       = IM_COL32(0, 255, 0, 255);
+    colors[static_cast<int>(Colors::kFlameChartColor)]   = IM_COL32(128, 128, 128, 255);
+    colors[static_cast<int>(Colors::kGridColor)]         = IM_COL32(255, 255, 255, 255);
+    colors[static_cast<int>(Colors::kGridRed)]           = IM_COL32(255, 0, 0, 255);
+    colors[static_cast<int>(Colors::kSelectionBorder)]   = IM_COL32(0, 0, 200, 255);
+    colors[static_cast<int>(Colors::kHighlightChart)]    = IM_COL32(0, 0, 200, 100);
+    colors[static_cast<int>(Colors::kSelection)]         = IM_COL32(0, 0, 100, 80);
+    colors[static_cast<int>(Colors::kBoundBox)]          = IM_COL32(180, 180, 180, 255);
+    colors[static_cast<int>(Colors::kFillerColor)]       = IM_COL32(0, 0, 0, 255);
+    colors[static_cast<int>(Colors::kScrollBarColor)]    = IM_COL32(255, 255, 255, 50);
     return colors;
 }();
 
 const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
     std::vector<ImU32> colors(static_cast<int>(Colors::__kLastColor));
-    colors[static_cast<int>(Colors::kMetaDataColor)]   = IM_COL32(240, 240, 240, 55);
-    colors[static_cast<int>(Colors::kTransparent)]     = IM_COL32(0, 0, 0, 0);
-    colors[static_cast<int>(Colors::kTextError)]       = IM_COL32(255, 0, 0, 255);
-    colors[static_cast<int>(Colors::kTextSuccess)]     = IM_COL32(0, 255, 0, 255);
-    colors[static_cast<int>(Colors::kFlameChartColor)] = IM_COL32(128, 128, 128, 255);
-    colors[static_cast<int>(Colors::kHighlightChart)]  = IM_COL32(0, 0, 200, 100);
-    colors[static_cast<int>(Colors::kGridColor)]       = IM_COL32(0, 0, 0, 255);
-    colors[static_cast<int>(Colors::kGridRed)]         = IM_COL32(255, 0, 0, 255);
-    colors[static_cast<int>(Colors::kSelectionBorder)] = IM_COL32(0, 0, 200, 255);
-    colors[static_cast<int>(Colors::kSelection)]       = IM_COL32(0, 0, 100, 80);
-    colors[static_cast<int>(Colors::kBoundBox)]        = IM_COL32(100, 100, 100, 150);
-    colors[static_cast<int>(Colors::kFillerColor)]     = IM_COL32(255, 255, 255, 255);
-    colors[static_cast<int>(Colors::kScrollBarColor)]  = IM_COL32(200, 200, 200, 255);
+    colors[static_cast<int>(Colors::kMetaDataColor)]     = IM_COL32(240, 240, 240, 255);
+    colors[static_cast<int>(Colors::kMetaDataSeparator)] = IM_COL32(248, 248, 248, 255);
+    colors[static_cast<int>(Colors::kTransparent)]       = IM_COL32(0, 0, 0, 0);
+    colors[static_cast<int>(Colors::kTextError)]         = IM_COL32(255, 0, 0, 255);
+    colors[static_cast<int>(Colors::kTextSuccess)]       = IM_COL32(0, 255, 0, 255);
+    colors[static_cast<int>(Colors::kFlameChartColor)]   = IM_COL32(128, 128, 128, 255);
+    colors[static_cast<int>(Colors::kHighlightChart)]    = IM_COL32(0, 0, 200, 100);
+    colors[static_cast<int>(Colors::kGridColor)]         = IM_COL32(0, 0, 0, 255);
+    colors[static_cast<int>(Colors::kGridRed)]           = IM_COL32(255, 0, 0, 255);
+    colors[static_cast<int>(Colors::kSelectionBorder)]   = IM_COL32(0, 0, 200, 255);
+    colors[static_cast<int>(Colors::kSelection)]         = IM_COL32(0, 0, 100, 80);
+    colors[static_cast<int>(Colors::kBoundBox)]          = IM_COL32(100, 100, 100, 150);
+    colors[static_cast<int>(Colors::kFillerColor)]       = IM_COL32(255, 255, 255, 255);
+    colors[static_cast<int>(Colors::kScrollBarColor)]    = IM_COL32(200, 200, 200, 255);
     return colors;
 }();
 

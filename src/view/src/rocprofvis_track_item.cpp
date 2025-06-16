@@ -1,6 +1,8 @@
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_settings.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_debug_window.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 using namespace RocProfVis::View;
 
@@ -17,17 +19,17 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 , m_scale_x(scale_x)
 , m_name(name)
 , m_track_height(75.0f)
+, m_track_content_height(0.0f)
 , m_min_track_height(10.0f)
 , m_is_in_view_vertical(false)
-, m_metadata_bg_color()
 , m_metadata_padding(ImVec2(4.0f, 4.0f))
 , m_resize_grip_thickness(4.0f)
 , m_request_state(TrackDataRequestState::kIdle)
 , m_is_resize(false)
 , m_meta_area_clicked(false)
+, m_meta_area_scale_width(0.0f)
 , m_settings(Settings::GetInstance())
 {
-    m_metadata_bg_color = m_settings.GetColor(static_cast<int>(Colors::kMetaDataColor));
 }
 
 bool
@@ -109,11 +111,11 @@ TrackItem::UpdateMovement(float zoom, float movement, double& min_x, double& max
 void
 TrackItem::Render(double width)
 {
-    m_metadata_bg_color = m_settings.GetColor(static_cast<int>(Colors::kMetaDataColor));
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
+    ImGuiChildFlags child_flags = ImGuiChildFlags_Borders;
 
-    if(ImGui::BeginChild((std::to_string(m_id)).c_str()), ImVec2(0, 0), true,
+    if(ImGui::BeginChild((std::to_string(m_id)).c_str()), ImVec2(0, 0), child_flags,
        window_flags)
     {
         ImVec2 parent_size = ImGui::GetContentRegionAvail();
@@ -127,6 +129,108 @@ TrackItem::Render(double width)
     }
     ImGui::EndChild();
 }
+
+void
+TrackItem::RenderMetaArea()
+{
+    ImU32 metadata_bg_color = m_settings.GetColor(Colors::kMetaDataColor);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, metadata_bg_color);
+
+    // Shrink the meta data content area by one unit in the vertical direction so that the
+    // borders rendered by the parent are visible other wise the bg fill will cover them
+    // up.
+    ImVec2 m_metadata_shrink_padding(0.0f, 1.0f);
+    ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
+    m_track_content_height      = m_track_height - m_metadata_shrink_padding.y * 2.0f;
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    DebugWindow::GetInstance()->AddDebugMessage(
+        "Metadata area size x: " + std::to_string(outer_container_size.x) +
+        " y: " + std::to_string(outer_container_size.y) +
+        " Track height: " + std::to_string(m_track_height) +
+
+        " Window padding x: " + std::to_string(style.WindowPadding.x) +
+        " y: " + std::to_string(style.WindowPadding.y) +
+        " Item spacing x: " + std::to_string(style.ItemSpacing.x) +
+        " y: " + std::to_string(style.ItemSpacing.y));
+
+    ImGui::SetCursorPos(m_metadata_shrink_padding);
+    if(ImGui::BeginChild("MetaData Area",
+                         ImVec2(s_metadata_width, outer_container_size.y -
+                                                      m_metadata_shrink_padding.y * 2.0f),
+                         ImGuiChildFlags_None))
+    {
+        ImVec2 content_size = ImGui::GetContentRegionAvail();
+
+        // handle mouse click
+        ImVec2 container_pos  = ImGui::GetWindowPos();
+        ImVec2 container_size = ImGui::GetWindowSize();
+
+        bool is_mouse_inside = ImGui::IsMouseHoveringRect(
+            container_pos, ImVec2(container_pos.x + container_size.x,
+                                  container_pos.y + container_size.y));
+
+        m_meta_area_clicked = false;
+        if(is_mouse_inside)
+        {
+            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            {
+                m_meta_area_clicked = true;
+            }
+        }
+
+        // Set padding for the child window (Note this done using SetCursorPos
+        // because ImGuiStyleVar_WindowPadding has no effect on child windows without
+        // borders)
+        ImGui::SetCursorPos(m_metadata_padding);
+        // Adjust content size to account for padding
+        content_size.x -= m_metadata_padding.x * 2;
+        content_size.y -= m_metadata_padding.x * 2;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 4.0f));
+        if(ImGui::BeginChild(
+               "MetaData Content",
+               ImVec2(content_size.x - m_meta_area_scale_width, content_size.y),
+               ImGuiChildFlags_None))
+        {
+            ImGui::Text(m_name.c_str());
+
+            if(m_request_state != TrackDataRequestState::kIdle)
+            {
+                ImGuiStyle& style = ImGui::GetStyle();
+
+                float  dot_radius  = 10.0f;
+                int    num_dots    = 3;
+                float  dot_spacing = 5.0f;
+                float  anim_speed  = 7.0f;
+                ImVec2 dot_size =
+                    MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
+
+                ImVec2 cursor_pos = ImGui::GetCursorPos();
+                ImGui::SetCursorPos(
+                    ImVec2(cursor_pos.x + (content_size.x - dot_size.x) * 0.5f,
+                           cursor_pos.y + style.ItemSpacing.y));
+
+                RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
+                                           m_settings.GetColor(Colors::kScrollBarColor),
+                                           anim_speed);
+            }
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+
+        ImGui::SameLine();
+
+        RenderMetaAreaScale(ImVec2(m_meta_area_scale_width, content_size.y));
+    }
+    ImGui::EndChild();  // end metadata area
+
+    ImGui::PopStyleColor();
+}
+
+void
+TrackItem::RenderMetaAreaScale(ImVec2& container_size)
+{}
 
 void
 TrackItem::RenderResizeBar(const ImVec2& parent_size)
@@ -180,12 +284,14 @@ TrackItem::RequestData(double min, double max, float width)
         {
             m_request_state = TrackDataRequestState::kIdle;
             spdlog::warn("Failed to request data for track {} from {} to {}", m_id,
-                          min - m_data_provider.GetStartTime(),
-                          max - m_data_provider.GetStartTime());
-        } else {
+                         min - m_data_provider.GetStartTime(),
+                         max - m_data_provider.GetStartTime());
+        }
+        else
+        {
             spdlog::debug("Fetching from {} to {} ( {} ) at zoom {} for track {}",
-                      min - m_data_provider.GetStartTime(),
-                      max - m_data_provider.GetStartTime(), max - min, m_zoom, m_id);
+                          min - m_data_provider.GetStartTime(),
+                          max - m_data_provider.GetStartTime(), max - min, m_zoom, m_id);
         }
     }
     else

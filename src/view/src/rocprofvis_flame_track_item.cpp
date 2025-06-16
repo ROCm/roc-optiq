@@ -20,11 +20,9 @@ constexpr int MIN_LABEL_WIDTH = 40;
 FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float zoom,
                                float movement, double min_x, double max_x, float scale_x)
 : TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
-, m_is_color_value_existant()
 , m_request_random_color(true)
 , m_text_padding(ImVec2(4.0f, 2.0f))
 , m_flame_height(40.0f)
-, m_scale_area_width(70.0f)
 , m_selected_event_id(std::numeric_limits<uint64_t>::max())
 , m_dp(dp)
 {}
@@ -139,7 +137,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
         // Select on click
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            if(m_selected_event_id != flame.m_id ||  m_dp.GetSelectedEvent() != flame.m_id)
+            if(m_selected_event_id != flame.m_id || m_dp.GetSelectedEvent() != flame.m_id)
             {
                 m_dp.SetSelectedEvent(flame.m_id);
                 m_selected_event_id = flame.m_id;
@@ -148,7 +146,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
             {
                 m_dp.SetSelectedEvent(std::numeric_limits<uint64_t>::max());
                 m_selected_event_id = std::numeric_limits<uint64_t>::max();
-            }            
+            }
         }
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
@@ -163,66 +161,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
 }
 
 void
-FlameTrackItem::RenderMetaArea()
-{
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
-    ImGui::BeginChild("MetaData View", ImVec2(s_metadata_width, m_track_height),
-                      ImGuiChildFlags_None);
-    ImVec2 content_size = ImGui::GetContentRegionAvail();
-
-    // handle mouse click
-    ImVec2 container_pos  = ImGui::GetWindowPos();
-    ImVec2 container_size = ImGui::GetWindowSize();
-
-    bool is_mouse_inside = ImGui::IsMouseHoveringRect(
-        container_pos,
-        ImVec2(container_pos.x + container_size.x, container_pos.y + container_size.y));
-
-    m_meta_area_clicked = false;
-    if(is_mouse_inside)
-    {
-        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-        {
-            m_meta_area_clicked = true;
-        }
-    }
-
-    // Set padding for the child window (Note this done using SetCursorPos
-    // because ImGuiStyleVar_WindowPadding has no effect on child windows without borders)
-    ImGui::SetCursorPos(m_metadata_padding);
-    // Adjust content size to account for padding
-    content_size.x -= m_metadata_padding.x * 2;
-    content_size.y -= m_metadata_padding.x * 2;
-    ImGui::BeginChild("MetaData Content",
-                      ImVec2(content_size.x - m_scale_area_width, content_size.y),
-                      ImGuiChildFlags_None);
-    ImGui::Text(m_name.c_str());
-    if(ImGui::IsItemVisible())
-    {
-        m_is_in_view_vertical = true;
-    }
-    else
-    {
-        m_is_in_view_vertical = false;
-    }
-
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-
-    ImGui::BeginChild("MetaData Scale", ImVec2(m_scale_area_width, content_size.y),
-                      ImGuiChildFlags_None);
-
-    ImGui::EndChild();
-
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-}
-
-void
 FlameTrackItem::RenderChart(float graph_width)
 {
-    ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
+    ImGui::BeginChild("FV", ImVec2(graph_width, m_track_content_height), false);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     auto colorCount = m_settings.GetColorWheel().size();

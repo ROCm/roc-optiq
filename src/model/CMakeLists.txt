@@ -13,7 +13,7 @@ include_directories(inc ${CMAKE_CURRENT_SOURCE_DIR}/src/common ${CMAKE_CURRENT_S
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
-set(CMAKE_BUILD_TYPE Release)
+#set(CMAKE_BUILD_TYPE Release)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCPPBUILD")
 if (UNIX)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
@@ -38,7 +38,6 @@ file(GLOB DATABASE_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/databa
 set(SQLITE3_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/database/sqlite3/sqlite3.c")
 file(GLOB MAIN_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/test/*.cpp")
 
-add_subdirectory(../core ../core)
 
 add_library(${PROJECT_NAME} ${DATAMODEL_SRC} ${DATABASE_SRC} ${DATABASE_SRC} ${COMMON_SRC} ${SQLITE3_SRC} )
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
@@ -50,8 +49,6 @@ target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_D
 target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}-test rocprof-visualizer-core)
 target_link_libraries(${PROJECT_NAME}-test spdlog)
-
-add_subdirectory(../../thirdparty/catch2 thirdparty/catch2)
 
 add_executable(${PROJECT_NAME}-basic-tests src/tests/basic_tests.cpp)
 target_include_directories(${PROJECT_NAME}-basic-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)

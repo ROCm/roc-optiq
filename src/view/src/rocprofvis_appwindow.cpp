@@ -207,7 +207,7 @@ AppWindow::Render()
                 // Determine the type of view to create based on the file extension
                 if(file_path.extension().string() == ".csv")
                 {
-                    auto compute_view = std::make_shared<ComputeRoot>(file_path_str);
+                    auto compute_view = std::make_shared<ComputeRoot>();
                     compute_view->SetProfilePath(file_path.parent_path().string());
                     compute_view->OpenTrace(file_path.parent_path().string());
                     tab_item.m_widget = compute_view;

@@ -81,6 +81,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeExtData = 15,
     // Compute trace object
     kRPVControllerObjectTypeComputeTrace = 16,
+    // Plot object
+    kRPVControllerObjectTypePlot = 17,
     // Plot series object
     kRPVControllerObjectTypePlotSeries = 18,
 } rocprofvis_controller_object_type_t;
@@ -666,6 +668,32 @@ typedef enum rocprofvis_controller_compute_table_types_t
     kRPVControllerComputeTableTypeL2Cache128Reqs,
     kRPVControllerComputeTableTypeCount
 } rocprofvis_controller_compute_table_types_t;
+
+
+/*
+* Properties of a Plot object
+*/
+typedef enum rocprofvis_controller_plot_properties_t
+{
+    // Id for the plot
+    kRPVControllerPlotId = 0x1A000000,
+    // Number of data series
+    kRPVControllerPlotNumSeries = 0x1A000001,
+    // Number of x axis tick labels
+    kRPVControllerPlotNumXAxisLabels = 0x1A000002,
+    // Number of y axis tick labels
+    kRPVControllerPlotNumYAxisLabels = 0x1A000003,
+    // Indexed x axis tick labels
+    kRPVControllerPlotXAxisLabelsIndexed = 0x1A000004,
+    // Indexed y axis tick labels
+    kRPVControllerPlotYAxisLabelsIndexed = 0x1A000005,
+    // X axis title
+    kRPVControllerPlotXAxisTitle = 0x1A000006,
+    // Y axis title
+    kRPVControllerPlotYAxisTitle = 0x1A000007,
+    // Plot title
+    kRPVControllerPlotTitle = 0x1A000008,
+} rocprofvis_controller_plot_properties_t;
 
 /*
 * Properties of a PlotSeries object

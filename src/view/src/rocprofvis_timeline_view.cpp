@@ -324,7 +324,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                                     ImGuiWindowFlags_NoScrollWithMouse |
                                     ImGuiWindowFlags_NoInputs;
 
-    ImVec2 display_size    = ImGui::GetWindowSize();
+    ImVec2 container_size  = ImGui::GetWindowSize();
     float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
     ImGui::SetNextWindowSize(m_graph_size, ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
@@ -345,18 +345,56 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImVec2 window_position = ImGui::GetWindowPos();
     ImVec2 mouse_position  = ImGui::GetMousePos();
 
-    ImVec2 relativeMousePos = ImVec2(mouse_position.x - window_position.x,
+    ImVec2 relative_mouse_pos = ImVec2(mouse_position.x - window_position.x,
                                      mouse_position.y - window_position.y);
+
+    // Render range selction box
+    ImVec2 cursor_position = screen_pos;
+
+    if(m_highlighted_region.first != INVALID_SELECTION_TIME)
+    {
+        double normalized_start_box_highlighted =
+            window_position.x +
+            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
+
+        draw_list->AddLine(ImVec2(normalized_start_box_highlighted, cursor_position.y),
+                           ImVec2(normalized_start_box_highlighted,
+                                  cursor_position.y + container_size.y - m_ruler_height),
+                           m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
+    }
+    if(m_highlighted_region.first != INVALID_SELECTION_TIME)
+    {
+        double normalized_start_box_highlighted_end =
+            window_position.x +
+            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
+
+        draw_list->AddLine(
+            ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
+            ImVec2(normalized_start_box_highlighted_end,
+                   cursor_position.y + container_size.y - m_ruler_height),
+            m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
+    }
+    if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
+       m_highlighted_region.second != INVALID_SELECTION_TIME)
+    {
+        double normalized_start_box_highlighted =
+            window_position.x +
+            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
+        double normalized_start_box_highlighted_end =
+            window_position.x +
+            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
+        draw_list->AddRectFilled(
+            ImVec2(normalized_start_box_highlighted, cursor_position.y),
+            ImVec2(normalized_start_box_highlighted_end,
+                   cursor_position.y + container_size.y - m_ruler_height),
+            m_settings.GetColor(Colors::kSelection));
+    }
 
     // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(
            window_position, ImVec2(window_position.x + m_graph_size.x - scrollbar_width,
                                    window_position.y + m_graph_size.y)))
     {
-        ImVec2 mouse_position = ImGui::GetMousePos();
-
-        ImVec2 containerPos = ImGui::GetWindowPos();
-
         float cursor_screen_percentage =
             (mouse_position.x - window_position.x) / m_graph_size.x;
         char   text[20];
@@ -364,13 +402,13 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
         sprintf(text, "%.0f", scrubber_position);
-        ImVec2 labelSize = ImGui::CalcTextSize(text);
+        ImVec2 label_size = ImGui::CalcTextSize(text);
 
         constexpr float label_padding = 4.0f;
-        ImVec2 rect_pos1 = ImVec2(mouse_position.x, screen_pos.y + display_size.y -
-                                                        labelSize.y - m_ruler_padding.y);
-        ImVec2 rect_pos2 = ImVec2(mouse_position.x + labelSize.x + label_padding * 2,
-                                  screen_pos.y + display_size.y - m_ruler_padding.y);
+        ImVec2 rect_pos1 = ImVec2(mouse_position.x, screen_pos.y + container_size.y -
+                                                        label_size.y - m_ruler_padding.y);
+        ImVec2 rect_pos2 = ImVec2(mouse_position.x + label_size.x + label_padding * 2,
+                                  screen_pos.y + container_size.y - m_ruler_padding.y);
         ImVec2 text_pos  = ImVec2(rect_pos1.x + label_padding, rect_pos1.y);
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
@@ -378,10 +416,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), text);
         draw_list->AddLine(
             ImVec2(mouse_position.x, screen_pos.y),
-            ImVec2(mouse_position.x, screen_pos.y + display_size.y - m_ruler_padding.y),
+            ImVec2(mouse_position.x, screen_pos.y + container_size.y - m_ruler_padding.y),
             m_settings.GetColor(Colors::kGridColor), 2.0f);
 
-        // Code below is for select
+        // Code below is for detecting range selection by double clicking
         if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
         {
             if(m_highlighted_region.first == INVALID_SELECTION_TIME)
@@ -443,12 +481,12 @@ TimelineView::RenderGrid()
 
         // use the largest time point to determine the step size
         std::string label     = format_nanosecond_timepoint(m_max_x) + "gap";
-        ImVec2      labelSize = ImGui::CalcTextSize(label.c_str());
+        ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
 
         // amount the loop which generates the grid iterates by.
-        steps = m_graph_size.x / labelSize.x;
+        steps = m_graph_size.x / label_size.x;
 
-        stepSize = labelSize.x;
+        stepSize = label_size.x;
     }
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
@@ -478,46 +516,7 @@ TimelineView::RenderGrid()
             container_pos.x +
             (m_min_x - (m_min_x + m_view_time_offset_ns)) * m_pixels_per_ns;
 
-        if(m_highlighted_region.first != INVALID_SELECTION_TIME)
-        {
-            double normalized_start_box_highlighted =
-                container_pos.x +
-                (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
-
-            draw_list->AddLine(
-                ImVec2(normalized_start_box_highlighted, cursor_position.y),
-                ImVec2(normalized_start_box_highlighted,
-                       cursor_position.y + content_size.y - m_ruler_height),
-                m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
-        }
-        if(m_highlighted_region.first != INVALID_SELECTION_TIME)
-        {
-            double normalized_start_box_highlighted_end =
-                container_pos.x +
-                (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
-
-            draw_list->AddLine(
-                ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
-                ImVec2(normalized_start_box_highlighted_end,
-                       cursor_position.y + content_size.y - m_ruler_height),
-                m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
-        }
-        if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
-           m_highlighted_region.second != INVALID_SELECTION_TIME)
-        {
-            double normalized_start_box_highlighted =
-                container_pos.x +
-                (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
-            double normalized_start_box_highlighted_end =
-                container_pos.x +
-                (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
-            draw_list->AddRectFilled(
-                ImVec2(normalized_start_box_highlighted, cursor_position.y),
-                ImVec2(normalized_start_box_highlighted_end,
-                       cursor_position.y + content_size.y - m_ruler_height),
-                m_settings.GetColor(Colors::kSelection));
-        }
-
+        // Draw the vertical lines for the grid
         int    rectangle_render_count = 0;
         double m_v_width              = (m_max_x - m_min_x) / m_zoom;
 
@@ -532,10 +531,11 @@ TimelineView::RenderGrid()
 
             double normalized_start = container_pos.x + linePos;
 
-            draw_list->AddLine(ImVec2(normalized_start, cursor_position.y),
-                               ImVec2(normalized_start,
-                                      cursor_position.y + content_size.y - m_ruler_height),
-                               m_settings.GetColor(Colors::kBoundBox), 0.5f);
+            draw_list->AddLine(
+                ImVec2(normalized_start, cursor_position.y),
+                ImVec2(normalized_start,
+                       cursor_position.y + content_size.y - m_ruler_height),
+                m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
             // char label[32];
             // snprintf(label, sizeof(label), "%.0f",
@@ -544,11 +544,11 @@ TimelineView::RenderGrid()
             std::string label = format_nanosecond_timepoint(
                 m_view_time_offset_ns + (cursor_screen_percentage * m_v_width));
 
-            ImVec2 labelSize = ImGui::CalcTextSize(label.c_str());
-            ImVec2 labelPos  = ImVec2(normalized_start - labelSize.x / 2,
-                                      cursor_position.y + content_size.y - labelSize.y -
+            ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+            ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
+                                      cursor_position.y + content_size.y - label_size.y -
                                           m_ruler_padding.y);
-            draw_list->AddText(labelPos, m_settings.GetColor(Colors::kGridColor),
+            draw_list->AddText(label_pos, m_settings.GetColor(Colors::kGridColor),
                                label.c_str());
         }
 

@@ -8,6 +8,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <unordered_set>
 
 namespace RocProfVis
 {
@@ -58,7 +59,7 @@ public:
 
     void Insert(double timestamp, uint8_t level, Handle* event);
 
-    rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index);
+    rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set);
 
     rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
 

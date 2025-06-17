@@ -1,9 +1,11 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_utils.h"
-#include <cmath>    // For std::abs, std::round, std::signbit, std::isfinite, std::isnan
-#include <cstdint>  // For uint64_t, uint32_t
-#include <iomanip>  // For std::setw, std::setfill
-#include <limits>   // For std::numeric_limits (though not strictly needed for this logic)
-#include <sstream>  // For std::ostringstream
+#include <cmath>
+#include <cstdint>
+#include <iomanip>
+#include <limits>
+#include <sstream>
 
 std::string
 RocProfVis::View::format_nanosecond_timepoint(double double_ns_duration,
@@ -77,7 +79,8 @@ RocProfVis::View::format_nanosecond_timepoint(double double_ns_duration,
     // Display minutes only if hours are displayed or minutes are non-zero
     if(display_hours > 0 || display_minutes > 0)
     {
-        oss << std::setw(2) << std::setfill('0') << static_cast<int>(display_minutes) << ":";
+        oss << std::setw(2) << std::setfill('0') << static_cast<int>(display_minutes)
+            << ":";
     }
     oss << std::setw(2) << std::setfill('0') << static_cast<int>(display_seconds) << "."
         << std::setw(9) << std::setfill('0') << nanoseconds_part;

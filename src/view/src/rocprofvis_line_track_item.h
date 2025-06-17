@@ -22,7 +22,6 @@ public:
     LineTrackItem(DataProvider& dp, int id, std::string name, float zoom, float movement,
                   double& min_x, double& max_x, float scale_x);
     ~LineTrackItem();
-    void Render(double width) override;
 
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);

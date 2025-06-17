@@ -29,8 +29,8 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 , m_meta_area_clicked(false)
 , m_meta_area_scale_width(0.0f)
 , m_settings(Settings::GetInstance())
-{
-}
+, m_selected(false)
+{}
 
 bool
 TrackItem::GetResizeStatus()
@@ -58,7 +58,7 @@ TrackItem::GetID()
 void
 TrackItem::SetSidebarSize(int sidebar_size)
 {
-    s_metadata_width = sidebar_size;
+    s_metadata_width = static_cast<float>(sidebar_size);
 }
 
 bool
@@ -97,6 +97,18 @@ TrackItem::GetMinMax()
     return std::make_tuple(m_min_x, m_max_x);
 }
 
+bool
+TrackItem::IsSelected() const
+{
+    return m_selected;
+}
+
+void
+TrackItem::SetSelected(bool selected)
+{
+    m_selected = selected;
+}
+
 void
 TrackItem::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
                           float scale_x, float y_scroll_position)
@@ -106,10 +118,11 @@ TrackItem::UpdateMovement(float zoom, float movement, double& min_x, double& max
     m_scale_x  = scale_x;
     m_min_x    = min_x;
     m_max_x    = max_x;
+    (void) y_scroll_position;
 }
 
 void
-TrackItem::Render(double width)
+TrackItem::Render(float width)
 {
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
@@ -133,7 +146,9 @@ TrackItem::Render(double width)
 void
 TrackItem::RenderMetaArea()
 {
-    ImU32 metadata_bg_color = m_settings.GetColor(Colors::kMetaDataColor);
+    ImU32 metadata_bg_color = m_selected
+                                  ? m_settings.GetColor(Colors::kMetaDataColorSelected)
+                                  : m_settings.GetColor(Colors::kMetaDataColor);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, metadata_bg_color);
 
     // Shrink the meta data content area by one unit in the vertical direction so that the
@@ -142,17 +157,6 @@ TrackItem::RenderMetaArea()
     ImVec2 m_metadata_shrink_padding(0.0f, 1.0f);
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
     m_track_content_height      = m_track_height - m_metadata_shrink_padding.y * 2.0f;
-
-    ImGuiStyle& style = ImGui::GetStyle();
-    DebugWindow::GetInstance()->AddDebugMessage(
-        "Metadata area size x: " + std::to_string(outer_container_size.x) +
-        " y: " + std::to_string(outer_container_size.y) +
-        " Track height: " + std::to_string(m_track_height) +
-
-        " Window padding x: " + std::to_string(style.WindowPadding.x) +
-        " y: " + std::to_string(style.WindowPadding.y) +
-        " Item spacing x: " + std::to_string(style.ItemSpacing.x) +
-        " y: " + std::to_string(style.ItemSpacing.y));
 
     ImGui::SetCursorPos(m_metadata_shrink_padding);
     if(ImGui::BeginChild("MetaData Area",
@@ -221,7 +225,8 @@ TrackItem::RenderMetaArea()
 
         ImGui::SameLine();
 
-        RenderMetaAreaScale(ImVec2(m_meta_area_scale_width, content_size.y));
+        ImVec2 scale_container_size(m_meta_area_scale_width, content_size.y);
+        RenderMetaAreaScale(scale_container_size);
     }
     ImGui::EndChild();  // end metadata area
 
@@ -230,7 +235,9 @@ TrackItem::RenderMetaArea()
 
 void
 TrackItem::RenderMetaAreaScale(ImVec2& container_size)
-{}
+{
+    (void) container_size;
+}
 
 void
 TrackItem::RenderResizeBar(const ImVec2& parent_size)
@@ -279,7 +286,8 @@ TrackItem::RequestData(double min, double max, float width)
     if(m_request_state == TrackDataRequestState::kIdle)
     {
         m_request_state = TrackDataRequestState::kRequesting;
-        bool result     = m_data_provider.FetchTrack(m_id, min, max, width);
+        bool result =
+            m_data_provider.FetchTrack(m_id, min, max, static_cast<uint32_t>(width));
         if(!result)
         {
             m_request_state = TrackDataRequestState::kIdle;

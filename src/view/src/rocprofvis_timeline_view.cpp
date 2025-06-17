@@ -34,12 +34,11 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_min_y(std::numeric_limits<double>::max())
 , m_max_y(std::numeric_limits<double>::lowest())
 , m_scroll_position(0.0f)
-, m_content_max_y_scoll(0.0f)
+, m_content_max_y_scroll(0.0f)
 , m_scrubber_position(0.0f)
 , m_v_min_x(0.0f)
 , m_v_max_x(0.0f)
 , m_pixels_per_ns(0.0f)
-, m_stop_zooming(false)
 , m_meta_map_made(false)
 , m_previous_scroll_position(0.0f)
 , m_graph_map({})
@@ -346,7 +345,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImVec2 mouse_position  = ImGui::GetMousePos();
 
     ImVec2 relative_mouse_pos = ImVec2(mouse_position.x - window_position.x,
-                                     mouse_position.y - window_position.y);
+                                       mouse_position.y - window_position.y);
 
     // Render range selction box
     ImVec2 cursor_position = screen_pos;
@@ -480,7 +479,7 @@ TimelineView::RenderGrid()
         // snprintf(label, sizeof(label), "%.0f", m_max_x);
 
         // use the largest time point to determine the step size
-        std::string label     = format_nanosecond_timepoint(m_max_x) + "gap";
+        std::string label      = format_nanosecond_timepoint(m_max_x) + "gap";
         ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
 
         // amount the loop which generates the grid iterates by.
@@ -506,19 +505,15 @@ TimelineView::RenderGrid()
 
         draw_list->PushClipRect(clip_min, clip_max, true);
 
-        // Background for the grid
+        // Background for the ruler area
         draw_list->AddRectFilled(
             ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
             ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
             m_settings.GetColor(Colors::kRulerBgColor));
 
-        double normalized_start_box =
-            container_pos.x +
-            (m_min_x - (m_min_x + m_view_time_offset_ns)) * m_pixels_per_ns;
-
         // Draw the vertical lines for the grid
-        int    rectangle_render_count = 0;
-        double m_v_width              = (m_max_x - m_min_x) / m_zoom;
+        constexpr float tick_height = 10.0f;
+        double          m_v_width   = (m_max_x - m_min_x) / m_zoom;
 
         double x_offset = (m_view_time_offset_ns / m_v_width) * m_graph_size.x;
         x_offset        = (int) x_offset % (int) stepSize;
@@ -534,7 +529,7 @@ TimelineView::RenderGrid()
             draw_list->AddLine(
                 ImVec2(normalized_start, cursor_position.y),
                 ImVec2(normalized_start,
-                       cursor_position.y + content_size.y - m_ruler_height),
+                       cursor_position.y + content_size.y + tick_height - m_ruler_height),
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
             // char label[32];
@@ -546,8 +541,8 @@ TimelineView::RenderGrid()
 
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
             ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
-                                      cursor_position.y + content_size.y - label_size.y -
-                                          m_ruler_padding.y);
+                                       cursor_position.y + content_size.y - label_size.y -
+                                           m_ruler_padding.y);
             draw_list->AddText(label_pos, m_settings.GetColor(Colors::kGridColor),
                                label.c_str());
         }
@@ -574,9 +569,9 @@ TimelineView::RenderGraphView()
     ImGui::BeginChild("Graph View Main",
                       ImVec2(container_size.x, container_size.y - m_ruler_height), false,
                       window_flags);
-    ImGuiIO& io           = ImGui::GetIO();
-    m_is_control_held     = io.KeyCtrl;
-    m_content_max_y_scoll = ImGui::GetScrollMaxY();
+    ImGuiIO& io            = ImGui::GetIO();
+    m_is_control_held      = io.KeyCtrl;
+    m_content_max_y_scroll = ImGui::GetScrollMaxY();
 
     // Prevent choppy behavior by preventing constant rerender.
     float temp_scroll_position = ImGui::GetScrollY();
@@ -757,6 +752,7 @@ TimelineView::RenderGraphView()
                     {
                         m_graph_map[track_item.chart->GetID()].selected =
                             !track_item.selected;
+                        track_item.chart->SetSelected(track_item.selected);
                         selection_changed = true;
                     }
                     ImGui::PopStyleColor();
@@ -952,16 +948,11 @@ TimelineView::RenderGraphPoints()
                    subcomponent_size_main.y - m_artificial_scrollbar_height),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-        // Scale used in all graphs computer here.
+        // Scale used in all graphs computed here
         m_v_width       = (m_range_x) / m_zoom;
         m_v_min_x       = m_min_x + m_view_time_offset_ns;
         m_v_max_x       = m_v_min_x + m_v_width;
         m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
-
-        if(m_pixels_per_ns > 1)
-        {
-            m_stop_zooming = true;
-        }
 
         RenderGrid();
 
@@ -977,10 +968,10 @@ TimelineView::RenderGraphPoints()
             RenderSplitter(screen_pos);
             RenderScrubber(screen_pos);
 
-            if(m_resize_activity == false)
+            if(!m_resize_activity)
             {
-                HandleTopSurfaceTouch();  // Funtion enables user interactions to be
-                                          // captured
+                // Funtion enables user interactions to be captured
+                HandleTopSurfaceTouch();
             }
         }
 
@@ -1079,7 +1070,7 @@ TimelineView::HandleTopSurfaceTouch()
                 float scroll_speed = 100.0f;
                 m_scroll_position  = clamp(
                     static_cast<float>(m_scroll_position - scroll_wheel * scroll_speed),
-                    0.0f, static_cast<float>(m_content_max_y_scoll));
+                    0.0f, static_cast<float>(m_content_max_y_scroll));
             }
         }
 
@@ -1110,7 +1101,10 @@ TimelineView::HandleTopSurfaceTouch()
                 float       new_zoom   = m_zoom;
                 if(scroll_wheel > 0)
                 {
-                    if(m_pixels_per_ns < 1.0) new_zoom *= 1.0f + zoom_speed;
+                    if(m_pixels_per_ns < 1.0)
+                    {
+                        new_zoom *= 1.0f + zoom_speed;
+                    }
                 }
                 else
                 {
@@ -1153,7 +1147,7 @@ TimelineView::HandleTopSurfaceTouch()
         {
             float drag_y      = io.MouseDelta.y;
             m_scroll_position = clamp(static_cast<float>(m_scroll_position - drag_y),
-                                      0.0f, static_cast<float>(m_content_max_y_scoll));
+                                      0.0f, static_cast<float>(m_content_max_y_scroll));
             float drag        = io.MouseDelta.x;
             float view_width  = (m_range_x) / m_zoom;
 

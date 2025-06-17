@@ -27,7 +27,7 @@ public:
     void               SetID(int id);
     int                GetID();
     virtual float      GetTrackHeight();
-    virtual void       Render(double width);
+    virtual void       Render(float width);
     const std::string& GetName();
 
     virtual void UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
@@ -38,6 +38,9 @@ public:
     bool         IsInViewVertical();
     void         SetInViewVertical(bool in_view);
 
+    bool IsSelected() const;
+    void SetSelected(bool selected);
+     
     void  SetDistanceToView(float distance);
     float GetDistanceToView();
 
@@ -72,7 +75,6 @@ protected:
     float                 m_min_track_height;
     bool                  m_is_in_view_vertical;
     float                 m_distance_to_view_y;
-    float                 m_metadata_width;
     std::string           m_name;
     ImVec2                m_metadata_padding;
     float                 m_resize_grip_thickness;
@@ -82,6 +84,7 @@ protected:
     Settings&             m_settings;
     bool                  m_meta_area_clicked;
     float                 m_meta_area_scale_width;
+    bool                  m_selected;
 
     static float s_metadata_width;
 };

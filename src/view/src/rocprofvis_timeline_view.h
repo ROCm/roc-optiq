@@ -65,7 +65,7 @@ private:
     double                                m_v_width;
     double                                m_pixels_per_ns;
     double                                m_scroll_position;
-    double                                m_content_max_y_scoll;
+    double                                m_content_max_y_scroll;
     bool                                  m_can_drag_to_pan;
     double                                m_previous_scroll_position;
     bool                                  m_user_adjusting_graph_height;
@@ -77,7 +77,6 @@ private:
     double                                m_scroll_position_x;
     EventManager::SubscriptionToken       m_scroll_to_track_token;
     double                                m_v_past_width;
-    bool                                  m_stop_zooming;
     double                                m_scrollbar_location_as_percentage;
     bool                                  m_artifical_scrollbar_active;
     float                                 m_unload_track_distance;

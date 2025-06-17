@@ -14,6 +14,7 @@ namespace View
 enum class Colors
 {
     kMetaDataColor,
+    kMetaDataColorSelected,
     kMetaDataSeparator,
     kTransparent,
     kTextError,

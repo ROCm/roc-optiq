@@ -467,12 +467,6 @@ LineTrackItem::RenderChart(float graph_width)
     }
 }
 
-void
-LineTrackItem::Render(double width)
-{
-    TrackItem::Render(width);
-}
-
 ImVec2
 LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
                        ImVec2& content_size, float scaleX, float scaleY)

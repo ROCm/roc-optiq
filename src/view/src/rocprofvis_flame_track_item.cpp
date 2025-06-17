@@ -41,7 +41,9 @@ FlameTrackItem::FindMaxMinFlame()
 
 void
 FlameTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
-{}
+{
+    (void) color_by_value_digits;
+}
 
 bool
 FlameTrackItem::HasData()
@@ -196,12 +198,6 @@ FlameTrackItem::RenderChart(float graph_width)
     }
 
     ImGui::EndChild();
-}
-
-void
-FlameTrackItem::Render(double width)
-{
-    TrackItem::Render(width);
 }
 
 }  // namespace View

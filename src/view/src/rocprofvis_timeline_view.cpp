@@ -286,8 +286,8 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
 
     // Horizontal Splitter
     ImGui::SetNextWindowSize(ImVec2(display_size.x, 1.0f), ImGuiCond_Always);
-    ImGui::SetCursorPos(ImVec2(0, m_graph_size.y - m_grid_size -
-                                                   m_artificial_scrollbar_size));
+    ImGui::SetCursorPos(
+        ImVec2(0, m_graph_size.y - m_grid_size - m_artificial_scrollbar_size));
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kScrollBarColor));
 
@@ -393,20 +393,17 @@ void
 TimelineView::RenderGrid()
 {
     /*This section makes the grid for the charts*/
-
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
-
-    ImGui::SetNextWindowSize(m_graph_size, ImGuiCond_Always);
-
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     ImVec2 container_pos =
         ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
 
-    int    ruler_size      = 30;
+    ImVec2 container_size = ImGui::GetWindowSize();
+
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_size    = ImVec2(m_graph_size.x, m_graph_size.y - ruler_size);
+    ImVec2 content_size    = ImVec2(container_size.x - m_sidebar_size, container_size.y);
+
     double range =
         (m_v_max_x + m_view_time_offset_ns) - (m_v_min_x + m_view_time_offset_ns);
 
@@ -416,8 +413,9 @@ TimelineView::RenderGrid()
         // char label[32];
         // snprintf(label, sizeof(label), "%.0f", m_max_x);
 
-        std::string label = format_nanosecond_timepoint(m_max_x) + "gap";
-        ImVec2 labelSize = ImGui::CalcTextSize(label.c_str());
+        // use the largest time point to determine the step size
+        std::string label     = format_nanosecond_timepoint(m_max_x) + "gap";
+        ImVec2      labelSize = ImGui::CalcTextSize(label.c_str());
 
         // amount the loop which generates the grid iterates by.
         steps = m_graph_size.x / labelSize.x;
@@ -427,13 +425,11 @@ TimelineView::RenderGrid()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    if(ImGui::BeginChild("Grid"), ImVec2(m_graph_size.x, m_graph_size.y - m_grid_size),
-       true, window_flags)
+    if(ImGui::BeginChild("Grid"), content_size, true, window_flags)
     {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
         ImGui::SetCursorPos(ImVec2(0, 0));
 
-        ImGui::BeginChild("main component",
-                          ImVec2(m_graph_size.x, m_graph_size.y - m_grid_size), false);
         ImVec2 child_win  = ImGui::GetWindowPos();
         ImVec2 child_size = ImGui::GetWindowSize();
 
@@ -441,8 +437,14 @@ TimelineView::RenderGrid()
         ImVec2 clip_min = child_win;
         ImVec2 clip_max =
             ImVec2(child_win.x + content_size.x, child_win.y + content_size.y);
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
         draw_list->PushClipRect(clip_min, clip_max, true);
+
+        // Background for the grid
+        draw_list->AddRectFilled(
+            ImVec2(container_pos.x, cursor_position.y + content_size.y - m_grid_size),
+            ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
+            m_settings.GetColor(Colors::kRulerBgColor));
 
         double normalized_start_box =
             container_pos.x +
@@ -494,12 +496,6 @@ TimelineView::RenderGrid()
         double x_offset = (m_view_time_offset_ns / m_v_width) * m_graph_size.x;
         x_offset        = (int) x_offset % (int) stepSize;
 
-        // Background for the grid
-        draw_list->AddRectFilled(
-            ImVec2(container_pos.x, cursor_position.y + content_size.y - m_grid_size),
-            ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
-            m_settings.GetColor(Colors::kRulerBgColor)); 
-
         for(float i = 0; i < steps + 1; i++)
         {
             float linePos = stepSize * i;
@@ -519,18 +515,15 @@ TimelineView::RenderGrid()
 
             std::string label = format_nanosecond_timepoint(
                 m_view_time_offset_ns + (cursor_screen_percentage * m_v_width));
-            // All though the gridlines are drawn based on where they should be on the
-            // scale the raw values are used to represent them.
+
             ImVec2 labelSize = ImGui::CalcTextSize(label.c_str());
             ImVec2 labelPos  = ImVec2(normalized_start - labelSize.x / 2,
                                       cursor_position.y + content_size.y - labelSize.y);
-            draw_list->AddText(labelPos,
-                               m_settings.GetColor(Colors::kGridColor),
+            draw_list->AddText(labelPos, m_settings.GetColor(Colors::kGridColor),
                                label.c_str());
         }
 
         draw_list->PopClipRect();
-        ImGui::EndChild();  // End of main component
     }
     ImGui::EndChild();  // End of Grid
 }
@@ -543,15 +536,15 @@ TimelineView::RenderGraphView()
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
-    ImVec2 display_size = ImGui::GetWindowSize();
-    ImGui::SetNextWindowSize(ImVec2(display_size.x, display_size.y - m_grid_size),
-                             ImGuiCond_Always);
+    ImVec2 container_size = ImGui::GetWindowSize();
     ImGui::SetCursorPos(ImVec2(0, 0));
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
-    ImGui::BeginChild("Graph View Main", ImVec2(0, 0), false, window_flags);
+    ImGui::BeginChild("Graph View Main",
+                      ImVec2(container_size.x, container_size.y - m_grid_size), false,
+                      window_flags);
     ImGuiIO& io           = ImGui::GetIO();
     m_is_control_held     = io.KeyCtrl;
     m_content_max_y_scoll = ImGui::GetScrollMaxY();
@@ -729,7 +722,7 @@ TimelineView::RenderGraphView()
 
                     m_resize_activity |= track_item.chart->GetResizeStatus();
                     track_item.chart->Render(m_graph_size.x);
-
+                    
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {
@@ -917,6 +910,10 @@ TimelineView::RenderGraphPoints()
         ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
         ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
+        ImGuiStyle& style           = ImGui::GetStyle();
+        float       fontHeight      = ImGui::GetFontSize();
+        m_artificial_scrollbar_size = fontHeight + style.FramePadding.y * 2.0f;
+
         m_graph_size =
             ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
 
@@ -958,7 +955,7 @@ TimelineView::RenderGraphPoints()
             }
         }
 
-        ImGui::EndChild();
+        ImGui::EndChild();  // End of Grid View 2
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg,
                               m_settings.GetColor(Colors::kTransparent));
@@ -969,40 +966,35 @@ TimelineView::RenderGraphPoints()
                           ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_size),
                           true, ImGuiWindowFlags_NoScrollbar);
 
-        ImGui::SameLine();
-
-        float current_pos = m_scroll_position_x * (subcomponent_size_main.x * m_zoom);
-
-        ImGuiStyle& style = ImGui::GetStyle();
-
-        float available_width = subcomponent_size_main.x - m_sidebar_size;
-
-        float original_grab_min_size = style.GrabMinSize;
-        style.GrabMinSize            = clamp((subcomponent_size_main.x * (1 / m_zoom)),
-                                             static_cast<float>(available_width * 0.05),
-                                             static_cast<float>(available_width * 0.90));
-        style.GrabRounding           = 3.0f;
-
-        ImVec4 scroll_color =
-            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kFillerColor));
-        ImVec4 grab_color =
-            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kScrollBarColor));
-
-        style.Colors[ImGuiCol_SliderGrab]       = grab_color;
-        style.Colors[ImGuiCol_SliderGrabActive] = grab_color;
-        style.Colors[ImGuiCol_FrameBg]          = scroll_color;
-        style.Colors[ImGuiCol_FrameBgHovered]   = scroll_color;
-        style.Colors[ImGuiCol_FrameBgActive]    = scroll_color;
-
+        // ImGui::SameLine();
         ImGui::Dummy(ImVec2(m_sidebar_size, 0));
         ImGui::SameLine();
+
+        float current_pos     = m_scroll_position_x * (subcomponent_size_main.x * m_zoom);
+        float available_width = subcomponent_size_main.x - m_sidebar_size;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
+                            clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
+                                  (available_width * 0.05f), (available_width * 0.90f)));
+        ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3.0f);
+
+        ImU32 scroll_color = m_settings.GetColor(Colors::kFillerColor);
+        ImU32 grab_color   = m_settings.GetColor(Colors::kScrollBarColor);
+
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, grab_color);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, grab_color);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, scroll_color);
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, scroll_color);
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, scroll_color);
+
         ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
 
         ImGui::SliderFloat("##scrollbar", &current_pos, 0.0f,
                            subcomponent_size_main.x * m_zoom, "%.5f");
 
+        ImGui::PopStyleColor(5);  // Pop the colors we pushed above
+        ImGui::PopStyleVar(2);    // Pop both style variables
         ImGui::PopItemWidth();
-        style.GrabMinSize = original_grab_min_size;
 
         m_scrollbar_location_as_percentage =
             current_pos / (subcomponent_size_main.x * m_zoom);

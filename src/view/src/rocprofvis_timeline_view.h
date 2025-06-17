@@ -50,7 +50,8 @@ public:
 
 private:
     std::map<int, rocprofvis_graph_map_t> m_graph_map;
-    int                                   m_grid_size;
+    int                                   m_ruler_height;
+    ImVec2                                m_ruler_padding;
     double                                m_v_min_x;
     double                                m_v_max_x;
     double                                m_min_x;
@@ -63,7 +64,6 @@ private:
     double                                m_scrubber_position;
     double                                m_v_width;
     double                                m_pixels_per_ns;
-    double                                m_original_v_max_x;
     double                                m_scroll_position;
     double                                m_content_max_y_scoll;
     bool                                  m_can_drag_to_pan;
@@ -88,7 +88,7 @@ private:
     Settings&                             m_settings;
     EventManager::SubscriptionToken       m_new_track_token;
     double                                m_viewport_past_position;
-    int                                   m_artificial_scrollbar_size;
+    int                                   m_artificial_scrollbar_height;
     ImVec2                                m_graph_size;
     bool                                  m_region_selection_changed;
 };

@@ -44,8 +44,8 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_previous_scroll_position(0.0f)
 , m_graph_map({})
 , m_is_control_held(false)
-, m_original_v_max_x(0.0f)
-, m_grid_size(30)
+, m_ruler_height(30)
+, m_ruler_padding(0.0f, 4.0f)
 , m_unload_track_distance(1000.0f)
 , m_sidebar_size(400)
 , m_resize_activity(false)
@@ -63,7 +63,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_range_x(0.0f)
 , m_can_drag_to_pan(false)
 , m_region_selection_changed(false)
-, m_artificial_scrollbar_size(30)
+, m_artificial_scrollbar_height(30)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -187,7 +187,6 @@ TimelineView::ResetView()
     m_v_min_x             = 0.0f;
     m_v_max_x             = 0.0f;
     m_pixels_per_ns       = 0.0f;
-    m_original_v_max_x    = 0.0f;
 }
 
 void
@@ -217,7 +216,26 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             return;
         }
 
-        m_graph_map[track_index].chart->HandleTrackDataChanged();
+        auto it = m_graph_map.find(track_index);
+        if(it != m_graph_map.end())
+        {
+            if(it->second.chart)
+            {
+                it->second.chart->HandleTrackDataChanged();
+            }
+            else
+            {
+                spdlog::error("Chart object for track index {} is null. Cannot handle "
+                              "track data changed.",
+                              track_index);
+            }
+        }
+        else
+        {
+            spdlog::warn("Track index {} not found in graph_map. Cannot handle track "
+                         "data changed.",
+                         track_index);
+        }
     }
 }
 
@@ -287,7 +305,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     // Horizontal Splitter
     ImGui::SetNextWindowSize(ImVec2(display_size.x, 1.0f), ImGuiCond_Always);
     ImGui::SetCursorPos(
-        ImVec2(0, m_graph_size.y - m_grid_size - m_artificial_scrollbar_size));
+        ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kScrollBarColor));
 
@@ -309,14 +327,16 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImVec2 display_size    = ImGui::GetWindowSize();
     float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
     ImGui::SetNextWindowSize(m_graph_size, ImGuiCond_Always);
-    ImGui::SetCursorPos(
-        ImVec2(m_sidebar_size, 0));  // Meta Data size will be universal next PR.
+    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
     // (with no alpha) over their predecessors
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
-    ImGui::BeginChild("Scrubber View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
+    ImGui::BeginChild(
+        "Scrubber View",
+        ImVec2(m_graph_size.x, m_graph_size.y - m_artificial_scrollbar_height),
+        ImGuiChildFlags_None, window_flags);
 
     ImGui::SetItemAllowOverlap();
 
@@ -344,21 +364,26 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
         sprintf(text, "%.0f", scrubber_position);
-        ImVec2 text_pos = ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28);
+        ImVec2 labelSize = ImGui::CalcTextSize(text);
 
-        ImVec2 rect_pos =
-            ImVec2(mouse_position.x + 100 * Settings::GetInstance().GetDPI(),
-                   screen_pos.y + display_size.y - 5);
-        draw_list->AddRectFilled(text_pos, rect_pos,
+        constexpr float label_padding = 4.0f;
+        ImVec2 rect_pos1 = ImVec2(mouse_position.x, screen_pos.y + display_size.y -
+                                                        labelSize.y - m_ruler_padding.y);
+        ImVec2 rect_pos2 = ImVec2(mouse_position.x + labelSize.x + label_padding * 2,
+                                  screen_pos.y + display_size.y - m_ruler_padding.y);
+        ImVec2 text_pos  = ImVec2(rect_pos1.x + label_padding, rect_pos1.y);
+
+        draw_list->AddRectFilled(rect_pos1, rect_pos2,
                                  m_settings.GetColor(Colors::kGridColor));
         draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), text);
-        draw_list->AddLine(ImVec2(mouse_position.x, screen_pos.y),
-                           ImVec2(mouse_position.x, screen_pos.y + display_size.y - 28),
-                           m_settings.GetColor(Colors::kGridColor), 2.0f);
+        draw_list->AddLine(
+            ImVec2(mouse_position.x, screen_pos.y),
+            ImVec2(mouse_position.x, screen_pos.y + display_size.y - m_ruler_padding.y),
+            m_settings.GetColor(Colors::kGridColor), 2.0f);
 
         // Code below is for select
-        if(ImGui::IsMouseDoubleClicked(0))
-        {  // 0 is for the left mouse button
+        if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+        {
             if(m_highlighted_region.first == INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.first =
@@ -400,6 +425,9 @@ TimelineView::RenderGrid()
         ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
 
     ImVec2 container_size = ImGui::GetWindowSize();
+    DebugWindow::GetInstance()->AddDebugMessage(
+        "TimelineView::RenderGrid: container_size: " + std::to_string(container_size.x) +
+        ", " + std::to_string(container_size.y));
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImVec2(container_size.x - m_sidebar_size, container_size.y);
@@ -442,7 +470,7 @@ TimelineView::RenderGrid()
 
         // Background for the grid
         draw_list->AddRectFilled(
-            ImVec2(container_pos.x, cursor_position.y + content_size.y - m_grid_size),
+            ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
             ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
             m_settings.GetColor(Colors::kRulerBgColor));
 
@@ -459,7 +487,7 @@ TimelineView::RenderGrid()
             draw_list->AddLine(
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted,
-                       cursor_position.y + content_size.y - m_grid_size),
+                       cursor_position.y + content_size.y - m_ruler_height),
                 m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
         }
         if(m_highlighted_region.first != INVALID_SELECTION_TIME)
@@ -471,7 +499,7 @@ TimelineView::RenderGrid()
             draw_list->AddLine(
                 ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted_end,
-                       cursor_position.y + content_size.y - m_grid_size),
+                       cursor_position.y + content_size.y - m_ruler_height),
                 m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
         }
         if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
@@ -486,7 +514,7 @@ TimelineView::RenderGrid()
             draw_list->AddRectFilled(
                 ImVec2(normalized_start_box_highlighted, cursor_position.y),
                 ImVec2(normalized_start_box_highlighted_end,
-                       cursor_position.y + content_size.y - m_grid_size),
+                       cursor_position.y + content_size.y - m_ruler_height),
                 m_settings.GetColor(Colors::kSelection));
         }
 
@@ -506,7 +534,7 @@ TimelineView::RenderGrid()
 
             draw_list->AddLine(ImVec2(normalized_start, cursor_position.y),
                                ImVec2(normalized_start,
-                                      cursor_position.y + content_size.y - m_grid_size),
+                                      cursor_position.y + content_size.y - m_ruler_height),
                                m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
             // char label[32];
@@ -518,7 +546,8 @@ TimelineView::RenderGrid()
 
             ImVec2 labelSize = ImGui::CalcTextSize(label.c_str());
             ImVec2 labelPos  = ImVec2(normalized_start - labelSize.x / 2,
-                                      cursor_position.y + content_size.y - labelSize.y);
+                                      cursor_position.y + content_size.y - labelSize.y -
+                                          m_ruler_padding.y);
             draw_list->AddText(labelPos, m_settings.GetColor(Colors::kGridColor),
                                label.c_str());
         }
@@ -543,7 +572,7 @@ TimelineView::RenderGraphView()
     // (with no alpha) over their predecessors
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("Graph View Main",
-                      ImVec2(container_size.x, container_size.y - m_grid_size), false,
+                      ImVec2(container_size.x, container_size.y - m_ruler_height), false,
                       window_flags);
     ImGuiIO& io           = ImGui::GetIO();
     m_is_control_held     = io.KeyCtrl;
@@ -722,7 +751,7 @@ TimelineView::RenderGraphView()
 
                     m_resize_activity |= track_item.chart->GetResizeStatus();
                     track_item.chart->Render(m_graph_size.x);
-                    
+
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {
@@ -905,14 +934,14 @@ TimelineView::RenderGraphPoints()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
-    if(ImGui::BeginChild("Main Graphs"))
+    if(ImGui::BeginChild("Main Trace"))
     {
         ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
         ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
-        ImGuiStyle& style           = ImGui::GetStyle();
-        float       fontHeight      = ImGui::GetFontSize();
-        m_artificial_scrollbar_size = fontHeight + style.FramePadding.y * 2.0f;
+        ImGuiStyle& style             = ImGui::GetStyle();
+        float       fontHeight        = ImGui::GetFontSize();
+        m_artificial_scrollbar_height = fontHeight + style.FramePadding.y * 2.0f;
 
         m_graph_size =
             ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
@@ -920,7 +949,7 @@ TimelineView::RenderGraphPoints()
         ImGui::BeginChild(
             "Grid View 2",
             ImVec2(subcomponent_size_main.x,
-                   subcomponent_size_main.y - m_artificial_scrollbar_size),
+                   subcomponent_size_main.y - m_artificial_scrollbar_height),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
         // Scale used in all graphs computer here.
@@ -963,7 +992,7 @@ TimelineView::RenderGraphPoints()
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
 
         ImGui::BeginChild("scrollbar",
-                          ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_size),
+                          ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_height),
                           true, ImGuiWindowFlags_NoScrollbar);
 
         // ImGui::SameLine();

@@ -43,7 +43,7 @@ AppWindow::DestroyInstance()
 }
 
 AppWindow::AppWindow()
-: m_show_debug_widow(false)
+: m_show_debug_window(false)
 , m_show_provider_test_widow(false)
 , m_show_metrics(false)
 , m_main_view(nullptr)
@@ -289,10 +289,18 @@ AppWindow::RenderDeveloperMenu()
         {
             Settings::GetInstance().HorizontalRender();
         }
-        //Toggele ImGui's built-in metrics window
+        // Toggele ImGui's built-in metrics window
         if(ImGui::MenuItem("Show Metrics", nullptr, m_show_metrics))
         {
             m_show_metrics = !m_show_metrics;
+        }
+        if(ImGui::MenuItem("Show Debug Window", nullptr, m_show_debug_window))
+        {
+            m_show_debug_window = !m_show_debug_window;
+            if(m_show_debug_window)
+            {
+                ImGui::SetWindowFocus("Debug Window");
+            }
         }
         ImGui::EndMenu();
     }
@@ -433,17 +441,16 @@ AppWindow::RenderDebugOuput()
         ImGui::ShowMetricsWindow(&m_show_metrics);
     }
 
-    if(m_show_debug_widow)
+    if(m_show_debug_window)
     {
         DebugWindow::GetInstance()->Render();
     }
 
-    ImGuiIO& io = ImGui::GetIO();
     if(ImGui::IsKeyPressed(ImGuiKey_D))
     {
-        m_show_debug_widow = !m_show_debug_widow;
+        m_show_debug_window = !m_show_debug_window;
 
-        if(m_show_debug_widow)
+        if(m_show_debug_window)
         {
             ImGui::SetWindowFocus("Debug Window");
         }

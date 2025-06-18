@@ -48,13 +48,21 @@ typedef struct track_info_t
     uint64_t                           num_entries;  // number of entries in the track
 } track_info_t;
 
+
+struct event_ext_data
+{
+    std::string category;
+    std::string name;
+    std::string value;
+};
+
 typedef struct event_info
 {
-    uint64_t id;        // id of the event
-    double   start_ts;  // start timestamp of the event
-    double   end_ts;    // end timestamp of the event
-
+    std::vector<event_ext_data> ext_data;  // additional event data
+ 
 } event_info;
+
+ 
 
 class RequestParamsBase
 {
@@ -140,6 +148,8 @@ public:
     uint64_t m_selected_event;
     double   m_selected_event_start;
     double   m_selected_event_end;
+    event_info m_event_info;  // Store event info for each event
+
 
     static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = -1;
     static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = -2;
@@ -329,7 +339,7 @@ private:
     rocprofvis_controller_future_t*   m_trace_future;
     rocprofvis_controller_t*          m_trace_controller;
     rocprofvis_controller_timeline_t* m_trace_timeline;
-
+ 
     ProviderState m_state;
 
     uint64_t    m_num_graphs;       // number of graphs contained in the trace

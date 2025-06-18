@@ -160,7 +160,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
     if(track_type == kRPVControllerTrackTypeEvents)
     {
-        std::map<uint64_t, std::map<double, Event*>> event_stack;
+        std::map<uint64_t, std::vector<Event*>> event_stack;
         for(auto& data : entries)
         {
             rocprofvis_handle_t* handle = nullptr;
@@ -176,11 +176,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 result = event->GetUInt64(kRPVControllerEventLevel, 0, &event_level);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-                double event_start = 0;
-                result = event->GetDouble(kRPVControllerEventStartTimestamp, 0, &event_start);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                event_stack[event_level][event_start] = event;
+                event_stack[event_level].push_back(event);
             }
         }
         std::vector<Event*> events;
@@ -193,10 +189,9 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
             double event_min = DBL_MAX;
             double event_max = DBL_MIN;
 
-            std::map<double, Event*>& events_at_level = pair.second;
-            for(auto& inner_pair : events_at_level)
+            std::vector<Event*>& events_at_level = pair.second;
+            for(auto& event : events_at_level)
             {
-                Event*   event       = inner_pair.second;
                 double   event_start = 0.0;
                 double   event_end   = 0.0;
                 uint64_t event_level = 0;

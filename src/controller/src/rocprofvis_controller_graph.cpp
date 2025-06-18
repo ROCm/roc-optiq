@@ -506,10 +506,6 @@ struct GraphFetchLODArgs
 {
     Array*    m_array;
     uint64_t* m_index;
-    // this set is for removing duplicated events
-    // but since LOD generator outputs to a map, duplicated events override each other naturally
-    // so, it's not needed here, unless LOD generation changes to use different storage 
-    //std::unordered_set<uint64_t> m_event_ids;
 };
 
 rocprofvis_result_t

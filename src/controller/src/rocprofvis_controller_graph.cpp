@@ -160,7 +160,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
     if(track_type == kRPVControllerTrackTypeEvents)
     {
-        std::map<uint64_t, std::vector<Event*>> event_stack;
+        std::map<uint64_t, std::map<double, Event*>> event_stack;
         for(auto& data : entries)
         {
             rocprofvis_handle_t* handle = nullptr;
@@ -176,7 +176,11 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 result = event->GetUInt64(kRPVControllerEventLevel, 0, &event_level);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-                event_stack[event_level].push_back(event);
+                double event_start = 0;
+                result = event->GetDouble(kRPVControllerEventStartTimestamp, 0, &event_start);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                event_stack[event_level][event_start] = event;
             }
         }
         std::vector<Event*> events;
@@ -186,9 +190,13 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
             double   max_ts = start_ts + scale;
             uint64_t level  = pair.first;
 
-            std::vector<Event*>& events_at_level = pair.second;
-            for(auto& event : events_at_level)
+            double event_min = DBL_MAX;
+            double event_max = DBL_MIN;
+
+            std::map<double, Event*>& events_at_level = pair.second;
+            for(auto& inner_pair : events_at_level)
             {
+                Event*   event       = inner_pair.second;
                 double   event_start = 0.0;
                 double   event_end   = 0.0;
                 uint64_t event_level = 0;
@@ -208,7 +216,6 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 {
                     if((event_start <= max_ts && event_end > min_ts) || events.size())
                     {
-
                         ROCPROFVIS_ASSERT(level == event_level || level == UINT64_MAX);
 
                         if((event_start >= min_ts && event_start <= max_ts) &&
@@ -217,6 +224,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                             // Merge into current event
                             events.push_back(event);
                             level = level == UINT64_MAX ? event_level : level;
+                            event_min = std::min(event_min, event_start);
+                            event_max = std::max(event_max, event_end);
                         }
                         else
                         {
@@ -225,13 +234,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                             double sample_start = event_start;
 
                             // Generate the stub event for any populated events.
-                            if(events.size() &&
-                               ((events.front()->GetDouble(
-                                     kRPVControllerEventStartTimestamp, 0,
-                                     &event_start) == kRocProfVisResultSuccess) &&
-                                (events.back()->GetDouble(kRPVControllerEventEndTimestamp,
-                                                          0, &event_end) ==
-                                 kRocProfVisResultSuccess)))
+                            if(events.size())
                             {
                                 std::string combined_name = "";
                                 for(auto event : events)
@@ -259,13 +262,13 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
                                 uint64_t event_id=0;
                                 events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);
-                                Event* event = new Event(event_id, event_start, event_end);
+                                Event* event = new Event(event_id, event_min, event_max);
                                 ROCPROFVIS_ASSERT(level != UINT64_MAX);
                                 event->SetUInt64(kRPVControllerEventLevel, 0, level);
                                 event->SetString(kRPVControllerEventName, 0,
                                                  combined_name.c_str(),
                                                  combined_name.size());
-                                Insert(lod_to_generate, event_start, level, event);
+                                Insert(lod_to_generate, event_min, level, event);
                             }
 
                             // Create a new event & increment the search
@@ -277,6 +280,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
                             events.clear();
                             events.push_back(event);
+
+                            event_min = event_start;
+                            event_max = event_end;
+
                             level = event_level;
                         }
                     }                  
@@ -285,47 +292,38 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
             if(events.size())
             {
-                double event_start = 0.0;
-                double event_end   = 0.0;
-                if((events.front()->GetDouble(kRPVControllerEventStartTimestamp, 0,
-                                              &event_start) ==
-                    kRocProfVisResultSuccess) &&
-                   (events.back()->GetDouble(kRPVControllerEventEndTimestamp, 0,
-                                             &event_end) == kRocProfVisResultSuccess))
+                std::string combined_name = "";
+                for(auto event : events)
                 {
-                    std::string combined_name = "";
-                    for(auto event : events)
+                    std::string name;
+                    uint32_t    len = 0;
+                    result =
+                        event->GetString(kRPVControllerEventName, 0, nullptr, &len);
+                    if(result == kRocProfVisResultSuccess)
                     {
-                        std::string name;
-                        uint32_t    len = 0;
+                        name.resize(len);
                         result =
-                            event->GetString(kRPVControllerEventName, 0, nullptr, &len);
+                            event->GetString(kRPVControllerEventName, 0,
+                                                const_cast<char*>(name.c_str()), &len);
                         if(result == kRocProfVisResultSuccess)
                         {
-                            name.resize(len);
-                            result =
-                                event->GetString(kRPVControllerEventName, 0,
-                                                 const_cast<char*>(name.c_str()), &len);
-                            if(result == kRocProfVisResultSuccess)
+                            if(combined_name.size() > 0)
                             {
-                                if(combined_name.size() > 0)
-                                {
-                                    combined_name += "\n";
-                                }
-                                combined_name += name;
+                                combined_name += "\n";
                             }
+                            combined_name += name;
                         }
                     }
-
-                    uint64_t event_id = 0;
-                    events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);
-                    Event* event = new Event(event_id, event_start, event_end);
-                    ROCPROFVIS_ASSERT(level != UINT64_MAX);
-                    event->SetUInt64(kRPVControllerEventLevel, 0, level);
-                    event->SetString(kRPVControllerEventName, 0, combined_name.c_str(),
-                                     combined_name.size());
-                    Insert(lod_to_generate, event_start, level, event);
                 }
+
+                uint64_t event_id = 0;
+                events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);
+                Event* event = new Event(event_id, event_min, event_max);
+                ROCPROFVIS_ASSERT(level != UINT64_MAX);
+                event->SetUInt64(kRPVControllerEventLevel, 0, level);
+                event->SetString(kRPVControllerEventName, 0, combined_name.c_str(),
+                                    combined_name.size());
+                Insert(lod_to_generate, event_min, level, event);
             }
         }
     }
@@ -460,7 +458,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                     double divided_by_segment = zerod_end / segment_duration;
                     double ceil_segment       = ceil(divided_by_segment);
                     double rounded_segment    = ceil_segment * segment_duration;
-                    double       fetch_end = min_ts + rounded_segment;
+                    double fetch_end = min_ts + rounded_segment;
+
                     GraphLODArgs args;
                     args.m_valid_range = range;
                     args.m_index       = 0;
@@ -479,10 +478,11 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
 
                     if(result == kRocProfVisResultSuccess)
                     {
-                        result = GenerateLOD(lod_to_generate, start, end, args.m_entries);
+                        result = GenerateLOD(lod_to_generate, fetch_start, fetch_end,
+                                             args.m_entries);
                         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                        it->second.SetValidRange(std::min(start, range.first),
-                                                 std::max(end, range.second));
+                        it->second.SetValidRange(std::min(fetch_start, range.first),
+                                                 std::max(fetch_end, range.second));
                     }
                 }
             }

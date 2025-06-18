@@ -679,23 +679,6 @@ typedef enum rocprofvis_controller_compute_plot_types_t
 {
     kRPVControllerComputePlotTypeKernelDurationPercentage = kRPVControllerComputeTableTypeCount + 1,
     kRPVControllerComputePlotTypeKernelDuration,
-    /*
-    kRPVControllerComputePlotTypeL2CacheSpeedOfLight,
-    kRPVControllerComputePlotTypeL2CacheFabricSpeedOfLight,
-    kRPVControllerComputePlotTypeL2CacheFabricStallsRead,
-    kRPVControllerComputePlotTypeL2CacheFabricStallsWrite,
-    kRPVControllerComputePlotTypeInstrMix,
-    kRPVControllerComputePlotTypeCUOps,
-    kRPVControllerComputePlotTypeSL1CacheSpeedOfLight,
-    kRPVControllerComputePlotTypeInstrCacheSpeedOfLight,
-    kRPVControllerComputePlotTypeVL1CacheSpeedOfLight,
-    kRPVControllerComputePlotTypeVL1CacheL2NCTransactions,
-    kRPVControllerComputePlotTypeVL1CacheL2UCTransactions,
-    kRPVControllerComputePlotTypeVL1CacheL2RWTransactions,
-    kRPVControllerComputePlotTypeVL1CacheL2CCTransactions,
-    kRPVControllerComputePlotTypeVALUInstrMix,
-    kRPVControllerComputePlotTypeLDSSpeedOfLight,
-    */
     kRPVControllerComputePlotTypeCount
 } rocprofvis_controller_compute_plot_types_t;
 

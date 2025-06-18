@@ -68,6 +68,7 @@ EventsView::Render()
     ImGui::EndChild();
 
     ImGui::EndChild();
+
 }
 
 void

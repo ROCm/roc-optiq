@@ -58,11 +58,11 @@ Event::FetchDataModelFlowTraceProperty(Array&                array,
                    rocprofvis_db_read_event_property_async(db, kRPVDMEventFlowTrace,
                                                            dm_event_id, object))
                 {
-                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, 2))
+                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, UINT64_MAX))
                     {
                         if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_handle(
-                                   dm_trace_handle, kRPVDMStackTraceHandleByEventID, m_id,
+                                   dm_trace_handle, kRPVDMFlowTraceHandleByEventID, m_id,
                                    &dm_flowtrace) &&
                            dm_flowtrace != nullptr)
                         {
@@ -150,7 +150,7 @@ Event::FetchDataModelStackTraceProperty(Array& array,
                    rocprofvis_db_read_event_property_async(db, kRPVDMEventStackTrace,
                                                            dm_event_id, object))
                 {
-                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, 2))
+                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, UINT64_MAX))
                     {
                         if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_handle(
@@ -236,7 +236,7 @@ Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm
                    rocprofvis_db_read_event_property_async(db, kRPVDMEventExtData,
                                                            dm_event_id, object))
                 {
-                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, 2))
+                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, UINT64_MAX))
                     {
                         if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_handle(

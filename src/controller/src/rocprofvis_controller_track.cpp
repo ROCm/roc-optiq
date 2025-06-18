@@ -99,8 +99,18 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
         uint64_t dm_track_type = rocprofvis_dm_get_property_as_uint64(
             m_dm_handle, kRPVDMTrackCategoryEnumUInt64, 0);
 
+        double fetch_start =
+            m_start_timestamp +
+            (floor((start - m_start_timestamp) / kSegmentDuration) * kSegmentDuration);
+
+        double zerod_end          = end - m_start_timestamp;
+        double divided_by_segment = zerod_end / kSegmentDuration;
+        double ceil_segment       = ceil(divided_by_segment);
+        double rounded_segment    = ceil_segment * kSegmentDuration;
+        double fetch_end          = m_start_timestamp + rounded_segment;
+
         if(kRocProfVisDmResultSuccess ==
-           rocprofvis_db_read_trace_slice_async(db, (uint64_t) start, (uint64_t) end, 1,
+           rocprofvis_db_read_trace_slice_async(db, (uint64_t) fetch_start, (uint64_t) fetch_end, 1,
                                                 (rocprofvis_db_track_selection_t) &m_id,
                                                 object2wait))
         {
@@ -108,7 +118,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                rocprofvis_db_future_wait(object2wait, UINT64_MAX))
             {
                 rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
-                    m_dm_handle, kRPVDMSliceHandleTimed, start);
+                    m_dm_handle, kRPVDMSliceHandleTimed, fetch_start);
                 if(nullptr != slice)
                 {
                     uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
@@ -215,15 +225,15 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                             }
                         }
                     }
-                    rocprofvis_dm_delete_time_slice(trace, start, end);
+                    rocprofvis_dm_delete_time_slice(trace, fetch_start, fetch_end);
                     
                     std::set<uint32_t> overlaps;
-                    double             start_segment = start;
-                    double             end_segment = end;
+                    double             start_segment = fetch_start;
+                    double             end_segment = fetch_end;
                     for (uint32_t i = 0; i < m_valid_segments.size(); i++)
                     {
-                        if (start <= m_valid_segments[i].second &&
-                            end >= m_valid_segments[i].first)
+                        if (fetch_start <= m_valid_segments[i].second &&
+                           fetch_end >= m_valid_segments[i].first)
                         {
                             overlaps.insert(i);
                             start_segment =

@@ -2,30 +2,23 @@
 
 #pragma once
 
-#include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
-#include "rocprofvis_c_interface.h"
-#include <unordered_map>
+#include <string>
+#include <vector>
 
 namespace RocProfVis
 {
 namespace Controller
 {
 
-class Arguments;
-class Array;
-class Future;
-class ComputeTable;
-class ComputePlot;
+class Data;
 
-class ComputeTrace : public Handle
+class PlotSeries : public Handle
 {
 public:
-    ComputeTrace();
+    PlotSeries();
 
-    virtual ~ComputeTrace();
-
-    rocprofvis_result_t Load(char const* const directory);
+    virtual ~PlotSeries();
 
     rocprofvis_controller_object_type_t GetType(void) final;
 
@@ -41,8 +34,9 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
 private:
-    std::unordered_map<rocprofvis_controller_compute_table_types_t, ComputeTable*> m_tables;
-    std::unordered_map<rocprofvis_controller_compute_plot_types_t, ComputePlot*> m_plots;
+    std::string m_name;
+    std::vector<std::pair<double, double>> m_values; //x, y pairs
+
 };
 
 }

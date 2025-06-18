@@ -1,8 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include "rocprofvis_compute_data_provider.h"
-#include "rocprofvis_compute_metric.h"
 #include "widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -10,46 +8,34 @@ namespace RocProfVis
 namespace View
 {
 
-class ComputeSummaryLeft : public RocWidget
-{
-public:
-    void Render();
-    void Update();
-    ComputeSummaryLeft(std::shared_ptr<ComputeDataProvider> data_provider);
-    ~ComputeSummaryLeft();
-
-private:
-    std::shared_ptr<ComputeMetricGroup> m_system_info;
-};
-
-class ComputeSummaryRight : public RocWidget
-{
-public:
-    void Render();
-    void Update();
-    ComputeSummaryRight(std::shared_ptr<ComputeDataProvider> data_provider);
-    ~ComputeSummaryRight();
-
-private:
-    std::shared_ptr<ComputeMetricGroup> m_kernel_list;
-    std::shared_ptr<ComputeMetricGroup> m_dispatch_list;
-};
+class ComputeDataProvider2;
+class ComputeTable;
+class ComputePlotBar;
+class ComputePlotPie;
 
 class ComputeSummaryView : public RocWidget
 {
 public:
     void Render();
     void Update();
-    ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
+    ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider);
     ~ComputeSummaryView(); 
 
 private:
     void RenderMenuBar();
+    void RenderLeftColumn();
+    void RenderRightColumn();
 
     std::shared_ptr<HSplitContainer> m_container;
-    std::shared_ptr<ComputeSummaryLeft> m_left_view;
-    std::shared_ptr<ComputeSummaryRight> m_right_view;
+    std::shared_ptr<RocCustomWidget> m_left_column;
+    std::shared_ptr<RocCustomWidget> m_right_column;
     std::string m_owner_id;
+
+    std::shared_ptr<ComputeTable> m_sysinfo_table;
+    std::shared_ptr<ComputePlotPie> m_kernel_pie;
+    std::shared_ptr<ComputePlotBar> m_kernel_bar;
+    std::shared_ptr<ComputeTable> m_kernel_table;
+    std::shared_ptr<ComputeTable> m_dispatch_table;
 };
 
 }  // namespace View

@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
+#include <array>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -16,10 +17,32 @@ typedef struct ComputeTableDefinition
     std::string m_title;
 } ComputeTableDefinition;
 
-const std::unordered_map<std::string, ComputeTableDefinition> COMPUTE_TABLE_DEFINITIONS = { 
+typedef struct ComputePlotDataDefinition
+{
+    rocprofvis_controller_compute_table_types_t m_table_type;
+    std::vector<std::string> m_metric_keys;
+} ComputePlotDataDefinition;
+
+typedef struct ComputePlotDataSeriesDefinition
+{
+    std::string m_name;
+    std::vector<ComputePlotDataDefinition> m_values;
+} ComputePlotDataSourceDefinition;
+
+typedef struct ComputePlotDefinition
+{
+    rocprofvis_controller_compute_plot_types_t m_type;
+    std::string m_title;
+    std::string x_axis_label;
+    std::string y_axis_label;
+    std::vector<ComputePlotDataSeriesDefinition> m_series;
+} ComputePlotDefinition;
+
+
+const std::unordered_map<std::string, ComputeTableDefinition> COMPUTE_TABLE_DEFINITIONS { 
     {"0.1_Top_Kernels.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeKernelList, "Kernel List"}},
     {"0.2_Dispatch_List.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeDispatchList, "Dispatch List"}},
-    {"1.1.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeSysInfo, "System Info"}},
+    {"sysinfo.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeSysInfo, "System Info"}},
     {"2.1_Speed-of-Light.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeSpeedOfLight, "System Speed of Light"}},
     {"3.1_Memory_Chart.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeMemoryChart, "Memory Chart"}},
     {"5.1_Command_Processor_Fetcher.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeCPFetcher, "Command Processor Fetcher"}},
@@ -67,5 +90,19 @@ const std::unordered_map<std::string, ComputeTableDefinition> COMPUTE_TABLE_DEFI
     {"18.10_L2-Fabric_Write_and_Atomic_Stall_(Cycles_per_normUnit).csv", ComputeTableDefinition{kRPVControllerComputeTableTypeL2CacheWrAtomStalls, "L2 Cache - Fabric Detailed Transaction Breakdown"}},
     {"18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv", ComputeTableDefinition{kRPVControllerComputeTableTypeL2Cache128Reqs, "L2 Cache - Fabric 128B Read Requests Per Channel"}}
 };
+
+const std::array COMPUTE_PLOT_DEFINITIONS {  
+    ComputePlotDefinition{kRPVControllerComputePlotTypeKernelDurationPercentage, "Kernel Durations", "Duration (%)", "Kernel", {  
+        ComputePlotDataSeriesDefinition{"", {
+            ComputePlotDataDefinition{kRPVControllerComputeTableTypeKernelList, {"{Pct}"}}
+        }}  
+    }},
+    ComputePlotDefinition{kRPVControllerComputePlotTypeKernelDuration, "Kernel Durations", "Mean Duration (ns)", "Kernel", {  
+        ComputePlotDataSeriesDefinition{"", { 
+            ComputePlotDataDefinition{kRPVControllerComputeTableTypeKernelList, {"{Mean(ns)}"}}  
+        }}
+    }},
+}; 
+
 }
 }

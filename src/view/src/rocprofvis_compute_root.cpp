@@ -28,7 +28,7 @@ ComputeRoot::ComputeRoot()
     m_compute_data_provider2 = std::make_shared<ComputeDataProvider2>();
 
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(TabItem{"Summary View", COMPUTE_SUMMARY_VIEW_URL, std::make_shared<ComputeSummaryView>(m_id, m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Summary View", COMPUTE_SUMMARY_VIEW_URL, std::make_shared<ComputeSummaryView>(m_id, m_compute_data_provider2), false});
     m_tab_container->AddTab(TabItem{"Roofline View", COMPUTE_ROOFLINE_VIEW_URL, std::make_shared<ComputeRooflineView>(m_id, m_compute_data_provider), false});
     m_tab_container->AddTab(TabItem{"Block View", COMPUTE_BLOCK_VIEW_URL, std::make_shared<ComputeBlockView>(m_id, m_compute_data_provider), false});
     m_tab_container->AddTab(TabItem{"Table View", COMPUTE_TABLE_VIEW_URL, std::make_shared<ComputeTableView>(m_id, m_compute_data_provider2), false});

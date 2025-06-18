@@ -10,6 +10,7 @@
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_table_system.h"
+#include "rocprofvis_controller_plot.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
 #include "rocprofvis_controller_arguments.h"
@@ -655,6 +656,31 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
                                             &start_count);
                 }
                 result = table.Fetch(dm_handle, start_index, start_count, array);
+            }
+            return result;
+        }));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
+
+rocprofvis_result_t
+Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
+{
+    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+
+    future.Set(std::async(
+        std::launch::async, [&plot, dm_handle, &args, &array]() -> rocprofvis_result_t {
+            rocprofvis_result_t result = kRocProfVisResultUnknownError;
+            result = plot.Setup(dm_handle, args);
+            if (result == kRocProfVisResultSuccess)
+            {
+                result = plot.Fetch(dm_handle, 0, 0, array);
             }
             return result;
         }));

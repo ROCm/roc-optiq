@@ -326,6 +326,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                                      combined_name.size());
                     Insert(lod_to_generate, event_start, level, event);
                 }
+                events.clear();
             }
         }
     }
@@ -471,7 +472,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                             rocprofvis_result_t result = kRocProfVisResultSuccess;
 
                             result = segment.Fetch(start, end, pair->m_entries,
-                                                                pair->m_index);
+                                                                pair->m_index,nullptr);
                             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                             return result;
                         });
@@ -540,7 +541,7 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
                     rocprofvis_result_t result = kRocProfVisResultSuccess;
                     GraphFetchLODArgs*  args   = (GraphFetchLODArgs*) user_ptr;
                     return segment.Fetch(start, end, args->m_array->GetVector(),
-                                         *(args->m_index));
+                                         *(args->m_index),nullptr);
                 });
         }
     }

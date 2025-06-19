@@ -1650,7 +1650,6 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                                          &prop_count);
         event_ext_data ext_data = {};
 
-        spdlog::debug(">>>>>>> Event {} has {} properties", 1, prop_count);
 
         for(auto j = 0; j < prop_count; j++)
         {
@@ -1670,8 +1669,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                     ext_data_handle, kRPVControllerExtDataCategory, 0, data, &length);
                 if(result == kRocProfVisResultSuccess)
                 {
-                    spdlog::debug(">>>>>>> Event {} Category: {}", j, data);
-                    ext_data.category = data;
+                     ext_data.category = data;
                 }
                 delete[] data;
             }
@@ -1687,8 +1685,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                     ext_data_handle, kRPVControllerExtDataName, 0, data, &length);
                 if(result == kRocProfVisResultSuccess)
                 {
-                    spdlog::debug(">>>>>>> Event {} Name: {}", j, data);
-                    ext_data.name = data;
+                     ext_data.name = data;
                 }
                 delete[] data;
             }
@@ -1704,8 +1701,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                     ext_data_handle, kRPVControllerExtDataValue, 0, data, &length);
                 if(result == kRocProfVisResultSuccess)
                 {
-                    spdlog::debug(">>>>>>> Event {} Value: {}", j, data);
-                    ext_data.value = data;
+                     ext_data.value = data;
                 }
                 delete[] data;
             }
@@ -1729,8 +1725,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
         rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
                                          &prop_count);
 
-        spdlog::debug(">>>>>>> Event {} has {} properties", 1, prop_count);
-        event_flow_data flow_data = {};
+         event_flow_data flow_data = {};
 
         for(auto j = 0; j < prop_count; j++)
         {
@@ -1743,8 +1738,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                 flow_control_handle, kRPVControllerFlowControltId, 0, &data);
             if(result == kRocProfVisResultSuccess)
             {
-                spdlog::debug(">>>>>>> Endpoint {} id: {}", j, data);
-                flow_data.id = data;
+                 flow_data.id = data;
             }
 
             data   = 0;
@@ -1753,8 +1747,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
             if(result == kRocProfVisResultSuccess)
             {
                 flow_data.timestamp = data;
-                spdlog::debug(">>>>>>> Endpoint {} timestamp: {}", j, data);
-            }
+             }
 
             data   = 0;
             result = rocprofvis_controller_get_uint64(
@@ -1762,8 +1755,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
             if(result == kRocProfVisResultSuccess)
             {
                 flow_data.track_id = data;
-                spdlog::debug(">>>>>>> Endpoint {} track id: {}", j, data);
-            }
+             }
 
             data   = 0;
             result = rocprofvis_controller_get_uint64(
@@ -1771,8 +1763,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
             if(result == kRocProfVisResultSuccess)
             {
                 flow_data.direction = data;
-                spdlog::debug(">>>>>>> Endpoint {} direction: {}", j, data);
-            }
+             }
         }
         m_flow_info.flow_data.push_back(flow_data);
     }

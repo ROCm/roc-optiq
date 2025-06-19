@@ -41,10 +41,8 @@ class PmcTrackSlice : public TrackSlice {
         // @param ctx - pointer to Track context
         // @param start - start timestamp of time slice
         // @param end - end timestamp of time slice
-        PmcTrackSlice( Track* ctx, 
-                            rocprofvis_dm_timestamp_t start, 
-                            rocprofvis_dm_timestamp_t end) : 
-                            TrackSlice(ctx, start, end) {}; 
+        PmcTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start,
+                      rocprofvis_dm_timestamp_t end); 
         // PmcTrackSlice class destructor, not required unless declared as virtual
         ~PmcTrackSlice(){}
         // Method to add PMC data record

@@ -4,7 +4,7 @@
 
 #include "rocprofvis_controller.h"
 
-#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -28,7 +28,7 @@ public:
 private:
     std::unordered_map<std::string, size_t> m_entries;
     std::vector<std::string> m_strings;
-    std::mutex m_mutex;
+    std::shared_mutex m_mutex;
     static StringTable s_self;
 };
 

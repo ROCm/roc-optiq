@@ -34,28 +34,28 @@ EventsView::Render()
     ImGui::BeginChild("LeftPanel", ImVec2(left_width, 0), true,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar);
 
-    if(m_data_provider.GetSelectedEvent() == std::numeric_limits<uint64_t>::max())
+    if(m_data_provider.GetSelectedEventID() == std::numeric_limits<uint64_t>::max())
     {
         ImGui::Text("No event selected.");
     }
     else
     {
-        ImGui::Text("Event ID: %llu", m_data_provider.GetSelectedEventValue());
+        ImGui::Text("Event ID: %llu", m_data_provider.GetSelectedEventID());
 
-        uint64_t selected_event = m_data_provider.GetSelectedEventValue();
+        uint64_t selected_event = m_data_provider.GetSelectedEventID();
 
         if(selected_event != m_last_selected_event)
         {
             if(selected_event != std::numeric_limits<uint64_t>::max())
             {
-                m_data_provider.GetEventInfo(m_data_provider.GetSelectedEventValue(),
+                m_data_provider.GetEventInfo(m_data_provider.GetSelectedEventID(),
                                              m_data_provider.GetSelectedEventStart(),
                                              m_data_provider.GetSelectedEventEnd());
             }
             m_last_selected_event = selected_event;
         }
 
-        const event_info& eventInfo = m_data_provider.GetEventInfoStruct();
+        const event_info_t& eventInfo = m_data_provider.GetEventInfoStruct();
         if(!eventInfo.ext_data.empty())
         {
             ShowEventExtDataPanel(eventInfo.ext_data);
@@ -63,7 +63,7 @@ EventsView::Render()
 
         ImGui::Separator();
 
-        const flow_info& flowInfo = m_data_provider.GetFlowInfo();
+        const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
         if(!flowInfo.flow_data.empty())
         {
             ShowEventFlowInfoPanel(flowInfo.flow_data);
@@ -83,7 +83,7 @@ EventsView::Render()
 }
 
 void
-EventsView::ShowEventExtDataPanel(const std::vector<event_ext_data>& ext_data)
+EventsView::ShowEventExtDataPanel(const std::vector<event_ext_data_t>& ext_data)
 {
     ImGui::BeginChild("EventExtDataChild", ImVec2(0, 250), true);
 
@@ -116,7 +116,7 @@ EventsView::ShowEventExtDataPanel(const std::vector<event_ext_data>& ext_data)
 }
 
 void
-EventsView::ShowEventFlowInfoPanel(const std::vector<event_flow_data>& flow_data)
+EventsView::ShowEventFlowInfoPanel(const std::vector<event_flow_data_t>& flow_data)
 {
     ImGui::BeginChild("EventFlowInfoChild", ImVec2(0, 100), true);
 

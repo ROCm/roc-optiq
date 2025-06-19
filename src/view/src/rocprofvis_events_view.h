@@ -15,8 +15,8 @@ class EventsView : public RocCustomWidget
 public:
     EventsView(DataProvider& dp);
     ~EventsView();
-    void ShowEventExtDataPanel(const std::vector<event_ext_data>& ext_data);
-    void ShowEventFlowInfoPanel(const std::vector<event_flow_data>& flow_data);
+    void ShowEventExtDataPanel(const std::vector<event_ext_data_t>& ext_data);
+    void ShowEventFlowInfoPanel(const std::vector<event_flow_data_t>& flow_data);
     void Render();
 
 private:

@@ -21,7 +21,7 @@ DataProvider::DataProvider()
 , m_max_ts(0)
 , m_trace_file_path("")
 , m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
-, m_selected_event(std::numeric_limits<uint64_t>::max())
+, m_selected_event_id(std::numeric_limits<uint64_t>::max())
 , m_selected_event_start(0)
 , m_selected_event_end(0)
 , m_event_info({})
@@ -33,22 +33,12 @@ DataProvider::~DataProvider() { CloseController(); }
 void
 DataProvider::SetSelectedEvent(uint64_t id, double start, double end)
 {
-    m_selected_event       = id;
+    m_selected_event_id       = id;
     m_selected_event_start = start;
     m_selected_event_end   = end;
 }
 
-uint64_t
-DataProvider::GetSelectedEventValue() const
-{
-    return m_selected_event;
-}
-
-void
-DataProvider::SetSelectedEventValue(uint64_t event)
-{
-    m_selected_event = event;
-}
+ 
 
 double
 DataProvider::GetSelectedEventStart() const
@@ -74,34 +64,34 @@ DataProvider::SetSelectedEventEnd(double end)
     m_selected_event_end = end;
 }
 
-const event_info&
+const event_info_t&
 DataProvider::GetEventInfoStruct() const
 {
     return m_event_info;
 }
 
 void
-DataProvider::SetEventInfoStruct(const event_info& info)
+DataProvider::SetEventInfoStruct(const event_info_t& info)
 {
     m_event_info = info;
 }
 
-const flow_info&
+const flow_info_t&
 DataProvider::GetFlowInfo() const
 {
     return m_flow_info;
 }
 
 void
-DataProvider::SetFlowInfo(const flow_info& info)
+DataProvider::SetFlowInfo(const flow_info_t& info)
 {
     m_flow_info = info;
 }
 
 uint64_t
-DataProvider::GetSelectedEvent()
+DataProvider::GetSelectedEventID()
 {
-    return m_selected_event;
+    return m_selected_event_id;
 }
 
 void
@@ -1648,7 +1638,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
         uint64_t prop_count = 0;
         rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
                                          &prop_count);
-        event_ext_data ext_data = {};
+        event_ext_data_t ext_data = {};
 
 
         for(auto j = 0; j < prop_count; j++)
@@ -1725,7 +1715,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
         rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
                                          &prop_count);
 
-         event_flow_data flow_data = {};
+         event_flow_data_t flow_data = {};
 
         for(auto j = 0; j < prop_count; j++)
         {

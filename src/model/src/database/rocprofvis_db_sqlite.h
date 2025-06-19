@@ -266,7 +266,7 @@ class SqliteDatabase : public Database
         // @param query - SQL query
         // @param callback - sqlite3_exec type callback
         // @param user_data - user parameters
-        int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
+        int Sqlite3Exec(sqlite3* db, const char* query,
                                         int (*callback)(void*, int, sqlite3_stmt*, char**),
                                         void* user_data);
 

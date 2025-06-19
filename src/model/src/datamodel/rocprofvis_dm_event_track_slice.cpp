@@ -27,9 +27,15 @@ namespace RocProfVis
 namespace DataModel
 {
 
+EventTrackSlice::EventTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
+: TrackSlice(ctx, start, end)
+{
+    m_samples.reserve(ctx->NumRecords());
+}; 
+
 rocprofvis_dm_result_t EventTrackSlice::AddRecord(rocprofvis_db_record_data_t & data){
     try {
-        m_samples.push_back(std::make_unique<EventRecord>(data.event.id, data.event.timestamp, data.event.duration, data.event.category, data.event.symbol, data.event.level));
+        m_samples.emplace_back(std::make_unique<EventRecord>(data.event.id, data.event.timestamp, data.event.duration, data.event.category, data.event.symbol, data.event.level));
     }
     catch(std::exception ex)
     {
@@ -65,7 +71,7 @@ rocprofvis_dm_result_t EventTrackSlice::GetRecordTimestampAt(const rocprofvis_dm
 
 rocprofvis_dm_result_t EventTrackSlice::GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_id_t & id){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    id = m_samples[index].get()->EventId();
+    id = *(rocprofvis_dm_id_t*) &m_samples[index].get()->EventIdFull();
     return kRocProfVisDmResultSuccess;
 }
 

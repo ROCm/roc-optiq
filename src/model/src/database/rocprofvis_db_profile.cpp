@@ -89,10 +89,22 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
-    rocprofvis_dm_track_id_t track_id;
     rocprofvis_db_record_data_t record;
     record.event.id.bitfield.event_op = sqlite3_column_int(stmt, 0);
-    if (db->FindTrackId((char*)sqlite3_column_text(stmt,6), (char*)sqlite3_column_text(stmt,7), (char*)sqlite3_column_text(stmt,8), record.event.id.bitfield.event_op, track_id) == kRocProfVisDmResultSuccess) {
+    if (callback_params->track_id == -1)
+    {
+        if (db->FindTrackId((char*)sqlite3_column_text(stmt, 6),
+            (char*)sqlite3_column_text(stmt, 7),
+            (char*)sqlite3_column_text(stmt, 8), 
+            record.event.id.bitfield.event_op,
+            callback_params->track_id) != kRocProfVisDmResultSuccess)
+        {
+            return 0;
+        }
+    }
+    
+    if(callback_params->track_id != -1)
+    {
         if (record.event.id.bitfield.event_op > 0) {       
             record.event.id.bitfield.event_id = sqlite3_column_int64(stmt, 5);
             record.event.timestamp = sqlite3_column_int64(stmt, 1);
@@ -106,10 +118,14 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
             record.pmc.timestamp = sqlite3_column_int64(stmt, 1);
             record.pmc.value = sqlite3_column_int(stmt,2);
         }
-        if (db->BindObject()->FuncAddRecord((*(slice_array_t*)callback_params->handle)[track_id], record) != kRocProfVisDmResultSuccess) return 1;
+        if(db->BindObject()->FuncAddRecord(
+               (*(slice_array_t*) callback_params->handle)[callback_params->track_id],
+               record) != kRocProfVisDmResultSuccess)
+            return 1;
+        callback_params->future->CountThisRow();
+        return 0;
     }
-    callback_params->future->CountThisRow();
-    return 0;
+    return 1;
 }
 
 int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName){

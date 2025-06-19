@@ -4,9 +4,9 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
-#include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_table.h"
 #include "rocprofvis_c_interface.h"
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -39,10 +39,19 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
     rocprofvis_result_t Load(const std::string& csv_file);
+    rocprofvis_result_t GetMetric(const std::string& key, std::pair<std::string, Data*>& metric) const;
+    rocprofvis_result_t GetMetricFuzzy(const std::string& key, std::vector<std::pair<std::string, Data*>>& metrics) const;
 
 private:
+    rocprofvis_result_t LoadSystemInfo(const std::string& csv_file);
+
+    struct MetricMapEntry {
+        std::string m_name;
+        Data* m_data;
+    };
     rocprofvis_controller_compute_table_types_t m_type;
     std::string m_title;
+    std::unordered_map<std::string, MetricMapEntry> m_metrics_map;
 };
 
 }

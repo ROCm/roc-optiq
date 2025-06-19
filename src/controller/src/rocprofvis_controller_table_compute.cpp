@@ -1,7 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_table_compute.h"
-#include "rocprofvis_controller_compute_metrics.h"
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_array.h"
@@ -229,6 +228,12 @@ rocprofvis_result_t ComputeTable::SetString(rocprofvis_property_t property, uint
 
 rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
 {
+    if (m_type == kRPVControllerComputeTableTypeSysInfo)
+    {
+        // Special handling for system info; all values are on one row.
+        return LoadSystemInfo(csv_file);
+    }
+
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
 
     csv::CSVFormat format;
@@ -243,58 +248,128 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
         {
             for (uint32_t col = 0; col < csv_row.size(); col ++)
             {
+                std::string name = column_names[col];
+                std::replace(name.begin(), name.end(), '_', ' ');
                 if (csv_row[col].is_null() || csv_row[col].is_str())
                 {
-                    m_columns.push_back(ColumnDefintion{column_names[col], kRPVControllerPrimitiveTypeString});
+                    m_columns.push_back(ColumnDefintion{std::move(name), kRPVControllerPrimitiveTypeString});
                 }
                 else if (csv_row[col].is_float())
                 {
-                    m_columns.push_back(ColumnDefintion{column_names[col], kRPVControllerPrimitiveTypeDouble});
+                    m_columns.push_back(ColumnDefintion{std::move(name), kRPVControllerPrimitiveTypeDouble});
                 }
                 else if (csv_row[col].is_int())   
                 {
-                    m_columns.push_back(ColumnDefintion{column_names[col], kRPVControllerPrimitiveTypeUInt64});
+                    m_columns.push_back(ColumnDefintion{std::move(name), kRPVControllerPrimitiveTypeUInt64});
                 }
             }       
         }
         std::vector<Data> row_data;
         for (uint32_t col = 0; col < csv_row.size(); col ++)
         {            
-            Data data;
-            data.SetType(m_columns[col].m_type);
             if (m_columns[col].m_type == kRPVControllerPrimitiveTypeString)
             {
-                data.SetString(csv_row[col].get().c_str());
+                row_data.emplace_back(csv_row[col].get().c_str());
             }
             else if (m_columns[col].m_type == kRPVControllerPrimitiveTypeDouble)
             {
                 if (csv_row[col].is_null())
                 {
-                    data.SetDouble(-1);
+                    row_data.emplace_back(-1.0); // Rows may have empty fields.
                 }
                 else
                 {
-                    data.SetDouble(csv_row[col].get<double>());
+                    row_data.emplace_back(csv_row[col].get<double>());
                 }
             }
             else if (m_columns[col].m_type == kRPVControllerPrimitiveTypeUInt64)
             {
                 if (csv_row[col].is_null())
                 {
-                    data.SetUInt64(-1);
+                    row_data.emplace_back(static_cast<uint64_t>(-1)); // Rows may have empty fields.
                 }
                 else
                 {
-                    data.SetUInt64(csv_row[col].get<uint64_t>());
+                    row_data.emplace_back(csv_row[col].get<uint64_t>());
                 }               
             }
-            row_data.push_back(data);
         }
-        m_rows[row_count] = row_data;
+        m_rows[row_count] = std::move(row_data);
+
+        // Keep track of all numerical fields in table for plots to reference.
+        // Key for any value is [row header][space][column header].
+        for (int i = 1; i < m_rows[row_count].size(); i ++)
+        {
+            std::string row_name = csv_row[0].get();
+            m_metrics_map[row_name + " " + m_columns[i].m_name] = MetricMapEntry{row_name, &m_rows[row_count][i]};
+        }
+
         row_count ++;
     }
 
     result = kRocProfVisResultSuccess;
+    return result;
+}
+
+rocprofvis_result_t ComputeTable::LoadSystemInfo(const std::string& csv_file)
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+
+    csv::CSVFormat format;
+    format.delimiter(',');
+    format.header_row(0);
+    csv::CSVReader csv(csv_file, format);
+    std::vector<std::string> column_names = csv.get_col_names();
+    m_columns = {ColumnDefintion{"Field", kRPVControllerPrimitiveTypeString}, ColumnDefintion{"Value", kRPVControllerPrimitiveTypeString}};
+
+    uint64_t row_count = 0;
+    csv::CSVRow csv_row;
+    if (csv.read_row(csv_row))
+    {     
+        for (uint32_t col = 0; col < csv_row.size(); col ++)
+        {            
+            Data field;
+            field.SetType(kRPVControllerPrimitiveTypeString);
+            std::replace(column_names[col].begin(), column_names[col].end(), '_', ' ');
+            column_names[col][0] = std::toupper(column_names[col][0]);
+            field.SetString(column_names[col].c_str());
+            Data value;
+            value.SetType(kRPVControllerPrimitiveTypeString);
+            value.SetString(csv_row[col].get().c_str());
+            m_rows[row_count] = {field, value};
+            row_count ++;
+        }
+    }
+
+    result = kRocProfVisResultSuccess;
+    return result;
+}
+
+rocprofvis_result_t ComputeTable::GetMetric(const std::string& key, std::pair<std::string, Data*>& metric) const
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if (m_metrics_map.count(key) > 0)
+    {
+        const MetricMapEntry& match = m_metrics_map.at(key);
+        metric = std::make_pair(match.m_name, match.m_data);
+        result = kRocProfVisResultSuccess;
+    }
+
+    return result;
+}
+
+rocprofvis_result_t ComputeTable::GetMetricFuzzy(const std::string& key, std::vector<std::pair<std::string, Data*>>& metrics) const
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    for (auto& it : m_metrics_map)
+    {
+        if (it.first.find(key) != std::string::npos)
+        {
+            const MetricMapEntry& match = m_metrics_map.at(it.first);
+            metrics.emplace_back(std::make_pair(match.m_name, match.m_data)); 
+            result = kRocProfVisResultSuccess;
+        }
+    }
     return result;
 }
 

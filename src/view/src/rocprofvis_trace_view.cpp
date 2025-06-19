@@ -68,7 +68,6 @@ TraceView::Update()
     {
         m_sidebar->Update();
     }
-    
 }
 
 void
@@ -154,9 +153,11 @@ TraceView::Render()
 
             int item_spacing = 10.0f;
 
-            float  dot_radius  = 5.0f;
-            int    num_dots    = 3;
-            float  dot_spacing = 5.0f;
+            float dot_radius  = 5.0f;
+            int   num_dots    = 3;
+            float dot_spacing = 5.0f;
+            float anim_speed  = 5.0f;
+
             ImVec2 dot_size =
                 MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
 
@@ -176,7 +177,7 @@ TraceView::Render()
             ImGui::SetCursorScreenPos(dot_pos);
 
             RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                                       ImVec4(0.3f, 0.3f, 0.3f, 1.0f), 5.0f);
+                                       IM_COL32(85, 85, 85, 255), anim_speed);
             ImGui::EndPopup();
         }
     }

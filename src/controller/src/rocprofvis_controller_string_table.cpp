@@ -25,7 +25,7 @@ StringTable::~StringTable()
 
 size_t StringTable::AddString(std::string& string)
 {
-    std::scoped_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
     auto it = m_entries.find(string);
     if (it == m_entries.end())
     {
@@ -38,7 +38,7 @@ size_t StringTable::AddString(std::string& string)
 
 char const* StringTable::GetString(size_t id)
 {
-    std::scoped_lock<std::mutex> lock(m_mutex);
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
     char const* string = "";
     if (m_strings.size() > id)
     {

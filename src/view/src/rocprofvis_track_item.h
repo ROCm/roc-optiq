@@ -27,7 +27,7 @@ public:
     void               SetID(int id);
     int                GetID();
     virtual float      GetTrackHeight();
-    virtual void       Render(double width);
+    virtual void       Render(float width);
     const std::string& GetName();
 
     virtual void UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
@@ -38,6 +38,9 @@ public:
     bool         IsInViewVertical();
     void         SetInViewVertical(bool in_view);
 
+    bool IsSelected() const;
+    void SetSelected(bool selected);
+     
     void  SetDistanceToView(float distance);
     float GetDistanceToView();
 
@@ -54,9 +57,10 @@ public:
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
     bool IsMetaAreaClicked() const { return m_meta_area_clicked; }
-    
+
 protected:
-    virtual void RenderMetaArea()               = 0;
+    virtual void RenderMetaArea();
+    virtual void RenderMetaAreaScale(ImVec2& container_size);
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
 
@@ -67,12 +71,11 @@ protected:
     double                m_scale_x;
     int                   m_id;
     float                 m_track_height;
+    float                 m_track_content_height;
     float                 m_min_track_height;
     bool                  m_is_in_view_vertical;
     float                 m_distance_to_view_y;
-    float                 m_metadata_width;
     std::string           m_name;
-    ImU32                 m_metadata_bg_color;
     ImVec2                m_metadata_padding;
     float                 m_resize_grip_thickness;
     bool                  m_is_resize;
@@ -80,7 +83,10 @@ protected:
     TrackDataRequestState m_request_state;
     Settings&             m_settings;
     bool                  m_meta_area_clicked;
-    static float          s_metadata_width;
+    float                 m_meta_area_scale_width;
+    bool                  m_selected;
+
+    static float s_metadata_width;
 };
 
 }  // namespace View

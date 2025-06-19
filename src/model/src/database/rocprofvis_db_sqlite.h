@@ -51,6 +51,7 @@ typedef struct{
     // multi-use string  
     rocprofvis_dm_charptr_t subquery;
     rocprofvis_dm_charptr_t table_subquery;
+    rocprofvis_dm_track_id_t track_id;
 } rocprofvis_db_sqlite_callback_parameters;
 
 // class for any Sqlite database methods and properties 

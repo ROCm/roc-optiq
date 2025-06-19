@@ -19,16 +19,23 @@
 // SOFTWARE.
 
 #include "rocprofvis_dm_pmc_track_slice.h"
+#include "rocprofvis_dm_track.h"
 
 namespace RocProfVis
 {
 namespace DataModel
 {
 
+PmcTrackSlice::PmcTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
+: TrackSlice(ctx, start, end)
+{
+    m_samples.reserve(ctx->NumRecords());
+}; 
+
 //AddRecord method adds an object to a m_samples
 rocprofvis_dm_result_t PmcTrackSlice::AddRecord(rocprofvis_db_record_data_t & data){
     try{
-        m_samples.push_back(std::make_unique<PmcRecord>(data.pmc.timestamp,data.pmc.value));
+        m_samples.emplace_back(std::make_unique<PmcRecord>(data.pmc.timestamp,data.pmc.value));
     }
     catch(std::exception ex)
     {

@@ -17,8 +17,7 @@ RocProfVis::View::MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
 
 void
 RocProfVis::View::RenderLoadingIndicatorDots(float dot_radius, int num_dots,
-                                             float spacing, const ImVec4& color,
-                                             float speed)
+                                             float spacing, ImU32 color, float speed)
 {
     // Calculate total width needed
     float  total_width = MeasureLoadingIndicatorDots(dot_radius, num_dots, spacing).x;
@@ -44,10 +43,12 @@ RocProfVis::View::RenderLoadingIndicatorDots(float dot_radius, int num_dots,
         // Sharpen the pulse a bit
         alpha_multiplier = clamp(alpha_multiplier * 1.5f - 0.25f, 0.0f, 1.0f);
 
-        ImVec4 current_color = color;
-        current_color.w *= alpha_multiplier;
+        ImU32        current_color = color;
+        unsigned int alpha         = (current_color >> IM_COL32_A_SHIFT) & 0xFF;
+        alpha                      = static_cast<unsigned int>(alpha * alpha_multiplier);
+        current_color = (current_color & ~IM_COL32_A_MASK) | (alpha << IM_COL32_A_SHIFT);
 
         draw_list->AddCircleFilled(ImVec2(current_dot_x, current_dot_y), dot_radius,
-                                   ImGui::GetColorU32(current_color), 12);
+                                   current_color, 12);
     }
 }

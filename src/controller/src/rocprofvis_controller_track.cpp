@@ -71,14 +71,23 @@ Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc
     return result;
 }
 
+struct FetchEventsArgs
+{
+    Array*             m_array;
+    uint64_t*          m_index;
+    std::unordered_set<uint64_t> m_event_ids;
+};
+
 rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_t& index)
 {
-    std::pair<Array&, uint64_t&> pair(array, index);
+    FetchEventsArgs args;
+    args.m_array = &array;
+    args.m_index = &index;
 
-    rocprofvis_result_t result = FetchSegments(start, end, &pair, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t
+    rocprofvis_result_t result = FetchSegments(start, end, &args, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t
     {
-        std::pair<Array&, uint64_t&>* pair = (std::pair<Array&, uint64_t&>*)user_ptr;
-        rocprofvis_result_t result = segment.Fetch(start, end, pair->first.GetVector(), pair->second);
+        FetchEventsArgs* args = (FetchEventsArgs*) user_ptr;
+        rocprofvis_result_t result = segment.Fetch(start, end, args->m_array->GetVector(), *args->m_index, &args->m_event_ids);
         return result;
     });
         
@@ -616,64 +625,91 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 if (((m_type == kRPVControllerTrackTypeEvents) && (object_type == kRPVControllerObjectTypeEvent))
                     || ((m_type == kRPVControllerTrackTypeSamples) && (object_type == kRPVControllerObjectTypeSample)))
                 {
-                    rocprofvis_property_t property;
+                    rocprofvis_property_t start_ts_property;
+                    rocprofvis_property_t end_ts_property;
                     uint64_t              level = 0;
+                    uint64_t              event_id = 0;
                     if (object_type == kRPVControllerObjectTypeEvent)
                     {  
                         result = object->GetUInt64(kRPVControllerEventLevel, 0, &level);
-                        property = kRPVControllerEventStartTimestamp;
+                        result = object->GetUInt64(kRPVControllerEventId, 0, &event_id);
+                        start_ts_property = kRPVControllerEventStartTimestamp;
+                        end_ts_property = kRPVControllerEventEndTimestamp;
                     }
                     else
                     {
-                        property = kRPVControllerSampleTimestamp;
+                        start_ts_property = kRPVControllerSampleTimestamp;
+                        end_ts_property = kRPVControllerSampleTimestamp;
                     }
 
-                    double timestamp = 0;
-                    result = object->GetDouble(property, 0, &timestamp);
+                    typedef struct
+                    {
+                        double start;
+                        double end;
+                    } timestamp_pair;
+                    timestamp_pair timestamp = { 0 };
+                    result = object->GetDouble(start_ts_property, 0, &timestamp.start);
                     if (result == kRocProfVisResultSuccess)
                     {
-                        if (timestamp >= m_start_timestamp && timestamp <= m_end_timestamp)
+                        result = object->GetDouble(end_ts_property, 0, &timestamp.end);
+                    }
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        if(timestamp.start >= m_start_timestamp &&
+                           timestamp.end <= m_end_timestamp)
                         {
-                            double relative = (timestamp - m_start_timestamp);
-                            double num_segments = floor(relative / kSegmentDuration);
-                            double segment_start = m_start_timestamp + (num_segments * kSegmentDuration);
-
-                            if (m_segments.GetSegments().find(segment_start) == m_segments.GetSegments().end())
+                            timestamp_pair relative  = { timestamp.start - m_start_timestamp,
+                                                    timestamp.end - m_start_timestamp };
+                            timestamp_pair num_segments = {floor(relative.start / kSegmentDuration),
+                                                    floor(relative.end / kSegmentDuration)};
+                            
+                            for (double current_segment = num_segments.start; current_segment <= num_segments.end; current_segment++)
                             {
-                                double segment_end = segment_start + kSegmentDuration;
-                                std::unique_ptr<Segment> segment = std::make_unique<Segment>(m_type);
-                                segment->SetStartEndTimestamps(segment_start, segment_end);
-                                segment->SetMinTimestamp(timestamp); 
-                                if (object_type == kRPVControllerObjectTypeEvent)
-                                {
-                                    property = kRPVControllerEventStartTimestamp;
-                                    double end_timestamp = timestamp;
-                                    object->GetDouble(kRPVControllerEventEndTimestamp, 0, &end_timestamp);
-                                    segment->SetMaxTimestamp(end_timestamp);
-                                }
-                                else
-                                {
-                                    segment->SetMaxTimestamp(timestamp);
-                                }
-                                m_segments.Insert(segment_start, std::move(segment));
-                                result = (m_segments.GetSegments().find(segment_start) !=
-                                          m_segments.GetSegments().end())
-                                             ? kRocProfVisResultSuccess
-                                             : kRocProfVisResultMemoryAllocError;
-                            }
+                                double segment_start =
+                                    m_start_timestamp +
+                                    (current_segment * kSegmentDuration);
 
-                            if (result == kRocProfVisResultSuccess)
-                            {
-                                std::unique_ptr<Segment>& segment =
-                                    m_segments.GetSegments()[segment_start];
-                                segment->SetMinTimestamp(std::min(segment->GetMinTimestamp(), timestamp));
-                                double end_timestamp = timestamp;
-                                if (object_type == kRPVControllerObjectTypeEvent)
-                                {   
-                                    object->GetDouble(kRPVControllerEventEndTimestamp, 0, &end_timestamp); 
+                                if(m_segments.GetSegments().find(segment_start) ==
+                                   m_segments.GetSegments().end())
+                                {
+                                    double segment_end = segment_start + kSegmentDuration;
+                                    std::unique_ptr<Segment> segment =
+                                        std::make_unique<Segment>(m_type);
+                                    segment->SetStartEndTimestamps(segment_start,
+                                                                   segment_end);
+                                    segment->SetMinTimestamp(timestamp.start);
+                                    segment->SetMaxTimestamp(timestamp.end);                                 
+                                    m_segments.Insert(segment_start, std::move(segment));
+                                    result =
+                                        (m_segments.GetSegments().find(segment_start) !=
+                                         m_segments.GetSegments().end())
+                                            ? kRocProfVisResultSuccess
+                                            : kRocProfVisResultMemoryAllocError;
                                 }
-                                segment->SetMaxTimestamp(std::max(segment->GetMaxTimestamp(), end_timestamp));
-                                segment->Insert(timestamp, level, object);
+
+                                if(result == kRocProfVisResultSuccess)
+                                {
+                                    std::unique_ptr<Segment>& segment =
+                                        m_segments.GetSegments()[segment_start];
+                                    segment->SetMinTimestamp(
+                                        std::min(segment->GetMinTimestamp(), timestamp.start));
+                                    segment->SetMaxTimestamp(std::max(
+                                        segment->GetMaxTimestamp(), timestamp.end));
+                                    if(current_segment == num_segments.start)
+                                    {
+                                        segment->Insert(timestamp.start, level, object);
+                                    }
+                                    else
+                                    {
+                                        if (object_type == kRPVControllerObjectTypeEvent)
+                                        {
+                                            Event* event = (Event*) object;
+                                            Event* event_duplicate = new Event(*event);
+                                            segment->Insert(timestamp.start, level, event_duplicate);
+                                            spdlog::debug("Add duplicate event with id = {}", event_id);
+                                        }
+                                    }
+                                }
                             }
                         }
                         else

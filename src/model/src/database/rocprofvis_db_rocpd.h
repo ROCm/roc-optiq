@@ -22,7 +22,7 @@
 
 #include "rocprofvis_db_profile.h"
 
-#include <map>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -33,7 +33,7 @@ namespace DataModel
 class RocpdDatabase : public ProfileDatabase
 {
     // type of map array for string indexes remapping
-    typedef std::map<uint64_t, uint32_t> string_index_map_t;
+    typedef std::unordered_map<uint64_t, uint32_t> string_index_map_t;
 
     // map array for fast non-PMC track ID search
     typedef std::map<uint32_t, uint32_t> sub_process_map_t;

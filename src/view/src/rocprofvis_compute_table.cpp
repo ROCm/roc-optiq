@@ -176,7 +176,8 @@ void ComputeTableView::RenderMenuBar()
                              [](ImGuiInputTextCallbackData* data) -> int 
                              {
                                  //ImGuiInputTextCallback on edit.
-                                 EventManager::GetInstance()->AddEvent(std::make_shared<ComputeTableSearchEvent>(static_cast<int>(RocEvents::kComputeTableSearchChanged), std::string(data->Buf)));
+                                 std::string data_str(data->Buf);
+                                 EventManager::GetInstance()->AddEvent(std::make_shared<ComputeTableSearchEvent>(static_cast<int>(RocEvents::kComputeTableSearchChanged), data_str));
                                  return 0;
                              });
 }

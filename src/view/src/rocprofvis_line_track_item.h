@@ -22,7 +22,6 @@ public:
     LineTrackItem(DataProvider& dp, int id, std::string name, float zoom, float movement,
                   double& min_x, double& max_x, float scale_x);
     ~LineTrackItem();
-    void Render(double width) override;
 
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
@@ -39,7 +38,7 @@ public:
     void  SetShowBoxplot(bool show_boxplot);
 
 protected:
-    virtual void RenderMetaArea() override;
+    virtual void RenderMetaAreaScale(ImVec2& container_size) override;
     virtual void RenderChart(float graph_width) override;
 
 private:
@@ -49,7 +48,7 @@ private:
     double                               m_max_y;
     bool                                 m_is_color_value_existant;
     DataProvider&                        m_dp;
-    bool m_show_boxplot;
+    bool                                 m_show_boxplot;
 };
 
 }  // namespace View

@@ -8,6 +8,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
 option(JSON_SUPPORT "Build with support for JSON traces" ON)
 
+# Add third-party libraries, core, and model BEFORE controller
+add_subdirectory(thirdparty)
+
+add_subdirectory(src/core)
+add_subdirectory(src/model)
 add_subdirectory(src/controller)
 
 set(rocprofvis_source_files)
@@ -44,6 +49,7 @@ set(VIEW_FILES
 	src/view/src/rocprofvis_compute_metric.cpp
 	src/view/src/rocprofvis_compute_roofline.cpp
 	src/view/src/rocprofvis_navigation_manager.cpp
+    src/view/src/rocprofvis_utils.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
 	src/view/src/widgets/rocprofvis_compute_widget.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
@@ -75,4 +81,10 @@ target_link_libraries(rocprof-visualizer PRIVATE spdlog)
 target_link_libraries(rocprof-visualizer PRIVATE csv)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
+
+# Csv parser enables coverage in debug builds so we need to enable it too
+if((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX) AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE))
+    message(STATUS "Adding --coverage to linker flags for rocprof-visualizer due to potential gcov symbols from dependencies.")
+    target_link_options(rocprof-visualizer PRIVATE --coverage)
+endif()
 

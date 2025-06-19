@@ -41,8 +41,7 @@ class EventTrackSlice : public TrackSlice {
         // @param end - end time of the slice
         EventTrackSlice(   Track* ctx, 
                                 rocprofvis_dm_timestamp_t start, 
-                                rocprofvis_dm_timestamp_t end) : 
-                                TrackSlice(ctx, start, end) {}; 
+                                rocprofvis_dm_timestamp_t end); 
         // EventTrackSlice class destructor, not required unless declared as virtual
         ~EventTrackSlice(){}
         // Method to add event record to the time slice

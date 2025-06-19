@@ -20,7 +20,6 @@ public:
     FlameTrackItem(DataProvider& dp, int chart_id, std::string name, float zoom,
                    float movement, double min_x, double max_x, float scale_x);
     void SetRandomColorFlag(bool set_color);
-    void Render(double width) override;
     void DrawBox(ImVec2 start_position, int boxplot_box_id,
                  rocprofvis_trace_event_t flame, float duration, ImDrawList* draw_list);
 
@@ -32,20 +31,16 @@ public:
 
     bool HasData() override;
     void ReleaseData() override;
- 
+
 protected:
-    void RenderMetaArea() override;
     void RenderChart(float graph_width) override;
 
 private:
     std::vector<rocprofvis_trace_event_t> m_flames;
-    float                                 m_sidebar_size;
-    rocprofvis_color_by_value_t           m_is_color_value_existant;
     bool                                  m_request_random_color;
     ImVec2                                m_text_padding;
     float                                 m_flame_height;
-    uint64_t                              m_selected_event_id; 
-    float                                 m_scale_area_width;
+    uint64_t                              m_selected_event_id;
     DataProvider&                         m_dp;
 };
 

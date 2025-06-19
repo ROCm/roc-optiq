@@ -215,6 +215,18 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controlle
 */
 
 /*
+* Setup and fetches data for a plot, populating the passed in array with PlotSeries objects.
+* Data within PlotSeries can be accessed using GetUInt64/GetDouble/GetString.
+* @param controller The controller.
+* @param plot The plot to fetch data from
+* @param args The arguments that setup the plot
+* @param result The future to wait on
+* @param output The array to write to
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_plot_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_plot_t* plot, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
+
+/*
 * Get indexed properties from an object.
 * @param controller The controller.
 * @param object The event or sample to fetch data from

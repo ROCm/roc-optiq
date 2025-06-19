@@ -177,7 +177,7 @@ HSplitContainer::Render()
     {
         float split           = clamp(m_split_ratio, 0.0f, 1.0f);
         float available_width = total_size.x - m_resize_grip_size;
-        m_left_col_width      = std::floorf(available_width * split);
+        m_left_col_width      = std::floor(available_width * split);
 
         m_left_col_width = clamp(m_left_col_width, m_left_min_width,
                                  available_width - m_right_min_width);
@@ -307,7 +307,7 @@ VSplitContainer::Render()
     {
         float split            = clamp(m_split_ratio, 0.0f, 1.0f);
         float available_height = total_size.y - m_resize_grip_size;
-        m_top_row_height       = std::floorf(available_height * split);
+        m_top_row_height       = std::floor(available_height * split);
 
         m_top_row_height = clamp(m_top_row_height, m_top_min_height,
                                  available_height - m_bottom_min_height);

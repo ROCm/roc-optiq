@@ -29,6 +29,9 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_flow_control.cpp
     src/rocprofvis_controller_call_stack.cpp
     src/rocprofvis_controller_ext_data.cpp
+	src/rocprofvis_controller_plot.cpp
+	src/rocprofvis_controller_plot_series.cpp
+	src/rocprofvis_controller_plot_compute.cpp
 )
 
 if(JSON_SUPPORT) 
@@ -41,9 +44,6 @@ endif(JSON_SUPPORT)
 add_library(rocprof-visualizer-controller ${rocprofvis_controller_source_files})
 
 file(GLOB COMMON_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
-
-add_subdirectory(../../thirdparty thirdparty)
-add_subdirectory(../model model)
 
 if(JSON_SUPPORT) 
 target_include_directories(rocprof-visualizer-controller PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
@@ -60,5 +60,11 @@ target_include_directories(rocprof-visualizer-controller PUBLIC ${CMAKE_CURRENT_
 add_executable(${PROJECT_NAME}-basic-tests tests/basic_tests.cpp)
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE ${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE Catch2::Catch2WithMain)
+
+# Csv parser enables coverage in debug builds so we need to enable it too
+if((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX) AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE))
+    target_link_options(${PROJECT_NAME}-basic-tests PRIVATE --coverage)
+endif()
+
 add_test(NAME ${PROJECT_NAME}-basic-tests COMMAND ${PROJECT_NAME}-basic-tests)
 set_tests_properties(${PROJECT_NAME}-basic-tests PROPERTIES RUN_SERIAL ON)

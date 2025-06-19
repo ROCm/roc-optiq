@@ -27,7 +27,7 @@ DebugWindow::DebugWindow()
     LayoutItem nav_bar(0, 30.0f);
     nav_bar.m_item = std::make_shared<RocCustomWidget>([this]() { this->RenderNav(); });
     nav_bar.m_window_padding = ImVec2(10, 2);
-    nav_bar.m_item_spacing = ImVec2(4,4);
+    nav_bar.m_item_spacing   = ImVec2(4, 4);
     nav_bar.m_bg_color       = ImColor(228, 228, 228, 255);
 
     LayoutItem content(0, 0.0f);
@@ -101,7 +101,7 @@ DebugWindow::RenderNav()
         }
         m_main_container->SetAt(1, tmp);
     }
-    
+
     ImGui::SameLine();
 
     if(ImGui::Button("Clear Log"))
@@ -157,7 +157,24 @@ DebugWindow::AddDebugMessage(const std::string& message)
 void
 DebugWindow::AddPersitentDebugMessage(const std::string& message)
 {
-    m_persitent_debug_messages.Push(message);
+    // escape the message so characters that could be interpreted as format specifiers and
+    // escape sequences are not interpreted by ImGui
+    std::string escaped_message;
+    escaped_message.reserve(message.size());
+    for(char c : message)
+    {
+        if(c == '\\')
+        {
+            escaped_message.push_back('\\');
+        }
+        else if(c == '%')
+        {
+            escaped_message.push_back('%');
+        }
+        escaped_message.push_back(c);
+    }
+
+    m_persitent_debug_messages.Push(escaped_message);
 }
 
 void

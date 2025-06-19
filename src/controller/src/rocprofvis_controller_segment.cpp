@@ -123,7 +123,7 @@ void Segment::Insert(double timestamp, uint8_t level, Handle* event)
     m_entries.insert(std::make_pair(SegmentItemKey(timestamp,level), event));
 }
 
-rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index)
+rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     double last_timestamp = std::max(m_end_timestamp, m_max_timestamp);
@@ -164,6 +164,20 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 double min_ts = lower->first.m_timestamp;
                 double max_ts = lower->first.m_timestamp;
                 lower->second->GetDouble(property, 0, &max_ts);
+
+                if(event_id_set)
+                {
+                    uint64_t event_id;
+                    lower->second->GetUInt64(kRPVControllerEventId, 0, &event_id);
+                    auto it = event_id_set->find(event_id);
+                    if(it != event_id_set->end())
+                    {
+                        spdlog::debug("Remove duplicate with id = {}", event_id);
+                        ++lower;
+                        continue;
+                    }
+                    event_id_set->insert(event_id);
+                }
 
                 if(min_ts <= end && max_ts >= start)
                 {

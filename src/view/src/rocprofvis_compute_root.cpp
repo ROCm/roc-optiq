@@ -15,24 +15,25 @@ namespace RocProfVis
 namespace View
 {
 
-ComputeRoot::ComputeRoot(std::string owner_id)
+ComputeRoot::ComputeRoot()
 : m_compute_data_provider(nullptr)
 , m_compute_data_provider2(nullptr)
 , m_tab_container(nullptr)
-, m_owner_id(owner_id)
 , m_data_dirty_event_token(-1)
 , m_data_dirty(false)
 {
+    m_id = GenUniqueName("");
+    
     m_compute_data_provider = std::make_shared<ComputeDataProvider>();
     m_compute_data_provider2 = std::make_shared<ComputeDataProvider2>();
 
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(TabItem{"Summary View", COMPUTE_SUMMARY_VIEW_URL, std::make_shared<ComputeSummaryView>(m_owner_id, m_compute_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Roofline View", COMPUTE_ROOFLINE_VIEW_URL, std::make_shared<ComputeRooflineView>(m_owner_id, m_compute_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Block View", COMPUTE_BLOCK_VIEW_URL, std::make_shared<ComputeBlockView>(m_owner_id, m_compute_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Table View", COMPUTE_TABLE_VIEW_URL, std::make_shared<ComputeTableView>(m_owner_id, m_compute_data_provider2), false});
+    m_tab_container->AddTab(TabItem{"Summary View", COMPUTE_SUMMARY_VIEW_URL, std::make_shared<ComputeSummaryView>(m_id, m_compute_data_provider2), false});
+    m_tab_container->AddTab(TabItem{"Roofline View", COMPUTE_ROOFLINE_VIEW_URL, std::make_shared<ComputeRooflineView>(m_id, m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Block View", COMPUTE_BLOCK_VIEW_URL, std::make_shared<ComputeBlockView>(m_id, m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Table View", COMPUTE_TABLE_VIEW_URL, std::make_shared<ComputeTableView>(m_id, m_compute_data_provider2), false});
 
-    NavigationManager::GetInstance()->RegisterContainer(m_tab_container, m_owner_id, m_owner_id);
+    NavigationManager::GetInstance()->RegisterContainer(m_tab_container, m_id, m_id);
 
     auto data_dirty_event_handler = [this](std::shared_ptr<RocEvent> event) 
     {
@@ -42,7 +43,7 @@ ComputeRoot::ComputeRoot(std::string owner_id)
 }
 
 ComputeRoot::~ComputeRoot() {
-    NavigationManager::GetInstance()->UnregisterContainer(m_tab_container, m_owner_id, m_owner_id);
+    NavigationManager::GetInstance()->UnregisterContainer(m_tab_container, m_id, m_id);
 }
 
 void ComputeRoot::Update()

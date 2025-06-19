@@ -278,33 +278,34 @@ extern "C"
         return error;
     }
 
-    //////////////////////////NEW STUFF
-
     rocprofvis_result_t rocprofvis_controller_event_fetch_async(
         rocprofvis_controller_t* controller, rocprofvis_property_t property,
         uint64_t index, uint32_t count, rocprofvis_controller_future_t* result,
         rocprofvis_controller_array_t* output, uint64_t event_id, double start_ts,
         double end_ts)
     {
-        rocprofvis_result_t              error = kRocProfVisResultInvalidArgument;
-        RocProfVis::Controller::TraceRef trace(controller);
+        RocProfVis::Controller::TraceRef  trace(controller);
         RocProfVis::Controller::FutureRef future(result);
         RocProfVis::Controller::ArrayRef  array(output);
 
-        RocProfVis::Controller::Event* event =
-            new RocProfVis::Controller::Event(event_id, 2, 3);
-
-        if(trace.IsValid()  && future.IsValid() && array.IsValid())
+        if(!trace.IsValid() || !future.IsValid() || !array.IsValid())
         {
-         
-           error = trace->AsyncFetch(*event, *future, *array, property);
-              
-          
+            return kRocProfVisResultInvalidArgument;
         }
+
+        auto event =
+            std::make_unique<RocProfVis::Controller::Event>(event_id, start_ts, end_ts);
+        if(!event)
+        {
+            return kRocProfVisResultUnknownError;
+        }
+
+        rocprofvis_result_t error = trace->AsyncFetch(*event, *future, *array, property);
+
+        event.release();
+
         return error;
     }
-
-      
 
     rocprofvis_result_t rocprofvis_controller_table_fetch_async(
         rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table,
@@ -324,7 +325,7 @@ extern "C"
         }
         return error;
     }
-     
+
     void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* args)
     {
         RocProfVis::Controller::ArgumentsRef arguments(args);

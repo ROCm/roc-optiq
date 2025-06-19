@@ -1,9 +1,9 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 #pragma once
+#include "../src/view/src/widgets/rocprofvis_widget.h"
 #include "rocprofvis_data_provider.h"
 #include <string>
 #include <vector>
-#include "../src/view/src/widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
 {
@@ -16,11 +16,13 @@ public:
     EventsView(DataProvider& dp);
     ~EventsView();
     void ShowEventExtDataPanel(const std::vector<event_ext_data>& ext_data);
+    void ShowEventFlowInfoPanel(const std::vector<event_flow_data>& flow_data);
     void Render();
 
 private:
     std::vector<std::string> events_;
     DataProvider&            m_data_provider;
+    uint64_t                 m_last_selected_event;
 };
 
 }  // namespace View

@@ -25,6 +25,7 @@ DataProvider::DataProvider()
 , m_selected_event_start(0)
 , m_selected_event_end(0)
 , m_event_info({})
+, m_flow_info({})
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
@@ -35,6 +36,66 @@ DataProvider::SetSelectedEvent(uint64_t id, double start, double end)
     m_selected_event       = id;
     m_selected_event_start = start;
     m_selected_event_end   = end;
+}
+
+uint64_t
+DataProvider::GetSelectedEventValue() const
+{
+    return m_selected_event;
+}
+
+void
+DataProvider::SetSelectedEventValue(uint64_t event)
+{
+    m_selected_event = event;
+}
+
+double
+DataProvider::GetSelectedEventStart() const
+{
+    return m_selected_event_start;
+}
+
+void
+DataProvider::SetSelectedEventStart(double start)
+{
+    m_selected_event_start = start;
+}
+
+double
+DataProvider::GetSelectedEventEnd() const
+{
+    return m_selected_event_end;
+}
+
+void
+DataProvider::SetSelectedEventEnd(double end)
+{
+    m_selected_event_end = end;
+}
+
+const event_info&
+DataProvider::GetEventInfoStruct() const
+{
+    return m_event_info;
+}
+
+void
+DataProvider::SetEventInfoStruct(const event_info& info)
+{
+    m_event_info = info;
+}
+
+const flow_info&
+DataProvider::GetFlowInfo() const
+{
+    return m_flow_info;
+}
+
+void
+DataProvider::SetFlowInfo(const flow_info& info)
+{
+    m_flow_info = info;
 }
 
 uint64_t
@@ -1563,7 +1624,9 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
 void
 DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
 {
-    auto future = rocprofvis_controller_future_alloc();
+    m_event_info = {};
+    m_flow_info  = {};
+    auto future  = rocprofvis_controller_future_alloc();
     ROCPROFVIS_ASSERT(future != nullptr);
     auto outArray = rocprofvis_controller_array_alloc(0);
     ROCPROFVIS_ASSERT(outArray != nullptr);
@@ -1626,7 +1689,6 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                 {
                     spdlog::debug(">>>>>>> Event {} Name: {}", j, data);
                     ext_data.name = data;
-
                 }
                 delete[] data;
             }
@@ -1644,12 +1706,10 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                 {
                     spdlog::debug(">>>>>>> Event {} Value: {}", j, data);
                     ext_data.value = data;
-
                 }
                 delete[] data;
             }
             m_event_info.ext_data.push_back(ext_data);
-
         }
     }
 
@@ -1670,6 +1730,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                                          &prop_count);
 
         spdlog::debug(">>>>>>> Event {} has {} properties", 1, prop_count);
+        event_flow_data flow_data = {};
 
         for(auto j = 0; j < prop_count; j++)
         {
@@ -1683,6 +1744,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
             if(result == kRocProfVisResultSuccess)
             {
                 spdlog::debug(">>>>>>> Endpoint {} id: {}", j, data);
+                flow_data.id = data;
             }
 
             data   = 0;
@@ -1690,6 +1752,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                 flow_control_handle, kRPVControllerFlowControlTimestamp, 0, &data);
             if(result == kRocProfVisResultSuccess)
             {
+                flow_data.timestamp = data;
                 spdlog::debug(">>>>>>> Endpoint {} timestamp: {}", j, data);
             }
 
@@ -1698,6 +1761,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                 flow_control_handle, kRPVControllerFlowControlTrackId, 0, &data);
             if(result == kRocProfVisResultSuccess)
             {
+                flow_data.track_id = data;
                 spdlog::debug(">>>>>>> Endpoint {} track id: {}", j, data);
             }
 
@@ -1706,9 +1770,11 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                 flow_control_handle, kRPVControllerFlowControlDirection, 0, &data);
             if(result == kRocProfVisResultSuccess)
             {
+                flow_data.direction = data;
                 spdlog::debug(">>>>>>> Endpoint {} direction: {}", j, data);
             }
         }
+        m_flow_info.flow_data.push_back(flow_data);
     }
 
     rocprofvis_controller_future_free(future);

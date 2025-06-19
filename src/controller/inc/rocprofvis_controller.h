@@ -225,6 +225,26 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controlle
 * @param output The array to write to
 * @returns kRocProfVisResultSuccess or an error code.
 */
+
+
+
+rocprofvis_result_t rocprofvis_controller_event_fetch_async(rocprofvis_controller_t* controller, rocprofvis_property_t property, uint64_t index, uint32_t count, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output, uint64_t event_id, double start_ts, double end_ts);
+/*
+* Fetches event data asynchronously for a given event ID and time range.
+
+
+* @param controller The controller.
+* @param property The property to fetch.
+* @param index The index to start at (reserved for future use).
+* @param count The number of elements to fetch (reserved for future use).
+* @param result The future to wait on.
+* @param output The array to write to.
+* @param event_id The event ID to fetch.
+* @param start_ts The start timestamp for the event data.
+* @param end_ts The end timestamp for the event data.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+
 rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_controller_t* controller, rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, uint32_t count, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
 /* JSON: GetIndexedProperty
 {
@@ -241,11 +261,7 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_
 }
 */
 
-rocprofvis_result_t rocprofvis_controller_event_fetch_async(
-    rocprofvis_controller_t* controller, rocprofvis_property_t property, uint64_t index,
-    uint32_t count, rocprofvis_controller_future_t* result,
-    rocprofvis_controller_array_t* output, uint64_t event_id, double start_ts,
-    double end_ts);
+ 
 
 void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* args);
 

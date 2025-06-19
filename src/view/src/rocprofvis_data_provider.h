@@ -48,7 +48,6 @@ typedef struct track_info_t
     uint64_t                           num_entries;  // number of entries in the track
 } track_info_t;
 
-
 struct event_ext_data
 {
     std::string category;
@@ -58,11 +57,23 @@ struct event_ext_data
 
 typedef struct event_info
 {
-    std::vector<event_ext_data> ext_data;  // additional event data
- 
+    std::vector<event_ext_data> ext_data;  // additional flow data
+
 } event_info;
 
- 
+struct event_flow_data
+{
+    std::string id;
+    std::string timestamp;
+    std::string track_id;
+    std::string direction;
+};
+
+typedef struct flow_info
+{
+    std::vector<event_flow_data> flow_data;  // additional flow data
+
+} flow_info;
 
 class RequestParamsBase
 {
@@ -145,17 +156,34 @@ typedef struct table_info_t
 class DataProvider
 {
 public:
-    uint64_t m_selected_event;
-    double   m_selected_event_start;
-    double   m_selected_event_end;
-    event_info m_event_info;  // Store event info for each event
-
+   
 
     static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = -1;
     static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = -2;
 
     DataProvider();
     ~DataProvider();
+
+    // Getter and Setter for m_selected_event
+    uint64_t GetSelectedEventValue() const;
+    void     SetSelectedEventValue(uint64_t event);
+
+    // Getter and Setter for m_selected_event_start
+    double GetSelectedEventStart() const;
+    void   SetSelectedEventStart(double start);
+
+    // Getter and Setter for m_selected_event_end
+    double GetSelectedEventEnd() const;
+    void   SetSelectedEventEnd(double end);
+
+    // Getter and Setter for m_event_info
+    const event_info& GetEventInfoStruct() const;
+    void              SetEventInfoStruct(const event_info& info);
+
+    // Getter and Setter for m_flow_info
+    const flow_info& GetFlowInfo() const;
+    void             SetFlowInfo(const flow_info& info);
+
 
     void GetEventInfo(uint64_t event_id, double start_ts, double end_ts);
 
@@ -339,14 +367,20 @@ private:
     rocprofvis_controller_future_t*   m_trace_future;
     rocprofvis_controller_t*          m_trace_controller;
     rocprofvis_controller_timeline_t* m_trace_timeline;
- 
+
     ProviderState m_state;
 
     uint64_t    m_num_graphs;       // number of graphs contained in the trace
     double      m_min_ts;           // timeline start point
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
-   
+
+    //Variables below are for event selection.
+    uint64_t   m_selected_event;
+    double     m_selected_event_start;
+    double     m_selected_event_end;
+    event_info m_event_info;  // Store event info for each event
+    flow_info  m_flow_info;   // Store flow info for each event
 
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;

@@ -14,6 +14,8 @@ namespace View
 enum class Colors
 {
     kMetaDataColor,
+    kMetaDataColorSelected,
+    kMetaDataSeparator,
     kTransparent,
     kTextError,
     kTextSuccess,
@@ -26,6 +28,7 @@ enum class Colors
     kFillerColor,
     kScrollBarColor,
     kHighlightChart,
+    kRulerBgColor,
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -44,11 +47,11 @@ enum class FontType
 class FontManager
 {
 public:
-    FontManager() = default;
-    ~FontManager() = default;
+    FontManager()                              = default;
+    ~FontManager()                             = default;
     FontManager(const FontManager&)            = delete;
     FontManager& operator=(const FontManager&) = delete;
-    
+
     /*
      * Called to initialize the font manager. Should be once called after ImGui context is
      * created, but before the first frame.

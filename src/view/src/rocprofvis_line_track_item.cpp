@@ -27,7 +27,8 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_dp(dp)
 , m_show_boxplot(false)
 {
-    m_track_height = 290.0f;
+    m_track_height          = 90.0f;
+    m_meta_area_scale_width = 70.0f;
 }
 
 LineTrackItem::~LineTrackItem() {}
@@ -54,7 +55,7 @@ LineTrackItem::SetShowBoxplot(bool show_boxplot)
 void
 LineTrackItem::LineTrackRender(float graph_width)
 {
-    ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
+    ImGui::BeginChild("LV", ImVec2(graph_width, m_track_content_height), false);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
@@ -188,7 +189,7 @@ LineTrackItem::LineTrackRender(float graph_width)
 void
 LineTrackItem::BoxPlotRender(float graph_width)
 {
-    ImGui::BeginChild("Graph View", ImVec2(graph_width, m_track_height), false);
+    ImGui::BeginChild("BV", ImVec2(graph_width, m_track_content_height), false);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
@@ -407,48 +408,20 @@ LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
 }
 
 void
-LineTrackItem::RenderMetaArea()
+LineTrackItem::RenderMetaAreaScale(ImVec2& container_size)
 {
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_metadata_bg_color);
-    ImGui::BeginChild("MetaData View", ImVec2(s_metadata_width, m_track_height),
-                      ImGuiChildFlags_None);
-    ImVec2 content_size = ImGui::GetContentRegionAvail();
-
-    // handle mouse click 
-    ImVec2 container_pos  = ImGui::GetWindowPos();
-    ImVec2 container_size = ImGui::GetWindowSize();
-
-    bool is_mouse_inside = ImGui::IsMouseHoveringRect(
-    container_pos, ImVec2(container_pos.x + container_size.x,
-                            container_pos.y + container_size.y));
-
-    m_meta_area_clicked = false;
-    if(is_mouse_inside) {
-        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-            m_meta_area_clicked = true;
-        }
-    }
-
-    // Set padding for the child window (Note this done using SetCursorPos
-    // because ImGuiStyleVar_WindowPadding has no effect on child windows without
-    // borders)
-    ImGui::SetCursorPos(m_metadata_padding);
-    // Adjust content size to account for padding
-    content_size.x -= m_metadata_padding.x * 2;
-    content_size.y -= m_metadata_padding.x * 2;
-    ImGui::BeginChild("MetaData Content", ImVec2(content_size.x - 70.0f, content_size.y),
+    ImGui::BeginChild("MetaData Scale", ImVec2(m_meta_area_scale_width, container_size.y),
                       ImGuiChildFlags_None);
 
-    ImGui::Text(m_name.c_str());
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-
-    ImGui::BeginChild("MetaData Scale", ImVec2(70.0f, content_size.y),
-                      ImGuiChildFlags_None);
+    ImDrawList* draw_list         = ImGui::GetWindowDrawList();
+    ImVec2      child_window_size = ImGui::GetWindowSize();
 
     char max_y_print[32];
     std::sprintf(max_y_print, "%.1f", m_max_y);
+    ImVec2 text_size = ImGui::CalcTextSize(max_y_print);
+
+    ImGui::SetCursorPos(ImVec2(child_window_size.x - (text_size.x + m_metadata_padding.x),
+                               ImGui::GetStyle().WindowPadding.y));
     ImGui::Text(max_y_print);
 
     if(ImGui::IsItemVisible())
@@ -460,19 +433,25 @@ LineTrackItem::RenderMetaArea()
         m_is_in_view_vertical = false;
     }
 
-    ImVec2 child_window_size = ImGui::GetWindowSize();
-    ImVec2 text_size         = ImGui::CalcTextSize("Scale Size");
-    ImGui::SetCursorPos(
-        ImVec2(0, child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
-
     char min_y_print[32];
     std::sprintf(min_y_print, "%.1f", m_min_y);
+    text_size = ImGui::CalcTextSize(max_y_print);
+
+    ImGui::SetCursorPos(
+        ImVec2(child_window_size.x - (text_size.x + m_metadata_padding.x),
+               child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
     ImGui::Text(min_y_print);
 
-    ImGui::EndChild();
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+
+    draw_list->AddLine(
+        ImVec2(cursor_position.x + m_metadata_padding.x, cursor_position.y),
+        ImVec2(cursor_position.x + m_metadata_padding.x,
+               cursor_position.y + child_window_size.y),
+        m_settings.GetColor(Colors::kMetaDataSeparator), 2.0f);
 
     ImGui::EndChild();
-    ImGui::PopStyleColor();
 }
 
 void
@@ -486,12 +465,6 @@ LineTrackItem::RenderChart(float graph_width)
     {
         LineTrackRender(graph_width);
     }
-}
-
-void
-LineTrackItem::Render(double width)
-{
-    TrackItem::Render(width);
 }
 
 ImVec2

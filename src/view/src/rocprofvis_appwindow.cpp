@@ -43,8 +43,10 @@ AppWindow::DestroyInstance()
 }
 
 AppWindow::AppWindow()
-: m_show_debug_widow(false)
+: m_show_debug_window(false)
 , m_show_provider_test_widow(false)
+, m_show_metrics(false)
+, m_main_view(nullptr)
 , m_tabclosed_event_token(-1)
 {}
 
@@ -53,7 +55,7 @@ AppWindow::~AppWindow()
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
                                              m_tabclosed_event_token);
 
-    m_open_views.clear();                                           
+    m_open_views.clear();
     NavigationManager::DestroyInstance();
 }
 
@@ -73,7 +75,7 @@ AppWindow::Init()
     status_bar_item.m_item = std::make_shared<RocWidget>();
     LayoutItem main_area_item(-1, -30.0f);
 
-    m_tab_container       = std::make_shared<TabContainer>();
+    m_tab_container = std::make_shared<TabContainer>();
     NavigationManager::GetInstance()->RegisterRootContainer(m_tab_container);
     main_area_item.m_item = m_tab_container;
 
@@ -287,7 +289,19 @@ AppWindow::RenderDeveloperMenu()
         {
             Settings::GetInstance().HorizontalRender();
         }
-
+        // Toggele ImGui's built-in metrics window
+        if(ImGui::MenuItem("Show Metrics", nullptr, m_show_metrics))
+        {
+            m_show_metrics = !m_show_metrics;
+        }
+        if(ImGui::MenuItem("Show Debug Window", nullptr, m_show_debug_window))
+        {
+            m_show_debug_window = !m_show_debug_window;
+            if(m_show_debug_window)
+            {
+                ImGui::SetWindowFocus("Debug Window");
+            }
+        }
         ImGui::EndMenu();
     }
 }
@@ -422,17 +436,21 @@ RenderProviderTest(DataProvider& provider)
 void
 AppWindow::RenderDebugOuput()
 {
-    if(m_show_debug_widow)
+    if(m_show_metrics)
+    {
+        ImGui::ShowMetricsWindow(&m_show_metrics);
+    }
+
+    if(m_show_debug_window)
     {
         DebugWindow::GetInstance()->Render();
     }
 
-    ImGuiIO& io = ImGui::GetIO();
     if(ImGui::IsKeyPressed(ImGuiKey_D))
     {
-        m_show_debug_widow = !m_show_debug_widow;
+        m_show_debug_window = !m_show_debug_window;
 
-        if(m_show_debug_widow)
+        if(m_show_debug_window)
         {
             ImGui::SetWindowFocus("Debug Window");
         }

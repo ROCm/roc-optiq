@@ -137,13 +137,13 @@ EventsView::ShowEventFlowInfoPanel(const std::vector<event_flow_data>& flow_data
         {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted(item.id.c_str());
+            ImGui::TextUnformatted(std::to_string(item.id).c_str());
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(item.timestamp.c_str());
+            ImGui::TextUnformatted(std::to_string(item.timestamp).c_str());
             ImGui::TableSetColumnIndex(2);
-            ImGui::TextUnformatted(item.track_id.c_str());
+            ImGui::TextUnformatted(std::to_string(item.track_id).c_str());
             ImGui::TableSetColumnIndex(3);
-            ImGui::TextUnformatted(item.direction.c_str());
+            ImGui::TextUnformatted(std::to_string(item.direction).c_str());
         }
         ImGui::EndTable();
     }

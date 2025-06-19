@@ -63,10 +63,10 @@ typedef struct event_info
 
 struct event_flow_data
 {
-    std::string id;
-    std::string timestamp;
-    std::string track_id;
-    std::string direction;
+    int id;
+    int timestamp;
+    int track_id;
+    int direction;
 };
 
 typedef struct flow_info
@@ -156,8 +156,6 @@ typedef struct table_info_t
 class DataProvider
 {
 public:
-   
-
     static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = -1;
     static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = -2;
 
@@ -183,7 +181,6 @@ public:
     // Getter and Setter for m_flow_info
     const flow_info& GetFlowInfo() const;
     void             SetFlowInfo(const flow_info& info);
-
 
     void GetEventInfo(uint64_t event_id, double start_ts, double end_ts);
 
@@ -375,7 +372,7 @@ private:
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
 
-    //Variables below are for event selection.
+    // Variables below are for event selection.
     uint64_t   m_selected_event;
     double     m_selected_event_start;
     double     m_selected_event_end;

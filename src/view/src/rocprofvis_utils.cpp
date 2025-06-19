@@ -8,25 +8,32 @@
 #include <sstream>
 
 std::string
-RocProfVis::View::format_nanosecond_timepoint(double double_ns_duration,
+RocProfVis::View::nanosecond_to_str(double time_point_ns) {
+    std::ostringstream oss;
+    oss << static_cast<uint64_t>(time_point_ns) << " ns";
+    return oss.str();
+}
+
+std::string
+RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
                                               bool   round_before_cast /*= false*/)
 {
     // Handle non-finite cases first
-    if(!std::isfinite(double_ns_duration))
+    if(!std::isfinite(time_point_ns))
     {
-        if(std::isnan(double_ns_duration)) return "NaN";
+        if(std::isnan(time_point_ns)) return "NaN";
         // For Inf, signbit helps distinguish +Inf and -Inf
-        if(std::signbit(double_ns_duration)) return "-Inf";
+        if(std::signbit(time_point_ns)) return "-Inf";
         return "+Inf";
     }
 
     bool is_negative_originally = false;
-    if(std::signbit(double_ns_duration))
+    if(std::signbit(time_point_ns))
     {
         // Determine if the original negative value is significant enough
         // to remain non-zero after conversion to integer nanoseconds.
         double threshold_for_non_zero_magnitude = round_before_cast ? 0.5 : 1.0;
-        if(std::abs(double_ns_duration) >= threshold_for_non_zero_magnitude)
+        if(std::abs(time_point_ns) >= threshold_for_non_zero_magnitude)
         {
             is_negative_originally = true;
         }
@@ -35,7 +42,7 @@ RocProfVis::View::format_nanosecond_timepoint(double double_ns_duration,
         // negative.
     }
 
-    double   abs_val_for_conversion = std::abs(double_ns_duration);
+    double   abs_val_for_conversion = std::abs(time_point_ns);
     uint64_t ns_duration_magnitude;
 
     if(round_before_cast)

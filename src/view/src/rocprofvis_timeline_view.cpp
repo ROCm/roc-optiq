@@ -63,6 +63,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_can_drag_to_pan(false)
 , m_region_selection_changed(false)
 , m_artificial_scrollbar_height(30)
+, m_display_time_format(TimeFormat::kTimecode)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -475,16 +476,20 @@ TimelineView::RenderGrid()
     double stepSize = 0;
     double steps    = 0;
     {
-        // char label[32];
-        // snprintf(label, sizeof(label), "%.0f", m_max_x);
+        std::string label;
 
-        // use the largest time point to determine the step size
-        std::string label      = format_nanosecond_timepoint(m_max_x) + "gap";
-        ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
-
+        switch(m_display_time_format)
+        {
+            // use the largest time point to determine the step size
+            case TimeFormat::kTimecode:
+                label = nanosecond_to_timecode_str(m_max_x) + "gap";
+                break;
+            case TimeFormat::kNanoseconds:
+            default: label = nanosecond_to_str(m_max_x) + "gap";
+        }
+        ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
         // amount the loop which generates the grid iterates by.
-        steps = m_graph_size.x / label_size.x;
-
+        steps    = m_graph_size.x / label_size.x;
         stepSize = label_size.x;
     }
 
@@ -511,9 +516,40 @@ TimelineView::RenderGrid()
             ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
             m_settings.GetColor(Colors::kRulerBgColor));
 
+        // Detect right mouse click in the ruler area
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
+           ImGui::IsMouseHoveringRect(
+               ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
+               ImVec2(container_pos.x + m_graph_size.x,
+                      cursor_position.y + content_size.y)))
+        {
+            // Show context menu for time format selection
+            ImGui::OpenPopup("Time Format Selection");
+        }
+
+        // Context menu for time format selection
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
+        if(ImGui::BeginPopup("Time Format Selection"))
+        {
+            ImGui::Text("Time format:");
+            ImGui::Separator();
+
+            if(ImGui::MenuItem("Timecode", nullptr, m_display_time_format == TimeFormat::kTimecode))
+            {
+                m_display_time_format = TimeFormat::kTimecode;
+            }
+            if(ImGui::MenuItem("Nanoseconds", nullptr,
+                               m_display_time_format == TimeFormat::kNanoseconds))
+            {
+                m_display_time_format = TimeFormat::kNanoseconds;
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
+
         // Draw the vertical lines for the grid
         constexpr float tick_height = 10.0f;
-        double          m_v_width   = (m_max_x - m_min_x) / m_zoom;
 
         double x_offset = (m_view_time_offset_ns / m_v_width) * m_graph_size.x;
         x_offset        = (int) x_offset % (int) stepSize;
@@ -532,12 +568,18 @@ TimelineView::RenderGrid()
                        cursor_position.y + content_size.y + tick_height - m_ruler_height),
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
-            // char label[32];
-            // snprintf(label, sizeof(label), "%.0f",
-            //          m_movement + (cursor_screen_percentage * m_v_width));
-
-            std::string label = format_nanosecond_timepoint(
-                m_view_time_offset_ns + (cursor_screen_percentage * m_v_width));
+            std::string label;
+            double time_point_ns =
+                m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
+            switch(m_display_time_format)
+            {
+                // use the largest time point to determine the step size
+                case TimeFormat::kTimecode:
+                    label = nanosecond_to_timecode_str(time_point_ns);
+                    break;
+                case TimeFormat::kNanoseconds:
+                default: label = nanosecond_to_str(time_point_ns);
+            }
 
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
             ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,

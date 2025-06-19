@@ -94,18 +94,25 @@ private:
 };
 
 
-  
 /**  
  * @brief Formats a time point, originally from a double representing nanoseconds (can be negative),  
  *        into a human-readable [+-]HH:MM:SS.nanoseconds string.  
  *  
- * @param double_ns_duration The time point in nanoseconds, stored as a double.  
+ * @param time_point_ns The time point in nanoseconds, stored as a double.  
  * @param round_before_cast If true, std::round will be applied to the absolute value  
  *                          before casting to integer nanoseconds. Otherwise, it truncates.  
  * @return std::string The formatted duration string. Handles positive, negative, and zero values.  
  *                     Also handles NaN and Inf.  
  */ 
-std::string format_nanosecond_timepoint(double double_ns_duration, bool round_before_cast = false);
+std::string nanosecond_to_timecode_str(double time_point_ns, bool round_before_cast = false);
+
+/**  
+ * @brief Converts a double representing nanoseconds into a string representation.  
+ *  
+ * @param time_point_ns The duration in nanoseconds as a double.  
+ * @return std::string The formatted duration string in nanoseconds.  
+ */
+std::string nanosecond_to_str(double time_point_ns);
 
 } // namespace View
 } // namespace RocProfVis

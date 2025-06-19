@@ -23,6 +23,12 @@ namespace RocProfVis
 namespace View
 {
 
+enum class TimeFormat
+{
+    kTimecode,
+    kNanoseconds,
+};
+
 class TimelineView : public RocWidget
 {
 public:
@@ -90,6 +96,7 @@ private:
     int                                   m_artificial_scrollbar_height;
     ImVec2                                m_graph_size;
     bool                                  m_region_selection_changed;
+    TimeFormat                            m_display_time_format;
 };
 
 }  // namespace View

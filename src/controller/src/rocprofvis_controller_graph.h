@@ -6,9 +6,6 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_segment.h"
 
-#include <bitset>
-#include <vector>
-
 namespace RocProfVis
 {
 namespace Controller
@@ -19,38 +16,6 @@ class Track;
 
 class Graph : public Handle
 {
-    class LOD
-    {
-    public:
-        LOD();
-
-        LOD(uint32_t num_segments, double segment_duration);
-
-        LOD(LOD const& other) = delete;
-
-        LOD(LOD&& other);
-        
-        ~LOD();
-
-        LOD& operator=(LOD const& other) = delete;
-
-        LOD& operator=(LOD&& other);
-
-        SegmentTimeline& GetSegments();
-
-        double GetSegmentDuration() const;
-
-        bool IsValid(uint32_t segment_index) const;
-
-        void SetValid(uint32_t segment_index);
-
-    private:
-        SegmentTimeline m_segments;
-        std::vector<std::bitset<64>> m_valid_segments;
-        double                    m_segment_duration;
-        uint32_t                  m_num_segments;
-    };
-
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts, std::vector<Data>& entries);
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start, double end);
     void Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object);
@@ -76,7 +41,7 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
 private:
-    std::map<uint32_t, LOD> m_lods;
+    std::map<uint32_t, SegmentTimeline> m_lods;
     uint64_t m_id;
     Track* m_track;
     rocprofvis_controller_graph_type_t m_type;

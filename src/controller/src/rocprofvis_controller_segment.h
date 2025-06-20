@@ -5,6 +5,7 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
+#include <bitset>
 #include <map>
 #include <vector>
 #include <memory>
@@ -85,12 +86,20 @@ public:
     SegmentTimeline(SegmentTimeline&& other);
     SegmentTimeline& operator=(SegmentTimeline&& other);
 
+    void Init(double segment_duration, uint32_t num_segments);
+
     rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
     void Insert(double segment_start, std::unique_ptr<Segment>&& segment);
     std::map<double, std::unique_ptr<Segment>>& GetSegments();
 
+    bool IsValid(uint32_t segment_index) const;
+    void SetValid(uint32_t segment_index);
+
 private:
     std::map<double, std::unique_ptr<Segment>> m_segments;
+    std::vector<std::bitset<64>>               m_valid_segments;
+    double                                     m_segment_duration;
+    uint32_t                                   m_num_segments;
 };
 
 }

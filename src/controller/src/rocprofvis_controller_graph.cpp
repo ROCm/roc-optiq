@@ -24,80 +24,6 @@ typedef Reference<rocprofvis_controller_event_t, Event, kRPVControllerObjectType
 typedef Reference<rocprofvis_controller_sample_t, Sample, kRPVControllerObjectTypeSample>
     SampleRef;
 
-Graph::LOD::LOD()
-: m_segment_duration(0)
-, m_num_segments(0)
-{
-}
-
-Graph::LOD::LOD(uint32_t num_segments, double segment_duration)
-: m_segment_duration(segment_duration)
-, m_num_segments(num_segments)
-{
-    uint32_t num_bitsets = (num_segments / 64) + 1;
-    m_valid_segments.resize(num_bitsets);
-}
-
-Graph::LOD::LOD(LOD&& other)
-: m_segments(std::move(other.m_segments))
-, m_valid_segments(other.m_valid_segments)
-, m_segment_duration(other.m_segment_duration)
-, m_num_segments(other.m_num_segments)
-{}
-
-Graph::LOD::~LOD() {}
-
-Graph::LOD&
-Graph::LOD::operator=(LOD&& other)
-{
-    if(this != &other)
-    {
-        m_segments    = std::move(other.m_segments);
-        m_valid_segments = other.m_valid_segments;
-        m_segment_duration = other.m_segment_duration;
-        m_num_segments = other.m_num_segments;
-    }
-    return *this;
-}
-
-SegmentTimeline&
-Graph::LOD::GetSegments()
-{
-    return m_segments;
-}
-
-double
-Graph::LOD::GetSegmentDuration() const
-{
-    return m_segment_duration;
-}
-
-bool
-Graph::LOD::IsValid(uint32_t segment_index) const
-{
-    bool is_set = false;
-    if(segment_index < m_num_segments)
-    {
-        uint32_t array_index = segment_index / 64;
-        uint32_t bit_index   = segment_index % 64;
-        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
-        is_set = m_valid_segments[array_index].test(bit_index);
-    }
-    return is_set;
-}
-
-void
-Graph::LOD::SetValid(uint32_t segment_index)
-{
-    if(segment_index < m_num_segments)
-    {
-        uint32_t array_index = segment_index / 64;
-        uint32_t bit_index   = segment_index % 64;
-        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
-        m_valid_segments[array_index].set(bit_index);
-    }
-}
-
 void
 Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
 {
@@ -106,7 +32,7 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
 
     rocprofvis_result_t result          = kRocProfVisResultOutOfRange;
     auto                object_type     = object->GetType();
-    auto&               segments        = m_lods[lod].GetSegments();
+    auto&               segments        = m_lods[lod];
     double              start_timestamp = 0;
     double              end_timestamp   = 0;
 
@@ -471,8 +397,9 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
             if(it == m_lods.end())
             {
                 uint32_t num_segments = ceil((max_ts - min_ts) / segment_duration);
-                m_lods[lod_to_generate] = LOD(num_segments, segment_duration);
-                it                      = m_lods.find(lod_to_generate);
+                SegmentTimeline& segments = m_lods[lod_to_generate];
+                segments.Init(segment_duration, num_segments);
+                it = m_lods.find(lod_to_generate);
             }
 
             start = std::max(start, min_ts);
@@ -592,7 +519,7 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
             args.m_array = &array;
             args.m_index = &index;
 
-            result = it->second.GetSegments().FetchSegments(
+            result = it->second.FetchSegments(
                 start, end, &args,
                 [](double start, double end, Segment& segment,
                    void* user_ptr) -> rocprofvis_result_t {

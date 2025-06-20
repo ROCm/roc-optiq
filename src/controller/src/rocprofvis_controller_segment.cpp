@@ -254,6 +254,9 @@ SegmentTimeline::~SegmentTimeline()
 
 SegmentTimeline::SegmentTimeline(SegmentTimeline&& other)
 : m_segments(std::move(other.m_segments))
+, m_valid_segments(std::move(other.m_valid_segments))
+, m_segment_duration(other.m_segment_duration)
+, m_num_segments(other.m_num_segments)
 {
 
 }
@@ -261,7 +264,19 @@ SegmentTimeline::SegmentTimeline(SegmentTimeline&& other)
 SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
 {
     m_segments = std::move(other.m_segments);
+    m_segment_duration = other.m_segment_duration;
+    m_num_segments     = other.m_num_segments;
+    m_valid_segments = std::move(other.m_valid_segments);
     return *this;
+}
+
+
+void SegmentTimeline::Init(double segment_duration, uint32_t num_segments)
+{
+    m_segment_duration = segment_duration;
+    m_num_segments = num_segments;
+    uint32_t num_bitsets = (num_segments / 64) + 1;
+    m_valid_segments.resize(num_bitsets);
 }
 
 rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
@@ -318,6 +333,32 @@ void SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& se
 std::map<double, std::unique_ptr<Segment>>& SegmentTimeline::GetSegments()
 {
     return m_segments;
+}
+
+bool
+SegmentTimeline::IsValid(uint32_t segment_index) const
+{
+    bool is_set = false;
+    if(segment_index < m_num_segments)
+    {
+        uint32_t array_index = segment_index / 64;
+        uint32_t bit_index   = segment_index % 64;
+        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
+        is_set = m_valid_segments[array_index].test(bit_index);
+    }
+    return is_set;
+}
+
+void
+SegmentTimeline::SetValid(uint32_t segment_index)
+{
+    if(segment_index < m_num_segments)
+    {
+        uint32_t array_index = segment_index / 64;
+        uint32_t bit_index   = segment_index % 64;
+        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
+        m_valid_segments[array_index].set(bit_index);
+    }
 }
 
 }

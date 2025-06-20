@@ -21,6 +21,7 @@ class Event;
 class Sample;
 
 constexpr double kSegmentDuration = 1000000000.0;
+constexpr uint32_t kSegmentBitSetSize = 64;
 
 struct SegmentItemKey
 {
@@ -99,7 +100,7 @@ public:
 
 private:
     std::map<double, std::unique_ptr<Segment>> m_segments;
-    std::vector<std::bitset<64>>               m_valid_segments;
+    std::vector<std::bitset<kSegmentBitSetSize>> m_valid_segments;
     double                                     m_segment_duration;
     uint32_t                                   m_num_segments;
 };

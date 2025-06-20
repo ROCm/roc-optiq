@@ -277,7 +277,7 @@ void SegmentTimeline::Init(double segment_duration, uint32_t num_segments)
 {
     m_segment_duration = segment_duration;
     m_num_segments = num_segments;
-    uint32_t num_bitsets = (num_segments / 64) + 1;
+    uint32_t num_bitsets = (num_segments / kSegmentBitSetSize) + 1;
     m_valid_segments.resize(num_bitsets);
 }
 
@@ -343,8 +343,8 @@ SegmentTimeline::IsValid(uint32_t segment_index) const
     bool is_set = false;
     if(segment_index < m_num_segments)
     {
-        uint32_t array_index = segment_index / 64;
-        uint32_t bit_index   = segment_index % 64;
+        uint32_t array_index = segment_index / kSegmentBitSetSize;
+        uint32_t bit_index   = segment_index % kSegmentBitSetSize;
         ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
         is_set = m_valid_segments[array_index].test(bit_index);
     }
@@ -356,8 +356,8 @@ SegmentTimeline::SetValid(uint32_t segment_index)
 {
     if(segment_index < m_num_segments)
     {
-        uint32_t array_index = segment_index / 64;
-        uint32_t bit_index   = segment_index % 64;
+        uint32_t array_index = segment_index / kSegmentBitSetSize;
+        uint32_t bit_index   = segment_index % kSegmentBitSetSize;
         ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
         m_valid_segments[array_index].set(bit_index);
     }

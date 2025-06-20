@@ -50,7 +50,6 @@ private:
     double m_end_timestamp;
     std::string m_name;
     rocprofvis_dm_track_t m_dm_handle;
-    std::vector<std::pair<double, double>> m_valid_segments;
 
 private:
     rocprofvis_result_t FetchFromDataModel(double start, double end);

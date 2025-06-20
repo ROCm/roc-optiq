@@ -245,6 +245,8 @@ rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_p
 }
 
 SegmentTimeline::SegmentTimeline()
+: m_segment_duration(0)
+, m_num_segments(0)
 {
 }
 
@@ -359,6 +361,11 @@ SegmentTimeline::SetValid(uint32_t segment_index)
         ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
         m_valid_segments[array_index].set(bit_index);
     }
+}
+
+double SegmentTimeline::GetSegmentDuration() const
+{
+    return m_segment_duration;
 }
 
 }

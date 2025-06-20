@@ -43,23 +43,63 @@ Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(m_start_timestamp <= end && m_end_timestamp >= start)
     {
-        bool dm_fetch = true;
-        for(auto it = m_valid_segments.begin(); it != m_valid_segments.end(); ++it)
+        if (m_segments.GetSegmentDuration() == 0)
         {
-            if (it->first <= start && it->second >= end)
+            uint32_t num_segments = (uint32_t)ceil((m_end_timestamp - m_start_timestamp) / kSegmentDuration);
+            m_segments.Init(kSegmentDuration, num_segments);
+        }
+
+        start = std::max(start, m_start_timestamp);
+        end   = std::min(end, m_end_timestamp);
+
+        std::vector<std::pair<uint32_t, uint32_t>> fetch_ranges;
+
+        uint32_t start_index = (uint32_t) floor((start - m_start_timestamp) / kSegmentDuration);
+        uint32_t end_index   = (uint32_t) ceil((end - m_start_timestamp) / kSegmentDuration);
+
+        for(uint32_t i = start_index; i < end_index; i++)
+        {
+            if(!m_segments.IsValid(i))
             {
-                dm_fetch = false;
-                break;
+                if(fetch_ranges.size())
+                {
+                    auto& last_range = fetch_ranges.back();
+                    if(last_range.second == i - 1)
+                    {
+                        last_range.second = i;
+                    }
+                    else
+                    {
+                        fetch_ranges.push_back(std::make_pair(i, i));
+                    }
+                }
+                else
+                {
+                    fetch_ranges.push_back(std::make_pair(i, i));
+                }
             }
         }
 
-        if (dm_fetch)
+        if(fetch_ranges.size())
         {
-            result = FetchFromDataModel(start, end);
-        }
-        else
-        {
-            result = kRocProfVisResultSuccess;
+            for(auto& range : fetch_ranges)
+            {
+                double fetch_start = m_start_timestamp + (range.first * kSegmentDuration);
+                double fetch_end   = m_start_timestamp + ((range.second + 1) * kSegmentDuration);
+
+                result = FetchFromDataModel(fetch_start, fetch_end);
+                if (result == kRocProfVisResultSuccess)
+                {
+                    for(uint32_t i = range.first; i <= range.second; i++)
+                    {
+                        m_segments.SetValid(i);
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
         }
 
         if(result == kRocProfVisResultSuccess)
@@ -236,40 +276,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                     }
                     rocprofvis_dm_delete_time_slice(trace, fetch_start, fetch_end);
                     
-                    std::set<uint32_t> overlaps;
-                    double             start_segment = fetch_start;
-                    double             end_segment = fetch_end;
-                    for (uint32_t i = 0; i < m_valid_segments.size(); i++)
-                    {
-                        if (fetch_start <= m_valid_segments[i].second &&
-                           fetch_end >= m_valid_segments[i].first)
-                        {
-                            overlaps.insert(i);
-                            start_segment =
-                                std::min(m_valid_segments[i].first, start_segment);
-                            end_segment =
-                                std::max(m_valid_segments[i].second, end_segment);
-                        }
-                    }
-                    for (auto it = overlaps.rbegin(); it != overlaps.rend(); ++it)
-                    {
-                        m_valid_segments.erase(m_valid_segments.begin() + *it);
-                    }
-                    auto it = m_valid_segments.begin();
-                    for (; it != m_valid_segments.end(); ++it)
-                    {
-                        if (it->first > start_segment)
-                        {
-                            m_valid_segments.insert(
-                                it, std::make_pair(start_segment, end_segment));
-                            break;
-                        }
-                    }
-                    if (it == m_valid_segments.end())
-                    {
-                        m_valid_segments.push_back(
-                            std::make_pair(start_segment, end_segment));
-                    }
+                    
                 }
             }
         }

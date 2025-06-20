@@ -95,6 +95,8 @@ public:
     bool IsValid(uint32_t segment_index) const;
     void SetValid(uint32_t segment_index);
 
+    double GetSegmentDuration() const;
+
 private:
     std::map<double, std::unique_ptr<Segment>> m_segments;
     std::vector<std::bitset<64>>               m_valid_segments;

@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_job_system.h"
+#include "rocprofvis_core_assert.h"
 
 namespace RocProfVis
 {
@@ -9,7 +10,7 @@ namespace Controller
 
 Job::Job(JobFunction function)
 : m_function(function)
-, m_result(kRocProfVisResultUnknownError)
+, m_result(kRocProfVisResultPending)
 {
 
 }
@@ -22,17 +23,55 @@ Job::~Job()
 void Job::Execute()
 {
     m_result = m_function();
+    m_condition_variable.notify_all();
 }
 
 void Job::Cancel()
 {
     m_result = kRocProfVisResultCancelled;
+    m_condition_variable.notify_all();
 }
 
 rocprofvis_result_t Job::GetResult() const
 {
     return m_result;
 }
+
+rocprofvis_result_t Job::Wait(float timeout)
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(m_result == kRocProfVisResultPending)
+    {
+        if(timeout == FLT_MAX)
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_condition_variable.wait(lock);
+            result = kRocProfVisResultSuccess;
+        }
+        else
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            std::chrono::microseconds    time =
+                std::chrono::microseconds(uint64_t(timeout * 1000000.0));
+            std::cv_status status = m_condition_variable.wait_for(lock, time);
+            if(status == std::cv_status::timeout)
+            {
+                result = kRocProfVisResultTimeout;
+            }
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+        }
+    }
+    else
+    {
+        result = kRocProfVisResultSuccess;
+    }
+    return result;
+}
+
+JobSystem JobSystem::s_self;
 
 JobSystem::JobSystem()
 : m_terminate(false)
@@ -89,13 +128,33 @@ JobSystem::~JobSystem()
     }
 }
 
+JobSystem& JobSystem::Get()
+{
+    return s_self;
+}
+
+Job* JobSystem::IssueJob(JobFunction function)
+{
+    Job* job = new Job(function);
+    if(job && EnqueueJob(job) != kRocProfVisResultSuccess)
+    {
+        delete job;
+        job = nullptr;
+    }
+    ROCPROFVIS_ASSERT(job);
+    return job;
+}
+
 rocprofvis_result_t JobSystem::EnqueueJob(Job* job)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (job)
     {
-        std::unique_lock<std::mutex> lock(m_queue_mutex);
-        m_jobs.push_back(job);
+        {
+            std::unique_lock<std::mutex> lock(m_queue_mutex);
+            m_jobs.push_back(job);
+        }
+        m_condition_variable.notify_one();
         result = kRocProfVisResultSuccess;
     }
     return result;

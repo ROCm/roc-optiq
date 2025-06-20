@@ -27,9 +27,12 @@ public:
     void Execute();
     void Cancel();
     rocprofvis_result_t GetResult() const;
+    rocprofvis_result_t Wait(float timeout);
 
 private:
     JobFunction m_function;
+    std::mutex m_mutex;
+    std::condition_variable m_condition_variable;
     rocprofvis_result_t m_result;
 };
 
@@ -39,8 +42,13 @@ public:
     JobSystem();
     ~JobSystem();
 
-    rocprofvis_result_t EnqueueJob(Job* job);
+    static JobSystem& Get();
+
+    Job* IssueJob(JobFunction function);
     rocprofvis_result_t CancelJob(Job* job);
+
+private:
+    rocprofvis_result_t EnqueueJob(Job* job);
 
 private:
     std::vector<std::thread> m_workers;
@@ -48,6 +56,7 @@ private:
     std::mutex m_queue_mutex;
     std::condition_variable m_condition_variable;
     std::atomic<bool> m_terminate;
+    static JobSystem s_self;
 };
 
 }

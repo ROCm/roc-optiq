@@ -40,8 +40,7 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
-    future.Set(std::async(
-        std::launch::async, [&graph, &array, start, end, pixels]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&graph, &array, start, end, pixels]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
             result                     = graph.Fetch(pixels, start, end, array, index);
@@ -63,8 +62,7 @@ rocprofvis_result_t Timeline::AsyncFetch(Track& track, Future& future, Array& ar
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
-    future.Set(std::async(
-        std::launch::async, [&track, &array, start, end]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&track, &array, start, end]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
             result                     = track.Fetch(start, end, array, index);

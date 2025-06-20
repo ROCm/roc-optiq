@@ -5,7 +5,7 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
-#include <future>
+#include "rocprofvis_controller_job_system.h"
 
 namespace RocProfVis
 {
@@ -20,7 +20,7 @@ public:
 
     rocprofvis_controller_object_type_t GetType(void) final;
 
-    void Set(std::future<rocprofvis_result_t>&& future);
+    void Set(Job* job);
 
     bool IsValid() const;
 
@@ -38,7 +38,7 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
 private:
-    std::future<rocprofvis_result_t> m_future;
+    Job* m_job;
     Data m_object;
 };
 

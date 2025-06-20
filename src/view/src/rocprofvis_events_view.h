@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 #pragma once
-#include "../src/view/src/widgets/rocprofvis_widget.h"
 #include "rocprofvis_data_provider.h"
 #include <string>
 #include <vector>

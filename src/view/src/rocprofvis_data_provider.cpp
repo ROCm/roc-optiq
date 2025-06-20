@@ -33,12 +33,10 @@ DataProvider::~DataProvider() { CloseController(); }
 void
 DataProvider::SetSelectedEvent(uint64_t id, double start, double end)
 {
-    m_selected_event_id       = id;
+    m_selected_event_id    = id;
     m_selected_event_start = start;
     m_selected_event_end   = end;
 }
-
- 
 
 double
 DataProvider::GetSelectedEventStart() const
@@ -1621,13 +1619,6 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
     auto outArray = rocprofvis_controller_array_alloc(0);
     ROCPROFVIS_ASSERT(outArray != nullptr);
 
-    //    // Load Event Flow control properties
-    // kRPVControllerEventDataFlowControl = 0xC0000000,
-    //// Load Event Callstack properties
-    //    kRPVControllerEventDataCallStack = 0xC0000001,
-    //// Load Event Extended data properties
-    //    kRPVControllerEventDataExtData = 0xC0000002,
-
     rocprofvis_controller_event_fetch_async(m_trace_controller,
                                             kRPVControllerEventDataExtData, 0, 1, future,
                                             outArray, event_id, start_ts, end_ts);
@@ -1639,7 +1630,6 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
         rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
                                          &prop_count);
         event_ext_data_t ext_data = {};
-
 
         for(auto j = 0; j < prop_count; j++)
         {
@@ -1659,7 +1649,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                     ext_data_handle, kRPVControllerExtDataCategory, 0, data, &length);
                 if(result == kRocProfVisResultSuccess)
                 {
-                     ext_data.category = data;
+                    ext_data.category = data;
                 }
                 delete[] data;
             }
@@ -1675,7 +1665,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                     ext_data_handle, kRPVControllerExtDataName, 0, data, &length);
                 if(result == kRocProfVisResultSuccess)
                 {
-                     ext_data.name = data;
+                    ext_data.name = data;
                 }
                 delete[] data;
             }
@@ -1691,7 +1681,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                     ext_data_handle, kRPVControllerExtDataValue, 0, data, &length);
                 if(result == kRocProfVisResultSuccess)
                 {
-                     ext_data.value = data;
+                    ext_data.value = data;
                 }
                 delete[] data;
             }
@@ -1715,7 +1705,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
         rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
                                          &prop_count);
 
-         event_flow_data_t flow_data = {};
+        event_flow_data_t flow_data = {};
 
         for(auto j = 0; j < prop_count; j++)
         {
@@ -1728,7 +1718,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                 flow_control_handle, kRPVControllerFlowControltId, 0, &data);
             if(result == kRocProfVisResultSuccess)
             {
-                 flow_data.id = data;
+                flow_data.id = data;
             }
 
             data   = 0;
@@ -1737,7 +1727,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
             if(result == kRocProfVisResultSuccess)
             {
                 flow_data.timestamp = data;
-             }
+            }
 
             data   = 0;
             result = rocprofvis_controller_get_uint64(
@@ -1745,7 +1735,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
             if(result == kRocProfVisResultSuccess)
             {
                 flow_data.track_id = data;
-             }
+            }
 
             data   = 0;
             result = rocprofvis_controller_get_uint64(
@@ -1753,7 +1743,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
             if(result == kRocProfVisResultSuccess)
             {
                 flow_data.direction = data;
-             }
+            }
         }
         m_flow_info.flow_data.push_back(flow_data);
     }

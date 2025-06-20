@@ -133,8 +133,6 @@ DebugWindow::RenderPersitent()
             escaped_message.push_back(c);
         }
         ImGui::Text(escaped_message.c_str());
-
-       /// ImGui::Text(message.c_str());
     }
 }
 

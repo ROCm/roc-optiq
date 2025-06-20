@@ -108,7 +108,7 @@ public:
 typedef struct data_req_info_t
 {
     uint64_t                           request_id;      // unique id of the request
-    rocprofvis_controller_future_t*    request_future;  // future for the request
+    rocprofvis_controller_request_t*    request_future;  // future for the request
     rocprofvis_controller_array_t*     request_array;   // array of data for the request
     rocprofvis_handle_t*               request_obj_handle;  // object for the request
     rocprofvis_controller_arguments_t* request_args;        // arguments for the request
@@ -312,7 +312,7 @@ private:
     void CreateRawSampleData(uint64_t index, rocprofvis_controller_array_t* track_data,
                              double min_ts, double max_ts);
 
-    rocprofvis_controller_future_t*   m_trace_future;
+    rocprofvis_controller_request_t*   m_trace_future;
     rocprofvis_controller_t*          m_trace_controller;
     rocprofvis_controller_timeline_t* m_trace_timeline;
 

@@ -77,7 +77,7 @@ private:
     std::string TrimDecimalPlaces(std::string& double_str, const int decimal_places);
 
     rocprofvis_controller_t* m_controller;
-    rocprofvis_controller_future_t* m_controller_future;
+    rocprofvis_controller_request_t* m_controller_future;
     rocprofvis_controller_compute_trace_t* m_trace;
 
     std::unordered_map<rocprofvis_controller_compute_table_types_t, std::unique_ptr<ComputeTableModel>> m_tables;

@@ -62,10 +62,10 @@ int main(int argc, char** argv)
 TEST_CASE( "Future Initialisation", "[require]" ) {
 
     spdlog::info("Allocating Future");
-    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    rocprofvis_controller_request_t* future = rocprofvis_controller_request_alloc();
     REQUIRE(future != nullptr);
     spdlog::info("Free Future");
-    rocprofvis_controller_future_free(future);
+    rocprofvis_controller_request_free(future);
 }
 
 struct RocProfVisControllerFixture
@@ -86,7 +86,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
     SECTION("Controller Initialisation")
     {
         spdlog::info("Allocating Future");
-        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        rocprofvis_controller_request_t* future = rocprofvis_controller_request_alloc();
         REQUIRE(future != nullptr);
 
         spdlog::info("Load trace: {0}", g_input_file);
@@ -94,17 +94,17 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         REQUIRE(result == kRocProfVisResultSuccess);
 
         spdlog::info("Wait for load");
-        result = rocprofvis_controller_future_wait(future, FLT_MAX);
+        result = rocprofvis_controller_request_wait(future, FLT_MAX);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         uint64_t future_result = 0;
-        result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0, &future_result);
+        result = rocprofvis_controller_get_uint64(future, kRPVControllerRequestResult, 0, &future_result);
         spdlog::info("Get future result: {0}", future_result);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(future_result == kRocProfVisResultSuccess);
 
         spdlog::info("Free Future");
-        rocprofvis_controller_future_free(future);
+        rocprofvis_controller_request_free(future);
     }
 
     SECTION("Controller Load Whole Track Data")
@@ -162,8 +162,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
                 REQUIRE(track_data != nullptr);
 
                 spdlog::info("Allocating Future");
-                rocprofvis_controller_future_t* future =
-                    rocprofvis_controller_future_alloc();
+                rocprofvis_controller_request_t* future =
+                    rocprofvis_controller_request_alloc();
                 REQUIRE(future != nullptr);
 
                 spdlog::info("Fetch track data");
@@ -173,12 +173,12 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
                 REQUIRE(track_data != nullptr);
 
                 spdlog::info("Wait for future");
-                result = rocprofvis_controller_future_wait(future, FLT_MAX);
+                result = rocprofvis_controller_request_wait(future, FLT_MAX);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
                 uint64_t future_result = 0;
                 result                 = rocprofvis_controller_get_uint64(
-                    future, kRPVControllerFutureResult, 0, &future_result);
+                    future, kRPVControllerRequestResult, 0, &future_result);
                 spdlog::info("Get future result: {0}", future_result);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 REQUIRE(future_result == kRocProfVisResultSuccess);
@@ -338,7 +338,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
                 }
 
                 spdlog::info("Free Future");
-                rocprofvis_controller_future_free(future);
+                rocprofvis_controller_request_free(future);
             }
         }
     }
@@ -382,18 +382,18 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
             REQUIRE(array != nullptr);
 
             spdlog::info("Allocating Future");
-            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            rocprofvis_controller_request_t* future = rocprofvis_controller_request_alloc();
             REQUIRE(future != nullptr);
 
             result = rocprofvis_controller_graph_fetch_async(m_controller, graph_handle, start_ts, end_ts, 1000, future, array);
             REQUIRE(result == kRocProfVisResultSuccess);
 
             spdlog::info("Wait for future");
-            result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            result = rocprofvis_controller_request_wait(future, FLT_MAX);
             REQUIRE(result == kRocProfVisResultSuccess);
 
             uint64_t future_result = 0;
-            result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0, &future_result);
+            result = rocprofvis_controller_get_uint64(future, kRPVControllerRequestResult, 0, &future_result);
             spdlog::info("Get future result: {0}", future_result);
             REQUIRE(result == kRocProfVisResultSuccess);
             REQUIRE(future_result == kRocProfVisResultSuccess);
@@ -412,7 +412,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
             }
 
             rocprofvis_controller_array_free(array);
-            rocprofvis_controller_future_free(future);
+            rocprofvis_controller_request_free(future);
         }
     }
 
@@ -483,18 +483,18 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         REQUIRE(array != nullptr);
 
         spdlog::info("Allocating Future");
-        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        rocprofvis_controller_request_t* future = rocprofvis_controller_request_alloc();
         REQUIRE(future != nullptr);
 
         result = rocprofvis_controller_table_fetch_async(m_controller, table_handle, args, future, array);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         spdlog::info("Wait for future");
-        result = rocprofvis_controller_future_wait(future, FLT_MAX);
+        result = rocprofvis_controller_request_wait(future, FLT_MAX);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         uint64_t future_result = 0;
-        result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0,
+        result = rocprofvis_controller_get_uint64(future, kRPVControllerRequestResult, 0,
                                                   &future_result);
         spdlog::info("Get future result: {0}", future_result);
         REQUIRE(result == kRocProfVisResultSuccess);
@@ -599,7 +599,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         }
 
         spdlog::info("Free Future");
-        rocprofvis_controller_future_free(future);
+        rocprofvis_controller_request_free(future);
 
         spdlog::info("Free Array");
         rocprofvis_controller_array_free(array);
@@ -705,7 +705,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         REQUIRE(array != nullptr);
 
         spdlog::info("Allocating Future");
-        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        rocprofvis_controller_request_t* future = rocprofvis_controller_request_alloc();
         REQUIRE(future != nullptr);
 
         result = rocprofvis_controller_table_fetch_async(m_controller, table_handle, args,
@@ -713,11 +713,11 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         REQUIRE(result == kRocProfVisResultSuccess);
 
         spdlog::info("Wait for future");
-        result = rocprofvis_controller_future_wait(future, FLT_MAX);
+        result = rocprofvis_controller_request_wait(future, FLT_MAX);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         uint64_t future_result = 0;
-        result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0,
+        result = rocprofvis_controller_get_uint64(future, kRPVControllerRequestResult, 0,
                                                   &future_result);
         spdlog::info("Get future result: {0}", future_result);
         REQUIRE(result == kRocProfVisResultSuccess);
@@ -822,7 +822,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         }
 
         spdlog::info("Free Future");
-        rocprofvis_controller_future_free(future);
+        rocprofvis_controller_request_free(future);
 
         spdlog::info("Free Array");
         rocprofvis_controller_array_free(array);
@@ -894,8 +894,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
                     REQUIRE(array != nullptr);
 
                     spdlog::trace("Allocating Future");
-                    rocprofvis_controller_future_t* future =
-                        rocprofvis_controller_future_alloc();
+                    rocprofvis_controller_request_t* future =
+                        rocprofvis_controller_request_alloc();
                     REQUIRE(future != nullptr);
 
                     spdlog::trace("Fetch track data");
@@ -905,12 +905,12 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
                     REQUIRE(array != nullptr);
 
                     spdlog::trace("Wait for future");
-                    result = rocprofvis_controller_future_wait(future, FLT_MAX);
+                    result = rocprofvis_controller_request_wait(future, FLT_MAX);
                     REQUIRE(result == kRocProfVisResultSuccess);
 
                     uint64_t future_result = 0;
                     result                 = rocprofvis_controller_get_uint64(
-                        future, kRPVControllerFutureResult, 0, &future_result);
+                        future, kRPVControllerRequestResult, 0, &future_result);
                     spdlog::trace("Get future result: {0}", future_result);
                     REQUIRE(result == kRocProfVisResultSuccess);
                     REQUIRE(future_result == kRocProfVisResultSuccess);
@@ -1144,7 +1144,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
                     rocprofvis_controller_array_free(array);
 
                     spdlog::trace("Free Future");
-                    rocprofvis_controller_future_free(future);
+                    rocprofvis_controller_request_free(future);
 
                     start_ts = end_ts;
                 }

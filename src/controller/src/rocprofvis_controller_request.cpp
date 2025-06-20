@@ -1,6 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_controller_future.h"
+#include "rocprofvis_controller_request.h"
 #include "rocprofvis_core_assert.h"
 
 #include <cfloat>
@@ -10,33 +10,33 @@ namespace RocProfVis
 namespace Controller
 {
 
-Future::Future()
+Request::Request()
 : m_job(false)
 {
 }
 
-Future::~Future()
+Request::~Request()
 { 
     delete m_job;
 }
 
-rocprofvis_controller_object_type_t Future::GetType(void) 
+rocprofvis_controller_object_type_t Request::GetType(void) 
 {
-    return kRPVControllerObjectTypeFuture;
+    return kRPVControllerObjectTypeRequest;
 }
 
-void Future::Set(Job* job)
+void Request::Set(Job* job)
 {
     ROCPROFVIS_ASSERT(job);
     m_job = job;
 }
 
-bool Future::IsValid() const
+bool Request::IsValid() const
 {
     return m_job;
 }
 
-rocprofvis_result_t Future::Wait(float timeout)
+rocprofvis_result_t Request::Wait(float timeout)
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     if (m_job)
@@ -46,7 +46,7 @@ rocprofvis_result_t Future::Wait(float timeout)
     return result;
 }
 
-rocprofvis_result_t Future::Cancel()
+rocprofvis_result_t Request::Cancel()
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     if(m_job)
@@ -56,21 +56,21 @@ rocprofvis_result_t Future::Cancel()
     return result;
 }
 
-rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
+rocprofvis_result_t Request::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (value && (property == kRPVControllerFutureResult))
+    if (value && (property == kRPVControllerRequestResult))
     {
         switch (property)
         {
             case kRPVControllerCommonMemoryUsageInclusive:
             case kRPVControllerCommonMemoryUsageExclusive:
             {
-                *value = sizeof(Future);
+                *value = sizeof(Request);
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerFutureResult:
+            case kRPVControllerRequestResult:
             {
                 if(m_job)
                 {
@@ -83,13 +83,13 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
                 }
                 break;
             }
-            case kRPVControllerFutureType:
+            case kRPVControllerRequestType:
             {
                 *value = m_object.GetType();
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerFutureObject:
+            case kRPVControllerRequestObject:
             {
                 result = m_object.GetUInt64(value);
                 break;
@@ -103,20 +103,20 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
     }
     return result;
 }
-rocprofvis_result_t Future::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) 
+rocprofvis_result_t Request::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value && (property == kRPVControllerFutureResult))
+    if(value && (property == kRPVControllerRequestResult))
     {
         switch(property)
         {
-            case kRPVControllerFutureObject:
+            case kRPVControllerRequestObject:
             {
                 result = m_object.GetDouble(value);
                 break;
             }
-            case kRPVControllerFutureResult:
-            case kRPVControllerFutureType:
+            case kRPVControllerRequestResult:
+            case kRPVControllerRequestType:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -130,20 +130,20 @@ rocprofvis_result_t Future::GetDouble(rocprofvis_property_t property, uint64_t i
     }
     return result;
 }
-rocprofvis_result_t Future::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) 
+rocprofvis_result_t Request::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value && (property == kRPVControllerFutureResult))
+    if(value && (property == kRPVControllerRequestResult))
     {
         switch(property)
         {
-            case kRPVControllerFutureObject:
+            case kRPVControllerRequestObject:
             {
                 result = m_object.GetObject(value);
                 break;
             }
-            case kRPVControllerFutureResult:
-            case kRPVControllerFutureType:
+            case kRPVControllerRequestResult:
+            case kRPVControllerRequestType:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -157,20 +157,20 @@ rocprofvis_result_t Future::GetObject(rocprofvis_property_t property, uint64_t i
     }
     return result;
 }
-rocprofvis_result_t Future::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
+rocprofvis_result_t Request::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value && (property == kRPVControllerFutureResult))
+    if(value && (property == kRPVControllerRequestResult))
     {
         switch(property)
         {
-            case kRPVControllerFutureObject:
+            case kRPVControllerRequestObject:
             {
                 result = m_object.GetString(value, length);
                 break;
             }
-            case kRPVControllerFutureResult:
-            case kRPVControllerFutureType:
+            case kRPVControllerRequestResult:
+            case kRPVControllerRequestType:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -185,14 +185,14 @@ rocprofvis_result_t Future::GetString(rocprofvis_property_t property, uint64_t i
     return result;
 }
 
-rocprofvis_result_t Future::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) 
+rocprofvis_result_t Request::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) 
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     switch(property)
     {
-        case kRPVControllerFutureObject:
-        case kRPVControllerFutureResult:
-        case kRPVControllerFutureType:
+        case kRPVControllerRequestObject:
+        case kRPVControllerRequestResult:
+        case kRPVControllerRequestType:
         {
             result = kRocProfVisResultReadOnlyError;
             break;
@@ -205,14 +205,14 @@ rocprofvis_result_t Future::SetUInt64(rocprofvis_property_t property, uint64_t i
     }
     return result;
 }
-rocprofvis_result_t Future::SetDouble(rocprofvis_property_t property, uint64_t index, double value) 
+rocprofvis_result_t Request::SetDouble(rocprofvis_property_t property, uint64_t index, double value) 
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     switch(property)
     {
-        case kRPVControllerFutureObject:
-        case kRPVControllerFutureResult:
-        case kRPVControllerFutureType:
+        case kRPVControllerRequestObject:
+        case kRPVControllerRequestResult:
+        case kRPVControllerRequestType:
         {
             result = kRocProfVisResultReadOnlyError;
             break;
@@ -225,14 +225,14 @@ rocprofvis_result_t Future::SetDouble(rocprofvis_property_t property, uint64_t i
     }
     return result;
 }
-rocprofvis_result_t Future::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) 
+rocprofvis_result_t Request::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     switch(property)
     {
-        case kRPVControllerFutureObject:
-        case kRPVControllerFutureResult:
-        case kRPVControllerFutureType:
+        case kRPVControllerRequestObject:
+        case kRPVControllerRequestResult:
+        case kRPVControllerRequestType:
         {
             result = kRocProfVisResultReadOnlyError;
             break;
@@ -245,14 +245,14 @@ rocprofvis_result_t Future::SetObject(rocprofvis_property_t property, uint64_t i
     }
     return result;
 }
-rocprofvis_result_t Future::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) 
+rocprofvis_result_t Request::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) 
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     switch(property)
     {
-        case kRPVControllerFutureObject:
-        case kRPVControllerFutureResult:
-        case kRPVControllerFutureType:
+        case kRPVControllerRequestObject:
+        case kRPVControllerRequestResult:
+        case kRPVControllerRequestType:
         {
             result = kRocProfVisResultReadOnlyError;
             break;

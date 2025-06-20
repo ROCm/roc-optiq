@@ -12,7 +12,7 @@
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_timeline.h"
 #include "rocprofvis_controller_trace.h"
-#include "rocprofvis_controller_future.h"
+#include "rocprofvis_controller_request.h"
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_table.h"
@@ -32,7 +32,7 @@ typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectType
 typedef Reference<rocprofvis_controller_event_t, Event, kRPVControllerObjectTypeEvent> EventRef;
 typedef Reference<rocprofvis_controller_sample_t, Sample, kRPVControllerObjectTypeSample> SampleRef;
 typedef Reference<rocprofvis_controller_array_t, Array, kRPVControllerObjectTypeArray> ArrayRef;
-typedef Reference<rocprofvis_controller_future_t, Future, kRPVControllerObjectTypeFuture> FutureRef;
+typedef Reference<rocprofvis_controller_request_t, Request, kRPVControllerObjectTypeRequest> RequestRef;
 typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectTypeGraph> GraphRef;
 typedef Reference<rocprofvis_controller_table_t, Table, kRPVControllerObjectTypeTable> TableRef;
 typedef Reference<rocprofvis_controller_arguments_t, Arguments, kRPVControllerObjectTypeArguments> ArgumentsRef;
@@ -122,23 +122,23 @@ rocprofvis_controller_t* rocprofvis_controller_alloc()
     }
     return controller;
 }
-rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_future_t* future)
+rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_request_t* request)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
 
     RocProfVis::Controller::TraceRef trace(controller);
-    RocProfVis::Controller::FutureRef future_ref(future);
-    if(trace.IsValid() && future_ref.IsValid() && filename && strlen(filename))
+    RocProfVis::Controller::RequestRef request_ref(request);
+    if(trace.IsValid() && request_ref.IsValid() && filename && strlen(filename))
     {
-        result = trace->Load(filename, *future_ref);
+        result = trace->Load(filename, *request_ref);
     }
 
     return result;
 }
-rocprofvis_controller_future_t* rocprofvis_controller_future_alloc(void)
+rocprofvis_controller_request_t* rocprofvis_controller_request_alloc(void)
 {
-    rocprofvis_controller_future_t* future = (rocprofvis_controller_future_t*)new RocProfVis::Controller::Future();
-    return future;
+    rocprofvis_controller_request_t* request = (rocprofvis_controller_request_t*)new RocProfVis::Controller::Request();
+    return request;
 }
 rocprofvis_controller_array_t* rocprofvis_controller_array_alloc(uint32_t initial_size)
 {
@@ -155,56 +155,56 @@ rocprofvis_controller_arguments_t* rocprofvis_controller_arguments_alloc(void)
     rocprofvis_controller_arguments_t* args = (rocprofvis_controller_arguments_t*)new RocProfVis::Controller::Arguments();
     return args;
 }
-rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_future_t* object, float timeout)
+rocprofvis_result_t rocprofvis_controller_request_wait(rocprofvis_controller_request_t* object, float timeout)
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    RocProfVis::Controller::FutureRef future(object);
-    if (future.IsValid())
+    RocProfVis::Controller::RequestRef request(object);
+    if (request.IsValid())
     {
-        result = future->Wait(timeout);
+        result = request->Wait(timeout);
     }
     return result;
 }
-rocprofvis_result_t rocprofvis_controller_future_cancel(rocprofvis_controller_future_t* object)
+rocprofvis_result_t rocprofvis_controller_request_cancel(rocprofvis_controller_request_t* object)
 {
     rocprofvis_result_t               result = kRocProfVisResultUnknownError;
-    RocProfVis::Controller::FutureRef future(object);
-    if(future.IsValid())
+    RocProfVis::Controller::RequestRef request(object);
+    if(request.IsValid())
     {
-        result = future->Cancel();
+        result = request->Cancel();
     }
     return result;
 }
 
 rocprofvis_result_t rocprofvis_controller_track_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_track_t* track,
-    double start_time, double end_time, rocprofvis_controller_future_t* result,
+    double start_time, double end_time, rocprofvis_controller_request_t* result,
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
     RocProfVis::Controller::TraceRef trace(controller);
     RocProfVis::Controller::TrackRef track_ref(track);
-    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::RequestRef request(result);
     RocProfVis::Controller::ArrayRef array(output);
-    if (trace.IsValid() && track_ref.IsValid() && future.IsValid() && array.IsValid())
+    if (trace.IsValid() && track_ref.IsValid() && request.IsValid() && array.IsValid())
     {
-        error = trace->AsyncFetch(*track_ref, *future, *array, start_time, end_time);
+        error = trace->AsyncFetch(*track_ref, *request, *array, start_time, end_time);
     }
     return error;
 }
 rocprofvis_result_t rocprofvis_controller_graph_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_graph_t* graph,
     double start_time, double end_time, uint32_t x_resolution,
-    rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output)
+    rocprofvis_controller_request_t* result, rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t               error = kRocProfVisResultInvalidArgument;
     RocProfVis::Controller::TraceRef  trace(controller);
     RocProfVis::Controller::GraphRef  graph_ref(graph);
-    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::RequestRef request(result);
     RocProfVis::Controller::ArrayRef  array(output);
-    if(trace.IsValid() && graph_ref.IsValid() && future.IsValid() && array.IsValid())
+    if(trace.IsValid() && graph_ref.IsValid() && request.IsValid() && array.IsValid())
     {
-        error = trace->AsyncFetch(*graph_ref, *future, *array, start_time, end_time, x_resolution);
+        error = trace->AsyncFetch(*graph_ref, *request, *array, start_time, end_time, x_resolution);
     }
     return error;
 }
@@ -212,28 +212,28 @@ rocprofvis_result_t rocprofvis_controller_graph_fetch_async(
 rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
     rocprofvis_controller_t* controller, rocprofvis_handle_t* object,
     rocprofvis_property_t property, uint64_t index, uint32_t count,
-    rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output)
+    rocprofvis_controller_request_t* result, rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
     RocProfVis::Controller::TraceRef trace(controller);
     RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*) object;
     RocProfVis::Controller::EventRef  event_ref(object);
-    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::RequestRef request(result);
     RocProfVis::Controller::ArrayRef  array(output);
-    if(trace.IsValid() && handle && future.IsValid() && array.IsValid())
+    if(trace.IsValid() && handle && request.IsValid() && array.IsValid())
     {
         switch (handle->GetType())
         {
             case kRPVControllerObjectTypeEvent:
             {
                 error = trace->AsyncFetch(*((RocProfVis::Controller::Event*)handle),
-                                          *future, *array, property);
+                                          *request, *array, property);
                 break;
             }
             case kRPVControllerObjectTypeTable:
             {
                 error = trace->AsyncFetch(*((RocProfVis::Controller::Table*) handle),
-                                          *future, *array, index, count);
+                                          *request, *array, index, count);
                 break;
             }
             default:
@@ -247,38 +247,38 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
 
 rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table,
-    rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result,
+    rocprofvis_controller_arguments_t* args, rocprofvis_controller_request_t* result,
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
     RocProfVis::Controller::TraceRef trace(controller);
     RocProfVis::Controller::TableRef table_ref(table);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
-    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::RequestRef request(result);
     RocProfVis::Controller::ArrayRef array(output);
-    if (trace.IsValid() && table_ref.IsValid() && args_ref.IsValid() && future.IsValid() &&
+    if (trace.IsValid() && table_ref.IsValid() && args_ref.IsValid() && request.IsValid() &&
         array.IsValid())
     {
-        error = trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+        error = trace->AsyncFetch(*table_ref, *args_ref, *request, *array);
     }
     return error;
 }
 
 rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_plot_t* plot,
-    rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result,
+    rocprofvis_controller_arguments_t* args, rocprofvis_controller_request_t* result,
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
     RocProfVis::Controller::TraceRef trace(controller);
     RocProfVis::Controller::PlotRef plot_ref(plot);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
-    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::RequestRef request(result);
     RocProfVis::Controller::ArrayRef array(output);
-    if (trace.IsValid() && plot_ref.IsValid() && args_ref.IsValid() && future.IsValid() &&
+    if (trace.IsValid() && plot_ref.IsValid() && args_ref.IsValid() && request.IsValid() &&
         array.IsValid())
     {
-        error = trace->AsyncFetch(*plot_ref, *args_ref, *future, *array);
+        error = trace->AsyncFetch(*plot_ref, *args_ref, *request, *array);
     }
     return error;
 }
@@ -300,12 +300,12 @@ void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
         delete array.Get();
     }
 }
-void rocprofvis_controller_future_free(rocprofvis_controller_future_t* object)
+void rocprofvis_controller_request_free(rocprofvis_controller_request_t* object)
 {
-    RocProfVis::Controller::FutureRef future(object);
-    if (future.IsValid())
+    RocProfVis::Controller::RequestRef request(object);
+    if (request.IsValid())
     {
-        delete future.Get();
+        delete request.Get();
     }
 }
 void rocprofvis_controller_free(rocprofvis_controller_t* object)

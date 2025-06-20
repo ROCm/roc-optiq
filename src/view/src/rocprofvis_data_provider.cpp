@@ -48,7 +48,7 @@ DataProvider::CloseController()
     }
     if(m_trace_future)
     {
-        rocprofvis_controller_future_free(m_trace_future);
+        rocprofvis_controller_request_free(m_trace_future);
         m_trace_future = nullptr;
     }
     if(m_trace_timeline)
@@ -78,7 +78,7 @@ DataProvider::FreeRequests()
         }
         if(req.request_future)
         {
-            rocprofvis_controller_future_free(req.request_future);
+            rocprofvis_controller_request_free(req.request_future);
             req.request_future = nullptr;
         }
         if(req.request_obj_handle)
@@ -197,7 +197,7 @@ DataProvider::FetchTrace(const std::string& file_path)
     if(m_trace_controller)
     {
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        m_trace_future             = rocprofvis_controller_future_alloc();
+        m_trace_future             = rocprofvis_controller_request_alloc();
         if(m_trace_future)
         {
             result = rocprofvis_controller_load_async(m_trace_controller,
@@ -206,7 +206,7 @@ DataProvider::FetchTrace(const std::string& file_path)
 
             if(result != kRocProfVisResultSuccess)
             {
-                rocprofvis_controller_future_free(m_trace_future);
+                rocprofvis_controller_request_free(m_trace_future);
                 m_trace_future = nullptr;
             }
         }
@@ -245,14 +245,14 @@ DataProvider::HandleLoadTrace()
 {
     if(m_trace_future)
     {
-        rocprofvis_result_t result = rocprofvis_controller_future_wait(m_trace_future, 0);
+        rocprofvis_result_t result = rocprofvis_controller_request_wait(m_trace_future, 0);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
                           result == kRocProfVisResultTimeout);
         if(result == kRocProfVisResultSuccess)
         {
             uint64_t uint64_result = 0;
             result                 = rocprofvis_controller_get_uint64(
-                m_trace_future, kRPVControllerFutureResult, 0, &uint64_result);
+                m_trace_future, kRPVControllerRequestResult, 0, &uint64_result);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
                               uint64_result == kRocProfVisResultSuccess);
 
@@ -282,7 +282,7 @@ DataProvider::HandleLoadTrace()
             }
 
             // trace loaded successfully, free the future pointer
-            rocprofvis_controller_future_free(m_trace_future);
+            rocprofvis_controller_request_free(m_trace_future);
             m_trace_future = nullptr;
 
             m_state = ProviderState::kReady;
@@ -408,7 +408,7 @@ DataProvider::FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
         // only allow load if a request for this index (track) is not pending
         if(it == m_requests.end())
         {
-            rocprofvis_handle_t* track_future = rocprofvis_controller_future_alloc();
+            rocprofvis_handle_t* track_future = rocprofvis_controller_request_alloc();
             rocprofvis_controller_array_t* track_array =
                 rocprofvis_controller_array_alloc(m_track_metadata[index].num_entries);
             rocprofvis_handle_t* track_handle = nullptr;
@@ -472,7 +472,7 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
         // only allow load if a request for this index (track) is not pending
         if(it == m_requests.end())
         {
-            rocprofvis_handle_t* graph_future = rocprofvis_controller_future_alloc();
+            rocprofvis_handle_t* graph_future = rocprofvis_controller_request_alloc();
             rocprofvis_controller_array_t* graph_array =
                 rocprofvis_controller_array_alloc(32);
             rocprofvis_handle_t* graph_obj = nullptr;
@@ -689,7 +689,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
             rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
             ROCPROFVIS_ASSERT(array != nullptr);
 
-            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            rocprofvis_controller_request_t* future = rocprofvis_controller_request_alloc();
             ROCPROFVIS_ASSERT(future != nullptr);
 
             result = rocprofvis_controller_table_fetch_async(
@@ -888,7 +888,7 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
             rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
             ROCPROFVIS_ASSERT(array != nullptr);
 
-            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            rocprofvis_controller_request_t* future = rocprofvis_controller_request_alloc();
             ROCPROFVIS_ASSERT(future != nullptr);
 
             result = rocprofvis_controller_table_fetch_async(
@@ -1138,14 +1138,14 @@ DataProvider::HandleRequests()
             data_req_info_t& req = it->second;
 
             rocprofvis_result_t result =
-                rocprofvis_controller_future_wait(req.request_future, 0);
+                rocprofvis_controller_request_wait(req.request_future, 0);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
                               result == kRocProfVisResultTimeout);
 
             // this graph is ready
             if(result == kRocProfVisResultSuccess)
             {
-                rocprofvis_controller_future_free(req.request_future);
+                rocprofvis_controller_request_free(req.request_future);
                 req.request_future = nullptr;
                 req.loading_state  = ProviderState::kReady;
                 ProcessRequest(req);

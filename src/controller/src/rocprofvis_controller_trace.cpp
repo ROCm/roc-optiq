@@ -5,7 +5,7 @@
 #include "rocprofvis_controller_timeline.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_reference.h"
-#include "rocprofvis_controller_future.h"
+#include "rocprofvis_controller_request.h"
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_graph.h"
@@ -478,15 +478,15 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                             for(int i = 0; i < num_tracks; i++)
                             {                               
                                 RocProfVis::Controller::Array* array = (RocProfVis::Controller::Array*)rocprofvis_controller_array_alloc(32);
-                                RocProfVis::Controller::Future* future = (RocProfVis::Controller::Future*) rocprofvis_controller_future_alloc();
+                                RocProfVis::Controller::Request* request = (RocProfVis::Controller::Request*) rocprofvis_controller_request_alloc();
                                 double start, end;
                                 m_tracks[i]->GetDouble(kRPVControllerTrackMinTimestamp, 0, &start);
                                 m_tracks[i]->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &end);
-                                result = AsyncFetch(*m_tracks[i], *future, *array, start, end);
-                                result = rocprofvis_controller_future_wait(
-                                    (rocprofvis_controller_future_t*) future, FLT_MAX);
-                                rocprofvis_controller_future_free(
-                                    (rocprofvis_controller_future_t*) future);
+                                result = AsyncFetch(*m_tracks[i], *request, *array, start, end);
+                                result = rocprofvis_controller_request_wait(
+                                    (rocprofvis_controller_request_t*) request, FLT_MAX);
+                                rocprofvis_controller_request_free(
+                                    (rocprofvis_controller_request_t*) request);
                             }
                             */
                         }
@@ -523,13 +523,13 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
     return result;
 }
 
-rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controller::Future& future)
+rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controller::Request& request)
 {
     assert (filename && strlen(filename));
         
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     std::string filepath = filename;
-    future.Set(JobSystem::Get().IssueJob([this, filepath]() -> rocprofvis_result_t
+    request.Set(JobSystem::Get().IssueJob([this, filepath]() -> rocprofvis_result_t
         {
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos || 
@@ -556,7 +556,7 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
         return result;
         }));
 
-    if(future.IsValid())
+    if(request.IsValid())
     {
         result = kRocProfVisResultSuccess;
     }
@@ -565,41 +565,41 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
 }
 
 
-rocprofvis_result_t Trace::AsyncFetch(Track& track, Future& future, Array& array,
+rocprofvis_result_t Trace::AsyncFetch(Track& track, Request& request, Array& array,
                                 double start, double end)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     if(m_timeline)
     {
-        error = m_timeline->AsyncFetch(track, future, array, start, end);
+        error = m_timeline->AsyncFetch(track, request, array, start, end);
     }
     return error;
 }
 
-rocprofvis_result_t Trace::AsyncFetch(Graph& graph, Future& future, Array& array,
+rocprofvis_result_t Trace::AsyncFetch(Graph& graph, Request& request, Array& array,
                                 double start, double end, uint32_t pixels)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     if(m_timeline)
     {
-        error = m_timeline->AsyncFetch(graph, future, array, start, end, pixels);
+        error = m_timeline->AsyncFetch(graph, request, array, start, end, pixels);
     }
     return error;
 }
 
 rocprofvis_result_t
-Trace::AsyncFetch(Event& event, Future& future, Array& array,
+Trace::AsyncFetch(Event& event, Request& request, Array& array,
                   rocprofvis_property_t property)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
-    future.Set(JobSystem::Get().IssueJob([&event, &array, property, dm_handle]() -> rocprofvis_result_t {
+    request.Set(JobSystem::Get().IssueJob([&event, &array, property, dm_handle]() -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               result = event.Fetch(property, array, dm_handle);
                               return result;
                           }));
 
-    if(future.IsValid())
+    if(request.IsValid())
     {
         error = kRocProfVisResultSuccess;
     }
@@ -608,19 +608,19 @@ Trace::AsyncFetch(Event& event, Future& future, Array& array,
 }
 
 rocprofvis_result_t
-Trace::AsyncFetch(Table& table, Future& future, Array& array,
+Trace::AsyncFetch(Table& table, Request& request, Array& array,
     uint64_t index, uint64_t count)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(JobSystem::Get().IssueJob([&table, &array, index, count, dm_handle]() -> rocprofvis_result_t {
+    request.Set(JobSystem::Get().IssueJob([&table, &array, index, count, dm_handle]() -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               result = table.Fetch(dm_handle, index, count, array);
                               return result;
                           }));
 
-    if(future.IsValid())
+    if(request.IsValid())
     {
         error = kRocProfVisResultSuccess;
     }
@@ -629,12 +629,12 @@ Trace::AsyncFetch(Table& table, Future& future, Array& array,
 }
 
 rocprofvis_result_t
-Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
+Trace::AsyncFetch(Table& table, Arguments& args, Request& request, Array& array)
 {
     rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array]() -> rocprofvis_result_t {
+    request.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             result = table.Setup(dm_handle, args);
             if (result == kRocProfVisResultSuccess)
@@ -656,7 +656,7 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
             return result;
         }));
 
-    if(future.IsValid())
+    if(request.IsValid())
     {
         error = kRocProfVisResultSuccess;
     }
@@ -665,12 +665,12 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
 }
 
 rocprofvis_result_t
-Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
+Trace::AsyncFetch(Plot& plot, Arguments& args, Request& request, Array& array)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(JobSystem::Get().IssueJob([&plot, dm_handle, &args, &array]() -> rocprofvis_result_t {
+    request.Set(JobSystem::Get().IssueJob([&plot, dm_handle, &args, &array]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             result = plot.Setup(dm_handle, args);
             if (result == kRocProfVisResultSuccess)
@@ -680,7 +680,7 @@ Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
             return result;
         }));
 
-    if(future.IsValid())
+    if(request.IsValid())
     {
         error = kRocProfVisResultSuccess;
     }

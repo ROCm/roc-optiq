@@ -22,10 +22,10 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(void);
 * Loads the file into the controller or returns an error.
 * @param controller The controller to load into.
 * @param filename The file to load.
-* @param future The object that tells you when the file has been loaded.
+* @param request The object that tells you when the file has been loaded.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_future_t* future);
+rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_request_t* request);
 /* JSON: CreateController
 {
     file_path: String,
@@ -37,10 +37,10 @@ rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* co
 */
 
 /*
-* Allocate a future object for use in async. calls.
-* @returns A valid future object, or nullptr.
+* Allocate a request object for use in async. calls.
+* @returns A valid request object, or nullptr.
 */
-rocprofvis_controller_future_t* rocprofvis_controller_future_alloc(void);
+rocprofvis_controller_request_t* rocprofvis_controller_request_alloc(void);
 
 /*
 * Allocate an array with an initial size for members (it will grow if needed).
@@ -93,19 +93,19 @@ rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object
 rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length);
 
 /*
-* Waits on the future until it is completed or an error or timeout occurs.
-* @param object The future to wait on.
+* Waits on the request until it is completed or an error or timeout occurs.
+* @param object The request to wait on.
 * @param timeout The timeout to wait, 0.0f will not wait at all and FLT_MAX will wait infinitely.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_future_t* object, float timeout);
+rocprofvis_result_t rocprofvis_controller_request_wait(rocprofvis_controller_request_t* object, float timeout);
 
 /*
-* Attempts to cancel the future. It is an error to assume operations can be cancelled.
-* @param object The future to try to cancel.
+* Attempts to cancel the request. It is an error to assume operations can be cancelled.
+* @param object The request to try to cancel.
 * @returns kRocProfVisResultSuccess if cancelled or an error code if the operation could not be cancelled.
 */
-rocprofvis_result_t rocprofvis_controller_future_cancel(rocprofvis_controller_future_t* object);
+rocprofvis_result_t rocprofvis_controller_request_cancel(rocprofvis_controller_request_t* object);
 
 /*
 * Creates an analysis view from the data - the args object contains the specification for what analysis to run.
@@ -113,10 +113,10 @@ rocprofvis_result_t rocprofvis_controller_future_cancel(rocprofvis_controller_fu
 * In an ideal world this would actually be performed using Python scripts.
 * @param controller The controller to analyze.
 * @param args The arguments for the analysis - the properties and behaviour of this will be defined as analysis functions are developed.
-* @param result The future to wait on and return the results.
+* @param result The request to wait on and return the results.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_create_analysis_view_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result);
+rocprofvis_result_t rocprofvis_controller_create_analysis_view_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_request_t* result);
 /* JSON: CreateAnalysisView
 {
     controller: Int,
@@ -150,11 +150,11 @@ rocprofvis_result_t rocprofvis_controller_close_view(rocprofvis_controller_t* co
 * @param track The track to fetch data from
 * @param start_time The start time for the results
 * @param end_time The end time for the results
-* @param result The future to wait on
+* @param result The request to wait on
 * @param output The array to write to
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_track_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_track_t* track, double start_time, double end_time, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
+rocprofvis_result_t rocprofvis_controller_track_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_track_t* track, double start_time, double end_time, rocprofvis_controller_request_t* result, rocprofvis_controller_array_t* output);
 /* JSON: TrackFetch
 {
     track: Int,
@@ -177,11 +177,11 @@ rocprofvis_result_t rocprofvis_controller_track_fetch_async(rocprofvis_controlle
 * @param start_time The start time for the results
 * @param end_time The end time for the results
 * @param x_resolution The number of pixels that can be displayed on the horizontal axis
-* @param result The future to wait on
+* @param result The request to wait on
 * @param output The array to write to
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_graph_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_graph_t* graph, double start_time, double end_time, uint32_t x_resolution, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
+rocprofvis_result_t rocprofvis_controller_graph_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_graph_t* graph, double start_time, double end_time, uint32_t x_resolution, rocprofvis_controller_request_t* result, rocprofvis_controller_array_t* output);
 /* JSON: GraphFetch
 {
     graph: Int,
@@ -204,11 +204,11 @@ rocprofvis_result_t rocprofvis_controller_graph_fetch_async(rocprofvis_controlle
 * @param controller The controller.
 * @param table The table to fetch data from
 * @param args The arguments that setup the table
-* @param result The future to wait on
+* @param result The request to wait on
 * @param output The array to write to
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
+rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table, rocprofvis_controller_arguments_t* args, rocprofvis_controller_request_t* result, rocprofvis_controller_array_t* output);
 /* JSON: TableFetch
 {
     controller: Int,
@@ -227,11 +227,11 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controlle
 * @param controller The controller.
 * @param plot The plot to fetch data from
 * @param args The arguments that setup the plot
-* @param result The future to wait on
+* @param result The request to wait on
 * @param output The array to write to
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_plot_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_plot_t* plot, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
+rocprofvis_result_t rocprofvis_controller_plot_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_plot_t* plot, rocprofvis_controller_arguments_t* args, rocprofvis_controller_request_t* result, rocprofvis_controller_array_t* output);
 
 /*
 * Get indexed properties from an object.
@@ -240,11 +240,11 @@ rocprofvis_result_t rocprofvis_controller_plot_fetch_async(rocprofvis_controller
 * @param property The property to access
 * @param index The index to start at
 * @param count The count of elements to get
-* @param result The future to wait on
+* @param result The request to wait on
 * @param output The array to write to
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_controller_t* controller, rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, uint32_t count, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
+rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_controller_t* controller, rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, uint32_t count, rocprofvis_controller_request_t* result, rocprofvis_controller_array_t* output);
 /* JSON: GetIndexedProperty
 {
     controller: Int,
@@ -269,10 +269,10 @@ void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* arg
 void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object);
 
 /*
-* Frees the provided future and any result it contains
+* Frees the provided request and any result it contains
 * @param object The object to free.
 */
-void rocprofvis_controller_future_free(rocprofvis_controller_future_t* object);
+void rocprofvis_controller_request_free(rocprofvis_controller_request_t* object);
 
 /*
 * Frees the provided controller and all sub-objects

@@ -12,11 +12,11 @@ namespace RocProfVis
 namespace Controller
 {
 
-class Future : public Handle
+class Request : public Handle
 {
 public:
-    Future();
-    virtual ~Future();
+    Request();
+    virtual ~Request();
 
     rocprofvis_controller_object_type_t GetType(void) final;
 

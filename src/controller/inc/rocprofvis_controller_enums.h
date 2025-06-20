@@ -65,8 +65,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeFlowControl = 5,
     // Callstack object
     kRPVControllerObjectTypeCallstack = 6,
-    // Future object
-    kRPVControllerObjectTypeFuture = 7,
+    // Request object
+    kRPVControllerObjectTypeRequest = 7,
     // Graph object
     kRPVControllerObjectTypeGraph = 8,
     // Table object
@@ -568,17 +568,17 @@ typedef enum rocprofvis_controller_table_type_t
 } rocprofvis_controller_table_type_t;
 
 /*
-* Properties for a future object
+* Properties for a Request object
 */
-typedef enum rocprofvis_controller_future_properties_t
+typedef enum rocprofvis_controller_request_properties_t
 {
     // Result code
-    kRPVControllerFutureResult = 0xB0000000,
+    kRPVControllerRequestResult = 0xB0000000,
     // Data object
-    kRPVControllerFutureObject = 0xB0000001,
+    kRPVControllerRequestObject = 0xB0000001,
     // Type of object, see rocprofvis_controller_object_type_t
-    kRPVControllerFutureType = 0xB0000002,
-} rocprofvis_controller_future_properties_t;
+    kRPVControllerRequestType = 0xB0000002,
+} rocprofvis_controller_request_properties_t;
 
 /*
 * Event extended properties . To be used by rocprofvis_controller_get_indexed_property_async 

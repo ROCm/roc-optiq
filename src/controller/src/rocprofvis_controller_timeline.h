@@ -12,7 +12,7 @@ namespace Controller
 {
 
 class Array;
-class Future;
+class Request;
 class Graph;
 class Track;
 
@@ -23,10 +23,10 @@ public:
 
     ~Timeline();
 
-    rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
+    rocprofvis_result_t AsyncFetch(Track& track, Request& request, Array& array,
                                    double start, double end);
 
-    rocprofvis_result_t AsyncFetch(Graph& track, Future& future, Array& array,
+    rocprofvis_result_t AsyncFetch(Graph& track, Request& request, Array& array,
                                    double start, double end, uint32_t pixels);
 
     rocprofvis_controller_object_type_t GetType(void) final;

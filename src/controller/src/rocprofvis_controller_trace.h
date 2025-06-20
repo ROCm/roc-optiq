@@ -15,7 +15,7 @@ namespace Controller
 
 class Arguments;
 class Array;
-class Future;
+class Request;
 class Track;
 class Graph;
 class Timeline;
@@ -33,24 +33,24 @@ public:
 
     virtual ~Trace();
 
-    rocprofvis_result_t Load(char const* const filename, Future& future);
+    rocprofvis_result_t Load(char const* const filename, Request& request);
 
-    rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
+    rocprofvis_result_t AsyncFetch(Track& track, Request& request, Array& array,
                                    double start, double end);
 
-    rocprofvis_result_t AsyncFetch(Graph& graph, Future& future, Array& array,
+    rocprofvis_result_t AsyncFetch(Graph& graph, Request& request, Array& array,
                                    double start, double end, uint32_t pixels);
 
-    rocprofvis_result_t AsyncFetch(Event& event, Future& future, Array& array,
+    rocprofvis_result_t AsyncFetch(Event& event, Request& request, Array& array,
                                    rocprofvis_property_t property);
 
-    rocprofvis_result_t AsyncFetch(Table& table, Future& future, Array& array,
+    rocprofvis_result_t AsyncFetch(Table& table, Request& request, Array& array,
                                    uint64_t index, uint64_t count);
 
-    rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future,
+    rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Request& request,
                                    Array& array);
 
-    rocprofvis_result_t AsyncFetch(Plot& plot, Arguments& args, Future& future,
+    rocprofvis_result_t AsyncFetch(Plot& plot, Arguments& args, Request& request,
                                    Array& array);
 
     rocprofvis_controller_object_type_t GetType(void) final;

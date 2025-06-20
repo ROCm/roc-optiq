@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_timeline.h"
-#include "rocprofvis_controller_future.h"
+#include "rocprofvis_controller_request.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
@@ -35,12 +35,12 @@ Timeline::~Timeline()
     }
 }
 
-rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& array,
+rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Request& request, Array& array,
                                 double start, double end, uint32_t pixels)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
-    future.Set(JobSystem::Get().IssueJob([&graph, &array, start, end, pixels]() -> rocprofvis_result_t {
+    request.Set(JobSystem::Get().IssueJob([&graph, &array, start, end, pixels]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
             result                     = graph.Fetch(pixels, start, end, array, index);
@@ -48,7 +48,7 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
             return result;
         }));
 
-    if(future.IsValid())
+    if(request.IsValid())
     {
         error = kRocProfVisResultSuccess;
     }
@@ -57,19 +57,19 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
     return error;
 }
 
-rocprofvis_result_t Timeline::AsyncFetch(Track& track, Future& future, Array& array,
+rocprofvis_result_t Timeline::AsyncFetch(Track& track, Request& request, Array& array,
                                 double start, double end)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
-    future.Set(JobSystem::Get().IssueJob([&track, &array, start, end]() -> rocprofvis_result_t {
+    request.Set(JobSystem::Get().IssueJob([&track, &array, start, end]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
             result                     = track.Fetch(start, end, array, index);
             return result;
         }));
 
-    if(future.IsValid())
+    if(request.IsValid())
     {
         error = kRocProfVisResultSuccess;
     }

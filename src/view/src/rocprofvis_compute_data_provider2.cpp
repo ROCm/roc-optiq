@@ -47,7 +47,7 @@ void ComputeDataProvider2::InitController()
     }
     if (!m_controller_future)
     {
-        m_controller_future = rocprofvis_controller_future_alloc();
+        m_controller_future = rocprofvis_controller_request_alloc();
         ROCPROFVIS_ASSERT(m_controller_future);
     }
 }
@@ -56,7 +56,7 @@ void ComputeDataProvider2::FreeController()
 {
     if (!m_controller_future)
     {
-        rocprofvis_controller_future_free(m_controller_future);
+        rocprofvis_controller_request_free(m_controller_future);
         m_controller_future = nullptr;
     }
     if (!m_controller)
@@ -73,7 +73,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
     rocprofvis_result_t result = rocprofvis_controller_load_async(m_controller, path.c_str(), m_controller_future);
     if (result == kRocProfVisResultSuccess)
     {
-        result = rocprofvis_controller_future_wait(m_controller_future, FLT_MAX);
+        result = rocprofvis_controller_request_wait(m_controller_future, FLT_MAX);
         if (result == kRocProfVisResultSuccess)
         {
             result = rocprofvis_controller_get_object(m_controller, kRPVControllerComputeTrace, 0, &m_trace);
@@ -114,14 +114,14 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                 ROCPROFVIS_ASSERT(rows > 0);
                                 rocprofvis_controller_array_t* table_data = rocprofvis_controller_array_alloc(0);
                                 ROCPROFVIS_ASSERT(table_data);
-                                rocprofvis_controller_future_t* table_future = rocprofvis_controller_future_alloc();
+                                rocprofvis_controller_request_t* table_future = rocprofvis_controller_request_alloc();
                                 ROCPROFVIS_ASSERT(table_future);
                                 rocprofvis_controller_arguments_t* sort = rocprofvis_controller_arguments_alloc();
                                 ROCPROFVIS_ASSERT(sort);                                
                                 result = rocprofvis_controller_table_fetch_async(m_trace, table_handle, sort, table_future, table_data);
                                 if (result == kRocProfVisResultSuccess)
                                 {
-                                    result = rocprofvis_controller_future_wait(table_future, FLT_MAX);
+                                    result = rocprofvis_controller_request_wait(table_future, FLT_MAX);
                                     if (result == kRocProfVisResultSuccess)
                                     {
                                         for (uint64_t r = 0; r < rows; r ++)
@@ -212,7 +212,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                     }
                                 }
                                 rocprofvis_controller_array_free(table_data);
-                                rocprofvis_controller_future_free(table_future);
+                                rocprofvis_controller_request_free(table_future);
                                 rocprofvis_controller_arguments_free(sort);
                             }
                         }
@@ -286,14 +286,14 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                             ROCPROFVIS_ASSERT(num_series > 0);
                             rocprofvis_controller_array_t* plot_data = rocprofvis_controller_array_alloc(0);
                             ROCPROFVIS_ASSERT(plot_data);
-                            rocprofvis_controller_future_t* plot_future = rocprofvis_controller_future_alloc();
+                            rocprofvis_controller_request_t* plot_future = rocprofvis_controller_request_alloc();
                             ROCPROFVIS_ASSERT(plot_future);
                             rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
                             ROCPROFVIS_ASSERT(args);
                             result = rocprofvis_controller_plot_fetch_async(m_controller, plot_handle, args, plot_future, plot_data);
                             if (result == kRocProfVisResultSuccess)
                             {
-                                result = rocprofvis_controller_future_wait(plot_future, FLT_MAX);
+                                result = rocprofvis_controller_request_wait(plot_future, FLT_MAX);
                                 if (result == kRocProfVisResultSuccess)
                                 {
                                     for (uint64_t i = 0; i < num_series; i ++)
@@ -349,7 +349,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                 }
                             }
                             rocprofvis_controller_array_free(plot_data);
-                            rocprofvis_controller_future_free(plot_future);
+                            rocprofvis_controller_request_free(plot_future);
                             rocprofvis_controller_arguments_free(args);
                         }
                     }

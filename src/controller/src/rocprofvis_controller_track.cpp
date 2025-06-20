@@ -101,6 +101,10 @@ Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc
                 }
             }
         }
+        else
+        {
+            result = kRocProfVisResultSuccess;
+        }
 
         if(result == kRocProfVisResultSuccess)
         {

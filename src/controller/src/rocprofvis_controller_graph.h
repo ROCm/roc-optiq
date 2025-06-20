@@ -16,32 +16,6 @@ class Track;
 
 class Graph : public Handle
 {
-    class LOD
-    {
-    public:
-        LOD();
-
-        LOD(LOD const& other) = delete;
-
-        LOD(LOD&& other);
-        
-        ~LOD();
-
-        LOD& operator=(LOD const& other) = delete;
-
-        LOD& operator=(LOD&& other);
-
-        SegmentTimeline& GetSegments();
-
-        std::pair<double, double> const& GetValidRange();
-
-        void SetValidRange(double start, double end);
-
-    private:
-        SegmentTimeline m_segments;
-        std::pair<double, double> m_valid_range;
-    };
-
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts, std::vector<Data>& entries);
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start, double end);
     void Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object);
@@ -67,7 +41,7 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
 private:
-    std::map<uint32_t, LOD> m_lods;
+    std::map<uint32_t, SegmentTimeline> m_lods;
     uint64_t m_id;
     Track* m_track;
     rocprofvis_controller_graph_type_t m_type;

@@ -10,6 +10,7 @@
 #include <cfloat>
 #include <cstring>
 #include <cmath>
+#include <set>
 
 namespace RocProfVis
 {
@@ -42,22 +43,72 @@ Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(m_start_timestamp <= end && m_end_timestamp >= start)
     {
-        bool dm_fetched = false;
-        while(true)
+        if (m_segments.GetSegmentDuration() == 0)
+        {
+            uint32_t num_segments = (uint32_t)ceil((m_end_timestamp - m_start_timestamp) / kSegmentDuration);
+            m_segments.Init(kSegmentDuration, num_segments);
+        }
+
+        start = std::max(start, m_start_timestamp);
+        end   = std::min(end, m_end_timestamp);
+
+        std::vector<std::pair<uint32_t, uint32_t>> fetch_ranges;
+
+        uint32_t start_index = (uint32_t) floor((start - m_start_timestamp) / kSegmentDuration);
+        uint32_t end_index   = (uint32_t) ceil((end - m_start_timestamp) / kSegmentDuration);
+
+        for(uint32_t i = start_index; i < end_index; i++)
+        {
+            if(!m_segments.IsValid(i))
+            {
+                if(fetch_ranges.size())
+                {
+                    auto& last_range = fetch_ranges.back();
+                    if(last_range.second == i - 1)
+                    {
+                        last_range.second = i;
+                    }
+                    else
+                    {
+                        fetch_ranges.push_back(std::make_pair(i, i));
+                    }
+                }
+                else
+                {
+                    fetch_ranges.push_back(std::make_pair(i, i));
+                }
+            }
+        }
+
+        if(fetch_ranges.size())
+        {
+            for(auto& range : fetch_ranges)
+            {
+                double fetch_start = m_start_timestamp + (range.first * kSegmentDuration);
+                double fetch_end   = m_start_timestamp + ((range.second + 1) * kSegmentDuration);
+
+                result = FetchFromDataModel(fetch_start, fetch_end);
+                if (result == kRocProfVisResultSuccess)
+                {
+                    for(uint32_t i = range.first; i <= range.second; i++)
+                    {
+                        m_segments.SetValid(i);
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            result = kRocProfVisResultSuccess;
+        }
+
+        if(result == kRocProfVisResultSuccess)
         {
             result = m_segments.FetchSegments(start, end, user_ptr, func);
-            if(result == kRocProfVisResultSuccess || dm_fetched)
-            {
-                break;
-            }
-            else if(result == kRocProfVisResultOutOfRange)
-            {
-                if(kRocProfVisResultSuccess != FetchFromDataModel(start, end))
-                {
-                    return kRocProfVisResultUnknownError;
-                }
-                dm_fetched = true;
-            }
         }
     }
 
@@ -101,8 +152,18 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
         uint64_t dm_track_type = rocprofvis_dm_get_property_as_uint64(
             m_dm_handle, kRPVDMTrackCategoryEnumUInt64, 0);
 
+        double fetch_start =
+            m_start_timestamp +
+            (floor((start - m_start_timestamp) / kSegmentDuration) * kSegmentDuration);
+
+        double zerod_end          = end - m_start_timestamp;
+        double divided_by_segment = zerod_end / kSegmentDuration;
+        double ceil_segment       = ceil(divided_by_segment);
+        double rounded_segment    = ceil_segment * kSegmentDuration;
+        double fetch_end          = m_start_timestamp + rounded_segment;
+
         if(kRocProfVisDmResultSuccess ==
-           rocprofvis_db_read_trace_slice_async(db, (uint64_t) start, (uint64_t) end, 1,
+           rocprofvis_db_read_trace_slice_async(db, (uint64_t) fetch_start, (uint64_t) fetch_end, 1,
                                                 (rocprofvis_db_track_selection_t) &m_id,
                                                 object2wait))
         {
@@ -110,7 +171,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                rocprofvis_db_future_wait(object2wait, UINT64_MAX))
             {
                 rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
-                    m_dm_handle, kRPVDMSliceHandleTimed, start);
+                    m_dm_handle, kRPVDMSliceHandleTimed, fetch_start);
                 if(nullptr != slice)
                 {
                     uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
@@ -217,7 +278,9 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                             }
                         }
                     }
-                    rocprofvis_dm_delete_time_slice(trace, start, end);
+                    rocprofvis_dm_delete_time_slice(trace, fetch_start, fetch_end);
+                    
+                    
                 }
             }
         }

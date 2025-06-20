@@ -15,7 +15,8 @@ namespace RocProfVis
 namespace Controller
 {
 
-constexpr double kGraphScaleFactor = 10.0;
+constexpr double kGraphScaleFactor   = 10.0;
+constexpr double kMaxSegmentDuration = 60000000000.0;
 
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack>
     TrackRef;
@@ -47,10 +48,10 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
         double scale = 1.0;
         for(uint32_t i = 0; i < lod; i++)
         {
-            scale *= 10.0;
+            scale *= kGraphScaleFactor;
         }
 
-        double segment_duration = std::min(kSegmentDuration * scale, 60000000000.0);
+        double segment_duration = std::min(kSegmentDuration * scale, kMaxSegmentDuration);
         double relative         = (timestamp - start_timestamp);
         double num_segments     = floor(relative / segment_duration);
         double segment_start    = start_timestamp + (num_segments * segment_duration);
@@ -110,7 +111,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
     double              scale  = 1.0;
     for(uint32_t i = 0; i < lod_to_generate; i++)
     {
-        scale *= 10.0;
+        scale *= kGraphScaleFactor;
     }
 
     uint64_t track_type = 0;
@@ -388,10 +389,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
             double scale = 1.0;
             for(uint32_t i = 0; i < lod_to_generate; i++)
             {
-                scale *= 10.0;
+                scale *= kGraphScaleFactor;
             }
             double segment_duration = std::min(
-                std::min(kSegmentDuration * scale, max_ts - start), 60000000000.0);
+                std::min(kSegmentDuration * scale, max_ts - start), kMaxSegmentDuration);
 
             auto it = m_lods.find(lod_to_generate);
             if(it == m_lods.end())

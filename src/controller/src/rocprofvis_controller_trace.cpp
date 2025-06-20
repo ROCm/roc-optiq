@@ -444,7 +444,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             (dm_track_type == kRocProfVisDmPmcTrack)
                                                 ? kRPVControllerGraphTypeLine
                                                 : kRPVControllerGraphTypeFlame,
-                                            graph_id++);
+                                            track_id);
                                         if(graph)
                                         {
                                             result = graph->SetObject(
@@ -454,7 +454,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             {
                                                 result = m_timeline->SetUInt64(
                                                     kRPVControllerTimelineNumGraphs, 0,
-                                                    graph_id);
+                                                    ++graph_id);
                                                 if(result == kRocProfVisResultSuccess)
                                                 {
                                                     result = m_timeline->SetObject(

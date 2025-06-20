@@ -46,6 +46,16 @@ rocprofvis_result_t Future::Wait(float timeout)
     return result;
 }
 
+rocprofvis_result_t Future::Cancel()
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(m_job)
+    {
+        result = JobSystem::Get().CancelJob(m_job);
+    }
+    return result;
+}
+
 rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;

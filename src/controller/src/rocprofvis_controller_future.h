@@ -25,6 +25,7 @@ public:
     bool IsValid() const;
 
     rocprofvis_result_t Wait(float timeout);
+    rocprofvis_result_t Cancel();
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;

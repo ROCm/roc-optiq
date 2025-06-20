@@ -6,6 +6,9 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_segment.h"
 
+#include <bitset>
+#include <vector>
+
 namespace RocProfVis
 {
 namespace Controller
@@ -21,6 +24,8 @@ class Graph : public Handle
     public:
         LOD();
 
+        LOD(uint32_t num_segments, double segment_duration);
+
         LOD(LOD const& other) = delete;
 
         LOD(LOD&& other);
@@ -33,13 +38,17 @@ class Graph : public Handle
 
         SegmentTimeline& GetSegments();
 
-        std::pair<double, double> const& GetValidRange();
+        double GetSegmentDuration() const;
 
-        void SetValidRange(double start, double end);
+        bool IsValid(uint32_t segment_index) const;
+
+        void SetValid(uint32_t segment_index);
 
     private:
         SegmentTimeline m_segments;
-        std::pair<double, double> m_valid_range;
+        std::vector<std::bitset<64>> m_valid_segments;
+        double                    m_segment_duration;
+        uint32_t                  m_num_segments;
     };
 
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts, std::vector<Data>& entries);

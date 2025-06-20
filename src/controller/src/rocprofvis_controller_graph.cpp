@@ -25,12 +25,24 @@ typedef Reference<rocprofvis_controller_sample_t, Sample, kRPVControllerObjectTy
     SampleRef;
 
 Graph::LOD::LOD()
-: m_valid_range(std::make_pair(0, 0))
-{}
+: m_segment_duration(0)
+, m_num_segments(0)
+{
+}
+
+Graph::LOD::LOD(uint32_t num_segments, double segment_duration)
+: m_segment_duration(segment_duration)
+, m_num_segments(num_segments)
+{
+    uint32_t num_bitsets = (num_segments / 64) + 1;
+    m_valid_segments.resize(num_bitsets);
+}
 
 Graph::LOD::LOD(LOD&& other)
 : m_segments(std::move(other.m_segments))
-, m_valid_range(m_valid_range)
+, m_valid_segments(other.m_valid_segments)
+, m_segment_duration(other.m_segment_duration)
+, m_num_segments(other.m_num_segments)
 {}
 
 Graph::LOD::~LOD() {}
@@ -41,7 +53,9 @@ Graph::LOD::operator=(LOD&& other)
     if(this != &other)
     {
         m_segments    = std::move(other.m_segments);
-        m_valid_range = other.m_valid_range;
+        m_valid_segments = other.m_valid_segments;
+        m_segment_duration = other.m_segment_duration;
+        m_num_segments = other.m_num_segments;
     }
     return *this;
 }
@@ -52,17 +66,36 @@ Graph::LOD::GetSegments()
     return m_segments;
 }
 
-std::pair<double, double> const&
-Graph::LOD::GetValidRange()
+double
+Graph::LOD::GetSegmentDuration() const
 {
-    return m_valid_range;
+    return m_segment_duration;
+}
+
+bool
+Graph::LOD::IsValid(uint32_t segment_index) const
+{
+    bool is_set = false;
+    if(segment_index < m_num_segments)
+    {
+        uint32_t array_index = segment_index / 64;
+        uint32_t bit_index   = segment_index % 64;
+        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
+        is_set = m_valid_segments[array_index].test(bit_index);
+    }
+    return is_set;
 }
 
 void
-Graph::LOD::SetValidRange(double start, double end)
+Graph::LOD::SetValid(uint32_t segment_index)
 {
-    m_valid_range.first  = start;
-    m_valid_range.second = end;
+    if(segment_index < m_num_segments)
+    {
+        uint32_t array_index = segment_index / 64;
+        uint32_t bit_index   = segment_index % 64;
+        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
+        m_valid_segments[array_index].set(bit_index);
+    }
 }
 
 void
@@ -418,75 +451,102 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(lod_to_generate > 0)
     {
-        auto it = m_lods.find(lod_to_generate);
-        if(it == m_lods.end())
+        double min_ts = start;
+        double max_ts = end;
+
+        if((m_track->GetDouble(kRPVControllerTrackMinTimestamp, 0, &min_ts) ==
+            kRocProfVisResultSuccess) &&
+           (m_track->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &max_ts) ==
+            kRocProfVisResultSuccess))
         {
-            m_lods[lod_to_generate] = LOD();
-            it                      = m_lods.find(lod_to_generate);
-        }
-
-        auto range = it->second.GetValidRange();
-
-        if(start < range.first || end > range.second)
-        {
-            double min_ts = start;
-            double max_ts = end;
-
-            if((m_track->GetDouble(kRPVControllerTrackMinTimestamp, 0, &min_ts) ==
-                kRocProfVisResultSuccess) &&
-               (m_track->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &max_ts) ==
-                kRocProfVisResultSuccess))
+            double scale = 1.0;
+            for(uint32_t i = 0; i < lod_to_generate; i++)
             {
-                double scale = 1.0;
-                for(uint32_t i = 0; i < lod_to_generate; i++)
+                scale *= 10.0;
+            }
+            double segment_duration = std::min(
+                std::min(kSegmentDuration * scale, max_ts - start), 60000000000.0);
+
+            auto it = m_lods.find(lod_to_generate);
+            if(it == m_lods.end())
+            {
+                uint32_t num_segments = ceil((max_ts - min_ts) / segment_duration);
+                m_lods[lod_to_generate] = LOD(num_segments, segment_duration);
+                it                      = m_lods.find(lod_to_generate);
+            }
+
+            start = std::max(start, min_ts);
+            end   = std::min(end, max_ts);
+            if (end > start)
+            {
+                std::vector<std::pair<uint32_t, uint32_t>> fetch_ranges;
+                uint32_t start_index = (uint32_t)floor((start - min_ts) / segment_duration);
+                uint32_t end_index = (uint32_t)ceil((end - min_ts) / segment_duration);
+                for (uint32_t i = start_index; i < end_index; i++)
                 {
-                    scale *= 10.0;
-                }
-                double segment_duration = std::min(std::min(kSegmentDuration * scale, max_ts - start), 60000000000.0);
-
-                start = std::max(start, min_ts);
-                end   = std::min(end, max_ts);
-                if(end > start)
-                {
-                    double fetch_start = min_ts + 
-                        (floor((start - min_ts) / segment_duration) * segment_duration);
-
-                    double zerod_end = end - min_ts;
-                    double divided_by_segment = zerod_end / segment_duration;
-                    double ceil_segment       = ceil(divided_by_segment);
-                    double rounded_segment    = ceil_segment * segment_duration;
-                    double fetch_end = min_ts + rounded_segment;
-
-                    GraphLODArgs args;
-                    args.m_valid_range = range;
-                    args.m_index       = 0;
-                    result             = m_track->FetchSegments(
-                        fetch_start, fetch_end, &args,
-                        [](double start, double end, Segment& segment,
-                           void* user_ptr) -> rocprofvis_result_t {
-                            GraphLODArgs*       pair   = (GraphLODArgs*) user_ptr;
-                            rocprofvis_result_t result = kRocProfVisResultSuccess;
-
-                            result = segment.Fetch(start, end, pair->m_entries,
-                                                                pair->m_index,nullptr);
-                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                            return result;
-                        });
-
-                    if(result == kRocProfVisResultSuccess)
+                    if (!it->second.IsValid(i))
                     {
-                        result = GenerateLOD(lod_to_generate, fetch_start, fetch_end,
-                                             args.m_entries);
-                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                        it->second.SetValidRange(std::min(fetch_start, range.first),
-                                                 std::max(fetch_end, range.second));
+                        if (fetch_ranges.size())
+                        {
+                            auto& last_range = fetch_ranges.back();
+                            if (last_range.second == i - 1)
+                            {
+                                last_range.second = i;
+                            }
+                            else
+                            {
+                                fetch_ranges.push_back(std::make_pair(i, i));
+                            }
+                        }
+                        else
+                        {
+                            fetch_ranges.push_back(std::make_pair(i, i));
+                        }
                     }
                 }
+
+                if(fetch_ranges.size())
+                {
+                    for(auto& range : fetch_ranges)
+                    {
+                        double fetch_start = min_ts + (range.first * segment_duration);
+                        double fetch_end   = min_ts + ((range.second + 1) * segment_duration);
+
+                        GraphLODArgs args;
+                        args.m_valid_range = range;
+                        args.m_index       = 0;
+                        result             = m_track->FetchSegments(
+                            fetch_start, fetch_end, &args,
+                            [](double start, double end, Segment& segment,
+                               void* user_ptr) -> rocprofvis_result_t {
+                                GraphLODArgs*       pair   = (GraphLODArgs*) user_ptr;
+                                rocprofvis_result_t result = kRocProfVisResultSuccess;
+
+                                result = segment.Fetch(start, end, pair->m_entries,
+                                                                   pair->m_index, nullptr);
+                                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                                return result;
+                            });
+
+                        if(result == kRocProfVisResultSuccess)
+                        {
+                            result = GenerateLOD(lod_to_generate, fetch_start, fetch_end,
+                                                 args.m_entries);
+                            if (result == kRocProfVisResultSuccess)
+                            {
+                                for (uint32_t i = range.first; i <= range.second; i++)
+                                {
+                                    it->second.SetValid(i);
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    result = kRocProfVisResultSuccess;
+                }
             }
-        }
-        else
-        {
-            result = kRocProfVisResultSuccess;
         }
     }
     return result;

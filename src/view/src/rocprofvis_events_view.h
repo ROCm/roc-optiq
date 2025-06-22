@@ -1,9 +1,9 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 #pragma once
 #include "rocprofvis_data_provider.h"
+#include "widgets/rocprofvis_widget.h"
 #include <string>
 #include <vector>
-#include "../src/view/src/widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
 {

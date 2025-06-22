@@ -3,6 +3,7 @@
 #include "rocprofvis_data_provider.h"
 #include <string>
 #include <vector>
+#include "../src/view/src/widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
 {

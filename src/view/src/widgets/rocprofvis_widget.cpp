@@ -211,7 +211,7 @@ HSplitContainer::Render()
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
         float  mouse_x   = mouse_pos.x - window_pos.x;
-        float  new_ratio = (mouse_x - 0.5f * m_resize_grip_size) / available_width;
+        float  new_ratio = (mouse_x - (m_resize_grip_size / 2)) / available_width;
         new_ratio        = clamp(new_ratio, m_left_min_width / available_width,
                                  1.0f - m_right_min_width / available_width);
         m_split_ratio    = new_ratio;
@@ -325,7 +325,7 @@ VSplitContainer::Render()
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
         float  mouse_y   = mouse_pos.y - window_pos.y;
-        float  new_ratio = (mouse_y - 0.5f * m_resize_grip_size) / available_height;
+        float  new_ratio = (mouse_y - (m_resize_grip_size / 2)) / available_height;
         new_ratio        = clamp(new_ratio, m_top_min_height / available_height,
                                  1.0f - m_bottom_min_height / available_height);
         m_split_ratio    = new_ratio;

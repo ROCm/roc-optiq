@@ -207,10 +207,15 @@ typedef enum rocprofvis_controller_track_type_t
 typedef enum rocprofvis_controller_node_properties_t
 {
     kRPVControllerNodeId = 0xC0000000,
-    kRPVControllerNodeName = 0xC0000001,
-    kRPVControllerNodeDescription = 0xC0000002,
-    kRPVControllerNodeNumProcessors = 0xC0000003,
-    kRPVControllerNodeProcessorIndexed = 0xC0000004,
+    kRPVControllerNodeHostName = 0xC0000001,
+    kRPVControllerNodeDomainName = 0xC0000002,
+    kRPVControllerNodeOSName = 0xC0000003,
+    kRPVControllerNodeOSRelease = 0xC0000004,
+    kRPVControllerNodeOSVersion = 0xC0000005,
+    kRPVControllerNodeHardwareName = 0xC0000006,
+    kRPVControllerNodeMachineId = 0xC0000007,
+    kRPVControllerNodeNumProcessors = 0xC0000008,
+    kRPVControllerNodeProcessorIndexed = 0xC0000009,
 } rocprofvis_controller_node_properties_t;
 /* JSON: RPVNode
 {

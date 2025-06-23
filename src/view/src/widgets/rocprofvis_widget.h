@@ -86,8 +86,7 @@ public:
     void SetMinRightWidth(float width);
 
 private:
-    float m_left_col_width;
-    float m_left_min_width;
+     float m_left_min_width;
     float m_right_min_width;
 
     LayoutItem m_left;
@@ -99,7 +98,6 @@ private:
     std::string m_handle_name;
 
     float m_split_ratio;
-    bool  m_dirty;
 };
 
 class VSplitContainer : public RocWidget
@@ -117,8 +115,7 @@ public:
     void SetMinBottomHeight(float height);
 
 private:
-    float m_top_row_height;
-    float m_top_min_height;
+     float m_top_min_height;
     float m_bottom_min_height;
 
     LayoutItem m_top;
@@ -130,7 +127,6 @@ private:
     std::string m_handle_name;
 
     float m_split_ratio;
-    bool  m_dirty;
 };
 
 struct TabItem

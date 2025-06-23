@@ -125,9 +125,7 @@ HSplitContainer::HSplitContainer(const LayoutItem& l, const LayoutItem& r)
 , m_resize_grip_size(4.0f)
 , m_left_min_width(100.0f)
 , m_right_min_width(100.0f)
-, m_left_col_width(200.0f)
 , m_split_ratio(0.25)  // Initial split ratio
-, m_dirty(true)
 {
     m_widget_name = GenUniqueName("HSplitContainer");
     m_left_name   = GenUniqueName("LeftColumn");
@@ -163,7 +161,6 @@ void
 HSplitContainer::SetSplit(float ratio)
 {
     m_split_ratio = ratio;
-    m_dirty       = true;
 }
 
 void
@@ -173,17 +170,10 @@ HSplitContainer::Render()
     ImVec2 total_size = ImGui::GetContentRegionAvail();
     ImVec2 window_pos = ImGui::GetWindowPos();
 
-    if(m_dirty)
-    {
-        float split           = clamp(m_split_ratio, 0.0f, 1.0f);
-        float available_width = total_size.x - m_resize_grip_size;
-        m_left_col_width      = std::floor(available_width * split);
-
-        m_left_col_width = clamp(m_left_col_width, m_left_min_width,
-                                 available_width - m_right_min_width);
-
-        m_dirty = false;
-    }
+    float available_width = total_size.x - m_resize_grip_size;
+    float left_col_width  = available_width * m_split_ratio;
+    left_col_width =
+        clamp(left_col_width, m_left_min_width, available_width - m_right_min_width);
 
     float col_height = 0;  // expand to fill height
 
@@ -193,7 +183,7 @@ HSplitContainer::Render()
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
-    ImGui::BeginChild(m_left_name.c_str(), ImVec2(m_left_col_width, col_height),
+    ImGui::BeginChild(m_left_name.c_str(), ImVec2(left_col_width, col_height),
                       m_left.m_child_window_flags);
     if(m_left.m_item)
     {
@@ -220,11 +210,11 @@ HSplitContainer::Render()
     if(ImGui::IsItemActive())
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
-        // convert to local space
-        ImVec2 ml = ImVec2(mouse_pos.x - window_pos.x, mouse_pos.y - window_pos.y);
-        // Minimum and maximum width for the left column
-        m_left_col_width = clamp(ml.x, m_left_min_width,
-                                 total_size.x - m_resize_grip_size - m_right_min_width);
+        float  mouse_x   = mouse_pos.x - window_pos.x;
+        float  new_ratio = (mouse_x - 0.5f * m_resize_grip_size) / available_width;
+        new_ratio        = clamp(new_ratio, m_left_min_width / available_width,
+                                 1.0f - m_right_min_width / available_width);
+        m_split_ratio    = new_ratio;
     }
 
     ImGui::SameLine();
@@ -253,9 +243,7 @@ VSplitContainer::VSplitContainer(const LayoutItem& t, const LayoutItem& b)
 , m_resize_grip_size(4.0f)
 , m_top_min_height(200.0f)
 , m_bottom_min_height(100.0f)
-, m_top_row_height(0.0f)
 , m_split_ratio(0.6)  // Initial split ratio
-, m_dirty(true)
 {
     m_widget_name = GenUniqueName("VSplitContainer");
     m_top_name    = GenUniqueName("TopRow");
@@ -291,7 +279,6 @@ void
 VSplitContainer::SetSplit(float ratio)
 {
     m_split_ratio = ratio;
-    m_dirty       = true;
 }
 
 void
@@ -303,23 +290,17 @@ VSplitContainer::Render()
 
     float col_width = 0;  // expand to fill height
 
-    if(m_dirty)
-    {
-        float split            = clamp(m_split_ratio, 0.0f, 1.0f);
-        float available_height = total_size.y - m_resize_grip_size;
-        m_top_row_height       = std::floor(available_height * split);
-
-        m_top_row_height = clamp(m_top_row_height, m_top_min_height,
-                                 available_height - m_bottom_min_height);
-        m_dirty          = false;
-    }
+    float available_height = total_size.y - m_resize_grip_size;
+    float top_row_height   = available_height * m_split_ratio;
+    top_row_height =
+        clamp(top_row_height, m_top_min_height, available_height - m_bottom_min_height);
 
     // Start Top Row
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_top.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_top.m_window_padding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
-    ImGui::BeginChild(m_top_name.c_str(), ImVec2(col_width, m_top_row_height),
+    ImGui::BeginChild(m_top_name.c_str(), ImVec2(col_width, top_row_height),
                       m_top.m_child_window_flags);
     if(m_top.m_item)
     {
@@ -343,13 +324,11 @@ VSplitContainer::Render()
     if(ImGui::IsItemActive())
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
-        // convert to local space
-
-        ImVec2 ml = ImVec2(mouse_pos.x - window_pos.x, mouse_pos.y - window_pos.y);
-
-        // Minimum and maximum height for the top row
-        m_top_row_height = clamp(ml.y, m_top_min_height,
-                                 total_size.y - m_resize_grip_size - m_bottom_min_height);
+        float  mouse_y   = mouse_pos.y - window_pos.y;
+        float  new_ratio = (mouse_y - 0.5f * m_resize_grip_size) / available_height;
+        new_ratio        = clamp(new_ratio, m_top_min_height / available_height,
+                                 1.0f - m_bottom_min_height / available_height);
+        m_split_ratio    = new_ratio;
     }
 
     // Start Bottom Row (Fills Remaining Space)
@@ -436,7 +415,8 @@ TabContainer::Render()
                 // show tooltip for inactive tabs if header is hovered
                 else if(ImGui::IsItemHovered())
                 {
-                    if(m_allow_tool_tips) {
+                    if(m_allow_tool_tips)
+                    {
                         ImGui::SetTooltip("%s", tab.m_id.c_str());
                     }
                 }
@@ -544,7 +524,7 @@ const std::vector<const TabItem*>
 TabContainer::GetTabs()
 {
     std::vector<const TabItem*> tabs;
-    for (TabItem& tab : m_tabs)
+    for(TabItem& tab : m_tabs)
     {
         const TabItem* t = &tab;
         tabs.push_back(t);

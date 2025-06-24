@@ -125,8 +125,10 @@ void
 TrackItem::Render(float width)
 {
     ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
-    ImGuiChildFlags child_flags = ImGuiChildFlags_Borders;
+        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar ;
+    ImGuiChildFlags child_flags = ImGuiChildFlags_Borders |ImGuiWindowFlags_NoScrollbar |
+                                  ImGuiWindowFlags_NoScrollWithMouse;
 
     if(ImGui::BeginChild((std::to_string(m_id)).c_str()), ImVec2(0, 0), child_flags,
        window_flags)
@@ -162,7 +164,9 @@ TrackItem::RenderMetaArea()
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
                                                       m_metadata_shrink_padding.y * 2.0f),
-                         ImGuiChildFlags_None))
+
+                         ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoScrollWithMouse))
     {
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 
@@ -195,7 +199,7 @@ TrackItem::RenderMetaArea()
         if(ImGui::BeginChild(
                "MetaData Content",
                ImVec2(content_size.x - m_meta_area_scale_width, content_size.y),
-               ImGuiChildFlags_None))
+               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
             ImGui::Text(m_name.c_str());
 

@@ -40,7 +40,7 @@ public:
 
     bool IsSelected() const;
     void SetSelected(bool selected);
-     
+
     void  SetDistanceToView(float distance);
     float GetDistanceToView();
 
@@ -56,13 +56,13 @@ public:
 
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
-    bool IsMetaAreaClicked() const { return m_meta_area_clicked; }
-
-protected:
-    virtual void RenderMetaArea();
-    virtual void RenderMetaAreaScale(ImVec2& container_size);
+    bool         IsMetaAreaClicked() const { return m_meta_area_clicked; }
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
+    virtual void RenderMetaArea();
+
+protected:
+    virtual void RenderMetaAreaScale(ImVec2& container_size);
 
     float                 m_zoom;
     double                m_movement;

@@ -55,8 +55,8 @@ void
 FlameTrackItem::ReleaseData()
 {
     m_flames.clear();
-    m_flames = {};
 }
+
 bool
 FlameTrackItem::HandleTrackDataChanged()
 {

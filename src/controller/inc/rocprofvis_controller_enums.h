@@ -85,6 +85,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypePlot = 17,
     // Plot series object
     kRPVControllerObjectTypePlotSeries = 18,
+    // Process object
+    kRPVControllerObjectTypeProcess = 19,
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -216,14 +218,23 @@ typedef enum rocprofvis_controller_node_properties_t
     kRPVControllerNodeMachineId = 0xC0000007,
     kRPVControllerNodeNumProcessors = 0xC0000008,
     kRPVControllerNodeProcessorIndexed = 0xC0000009,
+    kRPVControllerNodeNumProcesses    = 0xC000000A,
+    kRPVControllerNodeProcessIndexed = 0xC000000B,
 } rocprofvis_controller_node_properties_t;
 /* JSON: RPVNode
 {
     id: Int,
-    name: String,
-    description: String,
+    host_name: String,
+    domain_name: String,
+    os_name: String,
+    os_release: String,
+    os_version: String,
+    hardware_name: String,
+    machine_id: String,
     num_processors: Int,
-    processors: Array[RPVProcessor]
+    processors: Array[RPVProcessor],
+    num_processes: Int,
+    processes: Array[RPVProcess]
 }
 */
 
@@ -245,10 +256,41 @@ typedef enum rocprofvis_controller_processor_properties_t
 {
     id: Int,
     name: String,
-    description: String,
-    num_track: Int,
-    track: Array[RPVTrack],
-    node: RPVNode
+    model_name: String,
+    user_name: String,
+    vendor_name: String,
+    product_name: String,
+    ext_data: String,
+    uuid: String,
+    type: String,
+    type_index: Int,
+    node_id: Int
+}
+*/
+
+typedef enum rocprofvis_controller_process_properties_t
+{
+    kRPVControllerProcessId = 0xF1000000,
+    kRPVControllerProcessNodeId = 0xF1000001,
+    kRPVControllerProcessInitTime = 0xF1000002,
+    kRPVControllerProcessFinishTime = 0xF1000003,
+    kRPVControllerProcessStartTime = 0xF1000004,
+    kRPVControllerProcessEndTime = 0xF1000005,
+    kRPVControllerProcessCommand = 0xF1000006,
+    kRPVControllerProcessEnvironment = 0xF1000007,
+    kRPVControllerProcessExtData = 0xF1000008,
+} rocprofvis_controller_process_properties_t;
+/* JSON: RPVProcess
+{
+    id: Int,
+    node_id: Int,
+    init_time: Double,
+    finish_time: Double,
+    start_time: Double,
+    end_time: Double,
+    command: String,
+    environment: String,
+    ext_data: String
 }
 */
 

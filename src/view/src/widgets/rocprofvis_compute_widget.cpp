@@ -83,19 +83,28 @@ void ComputeTable::Render()
                     {
                         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_SEARCH);
                     }
-                    else if (cell.m_colorize && cell.m_metric)
+                    else if (cell.m_colorize)
                     {
-                        if (cell.m_metric->m_value > TABLE_THRESHOLD_HIGH)
+                        double value = 0;
+                        if (cell.m_type == kRPVControllerPrimitiveTypeDouble)
+                        {
+                            value = cell.m_num_value.m_double;
+                        }
+                        else if (cell.m_type == kRPVControllerPrimitiveTypeUInt64)
+                        {
+                            value = cell.m_num_value.m_uint64;
+                        }
+                        if (value > TABLE_THRESHOLD_HIGH)
                         {
                             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_HIGH);
                         }
-                        else if (cell.m_metric->m_value > TABLE_THRESHOLD_MID)
+                        else if (value > TABLE_THRESHOLD_MID)
                         {
                             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_MID);
                         }
                     }
 
-                    ImGui::TextColored(cell.m_highlight ? TABLE_COLOR_SEARCH_TEXT : ImGui::GetStyleColorVec4(ImGuiCol_Text), cell.m_value.c_str());
+                    ImGui::TextColored(cell.m_highlight ? TABLE_COLOR_SEARCH_TEXT : ImGui::GetStyleColorVec4(ImGuiCol_Text), cell.m_str_value.c_str());
                 }
             }
             ImGui::EndTable();
@@ -110,7 +119,7 @@ void ComputeTable::Search(const std::string& term)
         std::regex exp(term, std::regex_constants::icase);
         for (std::vector<ComputeTableCellModel>& row : m_model->m_cells)
         {            
-            bool match = !term.empty() && !(term.length() == 1 && term == " ") && std::regex_search(row[0].m_value, exp);
+            bool match = !term.empty() && !(term.length() == 1 && term == " ") && std::regex_search(row[0].m_str_value, exp);
             for (ComputeTableCellModel& cell : row)
             {
                 cell.m_highlight = match;
@@ -214,6 +223,47 @@ void ComputePlotBar::Render()
     }
 }
 
+ComputeMetric::ComputeMetric(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit)
+: ComputeWidget(data_provider)
+, m_type(type)
+, m_name(label)
+, m_unit(unit)
+{
+
+}
+
+void ComputeMetric::Update()
+{
+    m_model = m_data_provider->GetMetricModel(m_type);
+    if (m_model)
+    {
+        if (!m_name.empty())
+        {
+            m_formatted_string = m_name + ": ";
+        }       
+        if (m_model->m_type == kRPVControllerPrimitiveTypeDouble)
+        {
+            m_formatted_string += std::to_string(m_model->m_value.m_double);
+        }
+        else if (m_model->m_type == kRPVControllerPrimitiveTypeUInt64)
+        {
+            m_formatted_string += std::to_string(m_model->m_value.m_uint64);
+        }
+        if (!m_unit.empty())
+        {
+            m_formatted_string += " " + m_unit;
+            if (m_unit == "%")
+            {
+                m_formatted_string += "%";
+            }
+        }
+    }
+}
+
+std::string ComputeMetric::GetFormattedString() const
+{
+    return m_formatted_string;
+}
 
 }  // namespace View
 }  // namespace RocProfVis

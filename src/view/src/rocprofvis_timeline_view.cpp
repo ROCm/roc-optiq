@@ -681,33 +681,16 @@ TimelineView::RenderGraphView()
             if(is_visible)
             {
                 // Request data for the chart if it doesn't have data
-                if(!track_item.chart->HasData() &&
-                   track_item.chart->GetRequestState() == TrackDataRequestState::kIdle)
+                if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
+                                                        TrackDataRequestState::kIdle) ||
+                   request_horizontal_data && m_settings.IsHorizontalRender())
                 {
-                    double buffer_distance = m_v_width;  // Essentially creates one
-                                                         // viewport worth of buffer.
+                    // Request one viewport worth of data on each side of the current view
+                    double buffer_distance = m_v_width;
                     graph_objects.second.chart->RequestData(
                         (m_view_time_offset_ns - buffer_distance) + m_min_x,
                         (m_view_time_offset_ns + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
-                    request_horizontal_data =
-                        true;  // This is here because as new tracks are loaded all
-                               // graphs should have data to fill the viewport.
-                }
-                if(m_settings.IsHorizontalRender())
-                {
-                    if(request_horizontal_data && track_item.chart->GetRequestState() ==
-                                                      TrackDataRequestState::kIdle)
-                    {
-                        double buffer_distance = m_v_width;  // Essentially creates one
-                                                             // viewport worth of buffer.
-
-                        track_item.chart->RequestData(
-                            (m_view_time_offset_ns - buffer_distance) + m_min_x,
-                            (m_view_time_offset_ns + m_v_width + buffer_distance) +
-                                m_min_x,
-                            m_graph_size.x * 3);
-                    }
                 }
 
                 if(track_item.color_by_value)
@@ -781,6 +764,10 @@ TimelineView::RenderGraphView()
                             ImGui::EndDragDropTarget();
                         }
                     }
+
+                    // call update function (TODO: move this to timeline's update
+                    // function?)
+                    track_item.chart->Update();
 
                     track_item.chart->UpdateMovement(m_zoom, m_view_time_offset_ns,
                                                      m_min_x, m_max_x, m_pixels_per_ns,

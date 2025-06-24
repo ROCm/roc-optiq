@@ -265,11 +265,18 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
             }       
         }
         std::vector<Data> row_data;
+        std::string row_header;
         for (uint32_t col = 0; col < csv_row.size(); col ++)
         {            
             if (m_columns[col].m_type == kRPVControllerPrimitiveTypeString)
             {
-                row_data.emplace_back(csv_row[col].get().c_str());
+                std::string field = csv_row[col].get();
+                field.erase(std::remove_if(field.begin(), field.end(), [](char c) { return c < 0; }), field.end());
+                row_data.emplace_back(field.c_str());
+                if (col == 0)
+                {
+                    row_header = field;
+                }
             }
             else if (m_columns[col].m_type == kRPVControllerPrimitiveTypeDouble)
             {
@@ -300,8 +307,8 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
         // Key for any value is [row header][space][column header].
         for (int i = 1; i < m_rows[row_count].size(); i ++)
         {
-            std::string row_name = csv_row[0].get();
-            m_metrics_map[row_name + " " + m_columns[i].m_name] = MetricMapEntry{row_name, &m_rows[row_count][i]};
+            std::string key = row_header + " " + m_columns[i].m_name;
+            m_metrics_map[key] = MetricMapEntry{row_header, &m_rows[row_count][i]};
         }
 
         row_count ++;

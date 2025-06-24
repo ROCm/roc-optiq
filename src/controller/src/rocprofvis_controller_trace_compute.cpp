@@ -94,6 +94,45 @@ rocprofvis_controller_object_type_t ComputeTrace::GetType(void)
 rocprofvis_result_t ComputeTrace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if (value)
+    {
+        if (kRPVControllerComputeMetricTypeL2CacheRd <= property && property < kRPVControllerComputeMetricTypeCount)
+        {
+            Data* metric_data = nullptr;
+            result = GetMetric(static_cast<rocprofvis_controller_compute_metric_types_t>(property), &metric_data);
+            if (result == kRocProfVisResultSuccess)
+            {
+                ROCPROFVIS_ASSERT(metric_data);
+                switch(metric_data->GetType())
+                {
+                    case kRPVControllerPrimitiveTypeUInt64:
+                    {
+                        result = metric_data->GetUInt64(value);
+                        break;
+                    }
+                    case kRPVControllerPrimitiveTypeDouble:
+                    {
+                        double data;
+                        result = metric_data->GetDouble(&data);
+                        if (result == kRocProfVisResultSuccess)
+                        {
+                            *value = static_cast<uint64_t>(data);
+                        }
+                        break;
+                    }
+                    default: 
+                    {
+                        result = kRocProfVisResultInvalidType;
+                        break;
+                    }
+                }
+            }
+        }
+        else
+        {
+            result = kRocProfVisResultInvalidEnum;
+        }
+    }
     return result;
 }
 
@@ -168,6 +207,24 @@ rocprofvis_result_t ComputeTrace::SetObject(rocprofvis_property_t property, uint
 rocprofvis_result_t ComputeTrace::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    return result;
+}
+
+rocprofvis_result_t ComputeTrace::GetMetric(const rocprofvis_controller_compute_metric_types_t metric_type, Data** value)
+{
+    rocprofvis_result_t result = kRocProfVisResultNotLoaded;
+    const ComputeMetricDefinition& metric = COMPUTE_METRIC_DEFINITIONS.at(metric_type);
+    const rocprofvis_controller_compute_table_types_t& table_type = metric.m_table_type;
+    if (m_tables.count(table_type))
+    {
+        const std::string& key = metric.m_metric_key;
+        std::pair<std::string, Data*> metric_data;
+        result = m_tables[table_type]->GetMetric(key, metric_data);
+        if (result == kRocProfVisResultSuccess)
+        {
+            *value = metric_data.second;
+        }
+    }
     return result;
 }
 

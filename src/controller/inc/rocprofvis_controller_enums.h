@@ -230,11 +230,16 @@ typedef enum rocprofvis_controller_node_properties_t
 typedef enum rocprofvis_controller_processor_properties_t
 {
     kRPVControllerProcessorId = 0xD0000000,
-    kRPVControllerProcessorName = 0xD0000001,
-    kRPVControllerProcessorDescription = 0xD0000002,
-    kRPVControllerProcessorNumTracks = 0xD0000003,
-    kRPVControllerProcessorTrackIndexed = 0xD0000004,
-    kRPVControllerProcessorNode = 0xD0000005,
+    kRPVControllerProcessorName      = 0xD0000001,
+    kRPVControllerProcessorModelName = 0xD0000002,
+    kRPVControllerProcessorUserName = 0xD0000003,
+    kRPVControllerProcessorVendorName = 0xD0000004,
+    kRPVControllerProcessorProductName = 0xD0000005,
+    kRPVControllerProcessorExtData = 0xD0000006,
+    kRPVControllerProcessorUUID = 0xD0000007,
+    kRPVControllerProcessorType = 0xD0000008,
+    kRPVControllerProcessorTypeIndex = 0xD0000009,
+    kRPVControllerProcessorNodeId = 0xD000000A,
 } rocprofvis_controller_processor_properties_t;
 /* JSON: RPVProcessor
 {

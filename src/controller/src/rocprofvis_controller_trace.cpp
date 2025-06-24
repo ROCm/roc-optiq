@@ -30,6 +30,7 @@ static IdGenerator<Trace> s_trace_id;
 typedef Reference<rocprofvis_controller_table_t, SystemTable, kRPVControllerObjectTypeTable> SystemTableRef;
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 typedef Reference<rocprofvis_controller_timeline_t, Timeline, kRPVControllerObjectTypeTimeline> TimelineRef;
+typedef Reference<rocprofvis_controller_processor_t, Processor, kRPVControllerObjectTypeProcessor> ProcessorRef;
 
 Trace::Trace()
 : m_id(s_trace_id.GetNextId())
@@ -60,6 +61,11 @@ Trace::~Trace()
 
     if(m_compute_trace)
         delete m_compute_trace;
+
+    for (auto* node : m_nodes)
+    {
+        delete node;
+    }
 }
 
 #ifdef JSON_SUPPORT
@@ -656,6 +662,214 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
 
                                 rocprofvis_dm_delete_table_at(m_dm_handle, table_id);
                             }
+                            rocprofvis_db_future_free(future);
+                        }
+                    }
+
+                    if (result == kRocProfVisDmResultSuccess)
+                    {
+                        rocprofvis_db_future_t future =
+                            rocprofvis_db_future_alloc(nullptr);
+                        if(future)
+                        {
+                            std::string processor_query = "select * from rocpd_info_agent";
+                            rocprofvis_dm_table_id_t table_id = 0;
+                            auto dm_result = rocprofvis_db_execute_query_async(
+                                db, processor_query.c_str(), "Fetch processor info",
+                                future,
+                                &table_id);
+                            if(dm_result == kRocProfVisDmResultSuccess)
+                            {
+                                dm_result = rocprofvis_db_future_wait(future, UINT64_MAX);
+                            }
+
+                            if(dm_result == kRocProfVisDmResultSuccess)
+                            {
+                                uint64_t num_tables =
+                                    rocprofvis_dm_get_property_as_uint64(
+                                        m_dm_handle, kRPVDMNumberOfTablesUInt64, 0);
+                                if(num_tables > 0)
+                                {
+                                    rocprofvis_dm_table_t table =
+                                        rocprofvis_dm_get_property_as_handle(
+                                            m_dm_handle, kRPVDMTableHandleByID, table_id);
+                                    if(nullptr != table)
+                                    {
+                                        char* table_query =
+                                            rocprofvis_dm_get_property_as_charptr(
+                                                table, kRPVDMExtTableQueryCharPtr, 0);
+                                        uint64_t num_columns =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                table, kRPVDMNumberOfTableColumnsUInt64,
+                                                0);
+                                        uint64_t num_rows =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                table, kRPVDMNumberOfTableRowsUInt64, 0);
+                                        if(strcmp(table_query, processor_query.c_str()) == 0)
+                                        {
+                                            std::vector<
+                                                rocprofvis_controller_processor_properties_t>
+                                                columns;
+                                            for(int i = 0; i < num_columns; i++)
+                                            {
+                                                char const* column_name =
+                                                    rocprofvis_dm_get_property_as_charptr(
+                                                        table,
+                                                        kRPVDMExtTableColumnNameCharPtrIndexed,
+                                                        i);
+
+                                                if(strcmp(column_name, "id") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorId);
+                                                }
+                                                else if(strcmp(column_name, "nid") ==
+                                                        0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorNodeId);
+                                                }
+                                                else if(strcmp(column_name,
+                                                               "type") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorType);
+                                                }
+                                                else if(strcmp(column_name,
+                                                               "type_index") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorTypeIndex);
+                                                }
+                                                else if(strcmp(column_name, "uuid") ==
+                                                        0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorUUID);
+                                                }
+                                                else if(strcmp(column_name, "name") ==
+                                                        0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorName);
+                                                }
+                                                else if(strcmp(column_name,
+                                                               "model_name") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorModelName);
+                                                }
+                                                else if(strcmp(column_name,
+                                                               "vendor_name") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorVendorName);
+                                                }
+                                                else if(strcmp(column_name,
+                                                               "product_name") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorProductName);
+                                                }
+                                                else if(strcmp(column_name,
+                                                               "user_name") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorUserName);
+                                                }
+                                                else if(strcmp(column_name,
+                                                               "extdata") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorExtData);
+                                                }
+                                                else
+                                                {
+                                                    columns.push_back((rocprofvis_controller_processor_properties_t)0);
+                                                }
+                                            }
+                                            for(int i = 0; i < num_rows; i++)
+                                            {
+                                                rocprofvis_dm_table_row_t table_row =
+                                                    rocprofvis_dm_get_property_as_handle(
+                                                        table,
+                                                        kRPVDMExtTableRowHandleIndexed,
+                                                        i);
+                                                if(table_row != nullptr)
+                                                {
+                                                    uint64_t num_cells =
+                                                        rocprofvis_dm_get_property_as_uint64(
+                                                            table_row,
+                                                            kRPVDMNumberOfTableRowCellsUInt64,
+                                                            0);
+                                                    if(num_cells == num_columns)
+                                                    {
+                                                        Processor* proc = new Processor;
+
+                                                        std::vector<std::string> row;
+                                                        for(int j = 0; j < num_cells; j++)
+                                                        {
+                                                            char const* prop_string =
+                                                                rocprofvis_dm_get_property_as_charptr(
+                                                                    table_row,
+                                                                    kRPVDMExtTableRowCellValueCharPtrIndexed,
+                                                                    j);
+                                                            if(columns[j] ==
+                                                               (rocprofvis_controller_processor_properties_t) 0)
+                                                            {
+                                                                continue;
+                                                            }
+                                                            else if(columns[j] ==
+                                                                    kRPVControllerProcessorId ||
+                                                                columns[j] ==
+                                                                    kRPVControllerProcessorNodeId ||
+                                                                columns[j] ==
+                                                                    kRPVControllerProcessorTypeIndex)
+                                                            {
+                                                                char* end = nullptr;
+                                                                proc->SetUInt64(
+                                                                    columns[j],
+                                                                    0,
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10));
+                                                            }
+                                                            else
+                                                            {
+                                                                proc->SetString(
+                                                                    columns[j], 0,
+                                                                    prop_string,
+                                                                    strlen(prop_string));
+                                                            }
+                                                        }
+
+                                                        uint64_t node_id = 0;
+                                                        proc->GetUInt64(kRPVControllerProcessorNodeId, 0, &node_id);
+                                                        for (auto* node : m_nodes)
+                                                        {
+                                                            uint64_t id = 0;
+                                                            node->GetUInt64(kRPVControllerNodeId, 0, &id);
+                                                            if (id == node_id)
+                                                            {
+                                                                uint64_t num_procs = 0;
+                                                                node->GetUInt64(kRPVControllerNodeNumProcessors, 0, &num_procs);
+                                                                node->SetUInt64(kRPVControllerNodeNumProcessors, 0, num_procs+1);
+                                                                node->SetObject(kRPVControllerNodeProcessorIndexed, num_procs, (rocprofvis_handle_t*)proc);
+                                                                proc = nullptr;
+                                                                break;
+                                                            }
+                                                        }
+                                                        ROCPROFVIS_ASSERT(!proc);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                rocprofvis_dm_delete_table_at(m_dm_handle, table_id);
+                            }
+
                             rocprofvis_db_future_free(future);
                         }
                     }
@@ -1261,6 +1475,10 @@ Node::Node()
 
 Node::~Node()
 {
+    for (auto* proc : m_processors)
+    {
+        delete proc;
+    }
 }
 
 rocprofvis_controller_object_type_t Node::GetType(void)
@@ -1282,6 +1500,12 @@ rocprofvis_result_t Node::GetUInt64(rocprofvis_property_t property, uint64_t ind
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerNodeNumProcessors:
+            {
+                *value = m_processors.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerNodeHostName:
             case kRPVControllerNodeDomainName:
             case kRPVControllerNodeOSName:
@@ -1289,7 +1513,6 @@ rocprofvis_result_t Node::GetUInt64(rocprofvis_property_t property, uint64_t ind
             case kRPVControllerNodeOSVersion:
             case kRPVControllerNodeHardwareName:
             case kRPVControllerNodeMachineId:
-            case kRPVControllerNodeNumProcessors:
             case kRPVControllerNodeProcessorIndexed:
             {
                 result = kRocProfVisResultInvalidType;
@@ -1495,6 +1718,15 @@ rocprofvis_result_t Node::SetUInt64(rocprofvis_property_t property, uint64_t ind
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerNodeNumProcessors:
+        {
+            if (m_processors.size() < value)
+            {
+                m_processors.resize(value);
+            }
+            result = kRocProfVisResultSuccess;
+            break;
+        }
         case kRPVControllerNodeHostName:
         case kRPVControllerNodeDomainName:
         case kRPVControllerNodeOSName:
@@ -1502,7 +1734,6 @@ rocprofvis_result_t Node::SetUInt64(rocprofvis_property_t property, uint64_t ind
         case kRPVControllerNodeOSVersion:
         case kRPVControllerNodeHardwareName:
         case kRPVControllerNodeMachineId:
-        case kRPVControllerNodeNumProcessors:
         case kRPVControllerNodeProcessorIndexed:
         {
             result = kRocProfVisResultInvalidType;
@@ -1552,6 +1783,23 @@ rocprofvis_result_t Node::SetObject(rocprofvis_property_t property, uint64_t ind
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
+        case kRPVControllerNodeProcessorIndexed:
+        {
+            if(m_processors.size() > index)
+            {
+                ProcessorRef ref(value);
+                if(ref.IsValid())
+                {
+                    m_processors[index] = ref.Get();
+                    result              = kRocProfVisResultSuccess;
+                }
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
+            break;
+        }
         case kRPVControllerNodeId:
         case kRPVControllerNodeHostName:
         case kRPVControllerNodeDomainName:
@@ -1561,7 +1809,6 @@ rocprofvis_result_t Node::SetObject(rocprofvis_property_t property, uint64_t ind
         case kRPVControllerNodeHardwareName:
         case kRPVControllerNodeMachineId:
         case kRPVControllerNodeNumProcessors:
-        case kRPVControllerNodeProcessorIndexed:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -1628,6 +1875,442 @@ rocprofvis_result_t Node::SetString(rocprofvis_property_t property, uint64_t ind
             case kRPVControllerNodeId:
             case kRPVControllerNodeNumProcessors:
             case kRPVControllerNodeProcessorIndexed:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+Processor::Processor()
+{
+
+}
+
+Processor::~Processor()
+{
+
+}
+
+rocprofvis_controller_object_type_t Processor::GetType(void)
+{
+    return kRPVControllerObjectTypeProcessor;
+}
+
+rocprofvis_result_t Processor::GetUInt64(rocprofvis_property_t property, uint64_t index,
+                                uint64_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerProcessorId:
+            {
+                *value = m_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorTypeIndex:
+            {
+                *value = m_type_index;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorNodeId:
+            {
+                *value = m_node_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorName:
+            case kRPVControllerProcessorModelName:
+            case kRPVControllerProcessorUserName:
+            case kRPVControllerProcessorVendorName:
+            case kRPVControllerProcessorProductName:
+            case kRPVControllerProcessorExtData:
+            case kRPVControllerProcessorUUID:
+            case kRPVControllerProcessorType:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Processor::GetDouble(rocprofvis_property_t property, uint64_t index,
+                                double* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerProcessorId:
+        case kRPVControllerProcessorName:
+        case kRPVControllerProcessorModelName:
+        case kRPVControllerProcessorUserName:
+        case kRPVControllerProcessorVendorName:
+        case kRPVControllerProcessorProductName:
+        case kRPVControllerProcessorExtData: 
+        case kRPVControllerProcessorUUID:
+        case kRPVControllerProcessorType:
+        case kRPVControllerProcessorTypeIndex:
+        case kRPVControllerProcessorNodeId:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Processor::GetObject(rocprofvis_property_t property, uint64_t index,
+                                rocprofvis_handle_t** value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerProcessorId:
+        case kRPVControllerProcessorName:
+        case kRPVControllerProcessorModelName:
+        case kRPVControllerProcessorUserName:
+        case kRPVControllerProcessorVendorName:
+        case kRPVControllerProcessorProductName:
+        case kRPVControllerProcessorExtData: 
+        case kRPVControllerProcessorUUID:
+        case kRPVControllerProcessorType:
+        case kRPVControllerProcessorTypeIndex:
+        case kRPVControllerProcessorNodeId:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Processor::GetString(rocprofvis_property_t property, uint64_t index,
+                                char* value, uint32_t* length)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerProcessorName:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_name.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_name.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorModelName:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_model_name.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_model_name.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorUserName:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_user_name.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_user_name.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorVendorName:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_vendor_name.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_vendor_name.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorProductName:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_product_name.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_product_name.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorExtData:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_ext_data.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_ext_data.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorUUID:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_uuid.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_uuid.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorType:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_type.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_type.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorId:
+        case kRPVControllerProcessorTypeIndex:
+        case kRPVControllerProcessorNodeId:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Processor::SetUInt64(rocprofvis_property_t property, uint64_t index,
+                                uint64_t value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerProcessorId:
+        {
+            m_id = value;
+            result    = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerProcessorTypeIndex:
+        {
+            m_type_index = value;
+            result    = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerProcessorNodeId:
+        {
+            m_node_id = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerProcessorName:
+        case kRPVControllerProcessorModelName:
+        case kRPVControllerProcessorUserName:
+        case kRPVControllerProcessorVendorName:
+        case kRPVControllerProcessorProductName:
+        case kRPVControllerProcessorExtData:
+        case kRPVControllerProcessorUUID:
+        case kRPVControllerProcessorType:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Processor::SetDouble(rocprofvis_property_t property, uint64_t index,
+                                double value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerProcessorId:
+        case kRPVControllerProcessorName:
+        case kRPVControllerProcessorModelName:
+        case kRPVControllerProcessorUserName:
+        case kRPVControllerProcessorVendorName:
+        case kRPVControllerProcessorProductName:
+        case kRPVControllerProcessorExtData: 
+        case kRPVControllerProcessorUUID:
+        case kRPVControllerProcessorType:
+        case kRPVControllerProcessorTypeIndex:
+        case kRPVControllerProcessorNodeId:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Processor::SetObject(rocprofvis_property_t property, uint64_t index,
+                                rocprofvis_handle_t* value)
+    
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerProcessorId:
+        case kRPVControllerProcessorName:
+        case kRPVControllerProcessorModelName:
+        case kRPVControllerProcessorUserName:
+        case kRPVControllerProcessorVendorName:
+        case kRPVControllerProcessorProductName:
+        case kRPVControllerProcessorExtData: 
+        case kRPVControllerProcessorUUID:
+        case kRPVControllerProcessorType:
+        case kRPVControllerProcessorTypeIndex:
+        case kRPVControllerProcessorNodeId:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Processor::SetString(rocprofvis_property_t property, uint64_t index,
+                                char const* value, uint32_t length)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value && length)
+    {
+        switch(property)
+        {
+            case kRPVControllerProcessorName:
+            {
+                m_name = value;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorModelName:
+            {
+                m_model_name = value;
+                result       = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorUserName:
+            {
+                m_user_name = value;
+                result      = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorVendorName:
+            {
+                m_vendor_name = value;
+                result        = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorProductName:
+            {
+                m_product_name = value;
+                result         = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorExtData:
+            {
+                m_ext_data = value;
+                result     = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorUUID:
+            {
+                m_uuid = value;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorType:
+            {
+                m_type = value;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorId:
+            case kRPVControllerProcessorTypeIndex:
+            case kRPVControllerProcessorNodeId:
             {
                 result = kRocProfVisResultInvalidType;
                 break;

@@ -519,8 +519,7 @@ TimelineView::RenderGrid()
         // Detect right mouse click in the ruler area
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
            ImGui::IsMouseHoveringRect(
-               ImVec2(container_pos.x,
-                      cursor_position.y + content_size.y - m_ruler_height),
+               ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
                ImVec2(container_pos.x + m_graph_size.x,
                       cursor_position.y + content_size.y)))
         {
@@ -536,8 +535,7 @@ TimelineView::RenderGrid()
             ImGui::Text("Time format:");
             ImGui::Separator();
 
-            if(ImGui::MenuItem("Timecode", nullptr,
-                               m_display_time_format == TimeFormat::kTimecode))
+            if(ImGui::MenuItem("Timecode", nullptr, m_display_time_format == TimeFormat::kTimecode))
             {
                 m_display_time_format = TimeFormat::kTimecode;
             }
@@ -571,7 +569,7 @@ TimelineView::RenderGrid()
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
             std::string label;
-            double      time_point_ns =
+            double time_point_ns =
                 m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
             switch(m_display_time_format)
             {
@@ -789,36 +787,7 @@ TimelineView::RenderGraphView()
                                                      m_scroll_position);
 
                     m_resize_activity |= track_item.chart->GetResizeStatus();
-
-                    ImGui::Separator();
-
-                    // Track row
-                    ImGui::BeginGroup();
-
-                    // Metadata
-                    ImGui::BeginChild(
-                        ("MetaData_" + std::to_string(graph_objects.first)).c_str(),
-                        ImVec2(m_sidebar_size, track_height), false,
-                        ImGuiWindowFlags_NoScrollbar |
-                            ImGuiWindowFlags_NoScrollWithMouse);
-                    track_item.chart->RenderMetaArea();
-                    ImGui::EndChild();
-
-                    ImGui::SameLine(0, 0);
-
-                    // Charts go here
-                    ImGui::BeginChild(
-                        ("Chart_" + std::to_string(graph_objects.first)).c_str(),
-                        ImVec2(m_graph_size.x, track_height), false,
-                        ImGuiWindowFlags_NoScrollbar |
-                            ImGuiWindowFlags_NoScrollWithMouse);
-                    track_item.chart->RenderChart(m_graph_size.x);
-                    track_item.chart->RenderResizeBar(
-                        ImVec2(m_graph_size.x, track_height));
-                    ImGui::EndChild();
-
-                    ImGui::EndGroup();
-                    ImGui::Separator();
+                    track_item.chart->Render(m_graph_size.x);
 
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
@@ -1154,12 +1123,13 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 m_can_drag_to_pan = true;
             }
+            
 
-            // Enables horizontal scrolling using mouse.
+            //Enables horizontal scrolling using mouse. 
             float scroll_wheel_h = io.MouseWheelH;
             if(scroll_wheel_h != 0.0f)
             {
-                const float scroll_speed = 0.1f;
+                const float scroll_speed = 0.1f; 
                 float       move_amount  = scroll_wheel_h * m_v_width * scroll_speed;
                 m_view_time_offset_ns -= move_amount;
 

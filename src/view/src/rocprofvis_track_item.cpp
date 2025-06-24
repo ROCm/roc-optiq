@@ -124,25 +124,24 @@ TrackItem::UpdateMovement(float zoom, float movement, double& min_x, double& max
 void
 TrackItem::Render(float width)
 {
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoScrollbar ;
-    ImGuiChildFlags child_flags = ImGuiChildFlags_Borders |ImGuiWindowFlags_NoScrollbar |
-                                  ImGuiWindowFlags_NoScrollWithMouse;
+    ImGui::BeginGroup();
 
-    if(ImGui::BeginChild((std::to_string(m_id)).c_str()), ImVec2(0, 0), child_flags,
-       window_flags)
-    {
-        ImVec2 parent_size = ImGui::GetContentRegionAvail();
-        float  graph_width = width;
-
-        RenderMetaArea();
-        ImGui::SameLine();
-
-        RenderChart(graph_width);
-        RenderResizeBar(parent_size);
-    }
+    ImGui::BeginChild(("MetaData_" + std::to_string(m_id)).c_str(),
+                      ImVec2(s_metadata_width, m_track_height), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    RenderMetaArea();
     ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    ImGui::BeginChild(("Chart_" + std::to_string(m_id)).c_str(),
+                      ImVec2(width, m_track_height), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    RenderChart(width);
+    RenderResizeBar(ImVec2(width, m_track_height));
+    ImGui::EndChild();
+
+    ImGui::EndGroup();
 }
 
 void

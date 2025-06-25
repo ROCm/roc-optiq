@@ -734,9 +734,6 @@ TimelineView::RenderGraphView()
                                          ImGuiWindowFlags_NoScrollWithMouse |
                                          ImGuiWindowFlags_NoScrollbar))
                 {
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                                          m_settings.GetColor(Colors::kTransparent));
-
                     if(m_is_control_held)
                     {
                         ImGui::Selectable(
@@ -758,7 +755,6 @@ TimelineView::RenderGraphView()
                                    ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
                             {
                                 // Handle the payload (here we just print it)
-
                                 rocprofvis_graph_map_t* payload_data =
                                     (rocprofvis_graph_map_t*)
                                         payload->Data;  // incoming (being dragged)
@@ -798,12 +794,17 @@ TimelineView::RenderGraphView()
                         track_item.chart->SetSelected(track_item.selected);
                         selection_changed = true;
                     }
-                    ImGui::PopStyleColor();
                 }
                 ImGui::EndChild();
                 ImGui::PopStyleColor();
+                
+                // Draw border around the track
+                // This is done after the child window to ensure it is on top
+                ImVec2 p_min = ImGui::GetItemRectMin();
+                ImVec2 p_max = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddRect(
+                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
 
-                ImGui::Separator();
             }
             else
             {

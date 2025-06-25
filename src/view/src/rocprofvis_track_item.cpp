@@ -126,23 +126,11 @@ TrackItem::Render(float width)
 {
     ImGui::BeginGroup();
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
-                                     : m_settings.GetColor(Colors::kMetaDataColor));
-    ImGui::BeginChild(("MetaData_" + std::to_string(m_id)).c_str(),
-                      ImVec2(s_metadata_width, m_track_height), true,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     RenderMetaArea();
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
     ImGui::SameLine();
 
-    ImGui::BeginChild(("Chart_" + std::to_string(m_id)).c_str(),
-                      ImVec2(width, m_track_height), false,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     RenderChart(width);
-    RenderResizeBar(ImVec2(width, m_track_height));
-    ImGui::EndChild();
+    RenderResizeBar(ImVec2(width + s_metadata_width, m_track_height));
 
     ImGui::EndGroup();
 }
@@ -157,6 +145,9 @@ TrackItem::RenderMetaArea()
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
     m_track_content_height      = m_track_height - m_metadata_shrink_padding.y * 2.0f;
 
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
+                                     : m_settings.GetColor(Colors::kMetaDataColor));
     ImGui::SetCursorPos(m_metadata_shrink_padding);
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
@@ -228,6 +219,7 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaScale(scale_container_size);
     }
     ImGui::EndChild();  // end metadata area
+    ImGui::PopStyleColor();
 }
 
 void

@@ -126,12 +126,15 @@ TrackItem::Render(float width)
 {
     ImGui::BeginGroup();
 
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
+                                     : m_settings.GetColor(Colors::kMetaDataColor));
     ImGui::BeginChild(("MetaData_" + std::to_string(m_id)).c_str(),
-                      ImVec2(s_metadata_width, m_track_height), false,
+                      ImVec2(s_metadata_width, m_track_height), true,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     RenderMetaArea();
     ImGui::EndChild();
-
+    ImGui::PopStyleColor();
     ImGui::SameLine();
 
     ImGui::BeginChild(("Chart_" + std::to_string(m_id)).c_str(),
@@ -147,11 +150,6 @@ TrackItem::Render(float width)
 void
 TrackItem::RenderMetaArea()
 {
-    ImU32 metadata_bg_color = m_selected
-                                  ? m_settings.GetColor(Colors::kMetaDataColorSelected)
-                                  : m_settings.GetColor(Colors::kMetaDataColor);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, metadata_bg_color);
-
     // Shrink the meta data content area by one unit in the vertical direction so that the
     // borders rendered by the parent are visible other wise the bg fill will cover them
     // up.
@@ -163,9 +161,7 @@ TrackItem::RenderMetaArea()
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
                                                       m_metadata_shrink_padding.y * 2.0f),
-
-                         ImGuiWindowFlags_NoScrollbar |
-                             ImGuiWindowFlags_NoScrollWithMouse))
+                         ImGuiChildFlags_None))
     {
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 
@@ -198,7 +194,7 @@ TrackItem::RenderMetaArea()
         if(ImGui::BeginChild(
                "MetaData Content",
                ImVec2(content_size.x - m_meta_area_scale_width, content_size.y),
-               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+               ImGuiChildFlags_None))
         {
             ImGui::Text(m_name.c_str());
 
@@ -232,8 +228,6 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaScale(scale_container_size);
     }
     ImGui::EndChild();  // end metadata area
-
-    ImGui::PopStyleColor();
 }
 
 void

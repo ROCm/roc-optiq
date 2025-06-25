@@ -789,6 +789,7 @@ TimelineView::RenderGraphView()
                     m_resize_activity |= track_item.chart->GetResizeStatus();
                     track_item.chart->Render(m_graph_size.x);
 
+
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {

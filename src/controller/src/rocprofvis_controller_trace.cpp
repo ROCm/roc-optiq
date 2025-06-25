@@ -2981,5 +2981,903 @@ rocprofvis_result_t Process::SetString(rocprofvis_property_t property, uint64_t 
     return result;
 }
 
+Thread::Thread()
+{
+
+}
+
+Thread::~Thread()
+{
+
+}
+
+rocprofvis_controller_object_type_t Thread::GetType(void)
+{
+    return kRPVControllerObjectTypeThread;
+}
+
+rocprofvis_result_t Thread::GetUInt64(rocprofvis_property_t property, uint64_t index,
+                                uint64_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerThreadId:
+            {
+                *value = m_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerThreadNodeId:
+            {
+                *value = m_node_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerThreadProcessId:
+            {
+                *value = m_process_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerThreadParentId:
+            {
+                *value = m_parent_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerThreadTid:
+            {
+                *value = m_tid;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerThreadName:
+            case kRPVControllerThreadExtData:
+            case kRPVControllerThreadStartTime:
+            case kRPVControllerThreadEndTime:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Thread::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerThreadStartTime:
+            {
+                *value = m_start_time;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerThreadEndTime:
+            {
+                *value = m_end_time;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerThreadId:
+            case kRPVControllerThreadNodeId:
+            case kRPVControllerThreadProcessId:
+            case kRPVControllerThreadParentId:
+            case kRPVControllerThreadTid:
+            case kRPVControllerThreadName:
+            case kRPVControllerThreadExtData:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Thread::GetObject(rocprofvis_property_t property, uint64_t index,
+                  rocprofvis_handle_t** value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerThreadId:
+        case kRPVControllerThreadNodeId:
+        case kRPVControllerThreadProcessId:
+        case kRPVControllerThreadParentId:
+        case kRPVControllerThreadTid:
+        case kRPVControllerThreadName:
+        case kRPVControllerThreadExtData:
+        case kRPVControllerThreadStartTime:
+        case kRPVControllerThreadEndTime:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Thread::GetString(rocprofvis_property_t property, uint64_t index, char* value,
+                  uint32_t* length)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerThreadName:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_name.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_name.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerThreadExtData:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_ext_data.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_ext_data.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerThreadId:
+        case kRPVControllerThreadNodeId:
+        case kRPVControllerThreadProcessId:
+        case kRPVControllerThreadParentId:
+        case kRPVControllerThreadTid:
+        case kRPVControllerThreadStartTime:
+        case kRPVControllerThreadEndTime:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Thread::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerThreadId:
+        {
+            m_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerThreadNodeId:
+        {
+            m_node_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerThreadProcessId:
+        {
+            m_process_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerThreadParentId:
+        {
+            m_parent_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerThreadTid:
+        {
+            m_tid  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerThreadName:
+        case kRPVControllerThreadExtData:
+        case kRPVControllerThreadStartTime:
+        case kRPVControllerThreadEndTime:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Thread::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerThreadStartTime:
+        {
+            m_start_time  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerThreadEndTime:
+        {
+            m_end_time  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerThreadId:
+        case kRPVControllerThreadNodeId:
+        case kRPVControllerThreadProcessId:
+        case kRPVControllerThreadParentId:
+        case kRPVControllerThreadTid:
+        case kRPVControllerThreadName:
+        case kRPVControllerThreadExtData:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Thread::SetObject(rocprofvis_property_t property, uint64_t index,
+                  rocprofvis_handle_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerThreadId:
+        case kRPVControllerThreadNodeId:
+        case kRPVControllerThreadProcessId:
+        case kRPVControllerThreadParentId:
+        case kRPVControllerThreadTid:
+        case kRPVControllerThreadName:
+        case kRPVControllerThreadExtData:
+        case kRPVControllerThreadStartTime:
+        case kRPVControllerThreadEndTime:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Thread::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
+                  uint32_t length)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerThreadName:
+        {
+            m_name = value;
+            result     = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerThreadExtData:
+        {
+            m_ext_data = value;
+            result     = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerThreadId:
+        case kRPVControllerThreadNodeId:
+        case kRPVControllerThreadProcessId:
+        case kRPVControllerThreadParentId:
+        case kRPVControllerThreadTid:
+        case kRPVControllerThreadStartTime:
+        case kRPVControllerThreadEndTime:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+Queue::Queue() {
+
+}
+
+Queue::~Queue() {
+
+}
+
+rocprofvis_controller_object_type_t Queue::GetType(void)
+{
+    return kRPVControllerObjectTypeQueue;
+}
+
+rocprofvis_result_t Queue::GetUInt64(rocprofvis_property_t property, uint64_t index,
+                                uint64_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerQueueId:
+            {
+                *value = m_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerQueueNodeId:
+            {
+                *value = m_node_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerQueueProcessId:
+            {
+                *value = m_process_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerQueueName:
+            case kRPVControllerQueueExtData:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Queue::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerQueueId:
+            case kRPVControllerQueueNodeId:
+            case kRPVControllerQueueProcessId:
+            case kRPVControllerQueueName:
+            case kRPVControllerQueueExtData:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Queue::GetObject(rocprofvis_property_t property, uint64_t index,
+                  rocprofvis_handle_t** value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerQueueId:
+        case kRPVControllerQueueNodeId:
+        case kRPVControllerQueueProcessId:
+        case kRPVControllerQueueName:
+        case kRPVControllerQueueExtData:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Queue::GetString(rocprofvis_property_t property, uint64_t index, char* value,
+                  uint32_t* length)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerQueueName:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_name.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_name.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerQueueExtData:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_ext_data.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_ext_data.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerQueueId:
+        case kRPVControllerQueueNodeId:
+        case kRPVControllerQueueProcessId:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Queue::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerQueueId:
+        {
+            m_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerQueueNodeId:
+        {
+            m_node_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerQueueProcessId:
+        {
+            m_process_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerQueueName:
+        case kRPVControllerQueueExtData:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Queue::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerQueueId:
+        case kRPVControllerQueueNodeId:
+        case kRPVControllerQueueProcessId:
+        case kRPVControllerQueueName:
+        case kRPVControllerQueueExtData:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Queue::SetObject(rocprofvis_property_t property, uint64_t index,
+                  rocprofvis_handle_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerQueueId:
+        case kRPVControllerQueueNodeId:
+        case kRPVControllerQueueProcessId:
+        case kRPVControllerQueueName:
+        case kRPVControllerQueueExtData:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Queue::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
+                  uint32_t length)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerQueueName:
+        {
+            m_name = value;
+            result     = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerQueueExtData:
+        {
+            m_ext_data = value;
+            result     = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerQueueId:
+        case kRPVControllerQueueNodeId:
+        case kRPVControllerQueueProcessId:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+
+
+Stream::Stream() {
+
+}
+
+Stream::~Stream() {
+
+}
+
+rocprofvis_controller_object_type_t Stream::GetType(void)
+{
+    return kRPVControllerObjectTypeStream;
+}
+
+rocprofvis_result_t Stream::GetUInt64(rocprofvis_property_t property, uint64_t index,
+                                uint64_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerStreamId:
+            {
+                *value = m_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerStreamNodeId:
+            {
+                *value = m_node_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerStreamProcessId:
+            {
+                *value = m_process_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerStreamName:
+            case kRPVControllerStreamExtData:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Stream::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerStreamId:
+            case kRPVControllerStreamNodeId:
+            case kRPVControllerStreamProcessId:
+            case kRPVControllerStreamName:
+            case kRPVControllerStreamExtData:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Stream::GetObject(rocprofvis_property_t property, uint64_t index,
+                  rocprofvis_handle_t** value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerStreamId:
+        case kRPVControllerStreamNodeId:
+        case kRPVControllerStreamProcessId:
+        case kRPVControllerStreamName:
+        case kRPVControllerStreamExtData:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Stream::GetString(rocprofvis_property_t property, uint64_t index, char* value,
+                  uint32_t* length)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerStreamName:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_name.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_name.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerStreamExtData:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_ext_data.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_ext_data.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerStreamId:
+        case kRPVControllerStreamNodeId:
+        case kRPVControllerStreamProcessId:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Stream::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerStreamId:
+        {
+            m_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerStreamNodeId:
+        {
+            m_node_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerStreamProcessId:
+        {
+            m_process_id  = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerStreamName:
+        case kRPVControllerStreamExtData:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Stream::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerStreamId:
+        case kRPVControllerStreamNodeId:
+        case kRPVControllerStreamProcessId:
+        case kRPVControllerStreamName:
+        case kRPVControllerStreamExtData:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Stream::SetObject(rocprofvis_property_t property, uint64_t index,
+                  rocprofvis_handle_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerStreamId:
+        case kRPVControllerStreamNodeId:
+        case kRPVControllerStreamProcessId:
+        case kRPVControllerStreamName:
+        case kRPVControllerStreamExtData:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Stream::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
+                  uint32_t length)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerStreamName:
+        {
+            m_name = value;
+            result     = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerStreamExtData:
+        {
+            m_ext_data = value;
+            result     = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerStreamId:
+        case kRPVControllerStreamNodeId:
+        case kRPVControllerStreamProcessId:
+        {
+            result = kRocProfVisResultInvalidType;
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+    }
+    return result;
+}
+
 }
 }

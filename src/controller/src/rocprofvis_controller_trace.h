@@ -163,6 +163,9 @@ public:
                                   char const* value, uint32_t length) final;
 
 private:
+    std::vector<Thread*> m_threads;
+    std::vector<Queue*> m_queues;
+    std::vector<Stream*> m_streams;
     std::string m_command;
     std::string m_environment;
     std::string m_ext_data;
@@ -172,6 +175,7 @@ private:
     double      m_end_time;
     uint32_t    m_id;
     uint32_t    m_node_id;
+    uint32_t    m_parent_id;
 };
 
 class Processor : public Handle

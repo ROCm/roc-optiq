@@ -1,20 +1,22 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_trace.h"
-#include "rocprofvis_controller_trace_compute.h"
-#include "rocprofvis_controller_timeline.h"
-#include "rocprofvis_controller_track.h"
-#include "rocprofvis_controller_reference.h"
-#include "rocprofvis_controller_future.h"
+#include "rocprofvis_controller_arguments.h"
+#include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_event.h"
-#include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_graph.h"
-#include "rocprofvis_controller_table_system.h"
-#include "rocprofvis_controller_plot.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
-#include "rocprofvis_controller_arguments.h"
+#include "rocprofvis_controller_plot.h"
+#include "rocprofvis_controller_reference.h"
+#include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_table_system.h"
+#include "rocprofvis_controller_timeline.h"
+#include "rocprofvis_controller_trace_compute.h"
+#include "rocprofvis_controller_track.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_controller_ext_data.h"
 
 #include <cfloat>
 #include <cstdint>
@@ -27,9 +29,14 @@ namespace Controller
 
 static IdGenerator<Trace> s_trace_id;
 
-typedef Reference<rocprofvis_controller_table_t, SystemTable, kRPVControllerObjectTypeTable> SystemTableRef;
-typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
-typedef Reference<rocprofvis_controller_timeline_t, Timeline, kRPVControllerObjectTypeTimeline> TimelineRef;
+typedef Reference<rocprofvis_controller_table_t, SystemTable,
+                  kRPVControllerObjectTypeTable>
+    SystemTableRef;
+typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack>
+    TrackRef;
+typedef Reference<rocprofvis_controller_timeline_t, Timeline,
+                  kRPVControllerObjectTypeTimeline>
+    TimelineRef;
 
 Trace::Trace()
 : m_id(s_trace_id.GetNextId())
@@ -38,6 +45,8 @@ Trace::Trace()
 , m_sample_table(nullptr)
 , m_dm_handle(nullptr)
 , m_compute_trace(nullptr)
+, m_event(nullptr)
+
 {
     m_event_table = new SystemTable(0);
     ROCPROFVIS_ASSERT(m_event_table);
@@ -51,19 +60,21 @@ Trace::~Trace()
     delete m_timeline;
     delete m_event_table;
     delete m_sample_table;
-    for (Track* track : m_tracks)
+    for(Track* track : m_tracks)
     {
         delete track;
     }
-    if(m_dm_handle)
-        rocprofvis_dm_delete_trace(m_dm_handle);
+    if(m_dm_handle) rocprofvis_dm_delete_trace(m_dm_handle);
 
-    if(m_compute_trace)
-        delete m_compute_trace;
+    if(m_compute_trace) delete m_compute_trace;
+
+    delete m_event;
 }
 
 #ifdef JSON_SUPPORT
-rocprofvis_result_t Trace::LoadJson(char const* const filename) {
+rocprofvis_result_t
+Trace::LoadJson(char const* const filename)
+{
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     m_timeline                 = new Timeline(0);
     if(m_timeline)
@@ -137,14 +148,14 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                     kRPVControllerEventName, 0,
                                                     event.m_name.c_str(),
                                                     event.m_name.length());
-                                                ROCPROFVIS_ASSERT(result ==
-                                                       kRocProfVisResultSuccess);
+                                                ROCPROFVIS_ASSERT(
+                                                    result == kRocProfVisResultSuccess);
 
                                                 result = track->SetObject(
                                                     kRPVControllerTrackEntry, index++,
                                                     (rocprofvis_handle_t*) new_event);
-                                                ROCPROFVIS_ASSERT(result ==
-                                                       kRocProfVisResultSuccess);
+                                                ROCPROFVIS_ASSERT(
+                                                    result == kRocProfVisResultSuccess);
                                             }
                                             else
                                             {
@@ -334,7 +345,9 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
 }
 #endif
 
-rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
+rocprofvis_result_t
+Trace::LoadRocpd(char const* const filename)
+{
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     m_timeline                 = new Timeline(0);
     if(m_timeline)
@@ -368,7 +381,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                 rocprofvis_dm_get_property_as_uint64(
                                     m_dm_handle, kRPVDMNumberOfTracksUInt64, 0);
 
-                            uint64_t  graph_id = 0;
+                            uint64_t graph_id = 0;
                             for(int i = 0; i < num_tracks; i++)
                             {
                                 rocprofvis_dm_track_t dm_track_handle =
@@ -472,18 +485,23 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                 }
                             }
                             // This block is asynchronously loading full trace
-                            // todo : remove following block after  UI implemented segmented loading
-                            // or : use this code for preloading some segments at the load time. start and end has to be calculated considering preloaded segment boundaries  
+                            // todo : remove following block after  UI implemented
+                            // segmented loading or : use this code for preloading some
+                            // segments at the load time. start and end has to be
+                            // calculated considering preloaded segment boundaries
                             /*
                             for(int i = 0; i < num_tracks; i++)
-                            {                               
-                                RocProfVis::Controller::Array* array = (RocProfVis::Controller::Array*)rocprofvis_controller_array_alloc(32);
-                                RocProfVis::Controller::Future* future = (RocProfVis::Controller::Future*) rocprofvis_controller_future_alloc();
-                                double start, end;
-                                m_tracks[i]->GetDouble(kRPVControllerTrackMinTimestamp, 0, &start);
-                                m_tracks[i]->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &end);
-                                result = AsyncFetch(*m_tracks[i], *future, *array, start, end);
-                                result = rocprofvis_controller_future_wait(
+                            {
+                                RocProfVis::Controller::Array* array =
+                            (RocProfVis::Controller::Array*)rocprofvis_controller_array_alloc(32);
+                                RocProfVis::Controller::Future* future =
+                            (RocProfVis::Controller::Future*)
+                            rocprofvis_controller_future_alloc(); double start, end;
+                                m_tracks[i]->GetDouble(kRPVControllerTrackMinTimestamp, 0,
+                            &start);
+                                m_tracks[i]->GetDouble(kRPVControllerTrackMaxTimestamp, 0,
+                            &end); result = AsyncFetch(*m_tracks[i], *future, *array,
+                            start, end); result = rocprofvis_controller_future_wait(
                                     (rocprofvis_controller_future_t*) future, FLT_MAX);
                                 rocprofvis_controller_future_free(
                                     (rocprofvis_controller_future_t*) future);
@@ -523,39 +541,38 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
     return result;
 }
 
-rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controller::Future& future)
+rocprofvis_result_t
+Trace::Load(char const* const filename, RocProfVis::Controller::Future& future)
 {
-    assert (filename && strlen(filename));
-        
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    std::string filepath = filename;
-    future.Set(
-        std::async(std::launch::async, [this, filepath]() -> rocprofvis_result_t
+    assert(filename && strlen(filename));
+
+    rocprofvis_result_t result   = kRocProfVisResultInvalidArgument;
+    std::string         filepath = filename;
+    future.Set(std::async(std::launch::async, [this, filepath]() -> rocprofvis_result_t {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos ||
+           filepath.find(".db", filepath.size() - 3) != std::string::npos)
         {
-            rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-            if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos || 
-                filepath.find(".db", filepath.size() - 3) != std::string::npos)
-            {
-                result = LoadRocpd(filepath.c_str());
-            }
-            else if(filepath.find(".csv", filepath.size() - 4 != std::string::npos))
-            {
-                m_compute_trace = new ComputeTrace();
-                ROCPROFVIS_ASSERT(m_compute_trace);
-                result = m_compute_trace->Load(filepath.c_str());
-            }
+            result = LoadRocpd(filepath.c_str());
+        }
+        else if(filepath.find(".csv", filepath.size() - 4 != std::string::npos))
+        {
+            m_compute_trace = new ComputeTrace();
+            ROCPROFVIS_ASSERT(m_compute_trace);
+            result = m_compute_trace->Load(filepath.c_str());
+        }
 #ifdef JSON_SUPPORT
-            else if(filepath.find(".json", filepath.size() - 5) != std::string::npos)
-            {
-                result = LoadJson(filepath.c_str());
-            }
+        else if(filepath.find(".json", filepath.size() - 5) != std::string::npos)
+        {
+            result = LoadJson(filepath.c_str());
+        }
 #endif
-            else
-            {
-                result = kRocProfVisResultInvalidArgument;
-            }
+        else
+        {
+            result = kRocProfVisResultInvalidArgument;
+        }
         return result;
-        }));
+    }));
 
     if(future.IsValid())
     {
@@ -565,9 +582,8 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
     return result;
 }
 
-
-rocprofvis_result_t Trace::AsyncFetch(Track& track, Future& future, Array& array,
-                                double start, double end)
+rocprofvis_result_t
+Trace::AsyncFetch(Track& track, Future& future, Array& array, double start, double end)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     if(m_timeline)
@@ -577,8 +593,9 @@ rocprofvis_result_t Trace::AsyncFetch(Track& track, Future& future, Array& array
     return error;
 }
 
-rocprofvis_result_t Trace::AsyncFetch(Graph& graph, Future& future, Array& array,
-                                double start, double end, uint32_t pixels)
+rocprofvis_result_t
+Trace::AsyncFetch(Graph& graph, Future& future, Array& array, double start, double end,
+                  uint32_t pixels)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     if(m_timeline)
@@ -592,10 +609,10 @@ rocprofvis_result_t
 Trace::AsyncFetch(Event& event, Future& future, Array& array,
                   rocprofvis_property_t property)
 {
-    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+    rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
     future.Set(std::async(std::launch::async,
-                   [&event, &array, property, dm_handle]() -> rocprofvis_result_t {
+                          [&event, &array, property, dm_handle]() -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               result = event.Fetch(property, array, dm_handle);
                               return result;
@@ -610,18 +627,164 @@ Trace::AsyncFetch(Event& event, Future& future, Array& array,
 }
 
 rocprofvis_result_t
-Trace::AsyncFetch(Table& table, Future& future, Array& array,
-    uint64_t index, uint64_t count)
+Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
+                  uint64_t index, uint64_t count)
 {
-    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+    rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
+
+    future.Set(std::async(
+        std::launch::async, [this, property, &array, index]() -> rocprofvis_result_t {
+            rocprofvis_result_t result = kRocProfVisResultUnknownError;
+
+            switch(property)
+            {
+                case kRPVControllerEventIndexed:
+                {
+                    result = FetchSingleEvent(index, array);
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidArgument;
+                    ROCPROFVIS_ASSERT_MSG(false,
+                                          "Invalid property for Trace::AsyncFetch");
+                    break;
+                }
+            }
+
+            return result;
+        }));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;        
+}
+
+rocprofvis_result_t
+Trace::FetchSingleEvent(uint64_t id, Array& array)
+{
+    Event* event = new Event(id, 0.0, 0.0);
+    ROCPROFVIS_ASSERT(event);
+
+    Array                                         tmp_array;
+    rocprofvis_controller_event_data_properties_t property =
+        kRPVControllerEventDataExtData;
+
+    rocprofvis_result_t result = event->Fetch(property, tmp_array, m_dm_handle);
+    if(result == kRocProfVisResultSuccess)
+    {
+        for(int index = 0; index < tmp_array.GetVector().size(); index++)
+        {                
+             rocprofvis_handle_t* ext_data_handle = nullptr;
+
+            tmp_array.GetObject(kRPVControllerArrayEntryIndexed, index,
+                                &ext_data_handle);
+            ROCPROFVIS_ASSERT(ext_data_handle);
+            ExtData * ext_data =
+                (ExtData*)ext_data_handle; // Cast to ExtData pointer
+
+            uint32_t length = 0;
+            result = ext_data->GetString(kRPVControllerExtDataName, 0, nullptr, &length);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            if(length > 0)
+            {
+                char* tmp_text = new char[length + 1];
+                ROCPROFVIS_ASSERT(tmp_text);
+                result = ext_data->GetString(kRPVControllerExtDataName, index,
+                                             tmp_text, &length);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    tmp_text[length] = '\0';
+                    spdlog::debug(
+                        "{} Trace::FetchSingleEvent: ext_data name = {}", index, tmp_text);
+
+                    //get value
+                    uint32_t val_length = 0;
+                    result = ext_data->GetString(kRPVControllerExtDataValue, 0, nullptr, &val_length);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    
+                    if(val_length > 0)
+                    {
+                        char* tmp_val_text = new char[val_length + 1];
+                        ROCPROFVIS_ASSERT(tmp_val_text);
+                        result = ext_data->GetString(kRPVControllerExtDataValue, index,
+                                             tmp_val_text, &val_length);
+                        tmp_val_text[length] = '\0';
+
+                        //if tmp_text is == "name"
+                        //then set event name
+                        if(strcmp(tmp_text, "name") == 0)
+                        {
+                            result = event->SetString(kRPVControllerEventName, 0,
+                                                    tmp_val_text, length);
+                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                        }
+
+                        //if tmp_text is == "start"
+                        //then set event start timestamp
+                        if(strcmp(tmp_text, "start") == 0)
+                        {
+                            double start_ts = 0.0;
+                            //convert tmp_text to double
+                            start_ts = std::stod(std::string(tmp_val_text));
+                            result = event->SetDouble(kRPVControllerEventStartTimestamp, 0,
+                                                    start_ts);
+                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                        }
+                        //if tmp_text is == "end"
+                        //then set event end timestamp
+                        if(strcmp(tmp_text, "end") == 0)
+                        {
+                            double end_ts = 0.0;
+                            //convert tmp_text to double
+                            end_ts = std::stod(tmp_val_text);
+                            result = event->SetDouble(kRPVControllerEventEndTimestamp, 0,
+                                                    end_ts);
+                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                        }
+
+                        //also need to get level which is not present in extended data
+                    }
+                }
+                delete[] tmp_text;
+            }            
+
+        }
+        
+        result =
+            array.SetObject(kRPVControllerEventIndexed, 0, (rocprofvis_handle_t*) event);
+        if(result == kRocProfVisResultSuccess)
+        {
+            return result;
+        }
+    }
+    else
+    {
+        delete event;
+        event = nullptr;
+    }
+
+    return result;
+}
+
+rocprofvis_result_t
+Trace::AsyncFetch(Table& table, Future& future, Array& array, uint64_t index,
+                  uint64_t count)
+{
+    rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(std::async(std::launch::async,
+    future.Set(
+        std::async(std::launch::async,
                    [&table, &array, index, count, dm_handle]() -> rocprofvis_result_t {
-                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                              result = table.Fetch(dm_handle, index, count, array);
-                              return result;
-                          }));
+                       rocprofvis_result_t result = kRocProfVisResultUnknownError;
+                       result = table.Fetch(dm_handle, index, count, array);
+                       return result;
+                   }));
 
     if(future.IsValid())
     {
@@ -640,8 +803,8 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
     future.Set(std::async(
         std::launch::async, [&table, dm_handle, &args, &array]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            result = table.Setup(dm_handle, args);
-            if (result == kRocProfVisResultSuccess)
+            result                     = table.Setup(dm_handle, args);
+            if(result == kRocProfVisResultSuccess)
             {
                 uint64_t start_index = 0;
                 uint64_t start_count = 0;
@@ -671,19 +834,19 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
 rocprofvis_result_t
 Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
 {
-    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+    rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(std::async(
-        std::launch::async, [&plot, dm_handle, &args, &array]() -> rocprofvis_result_t {
-            rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            result = plot.Setup(dm_handle, args);
-            if (result == kRocProfVisResultSuccess)
-            {
-                result = plot.Fetch(dm_handle, 0, 0, array);
-            }
-            return result;
-        }));
+    future.Set(std::async(std::launch::async,
+                          [&plot, dm_handle, &args, &array]() -> rocprofvis_result_t {
+                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
+                              result                     = plot.Setup(dm_handle, args);
+                              if(result == kRocProfVisResultSuccess)
+                              {
+                                  result = plot.Fetch(dm_handle, 0, 0, array);
+                              }
+                              return result;
+                          }));
 
     if(future.IsValid())
     {
@@ -693,17 +856,19 @@ Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
     return error;
 }
 
-rocprofvis_controller_object_type_t Trace::GetType(void) 
+rocprofvis_controller_object_type_t
+Trace::GetType(void)
 {
     return kRPVControllerObjectTypeController;
 }
 
-rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
+rocprofvis_result_t
+Trace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (value)
+    if(value)
     {
-        switch (property)
+        switch(property)
         {
             case kRPVControllerCommonMemoryUsageInclusive:
             {
@@ -713,8 +878,8 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                 for(auto& track : m_tracks)
                 {
                     uint64_t entry_size = 0;
-                    result = track->GetUInt64(property, 0, &entry_size);
-                    if (result == kRocProfVisResultSuccess)
+                    result              = track->GetUInt64(property, 0, &entry_size);
+                    if(result == kRocProfVisResultSuccess)
                     {
                         *value += entry_size;
                     }
@@ -723,7 +888,7 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                         break;
                     }
                 }
-                if (result == kRocProfVisResultSuccess)
+                if(result == kRocProfVisResultSuccess)
                 {
                     result = m_timeline->GetUInt64(property, 0, value);
                 }
@@ -776,7 +941,8 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
-rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) 
+rocprofvis_result_t
+Trace::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
@@ -804,28 +970,30 @@ rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
-rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) 
+rocprofvis_result_t
+Trace::GetObject(rocprofvis_property_t property, uint64_t index,
+                 rocprofvis_handle_t** value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (value)
+    if(value)
     {
-        switch (property)
+        switch(property)
         {
             case kRPVControllerTimeline:
             {
-                *value = (rocprofvis_handle_t*)m_timeline;
+                *value = (rocprofvis_handle_t*) m_timeline;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventTable:
             {
-                *value = (rocprofvis_handle_t*)m_event_table;
+                *value = (rocprofvis_handle_t*) m_event_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleTable:
             {
-                *value = (rocprofvis_handle_t*)m_sample_table;
+                *value = (rocprofvis_handle_t*) m_sample_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -840,7 +1008,7 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
             {
                 if(index < m_tracks.size())
                 {
-                    *value = (rocprofvis_handle_t*)m_tracks[index];
+                    *value = (rocprofvis_handle_t*) m_tracks[index];
                     result = kRocProfVisResultSuccess;
                 }
                 else
@@ -851,7 +1019,14 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerComputeTrace:
             {
-                *value = (rocprofvis_handle_t*)m_compute_trace;
+                *value = (rocprofvis_handle_t*) m_compute_trace;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerEventIndexed:
+            {
+                // m_event->SetUInt64(kRPVControllerEventId, 0, index);
+                *value = (rocprofvis_handle_t*) m_event;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -873,7 +1048,9 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
-rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
+rocprofvis_result_t
+Trace::GetString(rocprofvis_property_t property, uint64_t index, char* value,
+                 uint32_t* length)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
@@ -902,7 +1079,8 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) 
+rocprofvis_result_t
+Trace::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
@@ -914,15 +1092,16 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerNumTracks:
         {
-            if (m_tracks.size() != value)
+            if(m_tracks.size() != value)
             {
-                for (uint32_t i = value; i < m_tracks.size(); i++)
+                for(uint32_t i = value; i < m_tracks.size(); i++)
                 {
                     delete m_tracks[i];
                     m_tracks[i] = nullptr;
                 }
                 m_tracks.resize(value);
-                result = m_tracks.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
+                result = m_tracks.size() == value ? kRocProfVisResultSuccess
+                                                  : kRocProfVisResultMemoryAllocError;
             }
             else
             {
@@ -959,7 +1138,8 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
-rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t index, double value) 
+rocprofvis_result_t
+Trace::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
@@ -988,7 +1168,9 @@ rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) 
+rocprofvis_result_t
+Trace::SetObject(rocprofvis_property_t property, uint64_t index,
+                 rocprofvis_handle_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
@@ -1001,7 +1183,7 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
                 if(timeline.IsValid())
                 {
                     m_timeline = timeline.Get();
-                    result = kRocProfVisResultSuccess;
+                    result     = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1011,7 +1193,7 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
                 if(table.IsValid())
                 {
                     m_event_table = table.Get();
-                    result = kRocProfVisResultSuccess;
+                    result        = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1021,7 +1203,7 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
                 if(table.IsValid())
                 {
                     m_sample_table = table.Get();
-                    result = kRocProfVisResultSuccess;
+                    result         = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1039,7 +1221,7 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
                     if(index < m_tracks.size())
                     {
                         m_tracks[index] = track.Get();
-                        result = kRocProfVisResultSuccess;
+                        result          = kRocProfVisResultSuccess;
                     }
                     else
                     {
@@ -1067,7 +1249,9 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
-rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) 
+rocprofvis_result_t
+Trace::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
+                 uint32_t length)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
@@ -1096,5 +1280,5 @@ rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-}
-}
+}  // namespace Controller
+}  // namespace RocProfVis

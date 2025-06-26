@@ -237,7 +237,7 @@ Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm
                    rocprofvis_db_read_event_property_async(db, kRPVDMEventExtData,
                                                            dm_event_id, object))
                 {
-                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, 2))
+                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, UINT64_MAX))
                     {
                         if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_handle(
@@ -252,6 +252,7 @@ Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     char* category = nullptr;
@@ -265,18 +266,17 @@ Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm
                                        kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_extdata,
-                                               kRPVDMExtDataCategoryCharPtrIndexed, index,
+                                               kRPVDMExtDataNameCharPtrIndexed, index,
                                                &name) &&
                                        kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_extdata,
-                                               kRPVDMExtDataCategoryCharPtrIndexed, index,
+                                               kRPVDMExtDataValueCharPtrIndexed, index,
                                                &value))
                                     {
                                         ExtData* ext_data =
                                             new ExtData(category, name, value);
-                                        result = array.SetUInt64(
-                                            kRPVControllerArrayNumEntries, 0, 1);
+
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(

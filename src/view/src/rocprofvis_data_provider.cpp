@@ -181,6 +181,47 @@ DataProvider::SetTraceLoadedCallback(
 }
 
 bool
+DataProvider::FetchEvent(uint64_t event_id)
+{
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+
+
+    {
+        rocprofvis_handle_t*           future = rocprofvis_controller_future_alloc();
+        rocprofvis_controller_array_t* array  = rocprofvis_controller_array_alloc(0);
+
+        auto result = rocprofvis_controller_get_indexed_property_async(
+            m_trace_controller, m_trace_controller, kRPVControllerEventIndexed, event_id,
+            1, future, array);
+
+        if(result == kRocProfVisResultSuccess)
+        {
+            result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            if(result == kRocProfVisResultSuccess)
+            {
+                rocprofvis_handle_t* event_handle = nullptr;
+                result                            = rocprofvis_controller_get_object(
+                    array, kRPVControllerEventIndexed, 0, &event_handle);
+            
+                if(result == kRocProfVisResultSuccess && event_handle) {
+                    spdlog::debug("Event fetched successfully, id: {}", event_id);
+                }
+            }
+        }
+
+        rocprofvis_controller_array_free(array);
+        rocprofvis_controller_future_free(future);
+    }
+
+    return true;
+}
+
+bool
 DataProvider::FetchTrace(const std::string& file_path)
 {
     if(m_state == ProviderState::kLoading || m_state == ProviderState::kError)

@@ -156,6 +156,8 @@ public:
      */
     void FreeAllTracks();
 
+    bool FetchEvent(uint64_t event_id);
+    
     /*
      * Opens a trace file and loads the data into the controller.
      * Any previous data will be cleared.

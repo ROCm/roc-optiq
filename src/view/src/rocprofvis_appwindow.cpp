@@ -328,6 +328,7 @@ RenderProviderTest(DataProvider& provider)
 
     static char track_index_buffer[64]     = "0";
     static char end_track_index_buffer[64] = "1";  // for setting table track range
+    static char event_index_buffer[64]     = "0";
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
@@ -428,6 +429,15 @@ RenderProviderTest(DataProvider& provider)
     if(ImGui::Button("Print Track List"))
     {
         provider.DumpMetaData();
+    }
+
+    ImGui::InputText("Event index", event_index_buffer, IM_ARRAYSIZE(track_index_buffer),
+                     ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
+
+    uint64_t event_index = std::strtoull(event_index_buffer, nullptr, 10);
+    if(ImGui::Button("Fetch Event"))
+    {
+        provider.FetchEvent(event_index);
     }
 
     ImGui::End();

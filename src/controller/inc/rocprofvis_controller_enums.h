@@ -129,6 +129,8 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerSampleTable = 0x00000009,
     // Compute trace controller
     kRPVControllerComputeTrace = 0x00000010,
+    // Indexed event in the trace
+    kRPVControllerEventIndexed = 0x00000011,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {

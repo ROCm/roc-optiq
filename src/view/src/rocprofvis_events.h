@@ -27,7 +27,6 @@ enum class RocEventType
 {
     kRocEvent,
     kTrackDataEvent,
-    kComputeBlockNavigationEvent,
     kComputeTableSearchEvent,
     kTabEvent,
     kTimelineSelectionChangedEvent,
@@ -67,18 +66,6 @@ public:
 private:
     uint64_t    m_track_index;
     std::string m_trace_path;
-};
-
-class ComputeBlockNavigationEvent : public RocEvent
-{
-public:
-    ComputeBlockNavigationEvent(int event_id, int level, int block);
-    const int GetLevel();
-    const int GetBlock();
-
-private:
-    int m_level;
-    int m_block;
 };
 
 class ScrollToTrackByNameEvent : public RocEvent

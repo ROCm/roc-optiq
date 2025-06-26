@@ -90,7 +90,6 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                         std::string title;
                         std::vector<std::string> column_names;
                         std::vector<std::vector<ComputeTableCellModel>> cells;
-                        std::unordered_map<std::string, ComputeTableNumericMetricModel> metrics_map;
                         uint64_t unit_column = -1;
                         GetStringPropertyFromHandle(table_handle, kRPVControllerTableTitle, 0, title);
                         uint64_t columns = 0;
@@ -148,9 +147,10 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                     result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableColumnTypeIndexed, c, &type);
                                                     if (result == kRocProfVisResultSuccess)
                                                     {
-                                                        std::string value;
-                                                        bool colorize = false;
-                                                        ComputeTableNumericMetricModel* metric = nullptr;
+                                                        ComputeTableCellModel model;
+                                                        model.m_type = static_cast<rocprofvis_controller_primitive_type_t>(type);
+                                                        model.m_colorize = false;
+                                                        model.m_highlight = false;
                                                         switch (type)
                                                         {
                                                             case kRPVControllerPrimitiveTypeUInt64:
@@ -159,12 +159,11 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                                 result = rocprofvis_controller_get_uint64(row_handle, kRPVControllerArrayEntryIndexed, c, &data);
                                                                 if (result == kRocProfVisResultSuccess && data != -1)
                                                                 {
-                                                                    value = std::to_string(data);
+                                                                    model.m_str_value = std::to_string(data);
                                                                     if (c > 0)
                                                                     {
-                                                                        colorize = ((unit == "Pct" || unit == "Pct of peak") && column_names[c] == "Avg") || column_names[c] == "Pct of Peak";
-                                                                        metrics_map[cell_row[0].m_value + " " + column_names[c]] = ComputeTableNumericMetricModel{static_cast<double>(data), unit};
-                                                                        metric = &metrics_map[cell_row[0].m_value + " " + column_names[c]];
+                                                                        model.m_colorize = ((unit == "Pct" || unit == "Pct of peak") && column_names[c] == "Avg") || column_names[c] == "Pct of Peak";
+                                                                        model.m_num_value.m_uint64 = data;
                                                                     }
                                                                 }
                                                                 break;
@@ -175,20 +174,19 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                                 result = rocprofvis_controller_get_double(row_handle, kRPVControllerArrayEntryIndexed, c, &data);
                                                                 if (result == kRocProfVisResultSuccess && data != -1)
                                                                 {
-                                                                    auto data_str = std::to_string(data);
-                                                                    value = TrimDecimalPlaces(data_str, 2);
+                                                                    std::string data_str = std::to_string(data);
+                                                                    model.m_str_value = TrimDecimalPlaces(data_str, 2);
                                                                     if (c > 0)
                                                                     {
-                                                                        colorize = ((unit == "Pct" || unit == "Pct of peak") && column_names[c] == "Avg") || column_names[c] == "Pct of Peak";
-                                                                        metrics_map[cell_row[0].m_value + " " + column_names[c]] = ComputeTableNumericMetricModel{data, unit};
-                                                                        metric = &metrics_map[cell_row[0].m_value + " " + column_names[c]];
+                                                                        model.m_colorize = ((unit == "Pct" || unit == "Pct of peak") && column_names[c] == "Avg") || column_names[c] == "Pct of Peak";
+                                                                        model.m_num_value.m_double = data;
                                                                     }
                                                                 }
                                                                 break;
                                                             }
                                                             case kRPVControllerPrimitiveTypeString:
                                                             {
-                                                                result = GetStringPropertyFromHandle(row_handle, kRPVControllerArrayEntryIndexed, c, value);
+                                                                result = GetStringPropertyFromHandle(row_handle, kRPVControllerArrayEntryIndexed, c, model.m_str_value);
                                                                 break;
                                                             }
                                                             default:
@@ -199,7 +197,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                         }
                                                         if (result == kRocProfVisResultSuccess)
                                                         {
-                                                            cell_row.emplace_back(ComputeTableCellModel{std::move(value), std::move(colorize), false, std::move(metric)}); 
+                                                            cell_row.push_back(std::move(model)); 
                                                         }                                                   
                                                     }
                                                 }
@@ -219,7 +217,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                         if (result == kRocProfVisResultSuccess)
                         {
                             m_tables[static_cast<rocprofvis_controller_compute_table_types_t>(table_type)] = std::make_unique<ComputeTableModel>(
-                                ComputeTableModel{std::move(title), std::move(column_names), std::move(cells), std::move(metrics_map)}
+                                ComputeTableModel{std::move(title), std::move(column_names), std::move(cells)}
                             );
                         }
                     }
@@ -313,7 +311,7 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                                                 ROCPROFVIS_ASSERT(num_values > 0);
                                                 x_values.resize(num_values);
                                                 y_values.resize(num_values);
-                                                x_axis.m_max = 0;
+                                                x_axis.m_max = 100;
                                                 x_axis.m_min = 0;
                                                 y_axis.m_max = 0;
                                                 y_axis.m_min = 0;
@@ -354,6 +352,18 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
                         }
                     }
                 }
+                for (uint64_t metric_type = kRPVControllerComputeMetricTypeL2CacheRd; metric_type < kRPVControllerComputeMetricTypeCount; metric_type ++)
+                {
+                    uint64_t data;
+                    result = rocprofvis_controller_get_uint64(m_trace, metric_type, 0, &data);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        std::unique_ptr<ComputeMetricModel> model = std::make_unique<ComputeMetricModel>();
+                        model->m_type = kRPVControllerPrimitiveTypeUInt64;
+                        model->m_value.m_uint64 = data;
+                        m_metrics[static_cast<rocprofvis_controller_compute_metric_types_t>(metric_type)] = std::move(model);
+                    }
+                }
             }
         }
     }
@@ -363,24 +373,34 @@ rocprofvis_result_t ComputeDataProvider2::LoadTrace(const std::string& path)
     return result;
 }
 
-ComputeTableModel* ComputeDataProvider2::GetTableModel(const rocprofvis_controller_compute_table_types_t type)
+ComputeTableModel* ComputeDataProvider2::GetTableModel(const rocprofvis_controller_compute_table_types_t type) const
 {
     ComputeTableModel* table = nullptr;
     if (m_tables.count(type) > 0)
     {
-        table = m_tables[type].get();
+        table = m_tables.at(type).get();
     }
     return table;
 }
 
-ComputePlotModel* ComputeDataProvider2::GetPlotModel(const rocprofvis_controller_compute_plot_types_t type)
+ComputePlotModel* ComputeDataProvider2::GetPlotModel(const rocprofvis_controller_compute_plot_types_t type) const
 {
     ComputePlotModel* plot = nullptr;
     if (m_plots.count(type) > 0)
     {
-        plot = m_plots[type].get();
+        plot = m_plots.at(type).get();
     }
     return plot;
+}
+
+ComputeMetricModel* ComputeDataProvider2::GetMetricModel(const rocprofvis_controller_compute_metric_types_t type) const
+{
+    ComputeMetricModel* metric = nullptr;
+    if (m_metrics.count(type) > 0)
+    {
+        return m_metrics.at(type).get();
+    }
+    return metric;
 }
 
 rocprofvis_result_t ComputeDataProvider2::GetStringPropertyFromHandle(rocprofvis_handle_t* handle, const rocprofvis_property_t property, const uint64_t index, std::string& output)

@@ -35,7 +35,6 @@ rocprofvis_result_t ComputePlot::Load(const ComputeTable* table, const std::stri
         {
             // Existing series, get the number of existing values.
             result = m_series[series_name].GetUInt64(kRPVControllerPlotSeriesNumValues, 0, &existing_values);
-            
         }
         else
         {
@@ -55,28 +54,29 @@ rocprofvis_result_t ComputePlot::Load(const ComputeTable* table, const std::stri
                     {
                         for (uint64_t i = 0; i < values.size(); i ++)
                         {
-                            Data* data = values[i].second;
-                            if (data->GetType() == kRPVControllerPrimitiveTypeDouble)
+                            result = kRocProfVisResultUnknownError;
+                            double data;
+                            if (values[i].second->GetType() == kRPVControllerPrimitiveTypeDouble)
                             {
                                 double data_double;
-                                data->GetDouble(&data_double);
-                                m_series[series_name].SetDouble(kRPVControllerPlotSeriesXValuesIndexed, existing_values + i, data_double);
-                                m_series[series_name].SetDouble(kRPVControllerPlotSeriesYValuesIndexed, existing_values + i, existing_values + i);
-                                if (series_name.empty())
-                                {
-                                    m_y_axis.m_tick_labels.emplace_back(values[i].first);
-                                }
+                                result = values[i].second->GetDouble(&data_double);
+                                data = data_double;
                             }
-                            else if (data->GetType() == kRPVControllerPrimitiveTypeUInt64)
+                            else if (values[i].second->GetType() == kRPVControllerPrimitiveTypeUInt64)
                             {
                                 uint64_t data_uint;
-                                data->GetUInt64(&data_uint);
-                                m_series[series_name].SetDouble(kRPVControllerPlotSeriesXValuesIndexed, existing_values + i, data_uint);
-                                m_series[series_name].SetDouble(kRPVControllerPlotSeriesYValuesIndexed, existing_values + i, existing_values + i);
+                                result = values[i].second->GetUInt64(&data_uint);
+                                data = data_uint;
+                            }
+                            if (result == kRocProfVisResultSuccess)
+                            {
+                                m_series[series_name].SetDouble(kRPVControllerPlotSeriesXValuesIndexed, existing_values, data);
+                                m_series[series_name].SetDouble(kRPVControllerPlotSeriesYValuesIndexed, existing_values, existing_values);
                                 if (series_name.empty())
                                 {
                                     m_y_axis.m_tick_labels.emplace_back(values[i].first);
                                 }
+                                existing_values ++;
                             }
                         }
                     }
@@ -86,32 +86,32 @@ rocprofvis_result_t ComputePlot::Load(const ComputeTable* table, const std::stri
                     // Retrieve metric from table by specific name.
                     std::pair<std::string, Data*> value;
                     result = table->GetMetric(key, value);
+                    double data = 0;
                     if (result == kRocProfVisResultSuccess)
                     {
-                        Data* data = value.second;
-                        if (data->GetType() == kRPVControllerPrimitiveTypeDouble)
+                        if (value.second->GetType() == kRPVControllerPrimitiveTypeDouble)
                         {
-                            double data_double;
-                            data->GetDouble(&data_double);
-                            m_series[series_name].SetDouble(kRPVControllerPlotSeriesXValuesIndexed, existing_values, data_double);
-                            m_series[series_name].SetDouble(kRPVControllerPlotSeriesYValuesIndexed, existing_values, existing_values);
-                            if (series_name.empty())
-                            {
-                                m_y_axis.m_tick_labels.emplace_back(value.first);
-                            }
+                            result = value.second->GetDouble(&data);
                         }
-                        else if (data->GetType() == kRPVControllerPrimitiveTypeUInt64)
+                        else if (value.second->GetType() == kRPVControllerPrimitiveTypeUInt64)
                         {
                             uint64_t data_uint;
-                            data->GetUInt64(&data_uint);
-                            m_series[series_name].SetDouble(kRPVControllerPlotSeriesXValuesIndexed, existing_values, data_uint);
-                            m_series[series_name].SetDouble(kRPVControllerPlotSeriesYValuesIndexed, existing_values, existing_values);
-                            if (series_name.empty())
-                            {
-                                m_y_axis.m_tick_labels.emplace_back(value.first);
-                            }
-                        }                       
+                            result = value.second->GetUInt64(&data_uint);
+                            data = data_uint;
+                        }
                     }
+                    result = kRocProfVisResultSuccess;
+                    m_series[series_name].SetDouble(kRPVControllerPlotSeriesXValuesIndexed, existing_values, data);
+                    m_series[series_name].SetDouble(kRPVControllerPlotSeriesYValuesIndexed, existing_values, existing_values);
+                    if (series_name.empty())
+                    {
+                        m_y_axis.m_tick_labels.emplace_back(value.first);
+                    }
+                    existing_values ++;
+                }
+                if (result == kRocProfVisResultSuccess)
+                {
+                    m_series[series_name].SetUInt64(kRPVControllerPlotSeriesNumValues, 0, existing_values);
                 }
             }
         }

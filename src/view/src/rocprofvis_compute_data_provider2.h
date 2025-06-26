@@ -14,18 +14,16 @@ namespace RocProfVis
 namespace View
 {
 
-typedef struct ComputeTableNumericMetricModel
-{
-    double m_value;
-    std::string m_unit;
-} ComputeTableNumericMetricModel;
-
 typedef struct ComputeTableCellModel
 {
-    std::string m_value;
+    std::string m_str_value;
+    rocprofvis_controller_primitive_type_t m_type;
+    union {
+        uint64_t m_uint64;
+        double m_double;
+    } m_num_value;
     bool m_colorize;
     bool m_highlight;
-    ComputeTableNumericMetricModel* m_metric;
 } ComputeTableCellModel;
 
 typedef struct ComputeTableModel
@@ -33,7 +31,6 @@ typedef struct ComputeTableModel
     std::string m_title;
     std::vector<std::string> m_column_names;
     std::vector<std::vector<ComputeTableCellModel>> m_cells;
-    std::unordered_map<std::string, ComputeTableNumericMetricModel> m_model_map;
 } ComputeTableModel;
 
 typedef struct ComputePlotAxisModel
@@ -59,6 +56,15 @@ typedef struct ComputePlotModel
     std::vector<ComputePlotSeriesModel> m_series;
 } ComputePlotModel;
 
+typedef struct ComputeMetricModel
+{
+    rocprofvis_controller_primitive_type_t m_type;
+    union {
+        uint64_t m_uint64;
+        double m_double;
+    } m_value;
+} ComputeMetricModel;
+
 class ComputeDataProvider2
 {
 public:
@@ -69,8 +75,9 @@ public:
     void FreeController();
     rocprofvis_result_t LoadTrace(const std::string& path);
 
-    ComputeTableModel* GetTableModel(const rocprofvis_controller_compute_table_types_t type);
-    ComputePlotModel* GetPlotModel(const rocprofvis_controller_compute_plot_types_t type);
+    ComputeTableModel* GetTableModel(const rocprofvis_controller_compute_table_types_t type) const;
+    ComputePlotModel* GetPlotModel(const rocprofvis_controller_compute_plot_types_t type) const;
+    ComputeMetricModel* GetMetricModel(const rocprofvis_controller_compute_metric_types_t type) const;
 
 private:
     rocprofvis_result_t GetStringPropertyFromHandle(rocprofvis_handle_t* handle, const rocprofvis_property_t property, const uint64_t index, std::string& output);
@@ -82,6 +89,7 @@ private:
 
     std::unordered_map<rocprofvis_controller_compute_table_types_t, std::unique_ptr<ComputeTableModel>> m_tables;
     std::unordered_map<rocprofvis_controller_compute_plot_types_t, std::unique_ptr<ComputePlotModel>> m_plots;
+    std::unordered_map<rocprofvis_controller_compute_metric_types_t, std::unique_ptr<ComputeMetricModel>> m_metrics;
 };
 
 }  // namespace View

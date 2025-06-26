@@ -21,11 +21,11 @@ ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<Com
 , m_kernel_table(nullptr)
 , m_dispatch_table(nullptr)
 {
-    m_sysinfo_table = std::make_shared<ComputeTable>(data_provider, kRPVControllerComputeTableTypeSysInfo);
-    m_kernel_pie = std::make_shared<ComputePlotPie>(data_provider, kRPVControllerComputePlotTypeKernelDurationPercentage);
-    m_kernel_bar = std::make_shared<ComputePlotBar>(data_provider, kRPVControllerComputePlotTypeKernelDuration);
-    m_kernel_table = std::make_shared<ComputeTable>(data_provider, kRPVControllerComputeTableTypeKernelList);
-    m_dispatch_table = std::make_shared<ComputeTable>(data_provider, kRPVControllerComputeTableTypeDispatchList);
+    m_sysinfo_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeSysInfo);
+    m_kernel_pie = std::make_unique<ComputePlotPie>(data_provider, kRPVControllerComputePlotTypeKernelDurationPercentage);
+    m_kernel_bar = std::make_unique<ComputePlotBar>(data_provider, kRPVControllerComputePlotTypeKernelDuration);
+    m_kernel_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeKernelList);
+    m_dispatch_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeDispatchList);
 
     m_left_column = std::make_shared<RocCustomWidget>([this]()
     {

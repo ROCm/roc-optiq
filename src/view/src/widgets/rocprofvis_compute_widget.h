@@ -60,5 +60,21 @@ public:
     void Render() override;
 };
 
+class ComputeMetric : public ComputeWidget
+{
+public:
+    ComputeMetric(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit);
+    void Update() override;
+    void Render() {};
+    std::string GetFormattedString() const;
+
+private:
+    rocprofvis_controller_compute_metric_types_t m_type;
+    ComputeMetricModel* m_model;
+    std::string m_name;
+    std::string m_unit;
+    std::string m_formatted_string;
+};
+
 }  // namespace View
 }  // namespace RocProfVis

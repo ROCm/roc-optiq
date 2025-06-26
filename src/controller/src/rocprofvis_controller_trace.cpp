@@ -712,6 +712,17 @@ Trace::FetchSingleEvent(uint64_t id, Array& array)
                                              tmp_val_text, &val_length);
                         tmp_val_text[val_length] = '\0';
 
+                        //if tmp_text is == "id"
+                        //then confirm event id
+                        if(strcmp(tmp_text, "id") == 0)
+                        {
+                            uint64_t base_id = 0;
+                            //convert tmp_text to uint64_t
+                            base_id = std::stoull(std::string(tmp_val_text));
+                            const uint64_t mask = 0xFULL << 60;
+                            ROCPROFVIS_ASSERT(base_id == (id & ~mask));
+                        }
+
                         //if tmp_text is == "name"
                         //then set event name
                         if(strcmp(tmp_text, "apiName") == 0)

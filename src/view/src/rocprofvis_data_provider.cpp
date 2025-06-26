@@ -206,11 +206,46 @@ DataProvider::FetchEvent(uint64_t event_id)
             {
                 rocprofvis_handle_t* event_handle = nullptr;
                 result                            = rocprofvis_controller_get_object(
-                    array, kRPVControllerEventIndexed, 0, &event_handle);
-            
+                    array, kRPVControllerArrayEntryIndexed, 0, &event_handle);            
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
                 if(result == kRocProfVisResultSuccess && event_handle) {
                     spdlog::debug("Event fetched successfully, id: {}", event_id);
                 }
+
+                double min_ts = 0.0;
+                double max_ts = 0.0;
+                
+                result = rocprofvis_controller_get_double(
+                    event_handle, kRPVControllerEventStartTimestamp, 0, &min_ts);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                result = rocprofvis_controller_get_double(
+                    event_handle, kRPVControllerEventEndTimestamp, 0, &max_ts);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                uint32_t length = 0;
+                result = rocprofvis_controller_get_string(
+                    event_handle, kRPVControllerEventName, 0, nullptr, &length);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                char* tmp_text = new char[length + 1];
+                ROCPROFVIS_ASSERT(tmp_text);
+                result = rocprofvis_controller_get_string(
+                    event_handle, kRPVControllerEventName, 0, tmp_text, &length);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                tmp_text[length] = '\0';
+
+                rocprofvis_trace_event_t trace_event;
+                trace_event.m_id         = event_id;
+                trace_event.m_name       = tmp_text;
+                trace_event.m_start_ts   = min_ts;
+                trace_event.m_duration   = max_ts - min_ts;
+
+                spdlog::debug("Fetched event: id {}, name {}, start {}, duration {}",
+                              trace_event.m_id, trace_event.m_name, trace_event.m_start_ts,
+                              trace_event.m_duration);
+                delete[] tmp_text;
             }
         }
 

@@ -698,8 +698,6 @@ Trace::FetchSingleEvent(uint64_t id, Array& array)
                 if(result == kRocProfVisResultSuccess)
                 {
                     tmp_text[length] = '\0';
-                    spdlog::debug(
-                        "{} Trace::FetchSingleEvent: ext_data name = {}", index, tmp_text);
 
                     //get value
                     uint32_t val_length = 0;
@@ -712,14 +710,14 @@ Trace::FetchSingleEvent(uint64_t id, Array& array)
                         ROCPROFVIS_ASSERT(tmp_val_text);
                         result = ext_data->GetString(kRPVControllerExtDataValue, index,
                                              tmp_val_text, &val_length);
-                        tmp_val_text[length] = '\0';
+                        tmp_val_text[val_length] = '\0';
 
                         //if tmp_text is == "name"
                         //then set event name
-                        if(strcmp(tmp_text, "name") == 0)
+                        if(strcmp(tmp_text, "apiName") == 0)
                         {
                             result = event->SetString(kRPVControllerEventName, 0,
-                                                    tmp_val_text, length);
+                                                    tmp_val_text, val_length);
                             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                         }
 
@@ -747,6 +745,10 @@ Trace::FetchSingleEvent(uint64_t id, Array& array)
                             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                         }
 
+                        spdlog::debug(
+                            "{} Trace::FetchSingleEvent: ext_data name = {}, val = {}", index, tmp_text, tmp_val_text);
+
+                        delete[] tmp_val_text;            
                         //also need to get level which is not present in extended data
                     }
                 }
@@ -755,8 +757,11 @@ Trace::FetchSingleEvent(uint64_t id, Array& array)
 
         }
         
+        result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, 1);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
         result =
-            array.SetObject(kRPVControllerEventIndexed, 0, (rocprofvis_handle_t*) event);
+            array.SetObject(kRPVControllerArrayEntryIndexed, 0, (rocprofvis_handle_t*) event);
         if(result == kRocProfVisResultSuccess)
         {
             return result;

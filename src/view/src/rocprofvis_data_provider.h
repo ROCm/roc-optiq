@@ -206,6 +206,10 @@ public:
      * @param file_path: The path to the trace file to load.
      *
      */
+
+
+        bool FetchEvent(uint64_t event_id);
+
     bool FetchTrace(const std::string& file_path);
 
     /*

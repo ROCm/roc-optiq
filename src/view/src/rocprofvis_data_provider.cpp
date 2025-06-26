@@ -1609,9 +1609,210 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
     m_raw_trackdata[index] = raw_sample_data;
 }
 
+
+const char*
+RocprofvisResultToString(rocprofvis_result_t result)
+{
+    switch(result)
+    {
+        case kRocProfVisResultSuccess: return "Success";
+        case kRocProfVisResultUnknownError: return "UnknownError";
+        case kRocProfVisResultTimeout: return "Timeout";
+        case kRocProfVisResultNotLoaded: return "NotLoaded";
+        case kRocProfVisResultInvalidArgument: return "InvalidArgument";
+        case kRocProfVisResultNotSupported: return "NotSupported";
+        case kRocProfVisResultReadOnlyError: return "ReadOnlyError";
+        case kRocProfVisResultMemoryAllocError: return "MemoryAllocError";
+        case kRocProfVisResultInvalidEnum: return "InvalidEnum";
+        case kRocProfVisResultInvalidType: return "InvalidType";
+        case kRocProfVisResultOutOfRange: return "OutOfRange";
+        default: return "Unknown";
+    }
+}
+
+
+
+bool
+DataProvider::FetchEvent(uint64_t event_id)
+{
+    if(m_state != ProviderState::kReady)
+    {
+        std::cout << "FetchEvent: Provider not ready, state=" << static_cast<int>(m_state)
+                  << std::endl;
+        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+
+    std::cout << "FetchEvent: Starting event fetch for id " << event_id << std::endl;
+
+    // Fetch the event object
+    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    rocprofvis_controller_array_t*  array  = rocprofvis_controller_array_alloc(0);
+
+    auto result = rocprofvis_controller_get_indexed_property_async(
+        m_trace_controller, m_trace_controller, kRPVControllerEventIndexed, event_id, 1,
+        future, array);
+    std::cout << "FetchEvent: get_indexed_property_async result = "
+              << static_cast<int>(result) << std::endl;
+
+    if(result == kRocProfVisResultSuccess)
+    {
+        result = rocprofvis_controller_future_wait(future, FLT_MAX);
+        std::cout << "FetchEvent: future_wait result = " << static_cast<int>(result)
+                  << std::endl;
+        if(result == kRocProfVisResultSuccess)
+        {
+            rocprofvis_handle_t* event_handle = nullptr;
+            result                            = rocprofvis_controller_get_object(
+                array, kRPVControllerArrayEntryIndexed, 0, &event_handle);
+            std::cout << "FetchEvent: get_object result = " << static_cast<int>(result)
+                      << std::endl;
+
+            if(result == kRocProfVisResultSuccess && event_handle)
+            {
+                std::cout << "FetchEvent: Event fetched successfully, id: " << event_id
+                          << std::endl;
+                spdlog::debug("Event fetched successfully, id: {}", event_id);
+
+                // Fetch ext data for this event
+                rocprofvis_controller_future_t* ext_future =
+                    rocprofvis_controller_future_alloc();
+                rocprofvis_controller_array_t* ext_array =
+                    rocprofvis_controller_array_alloc(0);
+
+                auto ext_result = rocprofvis_controller_get_indexed_property_async(
+                    m_trace_controller, event_handle, kRPVControllerEventDataExtData, 0,
+                    1, ext_future, ext_array);
+                std::cout << "FetchEvent: ext get_indexed_property_async result = "
+                          << static_cast<int>(ext_result) << std::endl;
+
+                if(ext_result == kRocProfVisResultSuccess)
+                {
+                    ext_result = rocprofvis_controller_future_wait(ext_future, FLT_MAX);
+                    std::cout << "FetchEvent: ext future_wait result = "
+                              << static_cast<int>(ext_result) << std::endl;
+                    if(ext_result == kRocProfVisResultSuccess)
+                    {
+                        uint64_t prop_count = 0;
+                        rocprofvis_controller_get_uint64(
+                            ext_array, kRPVControllerArrayNumEntries, 0, &prop_count);
+
+                        m_event_info.ext_data.clear();
+                        for(uint64_t j = 0; j < prop_count; ++j)
+                        {
+                            rocprofvis_handle_t* ext_data_handle = nullptr;
+                            ext_result = rocprofvis_controller_get_object(
+                                ext_array, kRPVControllerArrayEntryIndexed, j,
+                                &ext_data_handle);
+                            std::cout << "FetchEvent: ext get_object result (j=" << j
+                                      << ") = " <<ext_result
+                                      << std::endl;
+
+                            if(ext_result == kRocProfVisResultSuccess && ext_data_handle)
+                            {
+                                event_ext_data_t ext_data = {};
+
+                                // Category
+                                uint32_t length = 0;
+                                ext_result      = rocprofvis_controller_get_string(
+                                    ext_data_handle, kRPVControllerExtDataCategory, 0,
+                                    nullptr, &length);
+                                std::cout
+                                    << "FetchEvent: ext get_string(Category) result = "
+                                    <<ext_result << std::endl;
+                                if(ext_result == kRocProfVisResultSuccess && length > 0)
+                                {
+                                    char* data   = new char[length + 1];
+                                    data[length] = '\0';
+                                    ext_result   = rocprofvis_controller_get_string(
+                                        ext_data_handle, kRPVControllerExtDataCategory, 0,
+                                        data, &length);
+                                    if(ext_result == kRocProfVisResultSuccess)
+                                        ext_data.category = data;
+                                    delete[] data;
+                                }
+
+                                // Name
+                                length     = 0;
+                                ext_result = rocprofvis_controller_get_string(
+                                    ext_data_handle, kRPVControllerExtDataName, 0,
+                                    nullptr, &length);
+                                std::cout << "FetchEvent: ext get_string(Name) result = "
+                                          << ext_result << std::endl;
+                                if(ext_result == kRocProfVisResultSuccess && length > 0)
+                                {
+                                    char* data   = new char[length + 1];
+                                    data[length] = '\0';
+                                    ext_result   = rocprofvis_controller_get_string(
+                                        ext_data_handle, kRPVControllerExtDataName, 0,
+                                        data, &length);
+                                    if(ext_result == kRocProfVisResultSuccess)
+                                        ext_data.name = data;
+                                    delete[] data;
+                                }
+
+                                // Value
+                                length     = 0;
+                                ext_result = rocprofvis_controller_get_string(
+                                    ext_data_handle, kRPVControllerExtDataValue, 0,
+                                    nullptr, &length);
+                                std::cout << "FetchEvent: ext get_string(Value) result = "
+                                          << ext_result << std::endl;
+                                if(ext_result == kRocProfVisResultSuccess && length > 0)
+                                {
+                                    char* data   = new char[length + 1];
+                                    data[length] = '\0';
+                                    ext_result   = rocprofvis_controller_get_string(
+                                        ext_data_handle, kRPVControllerExtDataValue, 0,
+                                        data, &length);
+                                    if(ext_result == kRocProfVisResultSuccess)
+                                        ext_data.value = data;
+                                    delete[] data;
+                                }
+
+                                m_event_info.ext_data.push_back(std::move(ext_data));
+                            }
+                        }
+                    }
+                }
+                rocprofvis_controller_array_free(ext_array);
+                rocprofvis_controller_future_free(ext_future);
+            }
+            else
+            {
+                std::cout << "FetchEvent: Failed to get event_handle, result = "
+                          << static_cast<int>(result) << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "FetchEvent: future_wait failed, result = "
+                      << static_cast<int>(result) << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "FetchEvent: get_indexed_property_async failed, result = "
+                  << static_cast<int>(result) << std::endl;
+    }
+
+    rocprofvis_controller_array_free(array);
+    rocprofvis_controller_future_free(future);
+
+    std::cout << "FetchEvent: Done" << std::endl;
+    return true;
+}
+
+
+ 
+
 void
 DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
 {
+
+    FetchEvent(event_id);
+
     m_event_info = {};
     m_flow_info  = {};
     auto future  = rocprofvis_controller_future_alloc();

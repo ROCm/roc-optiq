@@ -48,6 +48,9 @@ public:
     rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future,
                                    Array& array);
 
+    rocprofvis_result_t Trace::AsyncFetch(rocprofvis_property_t property, Future& future,
+                                          Array& array, uint64_t index, uint64_t count);
+
     rocprofvis_controller_object_type_t GetType(void) final;
 
     // Handlers for getters.
@@ -76,6 +79,7 @@ private:
     rocprofvis_result_t LoadJson(char const* const filename);
 #endif
     rocprofvis_result_t LoadRocpd(char const* const filename);
+    rocprofvis_result_t FetchSingleEvent(uint64_t id, Array& array);
 };
 
 }

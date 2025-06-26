@@ -268,7 +268,11 @@ extern "C"
                                               *future, *array, index, count);
                     break;
                 }
-
+                 case kRPVControllerObjectTypeController:
+            {
+                error = trace->AsyncFetch(property,
+                                *future, *array, index, count);
+            }
                 default:
                 {
                     break;

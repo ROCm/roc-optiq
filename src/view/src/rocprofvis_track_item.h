@@ -58,6 +58,7 @@ public:
 
     bool IsMetaAreaClicked() const { return m_meta_area_clicked; }
 
+
 protected:
     virtual void RenderMetaArea();
     virtual void RenderMetaAreaScale(ImVec2& container_size);

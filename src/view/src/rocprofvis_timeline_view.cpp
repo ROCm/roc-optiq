@@ -734,9 +734,6 @@ TimelineView::RenderGraphView()
                                          ImGuiWindowFlags_NoScrollWithMouse |
                                          ImGuiWindowFlags_NoScrollbar))
                 {
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                                          m_settings.GetColor(Colors::kTransparent));
-
                     if(m_is_control_held)
                     {
                         ImGui::Selectable(
@@ -758,7 +755,6 @@ TimelineView::RenderGraphView()
                                    ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
                             {
                                 // Handle the payload (here we just print it)
-
                                 rocprofvis_graph_map_t* payload_data =
                                     (rocprofvis_graph_map_t*)
                                         payload->Data;  // incoming (being dragged)
@@ -789,6 +785,7 @@ TimelineView::RenderGraphView()
                     m_resize_activity |= track_item.chart->GetResizeStatus();
                     track_item.chart->Render(m_graph_size.x);
 
+
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {
@@ -797,12 +794,17 @@ TimelineView::RenderGraphView()
                         track_item.chart->SetSelected(track_item.selected);
                         selection_changed = true;
                     }
-                    ImGui::PopStyleColor();
                 }
                 ImGui::EndChild();
                 ImGui::PopStyleColor();
+                
+                // Draw border around the track
+                // This is done after the child window to ensure it is on top
+                ImVec2 p_min = ImGui::GetItemRectMin();
+                ImVec2 p_max = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddRect(
+                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
 
-                ImGui::Separator();
             }
             else
             {
@@ -1122,6 +1124,20 @@ TimelineView::HandleTopSurfaceTouch()
             if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
                 m_can_drag_to_pan = true;
+            }
+            
+
+            //Enables horizontal scrolling using mouse. 
+            float scroll_wheel_h = io.MouseWheelH;
+            if(scroll_wheel_h != 0.0f)
+            {
+                const float scroll_speed = 0.1f; 
+                float       move_amount  = scroll_wheel_h * m_v_width * scroll_speed;
+                m_view_time_offset_ns -= move_amount;
+
+                if(m_view_time_offset_ns < 0.0f) m_view_time_offset_ns = 0.0f;
+                if(m_view_time_offset_ns > m_range_x - m_v_width)
+                    m_view_time_offset_ns = m_range_x - m_v_width;
             }
 
             // Handle Zoom at Cursor

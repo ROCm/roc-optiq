@@ -124,33 +124,20 @@ TrackItem::UpdateMovement(float zoom, float movement, double& min_x, double& max
 void
 TrackItem::Render(float width)
 {
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
-    ImGuiChildFlags child_flags = ImGuiChildFlags_Borders;
+    ImGui::BeginGroup();
 
-    if(ImGui::BeginChild((std::to_string(m_id)).c_str()), ImVec2(0, 0), child_flags,
-       window_flags)
-    {
-        ImVec2 parent_size = ImGui::GetContentRegionAvail();
-        float  graph_width = width;
+    RenderMetaArea();
+    ImGui::SameLine();
 
-        RenderMetaArea();
-        ImGui::SameLine();
+    RenderChart(width);
+    RenderResizeBar(ImVec2(width + s_metadata_width, m_track_height));
 
-        RenderChart(graph_width);
-        RenderResizeBar(parent_size);
-    }
-    ImGui::EndChild();
+    ImGui::EndGroup();
 }
 
 void
 TrackItem::RenderMetaArea()
 {
-    ImU32 metadata_bg_color = m_selected
-                                  ? m_settings.GetColor(Colors::kMetaDataColorSelected)
-                                  : m_settings.GetColor(Colors::kMetaDataColor);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, metadata_bg_color);
-
     // Shrink the meta data content area by one unit in the vertical direction so that the
     // borders rendered by the parent are visible other wise the bg fill will cover them
     // up.
@@ -158,6 +145,9 @@ TrackItem::RenderMetaArea()
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
     m_track_content_height      = m_track_height - m_metadata_shrink_padding.y * 2.0f;
 
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
+                                     : m_settings.GetColor(Colors::kMetaDataColor));
     ImGui::SetCursorPos(m_metadata_shrink_padding);
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
@@ -229,7 +219,6 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaScale(scale_container_size);
     }
     ImGui::EndChild();  // end metadata area
-
     ImGui::PopStyleColor();
 }
 

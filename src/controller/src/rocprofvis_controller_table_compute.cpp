@@ -287,6 +287,10 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
                 else
                 {
                     row_data.emplace_back(csv_row[col].get<double>());
+                    if (col == 0)
+                    {
+                        row_header = std::to_string(csv_row[col].get<double>());
+                    }
                 }
             }
             else if (m_columns[col].m_type == kRPVControllerPrimitiveTypeUInt64)
@@ -298,12 +302,16 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
                 else
                 {
                     row_data.emplace_back(csv_row[col].get<uint64_t>());
+                    if (col == 0)
+                    {
+                        row_header = std::to_string(csv_row[col].get<uint64_t>());
+                    }
                 }               
             }
         }
         m_rows[row_count] = std::move(row_data);
 
-        // Keep track of all numerical fields in table for plots to reference.
+        // Keep track of all fields in table for plots to reference.
         // Key for any value is [row header][space][column header].
         for (int i = 1; i < m_rows[row_count].size(); i ++)
         {

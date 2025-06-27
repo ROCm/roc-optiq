@@ -669,6 +669,8 @@ typedef enum rocprofvis_controller_compute_table_types_t
     kRPVControllerComputeTableTypeL2CacheRdStalls,
     kRPVControllerComputeTableTypeL2CacheWrAtomStalls,
     kRPVControllerComputeTableTypeL2Cache128Reqs,
+    kRPVControllerComputeTableTypeRooflineBenchmarks,
+    kRPVControllerComputeTableTypeRooflineCounters,
     kRPVControllerComputeTableTypeCount
 } rocprofvis_controller_compute_table_types_t;
 
@@ -694,7 +696,11 @@ typedef enum rocprofvis_controller_compute_plot_types_t
     kRPVControllerComputePlotTypeVL1CacheL2CCTransactions,
     kRPVControllerComputePlotTypeVALUInstrMix,
     kRPVControllerComputePlotTypeLDSSpeedOfLight,
-    kRPVControllerComputePlotTypeCount
+    kRPVControllerComputePlotTypeRooflineFP64,
+    kRPVControllerComputePlotTypeRooflineFP32,
+    kRPVControllerComputePlotTypeRooflineFP16,
+    kRPVControllerComputePlotTypeRooflineINT8,
+    kRPVControllerComputePlotTypeCount,
 } rocprofvis_controller_compute_plot_types_t;
 
 /*

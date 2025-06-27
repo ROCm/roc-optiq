@@ -189,6 +189,8 @@ TrackItem::RenderMetaArea()
         {
             ImGui::Text(m_name.c_str());
 
+            ImGui::Text(std::to_string(m_id).c_str());
+
             if(m_request_state != TrackDataRequestState::kIdle)
             {
                 ImGuiStyle& style = ImGui::GetStyle();

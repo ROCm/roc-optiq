@@ -21,7 +21,7 @@ DataProvider::DataProvider()
 , m_max_ts(0)
 , m_trace_file_path("")
 , m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
-, m_selected_event(std::numeric_limits<uint64_t>::max())
+, m_selected_event_id(std::numeric_limits<uint64_t>::max())
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
@@ -29,15 +29,7 @@ DataProvider::~DataProvider() { CloseController(); }
 void
 DataProvider::SetSelectedEvent(uint64_t id)
 {
-    m_selected_event = id;
-}
-
-void
-DataProvider::SetSelectedEvent(uint64_t id, double start, double end)
-{
-    m_selected_event_id    = id;
-    m_selected_event_start = start;
-    m_selected_event_end   = end;
+    m_selected_event_id = id;
 }
 
 double
@@ -92,15 +84,6 @@ uint64_t
 DataProvider::GetSelectedEventID()
 {
     return m_selected_event_id;
-}
-
-
- 
-
-uint64_t
-DataProvider::GetSelectedEvent()
-{
-    return m_selected_event;
 }
 
 void
@@ -1636,7 +1619,7 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
                                             outArray, event_id, start_ts, end_ts);*/
 
 
-      auto result = rocprofvis_controller_get_indexed_property_async(
+    auto result = rocprofvis_controller_get_indexed_property_async(
         m_trace_controller, m_trace_controller, kRPVControllerEventDataExtDataIndexed,
         event_id, 1,
         future, outArray);
@@ -1645,8 +1628,11 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
     if(result == kRocProfVisResultSuccess)
     {
         uint64_t prop_count = 0;
-        rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
+        result = rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
                                          &prop_count);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        spdlog::debug("Event {} has {} ext data properties", event_id, prop_count);
+
         event_ext_data_t ext_data = {};
 
         for(auto j = 0; j < prop_count; j++)
@@ -1712,17 +1698,19 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
     future   = rocprofvis_controller_future_alloc();
     outArray = rocprofvis_controller_array_alloc(0);
 
-   /* rocprofvis_controller_event_fetch_async(m_trace_controller,
-                                            kRPVControllerEventDataFlowControl, 0, 1,
-                                            future, outArray, event_id, start_ts, end_ts);
+    result = rocprofvis_controller_get_indexed_property_async(
+        m_trace_controller, m_trace_controller, kRPVControllerEventDataFlowControlIndexed,
+        event_id, 1,
+        future, outArray);
 
     result = rocprofvis_controller_future_wait(future, FLT_MAX);
     if(result == kRocProfVisResultSuccess)
     {
         uint64_t prop_count = 0;
-        rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
+        result = rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
                                          &prop_count);
-
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        spdlog::debug("Event {} has {} flow control properties", event_id, prop_count);
         event_flow_data_t flow_data = {};
 
         for(auto j = 0; j < prop_count; j++)
@@ -1762,12 +1750,12 @@ DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
             {
                 flow_data.direction = data;
             }
+            m_flow_info.flow_data.push_back(flow_data);
         }
-        m_flow_info.flow_data.push_back(flow_data);
     }
 
     rocprofvis_controller_future_free(future);
-    rocprofvis_controller_array_free(outArray);*/
+    rocprofvis_controller_array_free(outArray);
 }
 
 

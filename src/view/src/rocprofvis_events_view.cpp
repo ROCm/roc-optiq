@@ -34,16 +34,14 @@ EventsView::Render()
     ImGui::BeginChild("LeftPanel", ImVec2(left_width, 0), true,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar);
 
-    if(m_data_provider.GetSelectedEventID() == std::numeric_limits<uint64_t>::max())
+    uint64_t selected_event = m_data_provider.GetSelectedEventID();
+    if(selected_event == std::numeric_limits<uint64_t>::max())
     {
         ImGui::Text("No event selected.");
     }
     else
     {
         ImGui::Text("Event ID: %llu", m_data_provider.GetSelectedEventID());
-
-        uint64_t selected_event = m_data_provider.GetSelectedEventID();
-
         if(selected_event != m_last_selected_event)
         {
             if(selected_event != std::numeric_limits<uint64_t>::max())

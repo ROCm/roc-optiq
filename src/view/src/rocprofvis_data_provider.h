@@ -179,19 +179,12 @@ public:
 
     void GetEventInfo(uint64_t event_id, double start_ts, double end_ts);
 
-    // Set user selected event.
-    void SetSelectedEvent(uint64_t id, double start, double end);
-
     // Get user selected event.
     uint64_t GetSelectedEventID();
-
-
 
     //Set user selected event.
     void SetSelectedEvent(uint64_t id);
 
-    //Get user selected event.
-    uint64_t GetSelectedEvent();
 
     /*
      *   Close the controller.
@@ -374,7 +367,6 @@ private:
     double      m_min_ts;           // timeline start point
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
-    uint64_t    m_selected_event;
 
     uint64_t     m_selected_event_id;
     double       m_selected_event_start;

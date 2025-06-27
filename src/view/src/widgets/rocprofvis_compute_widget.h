@@ -76,5 +76,29 @@ private:
     std::string m_formatted_string;
 };
 
+class ComputePlotRoofline : public ComputePlot
+{
+public:
+    enum GroupMode {
+        GroupModeKernel,
+        GroupModeDispatch
+    };
+    ComputePlotRoofline(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
+    void Update() override;
+    void Render() override;
+    void UpdateGroupMode();
+    void SetGroupMode(const GroupMode& mode);
+
+private:
+    GroupMode m_group_mode;
+    bool m_group_dirty;
+    std::vector<const char*> m_ceilings_names;
+    std::vector<std::vector<double>*> m_ceilings_x;
+    std::vector<std::vector<double>*> m_ceilings_y;
+    std::vector<const char*> m_ai_names;
+    std::vector<std::vector<double>*> m_ai_x;
+    std::vector<std::vector<double>*> m_ai_y;
+};
+
 }  // namespace View
 }  // namespace RocProfVis

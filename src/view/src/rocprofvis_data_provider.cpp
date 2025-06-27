@@ -32,6 +32,71 @@ DataProvider::SetSelectedEvent(uint64_t id)
     m_selected_event = id;
 }
 
+void
+DataProvider::SetSelectedEvent(uint64_t id, double start, double end)
+{
+    m_selected_event_id    = id;
+    m_selected_event_start = start;
+    m_selected_event_end   = end;
+}
+
+double
+DataProvider::GetSelectedEventStart() const
+{
+    return m_selected_event_start;
+}
+
+void
+DataProvider::SetSelectedEventStart(double start)
+{
+    m_selected_event_start = start;
+}
+
+double
+DataProvider::GetSelectedEventEnd() const
+{
+    return m_selected_event_end;
+}
+
+void
+DataProvider::SetSelectedEventEnd(double end)
+{
+    m_selected_event_end = end;
+}
+
+const event_info_t&
+DataProvider::GetEventInfoStruct() const
+{
+    return m_event_info;
+}
+
+void
+DataProvider::SetEventInfoStruct(const event_info_t& info)
+{
+    m_event_info = info;
+}
+
+const flow_info_t&
+DataProvider::GetFlowInfo() const
+{
+    return m_flow_info;
+}
+
+void
+DataProvider::SetFlowInfo(const flow_info_t& info)
+{
+    m_flow_info = info;
+}
+
+uint64_t
+DataProvider::GetSelectedEventID()
+{
+    return m_selected_event_id;
+}
+
+
+ 
+
 uint64_t
 DataProvider::GetSelectedEvent()
 {
@@ -1554,6 +1619,157 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
     raw_sample_data->SetData(std::move(buffer));
     m_raw_trackdata[index] = raw_sample_data;
 }
+
+
+void
+DataProvider::GetEventInfo(uint64_t event_id, double start_ts, double end_ts)
+{
+    m_event_info = {};
+    m_flow_info  = {};
+    auto future  = rocprofvis_controller_future_alloc();
+    ROCPROFVIS_ASSERT(future != nullptr);
+    auto outArray = rocprofvis_controller_array_alloc(0);
+    ROCPROFVIS_ASSERT(outArray != nullptr);
+
+   /* rocprofvis_controller_event_fetch_async(m_trace_controller,
+                                            kRPVControllerEventDataExtData, 0, 1, future,
+                                            outArray, event_id, start_ts, end_ts);*/
+
+
+      auto result = rocprofvis_controller_get_indexed_property_async(
+        m_trace_controller, m_trace_controller, kRPVControllerEventDataExtDataIndexed,
+        event_id, 1,
+        future, outArray);
+
+    result = rocprofvis_controller_future_wait(future, FLT_MAX);
+    if(result == kRocProfVisResultSuccess)
+    {
+        uint64_t prop_count = 0;
+        rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
+                                         &prop_count);
+        event_ext_data_t ext_data = {};
+
+        for(auto j = 0; j < prop_count; j++)
+        {
+            rocprofvis_handle_t* ext_data_handle = nullptr;
+            result                               = rocprofvis_controller_get_object(
+                outArray, kRPVControllerArrayEntryIndexed, j, &ext_data_handle);
+
+            uint32_t length = -1;
+            result          = rocprofvis_controller_get_string(
+                ext_data_handle, kRPVControllerExtDataCategory, 0, nullptr, &length);
+            if(result == kRocProfVisResultSuccess)
+            {
+                ROCPROFVIS_ASSERT(length >= 0);
+                char* data   = new char[length + 1];
+                data[length] = '\0';
+                result       = rocprofvis_controller_get_string(
+                    ext_data_handle, kRPVControllerExtDataCategory, 0, data, &length);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    ext_data.category = data;
+                }
+                delete[] data;
+            }
+            length = -1;
+            result = rocprofvis_controller_get_string(
+                ext_data_handle, kRPVControllerExtDataName, 0, nullptr, &length);
+            if(result == kRocProfVisResultSuccess)
+            {
+                ROCPROFVIS_ASSERT(length >= 0);
+                char* data   = new char[length + 1];
+                data[length] = '\0';
+                result       = rocprofvis_controller_get_string(
+                    ext_data_handle, kRPVControllerExtDataName, 0, data, &length);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    ext_data.name = data;
+                }
+                delete[] data;
+            }
+            length = -1;
+            result = rocprofvis_controller_get_string(
+                ext_data_handle, kRPVControllerExtDataValue, 0, nullptr, &length);
+            if(result == kRocProfVisResultSuccess)
+            {
+                ROCPROFVIS_ASSERT(length >= 0);
+                char* data   = new char[length + 1];
+                data[length] = '\0';
+                result       = rocprofvis_controller_get_string(
+                    ext_data_handle, kRPVControllerExtDataValue, 0, data, &length);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    ext_data.value = data;
+                }
+                delete[] data;
+            }
+            m_event_info.ext_data.push_back(ext_data);
+        }
+    }
+
+    rocprofvis_controller_future_free(future);
+    rocprofvis_controller_array_free(outArray);
+    future   = rocprofvis_controller_future_alloc();
+    outArray = rocprofvis_controller_array_alloc(0);
+
+   /* rocprofvis_controller_event_fetch_async(m_trace_controller,
+                                            kRPVControllerEventDataFlowControl, 0, 1,
+                                            future, outArray, event_id, start_ts, end_ts);
+
+    result = rocprofvis_controller_future_wait(future, FLT_MAX);
+    if(result == kRocProfVisResultSuccess)
+    {
+        uint64_t prop_count = 0;
+        rocprofvis_controller_get_uint64(outArray, kRPVControllerArrayNumEntries, 0,
+                                         &prop_count);
+
+        event_flow_data_t flow_data = {};
+
+        for(auto j = 0; j < prop_count; j++)
+        {
+            rocprofvis_handle_t* flow_control_handle = nullptr;
+            result                                   = rocprofvis_controller_get_object(
+                outArray, kRPVControllerArrayEntryIndexed, j, &flow_control_handle);
+
+            uint64_t data = 0;
+            result        = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControltId, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                flow_data.id = data;
+            }
+
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlTimestamp, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                flow_data.timestamp = data;
+            }
+
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlTrackId, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                flow_data.track_id = data;
+            }
+
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlDirection, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                flow_data.direction = data;
+            }
+        }
+        m_flow_info.flow_data.push_back(flow_data);
+    }
+
+    rocprofvis_controller_future_free(future);
+    rocprofvis_controller_array_free(outArray);*/
+}
+
 
 void
 DataProvider::CreateRawEventData(uint64_t                       index,

@@ -2,9 +2,9 @@
 
 #pragma once
 
+#include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
-#include "rocprofvis_c_interface.h"
 #include <vector>
 
 namespace RocProfVis
@@ -52,25 +52,36 @@ public:
     rocprofvis_result_t AsyncFetch(Plot& plot, Arguments& args, Future& future,
                                    Array& array);
 
+    rocprofvis_result_t AsyncFetch(rocprofvis_property_t property, Future& future,
+                                   Array& array, uint64_t index, uint64_t count);
+
     rocprofvis_controller_object_type_t GetType(void) final;
 
     // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final;
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final;
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final;
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,
+                                  uint64_t* value) final;
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index,
+                                  double* value) final;
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index,
+                                  rocprofvis_handle_t** value) final;
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index,
+                                  char* value, uint32_t* length) final;
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final;
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index,
+                                  uint64_t value) final;
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index,
+                                  double value) final;
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index,
+                                  rocprofvis_handle_t* value) final;
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index,
+                                  char const* value, uint32_t length) final;
 
 private:
-    std::vector<Track*> m_tracks;
-    uint64_t m_id;
-    Timeline* m_timeline;
-    SystemTable* m_event_table;
-    SystemTable* m_sample_table;
+    std::vector<Track*>   m_tracks;
+    uint64_t              m_id;
+    Timeline*             m_timeline;
+    SystemTable*          m_event_table;
+    SystemTable*          m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
 
     ComputeTrace* m_compute_trace;
@@ -80,7 +91,9 @@ private:
     rocprofvis_result_t LoadJson(char const* const filename);
 #endif
     rocprofvis_result_t LoadRocpd(char const* const filename);
+
+    rocprofvis_result_t FetchSingleEvent(uint64_t id, Array& array);
 };
 
-}
-}
+}  // namespace Controller
+}  // namespace RocProfVis

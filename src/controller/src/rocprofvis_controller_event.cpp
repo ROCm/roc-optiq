@@ -57,11 +57,11 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array&                
                    rocprofvis_db_read_event_property_async(db, kRPVDMEventFlowTrace,
                                                            dm_event_id, object))
                 {
-                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, 2))
+                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, UINT64_MAX))
                     {
                         if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_handle(
-                                   dm_trace_handle, kRPVDMStackTraceHandleByEventID, event_id,
+                                   dm_trace_handle, kRPVDMFlowTraceHandleByEventID, event_id,
                                    &dm_flowtrace) &&
                            dm_flowtrace != nullptr)
                         {
@@ -72,6 +72,12 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array&                
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
+                                if(records_count > 0)
+                                {
+                                    // Set the number of entries in the array
+                                    result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
+                                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                                }
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     uint64_t id   = 0;
@@ -99,8 +105,6 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array&                
                                             id, timestamp, track_id,
                                             dm_event_id.bitfield.event_op ==
                                                 kRocProfVisDmOperationLaunch ? 0 : 1);
-                                        result = array.SetUInt64(
-                                            kRPVControllerArrayNumEntries, 0, 1);
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(
@@ -150,7 +154,7 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                    rocprofvis_db_read_event_property_async(db, kRPVDMEventStackTrace,
                                                            dm_event_id, object))
                 {
-                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, 2))
+                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, UINT64_MAX))
                     {
                         if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_handle(
@@ -165,6 +169,7 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     char* symbol = nullptr;
@@ -188,8 +193,6 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                     {
                                         CallStack* call_stack =
                                             new CallStack(symbol, args, codeline);
-                                        result = array.SetUInt64(
-                                            kRPVControllerArrayNumEntries, 0, 1);
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(

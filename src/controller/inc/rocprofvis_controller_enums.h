@@ -131,6 +131,12 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerComputeTrace = 0x00000010,
     // Indexed event in the trace
     kRPVControllerEventIndexed = 0x00000011,
+    // Load Event Flow control properties  
+    kRPVControllerEventDataFlowControlIndexed = 0x00000012,
+    // Load Event Callstack properties  
+    kRPVControllerEventDataCallStackIndexed   = 0x00000013,
+    // Load Event Extended data properties
+    kRPVControllerEventDataExtDataIndexed     = 0x00000014   
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {
@@ -581,15 +587,15 @@ typedef enum rocprofvis_controller_future_properties_t
 /*
 * Event extended properties . To be used by rocprofvis_controller_get_indexed_property_async 
 */
-typedef enum rocprofvis_controller_event_data_properties_t
-{
-    // Load Event Flow control properties  
-    kRPVControllerEventDataFlowControl = 0xC0000000,
-    // Load Event Callstack properties  
-    kRPVControllerEventDataCallStack   = 0xC0000001,
-    // Load Event Extended data properties
-    kRPVControllerEventDataExtData     = 0xC0000002,
-} rocprofvis_controller_event_data_properties_t;
+// typedef enum rocprofvis_controller_event_data_properties_t
+// {
+//     // Load Event Flow control properties  
+//     kRPVControllerEventDataFlowControl = 0xC0000000,
+//     // Load Event Callstack properties  
+//     kRPVControllerEventDataCallStack   = 0xC0000001,
+//     // Load Event Extended data properties
+//     kRPVControllerEventDataExtData     = 0xC0000002,
+// } rocprofvis_controller_event_data_properties_t;
 
 /*
 * Properties for extended data

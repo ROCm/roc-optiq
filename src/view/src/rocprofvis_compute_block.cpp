@@ -190,7 +190,7 @@ void ComputeBlockDiagramNavHelper::NotifyNavigationChanged()
     EventManager::GetInstance()->AddEvent(nav_event);
 }
 
-ComputeBlockView::ComputeBlockView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider)
+ComputeBlockView::ComputeBlockView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
 : m_left_column(nullptr)
 , m_right_column(nullptr)
 , m_container(nullptr)

@@ -8,7 +8,7 @@ namespace RocProfVis
 namespace View
 {
 
-class ComputeDataProvider2;
+class ComputeDataProvider;
 class ComputeTable;
 class ComputePlotBar;
 class ComputePlotPie;
@@ -18,7 +18,7 @@ class ComputeSummaryView : public RocWidget
 public:
     void Render();
     void Update();
-    ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider);
+    ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
     ~ComputeSummaryView(); 
 
 private:

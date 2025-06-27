@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include "rocprofvis_compute_data_provider2.h"
+#include "rocprofvis_compute_data_provider.h"
 #include "rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -12,19 +12,19 @@ namespace View
 class ComputeWidget : public RocWidget
 {
 public:
-    ComputeWidget(std::shared_ptr<ComputeDataProvider2> data_provider);
+    ComputeWidget(std::shared_ptr<ComputeDataProvider> data_provider);
     void Update() = 0;
     void Render() = 0;
 
 protected:
-    std::shared_ptr<ComputeDataProvider2> m_data_provider;
+    std::shared_ptr<ComputeDataProvider> m_data_provider;
     std::string m_id;
 };
 
 class ComputePlot : public ComputeWidget
 {
 public:
-    ComputePlot(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_plot_types_t type);
+    ComputePlot(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
     void Update() override;
     void Render() = 0;
 
@@ -36,7 +36,7 @@ protected:
 class ComputeTable : public ComputeWidget
 {
 public:
-    ComputeTable(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_table_types_t type);
+    ComputeTable(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_table_types_t type);
     void Update() override;
     void Render() override;
     void Search(const std::string& term);
@@ -49,21 +49,21 @@ private:
 class ComputePlotPie : public ComputePlot
 {
 public:
-    ComputePlotPie(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_plot_types_t type);
+    ComputePlotPie(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
     void Render() override;
 };
 
 class ComputePlotBar : public ComputePlot
 {
 public:
-    ComputePlotBar(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_plot_types_t type);
+    ComputePlotBar(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
     void Render() override;
 };
 
 class ComputeMetric : public ComputeWidget
 {
 public:
-    ComputeMetric(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit);
+    ComputeMetric(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit);
     void Update() override;
     void Render() {};
     std::string GetFormattedString() const;

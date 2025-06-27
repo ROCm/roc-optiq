@@ -21,7 +21,7 @@ constexpr ImU32 TABLE_COLOR_MID = IM_COL32(255, 169, 10, 255);
 constexpr ImU32 TABLE_COLOR_SEARCH = IM_COL32(0, 255, 0, 255);
 constexpr ImVec4 TABLE_COLOR_SEARCH_TEXT = ImVec4(0, 0, 0, 1);
 
-ComputeWidget::ComputeWidget(std::shared_ptr<ComputeDataProvider2> data_provider) 
+ComputeWidget::ComputeWidget(std::shared_ptr<ComputeDataProvider> data_provider) 
 : m_data_provider(data_provider)
 , m_id("")
 {
@@ -29,7 +29,7 @@ ComputeWidget::ComputeWidget(std::shared_ptr<ComputeDataProvider2> data_provider
     m_id = GenUniqueName("");
 }
 
-ComputePlot::ComputePlot(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_plot_types_t type)
+ComputePlot::ComputePlot(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
 : ComputeWidget(data_provider)
 , m_type(type)
 , m_model(nullptr)
@@ -42,7 +42,7 @@ void ComputePlot::Update()
     m_model = m_data_provider->GetPlotModel(m_type);
 }
 
-ComputeTable::ComputeTable(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_table_types_t type)
+ComputeTable::ComputeTable(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_table_types_t type)
 : ComputeWidget(data_provider)
 , m_type(type)
 , m_model(nullptr)
@@ -128,7 +128,7 @@ void ComputeTable::Search(const std::string& term)
     }
 }
 
-ComputePlotPie::ComputePlotPie(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_plot_types_t type)
+ComputePlotPie::ComputePlotPie(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
 : ComputePlot(data_provider, type)
 {
 
@@ -174,7 +174,7 @@ void ComputePlotPie::Render()
     }
 }
 
-ComputePlotBar::ComputePlotBar(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_plot_types_t type)
+ComputePlotBar::ComputePlotBar(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
 : ComputePlot(data_provider, type)
 {
 
@@ -223,7 +223,7 @@ void ComputePlotBar::Render()
     }
 }
 
-ComputeMetric::ComputeMetric(std::shared_ptr<ComputeDataProvider2> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit)
+ComputeMetric::ComputeMetric(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit)
 : ComputeWidget(data_provider)
 , m_type(type)
 , m_name(label)

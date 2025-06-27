@@ -187,7 +187,7 @@ rocprofvis_result_t Array::SetUInt64(rocprofvis_property_t property, uint64_t in
                                 uint64_t value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
+    if(value)  //Todo: why are values of zero rejected??
     {
         switch(property)
         {

@@ -9,6 +9,7 @@
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
+#include <cfloat>
 
 namespace RocProfVis
 {

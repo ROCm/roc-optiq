@@ -32,7 +32,7 @@ enum class RequestType
 
 enum class TableType
 {
-    kSampleTable,    
+    kSampleTable,
     kEventTable,
     __kTableTypeCount
 };
@@ -62,6 +62,9 @@ public:
     double   m_start_ts;          // start time stamp of data being requested
     double   m_end_ts;            // end time stamp of data being requested
     uint32_t m_horz_pixel_range;  // horizontal pixel range for the request
+
+    TrackRequestParams(const TrackRequestParams& other)            = default;
+    TrackRequestParams& operator=(const TrackRequestParams& other) = default;
 
     TrackRequestParams(uint64_t index, double start_ts, double end_ts,
                        uint32_t horz_pixel_range)
@@ -129,16 +132,16 @@ typedef struct table_info_t
 class DataProvider
 {
 public:
-    static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = -1;
-    static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = -2;
+    static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = static_cast<uint64_t>(-1);
+    static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = static_cast<uint64_t>(-2);
 
     DataProvider();
     ~DataProvider();
 
-    //Set user selected event.
+    // Set user selected event.
     void SetSelectedEvent(uint64_t id);
 
-    //Get user selected event.
+    // Get user selected event.
     uint64_t GetSelectedEvent();
 
     /*
@@ -173,6 +176,8 @@ public:
      */
     bool FetchTrack(uint64_t index, double start_ts, double end_ts,
                     uint32_t horz_pixel_range);
+
+    bool FetchTrack(const TrackRequestParams& request_params);
 
     bool FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
                          uint32_t horz_pixel_range);

@@ -161,14 +161,6 @@ public:
     DataProvider();
     ~DataProvider();
 
-        // Getter and Setter for m_selected_event_start
-    double GetSelectedEventStart() const;
-    void   SetSelectedEventStart(double start);
-
-    // Getter and Setter for m_selected_event_end
-    double GetSelectedEventEnd() const;
-    void   SetSelectedEventEnd(double end);
-
     // Getter and Setter for m_event_info
     const event_info_t& GetEventInfoStruct() const;
     void                SetEventInfoStruct(const event_info_t& info);
@@ -177,13 +169,14 @@ public:
     const flow_info_t& GetFlowInfo() const;
     void               SetFlowInfo(const flow_info_t& info);
 
-    void GetEventInfo(uint64_t event_id, double start_ts, double end_ts);
-
+    bool FetchEventExtData(uint64_t event_id);
+    bool FetchEventFlowDetails( uint64_t event_id);
+    
     // Get user selected event.
-    uint64_t GetSelectedEventID();
+    uint64_t GetSelectedEventId();
 
     //Set user selected event.
-    void SetSelectedEvent(uint64_t id);
+    void SetSelectedEventId(uint64_t id);
 
 
     /*

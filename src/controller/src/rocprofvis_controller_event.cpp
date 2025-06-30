@@ -38,7 +38,7 @@ rocprofvis_controller_object_type_t Event::GetType(void)
 
 
 rocprofvis_result_t
-Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array&                array,
+Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                         rocprofvis_dm_trace_t dm_trace_handle)
 {
     rocprofvis_result_t      result      = kRocProfVisResultUnknownError;
@@ -72,18 +72,13 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array&                
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
-                                if(records_count > 0)
-                                {
-                                    // Set the number of entries in the array
-                                    result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
-                                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                                }
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
+                                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     uint64_t id   = 0;
                                     uint64_t timestamp = 0;
                                     uint64_t track_id  = 0;
-                                    char* codeline = nullptr;
                                     if(kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_uint64(
                                                dm_flowtrace,

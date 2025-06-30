@@ -160,7 +160,7 @@ InfiniteScrollTable::Render()
 
     float start_row_position = start_row * row_height;
     float end_row_position   = end_row * row_height;
-    
+
     bool                               sort_requested    = false;
     uint64_t                           sort_colunn_index = 0;
     rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending;
@@ -434,9 +434,5 @@ InfiniteScrollTable::RenderLoadingIndicator()
                                m_settings.GetColor(Colors::kScrollBarColor), anim_speed);
                             
     // Reset cursor position after rendering spinner                               
-    ImGui::SetCursorPos(pos);  
-
-    DebugWindow::GetInstance()->AddDebugMessage(
-        "InfiniteScrollTable: RenderLoadingIndicator called, frame count: " +
-        std::to_string(view_rect.x) + ", " + std::to_string(view_rect.y));
+    ImGui::SetCursorPos(pos);
 }

@@ -7,6 +7,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
 option(JSON_SUPPORT "Build with support for JSON traces" ON)
+option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 
 # Add third-party libraries, core, and model BEFORE controller
 add_subdirectory(thirdparty)
@@ -19,6 +20,10 @@ set(rocprofvis_source_files)
 if(JSON_SUPPORT) 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_SUPPORT")
 endif(JSON_SUPPORT)
+if(COMPUTE_UI_SUPPORT) 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
+endif(COMPUTE_UI_SUPPORT)
+
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 
@@ -40,20 +45,25 @@ set(VIEW_FILES
     src/view/src/rocprofvis_raw_track_data.cpp
     src/view/src/rocprofvis_events.cpp
     src/view/src/rocprofvis_event_manager.cpp
-	src/view/src/rocprofvis_compute_root.cpp
+    src/view/src/rocprofvis_utils.cpp
+    src/view/src/widgets/rocprofvis_widget.cpp	
+    src/view/src/widgets/rocprofvis_debug_window.cpp
+    src/view/src/widgets/rocprofvis_gui_helpers.cpp
+    src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
+)
+
+if(COMPUTE_UI_SUPPORT) 
+list(APPEND VIEW_FILES
+    src/view/src/rocprofvis_compute_root.cpp
 	src/view/src/rocprofvis_compute_summary.cpp
 	src/view/src/rocprofvis_compute_block.cpp
 	src/view/src/rocprofvis_compute_table.cpp
 	src/view/src/rocprofvis_compute_data_provider.cpp
 	src/view/src/rocprofvis_compute_roofline.cpp
 	src/view/src/rocprofvis_navigation_manager.cpp
-    src/view/src/rocprofvis_utils.cpp
-    src/view/src/widgets/rocprofvis_widget.cpp
-	src/view/src/widgets/rocprofvis_compute_widget.cpp
-    src/view/src/widgets/rocprofvis_debug_window.cpp
-    src/view/src/widgets/rocprofvis_gui_helpers.cpp
-    src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
+    src/view/src/widgets/rocprofvis_compute_widget.cpp
 )
+endif(COMPUTE_UI_SUPPORT)
 
 add_executable(rocprof-visualizer 
     src/app/src/rocprofvis_imgui_vulkan.cpp 
@@ -80,7 +90,7 @@ find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
 
 # Csv parser enables coverage in debug builds so we need to enable it too
-if((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX) AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE))
+if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX) AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE)))
     message(STATUS "Adding --coverage to linker flags for rocprof-visualizer due to potential gcov symbols from dependencies.")
     target_link_options(rocprof-visualizer PRIVATE --coverage)
 endif()

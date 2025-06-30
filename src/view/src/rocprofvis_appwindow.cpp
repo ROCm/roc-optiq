@@ -7,8 +7,10 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
-#include "rocprofvis_navigation_manager.h"
 #include "widgets/rocprofvis_debug_window.h"
+#ifdef COMPUTE_UI_SUPPORT
+#include "rocprofvis_navigation_manager.h"
+#endif
 #include <filesystem>
 
 using namespace RocProfVis::View;
@@ -56,7 +58,9 @@ AppWindow::~AppWindow()
                                              m_tabclosed_event_token);
 
     m_open_views.clear();
+#ifdef COMPUTE_UI_SUPPORT
     NavigationManager::DestroyInstance();
+#endif
 }
 
 bool
@@ -76,7 +80,9 @@ AppWindow::Init()
     LayoutItem main_area_item(-1, -30.0f);
 
     m_tab_container = std::make_shared<TabContainer>();
+#ifdef COMPUTE_UI_SUPPORT
     NavigationManager::GetInstance()->RegisterRootContainer(m_tab_container);
+#endif
     main_area_item.m_item = m_tab_container;
 
     std::vector<LayoutItem> layout_items;
@@ -139,9 +145,12 @@ AppWindow::Render()
             {
                 IGFD::FileDialogConfig config;
                 config.path                      = ".";
-                std::string supported_extensions = ".db,.rpd,.csv";
+                std::string supported_extensions = ".db,.rpd";
 #ifdef JSON_SUPPORT
                 supported_extensions += ",.json";
+#endif
+#ifdef COMPUTE_UI_SUPPORT
+                supported_extensions += ",.csv";
 #endif
                 ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File",
                                                         supported_extensions.c_str(),
@@ -205,7 +214,7 @@ AppWindow::Render()
                 tab_item.m_label     = file_path.filename().string();
                 tab_item.m_id        = file_path_str;
                 tab_item.m_can_close = true;
-
+#ifdef COMPUTE_UI_SUPPORT
                 // Determine the type of view to create based on the file extension
                 if(file_path.extension().string() == ".csv")
                 {
@@ -218,6 +227,7 @@ AppWindow::Render()
                     NavigationManager::GetInstance()->RefreshNavigationTree();
                 }
                 else
+#endif
                 {
                     auto trace_view = std::make_shared<TraceView>();
                     trace_view->OpenFile(file_path.string());
@@ -317,7 +327,9 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
             m_open_views.erase(it);
         }
     }
+#ifdef COMPUTE_UI_SUPPORT
     NavigationManager::GetInstance()->RefreshNavigationTree();
+#endif
 }
 
 void

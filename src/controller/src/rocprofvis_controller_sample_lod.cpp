@@ -88,6 +88,22 @@ SampleLOD::SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, d
     CalculateChildValues();
 }
 
+SampleLOD& SampleLOD::operator=(SampleLOD&& other)
+{
+    m_children  = std::move(other.m_children);
+    m_id = other.m_id;
+    m_data = other.m_data;
+    m_timestamp = other.m_timestamp;
+    m_child_min = 0;
+    m_child_mean = 0; 
+    m_child_median = 0;
+    m_child_max    = 0;
+    m_child_min_timestamp = 0;
+    m_child_max_timestamp = 0;
+
+    return *this;
+}
+
 SampleLOD::~SampleLOD()
 {
 }
@@ -95,6 +111,12 @@ SampleLOD::~SampleLOD()
 rocprofvis_controller_object_type_t SampleLOD::GetType(void) 
 {
     return kRPVControllerObjectTypeSample;
+}
+
+size_t
+SampleLOD::GetNumChildren()
+{
+    return m_children.size();
 }
 
 rocprofvis_result_t SampleLOD::GetUInt64(rocprofvis_property_t property, uint64_t index,

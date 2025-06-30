@@ -16,6 +16,8 @@ class Sample : public Handle
 public:
     Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp);
 
+    Sample& Sample::operator=(Sample&& other);
+
     virtual ~Sample();
 
     rocprofvis_controller_object_type_t GetType(void) override;
@@ -39,10 +41,9 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index,
                                   char const* value, uint32_t length) override;
 
-private:
+protected:
     Data         m_data;
     uint64_t     m_id;
-    class Track* m_track;
     double       m_timestamp;
 };
 

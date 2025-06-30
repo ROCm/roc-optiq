@@ -8,6 +8,7 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_sample_lod.h"
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_table_system.h"
 #include "rocprofvis_controller_plot.h"
@@ -44,10 +45,14 @@ Trace::Trace()
 
     m_sample_table = new SystemTable(1);
     ROCPROFVIS_ASSERT(m_sample_table);
+
+    m_mem_mgmt = new MemoryManager();
 }
 
 Trace::~Trace()
 {
+    delete m_mem_mgmt; 
+    m_mem_mgmt = nullptr;
     delete m_timeline;
     delete m_event_table;
     delete m_sample_table;
@@ -61,6 +66,12 @@ Trace::~Trace()
     if(m_compute_trace)
         delete m_compute_trace;
 }
+
+MemoryManager*
+Trace::GetMemoryManager(){
+    return m_mem_mgmt;
+}
+
 
 #ifdef JSON_SUPPORT
 rocprofvis_result_t Trace::LoadJson(char const* const filename) {
@@ -97,7 +108,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                ? kRPVControllerTrackTypeEvents
                                                : kRPVControllerTrackTypeSamples;
                             Graph* graph = nullptr;
-                            Track* track = new Track(type, track_id++, nullptr);
+                            Track* track = new Track(type, track_id++, nullptr, this);
                             if(track)
                             {
                                 track->SetString(kRPVControllerTrackName, 0,
@@ -128,7 +139,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                         uint64_t index = 0;
                                         for(auto& event : thread.second.m_events)
                                         {
-                                            Event* new_event = new Event(
+                                            Event* new_event = GetMemoryManager()->NewEvent(
                                                 event_id++, event.m_start_ts,
                                                 event.m_start_ts + event.m_duration);
                                             if(new_event)
@@ -160,7 +171,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                             m_tracks.push_back(track);
                                             if(m_tracks.size() == (index + 1))
                                             {
-                                                graph = new Graph(
+                                                graph = new Graph(this,
                                                     kRPVControllerGraphTypeFlame,
                                                     graph_id++);
                                                 if(graph)
@@ -256,7 +267,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                             if(m_tracks.size() == (index + 1))
                                             {
                                                 graph =
-                                                    new Graph(kRPVControllerGraphTypeLine,
+                                                    new Graph(this, kRPVControllerGraphTypeLine,
                                                               graph_id++);
                                                 if(graph)
                                                 {
@@ -337,6 +348,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
 rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     m_timeline                 = new Timeline(0);
+    size_t trace_size          = 0;
     if(m_timeline)
     {
         m_dm_handle = rocprofvis_dm_create_trace();
@@ -388,7 +400,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                       ? kRPVControllerTrackTypeSamples
                                                       : kRPVControllerTrackTypeEvents;
                                     Track* track =
-                                        new Track(type, track_id, dm_track_handle);
+                                        new Track(type, track_id, dm_track_handle, this);
                                     if(track)
                                     {
                                         std::string dm_track_name =
@@ -413,6 +425,12 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackNumRecordsUInt64, 0);
+
+                                        trace_size +=
+                                            num_records *
+                                            (type == kRPVControllerTrackTypeEvents
+                                                 ? sizeof(Event)
+                                                 : sizeof(Sample));
 
                                         track->SetUInt64(
                                             kRPVControllerTrackNumberOfEntries, 0,
@@ -440,7 +458,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             break;
                                         }
 
-                                        Graph* graph = new Graph(
+                                        Graph* graph = new Graph(this,
                                             (dm_track_type == kRocProfVisDmPmcTrack)
                                                 ? kRPVControllerGraphTypeLine
                                                 : kRPVControllerGraphTypeFlame,
@@ -471,22 +489,38 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                     }
                                 }
                             }
+
+                            GetMemoryManager()->Init(trace_size);
+
                             // This block is asynchronously loading full trace
                             // todo : remove following block after  UI implemented segmented loading
                             // or : use this code for preloading some segments at the load time. start and end has to be calculated considering preloaded segment boundaries  
-                            /*
+ /*                           
+                            std::vector<RocProfVis::Controller::Array*> arrays;
+                            std::vector<RocProfVis::Controller::Future*> futures;
+                            arrays.resize(num_tracks);
+                            futures.resize(num_tracks);
                             for(int i = 0; i < num_tracks; i++)
                             {                               
-                                RocProfVis::Controller::Array* array = (RocProfVis::Controller::Array*)rocprofvis_controller_array_alloc(32);
-                                RocProfVis::Controller::Future* future = (RocProfVis::Controller::Future*) rocprofvis_controller_future_alloc();
+                                arrays[i] = (RocProfVis::Controller::Array*)
+                                    rocprofvis_controller_array_alloc(32);
+                                futures[i] = (RocProfVis::Controller::Future*)
+                                    rocprofvis_controller_future_alloc();
                                 double start, end;
                                 m_tracks[i]->GetDouble(kRPVControllerTrackMinTimestamp, 0, &start);
                                 m_tracks[i]->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &end);
-                                result = AsyncFetch(*m_tracks[i], *future, *array, start, end);
+                                result = AsyncFetch(*m_tracks[i], *futures[i], *arrays[i],
+                                                    start, end);
+                            }
+
+                            for (int i = 0; i < num_tracks; i++)
+                            {
                                 result = rocprofvis_controller_future_wait(
-                                    (rocprofvis_controller_future_t*) future, FLT_MAX);
+                                    (rocprofvis_controller_future_t*) futures[i], FLT_MAX);
                                 rocprofvis_controller_future_free(
-                                    (rocprofvis_controller_future_t*) future);
+                                    (rocprofvis_controller_future_t*) futures[i]);
+                                rocprofvis_controller_array_free(
+                                    (rocprofvis_controller_array_t*) arrays[i]);
                             }
                             */
                         }
@@ -698,6 +732,7 @@ rocprofvis_controller_object_type_t Trace::GetType(void)
     return kRPVControllerObjectTypeController;
 }
 
+
 rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -725,7 +760,9 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                 }
                 if (result == kRocProfVisResultSuccess)
                 {
-                    result = m_timeline->GetUInt64(property, 0, value);
+                    uint64_t timeline_size = 0;
+                    result = m_timeline->GetUInt64(property, 0, &timeline_size);
+                    *value += timeline_size;
                 }
                 break;
             }

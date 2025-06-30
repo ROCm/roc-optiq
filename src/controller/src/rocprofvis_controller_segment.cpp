@@ -5,37 +5,58 @@
 #include "rocprofvis_controller_event_lod.h"
 #include "rocprofvis_controller_sample_lod.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_controller_trace.h"
 
 #include <algorithm>
+#include <execution>
 
 namespace RocProfVis
 {
 namespace Controller
 {
 
-Segment::Segment()
+Segment::Segment(rocprofvis_controller_track_type_t type, Trace* ctx)
 : m_start_timestamp(0.0)
 , m_end_timestamp(0.0)
 , m_min_timestamp(0.0)
 , m_max_timestamp(0.0)
-, m_type(kRPVControllerTrackTypeSamples)
+, m_memory_usage(0)
+, m_type(type)
+, m_ctx(ctx)
 {
 }
 
-Segment::Segment(rocprofvis_controller_track_type_t type)
-: m_start_timestamp(0.0)
-, m_end_timestamp(0.0)
-, m_min_timestamp(0.0)
-, m_max_timestamp(0.0)
-, m_type(type)
-{
-}
+
 
 Segment::~Segment()
-{ 
-    for(auto& pair : m_entries)
+{
+    Clear();
+}
+
+
+void Segment::Clear() 
+{
+    if(m_ctx->GetMemoryManager())
     {
-        delete pair.second;
+        for(auto& level : m_entries)
+        {
+            for(auto& pair : level.second)
+            {
+                m_ctx->GetMemoryManager()->RetainObject(pair.second);
+            }
+            level.second.clear();
+        }
+    }
+    else
+    {
+        for(auto& level : m_entries)
+        {
+            for(auto& pair : level.second)
+            {
+                delete pair.second;
+            }
+            level.second.clear();
+        }
     }
 }
 
@@ -120,26 +141,43 @@ void Segment::SetMaxTimestamp(double value)
 
 void Segment::Insert(double timestamp, uint8_t level, Handle* event)
 {
-    m_entries.insert(std::make_pair(SegmentItemKey(timestamp,level), event));
+    size_t num_entries = m_entries[level].size();
+    m_entries[level].insert(std::make_pair(timestamp, event));
+    if(num_entries != m_entries[level].size())
+    {
+        if(m_type == kRPVControllerTrackTypeEvents)
+        {
+            m_memory_usage += sizeof(Event);
+        }
+        else if(Sample* sample = dynamic_cast<Sample*>(event))
+        {
+            m_memory_usage += sizeof(Sample);
+        }
+        else if(SampleLOD* sample_lod = dynamic_cast<SampleLOD*>(event))
+        {
+            m_memory_usage += sizeof(SampleLOD);
+            m_memory_usage += sample_lod->GetNumChildren() * sizeof(Sample*);
+        }
+    }
 }
 
-rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set)
+rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     double last_timestamp = std::max(m_end_timestamp, m_max_timestamp);
     if(m_start_timestamp <= end && last_timestamp >= start)
     {
         result = kRocProfVisResultSuccess;
+        for(auto level : m_entries)
         {
-            auto& entries = m_entries; 
-            rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type = kRPVControllerTrackTypeEvents) ? kRPVControllerEventEndTimestamp : kRPVControllerSampleTimestamp);
+            auto& entries = level.second; 
+            rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type == kRPVControllerTrackTypeEvents) ? kRPVControllerEventEndTimestamp : kRPVControllerSampleTimestamp);
             
-            std::map<SegmentItemKey, Handle*>::iterator lower = entries.end();
-            auto it = entries.begin();
-            for (; it != entries.end(); ++it)
+            std::map<double, Handle*>::iterator lower = entries.end();
+            for(auto it = entries.begin(); it != entries.end(); ++it)
             {
-                double min_ts = it->first.m_timestamp;
-                double max_ts = it->first.m_timestamp;
+                double min_ts = it->first;
+                double max_ts = it->first;
                 it->second->GetDouble(property, 0, &max_ts);
                 if(min_ts <= end && max_ts >= start)
                 {
@@ -148,10 +186,10 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 }
             }
 
-            std::map<SegmentItemKey, Handle*>::iterator upper = entries.end();
-            for (; it != entries.end(); ++it)
+            std::map<double, Handle*>::iterator upper = entries.end();
+            for(auto it = entries.begin(); it != entries.end(); ++it)
             {
-                double min_ts = it->first.m_timestamp;
+                double min_ts = it->first;
                 if(min_ts > end)
                 {
                     upper = it;
@@ -159,20 +197,21 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 }
             }
 
+
             while(lower != upper && lower != entries.end())
             {
-                double min_ts = lower->first.m_timestamp;
-                double max_ts = lower->first.m_timestamp;
+                double min_ts = lower->first;
+                double max_ts = lower->first;
                 lower->second->GetDouble(property, 0, &max_ts);
-
-                if(event_id_set)
+                
+                if(event_id_set && m_type == kRPVControllerTrackTypeEvents)
                 {
                     uint64_t event_id;
                     lower->second->GetUInt64(kRPVControllerEventId, 0, &event_id);
                     auto it = event_id_set->find(event_id);
                     if(it != event_id_set->end())
                     {
-                        spdlog::debug("Remove duplicate with id = {}", event_id);
+                        //spdlog::debug("Remove duplicate with id = {}", event_id);
                         ++lower;
                         continue;
                     }
@@ -190,6 +229,10 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 }
                 ++lower;
             }
+            if(lru_params)
+            {
+                lru_params->m_ctx->GetMemoryManager()->AddLRUReference(lru_params->m_owner, this, lru_params->m_lod, &array);
+            }
         }
     }
     return result;
@@ -204,23 +247,8 @@ rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_p
         {
             case kRPVControllerCommonMemoryUsageInclusive:
             {
-                *value = 0;
+                *value = m_memory_usage;
                 result = kRocProfVisResultSuccess;
-
-                for(auto& entry : m_entries)
-                {
-                    *value += sizeof(entry);
-                    uint64_t entry_size = 0;
-                    result = entry.second->GetUInt64(property, 0, &entry_size);
-                    if (result == kRocProfVisResultSuccess)
-                    {
-                        *value += entry_size;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
                 break;
             }
             case kRPVControllerCommonMemoryUsageExclusive:
@@ -244,9 +272,22 @@ rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_p
     return result;
 }
 
+
+size_t Segment::GetNumEntries()
+{
+    size_t num_entries = 0;
+    for (auto level : m_entries)
+    {
+        num_entries += level.second.size();
+    }
+    return num_entries;
+};
+
+
 SegmentTimeline::SegmentTimeline()
 : m_segment_duration(0)
 , m_num_segments(0)
+, m_segment_start_time(0)
 {
 }
 
@@ -259,6 +300,7 @@ SegmentTimeline::SegmentTimeline(SegmentTimeline&& other)
 , m_valid_segments(std::move(other.m_valid_segments))
 , m_segment_duration(other.m_segment_duration)
 , m_num_segments(other.m_num_segments)
+, m_segment_start_time(other.m_segment_start_time)
 {
 
 }
@@ -269,14 +311,16 @@ SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
     m_segment_duration = other.m_segment_duration;
     m_num_segments     = other.m_num_segments;
     m_valid_segments = std::move(other.m_valid_segments);
+    m_segment_start_time = other.m_segment_start_time;
     return *this;
 }
 
 
-void SegmentTimeline::Init(double segment_duration, uint32_t num_segments)
+void SegmentTimeline::Init(double segment_start_time, double segment_duration, uint32_t num_segments)
 {
     m_segment_duration = segment_duration;
     m_num_segments = num_segments;
+    m_segment_start_time = segment_start_time;
     uint32_t num_bitsets = (num_segments / kSegmentBitSetSize) + 1;
     m_valid_segments.resize(num_bitsets);
 }
@@ -284,7 +328,7 @@ void SegmentTimeline::Init(double segment_duration, uint32_t num_segments)
 rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
-    std::map<double, std::unique_ptr<Segment>>::iterator lower = m_segments.end();
+    std::map<double, std::shared_ptr<Segment>>::iterator lower = m_segments.end();
     for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
     {
         double min_ts = it->first;
@@ -296,7 +340,7 @@ rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, voi
         }
     }
 
-    std::map<double, std::unique_ptr<Segment>>::iterator upper = m_segments.end();
+    std::map<double, std::shared_ptr<Segment>>::iterator upper = m_segments.end();
     for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
     {
         double min_ts = it->first;
@@ -329,10 +373,11 @@ rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, voi
 
 void SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment)
 {
-    m_segments.insert(std::make_pair(segment_start, std::move(segment)));
+    auto pair = m_segments.insert(std::make_pair(segment_start, std::move(segment)));
+
 }
 
-std::map<double, std::unique_ptr<Segment>>& SegmentTimeline::GetSegments()
+std::map<double, std::shared_ptr<Segment>>& SegmentTimeline::GetSegments()
 {
     return m_segments;
 }
@@ -363,9 +408,35 @@ SegmentTimeline::SetValid(uint32_t segment_index)
     }
 }
 
+void
+SegmentTimeline::SetInvalid(uint32_t segment_index)
+{
+    if(segment_index < m_num_segments)
+    {
+        uint32_t array_index = segment_index / kSegmentBitSetSize;
+        uint32_t bit_index   = segment_index % kSegmentBitSetSize;
+        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
+        m_valid_segments[array_index].reset(bit_index);
+    }
+}
+
 double SegmentTimeline::GetSegmentDuration() const
 {
     return m_segment_duration;
+}
+
+rocprofvis_result_t SegmentTimeline::Remove(Segment* target)
+{
+   
+    int segment_index =
+        (target->GetStartTimestamp() - m_segment_start_time) / m_segment_duration;
+
+    SetInvalid(segment_index);
+
+    //m_segments.erase(target->GetIteraror());
+    target->Clear();
+
+    return kRocProfVisResultSuccess;
 }
 
 }

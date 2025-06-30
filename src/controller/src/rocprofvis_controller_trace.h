@@ -5,7 +5,9 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface.h"
+#include "rocprofvis_controller_mem_mgmt.h"
 #include <vector>
+
 
 namespace RocProfVis
 {
@@ -24,6 +26,7 @@ class SystemTable;
 class Plot;
 
 class ComputeTrace;
+
 
 class Trace : public Handle
 {
@@ -65,6 +68,8 @@ public:
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
+    MemoryManager* GetMemoryManager();
+
 private:
     std::vector<Track*> m_tracks;
     uint64_t m_id;
@@ -72,6 +77,7 @@ private:
     SystemTable* m_event_table;
     SystemTable* m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
+    MemoryManager*         m_mem_mgmt;
 
     ComputeTrace* m_compute_trace;
 
@@ -80,6 +86,7 @@ private:
     rocprofvis_result_t LoadJson(char const* const filename);
 #endif
     rocprofvis_result_t LoadRocpd(char const* const filename);
+
 };
 
 }

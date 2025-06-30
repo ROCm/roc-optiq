@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_controller_trace.h"
 
 #include <algorithm>
 #include <cfloat>
@@ -17,13 +18,14 @@ namespace RocProfVis
 namespace Controller
 {
 
-Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle)
+Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, Trace * ctx)
 : m_id(id)
 , m_num_elements(0)
 , m_type(type)
 , m_start_timestamp(DBL_MIN)
 , m_end_timestamp(DBL_MAX)
 , m_dm_handle(dm_handle)
+, m_ctx(ctx)
 {
 
 }
@@ -37,8 +39,13 @@ rocprofvis_dm_track_t Track::GetDmHandle(void){
     return m_dm_handle;
 }
 
-rocprofvis_result_t
-Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
+
+Trace* Track::GetContext(void)
+{
+    return m_ctx;
+}
+
+rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(m_start_timestamp <= end && m_end_timestamp >= start)
@@ -46,7 +53,7 @@ Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc
         if (m_segments.GetSegmentDuration() == 0)
         {
             uint32_t num_segments = (uint32_t)ceil((m_end_timestamp - m_start_timestamp) / kSegmentDuration);
-            m_segments.Init(kSegmentDuration, num_segments);
+            m_segments.Init(m_start_timestamp, kSegmentDuration, num_segments);
         }
 
         start = std::max(start, m_start_timestamp);
@@ -115,23 +122,36 @@ Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc
     return result;
 }
 
+rocprofvis_result_t Track::DeleteSegment(void* target, uint32_t lod)
+{
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
+    result = m_segments.Remove((Segment*)target);
+    return result;
+}
+
 struct FetchEventsArgs
 {
     Array*             m_array;
     uint64_t*          m_index;
     std::unordered_set<uint64_t> m_event_ids;
+    SegmentLRUParams lru_params;
 };
 
 rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_t& index)
 {
+    std::unique_lock lock(m_ctx->GetMemoryManager()->GetMemoryManagerMutex());
     FetchEventsArgs args;
     args.m_array = &array;
     args.m_index = &index;
+    args.lru_params.m_owner = this;
+    args.lru_params.m_ctx   = GetContext();
+    args.lru_params.m_lod      = 0;
+    array.SetContext(GetContext());
 
     rocprofvis_result_t result = FetchSegments(start, end, &args, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t
     {
         FetchEventsArgs* args = (FetchEventsArgs*) user_ptr;
-        rocprofvis_result_t result = segment.Fetch(start, end, args->m_array->GetVector(), *args->m_index, &args->m_event_ids);
+        rocprofvis_result_t result = segment.Fetch(start, end, args->m_array->GetVector(), *args->m_index, &args->m_event_ids, &args->lru_params);
         return result;
     });
         
@@ -199,7 +219,9 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                                     uint64_t event_id =
                                         rocprofvis_dm_get_property_as_uint64(
                                             slice, kRPVDMEventIdUInt64Indexed, i);
-                                    Event* new_event = new Event(event_id, timestamp,
+                                    Event* new_event =
+                                        m_ctx->GetMemoryManager()->NewEvent(
+                                            event_id, timestamp,
                                                                  timestamp + duration);
                                     if(new_event)
                                     {
@@ -284,6 +306,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                 }
             }
         }
+        rocprofvis_db_future_free(object2wait);
     }
     return kRocProfVisResultSuccess;
 }
@@ -685,7 +708,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                 {
                                     double segment_end = segment_start + kSegmentDuration;
                                     std::unique_ptr<Segment> segment =
-                                        std::make_unique<Segment>(m_type);
+                                        std::make_unique<Segment>(m_type, m_ctx);
                                     segment->SetStartEndTimestamps(segment_start,
                                                                    segment_end);
                                     segment->SetMinTimestamp(timestamp.start);
@@ -700,7 +723,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
 
                                 if(result == kRocProfVisResultSuccess)
                                 {
-                                    std::unique_ptr<Segment>& segment =
+                                    std::shared_ptr<Segment>& segment =
                                         m_segments.GetSegments()[segment_start];
                                     segment->SetMinTimestamp(
                                         std::min(segment->GetMinTimestamp(), timestamp.start));
@@ -715,9 +738,9 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                         if (object_type == kRPVControllerObjectTypeEvent)
                                         {
                                             Event* event = (Event*) object;
-                                            Event* event_duplicate = new Event(*event);
+                                            Event* event_duplicate = m_ctx->GetMemoryManager()->NewEvent(event);
                                             segment->Insert(timestamp.start, level, event_duplicate);
-                                            spdlog::debug("Add duplicate event with id = {}", event_id);
+                                            //spdlog::debug("Add duplicate event with id = {}", event_id);
                                         }
                                     }
                                 }

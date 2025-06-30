@@ -287,6 +287,11 @@ void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
     RocProfVis::Controller::ArrayRef array(object);
     if (array.IsValid())
     {
+        if(array.Get()->GetContext() && array.Get()->GetContext()->GetMemoryManager())
+        {
+            array.Get()->GetContext()->GetMemoryManager()->CancelArrayOwnersip(
+                &array.Get()->GetVector());
+        }
         delete array.Get();
     }
 }

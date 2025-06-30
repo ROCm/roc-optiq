@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_array.h"
+#include "rocprofvis_controller_trace.h"
 
 namespace RocProfVis
 {
@@ -8,7 +9,8 @@ namespace Controller
 {
 
 Array::Array()
-{
+{ 
+    m_ctx = nullptr; 
 }
 
 Array::~Array()
@@ -23,6 +25,15 @@ std::vector<Data>& Array::GetVector(void)
 rocprofvis_controller_object_type_t Array::GetType(void) 
 {
     return kRPVControllerObjectTypeArray;
+}
+
+void Array::SetContext(Trace* ctx)
+{
+    m_ctx = ctx;
+}
+
+Trace* Array::GetContext(void) {
+    return m_ctx;
 }
 
 rocprofvis_result_t Array::GetUInt64(rocprofvis_property_t property, uint64_t index,

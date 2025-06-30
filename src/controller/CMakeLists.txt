@@ -32,6 +32,7 @@ list(APPEND rocprofvis_controller_source_files
 	src/rocprofvis_controller_plot.cpp
 	src/rocprofvis_controller_plot_series.cpp
 	src/rocprofvis_controller_plot_compute.cpp
+    src/rocprofvis_controller_mem_mgmt.cpp
 )
 
 if(JSON_SUPPORT) 

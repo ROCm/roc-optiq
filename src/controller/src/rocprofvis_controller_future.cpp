@@ -11,11 +11,13 @@ namespace Controller
 {
 
 Future::Future()
+: m_job(false)
 {
 }
 
 Future::~Future()
-{
+{ 
+    delete m_job;
 }
 
 rocprofvis_controller_object_type_t Future::GetType(void) 
@@ -23,38 +25,33 @@ rocprofvis_controller_object_type_t Future::GetType(void)
     return kRPVControllerObjectTypeFuture;
 }
 
-void Future::Set(std::future<rocprofvis_result_t>&& future)
+void Future::Set(Job* job)
 {
-    ROCPROFVIS_ASSERT(future.valid() && !m_future.valid());
-    m_future = std::move(future);
+    ROCPROFVIS_ASSERT(job);
+    m_job = job;
 }
 
 bool Future::IsValid() const
 {
-    return m_future.valid();
+    return m_job;
 }
 
 rocprofvis_result_t Future::Wait(float timeout)
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    if (timeout == FLT_MAX)
+    if (m_job)
     {
-        m_future.wait();
-        result = kRocProfVisResultSuccess;
+        result = m_job->Wait(timeout);
     }
-    else
+    return result;
+}
+
+rocprofvis_result_t Future::Cancel()
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(m_job)
     {
-        std::chrono::microseconds time =
-            std::chrono::microseconds(uint64_t(timeout * 1000000.0));
-        std::future_status   status = m_future.wait_for(time);
-        if (status == std::future_status::timeout || status == std::future_status::deferred)
-        {
-            result = kRocProfVisResultTimeout;
-        }
-        else
-        {
-            result = kRocProfVisResultSuccess;
-        }
+        result = JobSystem::Get().CancelJob(m_job);
     }
     return result;
 }
@@ -75,9 +72,9 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
             }
             case kRPVControllerFutureResult:
             {
-                if(m_future.valid())
+                if(m_job)
                 {
-                    *value = m_future.get();
+                    *value = m_job->GetResult();
                     result = kRocProfVisResultSuccess;
                 }
                 else

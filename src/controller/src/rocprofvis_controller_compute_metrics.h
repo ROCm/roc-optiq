@@ -35,8 +35,12 @@ typedef struct ComputePlotDefinition
     std::string m_title;
     std::string x_axis_label;
     std::string y_axis_label;
-    std::vector<ComputePlotDataSeriesDefinition> m_series;
 } ComputePlotDefinition;
+
+typedef struct ComputeTablePlotDefinition : ComputePlotDefinition
+{
+    std::vector<ComputePlotDataSeriesDefinition> m_series;
+} ComputeTablePlotDefinition;
 
 typedef struct ComputeMetricDefinition
 {
@@ -44,6 +48,42 @@ typedef struct ComputeMetricDefinition
     std::string m_metric_key;
 } ComputeMetricDefinition;
 
+typedef struct ComputeRooflineDefinition
+{
+    enum MemoryLevel : uint32_t
+    {
+        MemoryLevelHBM,
+        MemoryLevelL2,
+        MemoryLevelL1,
+        MemoryLevelLDS,
+        MemoryLevelCount
+    };
+    enum Format : uint32_t
+    {
+        FormatFP64,
+        FormatFP32,
+        FormatFP16,
+        FormatINT8,
+        FormatCount
+    };
+    enum Pipe : uint32_t
+    {
+        PipeVALU,
+        PipeMFMA
+    };
+    struct ComputeRooflinePlotDefinition : ComputePlotDefinition
+    {
+        std::vector<Format> m_formats;
+    };
+    std::unordered_map<MemoryLevel, std::string> m_memory_names;
+    std::unordered_map<Format, std::string> m_format_names;
+    std::unordered_map<Pipe, std::string> m_pipe_names;
+    std::unordered_map<Format, std::unordered_map<Pipe, std::string>> m_format_prefix;
+    std::unordered_map<rocprofvis_controller_compute_plot_types_t, ComputeRooflinePlotDefinition> m_plots;
+    std::uint32_t m_device_id;
+    double x_axis_min;
+    double x_axis_max;
+} ComputeRooflineDefinition;
 
 const std::unordered_map<std::string, ComputeTableDefinition> COMPUTE_TABLE_DEFINITIONS { 
     {"0.1_Top_Kernels.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeKernelList, "Kernel List"}},
@@ -94,25 +134,27 @@ const std::unordered_map<std::string, ComputeTableDefinition> COMPUTE_TABLE_DEFI
     {"18.8_L2-Fabric_Atomic_Latency_(Cycles).csv", ComputeTableDefinition{kRPVControllerComputeTableTypeL2CacheFabricAtomLat, "L2 Cache - Fabric Atomic Latency Per Channel"}},
     {"18.9_L2-Fabric_Read_Stall_(Cycles_per_normUnit).csv", ComputeTableDefinition{kRPVControllerComputeTableTypeL2CacheRdStalls, "L2 Cache - Fabric Read Stall Per Channel"}},
     {"18.10_L2-Fabric_Write_and_Atomic_Stall_(Cycles_per_normUnit).csv", ComputeTableDefinition{kRPVControllerComputeTableTypeL2CacheWrAtomStalls, "L2 Cache - Fabric Detailed Transaction Breakdown"}},
-    {"18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv", ComputeTableDefinition{kRPVControllerComputeTableTypeL2Cache128Reqs, "L2 Cache - Fabric 128B Read Requests Per Channel"}}
+    {"18.12_L2-Fabric_(128B_read_requests_per_normUnit).csv", ComputeTableDefinition{kRPVControllerComputeTableTypeL2Cache128Reqs, "L2 Cache - Fabric 128B Read Requests Per Channel"}},
+    {"pmc_perf.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeRooflineCounters, "Roofline Counters"}},
+    {"roofline.csv", ComputeTableDefinition{kRPVControllerComputeTableTypeRooflineBenchmarks, "Roofline Benchmarks"}}
 };
 
 const std::array COMPUTE_PLOT_DEFINITIONS {  
-    ComputePlotDefinition{kRPVControllerComputePlotTypeKernelDurationPercentage, "Kernel Durations", "Duration (%)", "Kernel", {  
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeKernelDurationPercentage, "Kernel Durations", "Duration (%)", "Kernel", {  
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeKernelList, {
                 "{Pct}"
             }}
         }}  
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeKernelDuration, "Kernel Durations", "Mean Duration (ns)", "Kernel", {  
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeKernelDuration, "Kernel Durations", "Mean Duration (ns)", "Kernel", {  
         ComputePlotDataSeriesDefinition{"", { 
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeKernelList, {
                 "{Mean(ns)}"
             }}  
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeL2CacheSpeedOfLight, "L2 Cache - Speed of Light", "% of Peak", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeL2CacheSpeedOfLight, "L2 Cache - Speed of Light", "% of Peak", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeL2CacheSpeedOfLight, {
                 "Utilization Avg", 
@@ -121,7 +163,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }},
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeL2CacheFabricSpeedOfLight, "L2 Cache - Speed of Light", "Gb/s", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeL2CacheFabricSpeedOfLight, "L2 Cache - Speed of Light", "Gb/s", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeL2CacheSpeedOfLight, {
                 "L2-Fabric Read BW Avg", 
@@ -129,7 +171,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeL2CacheFabricStallsRead, "L2 Cache - Infinity Fabric Interface Read Stalls", "%", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeL2CacheFabricStallsRead, "L2 Cache - Infinity Fabric Interface Read Stalls", "%", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeL2CacheFabricStalls, {
                 "Read - PCIe Stall Avg", 
@@ -138,7 +180,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeL2CacheFabricStallsWrite, "L2 Cache - Infinity Fabric Interface Stalls", "%", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeL2CacheFabricStallsWrite, "L2 Cache - Infinity Fabric Interface Stalls", "%", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeL2CacheFabricStalls, {
                 "Write - PCIe Stall Avg", 
@@ -148,7 +190,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeInstrMix, "Compute Units - Instruction Mix", "Instructions per Wave", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeInstrMix, "Compute Units - Instruction Mix", "Instructions per Wave", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeInstrMix, {
                 "VALU Avg", 
@@ -161,7 +203,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeCUOps, "Compute Units - Speed of Light", "Instructions per Wave", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeCUOps, "Compute Units - Speed of Light", "Instructions per Wave", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeCUSpeedOfLight, {
                 "VALU FLOPs Pct of Peak", 
@@ -174,7 +216,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeSL1CacheSpeedOfLight, "Scalar L1 Data Cache - Speed of Light", "% of Peak", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeSL1CacheSpeedOfLight, "Scalar L1 Data Cache - Speed of Light", "% of Peak", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeSL1CacheSpeedOfLight, {
                 "Bandwidth Avg", 
@@ -183,7 +225,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeInstrCacheSpeedOfLight, "L1 Instruction Cache - Speed of Light", "% of Peak", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeInstrCacheSpeedOfLight, "L1 Instruction Cache - Speed of Light", "% of Peak", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeInstrCacheSpeedOfLight, {
                 "Bandwidth Avg", 
@@ -192,7 +234,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeVL1CacheSpeedOfLight, "Vector L1 Data Cache - Speed of Light", "% of Peak", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeVL1CacheSpeedOfLight, "Vector L1 Data Cache - Speed of Light", "% of Peak", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeVL1CacheSpeedOfLight, {
                 "Hit rate Avg", 
@@ -202,7 +244,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeVL1CacheL2NCTransactions, "Vector L1 Data Cache - L2 Cache Non-hardware-Coherent Memory (NC) Transactions", "Requests per Wave", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeVL1CacheL2NCTransactions, "Vector L1 Data Cache - L2 Cache Non-hardware-Coherent Memory (NC) Transactions", "Requests per Wave", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeVL1CacheL2Transactions, {
                 "NC - Read Avg", 
@@ -211,7 +253,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeVL1CacheL2UCTransactions, "Vector L1 Data Cache - L2 Cache Uncached Memory (UC) Transactions", "Requests per Wave", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeVL1CacheL2UCTransactions, "Vector L1 Data Cache - L2 Cache Uncached Memory (UC) Transactions", "Requests per Wave", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeVL1CacheL2Transactions, {
                 "UC - Read Avg", 
@@ -220,7 +262,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeVL1CacheL2RWTransactions, "Vector L1 Data Cache - L2 Read/Write Coherent Memory (RW) Transactions", "Requests per Wave", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeVL1CacheL2RWTransactions, "Vector L1 Data Cache - L2 Read/Write Coherent Memory (RW) Transactions", "Requests per Wave", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeVL1CacheL2Transactions, {
                 "RW - Read Avg", 
@@ -229,7 +271,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeVL1CacheL2CCTransactions, "Vector L1 Data Cache - L2 Coherently Cachable (CC) Transactions", "Requests per Wave", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeVL1CacheL2CCTransactions, "Vector L1 Data Cache - L2 Coherently Cachable (CC) Transactions", "Requests per Wave", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeVL1CacheL2Transactions, {
                 "CC - Read Avg", 
@@ -238,7 +280,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeVALUInstrMix, "Vector Arithmetic Logic Unit - Instruction Mix", "Requests per Wave", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeVALUInstrMix, "Vector Arithmetic Logic Unit - Instruction Mix", "Requests per Wave", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeVALUInstrMix, {
                 "INT32 Avg", 
@@ -259,7 +301,7 @@ const std::array COMPUTE_PLOT_DEFINITIONS {
             }}
         }}
     }},
-    ComputePlotDefinition{kRPVControllerComputePlotTypeLDSSpeedOfLight, "Local Data Share - Speed of Light", "Requests per Wave", "", {
+    ComputeTablePlotDefinition{kRPVControllerComputePlotTypeLDSSpeedOfLight, "Local Data Share - Speed of Light", "Requests per Wave", "", {
         ComputePlotDataSeriesDefinition{"", {
             ComputePlotDataDefinition{kRPVControllerComputeTableTypeLDSSpeedOfLight, {
                 "Utilization Avg", 
@@ -311,6 +353,64 @@ const std::unordered_map<rocprofvis_controller_compute_metric_types_t, ComputeMe
     {kRPVControllerComputeMetricTypeCU_VL1Atomic, ComputeMetricDefinition{kRPVControllerComputeTableTypeMemoryChart, "VL1 Atomic Value"}},
     {kRPVControllerComputeMetricTypeCU_SL1Rd, ComputeMetricDefinition{kRPVControllerComputeTableTypeMemoryChart, "VL1D Rd Value"}},
     {kRPVControllerComputeMetricTypeCU_InstrReq, ComputeMetricDefinition{kRPVControllerComputeTableTypeMemoryChart, "IL1 Fetch Value"}}
+};
+
+const ComputeRooflineDefinition ROOFLINE_DEFINITION {
+    {
+        {ComputeRooflineDefinition::MemoryLevelHBM, "HBM"},
+        {ComputeRooflineDefinition::MemoryLevelL2, "L2"},
+        {ComputeRooflineDefinition::MemoryLevelL1, "L1"},
+        {ComputeRooflineDefinition::MemoryLevelLDS, "LDS"}
+    },
+    {
+        {ComputeRooflineDefinition::FormatFP64, "FP64"},
+        {ComputeRooflineDefinition::FormatFP32, "FP32"},
+        {ComputeRooflineDefinition::FormatFP16, "FP16"},
+        {ComputeRooflineDefinition::FormatINT8, "I8"}
+    },
+    {
+        {ComputeRooflineDefinition::PipeVALU, "Peak VALU"},
+        {ComputeRooflineDefinition::PipeMFMA, "Peak MFMA"}
+    },
+    {
+        {ComputeRooflineDefinition::FormatFP64, {
+            {ComputeRooflineDefinition::PipeVALU, "FP64Flops"},
+            {ComputeRooflineDefinition::PipeMFMA, "MFMAF64Flops"}
+        }},
+        {ComputeRooflineDefinition::FormatFP32, {
+            {ComputeRooflineDefinition::PipeVALU, "FP32Flops"},
+            {ComputeRooflineDefinition::PipeMFMA, "MFMAF32Flops"}
+        }},
+        {ComputeRooflineDefinition::FormatFP16, {
+            {ComputeRooflineDefinition::PipeMFMA, "MFMAF16Flops"}
+        }},
+        {ComputeRooflineDefinition::FormatINT8, {
+            {ComputeRooflineDefinition::PipeMFMA, "MFMAI8Ops"}
+        }},
+    },
+    {
+        {kRPVControllerComputePlotTypeRooflineFP64, ComputeRooflineDefinition::ComputeRooflinePlotDefinition{
+            kRPVControllerComputePlotTypeRooflineFP64, "Emperical Roofline Analysis (FP64)", "Arithmetic Intensity (FLOP/Byte)", "Performance (GFLOP/s)", {
+                ComputeRooflineDefinition::FormatFP64
+            }
+        }},
+        {kRPVControllerComputePlotTypeRooflineFP32, ComputeRooflineDefinition::ComputeRooflinePlotDefinition{
+            kRPVControllerComputePlotTypeRooflineFP32, "Emperical Roofline Analysis (FP32)", "Arithmetic Intensity (FLOP/Byte)", "Performance (GFLOP/s)", {
+                ComputeRooflineDefinition::FormatFP32
+            }
+        }},
+        {kRPVControllerComputePlotTypeRooflineFP16, ComputeRooflineDefinition::ComputeRooflinePlotDefinition{
+            kRPVControllerComputePlotTypeRooflineFP16, "Emperical Roofline Analysis (FP16)", "Arithmetic Intensity (FLOP/Byte)", "Performance (GFLOP/s)", {
+                ComputeRooflineDefinition::FormatFP16
+            }
+        }},
+        {kRPVControllerComputePlotTypeRooflineINT8, ComputeRooflineDefinition::ComputeRooflinePlotDefinition{
+            kRPVControllerComputePlotTypeRooflineINT8, "Emperical Roofline Analysis (INT8)", "Arithmetic Intensity (IOP/Byte)", "Performance (GIOP/s)", {
+                ComputeRooflineDefinition::FormatINT8
+            }
+        }}
+    },
+    0, 0.01, 1000
 };
 
 }

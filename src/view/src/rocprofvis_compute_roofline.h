@@ -1,14 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include "rocprofvis_compute_data_provider.h"
-#include "rocprofvis_compute_metric.h"
 #include "widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
 {
 namespace View
 {
+
+class ComputeDataProvider;
+class ComputePlotRoofline;
 
 class ComputeRooflineView : public RocWidget
 {
@@ -21,7 +22,11 @@ public:
 private:
     void RenderMenuBar();
 
-    std::unique_ptr<ComputeMetricRoofline> m_roofline;
+    std::unique_ptr<ComputePlotRoofline> m_roofline_fp64;
+    std::unique_ptr<ComputePlotRoofline> m_roofline_fp32;
+    std::unique_ptr<ComputePlotRoofline> m_roofline_fp16;
+    std::unique_ptr<ComputePlotRoofline> m_roofline_i8;
+    int m_group_mode;
     std::string m_owner_id;
 };
 

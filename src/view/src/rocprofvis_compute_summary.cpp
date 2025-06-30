@@ -10,7 +10,7 @@ namespace View
 
 constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
 
-ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider)
+ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
 : m_container(nullptr)
 , m_left_column(nullptr)
 , m_right_column(nullptr)

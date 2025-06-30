@@ -8,7 +8,7 @@
 #include "rocprofvis_controller_plot_series.h"
 #include "rocprofvis_c_interface.h"
 #include <vector>
-#include <unordered_map>
+#include <map>
 #include <string>
 
 namespace RocProfVis
@@ -51,7 +51,7 @@ protected:
     std::string m_title;
     AxisDefintion m_x_axis;
     AxisDefintion m_y_axis;
-    std::unordered_map<std::string, PlotSeries> m_series;
+    std::map<std::string, PlotSeries> m_series;
 };
 
 }

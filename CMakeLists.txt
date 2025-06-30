@@ -45,8 +45,6 @@ set(VIEW_FILES
 	src/view/src/rocprofvis_compute_block.cpp
 	src/view/src/rocprofvis_compute_table.cpp
 	src/view/src/rocprofvis_compute_data_provider.cpp
-	src/view/src/rocprofvis_compute_data_provider2.cpp
-	src/view/src/rocprofvis_compute_metric.cpp
 	src/view/src/rocprofvis_compute_roofline.cpp
 	src/view/src/rocprofvis_navigation_manager.cpp
     src/view/src/rocprofvis_utils.cpp
@@ -78,7 +76,6 @@ target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-controller)
 target_link_libraries(rocprof-visualizer PRIVATE datamodel)
 target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer PRIVATE spdlog)
-target_link_libraries(rocprof-visualizer PRIVATE csv)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
 

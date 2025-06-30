@@ -63,10 +63,10 @@ typedef struct event_info_t
 
 typedef struct event_flow_data_t
 {
-    int id;
-    int timestamp;
-    int track_id;
-    int direction;
+    uint64_t id;
+    uint64_t timestamp;
+    uint32_t track_id;
+    uint32_t direction;
 } event_flow_data_t;
 
 typedef struct flow_info_t

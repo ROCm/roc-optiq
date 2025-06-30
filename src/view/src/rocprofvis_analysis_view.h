@@ -23,9 +23,6 @@ public:
     void Update() override;
 
 private:
-    void RenderEventTable();
-    void RenderSampleTable();
-
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
 
     DataProvider& m_data_provider;

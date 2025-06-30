@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_settings.h"
 #include "widgets/rocprofvis_widget.h"
 #include <string>
 #include <vector>
@@ -26,10 +27,14 @@ public:
     void HandleTrackSelectionChanged(std::shared_ptr<TrackSelectionChangedEvent> e);
 
 private:
+
+    void RenderLoadingIndicator();
+
     TableType m_table_type;  // Type of table (e.g., EventTable, SampleTable)
     rocprofvis_controller_table_type_t m_req_table_type;
 
     DataProvider& m_data_provider;
+    Settings&     m_settings;
 
     int m_fetch_chunk_size;
     int m_fetch_pad_items;
@@ -41,6 +46,10 @@ private:
 
     ImVec2 m_last_table_size;
     std::shared_ptr<TrackSelectionChangedEvent> m_track_selection_event_to_handle;
+    
+    // Keep track of currently selected tracks for this table type
+    std::vector<uint64_t> m_selected_tracks;
+
 };
 
 }  // namespace View

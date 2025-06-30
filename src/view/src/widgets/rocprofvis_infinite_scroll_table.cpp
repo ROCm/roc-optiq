@@ -4,6 +4,7 @@
 
 #include "spdlog/spdlog.h"
 
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_debug_window.h"
 
 using namespace RocProfVis::View;
@@ -18,6 +19,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_fetch_threshold_items(10)  // Number of items from the edge to trigger a fetch
 , m_last_table_size(0, 0)
 , m_track_selection_event_to_handle(nullptr)
+, m_settings(Settings::GetInstance())
 , m_req_table_type(table_type == TableType::kEventTable ? kRPVControllerTableTypeEvents
                                                         : kRPVControllerTableTypeSamples)
 {
@@ -58,6 +60,7 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
         if(filtered_tracks.empty())
         {
             m_data_provider.ClearTable(m_table_type);
+            // Todo: Clear any pending requests for this table type?
             // clear any pending track selection event
             m_track_selection_event_to_handle = nullptr;
         }
@@ -83,6 +86,8 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
                 m_track_selection_event_to_handle = nullptr;
             }
         }
+        // Update the selected tracks for this table type
+        m_selected_tracks = std::move(filtered_tracks);
     }
 }
 
@@ -118,6 +123,9 @@ InfiniteScrollTable::Render()
     static uint64_t frame_count = 0;
     frame_count++;
 
+    // Flag to show loading spinner
+    bool show_loading_indicator = false;
+
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), true);
 
     const std::vector<std::vector<std::string>>& table_data =
@@ -152,9 +160,7 @@ InfiniteScrollTable::Render()
 
     float start_row_position = start_row * row_height;
     float end_row_position   = end_row * row_height;
-    float total_row_count_position =
-        (total_row_count - 1) * row_height;  // Position of the last row
-
+    
     bool                               sort_requested    = false;
     uint64_t                           sort_colunn_index = 0;
     rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending;
@@ -170,9 +176,11 @@ InfiniteScrollTable::Render()
     {
         // If the request is not pending, we can allow sorting
         table_flags |= ImGuiTableFlags_Sortable;
+    } else {
+        show_loading_indicator = true;
     }
 
-    if(table_data.size() > 0)
+    if(table_data.size() > 0 && m_selected_tracks.size() > 0)
     {
         ImGui::Text("Cached %d to %d of %d events for %d tracks", start_row, end_row,
                     total_row_count, selected_track_count);
@@ -367,6 +375,13 @@ InfiniteScrollTable::Render()
     {
         ImGui::Text("No Event Data Available");
     }
+
+    if(show_loading_indicator)
+    {
+        // Show a loading indicator if the data is being fetched
+        RenderLoadingIndicator();
+    }
+
     ImGui::EndChild();
 
     if(sort_requested)
@@ -395,4 +410,33 @@ InfiniteScrollTable::Render()
     }
 
     m_skip_data_fetch = false;  // Reset the skip data fetch flag after rendering
+}
+
+void
+InfiniteScrollTable::RenderLoadingIndicator()
+{
+    float dot_radius  = 5.0f;
+    int   num_dots    = 3;
+    float dot_spacing = 5.0f;
+    float anim_speed  = 5.0f;
+
+    ImVec2 dot_size = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
+
+    ImVec2 window_pos = ImGui::GetWindowPos();
+    ImVec2 view_rect  = ImGui::GetWindowSize();
+    ImVec2 pos        = ImGui::GetCursorPos();
+    ImVec2 center_pos = ImVec2(window_pos.x + (view_rect.x - dot_size.x) * 0.5f,
+                               window_pos.y + (view_rect.y - dot_size.y) * 0.5f);
+
+    ImGui::SetCursorScreenPos(center_pos);
+
+    RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
+                               m_settings.GetColor(Colors::kScrollBarColor), anim_speed);
+                            
+    // Reset cursor position after rendering spinner                               
+    ImGui::SetCursorPos(pos);  
+
+    DebugWindow::GetInstance()->AddDebugMessage(
+        "InfiniteScrollTable: RenderLoadingIndicator called, frame count: " +
+        std::to_string(view_rect.x) + ", " + std::to_string(view_rect.y));
 }

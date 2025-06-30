@@ -368,7 +368,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                 rocprofvis_dm_get_property_as_uint64(
                                     m_dm_handle, kRPVDMNumberOfTracksUInt64, 0);
 
-                            uint64_t  graph_id = 0;
+                            uint64_t  graph_index = 0;
                             for(int i = 0; i < num_tracks; i++)
                             {
                                 rocprofvis_dm_track_t dm_track_handle =
@@ -454,12 +454,12 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             {
                                                 result = m_timeline->SetUInt64(
                                                     kRPVControllerTimelineNumGraphs, 0,
-                                                    ++graph_id);
+                                                    ++graph_index);
                                                 if(result == kRocProfVisResultSuccess)
                                                 {
                                                     result = m_timeline->SetObject(
                                                         kRPVControllerTimelineGraphIndexed,
-                                                        graph_id - 1,
+                                                        graph_index - 1,
                                                         (rocprofvis_handle_t*) graph);
                                                 }
                                                 if(result != kRocProfVisResultSuccess)

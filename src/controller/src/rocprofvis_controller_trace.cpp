@@ -719,8 +719,7 @@ Trace::FetchSingleEvent(uint64_t id, Array& array)
                                                      tmp_val_text, &val_length);
                         tmp_val_text[val_length] = '\0';
 
-                        // if tmp_text is == "id"
-                        // then confirm event id
+                        // if tmp_text is == "id" then confirm event id matches
                         if(strcmp(tmp_text, "id") == 0)
                         {
                             uint64_t base_id = 0;
@@ -729,19 +728,15 @@ Trace::FetchSingleEvent(uint64_t id, Array& array)
                             const uint64_t mask = 0xFULL << 60;
                             ROCPROFVIS_ASSERT(base_id == (id & ~mask));
                         }
-
-                        // if tmp_text is == "name"
-                        // then set event name
-                        if(strcmp(tmp_text, "apiName") == 0)
+                        // if tmp_text is == "name" then set event name
+                        else if(strcmp(tmp_text, "apiName") == 0)
                         {
                             result = event->SetString(kRPVControllerEventName, 0,
                                                       tmp_val_text, val_length);
                             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                         }
-
-                        // if tmp_text is == "start"
-                        // then set event start timestamp
-                        if(strcmp(tmp_text, "start") == 0)
+                        // if tmp_text is == "start" then set event start timestamp
+                        else if(strcmp(tmp_text, "start") == 0)
                         {
                             double start_ts = 0.0;
                             // convert tmp_text to double
@@ -750,9 +745,8 @@ Trace::FetchSingleEvent(uint64_t id, Array& array)
                                                         0, start_ts);
                             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                         }
-                        // if tmp_text is == "end"
-                        // then set event end timestamp
-                        if(strcmp(tmp_text, "end") == 0)
+                        // if tmp_text is == "end" then set event end timestamp
+                        else if(strcmp(tmp_text, "end") == 0)
                         {
                             double end_ts = 0.0;
                             // convert tmp_text to double
@@ -790,7 +784,6 @@ Trace::FetchSingleEvent(uint64_t id, Array& array)
     else
     {
         delete event;
-        event = nullptr;
     }
 
     return result;

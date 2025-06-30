@@ -342,6 +342,19 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
             {
                 if(index < m_graphs.size())
                 {
+                    for (uint32_t i = 0; i < m_graphs.size(); i++)
+                    {
+                        if (m_graphs[i] == graph.Get())
+                        {
+                            m_graphs.erase(m_graphs.begin() + i);
+                            if (i < index)
+                            {
+                                index--;
+                            }
+                            break;
+                        }
+                    }
+
                     double min_ts = 0;
                     double max_ts = 0;
                     if((graph.Get()->GetDouble(kRPVControllerGraphStartTimestamp, 0,

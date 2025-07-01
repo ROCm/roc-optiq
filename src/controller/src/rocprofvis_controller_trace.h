@@ -4,6 +4,7 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
+#include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_c_interface.h"
 #include <string>
 #include <vector>

@@ -29,6 +29,10 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultInvalidType = 9,
     // Operation failed as a value is out of range
     kRocProfVisResultOutOfRange = 10,
+    // Operation was cancelled
+    kRocProfVisResultCancelled = 11,
+    // Operation is pending
+    kRocProfVisResultPending = 12,
 } rocprofvis_result_t;
 
 /*
@@ -765,6 +769,8 @@ typedef enum rocprofvis_controller_compute_table_types_t
     kRPVControllerComputeTableTypeL2CacheRdStalls,
     kRPVControllerComputeTableTypeL2CacheWrAtomStalls,
     kRPVControllerComputeTableTypeL2Cache128Reqs,
+    kRPVControllerComputeTableTypeRooflineBenchmarks,
+    kRPVControllerComputeTableTypeRooflineCounters,
     kRPVControllerComputeTableTypeCount
 } rocprofvis_controller_compute_table_types_t;
 
@@ -775,8 +781,74 @@ typedef enum rocprofvis_controller_compute_plot_types_t
 {
     kRPVControllerComputePlotTypeKernelDurationPercentage = kRPVControllerComputeTableTypeCount + 1,
     kRPVControllerComputePlotTypeKernelDuration,
-    kRPVControllerComputePlotTypeCount
+    kRPVControllerComputePlotTypeL2CacheSpeedOfLight,
+    kRPVControllerComputePlotTypeL2CacheFabricSpeedOfLight,
+    kRPVControllerComputePlotTypeL2CacheFabricStallsRead,
+    kRPVControllerComputePlotTypeL2CacheFabricStallsWrite,
+    kRPVControllerComputePlotTypeInstrMix,
+    kRPVControllerComputePlotTypeCUOps,
+    kRPVControllerComputePlotTypeSL1CacheSpeedOfLight,
+    kRPVControllerComputePlotTypeInstrCacheSpeedOfLight,
+    kRPVControllerComputePlotTypeVL1CacheSpeedOfLight,
+    kRPVControllerComputePlotTypeVL1CacheL2NCTransactions,
+    kRPVControllerComputePlotTypeVL1CacheL2UCTransactions,
+    kRPVControllerComputePlotTypeVL1CacheL2RWTransactions,
+    kRPVControllerComputePlotTypeVL1CacheL2CCTransactions,
+    kRPVControllerComputePlotTypeVALUInstrMix,
+    kRPVControllerComputePlotTypeLDSSpeedOfLight,
+    kRPVControllerComputePlotTypeRooflineFP64,
+    kRPVControllerComputePlotTypeRooflineFP32,
+    kRPVControllerComputePlotTypeRooflineFP16,
+    kRPVControllerComputePlotTypeRooflineINT8,
+    kRPVControllerComputePlotTypeCount,
 } rocprofvis_controller_compute_plot_types_t;
+
+/*
+* Identifiers for individual metrics in a compute trace.
+*/
+typedef enum rocprofvis_controller_compute_metric_types_t
+{
+    kRPVControllerComputeMetricTypeL2CacheRd = kRPVControllerComputePlotTypeCount + 1,
+    kRPVControllerComputeMetricTypeL2CacheWr,
+    kRPVControllerComputeMetricTypeL2CacheAtomic,
+    kRPVControllerComputeMetricTypeL2CacheHitRate,
+    kRPVControllerComputeMetricTypeFabricRd,
+    kRPVControllerComputeMetricTypeFabricWr,
+    kRPVControllerComputeMetricTypeFabricAtomic,
+    kRPVControllerComputeMetricTypeSL1CacheHitRate,
+    kRPVControllerComputeMetricTypeInstrCacheHitRate,
+    kRPVControllerComputeMetricTypeInstrCacheLat,
+    kRPVControllerComputeMetricTypeVL1CacheHitRate,
+    kRPVControllerComputeMetricTypeVL1CacheCoales,
+    kRPVControllerComputeMetricTypeVL1CacheStall,
+    kRPVControllerComputeMetricTypeLDSUtil,
+    kRPVControllerComputeMetricTypeLDSLat,
+    kRPVcontrollerComputeMetricTypeLDSAlloc,
+    kRPVControllerComputeMetricTypeVGPR,
+    kRPVControllerComputeMetricTypeSGPR,
+    kRPVControllerComputeMetricTypeScratchAlloc,
+    kRPVControllerComputeMetricTypeWavefronts,
+    kRPVControllerComputeMetricTypeWorkgroups,
+    kRPVControllerComputeMetricTypeFabric_HBMRd,
+    kRPVControllerComputeMetricTypeFabric_HBMWr,
+    kRPVControllerComputeMetricTypeL2_FabricRd,
+    kRPVControllerComputeMetricTypeL2_FabricWr,
+    kRPVControllerComputeMetricTypeL2_FabricAtomic,
+    kRPVControllerComputeMetricTypeVL1_L2Rd,
+    kRPVControllerComputeMetricTypeVL1_L2Wr,
+    kRPVControllerComputeMetricTypeVL1_L2Atomic,
+    kRPVControllerComputeMetricTypeSL1_L2Rd,
+    kRPVControllerComputeMetricTypeSL1_L2Wr,
+    kRPVControllerComputeMetricTypeSL1_L2Atomic,
+    kRPVControllerComputeMetricTypeInst_L2Req,
+    kRPVControllerComputeMetricTypeCU_LDSReq,
+    kRPVControllerComputeMetricTypeCU_VL1Rd,
+    kRPVControllerComputeMetricTypeCU_VL1Wr,
+    kRPVControllerComputeMetricTypeCU_VL1Atomic,
+    kRPVControllerComputeMetricTypeCU_SL1Rd,
+    kRPVControllerComputeMetricTypeCU_InstrReq,
+    kRPVControllerComputeMetricTypeCount
+} rocprofvis_controller_compute_metric_types_t;
 
 /*
 * Properties of a Plot object

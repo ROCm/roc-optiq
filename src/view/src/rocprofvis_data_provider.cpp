@@ -459,6 +459,13 @@ bool
 DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
                          uint32_t horz_pixel_range)
 {
+    TrackRequestParams request_params(index, start_ts, end_ts, horz_pixel_range);
+    return FetchTrack(request_params);
+}
+
+bool
+DataProvider::FetchTrack(const TrackRequestParams& request_params)
+{
     if(m_state != ProviderState::kReady)
     {
         spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
@@ -466,9 +473,9 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
         return false;
     }
 
-    if(index < m_track_metadata.size())
+    if(request_params.m_index < m_track_metadata.size())
     {
-        auto it = m_requests.find(index);
+        auto it = m_requests.find(request_params.m_index);
         // only allow load if a request for this index (track) is not pending
         if(it == m_requests.end())
         {
@@ -478,13 +485,15 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
             rocprofvis_handle_t* graph_obj = nullptr;
 
             rocprofvis_result_t result = rocprofvis_controller_get_object(
-                m_trace_timeline, kRPVControllerTimelineGraphIndexed, index, &graph_obj);
+                m_trace_timeline, kRPVControllerTimelineGraphIndexed,
+                request_params.m_index, &graph_obj);
 
             if(result == kRocProfVisResultSuccess && graph_obj && graph_future &&
                graph_array)
             {
                 result = rocprofvis_controller_graph_fetch_async(
-                    m_trace_controller, graph_obj, start_ts, end_ts, horz_pixel_range,
+                    m_trace_controller, graph_obj, request_params.m_start_ts,
+                    request_params.m_end_ts, request_params.m_horz_pixel_range,
                     graph_future, graph_array);
 
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -495,30 +504,30 @@ DataProvider::FetchTrack(uint64_t index, double start_ts, double end_ts,
             request_info.request_future     = graph_future;
             request_info.request_obj_handle = graph_obj;
             request_info.request_args       = nullptr;
-            request_info.request_id         = index;
+            request_info.request_id         = request_params.m_index;
             request_info.loading_state      = ProviderState::kLoading;
             request_info.request_type       = RequestType::kFetchGraph;
 
-            auto params = std::make_shared<TrackRequestParams>(index, start_ts, end_ts,
-                                                               horz_pixel_range);
+            auto params = std::make_shared<TrackRequestParams>(request_params);
             request_info.custom_params = params;
 
             m_requests.emplace(request_info.request_id, request_info);
 
-            spdlog::debug("Fetching track data {} from controller {}", index,
+            spdlog::debug("Fetching track data {} from controller {}",
+                          request_params.m_index,
                           reinterpret_cast<unsigned long long>(m_trace_controller));
             return true;
         }
         else
         {
             // request for item already exists
-            spdlog::debug("Request for this track, index {}, is already pending", index);
+            spdlog::debug("Request for this track, index {}, is already pending", request_params.m_index);
             return false;
         }
     }
     else
     {
-        spdlog::debug("Cannot fetch Track index {} is out of range", index);
+        spdlog::debug("Cannot fetch Track index {} is out of range", request_params.m_index);
         return false;
     }
 }

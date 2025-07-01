@@ -210,7 +210,6 @@ AppWindow::Render()
                 if(file_path.extension().string() == ".csv")
                 {
                     auto compute_view = std::make_shared<ComputeRoot>();
-                    compute_view->SetProfilePath(file_path.parent_path().string());
                     compute_view->OpenTrace(file_path.parent_path().string());
                     tab_item.m_widget = compute_view;
                     spdlog::info("Opening file: {}", file_path.string());

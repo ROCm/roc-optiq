@@ -681,33 +681,16 @@ TimelineView::RenderGraphView()
             if(is_visible)
             {
                 // Request data for the chart if it doesn't have data
-                if(!track_item.chart->HasData() &&
-                   track_item.chart->GetRequestState() == TrackDataRequestState::kIdle)
+                if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
+                                                        TrackDataRequestState::kIdle) ||
+                   request_horizontal_data && m_settings.IsHorizontalRender())
                 {
-                    double buffer_distance = m_v_width;  // Essentially creates one
-                                                         // viewport worth of buffer.
+                    // Request one viewport worth of data on each side of the current view
+                    double buffer_distance = m_v_width;
                     graph_objects.second.chart->RequestData(
                         (m_view_time_offset_ns - buffer_distance) + m_min_x,
                         (m_view_time_offset_ns + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
-                    request_horizontal_data =
-                        true;  // This is here because as new tracks are loaded all
-                               // graphs should have data to fill the viewport.
-                }
-                if(m_settings.IsHorizontalRender())
-                {
-                    if(request_horizontal_data && track_item.chart->GetRequestState() ==
-                                                      TrackDataRequestState::kIdle)
-                    {
-                        double buffer_distance = m_v_width;  // Essentially creates one
-                                                             // viewport worth of buffer.
-
-                        track_item.chart->RequestData(
-                            (m_view_time_offset_ns - buffer_distance) + m_min_x,
-                            (m_view_time_offset_ns + m_v_width + buffer_distance) +
-                                m_min_x,
-                            m_graph_size.x * 3);
-                    }
                 }
 
                 if(track_item.color_by_value)
@@ -734,9 +717,6 @@ TimelineView::RenderGraphView()
                                          ImGuiWindowFlags_NoScrollWithMouse |
                                          ImGuiWindowFlags_NoScrollbar))
                 {
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                                          m_settings.GetColor(Colors::kTransparent));
-
                     if(m_is_control_held)
                     {
                         ImGui::Selectable(
@@ -758,7 +738,6 @@ TimelineView::RenderGraphView()
                                    ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
                             {
                                 // Handle the payload (here we just print it)
-
                                 rocprofvis_graph_map_t* payload_data =
                                     (rocprofvis_graph_map_t*)
                                         payload->Data;  // incoming (being dragged)
@@ -782,12 +761,17 @@ TimelineView::RenderGraphView()
                         }
                     }
 
+                    // call update function (TODO: move this to timeline's update
+                    // function?)
+                    track_item.chart->Update();
+
                     track_item.chart->UpdateMovement(m_zoom, m_view_time_offset_ns,
                                                      m_min_x, m_max_x, m_pixels_per_ns,
                                                      m_scroll_position);
 
                     m_resize_activity |= track_item.chart->GetResizeStatus();
                     track_item.chart->Render(m_graph_size.x);
+
 
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
@@ -797,12 +781,17 @@ TimelineView::RenderGraphView()
                         track_item.chart->SetSelected(track_item.selected);
                         selection_changed = true;
                     }
-                    ImGui::PopStyleColor();
                 }
                 ImGui::EndChild();
                 ImGui::PopStyleColor();
+                
+                // Draw border around the track
+                // This is done after the child window to ensure it is on top
+                ImVec2 p_min = ImGui::GetItemRectMin();
+                ImVec2 p_max = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddRect(
+                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
 
-                ImGui::Separator();
             }
             else
             {
@@ -1122,6 +1111,20 @@ TimelineView::HandleTopSurfaceTouch()
             if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
                 m_can_drag_to_pan = true;
+            }
+            
+
+            //Enables horizontal scrolling using mouse. 
+            float scroll_wheel_h = io.MouseWheelH;
+            if(scroll_wheel_h != 0.0f)
+            {
+                const float scroll_speed = 0.1f; 
+                float       move_amount  = scroll_wheel_h * m_v_width * scroll_speed;
+                m_view_time_offset_ns -= move_amount;
+
+                if(m_view_time_offset_ns < 0.0f) m_view_time_offset_ns = 0.0f;
+                if(m_view_time_offset_ns > m_range_x - m_v_width)
+                    m_view_time_offset_ns = m_range_x - m_v_width;
             }
 
             // Handle Zoom at Cursor

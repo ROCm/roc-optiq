@@ -20,9 +20,7 @@ RocEvent::RocEvent(int event_id)
 {}
 
 RocEvent::~RocEvent()
-{
-    spdlog::debug("RocEvent destructor called for event id: {}", m_event_id);
-}
+{}
 
 int
 RocEvent::GetId()
@@ -86,27 +84,6 @@ const std::string&
 TrackDataEvent::GetTracePath()
 {
     return m_trace_path;
-}
-
-ComputeBlockNavigationEvent::ComputeBlockNavigationEvent(int event_id, int level,
-                                                         int block)
-: RocEvent(event_id)
-, m_level(level)
-, m_block(block)
-{
-    m_event_type = RocEventType::kComputeBlockNavigationEvent;
-}
-
-const int
-ComputeBlockNavigationEvent::GetLevel()
-{
-    return m_level;
-}
-
-const int
-ComputeBlockNavigationEvent::GetBlock()
-{
-    return m_block;
 }
 
 ComputeTableSearchEvent::ComputeTableSearchEvent(int event_id, std::string& term)

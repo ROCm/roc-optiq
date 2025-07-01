@@ -10,7 +10,7 @@ namespace View
 
 constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
 
-ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider)
+ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
 : m_container(nullptr)
 , m_left_column(nullptr)
 , m_right_column(nullptr)
@@ -21,11 +21,11 @@ ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<Com
 , m_kernel_table(nullptr)
 , m_dispatch_table(nullptr)
 {
-    m_sysinfo_table = std::make_shared<ComputeTable>(data_provider, kRPVControllerComputeTableTypeSysInfo);
-    m_kernel_pie = std::make_shared<ComputePlotPie>(data_provider, kRPVControllerComputePlotTypeKernelDurationPercentage);
-    m_kernel_bar = std::make_shared<ComputePlotBar>(data_provider, kRPVControllerComputePlotTypeKernelDuration);
-    m_kernel_table = std::make_shared<ComputeTable>(data_provider, kRPVControllerComputeTableTypeKernelList);
-    m_dispatch_table = std::make_shared<ComputeTable>(data_provider, kRPVControllerComputeTableTypeDispatchList);
+    m_sysinfo_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeSysInfo);
+    m_kernel_pie = std::make_unique<ComputePlotPie>(data_provider, kRPVControllerComputePlotTypeKernelDurationPercentage);
+    m_kernel_bar = std::make_unique<ComputePlotBar>(data_provider, kRPVControllerComputePlotTypeKernelDuration);
+    m_kernel_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeKernelList);
+    m_dispatch_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeDispatchList);
 
     m_left_column = std::make_shared<RocCustomWidget>([this]()
     {

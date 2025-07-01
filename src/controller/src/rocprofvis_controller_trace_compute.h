@@ -15,6 +15,7 @@ namespace Controller
 class Arguments;
 class Array;
 class Future;
+class Data;
 class ComputeTable;
 class ComputePlot;
 
@@ -41,6 +42,8 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
 private:
+    rocprofvis_result_t GetMetric(const rocprofvis_controller_compute_metric_types_t metric_type, Data** value);
+
     std::unordered_map<rocprofvis_controller_compute_table_types_t, ComputeTable*> m_tables;
     std::unordered_map<rocprofvis_controller_compute_plot_types_t, ComputePlot*> m_plots;
 };

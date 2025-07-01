@@ -28,6 +28,7 @@ public:
     int                GetID();
     virtual float      GetTrackHeight();
     virtual void       Render(float width);
+    void               Update();
     const std::string& GetName();
 
     virtual void UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
@@ -40,7 +41,7 @@ public:
 
     bool IsSelected() const;
     void SetSelected(bool selected);
-     
+
     void  SetDistanceToView(float distance);
     float GetDistanceToView();
 
@@ -58,11 +59,14 @@ public:
 
     bool IsMetaAreaClicked() const { return m_meta_area_clicked; }
 
+
 protected:
     virtual void RenderMetaArea();
     virtual void RenderMetaAreaScale(ImVec2& container_size);
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
+
+    void FetchHelper();
 
     float                 m_zoom;
     double                m_movement;
@@ -85,6 +89,8 @@ protected:
     bool                  m_meta_area_clicked;
     float                 m_meta_area_scale_width;
     bool                  m_selected;
+
+    std::shared_ptr<TrackRequestParams> m_deferred_request;
 
     static float s_metadata_width;
 };

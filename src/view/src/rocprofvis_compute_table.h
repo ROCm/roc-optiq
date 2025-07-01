@@ -10,7 +10,7 @@ namespace RocProfVis
 namespace View
 {
 
-class ComputeDataProvider2;
+class ComputeDataProvider;
 class ComputeTable;
 
 typedef enum table_view_category_t
@@ -44,7 +44,7 @@ class ComputeTableCategory : public RocWidget
 public:
     void Render() override;
     void Update() override;
-    ComputeTableCategory(std::shared_ptr<ComputeDataProvider2> data_provider, table_view_category_t category);
+    ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category);
 
 private:
     void OnSearchChanged(std::shared_ptr<RocEvent> event);
@@ -58,7 +58,7 @@ class ComputeTableView : public RocWidget
 public:
     void Render() override;
     void Update() override;
-    ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider);
+    ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
     ~ComputeTableView();
 
 private:

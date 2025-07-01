@@ -55,8 +55,8 @@ void
 FlameTrackItem::ReleaseData()
 {
     m_flames.clear();
-    m_flames = {};
 }
+
 bool
 FlameTrackItem::HandleTrackDataChanged()
 {
@@ -94,7 +94,7 @@ FlameTrackItem::ExtractPointsFromData()
 
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
-                        rocprofvis_trace_event_t flame, float duration,
+                        rocprofvis_trace_event_t const& flame, float duration,
                         ImDrawList* draw_list)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();

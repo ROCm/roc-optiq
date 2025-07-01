@@ -155,8 +155,8 @@ typedef struct table_info_t
 class DataProvider
 {
 public:
-    static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = -1;
-    static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = -2;
+    static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = static_cast<uint64_t>(-1);
+    static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = static_cast<uint64_t>(-2);
 
     DataProvider();
     ~DataProvider();
@@ -171,13 +171,12 @@ public:
 
     bool FetchEventExtData(uint64_t event_id);
     bool FetchEventFlowDetails( uint64_t event_id);
-    
+
     // Get user selected event.
     uint64_t GetSelectedEventId();
 
     //Set user selected event.
     void SetSelectedEventId(uint64_t id);
-
 
     /*
      *   Close the controller.
@@ -364,8 +363,8 @@ private:
     uint64_t     m_selected_event_id;
     double       m_selected_event_start;
     double       m_selected_event_end;
-    event_info_t m_event_info;  // Store event info for each event
-    flow_info_t  m_flow_info;   // Store flow info for each event
+    event_info_t m_event_info;  // Store event info for selected event
+    flow_info_t  m_flow_info;   // Store flow info for selected event
 
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;

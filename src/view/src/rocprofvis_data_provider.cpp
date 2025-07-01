@@ -1582,6 +1582,13 @@ DataProvider::CreateRawSampleData(uint64_t                       index,
 bool
 DataProvider::FetchEventExtData(uint64_t event_id)
 {
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+
     m_event_info   = {};
     bool ret_value = false;
     auto future    = rocprofvis_controller_future_alloc();
@@ -1685,6 +1692,13 @@ DataProvider::FetchEventExtData(uint64_t event_id)
 bool
 DataProvider::FetchEventFlowDetails(uint64_t event_id)
 {
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+        
     bool ret_value = false;
     m_flow_info    = {};
 

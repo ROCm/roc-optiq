@@ -370,7 +370,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                 rocprofvis_dm_get_property_as_uint64(
                                     m_dm_handle, kRPVDMNumberOfTracksUInt64, 0);
 
-                            uint64_t  graph_id = 0;
+                            uint64_t  graph_index = 0;
                             for(int i = 0; i < num_tracks; i++)
                             {
                                 rocprofvis_dm_track_t dm_track_handle =
@@ -446,7 +446,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             (dm_track_type == kRocProfVisDmPmcTrack)
                                                 ? kRPVControllerGraphTypeLine
                                                 : kRPVControllerGraphTypeFlame,
-                                            graph_id++);
+                                            track_id);
                                         if(graph)
                                         {
                                             result = graph->SetObject(
@@ -456,12 +456,12 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             {
                                                 result = m_timeline->SetUInt64(
                                                     kRPVControllerTimelineNumGraphs, 0,
-                                                    graph_id);
+                                                    ++graph_index);
                                                 if(result == kRocProfVisResultSuccess)
                                                 {
                                                     result = m_timeline->SetObject(
                                                         kRPVControllerTimelineGraphIndexed,
-                                                        graph_id - 1,
+                                                        graph_index - 1,
                                                         (rocprofvis_handle_t*) graph);
                                                 }
                                                 if(result != kRocProfVisResultSuccess)
@@ -531,8 +531,7 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
         
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     std::string filepath = filename;
-    future.Set(
-        std::async(std::launch::async, [this, filepath]() -> rocprofvis_result_t
+    future.Set(JobSystem::Get().IssueJob([this, filepath]() -> rocprofvis_result_t
         {
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos || 
@@ -596,8 +595,7 @@ Trace::AsyncFetch(Event& event, Future& future, Array& array,
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
-    future.Set(std::async(std::launch::async,
-                   [&event, &array, property, dm_handle]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&event, &array, property, dm_handle]() -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               result = event.Fetch(property, array, dm_handle);
                               return result;
@@ -678,8 +676,7 @@ Trace::AsyncFetch(Table& table, Future& future, Array& array,
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(std::async(std::launch::async,
-                   [&table, &array, index, count, dm_handle]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&table, &array, index, count, dm_handle]() -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               result = table.Fetch(dm_handle, index, count, array);
                               return result;
@@ -699,8 +696,7 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
     rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(std::async(
-        std::launch::async, [&table, dm_handle, &args, &array]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             result = table.Setup(dm_handle, args);
             if (result == kRocProfVisResultSuccess)
@@ -736,8 +732,7 @@ Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(std::async(
-        std::launch::async, [&plot, dm_handle, &args, &array]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&plot, dm_handle, &args, &array]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             result = plot.Setup(dm_handle, args);
             if (result == kRocProfVisResultSuccess)

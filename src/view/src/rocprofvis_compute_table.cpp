@@ -1,7 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_compute_table.h"
-#include "rocprofvis_compute_data_provider2.h"
 #include "rocprofvis_navigation_manager.h"
 #include "rocprofvis_navigation_url.h"
 #include "widgets/rocprofvis_compute_widget.h"
@@ -86,7 +85,7 @@ const std::array TAB_DEFINITIONS {
     }}
 };
 
-ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider2> data_provider, table_view_category_t category)
+ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category)
 : m_search_event_token(-1)
 {
     for (const rocprofvis_controller_compute_table_types_t& table : TAB_DEFINITIONS[category].m_table_types)
@@ -128,7 +127,7 @@ void ComputeTableCategory::Update()
     }
 }
 
-ComputeTableView::ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider) 
+ComputeTableView::ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider) 
 : m_tab_container(nullptr)
 , m_search_term("")
 , m_search_edited(false)

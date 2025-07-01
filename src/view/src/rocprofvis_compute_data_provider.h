@@ -1,148 +1,96 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include <algorithm>
-#include <filesystem>
+#include "rocprofvis_controller_types.h"
+#include "rocprofvis_controller_enums.h"
+#include <memory>
+#include <string>
 #include <unordered_map>
-#include "rocprofvis_core_assert.h"
-#include "csv.hpp"
-#include "spdlog/spdlog.h"
+#include <vector>
+
 
 namespace RocProfVis
 {
 namespace View
 {
 
-typedef struct rocprofvis_compute_metric_t
+typedef struct ComputeTableCellModel
 {
-    std::string m_name;
-    double m_value;
-    std::string m_unit;
-} rocprofvis_compute_metric_t;
+    std::string m_str_value;
+    rocprofvis_controller_primitive_type_t m_type;
+    union {
+        uint64_t m_uint64;
+        double m_double;
+    } m_num_value;
+    bool m_colorize;
+    bool m_highlight;
+} ComputeTableCellModel;
 
-typedef struct rocprofvis_compute_metric_plot_axis_t
+typedef struct ComputeTableModel
+{
+    std::string m_title;
+    std::vector<std::string> m_column_names;
+    std::vector<std::vector<ComputeTableCellModel>> m_cells;
+} ComputeTableModel;
+
+typedef struct ComputePlotAxisModel
 {
     std::string m_name;
     std::vector<const char*> m_tick_labels;
     double m_max;
     double m_min;
-} rocprofvis_compute_metric_plot_axis_t;
+    double m_min_non_zero;
+} ComputePlotAxisModel;
 
-typedef struct rocprofvis_compute_metric_plot_series_t
+typedef struct ComputePlotSeriesModel
 {
     std::string m_name;
     std::vector<double> m_x_values;
     std::vector<double> m_y_values;
-} rocprofvis_compute_metric_plot_series_t;
+} ComputePlotSeriesModel;
 
-typedef struct rocprofvis_compute_metrics_plot_t
+typedef struct ComputePlotModel
 {
     std::string m_title;
-    rocprofvis_compute_metric_plot_axis_t m_x_axis;
-    rocprofvis_compute_metric_plot_axis_t m_y_axis;
-    std::vector<rocprofvis_compute_metric_plot_series_t> m_series;
-} rocprofvis_compute_metric_plot_t;
+    ComputePlotAxisModel m_x_axis;
+    ComputePlotAxisModel m_y_axis;
+    std::vector<ComputePlotSeriesModel> m_series;
+} ComputePlotModel;
 
-typedef struct rocprofvis_compute_metrics_table_cell_t
+typedef struct ComputeMetricModel
 {
-    std::string m_value;
-    bool m_colorize;
-    bool m_highlight;
-    rocprofvis_compute_metric_t* m_metric;
-} rocprofvis_compute_metrics_table_cell_t;
-
-typedef struct rocprofvis_compute_metrics_table_t
-{
-    std::string m_title;
-    std::vector<std::string> m_column_names;
-    std::vector<std::vector<rocprofvis_compute_metrics_table_cell_t>> m_values;
-} rocprofvis_compute_metrics_table_t;
-
-typedef struct rocprofvis_compute_metrics_group_t
-{
-    rocprofvis_compute_metrics_table_t m_table;
-    std::vector<rocprofvis_compute_metrics_plot_t> m_plots;
-    std::unordered_map<std::string, rocprofvis_compute_metric_t> m_metrics;
-} rocprofvis_compute_metric_group_t;
-
-typedef struct metric_table_info_t
-{
-    std::string m_title;
-} metric_table_info_t;
-
-typedef struct metric_plot_info_t
-{
-    std::string m_title;
-    std::string x_axis_label;
-    std::string y_axis_label;
-    std::vector<std::string> m_metric_names;
-} metric_plot_info_t;
-
-typedef struct metric_group_info_t
-{
-    metric_table_info_t m_table_info;
-    std::vector<metric_plot_info_t> m_plot_infos;
-} metric_category_info_t;
-
-typedef enum roofline_grouping_mode_t
-{
-    kRooflineGroupByDispatch = 0,
-    kRooflineGroupByKernel
-} roofline_grouping_mode_t;
-
-typedef enum roofline_number_format_t
-{
-    kRooflineNumberformatFP32 = 0,
-    kRooflineNumberformatFP64,
-    kRooflineNumberformatFP16,
-    kRooflineNumberformatINT8,
-    kRooflineNumberformatCount
-} roofline_number_format_t;
-
-typedef enum roofline_pipe_t
-{
-    kRooflinePipeVALU = 0,
-    kRooflinePipeMFMA
-} roofline_pipe_t;
-
-typedef struct roofline_format_info_t
-{
-    std::string m_name;
-    roofline_number_format_t m_format;
-    std::unordered_map<roofline_pipe_t, std::string> m_supported_pipes;
-} roofline_format_info_t;
-
-typedef struct metric_roofline_info_t
-{
-    std::vector<std::string> m_memory_levels;
-    std::array<roofline_format_info_t, kRooflineNumberformatCount> m_number_formats;
-} metric_roofline_info_t;
+    rocprofvis_controller_primitive_type_t m_type;
+    union {
+        uint64_t m_uint64;
+        double m_double;
+    } m_value;
+} ComputeMetricModel;
 
 class ComputeDataProvider
 {
 public:
-    rocprofvis_compute_metrics_group_t* GetMetricGroup(std::string &group_id);
-    rocprofvis_compute_metric_t* GetMetric(std::string &group_id, std::string &metric_id);
-
-    void SetProfilePath(const std::string& path);
-    void LoadProfile();
-    bool ProfileLoaded();
-
     ComputeDataProvider();
     ~ComputeDataProvider();
 
+    void InitController();
+    void FreeController();
+    rocprofvis_result_t LoadTrace(const std::string& path);
+
+    ComputeTableModel* GetTableModel(const rocprofvis_controller_compute_table_types_t type) const;
+    ComputePlotModel* GetPlotModel(const rocprofvis_controller_compute_plot_types_t type) const;
+    ComputeMetricModel* GetMetricModel(const rocprofvis_controller_compute_metric_types_t type) const;
+
 private:
-    void LoadSystemInfo(std::filesystem::directory_entry csv_entry);
-    void BuildPlots();
-    void BuildRoofline();
-    void FreePlotLabels();
+    rocprofvis_result_t GetStringPropertyFromHandle(rocprofvis_handle_t* handle, const rocprofvis_property_t property, const uint64_t index, std::string& output);
+    std::string TrimDecimalPlaces(std::string& double_str, const int decimal_places);
 
-    csv::CSVFormat m_csv_format;
-    bool m_profile_loaded;
-    bool m_attempt_profile_load;
-    std::filesystem::path m_profile_path;
+    rocprofvis_controller_t* m_controller;
+    rocprofvis_controller_future_t* m_controller_future;
+    rocprofvis_controller_compute_trace_t* m_trace;
 
-    std::unordered_map<std::string, std::unique_ptr<rocprofvis_compute_metrics_group_t>> m_metrics_group_map;
+    std::unordered_map<rocprofvis_controller_compute_table_types_t, std::unique_ptr<ComputeTableModel>> m_tables;
+    std::unordered_map<rocprofvis_controller_compute_plot_types_t, std::unique_ptr<ComputePlotModel>> m_plots;
+    std::unordered_map<rocprofvis_controller_compute_metric_types_t, std::unique_ptr<ComputeMetricModel>> m_metrics;
 };
 
 }  // namespace View

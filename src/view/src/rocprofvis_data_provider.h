@@ -32,7 +32,7 @@ enum class RequestType
 
 enum class TableType
 {
-    kSampleTable,    
+    kSampleTable,
     kEventTable,
     __kTableTypeCount
 };
@@ -88,6 +88,9 @@ public:
     double   m_start_ts;          // start time stamp of data being requested
     double   m_end_ts;            // end time stamp of data being requested
     uint32_t m_horz_pixel_range;  // horizontal pixel range for the request
+
+    TrackRequestParams(const TrackRequestParams& other)            = default;
+    TrackRequestParams& operator=(const TrackRequestParams& other) = default;
 
     TrackRequestParams(uint64_t index, double start_ts, double end_ts,
                        uint32_t horz_pixel_range)
@@ -210,6 +213,8 @@ public:
      */
     bool FetchTrack(uint64_t index, double start_ts, double end_ts,
                     uint32_t horz_pixel_range);
+
+    bool FetchTrack(const TrackRequestParams& request_params);
 
     bool FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
                          uint32_t horz_pixel_range);

@@ -30,6 +30,7 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 , m_meta_area_scale_width(0.0f)
 , m_settings(Settings::GetInstance())
 , m_selected(false)
+, m_deferred_request(nullptr)
 {}
 
 bool
@@ -274,27 +275,51 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 void
 TrackItem::RequestData(double min, double max, float width)
 {
+    if(m_deferred_request)
+    {
+        spdlog::warn("Overwriting existing deferred request for track {}", m_id);
+    }
+    m_deferred_request = std::make_shared<TrackRequestParams>(
+        m_id, min, max, static_cast<uint32_t>(width));
+
     if(m_request_state == TrackDataRequestState::kIdle)
     {
-        m_request_state = TrackDataRequestState::kRequesting;
-        bool result =
-            m_data_provider.FetchTrack(m_id, min, max, static_cast<uint32_t>(width));
-        if(!result)
-        {
-            m_request_state = TrackDataRequestState::kIdle;
-            spdlog::warn("Failed to request data for track {} from {} to {}", m_id,
-                         min - m_data_provider.GetStartTime(),
-                         max - m_data_provider.GetStartTime());
-        }
-        else
-        {
-            spdlog::debug("Fetching from {} to {} ( {} ) at zoom {} for track {}",
-                          min - m_data_provider.GetStartTime(),
-                          max - m_data_provider.GetStartTime(), max - min, m_zoom, m_id);
-        }
+        FetchHelper();
     }
     else
     {
         spdlog::warn("Fetch request rejected for track {}, already pending...", m_id);
+    }
+}
+
+void
+TrackItem::Update()
+{
+    if(m_request_state == TrackDataRequestState::kIdle)
+    {
+        if(m_deferred_request && !m_data_provider.IsRequestPending(m_id))
+        {
+            FetchHelper();
+        }
+    }
+}
+
+void
+TrackItem::FetchHelper()
+{
+    bool result = m_data_provider.FetchTrack(*m_deferred_request);
+    if(!result)
+    {
+        spdlog::error("Request for track {} failed", m_id);
+    }
+    else
+    {
+        spdlog::debug("Fetching from {} to {} ( {} ) at zoom {} for track {}",
+                      m_deferred_request->m_start_ts, m_deferred_request->m_end_ts,
+                      m_deferred_request->m_end_ts - m_deferred_request->m_start_ts,
+                      m_zoom, m_id);
+
+        m_deferred_request.reset();
+        m_request_state = TrackDataRequestState::kRequesting;
     }
 }

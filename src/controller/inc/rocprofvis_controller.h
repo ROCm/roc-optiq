@@ -101,6 +101,13 @@ rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object
 rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_future_t* object, float timeout);
 
 /*
+* Attempts to cancel the future. It is an error to assume operations can be cancelled.
+* @param object The future to try to cancel.
+* @returns kRocProfVisResultSuccess if cancelled or an error code if the operation could not be cancelled.
+*/
+rocprofvis_result_t rocprofvis_controller_future_cancel(rocprofvis_controller_future_t* object);
+
+/*
 * Creates an analysis view from the data - the args object contains the specification for what analysis to run.
 * This will require further definition depending on what analysis needs to be generated.
 * In an ideal world this would actually be performed using Python scripts.

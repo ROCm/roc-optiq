@@ -12,7 +12,7 @@ namespace RocProfVis
 namespace View
 {
 
-class ComputeDataProvider2;
+class ComputeDataProvider;
 class ComputePlot;
 class ComputeMetric;
 
@@ -159,7 +159,7 @@ class ComputeBlockView : public RocWidget
 public:
     void Render();
     void Update();
-    ComputeBlockView(std::string owner_id, std::shared_ptr<ComputeDataProvider2> data_provider);
+    ComputeBlockView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
     ~ComputeBlockView();
 
 private:

@@ -308,20 +308,16 @@ rocprofvis_result_t
 Event::Fetch(rocprofvis_property_t property, Array& array,
              rocprofvis_dm_trace_t dm_trace_handle)
 {
-    rocprofvis_result_t      result      = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
     if(dm_trace_handle)
     {
         switch(property)
         {
-            // case kRPVControllerEventDataExtData:
-            //     result = FetchDataModelExtendedDataProperty(array, dm_trace_handle);
-            //     break;
-            // case kRPVControllerEventDataCallStack:
-            //     result = FetchDataModelStackTraceProperty(array, dm_trace_handle);
-            //     break;
-            // case kRPVControllerEventDataFlowControl:
-            //     result = FetchDataModelFlowTraceProperty(array, dm_trace_handle);
-            //     break;
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
         }
     }
     return result;

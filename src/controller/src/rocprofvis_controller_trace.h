@@ -82,7 +82,6 @@ private:
     rocprofvis_result_t LoadJson(char const* const filename);
 #endif
     rocprofvis_result_t LoadRocpd(char const* const filename);
-    rocprofvis_result_t FetchSingleEvent(uint64_t id, Array& array);
 };
 
 }  // namespace Controller

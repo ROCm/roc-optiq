@@ -626,9 +626,8 @@ Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
             {
                 case kRPVControllerEventIndexed:
                 {
-                    // index is the event id
-                    const uint64_t& event_id = index;
-                    result                   = FetchSingleEvent(event_id, array);
+                    // Todo: implement this function 
+                    // result = Event::FetchSingleEvent(event_id, array, m_dm_handle);
                     break;
                 }
                 case kRPVControllerEventDataExtDataIndexed:
@@ -671,125 +670,6 @@ Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
 
     return error;
 }
-
-rocprofvis_result_t
-Trace::FetchSingleEvent(uint64_t id, Array& array)
-{
-    Event* event = new Event(id, 0.0, 0.0);
-    ROCPROFVIS_ASSERT(event);
-
-    Array tmp_array;
-
-    rocprofvis_result_t result =
-        Event::FetchDataModelExtendedDataProperty(id, tmp_array, m_dm_handle);
-    if(result == kRocProfVisResultSuccess)
-    {
-        for(int index = 0; index < tmp_array.GetVector().size(); index++)
-        {
-            rocprofvis_handle_t* ext_data_handle = nullptr;
-
-            tmp_array.GetObject(kRPVControllerArrayEntryIndexed, index, &ext_data_handle);
-            ROCPROFVIS_ASSERT(ext_data_handle);
-            ExtData* ext_data = (ExtData*) ext_data_handle;  // Cast to ExtData pointer
-
-            uint32_t length = 0;
-            result = ext_data->GetString(kRPVControllerExtDataName, 0, nullptr, &length);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            if(length > 0)
-            {
-                char* tmp_text = new char[length + 1];
-                ROCPROFVIS_ASSERT(tmp_text);
-                result = ext_data->GetString(kRPVControllerExtDataName, index, tmp_text,
-                                             &length);
-                if(result == kRocProfVisResultSuccess)
-                {
-                    tmp_text[length] = '\0';
-
-                    // get value
-                    uint32_t val_length = 0;
-                    result = ext_data->GetString(kRPVControllerExtDataValue, 0, nullptr,
-                                                 &val_length);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                    if(val_length > 0)
-                    {
-                        char* tmp_val_text = new char[val_length + 1];
-                        ROCPROFVIS_ASSERT(tmp_val_text);
-                        result = ext_data->GetString(kRPVControllerExtDataValue, index,
-                                                     tmp_val_text, &val_length);
-                        tmp_val_text[val_length] = '\0';
-
-                        // if tmp_text is == "id" then confirm event id matches
-                        if(strcmp(tmp_text, "id") == 0)
-                        {
-                            uint64_t base_id = 0;
-                            // convert tmp_text to uint64_t
-                            base_id             = std::stoull(std::string(tmp_val_text));
-                            const uint64_t mask = 0xFULL << 60;
-                            ROCPROFVIS_ASSERT(base_id == (id & ~mask));
-                        }
-                        // if tmp_text is == "name" then set event name
-                        else if(strcmp(tmp_text, "apiName") == 0)
-                        {
-                            result = event->SetString(kRPVControllerEventName, 0,
-                                                      tmp_val_text, val_length);
-                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                        }
-                        // if tmp_text is == "start" then set event start timestamp
-                        else if(strcmp(tmp_text, "start") == 0)
-                        {
-                            double start_ts = 0.0;
-                            // convert tmp_text to double
-                            start_ts = std::stod(std::string(tmp_val_text));
-                            result   = event->SetDouble(kRPVControllerEventStartTimestamp,
-                                                        0, start_ts);
-                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                        }
-                        // if tmp_text is == "end" then set event end timestamp
-                        else if(strcmp(tmp_text, "end") == 0)
-                        {
-                            double end_ts = 0.0;
-                            // convert tmp_text to double
-                            end_ts = std::stod(tmp_val_text);
-                            result = event->SetDouble(kRPVControllerEventEndTimestamp, 0,
-                                                      end_ts);
-                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                        }
-
-                        spdlog::debug(
-                            "{} Trace::FetchSingleEvent: ext_data name = {}, val = {}",
-                            index, tmp_text, tmp_val_text);
-
-                        delete[] tmp_val_text;
-
-                        // also need to get level which is not present in extended data
-
-                        // and track Id which this event belongs to
-                    }
-                }
-                delete[] tmp_text;
-            }
-        }
-
-        result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, 1);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-        result = array.SetObject(kRPVControllerArrayEntryIndexed, 0,
-                                 (rocprofvis_handle_t*) event);
-        if(result == kRocProfVisResultSuccess)
-        {
-            return result;
-        }
-    }
-    else
-    {
-        delete event;
-    }
-
-    return result;
-}
-
-
 
 rocprofvis_result_t
 Trace::AsyncFetch(Table& table, Future& future, Array& array,

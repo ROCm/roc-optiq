@@ -269,7 +269,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     ImGui::SetNextWindowSize(ImVec2(1.0f, display_size.y), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kScrollBarColor));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
 
     ImGui::BeginChild("Splitter View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
 
@@ -307,7 +307,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     ImGui::SetCursorPos(
         ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kScrollBarColor));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
 
     ImGui::BeginChild("Splitter View Horizontal", ImVec2(0, 0), ImGuiChildFlags_None,
                       window_flags);

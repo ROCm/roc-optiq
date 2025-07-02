@@ -85,7 +85,7 @@ TrackDataEvent::GetTracePath()
 {
     return m_trace_path;
 }
-
+#ifdef COMPUTE_UI_SUPPORT
 ComputeTableSearchEvent::ComputeTableSearchEvent(int event_id, std::string& term)
 : RocEvent(event_id)
 , m_search_term(term)
@@ -98,7 +98,7 @@ RocProfVis::View::ComputeTableSearchEvent::GetSearchTerm()
 {
     return m_search_term;
 }
-
+#endif
 TabClosedEvent::TabClosedEvent(int event_id, const std::string& tab_id)
 : RocEvent(event_id)
 , m_tab_id(tab_id)

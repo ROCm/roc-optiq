@@ -23,9 +23,10 @@ class Timeline;
 class Event;
 class Table;
 class SystemTable;
+#ifdef COMPUTE_UI_SUPPORT
 class Plot;
-
 class ComputeTrace;
+#endif
 
 class Trace : public Handle
 {
@@ -50,9 +51,10 @@ public:
 
     rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future,
                                    Array& array);
-
+#ifdef COMPUTE_UI_SUPPORT
     rocprofvis_result_t AsyncFetch(Plot& plot, Arguments& args, Future& future,
                                    Array& array);
+#endif
 
     rocprofvis_result_t AsyncFetch(rocprofvis_property_t property, Future& future,
                                           Array& array, uint64_t index, uint64_t count);
@@ -77,7 +79,9 @@ private:
     SystemTable*          m_event_table;
     SystemTable*          m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
-    ComputeTrace*         m_compute_trace;
+#ifdef COMPUTE_UI_SUPPORT
+    ComputeTrace* m_compute_trace;
+#endif
 
 private:
 #ifdef JSON_SUPPORT

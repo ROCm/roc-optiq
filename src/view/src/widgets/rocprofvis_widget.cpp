@@ -200,6 +200,13 @@ HSplitContainer::Render()
     ImGui::Selectable(m_handle_name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick,
                       ImVec2(m_resize_grip_size, total_size.y));
 
+    // Draw a custom background for the splitter area
+    ImVec2 splitter_min = ImGui::GetItemRectMin();
+    ImVec2 splitter_max = ImGui::GetItemRectMax();
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        splitter_min, splitter_max,
+        Settings::GetInstance().GetColor(static_cast<int>(Colors::kSplitterColor)));
+
     // Change cursor appearance when hovering over the resize handle
     if(ImGui::IsItemHovered())
     {
@@ -313,6 +320,13 @@ VSplitContainer::Render()
     // Create a resize handle between columns
     ImGui::Selectable(m_handle_name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick,
                       ImVec2(total_size.x, m_resize_grip_size));
+
+    // Draw a custom background for the splitter area
+    ImVec2 splitter_min = ImGui::GetItemRectMin();
+    ImVec2 splitter_max = ImGui::GetItemRectMax();
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        splitter_min, splitter_max,
+        Settings::GetInstance().GetColor(static_cast<int>(Colors::kSplitterColor)));
 
     // Change cursor appearance when hovering over the resize handle
     if(ImGui::IsItemHovered())

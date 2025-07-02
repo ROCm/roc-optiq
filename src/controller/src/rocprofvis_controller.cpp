@@ -36,7 +36,9 @@ typedef Reference<rocprofvis_controller_future_t, Future, kRPVControllerObjectTy
 typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectTypeGraph> GraphRef;
 typedef Reference<rocprofvis_controller_table_t, Table, kRPVControllerObjectTypeTable> TableRef;
 typedef Reference<rocprofvis_controller_arguments_t, Arguments, kRPVControllerObjectTypeArguments> ArgumentsRef;
+#ifdef COMPUTE_UI_SUPPORT
 typedef Reference<rocprofvis_controller_plot_t, Plot, kRPVControllerObjectTypePlot> PlotRef;
+#endif
 }
 }
 
@@ -267,6 +269,7 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     return error;
 }
 
+#ifdef COMPUTE_UI_SUPPORT
 rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_plot_t* plot,
     rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result,
@@ -285,6 +288,7 @@ rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
     }
     return error;
 }
+#endif
 
 void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* args)
 {

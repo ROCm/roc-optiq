@@ -9,14 +9,16 @@
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
-#include "rocprofvis_controller_plot.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_table_system.h"
 #include "rocprofvis_controller_timeline.h"
-#include "rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_core_assert.h"
+#ifdef COMPUTE_UI_SUPPORT
+#include "rocprofvis_controller_trace_compute.h"
+#include "rocprofvis_controller_plot.h"
+#endif
 
 #include <cfloat>
 #include <cstdint>
@@ -39,7 +41,9 @@ Trace::Trace()
 , m_event_table(nullptr)
 , m_sample_table(nullptr)
 , m_dm_handle(nullptr)
+#ifdef COMPUTE_UI_SUPPORT
 , m_compute_trace(nullptr)
+#endif
 {
     m_event_table = new SystemTable(0);
     ROCPROFVIS_ASSERT(m_event_table);
@@ -59,9 +63,10 @@ Trace::~Trace()
     }
     if(m_dm_handle)
         rocprofvis_dm_delete_trace(m_dm_handle);
-
+#ifdef COMPUTE_UI_SUPPORT
     if(m_compute_trace)
         delete m_compute_trace;
+#endif
 }
 
 #ifdef JSON_SUPPORT
@@ -539,12 +544,14 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
             {
                 result = LoadRocpd(filepath.c_str());
             }
+#ifdef COMPUTE_UI_SUPPORT
             else if(filepath.find(".csv", filepath.size() - 4 != std::string::npos))
             {
                 m_compute_trace = new ComputeTrace();
                 ROCPROFVIS_ASSERT(m_compute_trace);
                 result = m_compute_trace->Load(filepath.c_str());
             }
+#endif
 #ifdef JSON_SUPPORT
             else if(filepath.find(".json", filepath.size() - 5) != std::string::npos)
             {
@@ -726,6 +733,7 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
     return error;
 }
 
+#ifdef COMPUTE_UI_SUPPORT
 rocprofvis_result_t
 Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
 {
@@ -749,6 +757,7 @@ Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
 
     return error;
 }
+#endif
 
 rocprofvis_controller_object_type_t Trace::GetType(void) 
 {
@@ -819,7 +828,9 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventTable:
             case kRPVControllerSampleTable:
             case kRPVControllerAnalysisViewIndexed:
+#ifdef COMPUTE_UI_SUPPORT
             case kRPVControllerComputeTrace:
+#endif
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -848,7 +859,9 @@ rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
+#ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
+#endif
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -906,12 +919,14 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
+#ifdef COMPUTE_UI_SUPPORT
             case kRPVControllerComputeTrace:
             {
                 *value = (rocprofvis_handle_t*)m_compute_trace;
                 result = kRocProfVisResultSuccess;
                 break;
             }
+#endif
             case kRPVControllerNumNodes:
             case kRPVControllerNodeIndexed:
             case kRPVControllerNumTracks:
@@ -945,7 +960,9 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
+#ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
+#endif
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -1003,7 +1020,9 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerTrackIndexed:
         case kRPVControllerNodeIndexed:
+#ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
+#endif
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -1031,7 +1050,9 @@ rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
+#ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
+#endif
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -1105,7 +1126,9 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
+#ifdef COMPUTE_UI_SUPPORT
             case kRPVControllerComputeTrace:
+#endif
             case kRPVControllerNumNodes:
             case kRPVControllerNodeIndexed:
             case kRPVControllerNumTracks:
@@ -1139,7 +1162,9 @@ rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
+#ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
+#endif
         {
             result = kRocProfVisResultInvalidType;
             break;

@@ -14,23 +14,26 @@ enum class RocEvents
 {
     kInvalidEvent = -1,
     kNewTrackData,
-    kComputeDataDirty,
-    kComputeBlockNavigationChanged,
-    kComputeTableSearchChanged,
     kTabClosed,
     kTimelineSelectionChanged,
     kHandleUserGraphNavigationEvent,
-
+#ifdef COMPUTE_UI_SUPPORT
+    kComputeDataDirty,
+    kComputeBlockNavigationChanged,
+    kComputeTableSearchChanged,
+#endif
 };
 
 enum class RocEventType
 {
     kRocEvent,
     kTrackDataEvent,
-    kComputeTableSearchEvent,
     kTabEvent,
     kTimelineSelectionChangedEvent,
     kScrollToTrackByNameEvent,
+#ifdef  COMPUTE_UI_SUPPORT
+    kComputeTableSearchEvent,
+#endif
 };
 
 class RocEvent
@@ -82,7 +85,7 @@ public:
 private:
     std::string m_track_name;
 };
-
+#ifdef COMPUTE_UI_SUPPORT
 class ComputeTableSearchEvent : public RocEvent
 {
 public:
@@ -92,7 +95,7 @@ public:
 private:
     std::string m_search_term;
 };
-
+#endif
 class TabClosedEvent : public RocEvent
 {
 public:

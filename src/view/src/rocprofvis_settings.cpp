@@ -89,6 +89,7 @@ const std::vector<ImU32> DARK_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kScrollBarColor)]  = IM_COL32(255, 255, 255, 50);
     colors[static_cast<int>(Colors::kRulerBgColor)]    = IM_COL32(48, 48, 20, 255);
     colors[static_cast<int>(Colors::kBorderColor)]     = IM_COL32(64, 64, 64, 255);
+    colors[static_cast<int>(Colors::kSplitterColor)]   = IM_COL32(100, 100, 100, 255);
     return colors;
 }();
 
@@ -112,6 +113,7 @@ const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kScrollBarColor)]    = IM_COL32(200, 200, 200, 255);
     colors[static_cast<int>(Colors::kRulerBgColor)]      = IM_COL32(250, 250, 220, 255);
     colors[static_cast<int>(Colors::kBorderColor)]       = IM_COL32(178, 178, 178, 255);
+    colors[static_cast<int>(Colors::kSplitterColor)]     = IM_COL32(200, 200, 200, 255);
     return colors;
 }();
 

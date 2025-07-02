@@ -167,6 +167,16 @@ rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_futu
     }
     return result;
 }
+rocprofvis_result_t rocprofvis_controller_future_cancel(rocprofvis_controller_future_t* object)
+{
+    rocprofvis_result_t               result = kRocProfVisResultUnknownError;
+    RocProfVis::Controller::FutureRef future(object);
+    if(future.IsValid())
+    {
+        result = future->Cancel();
+    }
+    return result;
+}
 
 rocprofvis_result_t rocprofvis_controller_track_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_track_t* track,

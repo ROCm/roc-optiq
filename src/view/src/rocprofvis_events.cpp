@@ -20,9 +20,7 @@ RocEvent::RocEvent(int event_id)
 {}
 
 RocEvent::~RocEvent()
-{
-    spdlog::debug("RocEvent destructor called for event id: {}", m_event_id);
-}
+{}
 
 int
 RocEvent::GetId()

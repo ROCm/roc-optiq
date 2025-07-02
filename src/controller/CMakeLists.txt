@@ -27,6 +27,7 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_flow_control.cpp
     src/rocprofvis_controller_call_stack.cpp
     src/rocprofvis_controller_ext_data.cpp
+	src/rocprofvis_controller_job_system.cpp
 )
 
 if(JSON_SUPPORT) 

@@ -29,6 +29,10 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultInvalidType = 9,
     // Operation failed as a value is out of range
     kRocProfVisResultOutOfRange = 10,
+    // Operation was cancelled
+    kRocProfVisResultCancelled = 11,
+    // Operation is pending
+    kRocProfVisResultPending = 12,
 } rocprofvis_result_t;
 
 /*

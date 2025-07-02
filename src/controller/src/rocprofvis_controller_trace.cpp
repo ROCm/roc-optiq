@@ -616,8 +616,8 @@ Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
-    future.Set(std::async(
-        std::launch::async, [this, property, &array, index]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob(
+        [this, property, &array, index]() -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
 
             switch(property)

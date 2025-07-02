@@ -49,7 +49,7 @@ AppWindow::AppWindow()
 , m_show_provider_test_widow(false)
 , m_show_metrics(false)
 , m_main_view(nullptr)
-, m_tabclosed_event_token(-1)
+, m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 {}
 
 AppWindow::~AppWindow()

@@ -119,7 +119,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
     // Highlight with blue outline if selected
     if(flame.m_id == m_selected_event_id)
     {
-        if(m_selected_event_id == m_dp.GetSelectedEvent())
+        if(m_selected_event_id == m_dp.GetSelectedEventId())
         {
             ImU32 blue = IM_COL32(0, 120, 255, 255);
             draw_list->AddRect(rectMin, rectMax, blue, 0.0f, 0, 3.0f);
@@ -139,14 +139,14 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
         // Select on click
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            if(m_selected_event_id != flame.m_id || m_dp.GetSelectedEvent() != flame.m_id)
+            if(m_selected_event_id != flame.m_id || m_dp.GetSelectedEventId() != flame.m_id)
             {
-                m_dp.SetSelectedEvent(flame.m_id);
+                m_dp.SetSelectedEventId(flame.m_id);
                 m_selected_event_id = flame.m_id;
             }
             else
             {
-                m_dp.SetSelectedEvent(std::numeric_limits<uint64_t>::max());
+                m_dp.SetSelectedEventId(std::numeric_limits<uint64_t>::max());
                 m_selected_event_id = std::numeric_limits<uint64_t>::max();
             }
         }

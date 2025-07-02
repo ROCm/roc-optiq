@@ -216,19 +216,19 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
     rocprofvis_property_t property, uint64_t index, uint32_t count,
     rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output)
 {
-    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::TraceRef trace(controller);
-    RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*) object;
+    rocprofvis_result_t               error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::TraceRef  trace(controller);
+    RocProfVis::Controller::Handle*   handle = (RocProfVis::Controller::Handle*) object;
     RocProfVis::Controller::EventRef  event_ref(object);
     RocProfVis::Controller::FutureRef future(result);
     RocProfVis::Controller::ArrayRef  array(output);
     if(trace.IsValid() && handle && future.IsValid() && array.IsValid())
     {
-        switch (handle->GetType())
+        switch(handle->GetType())
         {
             case kRPVControllerObjectTypeEvent:
             {
-                error = trace->AsyncFetch(*((RocProfVis::Controller::Event*)handle),
+                error = trace->AsyncFetch(*((RocProfVis::Controller::Event*) handle),
                                           *future, *array, property);
                 break;
             }
@@ -238,6 +238,10 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
                                           *future, *array, index, count);
                 break;
             }
+            case kRPVControllerObjectTypeController:
+            {
+                error = trace->AsyncFetch(property, *future, *array, index, count);
+            }
             default:
             {
                 break;
@@ -246,7 +250,6 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
     }
     return error;
 }
-
 rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table,
     rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result,

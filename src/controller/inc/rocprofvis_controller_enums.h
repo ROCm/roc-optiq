@@ -137,6 +137,14 @@ typedef enum rocprofvis_controller_properties_t
     // Compute trace controller
     kRPVControllerComputeTrace = 0x00000010,
 #endif
+    // Indexed event in the trace
+    kRPVControllerEventIndexed = 0x00000011,
+    // Load Event Flow control properties
+    kRPVControllerEventDataFlowControlIndexed = 0x00000012,
+    // Load Event Callstack properties
+    kRPVControllerEventDataCallStackIndexed = 0x00000013,
+    // Load Event Extended data properties
+    kRPVControllerEventDataExtDataIndexed = 0x00000014
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {

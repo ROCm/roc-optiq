@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_job_system.h"
@@ -55,6 +56,9 @@ public:
                                    Array& array);
 #endif
 
+    rocprofvis_result_t AsyncFetch(rocprofvis_property_t property, Future& future,
+                                          Array& array, uint64_t index, uint64_t count);
+
     rocprofvis_controller_object_type_t GetType(void) final;
 
     // Handlers for getters.
@@ -69,11 +73,11 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
 private:
-    std::vector<Track*> m_tracks;
-    uint64_t m_id;
-    Timeline* m_timeline;
-    SystemTable* m_event_table;
-    SystemTable* m_sample_table;
+    std::vector<Track*>   m_tracks;
+    uint64_t              m_id;
+    Timeline*             m_timeline;
+    SystemTable*          m_event_table;
+    SystemTable*          m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
 #ifdef COMPUTE_UI_SUPPORT
     ComputeTrace* m_compute_trace;
@@ -86,5 +90,5 @@ private:
     rocprofvis_result_t LoadRocpd(char const* const filename);
 };
 
-}
-}
+}  // namespace Controller
+}  // namespace RocProfVis

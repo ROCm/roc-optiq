@@ -187,40 +187,37 @@ rocprofvis_result_t Array::SetUInt64(rocprofvis_property_t property, uint64_t in
                                 uint64_t value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
+    switch(property)
     {
-        switch(property)
+        case kRPVControllerArrayEntryIndexed:
         {
-            case kRPVControllerArrayEntryIndexed:
+            if(index < m_array.size())
             {
-                if(index < m_array.size())
-                {
-                    result = m_array[index].SetUInt64(value);
-                }
-                else
-                {
-                    result = kRocProfVisResultOutOfRange;
-                }
-                break;
+                result = m_array[index].SetUInt64(value);
             }
-            case kRPVControllerArrayNumEntries:
+            else
             {
-                if(value != m_array.size())
-                {
-                    m_array.resize(value);
-                    result = m_array.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
-                }
-                else
-                {
-                    result = kRocProfVisResultSuccess;
-                }
-                break;
+                result = kRocProfVisResultOutOfRange;
             }
-            default:
+            break;
+        }
+        case kRPVControllerArrayNumEntries:
+        {
+            if(value != m_array.size())
             {
-                result = kRocProfVisResultInvalidEnum;
-                break;
+                m_array.resize(value);
+                result = m_array.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
             }
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
         }
     }
     return result;

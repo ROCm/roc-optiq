@@ -48,6 +48,32 @@ typedef struct track_info_t
     uint64_t                           num_entries;  // number of entries in the track
 } track_info_t;
 
+
+typedef struct event_ext_data_t
+{
+    std::string category;
+    std::string name;
+    std::string value;
+} event_ext_data_t;
+
+typedef struct event_info_t
+{
+    std::vector<event_ext_data_t> ext_data;
+} event_info_t;
+
+typedef struct event_flow_data_t
+{
+    uint64_t id;
+    uint64_t timestamp;
+    uint32_t track_id;
+    uint32_t direction;
+} event_flow_data_t;
+
+typedef struct flow_info_t
+{
+    std::vector<event_flow_data_t> flow_data;
+} flow_info_t;
+
 class RequestParamsBase
 {
 public:
@@ -138,11 +164,22 @@ public:
     DataProvider();
     ~DataProvider();
 
-    // Set user selected event.
-    void SetSelectedEvent(uint64_t id);
+    // Getter and Setter for m_event_info
+    const event_info_t& GetEventInfoStruct() const;
+    void                SetEventInfoStruct(const event_info_t& info);
+
+    // Getter and Setter for m_flow_info
+    const flow_info_t& GetFlowInfo() const;
+    void               SetFlowInfo(const flow_info_t& info);
+
+    bool FetchEventExtData(uint64_t event_id);
+    bool FetchEventFlowDetails( uint64_t event_id);
 
     // Get user selected event.
-    uint64_t GetSelectedEvent();
+    uint64_t GetSelectedEventId();
+
+    //Set user selected event.
+    void SetSelectedEventId(uint64_t id);
 
     /*
      *   Close the controller.
@@ -327,7 +364,12 @@ private:
     double      m_min_ts;           // timeline start point
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
-    uint64_t    m_selected_event;
+
+    uint64_t     m_selected_event_id;
+    double       m_selected_event_start;
+    double       m_selected_event_end;
+    event_info_t m_event_info;  // Store event info for selected event
+    flow_info_t  m_flow_info;   // Store flow info for selected event
 
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;

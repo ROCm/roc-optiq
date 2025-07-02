@@ -1,17 +1,19 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_trace.h"
-#include "rocprofvis_controller_timeline.h"
-#include "rocprofvis_controller_track.h"
-#include "rocprofvis_controller_reference.h"
-#include "rocprofvis_controller_future.h"
+#include "rocprofvis_controller_arguments.h"
+#include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_event.h"
-#include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_ext_data.h"
+#include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_graph.h"
-#include "rocprofvis_controller_table_system.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
-#include "rocprofvis_controller_arguments.h"
+#include "rocprofvis_controller_reference.h"
+#include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_table_system.h"
+#include "rocprofvis_controller_timeline.h"
+#include "rocprofvis_controller_track.h"
 #include "rocprofvis_core_assert.h"
 #ifdef COMPUTE_UI_SUPPORT
 #include "rocprofvis_controller_trace_compute.h"
@@ -21,7 +23,7 @@
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
-
+ 
 namespace RocProfVis
 {
 namespace Controller
@@ -605,6 +607,66 @@ Trace::AsyncFetch(Event& event, Future& future, Array& array,
                               result = event.Fetch(property, array, dm_handle);
                               return result;
                           }));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
+
+
+rocprofvis_result_t
+Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
+                  uint64_t index, uint64_t count)
+{
+    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+
+    future.Set(JobSystem::Get().IssueJob(
+        [this, property, &array, index]() -> rocprofvis_result_t {
+            rocprofvis_result_t result = kRocProfVisResultUnknownError;
+
+            switch(property)
+            {
+                case kRPVControllerEventIndexed:
+                {
+                    // Todo: implement this function 
+                    // result = Event::FetchSingleEvent(event_id, array, m_dm_handle);
+                    break;
+                }
+                case kRPVControllerEventDataExtDataIndexed:
+                {
+                    const uint64_t& event_id = index;
+                    result = Event::FetchDataModelExtendedDataProperty(event_id, array,
+                                                                       m_dm_handle);
+                    break;
+                }
+                case kRPVControllerEventDataCallStackIndexed:
+                {
+                    const uint64_t& event_id = index;
+                    result = Event::FetchDataModelStackTraceProperty(event_id, array,
+                                                                     m_dm_handle);
+                    break;
+                }
+                case kRPVControllerEventDataFlowControlIndexed:
+                {
+                    const uint64_t& event_id = index;
+                    result = Event::FetchDataModelFlowTraceProperty(event_id, array,
+                                                                    m_dm_handle);
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultInvalidArgument;
+                    ROCPROFVIS_ASSERT_MSG(false,
+                                          "Invalid property for Trace::AsyncFetch");
+                    break;
+                }
+            }
+
+            return result;
+        }));
 
     if(future.IsValid())
     {

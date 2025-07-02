@@ -137,22 +137,19 @@ rocprofvis_result_t ExtData::GetString(rocprofvis_property_t property, uint64_t 
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        switch(property)
+        case kRPVControllerExtDataCategory:
+            result = m_category.GetString(value, length);
+            break;
+        case kRPVControllerExtDataName:
+            result = m_name.GetString(value, length);
+            break;
+        case kRPVControllerExtDataValue:
+            result = m_value.GetString(value, length);
+            break;
+        default:
         {
-            case kRPVControllerExtDataCategory:
-                result = m_category.GetString(value, length);
-                break;
-            case kRPVControllerExtDataName:
-                result = m_name.GetString(value, length);
-                break;
-            case kRPVControllerExtDataValue:
-                result = m_value.GetString(value, length);
-                break;
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
+            result = kRocProfVisResultInvalidEnum;
+            break;
         }
     }
     return result;

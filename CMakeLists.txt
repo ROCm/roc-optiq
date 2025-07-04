@@ -8,6 +8,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
 option(JSON_SUPPORT "Build with support for JSON traces" ON)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
+option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 
 # Add third-party libraries, core, and model BEFORE controller
 add_subdirectory(thirdparty)
@@ -18,11 +19,14 @@ add_subdirectory(src/controller)
 
 set(rocprofvis_source_files)
 if(JSON_SUPPORT) 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_SUPPORT")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_SUPPORT")
 endif(JSON_SUPPORT)
 if(COMPUTE_UI_SUPPORT) 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)
+if(ROCPROFVIS_DEVELOPER_MODE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
+endif(ROCPROFVIS_DEVELOPER_MODE)
 
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)

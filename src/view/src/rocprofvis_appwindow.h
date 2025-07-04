@@ -27,10 +27,13 @@ private:
     AppWindow();
     ~AppWindow();
 
-    void RenderDebugOuput();
     void RenderSettingsMenu();
-    void RenderDeveloperMenu();
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    void RenderDebugOuput();
+    void RenderDeveloperMenu();
+#endif
 
     static AppWindow* s_instance;
 

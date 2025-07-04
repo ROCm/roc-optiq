@@ -45,11 +45,16 @@ AppWindow::DestroyInstance()
 }
 
 AppWindow::AppWindow()
-: m_show_debug_window(false)
+: m_main_view(nullptr)
+, m_tab_container(nullptr)
+, m_default_padding(0.0f, 0.0f)
+, m_default_spacing(0.0f, 0.0f)
+, m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+, m_show_debug_window(false)
 , m_show_provider_test_widow(false)
 , m_show_metrics(false)
-, m_main_view(nullptr)
-, m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+#endif
 {}
 
 AppWindow::~AppWindow()
@@ -106,10 +111,11 @@ void
 AppWindow::Update()
 {
     EventManager::GetInstance()->DispatchEvents();
-
     DebugWindow::GetInstance()->ClearTransient();
-    m_data_provider.Update();
     m_tab_container->Update();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    m_test_data_provider.Update();
+#endif
 }
 
 void
@@ -156,7 +162,7 @@ AppWindow::Render()
                                                         supported_extensions.c_str(),
                                                         config);
             }
-            
+
             ImGui::EndMenu();
         }
 
@@ -233,32 +239,9 @@ AppWindow::Render()
         ImGuiFileDialog::Instance()->Close();
     }
 
-    ImGui::SetNextWindowPos(
-        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
-        ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
-    if(ImGuiFileDialog::Instance()->Display("DebugFile"))
-    {
-        if(ImGuiFileDialog::Instance()->IsOk())
-        {
-            std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-
-            m_data_provider.FetchTrace(file_path);
-            spdlog::info("Opening file: {}", file_path);
-
-            m_show_provider_test_widow = true;
-        }
-
-        ImGuiFileDialog::Instance()->Close();
-    }
-
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
-    // handle debug window
-    if(m_show_provider_test_widow)
-    {
-        RenderProviderTest(m_data_provider);
-    }
+
 #endif
 }
 
@@ -454,6 +437,25 @@ RenderProviderTest(DataProvider& provider)
 void
 AppWindow::RenderDebugOuput()
 {
+    ImGui::SetNextWindowPos(
+        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
+        ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
+    if(ImGuiFileDialog::Instance()->Display("DebugFile"))
+    {
+        if(ImGuiFileDialog::Instance()->IsOk())
+        {
+            std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+            m_test_data_provider.FetchTrace(file_path);
+            spdlog::info("Opening file: {}", file_path);
+
+            m_show_provider_test_widow = true;
+        }
+
+        ImGuiFileDialog::Instance()->Close();
+    }
+
     if(m_show_metrics)
     {
         ImGui::ShowMetricsWindow(&m_show_metrics);
@@ -473,5 +475,10 @@ AppWindow::RenderDebugOuput()
             ImGui::SetWindowFocus("Debug Window");
         }
     }
+
+    if(m_show_provider_test_widow)
+    {
+        RenderProviderTest(m_test_data_provider);
+    }    
 }
 #endif  // ROCPROFVIS_DEVELOPER_MODE

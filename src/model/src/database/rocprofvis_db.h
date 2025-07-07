@@ -87,9 +87,6 @@ class Database
         // Method to close database, must be overriden by derived classes
         // @return status of operation
         virtual rocprofvis_dm_result_t  Close() = 0;
-        // Method to check if database is open, must be overriden by derived classes
-        // @return True if open 
-        virtual bool                    IsOpen() = 0; 
         // Get amount of memory used by database resource
         // @return memory size
         virtual rocprofvis_dm_size_t    GetMemoryFootprint(void); 

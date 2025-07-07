@@ -263,10 +263,10 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             break;
         }
 
-        if(SQLITE_OK != DetectTable(Connection(), "event_levels_launch", false) ||
-           SQLITE_OK != DetectTable(Connection(), "event_levels_dispatch", false) ||
-           SQLITE_OK != DetectTable(Connection(), "event_levels_mem_alloc", false) ||
-           SQLITE_OK != DetectTable(Connection(), "event_levels_mem_copy", false))
+        if(SQLITE_OK != DetectTable(GetServiceConnection(), "event_levels_launch", false) ||
+           SQLITE_OK != DetectTable(GetServiceConnection(), "event_levels_dispatch", false) ||
+           SQLITE_OK != DetectTable(GetServiceConnection(), "event_levels_mem_alloc", false) ||
+           SQLITE_OK != DetectTable(GetServiceConnection(), "event_levels_mem_copy", false))
         {
             m_event_levels[kRocProfVisDmOperationLaunch].reserve(
                 TraceProperties()->events_count[kRocProfVisDmOperationLaunch]);

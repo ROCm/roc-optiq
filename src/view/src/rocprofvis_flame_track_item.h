@@ -18,7 +18,7 @@ class FlameTrackItem : public TrackItem
 {
 public:
     FlameTrackItem(DataProvider& dp, int chart_id, std::string name, float zoom,
-                   float movement, double min_x, double max_x, float scale_x);
+                   double time_offset_ns, double min_x, double max_x, double scale_x);
     void SetRandomColorFlag(bool set_color);
     void DrawBox(ImVec2 start_position, int boxplot_box_id,
                  rocprofvis_trace_event_t const& flame, float duration, ImDrawList* draw_list);

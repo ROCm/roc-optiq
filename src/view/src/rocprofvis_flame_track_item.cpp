@@ -181,6 +181,10 @@ FlameTrackItem::RenderChart(float graph_width)
 
         double normalized_duration = flame.m_duration * m_scale_x;
         double normalized_end      = normalized_start + normalized_duration;
+        if(normalized_duration < 1)
+        { 
+        	normalized_duration = 1;
+        }
 
         ImVec2 start_position;
 

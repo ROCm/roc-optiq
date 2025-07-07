@@ -65,11 +65,6 @@ DataProvider::GetSelectedEventId()
 void
 DataProvider::CloseController()
 {
-    if(m_trace_controller)
-    {
-        rocprofvis_controller_free(m_trace_controller);
-        m_trace_controller = nullptr;
-    }
     if(m_trace_future)
     {
         rocprofvis_controller_future_free(m_trace_future);
@@ -87,6 +82,12 @@ DataProvider::CloseController()
     m_min_ts     = 0;
     m_max_ts     = 0;
     m_trace_file_path.clear();
+
+    if(m_trace_controller)
+    {
+        rocprofvis_controller_free(m_trace_controller);
+        m_trace_controller = nullptr;
+    }
 }
 
 void

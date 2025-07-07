@@ -65,19 +65,19 @@ RocEvent::CanPropagate() const
 }
 
 // TrackDataEvent Implementation
-TrackDataEvent::TrackDataEvent(int event_id, uint64_t track_index,
+TrackDataEvent::TrackDataEvent(int event_id, uint64_t track_id,
                                const std::string& trace_path)
 : RocEvent(event_id)
-, m_track_index(track_index)
+, m_track_id(track_id)
 , m_trace_path(trace_path)
 {
     m_event_type = RocEventType::kTrackDataEvent;
 }
 
 uint64_t
-TrackDataEvent::GetTrackIndex()
+TrackDataEvent::GetTrackID()
 {
-    return m_track_index;
+    return m_track_id;
 }
 
 const std::string&

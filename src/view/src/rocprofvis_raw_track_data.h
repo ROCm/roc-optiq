@@ -16,13 +16,13 @@ namespace View
 class RawTrackData
 {
 public:
-    RawTrackData(rocprofvis_controller_track_type_t track_type, uint64_t index,
+    RawTrackData(rocprofvis_controller_track_type_t track_type, uint64_t track_id,
                  double start_ts, double end_ts);
     virtual ~RawTrackData() = 0;
     rocprofvis_controller_track_type_t GetType();
     double                             GetStartTs();
     double                             GetEndTs();
-    uint64_t                           GetIndex();
+    uint64_t                           GetTrackID();
 
 protected:
     rocprofvis_controller_track_type_t m_track_type;
@@ -30,13 +30,13 @@ protected:
     double m_start_ts;  // starting time stamp of track data
     double m_end_ts;    // ending time stamp of track data
 
-    uint64_t m_index;  // index of the track
+    uint64_t m_track_id; // id of the track
 };
 
 class RawTrackSampleData : public RawTrackData
 {
 public:
-    RawTrackSampleData(uint64_t index, double start_ts, double end_ts);
+    RawTrackSampleData(uint64_t track_id, double start_ts, double end_ts);
     virtual ~RawTrackSampleData();
     const std::vector<rocprofvis_trace_counter_t>& GetData() const;
     void SetData(std::vector<rocprofvis_trace_counter_t>&& data);
@@ -48,7 +48,7 @@ private:
 class RawTrackEventData : public RawTrackData
 {
 public:
-    RawTrackEventData(uint64_t index, double start_ts, double end_ts);
+    RawTrackEventData(uint64_t track_id, double start_ts, double end_ts);
     virtual ~RawTrackEventData();
     const std::vector<rocprofvis_trace_event_t>& GetData() const;
     void SetData(std::vector<rocprofvis_trace_event_t>&& data);

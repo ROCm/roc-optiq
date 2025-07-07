@@ -55,7 +55,7 @@ public:
     void HandleNewTrackData(std::shared_ptr<RocEvent> e);
 
 private:
-    std::vector<rocprofvis_graph_t>   m_graphs;
+    std::vector<rocprofvis_graph_t>       m_graphs;
     int                                   m_ruler_height;
     ImVec2                                m_ruler_padding;
     double                                m_v_min_x;

@@ -208,7 +208,14 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     }
     else
     {
-        uint64_t           track_index = tde->GetTrackIndex();
+        const track_info_t* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
+        if(!metadata)
+        {
+            spdlog::debug("No metadata found for track id {}, cannot process new track data", tde->GetTrackID());
+            return;
+        }
+
+        uint64_t           track_index = metadata->index;
         const std::string& trace_path  = tde->GetTracePath();
 
         if(m_data_provider.GetTraceFilePath() != trace_path)
@@ -826,7 +833,7 @@ TimelineView::RenderGraphView()
         {
             if(m_graphs[i].selected)
             {
-                selected_graphs.push_back(i);
+                selected_graphs.push_back(m_graphs[i].chart->GetID());
             }
         }
 
@@ -859,7 +866,6 @@ TimelineView::DestroyGraphs()
     }
 
     m_graphs.clear();
-    //m_graphs.clear();
     m_meta_map_made = false;
 }
 
@@ -881,13 +887,12 @@ TimelineView::MakeGraphView()
     uint64_t num_graphs = m_data_provider.GetTrackCount();
     int      scale_x    = 1;
     m_graphs.resize(num_graphs);
-    for(uint64_t i = 0; i < num_graphs; i++)
+    for(const track_info_t* track_info : m_data_provider.GetTrackInfoList())
     {
-        const track_info_t* track_info = m_data_provider.GetTrackInfo(i);
         if(!track_info)
         {
             // log warning (should this be an error?)
-            spdlog::warn("Missing track meta data for track at index {}", i);
+            spdlog::warn("Missing track meta data for track id {}", track_info->id);
             continue;
         }
 
@@ -897,7 +902,7 @@ TimelineView::MakeGraphView()
             {
                 // Create FlameChart
                 FlameTrackItem* flame = new FlameTrackItem(
-                    m_data_provider, track_info->index, track_info->name, m_zoom,
+                    m_data_provider, track_info->id, track_info->name, m_zoom,
                     m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
@@ -912,7 +917,7 @@ TimelineView::MakeGraphView()
                 temp_flame.selected       = false;
                 rocprofvis_color_by_value_t temp_color = {};
                 temp_flame.color_by_value_digits       = temp_color;
-                m_graphs[i]                            = std::move(temp_flame);
+                m_graphs[track_info->index]            = std::move(temp_flame);
 
                 break;
             }
@@ -920,7 +925,7 @@ TimelineView::MakeGraphView()
             {
                 // Linechart
                 LineTrackItem* line = new LineTrackItem(
-                    m_data_provider, track_info->index, track_info->name, m_zoom,
+                    m_data_provider, track_info->id, track_info->name, m_zoom,
                     m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns);
 
                 std::tuple<float, float> temp_min_max_flame =
@@ -945,7 +950,7 @@ TimelineView::MakeGraphView()
                 temp.selected       = false;
                 rocprofvis_color_by_value_t temp_color_line = {};
                 temp.color_by_value_digits                  = temp_color_line;
-                m_graphs[i]                                 = std::move(temp);
+                m_graphs[track_info->index]                 = std::move(temp);
                 break;
             }
             default:

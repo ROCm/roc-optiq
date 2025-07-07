@@ -363,7 +363,7 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
                         m_min_ts = std::min(min_ts, m_min_ts);
                         m_max_ts = std::max(max_ts, m_max_ts);
 
-                        m_graphs[index] = graph.Get();
+                        m_graphs.insert(m_graphs.begin() + index, graph.Get());
                         result          = kRocProfVisResultSuccess;
                     }
                 }

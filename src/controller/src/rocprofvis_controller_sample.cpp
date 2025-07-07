@@ -331,15 +331,6 @@ rocprofvis_result_t Sample::SetObject(rocprofvis_property_t property, uint64_t i
         switch(property)
         {
             case kRPVControllerSampleTrack:
-            {
-                TrackRef track_ref(value);
-                if(track_ref.IsValid())
-                {
-                    m_track = track_ref.Get();
-                    result  = kRocProfVisResultSuccess;
-                }
-                break;
-            }
             case kRPVControllerSampleValue:
             case kRPVControllerSampleId:
             case kRPVControllerSampleType:

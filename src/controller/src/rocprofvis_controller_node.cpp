@@ -60,6 +60,12 @@ Node::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerNodeHash:
+            {
+                *value = m_hash;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerNodeHostName:
             case kRPVControllerNodeDomainName:
             case kRPVControllerNodeOSName:
@@ -67,6 +73,7 @@ Node::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
             case kRPVControllerNodeOSVersion:
             case kRPVControllerNodeHardwareName:
             case kRPVControllerNodeMachineId:
+            case kRPVControllerNodeMachineGuid:
             case kRPVControllerNodeProcessorIndexed:
             case kRPVControllerNodeProcessIndexed:
             {
@@ -97,10 +104,12 @@ Node::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
         case kRPVControllerNodeOSVersion:
         case kRPVControllerNodeHardwareName:
         case kRPVControllerNodeMachineId:
+        case kRPVControllerNodeMachineGuid:
         case kRPVControllerNodeNumProcessors:
         case kRPVControllerNodeProcessorIndexed:
         case kRPVControllerNodeNumProcesses:
         case kRPVControllerNodeProcessIndexed:
+        case kRPVControllerNodeHash:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -157,8 +166,10 @@ Node::GetObject(rocprofvis_property_t property, uint64_t index,
             case kRPVControllerNodeOSVersion:
             case kRPVControllerNodeHardwareName:
             case kRPVControllerNodeMachineId:
+            case kRPVControllerNodeMachineGuid:
             case kRPVControllerNodeNumProcessors:
             case kRPVControllerNodeNumProcesses:
+            case kRPVControllerNodeHash:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -278,11 +289,26 @@ Node::GetString(rocprofvis_property_t property, uint64_t index, char* value,
             }
             break;
         }
+        case kRPVControllerNodeMachineGuid:
+        {
+            if(value && length && *length)
+            {
+                strncpy(value, m_guid.c_str(), *length);
+                result = kRocProfVisResultSuccess;
+            }
+            else if(length)
+            {
+                *length = m_guid.length();
+                result  = kRocProfVisResultSuccess;
+            }
+            break;
+        }
         case kRPVControllerNodeId:
         case kRPVControllerNodeNumProcessors:
         case kRPVControllerNodeProcessorIndexed:
         case kRPVControllerNodeNumProcesses:
         case kRPVControllerNodeProcessIndexed:
+        case kRPVControllerNodeHash:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -326,6 +352,12 @@ Node::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerNodeHash:
+        {
+            m_hash = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
         case kRPVControllerNodeHostName:
         case kRPVControllerNodeDomainName:
         case kRPVControllerNodeOSName:
@@ -333,6 +365,7 @@ Node::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
         case kRPVControllerNodeOSVersion:
         case kRPVControllerNodeHardwareName:
         case kRPVControllerNodeMachineId:
+        case kRPVControllerNodeMachineGuid:
         case kRPVControllerNodeProcessorIndexed:
         case kRPVControllerNodeProcessIndexed:
         {
@@ -362,6 +395,8 @@ Node::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
         case kRPVControllerNodeOSVersion:
         case kRPVControllerNodeHardwareName:
         case kRPVControllerNodeMachineId:
+        case kRPVControllerNodeHash:
+        case kRPVControllerNodeMachineGuid:
         case kRPVControllerNodeNumProcessors:
         case kRPVControllerNodeProcessorIndexed:
         case kRPVControllerNodeNumProcesses:
@@ -428,6 +463,8 @@ Node::SetObject(rocprofvis_property_t property, uint64_t index,
         case kRPVControllerNodeOSVersion:
         case kRPVControllerNodeHardwareName:
         case kRPVControllerNodeMachineId:
+        case kRPVControllerNodeHash:
+        case kRPVControllerNodeMachineGuid:
         case kRPVControllerNodeNumProcessors:
         case kRPVControllerNodeNumProcesses:
         {
@@ -494,6 +531,13 @@ Node::SetString(rocprofvis_property_t property, uint64_t index, char const* valu
                 result       = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerNodeMachineGuid:
+            {
+                m_guid = value;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerNodeHash:
             case kRPVControllerNodeId:
             case kRPVControllerNodeNumProcessors:
             case kRPVControllerNodeProcessorIndexed:

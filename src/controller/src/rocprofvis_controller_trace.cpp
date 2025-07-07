@@ -611,6 +611,14 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 {
                                                     columns.push_back(kRPVControllerNodeMachineId);
                                                 }
+                                                else if (strcmp(column_name, "guid") == 0)
+                                                {
+                                                    columns.push_back(kRPVControllerNodeMachineGuid);
+                                                }
+                                                else if (strcmp(column_name, "hash") == 0)
+                                                {
+                                                    columns.push_back(kRPVControllerNodeHash);
+                                                }
                                                 else
                                                 {
                                                     columns.push_back((rocprofvis_controller_node_properties_t)0);
@@ -647,11 +655,11 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             {
                                                                 continue;
                                                             }
-                                                            else if (columns[j] == kRPVControllerNodeId)
+                                                            else if (columns[j] == kRPVControllerNodeId || columns[j] == kRPVControllerNodeHash)
                                                             {
                                                                 char* end = nullptr;
                                                                 node->SetUInt64(
-                                                                    kRPVControllerNodeId,
+                                                                    columns[j],
                                                                     0, std::strtoull(prop_string, &end, 10));
                                                             }
                                                             else

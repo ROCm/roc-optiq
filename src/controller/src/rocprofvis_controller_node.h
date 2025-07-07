@@ -46,12 +46,14 @@ private:
     std::vector<Processor*> m_processors;
     std::vector<Process*>   m_processes;
     std::string             m_machine_id;
+    std::string             m_guid;
     std::string             m_host_name;
     std::string             m_domain_name;
     std::string             m_os_name;
     std::string             m_os_release;
     std::string             m_os_version;
     std::string             m_hardware_name;
+    uint64_t                m_hash;
     uint32_t                m_id;
 };
 

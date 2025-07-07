@@ -230,6 +230,8 @@ typedef enum rocprofvis_controller_node_properties_t
     kRPVControllerNodeProcessorIndexed = 0xC0000009,
     kRPVControllerNodeNumProcesses    = 0xC000000A,
     kRPVControllerNodeProcessIndexed = 0xC000000B,
+    kRPVControllerNodeMachineGuid = 0xC000000C,
+    kRPVControllerNodeHash = 0xC000000D
 } rocprofvis_controller_node_properties_t;
 /* JSON: RPVNode
 {

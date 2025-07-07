@@ -13,15 +13,19 @@ namespace Controller
 
 class Array;
 class Track;
+class Trace;
 
 class Graph : public Handle
 {
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts, std::vector<Data>& entries);
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start, double end);
     void Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object);
+    rocprofvis_result_t DeleteSegment(void* reference, uint32_t lod) override;   
 
 public:
-    Graph(rocprofvis_controller_graph_type_t type, uint64_t id);
+    Graph(Handle* ctx, rocprofvis_controller_graph_type_t type, uint64_t id);
+
+    Handle* GetContext() override;
 
     virtual ~Graph();
 
@@ -44,6 +48,7 @@ private:
     std::map<uint32_t, SegmentTimeline> m_lods;
     uint64_t m_id;
     Track* m_track;
+    Trace* m_ctx;
     rocprofvis_controller_graph_type_t m_type;
 };
 

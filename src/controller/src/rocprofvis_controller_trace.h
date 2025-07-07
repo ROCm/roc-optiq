@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_c_interface.h"
+#include "rocprofvis_controller_mem_mgmt.h"
 #include <vector>
 
 namespace RocProfVis
@@ -72,6 +73,8 @@ public:
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
 
+    MemoryManager* GetMemoryManager();
+
 private:
     std::vector<Track*>   m_tracks;
     uint64_t              m_id;
@@ -79,6 +82,7 @@ private:
     SystemTable*          m_event_table;
     SystemTable*          m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
+    MemoryManager*        m_mem_mgmt;
 #ifdef COMPUTE_UI_SUPPORT
     ComputeTrace* m_compute_trace;
 #endif

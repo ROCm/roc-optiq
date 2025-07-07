@@ -18,6 +18,14 @@ Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double 
 {
 }
 
+Sample& Sample::operator=(Sample&& other)
+{
+    m_id              = other.m_id;
+    m_data            = other.m_data;
+    m_timestamp       = other.m_timestamp;   
+    return *this;
+}
+
 Sample::~Sample()
 {
 }

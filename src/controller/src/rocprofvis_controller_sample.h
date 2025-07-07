@@ -16,6 +16,8 @@ class Sample : public Handle
 public:
     Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp);
 
+    Sample& Sample::operator=(Sample&& other);
+
     virtual ~Sample();
 
     rocprofvis_controller_object_type_t GetType(void) override;

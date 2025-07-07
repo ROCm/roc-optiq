@@ -27,6 +27,40 @@ Event::Event(uint64_t id, double start_ts, double end_ts)
 {
 }
 
+Event::Event(Event* other) 
+: m_id(other->m_id)
+, m_start_timestamp(other->m_start_timestamp)
+, m_end_timestamp(other->m_end_timestamp)
+, m_name(UINT64_MAX)
+, m_category(UINT64_MAX)
+, m_level(0)
+{
+}
+
+Event& Event::operator=(Event&& other)
+{
+    m_id              = other.m_id;
+    m_start_timestamp = other.m_start_timestamp;
+    m_end_timestamp   = other.m_end_timestamp;
+    m_name            = UINT64_MAX;
+    m_category        = UINT64_MAX;
+    m_level           = 0;    
+    return *this;
+}
+
+Event&
+Event::operator=(const Event& other)
+{
+    m_id              = other.m_id;
+    m_start_timestamp = other.m_start_timestamp;
+    m_end_timestamp   = other.m_end_timestamp;
+    m_name            = UINT64_MAX;
+    m_category        = UINT64_MAX;
+    m_level           = 0;
+    return *this;
+}
+
+
 Event::~Event()
 { 
 }

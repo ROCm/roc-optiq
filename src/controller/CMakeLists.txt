@@ -33,6 +33,12 @@ list(APPEND rocprofvis_controller_source_files
 	src/rocprofvis_controller_plot_series.cpp
 	src/rocprofvis_controller_plot_compute.cpp
 	src/rocprofvis_controller_job_system.cpp
+	src/rocprofvis_controller_thread.cpp
+	src/rocprofvis_controller_queue.cpp
+	src/rocprofvis_controller_stream.cpp
+	src/rocprofvis_controller_process.cpp
+	src/rocprofvis_controller_processor.cpp
+	src/rocprofvis_controller_node.cpp
 )
 
 if(JSON_SUPPORT) 

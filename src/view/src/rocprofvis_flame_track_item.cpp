@@ -18,8 +18,9 @@ namespace View
 constexpr int MIN_LABEL_WIDTH = 40;
 
 FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float zoom,
-                               float movement, double min_x, double max_x, float scale_x)
-: TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
+                               double time_offset_ns, double min_x, double max_x,
+                               double scale_x)
+: TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_request_random_color(true)
 , m_text_padding(ImVec2(4.0f, 2.0f))
 , m_flame_height(40.0f)
@@ -139,7 +140,8 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
         // Select on click
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            if(m_selected_event_id != flame.m_id || m_dp.GetSelectedEventId() != flame.m_id)
+            if(m_selected_event_id != flame.m_id ||
+               m_dp.GetSelectedEventId() != flame.m_id)
             {
                 m_dp.SetSelectedEventId(flame.m_id);
                 m_selected_event_id = flame.m_id;
@@ -177,21 +179,21 @@ FlameTrackItem::RenderChart(float graph_width)
         ImVec2 container_pos = ImGui::GetWindowPos();
 
         double normalized_start =
-            container_pos.x + (flame.m_start_ts - (m_min_x + m_movement)) * m_scale_x;
-
-        double normalized_duration = flame.m_duration * m_scale_x;
-        double normalized_end      = normalized_start + normalized_duration;
-
-        ImVec2 start_position;
-
-        // Calculate the start position based on the normalized start time and level
-        start_position = ImVec2(normalized_start, flame.m_level * m_flame_height);
+            container_pos.x +
+            (flame.m_start_ts - (m_min_x + m_time_offset_ns)) * m_scale_x;
+        // If size of flame duration is too large for a float, cap it to FLT_MAX
+        float normalized_duration =
+            static_cast<float>(std::min<double>(flame.m_duration * m_scale_x, FLT_MAX));
+        double normalized_end = normalized_start + normalized_duration;
 
         if(normalized_end < container_pos.x ||
            normalized_start > container_pos.x + graph_width)
         {
             continue;  // Skip if the flame is not visible in the current view
         }
+        
+        // Calculate the start position based on the normalized start time and level
+        ImVec2 start_position(static_cast<float>(normalized_start), flame.m_level * m_flame_height);
 
         color_index = static_cast<long long>(flame.m_start_ts) % colorCount;
         DrawBox(start_position, color_index, flame, normalized_duration, draw_list);

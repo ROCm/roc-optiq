@@ -19,8 +19,8 @@ namespace View
 class LineTrackItem : public TrackItem
 {
 public:
-    LineTrackItem(DataProvider& dp, int id, std::string name, float zoom, float movement,
-                  double& min_x, double& max_x, float scale_x);
+    LineTrackItem(DataProvider& dp, int id, std::string name, float zoom, double time_offset_ns,
+                  double& min_x, double& max_x, double scale_x);
     ~LineTrackItem();
 
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,

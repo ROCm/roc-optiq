@@ -107,6 +107,54 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
 }
 
 rocprofvis_result_t
+Graph::CombineEventNames(std::vector<Event*>& events, std::string & combined_name)
+{
+    rocprofvis_result_t  result = kRocProfVisResultUnknownError;
+    std::unordered_map<std::string, int> string_counter;
+    for(auto event : events)
+    {
+        std::string name;
+        uint32_t    len = 0;
+        result          = event->GetString(kRPVControllerEventName, 0, nullptr, &len);
+        if(result == kRocProfVisResultSuccess)
+        {
+            name.resize(len);
+            result = event->GetString(kRPVControllerEventName, 0,
+                                      const_cast<char*>(name.c_str()), &len);
+            if(result == kRocProfVisResultSuccess)
+            {
+                string_counter[name]++;
+            }
+        }
+    }
+    int max_count = 0;
+    for(const auto& [key, count] : string_counter)
+    {
+        max_count = std::max(max_count, count);
+    }
+    int width = std::to_string(max_count).length();
+
+    for(const auto& [name, count] : string_counter)
+    {
+        if(string_counter.size() > 1)
+        {
+            if(combined_name.size() > 0)
+            {
+                combined_name += "\n";
+            }
+            std::string count_string          = std::to_string(count);
+            count_string += std::string(
+                (width > count_string.size() ? width - count_string.size()
+                                             : 0),' ');
+            count_string += " of ";
+            combined_name += count_string;
+        }
+        combined_name += name;
+    }
+    return result;
+}
+
+rocprofvis_result_t
 Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                    std::vector<Data>& entries)
 {
@@ -195,28 +243,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                             if(events.size())
                             {
                                 std::string combined_name = "";
-                                for(auto event : events)
-                                {
-                                    std::string name;
-                                    uint32_t    len = 0;
-                                    result = event->GetString(kRPVControllerEventName, 0,
-                                                                nullptr, &len);
-                                    if(result == kRocProfVisResultSuccess)
-                                    {
-                                        name.resize(len);
-                                        result = event->GetString(
-                                            kRPVControllerEventName, 0,
-                                            const_cast<char*>(name.c_str()), &len);
-                                        if(result == kRocProfVisResultSuccess)
-                                        {
-                                            if(combined_name.size() > 0)
-                                            {
-                                                combined_name += "\n";
-                                            }
-                                            combined_name += name;
-                                        }
-                                    }
-                                }
+                                CombineEventNames(events, combined_name);
 
                                 uint64_t event_id=0;
                                 events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);
@@ -251,28 +278,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
             if(events.size())
             {
                 std::string combined_name = "";
-                for(auto event : events)
-                {
-                    std::string name;
-                    uint32_t    len = 0;
-                    result =
-                        event->GetString(kRPVControllerEventName, 0, nullptr, &len);
-                    if(result == kRocProfVisResultSuccess)
-                    {
-                        name.resize(len);
-                        result =
-                            event->GetString(kRPVControllerEventName, 0,
-                                                const_cast<char*>(name.c_str()), &len);
-                        if(result == kRocProfVisResultSuccess)
-                        {
-                            if(combined_name.size() > 0)
-                            {
-                                combined_name += "\n";
-                            }
-                            combined_name += name;
-                        }
-                    }
-                }
+                CombineEventNames(events, combined_name);
 
                 uint64_t event_id = 0;
                 events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);

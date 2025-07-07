@@ -492,12 +492,12 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
                 char const* name = StringTable::Get().GetString(m_name);
                 char const* category = StringTable::Get().GetString(m_category);
                 ROCPROFVIS_ASSERT(name && category);
-                std::string full_name = category;
+                std::string full_name = name;
                 if(full_name.size() > 0)
                 {
                     full_name += " ";
                 }
-                full_name += name; 
+                full_name += category; 
                 strncpy(value, full_name.c_str(), *length);
        
                 result = kRocProfVisResultSuccess;
@@ -667,15 +667,13 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerEventName:
             {
-                std::string name = value;
-                m_name = StringTable::Get().AddString(name);
+                m_name = StringTable::Get().AddString(value, length > 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventCategory:
             {
-                std::string category = value;
-                m_category = StringTable::Get().AddString(category);
+                m_category = StringTable::Get().AddString(value, length > 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }

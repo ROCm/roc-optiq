@@ -41,7 +41,6 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_pixels_per_ns(0.0f)
 , m_meta_map_made(false)
 , m_previous_scroll_position(0.0f)
-, m_graph_map({})
 , m_is_control_held(false)
 , m_ruler_height(30)
 , m_ruler_padding(0.0f, 4.0f)
@@ -87,11 +86,11 @@ TimelineView::TimelineView(DataProvider& dp)
 int
 TimelineView::FindTrackIdByName(const std::string& name)
 {
-    for(const auto& pair : m_graph_map)
+    for(int i = 0; i < m_graphs.size(); i++)
     {
-        if(pair.second.chart && pair.second.chart->GetName() == name)
+        if(m_graphs[i].chart && m_graphs[i].chart->GetName() == name)
         {
-            return pair.first;
+            return i;
         }
     }
     return -1;
@@ -101,12 +100,15 @@ float
 TimelineView::CalculateTrackOffsetY(int chart_id)
 {
     float offset = 0.0f;
-    for(const auto& pair : m_graph_map)
+    for(int i = 0; i < m_graphs.size(); i++)
     {
-        if(pair.first == chart_id) break;
-        if(pair.second.display && pair.second.chart)
+        if(i == chart_id)
         {
-            offset += pair.second.chart->GetTrackHeight();
+            break;
+        }
+        else if(m_graphs[i].display && m_graphs[i].chart)
+        {
+            offset += m_graphs[i].chart->GetTrackHeight();
         }
     }
     return offset;
@@ -216,12 +218,11 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             return;
         }
 
-        auto it = m_graph_map.find(track_index);
-        if(it != m_graph_map.end())
+        if(track_index < m_graphs.size())
         {
-            if(it->second.chart)
+            if(m_graphs[track_index].chart)
             {
-                it->second.chart->HandleTrackDataChanged();
+                m_graphs[track_index].chart->HandleTrackDataChanged();
             }
             else
             {
@@ -446,10 +447,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::PopStyleColor();
 }
 
-std::map<int, rocprofvis_graph_map_t>*
-TimelineView::GetGraphMap()
+std::vector<rocprofvis_graph_t>*
+TimelineView::GetGraphs()
 {
-    return &m_graph_map;
+    return &m_graphs;
 }
 
 void
@@ -648,9 +649,9 @@ TimelineView::RenderGraphView()
     }
 
     bool selection_changed = false;
-    for(const auto& graph_objects : m_graph_map)
+    for(int i = 0; i < m_graphs.size(); i++)
     {
-        const rocprofvis_graph_map_t& track_item = graph_objects.second;
+        rocprofvis_graph_t& track_item = m_graphs[i];
 
         if(track_item.display)
         {
@@ -687,7 +688,7 @@ TimelineView::RenderGraphView()
                 {
                     // Request one viewport worth of data on each side of the current view
                     double buffer_distance = m_v_width;
-                    graph_objects.second.chart->RequestData(
+                    track_item.chart->RequestData(
                         (m_view_time_offset_ns - buffer_distance) + m_min_x,
                         (m_view_time_offset_ns + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
@@ -698,20 +699,21 @@ TimelineView::RenderGraphView()
                     track_item.chart->SetColorByValue(track_item.color_by_value_digits);
                 }
 
-                if(track_item.graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
+                if(track_item.graph_type == rocprofvis_graph_t::TYPE_LINECHART)
                 {
                     static_cast<LineTrackItem*>(track_item.chart)
                         ->SetShowBoxplot(track_item.make_boxplot);
                 }
 
                 ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
-                if(graph_objects.second.selected)
+                if(track_item.selected)
                 {
                     selection_color = m_settings.GetColor(Colors::kHighlightChart);
                 }
 
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
-                if(ImGui::BeginChild((std::to_string(graph_objects.first)).c_str(),
+                ImGui::PushID(i);
+                if(ImGui::BeginChild("",
                                      ImVec2(0, track_height), false,
                                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                          ImGuiWindowFlags_NoScrollWithMouse |
@@ -720,11 +722,12 @@ TimelineView::RenderGraphView()
                     if(m_is_control_held)
                     {
                         ImGui::Selectable(
-                            ("Move Position " + std::to_string(graph_objects.first))
+                            ("Move Position " + std::to_string(i))
                                 .c_str(),
                             false, ImGuiSelectableFlags_AllowDoubleClick,
                             ImVec2(0, 20.0f));
 
+                        /* TODO: Reordering
                         if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
                         {
                             ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE",
@@ -759,6 +762,7 @@ TimelineView::RenderGraphView()
                             }
                             ImGui::EndDragDropTarget();
                         }
+                        */
                     }
 
                     // call update function (TODO: move this to timeline's update
@@ -776,13 +780,13 @@ TimelineView::RenderGraphView()
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {
-                        m_graph_map[track_item.chart->GetID()].selected =
-                            !track_item.selected;
+                        track_item.selected = !track_item.selected;
                         track_item.chart->SetSelected(track_item.selected);
                         selection_changed = true;
                     }
                 }
                 ImGui::EndChild();
+                ImGui::PopID();
                 ImGui::PopStyleColor();
                 
                 // Draw border around the track
@@ -818,11 +822,11 @@ TimelineView::RenderGraphView()
     {
         m_region_selection_changed = false;
         std::vector<uint64_t> selected_graphs;
-        for(const auto& graph_objects : m_graph_map)
+        for(int i = 0; i < m_graphs.size(); i++)
         {
-            if(graph_objects.second.selected)
+            if(m_graphs[i].selected)
             {
-                selected_graphs.push_back(graph_objects.first);
+                selected_graphs.push_back(i);
             }
         }
 
@@ -849,15 +853,13 @@ TimelineView::RenderGraphView()
 void
 TimelineView::DestroyGraphs()
 {
-    for(const auto& graph_object : m_graph_map)
+    for(rocprofvis_graph_t& graph : m_graphs)
     {
-        if(graph_object.second.chart)
-        {
-            delete graph_object.second.chart;
-        }
+        delete graph.chart;
     }
 
-    m_graph_map.clear();
+    m_graphs.clear();
+    //m_graphs.clear();
     m_meta_map_made = false;
 }
 
@@ -878,6 +880,7 @@ TimelineView::MakeGraphView()
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();
     int      scale_x    = 1;
+    m_graphs.resize(num_graphs);
     for(uint64_t i = 0; i < num_graphs; i++)
     {
         const track_info_t* track_info = m_data_provider.GetTrackInfo(i);
@@ -901,15 +904,15 @@ TimelineView::MakeGraphView()
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
                                              static_cast<float>(track_info->max_ts));
 
-                rocprofvis_graph_map_t temp_flame;
+                rocprofvis_graph_t temp_flame;
                 temp_flame.chart          = flame;
-                temp_flame.graph_type     = rocprofvis_graph_map_t::TYPE_FLAMECHART;
+                temp_flame.graph_type     = rocprofvis_graph_t::TYPE_FLAMECHART;
                 temp_flame.display        = true;
                 temp_flame.color_by_value = false;
                 temp_flame.selected       = false;
                 rocprofvis_color_by_value_t temp_color = {};
                 temp_flame.color_by_value_digits       = temp_color;
-                m_graph_map[track_info->index]         = temp_flame;
+                m_graphs[i]                            = std::move(temp_flame);
 
                 break;
             }
@@ -933,17 +936,16 @@ TimelineView::MakeGraphView()
                     m_max_x = std::get<1>(temp_min_max_flame);
                 }
 
-                rocprofvis_graph_map_t temp;
+                rocprofvis_graph_t temp;
                 temp.chart          = line;
                 temp.make_boxplot   = false;
-                temp.graph_type     = rocprofvis_graph_map_t::TYPE_LINECHART;
+                temp.graph_type     = rocprofvis_graph_t::TYPE_LINECHART;
                 temp.display        = true;
                 temp.color_by_value = false;
                 temp.selected       = false;
                 rocprofvis_color_by_value_t temp_color_line = {};
                 temp.color_by_value_digits                  = temp_color_line;
-                m_graph_map[track_info->index]              = temp;
-
+                m_graphs[i]                                 = std::move(temp);
                 break;
             }
             default:

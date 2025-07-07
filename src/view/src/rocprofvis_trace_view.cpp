@@ -51,7 +51,7 @@ TraceView::Update()
             m_timeline_view->MakeGraphView();
             if(m_sidebar)
             {
-                m_sidebar->SetGraphMap(m_timeline_view->GetGraphMap());
+                m_sidebar->SetGraphs(m_timeline_view->GetGraphs());
             }
         }
     }

@@ -340,11 +340,13 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
             {
                 if(index < m_graphs.size())
                 {
+                    bool is_replace = false;
                     for (uint32_t i = 0; i < m_graphs.size(); i++)
                     {
                         if (m_graphs[i] == graph.Get())
                         {
                             m_graphs.erase(m_graphs.begin() + i);
+                            is_replace = true;
                             if (i < index)
                             {
                                 index--;
@@ -362,8 +364,14 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
                     {
                         m_min_ts = std::min(min_ts, m_min_ts);
                         m_max_ts = std::max(max_ts, m_max_ts);
-
-                        m_graphs[index] = graph.Get();
+                        if(is_replace)
+                        {
+                            m_graphs.insert(m_graphs.begin() + index, graph.Get());
+                        }
+                        else
+                        {
+                            m_graphs[index] = graph.Get();
+                        }
                         result          = kRocProfVisResultSuccess;
                     }
                 }

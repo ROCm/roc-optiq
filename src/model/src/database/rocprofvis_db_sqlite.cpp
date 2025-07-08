@@ -174,7 +174,9 @@ sqlite3* SqliteDatabase::GetConnection()
     {
         
         sqlite3* conn;
-        if(m_connections_inuse.size() > MAX_CONNECTIONS || kRocProfVisDmResultSuccess != OpenConnection(&conn))
+        size_t   thread_count = std::thread::hardware_concurrency();
+        if(m_connections_inuse.size() > thread_count ||
+           kRocProfVisDmResultSuccess != OpenConnection(&conn))
         {
            m_inuse_cv.wait(lock, [&] { return !m_available_connections.empty(); });
            

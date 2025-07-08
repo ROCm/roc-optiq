@@ -94,3 +94,35 @@ RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
 
     return oss.str();
 }
+
+double RocProfVis::View::calculate_nice_interval(double view_range, int target_divisions) {
+    if (view_range <= 0.0) {
+        return 1.0; // Avoid division by zero or log of non-positive
+    }
+
+    //Calculate the ideal, but possibly "ugly" interval
+    double ideal_interval = view_range / target_divisions;
+
+    //Calculate the order of magnitude, which is a power of 10
+    double exponent = std::floor(std::log10(ideal_interval));
+    double scale = std::pow(10.0, exponent);
+
+    //Normalize the ideal interval to find a "nice" multiplier (1, 2, 5)
+    double normalized_interval = ideal_interval / scale;
+    
+    double nice_multiplier;
+    if (normalized_interval < 1.5) {
+        nice_multiplier = 1;
+    } else if (normalized_interval < 3.0) {
+        nice_multiplier = 2;
+    } else if (normalized_interval < 4.5) {
+        nice_multiplier = 4;        
+    } else if (normalized_interval < 7.0) {
+        nice_multiplier = 5;
+    } else {
+        nice_multiplier = 10;
+    }
+
+    return nice_multiplier * scale;
+}
+

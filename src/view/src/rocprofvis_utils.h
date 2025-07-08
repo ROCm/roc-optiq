@@ -114,5 +114,14 @@ std::string nanosecond_to_timecode_str(double time_point_ns, bool round_before_c
  */
 std::string nanosecond_to_str(double time_point_ns);
 
+/**
+ * @brief Calculates a "nice" grid interval for a timeline.
+ *
+ * @param viewRange The total duration of the visible timeline range in nanoseconds, specified as a double.
+ * @param targetDivisions The desired number of divisions on the screen.
+ * @return A "nice" interval in nanoseconds (e.g., 1000, 2000, 5000, 10000...).
+ */
+double calculate_nice_interval(double view_range, int target_divisions);
+
 } // namespace View
 } // namespace RocProfVis

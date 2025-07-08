@@ -46,6 +46,7 @@ public:
     void                                   ScrollToTrackByName(const std::string& name);
     void SetViewTimePosition(double time_pos_ns, bool center);
     void RenderGraphPoints();
+    void RenderGridAlt();
     void RenderGrid();
     void RenderScrubber(ImVec2 screen_pos);
     void RenderSplitter(ImVec2 screen_pos);
@@ -53,6 +54,7 @@ public:
     void HandleTopSurfaceTouch();
     void CalibratePosition();
     void HandleNewTrackData(std::shared_ptr<RocEvent> e);
+    void CalculateGridInterval();
 
 private:
     std::vector<rocprofvis_graph_t>       m_graphs;
@@ -97,6 +99,8 @@ private:
     ImVec2                                m_graph_size;
     bool                                  m_region_selection_changed;
     TimeFormat                            m_display_time_format;
+    double m_grid_interval_ns;
+    int m_grid_interval_count;    
 };
 
 }  // namespace View

@@ -461,6 +461,165 @@ TimelineView::GetGraphs()
 }
 
 void
+TimelineView::CalculateGridInterval()
+{
+    // measure the size of the label to determine the step size
+    std::string label;
+    switch(m_display_time_format)
+    {
+        // use the largest time point to determine the step size
+        case TimeFormat::kTimecode:
+            label = nanosecond_to_timecode_str(m_max_x - m_min_x) + "gap";
+            break;
+        case TimeFormat::kNanoseconds:
+        default: label = nanosecond_to_str(m_max_x - m_min_x) + "gap";
+    }
+    ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+
+    // calculate the number of intervals based on the graph size and label size
+    int interval_count = m_graph_size.x / label_size.x;
+
+    double interval_ns  = calculate_nice_interval(m_v_width, interval_count);
+    double step_size_px = interval_ns * m_pixels_per_ns;
+
+    int pad_amount = 2;  // +2 for the first and last label
+
+    // If the step size is smaller than the label size, try to adjust the interval count
+    int loop_count = 0;
+    while(step_size_px < label_size.x)
+    {
+        interval_count--;
+        double new_interval_ns = calculate_nice_interval(m_v_width, interval_count);
+        interval_ns            = new_interval_ns;
+        step_size_px           = interval_ns * m_pixels_per_ns;
+        loop_count++;
+        // If the interval count is too small break out and pad it
+        if(interval_count <= 3)
+        {
+            pad_amount++;
+            break;
+        }
+    }
+    if(loop_count > 0)
+    {
+        spdlog::debug("Adjusted interval count: {}, new interval_ns: {}, step_size_px: "
+                      "{} after {} iterations",
+                      interval_count, interval_ns, step_size_px, loop_count);
+    }
+
+    m_grid_interval_ns    = interval_ns;
+    m_grid_interval_count = interval_count + pad_amount;
+}
+
+void
+TimelineView::RenderGridAlt()
+{
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoScrollWithMouse;
+
+    ImVec2 container_pos =
+        ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
+
+    ImVec2 container_size  = ImGui::GetWindowSize();
+    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+    ImVec2 content_size    = ImVec2(container_size.x - m_sidebar_size, container_size.y);
+
+    CalculateGridInterval();
+
+    constexpr float tick_height = 10.0f;
+    double          start_ns    = m_view_time_offset_ns;
+    double          grid_line_start_ns =
+        std::floor(start_ns / m_grid_interval_ns) * m_grid_interval_ns;
+
+    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+
+    if(ImGui::BeginChild("Grid_alt"), content_size, true, window_flags)
+    {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+        ImVec2 child_win  = ImGui::GetWindowPos();
+        ImVec2 child_size = ImGui::GetWindowSize();
+
+        // Background for the ruler area
+        draw_list->AddRectFilled(
+            ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
+            ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
+            m_settings.GetColor(Colors::kRulerBgColor));
+
+        // Detect right mouse click in the ruler area
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
+           ImGui::IsMouseHoveringRect(
+               ImVec2(container_pos.x,
+                      cursor_position.y + content_size.y - m_ruler_height),
+               ImVec2(container_pos.x + m_graph_size.x,
+                      cursor_position.y + content_size.y)))
+        {
+            // Show context menu for time format selection
+            ImGui::OpenPopup("Time Format Selection");
+        }
+
+        // Context menu for time format selection
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
+        if(ImGui::BeginPopup("Time Format Selection"))
+        {
+            ImGui::Text("Time format:");
+            ImGui::Separator();
+
+            if(ImGui::MenuItem("Timecode", nullptr,
+                               m_display_time_format == TimeFormat::kTimecode))
+            {
+                m_display_time_format = TimeFormat::kTimecode;
+            }
+            if(ImGui::MenuItem("Nanoseconds", nullptr,
+                               m_display_time_format == TimeFormat::kNanoseconds))
+            {
+                m_display_time_format = TimeFormat::kNanoseconds;
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
+
+        std::string label;
+        for(auto i = 0; i < m_grid_interval_count; i++)
+        {
+            double grid_line_ns = grid_line_start_ns + (i * m_grid_interval_ns);
+            float  normalized_start =
+                child_win.x + (grid_line_ns - m_view_time_offset_ns) * m_pixels_per_ns;
+
+            draw_list->AddLine(
+                ImVec2(normalized_start, cursor_position.y),
+                ImVec2(normalized_start,
+                       cursor_position.y + content_size.y + tick_height - m_ruler_height),
+                m_settings.GetColor(Colors::kBoundBox), 0.5f);
+
+            DebugWindow::GetInstance()->AddDebugMessage(
+                "RenderGridAlt: grid_line_ns: " + std::to_string(grid_line_ns) +
+                ", normalized_start: " + std::to_string(normalized_start));
+
+            switch(m_display_time_format)
+            {
+                // use the largest time point to determine the step size
+                case TimeFormat::kTimecode:
+                    label = nanosecond_to_timecode_str(grid_line_ns);
+                    break;
+                case TimeFormat::kNanoseconds:
+                default: label = nanosecond_to_str(grid_line_ns);
+            }
+
+            ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+            ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
+                                       cursor_position.y + content_size.y - label_size.y -
+                                           m_ruler_padding.y);
+            draw_list->AddText(label_pos, m_settings.GetColor(Colors::kGridColor),
+                               label.c_str());
+        }
+    }
+
+    ImGui::EndChild();
+}
+
+void
 TimelineView::RenderGrid()
 {
     /*This section makes the grid for the charts*/
@@ -527,7 +686,8 @@ TimelineView::RenderGrid()
         // Detect right mouse click in the ruler area
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
            ImGui::IsMouseHoveringRect(
-               ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
+               ImVec2(container_pos.x,
+                      cursor_position.y + content_size.y - m_ruler_height),
                ImVec2(container_pos.x + m_graph_size.x,
                       cursor_position.y + content_size.y)))
         {
@@ -543,7 +703,8 @@ TimelineView::RenderGrid()
             ImGui::Text("Time format:");
             ImGui::Separator();
 
-            if(ImGui::MenuItem("Timecode", nullptr, m_display_time_format == TimeFormat::kTimecode))
+            if(ImGui::MenuItem("Timecode", nullptr,
+                               m_display_time_format == TimeFormat::kTimecode))
             {
                 m_display_time_format = TimeFormat::kTimecode;
             }
@@ -577,7 +738,7 @@ TimelineView::RenderGrid()
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
             std::string label;
-            double time_point_ns =
+            double      time_point_ns =
                 m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
             switch(m_display_time_format)
             {
@@ -783,7 +944,6 @@ TimelineView::RenderGraphView()
                     m_resize_activity |= track_item.chart->GetResizeStatus();
                     track_item.chart->Render(m_graph_size.x);
 
-
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {
@@ -795,14 +955,14 @@ TimelineView::RenderGraphView()
                 ImGui::EndChild();
                 ImGui::PopID();
                 ImGui::PopStyleColor();
-                
+
                 // Draw border around the track
                 // This is done after the child window to ensure it is on top
                 ImVec2 p_min = ImGui::GetItemRectMin();
                 ImVec2 p_max = ImGui::GetItemRectMax();
                 ImGui::GetWindowDrawList()->AddRect(
-                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
-
+                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0,
+                    1.0f);
             }
             else
             {
@@ -995,7 +1155,8 @@ TimelineView::RenderGraphPoints()
         m_v_max_x       = m_v_min_x + m_v_width;
         m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
 
-        RenderGrid();
+        // RenderGrid();
+        RenderGridAlt();
 
         if(m_meta_map_made)
         {
@@ -1122,13 +1283,12 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 m_can_drag_to_pan = true;
             }
-            
 
-            //Enables horizontal scrolling using mouse. 
+            // Enables horizontal scrolling using mouse.
             float scroll_wheel_h = io.MouseWheelH;
             if(scroll_wheel_h != 0.0f)
             {
-                const float scroll_speed = 0.1f; 
+                const float scroll_speed = 0.1f;
                 float       move_amount  = scroll_wheel_h * m_v_width * scroll_speed;
                 m_view_time_offset_ns -= move_amount;
 

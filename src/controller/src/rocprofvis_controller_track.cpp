@@ -763,7 +763,6 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                             Event* event = (Event*) object;
                                             Event* event_duplicate = m_ctx->GetMemoryManager()->NewEvent(event);
                                             segment->Insert(timestamp.start, level, event_duplicate);
-                                            //spdlog::debug("Add duplicate event with id = {}", event_id);
                                         }
                                     }
                                 }

@@ -29,12 +29,6 @@ public:
     virtual rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) = 0;
     virtual rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) = 0;
 
-    virtual rocprofvis_result_t DeleteSegment(void* reference,
-                                              uint32_t lod)
-    {
-        return kRocProfVisResultSuccess;
-    }
-
     virtual Handle* GetContext() { return nullptr; }
 };
 

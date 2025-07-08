@@ -151,11 +151,12 @@ MemoryManager::ManageLRU()
 
                 Segment* reference    = lru->m_reference;
                 uint32_t lod          = lru->m_lod;
-                Handle*  owner        = lru->m_owner;
+                SegmentTimeline* owner        = lru->m_owner;
 
                 m_lru_array.erase(reference);
 
-                owner->DeleteSegment(reference, lod);
+                owner->Remove(reference);
+
                 
                 if (m_lru_storage_memory_used <= m_lru_storage_limit)
                 {

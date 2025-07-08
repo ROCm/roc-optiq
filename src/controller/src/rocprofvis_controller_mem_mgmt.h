@@ -24,6 +24,7 @@ namespace RocProfVis
         class Sample;
         class SampleLOD;
         class Segment;
+        class SegmentTimeline;
 
 
         class ComputeTrace;
@@ -55,11 +56,11 @@ namespace RocProfVis
 
         struct LRUMember
         {
-            uint64_t    m_timestamp;
-            Handle*     m_owner;
-            Segment*    m_reference;
-            void*       m_array_ptr;
-            uint32_t    m_lod;
+            uint64_t            m_timestamp;
+            SegmentTimeline*    m_owner;
+            Segment*            m_reference;
+            void*               m_array_ptr;
+            uint32_t            m_lod;
         };
 
 
@@ -73,7 +74,7 @@ namespace RocProfVis
             virtual ~MemoryManager();
 
             std::mutex&         GetMemoryManagerMutex();
-            rocprofvis_result_t AddLRUReference(Handle* owner, Segment* reference, uint32_t lod, void* array_ptr);
+            rocprofvis_result_t AddLRUReference(SegmentTimeline* owner, Segment* reference, uint32_t lod, void* array_ptr);
             rocprofvis_result_t CancelArrayOwnersip(void* array_ptr);
             void                ManageLRU();
 

@@ -21,6 +21,7 @@ class Array;
 class Event;
 class Sample;
 class Trace;
+class SegmentTimeline;
 
 constexpr double kSegmentDuration = 1000000000.0;
 constexpr double kScalableSegmentDuration   = 10000.0;
@@ -28,7 +29,7 @@ constexpr uint32_t kSegmentBitSetSize = 64;
 struct SegmentLRUParams
 {
     Trace* m_ctx;
-    Handle* m_owner;
+    SegmentTimeline* m_owner;
     uint32_t m_lod;
 };
 
@@ -90,7 +91,7 @@ private:
     rocprofvis_timeline_iterator_t  m_timeline_iterator;
 };
 
-typedef rocprofvis_result_t (*FetchSegmentsFunc)(double start, double end, Segment& segment, void* user_ptr); 
+typedef rocprofvis_result_t (*FetchSegmentsFunc)(double start, double end, Segment& segment, void* user_ptr, SegmentTimeline* owner); 
 
 class SegmentTimeline
 {

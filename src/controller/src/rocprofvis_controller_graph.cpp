@@ -374,11 +374,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
     return result;
 }
 
-struct GraphLODArgs
+struct FetchTrackSegmentArgs
 {
-    uint64_t                  m_index;
-    std::pair<double, double> m_valid_range;
     std::vector<Data>         m_entries;
+    uint64_t                  m_index;
 	SegmentLRUParams          m_lru_params;
 };
 
@@ -450,24 +449,26 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                         double fetch_start = min_ts + (range.first * segment_duration);
                         double fetch_end   = min_ts + ((range.second + 1) * segment_duration);
 
-                        GraphLODArgs args;
-                        args.m_valid_range = range;
+                        FetchTrackSegmentArgs args;
                         args.m_index       = 0;
-                        args.m_lru_params.m_owner    = m_track;
                     	args.m_lru_params.m_ctx      = (Trace*)m_track->GetContext();
                     	args.m_lru_params.m_lod      = 0;
                         result             = m_track->FetchSegments(
                             fetch_start, fetch_end, &args,
                             [](double start, double end, Segment& segment,
-                               void* user_ptr) -> rocprofvis_result_t {
-                            GraphLODArgs*       args   = (GraphLODArgs*) user_ptr;
-                            rocprofvis_result_t result = kRocProfVisResultSuccess;
-
-                            result = segment.Fetch(start, end, args->m_entries,
-                                                                args->m_index, nullptr, &args->m_lru_params);
-                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                            return result;
+                                void*            user_ptr,
+                                SegmentTimeline* owner) -> rocprofvis_result_t {
+                                FetchTrackSegmentArgs* args =
+                                    (FetchTrackSegmentArgs*) user_ptr;
+                                rocprofvis_result_t result = kRocProfVisResultSuccess;
+                                args->m_lru_params.m_owner = owner;
+                                result = segment.Fetch(start, end, args->m_entries,
+                                                        args->m_index, nullptr,
+                                                        &args->m_lru_params);
+                                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                                return result;
                             });
+
 
                         if(result == kRocProfVisResultSuccess)
                         {
@@ -541,16 +542,16 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
             args.m_array = &array;
             args.m_index = &index;
             args.m_lru_params.m_ctx = m_ctx;
-            args.m_lru_params.m_owner = this;
             args.m_lru_params.m_lod   = lod;
             array.SetContext(m_ctx);
 
             result = it->second.FetchSegments(
                 start, end, &args,
                 [](double start, double end, Segment& segment,
-                   void* user_ptr) -> rocprofvis_result_t {
+                   void* user_ptr, SegmentTimeline* owner) -> rocprofvis_result_t {
                     rocprofvis_result_t result = kRocProfVisResultSuccess;
                     GraphFetchLODArgs*  args   = (GraphFetchLODArgs*) user_ptr;
+                    args->m_lru_params.m_owner = owner;
                     return segment.Fetch(start, end, args->m_array->GetVector(),
                                          *(args->m_index),nullptr, &args->m_lru_params);
                 });
@@ -561,13 +562,7 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
     return result;
 }
 
-rocprofvis_result_t
-Graph::DeleteSegment(void* target, uint32_t lod)
-{
-    rocprofvis_result_t result = kRocProfVisResultSuccess;
-    result = m_lods[lod].Remove((Segment*) target);
-    return result;
-}
+
 rocprofvis_controller_object_type_t
 Graph::GetType(void)
 {

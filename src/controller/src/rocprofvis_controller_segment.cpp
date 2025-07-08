@@ -347,7 +347,7 @@ rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, voi
 
     while(lower != upper && lower != m_segments.end())
     {
-        result = func(start, end, *lower->second.get(), user_ptr);
+        result = func(start, end, *lower->second.get(), user_ptr, this);
         if(result == kRocProfVisResultSuccess)
         {
             ++lower;

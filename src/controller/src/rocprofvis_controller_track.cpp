@@ -121,13 +121,6 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
     return result;
 }
 
-rocprofvis_result_t Track::DeleteSegment(void* target, uint32_t lod)
-{
-    rocprofvis_result_t result = kRocProfVisResultSuccess;
-    result = m_segments.Remove((Segment*)target);
-    return result;
-}
-
 struct FetchEventsArgs
 {
     Array*             m_array;
@@ -141,14 +134,14 @@ rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_
     FetchEventsArgs args;
     args.m_array = &array;
     args.m_index = &index;
-    args.lru_params.m_owner = this;
     args.lru_params.m_ctx   = (Trace*)GetContext();
     args.lru_params.m_lod      = 0;
     array.SetContext(GetContext());
 
-    rocprofvis_result_t result = FetchSegments(start, end, &args, [](double start, double end, Segment& segment, void* user_ptr) -> rocprofvis_result_t
+    rocprofvis_result_t result = FetchSegments(start, end, &args, [](double start, double end, Segment& segment, void* user_ptr, SegmentTimeline* owner) -> rocprofvis_result_t
     {
         FetchEventsArgs* args = (FetchEventsArgs*) user_ptr;
+        args->lru_params.m_owner   = owner;
         rocprofvis_result_t result = segment.Fetch(start, end, args->m_array->GetVector(), *args->m_index, &args->m_event_ids, &args->lru_params);
         return result;
     });

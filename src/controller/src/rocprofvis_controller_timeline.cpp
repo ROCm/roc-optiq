@@ -132,6 +132,7 @@ rocprofvis_result_t Timeline::GetUInt64(rocprofvis_property_t property, uint64_t
             case kRPVControllerTimelineMinTimestamp:
             case kRPVControllerTimelineMaxTimestamp:
             case kRPVControllerTimelineGraphIndexed:
+            case kRPVControllerTimelineGraphById:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -182,6 +183,7 @@ rocprofvis_result_t Timeline::GetDouble(rocprofvis_property_t property, uint64_t
             case kRPVControllerTimelineId:
             case kRPVControllerTimelineNumGraphs:
             case kRPVControllerTimelineGraphIndexed:
+            case kRPVControllerTimelineGraphById:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -203,6 +205,21 @@ rocprofvis_result_t Timeline::GetObject(rocprofvis_property_t property, uint64_t
     {
         switch(property)
         {
+            case kRPVControllerTimelineGraphById:
+            {
+                result = kRocProfVisResultOutOfRange;
+                for (auto* graph : m_graphs)
+                {
+                    uint64_t graph_id = 0;
+                    if (graph->GetUInt64(kRPVControllerGraphId, 0, &graph_id) == kRocProfVisResultSuccess && graph_id == index)
+                    {
+                        *value = (rocprofvis_handle_t*)graph;
+                        result = kRocProfVisResultSuccess;
+                        break;
+                    }
+                }
+                break;
+            }
             case kRPVControllerTimelineGraphIndexed:
             {
                 if(index < m_graphs.size())
@@ -246,6 +263,7 @@ rocprofvis_result_t Timeline::GetString(rocprofvis_property_t property, uint64_t
             case kRPVControllerTimelineMinTimestamp:
             case kRPVControllerTimelineMaxTimestamp:
             case kRPVControllerTimelineGraphIndexed:
+            case kRPVControllerTimelineGraphById:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -292,6 +310,7 @@ rocprofvis_result_t Timeline::SetUInt64(rocprofvis_property_t property, uint64_t
         case kRPVControllerTimelineMinTimestamp:
         case kRPVControllerTimelineMaxTimestamp:
         case kRPVControllerTimelineGraphIndexed:
+        case kRPVControllerTimelineGraphById:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -311,6 +330,7 @@ rocprofvis_result_t Timeline::SetDouble(rocprofvis_property_t property, uint64_t
     switch(property)
     {
         case kRPVControllerTimelineGraphIndexed:
+        case kRPVControllerTimelineGraphById:
         case kRPVControllerTimelineId:
         case kRPVControllerTimelineNumGraphs:
         case kRPVControllerTimelineMinTimestamp:
@@ -382,6 +402,7 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
             }
             break;
         }
+        case kRPVControllerTimelineGraphById:
         case kRPVControllerTimelineId:
         case kRPVControllerTimelineNumGraphs:
         case kRPVControllerTimelineMinTimestamp:
@@ -405,6 +426,7 @@ rocprofvis_result_t Timeline::SetString(rocprofvis_property_t property, uint64_t
     switch(property)
     {
         case kRPVControllerTimelineGraphIndexed:
+        case kRPVControllerTimelineGraphById:
         case kRPVControllerTimelineId:
         case kRPVControllerTimelineNumGraphs:
         case kRPVControllerTimelineMinTimestamp:

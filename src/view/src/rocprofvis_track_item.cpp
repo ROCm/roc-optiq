@@ -9,11 +9,11 @@ using namespace RocProfVis::View;
 float TrackItem::s_metadata_width = 400.0f;
 
 TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
-                     float movement, double& min_x, double& max_x, float scale_x)
+                     double time_offset_ns, double& min_x, double& max_x, double scale_x)
 : m_data_provider(dp)
 , m_id(id)
 , m_zoom(zoom)
-, m_movement(movement)
+, m_time_offset_ns(time_offset_ns)
 , m_min_x(min_x)
 , m_max_x(max_x)
 , m_scale_x(scale_x)
@@ -111,11 +111,11 @@ TrackItem::SetSelected(bool selected)
 }
 
 void
-TrackItem::UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                          float scale_x, float y_scroll_position)
+TrackItem::UpdateMovement(float zoom, double time_offset_ns, double& min_x, double& max_x,
+                          double scale_x, float y_scroll_position)
 {
     m_zoom     = zoom;
-    m_movement = movement;
+    m_time_offset_ns = time_offset_ns;
     m_scale_x  = scale_x;
     m_min_x    = min_x;
     m_max_x    = max_x;

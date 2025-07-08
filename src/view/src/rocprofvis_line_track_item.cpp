@@ -17,8 +17,8 @@ namespace View
 {
 
 LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
-                             float movement, double& min_x, double& max_x, float scale_x)
-: TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
+                             double time_offset_ns, double& min_x, double& max_x, double scale_x)
+: TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
 , m_data({})
@@ -473,7 +473,7 @@ LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
 {
     ImVec2 container_pos = ImGui::GetWindowPos();
 
-    double x = container_pos.x + (point.x_value - (m_min_x + m_movement)) * scaleX;
+    double x = container_pos.x + (point.x_value - (m_min_x + m_time_offset_ns)) * scaleX;
     double y = cursor_position.y + content_size.y - (point.y_value - m_min_y) * scaleY;
 
     return ImVec2(x, y);

@@ -27,20 +27,14 @@ private:
     AppWindow();
     ~AppWindow();
 
-    void RenderDebugOuput();
     void RenderSettingsMenu();
-    void RenderDeveloperMenu();
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
+
 
     static AppWindow* s_instance;
 
     std::shared_ptr<RocWidget>    m_main_view;
     std::shared_ptr<TabContainer> m_tab_container;
-
-    bool         m_show_metrics;
-    bool         m_show_debug_window;
-    DataProvider m_data_provider;
-    bool         m_show_provider_test_widow;
 
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;
@@ -48,6 +42,17 @@ private:
     std::map<std::string, TabItem> m_open_views;
 
     EventManager::SubscriptionToken m_tabclosed_event_token;
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    void RenderDebugOuput();
+    void RenderDeveloperMenu();
+
+    bool         m_show_metrics;
+    bool         m_show_debug_window;
+    DataProvider m_test_data_provider;
+    bool         m_show_provider_test_widow;
+#endif
+
 };
 
 }  // namespace View

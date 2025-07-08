@@ -144,7 +144,9 @@ typedef enum rocprofvis_controller_properties_t
     // Load Event Callstack properties
     kRPVControllerEventDataCallStackIndexed = 0x00000013,
     // Load Event Extended data properties
-    kRPVControllerEventDataExtDataIndexed = 0x00000014
+    kRPVControllerEventDataExtDataIndexed = 0x00000014,
+    // Tracks by Id
+    kRPVControllerTrackById = 0x00000015,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {
@@ -173,6 +175,8 @@ typedef enum rocprofvis_controller_timeline_properties_t
     kRPVControllerTimelineMaxTimestamp = 0x10000003,
     // Indexed graphs
     kRPVControllerTimelineGraphIndexed = 0x10000004,
+    // Graphs by Id
+    kRPVControllerTimelineGraphById = 0x10000005,
 } rocprofvis_controller_timeline_properties_t;
 /* JSON: RPVTimeline
 {

@@ -110,14 +110,12 @@ namespace RocProfVis
             rocprofvis_result_t CancelArrayOwnersip(void* array_ptr);
             void                ManageLRU();
 
-            void*               Allocate(size_t size, rocprofvis_object_type_t type);
             void                Delete(Handle* handle);
-            void                CleanUp();
             Event*              NewEvent(uint64_t id, double start_ts, double end_ts);
             Event*              NewEvent(Event* event);
             Sample*             NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp);
             SampleLOD*          NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, std::vector<Sample*>& children);
-
+            
             
 
         private:
@@ -131,13 +129,17 @@ namespace RocProfVis
             bool                                                        m_lru_mgmt_shutdown;
             bool                                                        m_array_ownership_changed;
             bool                                                        m_mem_mgmt_initialized;
-            size_t                                                      m_lru_storage_limit;
             std::atomic<size_t>                                         m_lru_storage_memory_used;
+            size_t                                                      m_trace_size;
             uint32_t                                                    m_mem_block_size;
 
             std::map<void*, MemoryPool*>                                m_object_pools;
             std::map<void*, MemoryPool*>::iterator                      m_current_pool[kRocProfVisNumberOfObjectTypes];
             std::mutex                                                  m_pool_mutex;
+
+            void*  Allocate(size_t size, rocprofvis_object_type_t type);
+            void   CleanUp();
+            size_t GetMemoryManagerSizeLimit();
 
         };
 

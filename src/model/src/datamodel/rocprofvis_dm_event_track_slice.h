@@ -113,7 +113,8 @@ class EventTrackSlice : public TrackSlice {
     private:
 
         // vector array of event records
-        std::vector<std::unique_ptr<EventRecord>>    m_samples;
+        std::vector<EventRecord*>    m_samples;
+
 };
 
 }  // namespace DataModel

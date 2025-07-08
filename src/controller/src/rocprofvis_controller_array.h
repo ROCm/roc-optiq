@@ -12,6 +12,8 @@ namespace RocProfVis
 namespace Controller
 {
 
+class Trace;
+
 class Array : public Handle
 {
 public:
@@ -19,6 +21,9 @@ public:
     virtual ~Array();
 
     std::vector<Data>& GetVector(void);
+
+    void SetContext(Handle* ctx);
+    Handle* GetContext(void) override;
 
     rocprofvis_controller_object_type_t GetType(void) final;
 
@@ -43,6 +48,7 @@ public:
 
 private:
     std::vector<Data> m_array;
+    Trace*            m_ctx;
 };
 
 }

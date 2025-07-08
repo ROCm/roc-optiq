@@ -21,7 +21,11 @@ class FlowControl;
 class Event : public Handle
 {
 public:
+    Event(Event* other);
     Event(uint64_t id, double start_ts, double end_ts);
+
+    Event& Event::operator=(Event&& other);
+    Event& Event::operator=(const Event& other);
 
     virtual ~Event();
 

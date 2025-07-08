@@ -184,6 +184,8 @@ FlameTrackItem::RenderChart(float graph_width)
         // If size of flame duration is too large for a float, cap it to FLT_MAX
         float normalized_duration =
             static_cast<float>(std::min<double>(flame.m_duration * m_scale_x, FLT_MAX));
+        // Any event must be visible on screen, having at least one point duration 
+        normalized_duration   = std::max(normalized_duration, 1.0F);
         double normalized_end = normalized_start + normalized_duration;
 
         if(normalized_end < container_pos.x ||

@@ -231,8 +231,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             break;
         }
 
-        if(SQLITE_OK != DetectTable(Connection(), "event_levels_api", false) ||
-           SQLITE_OK != DetectTable(Connection(), "event_levels_op", false))
+        if(SQLITE_OK != DetectTable(GetServiceConnection(), "event_levels_api", false) ||
+           SQLITE_OK != DetectTable(GetServiceConnection(), "event_levels_op", false))
         {
             m_event_levels[kRocProfVisDmOperationLaunch].reserve(
                 TraceProperties()->events_count[kRocProfVisDmOperationLaunch]);

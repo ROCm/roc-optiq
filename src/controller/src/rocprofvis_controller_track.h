@@ -16,19 +16,22 @@ namespace Controller
 {
 
 class Array;
+class Trace;
 
 class Track : public Handle
 {
 public:
-    Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle);
+    Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, Trace* ctx);
 
     virtual ~Track();
 
     rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
     rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index);
+    void LockSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
 
     rocprofvis_controller_object_type_t GetType(void) final;
     rocprofvis_dm_track_t GetDmHandle(void);
+    Handle* GetContext(void) override;
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -43,16 +46,18 @@ public:
 
 private:
     uint64_t m_id;
-    uint64_t m_num_elements;
+    uint64_t m_num_entries;
     rocprofvis_controller_track_type_t m_type;
     SegmentTimeline m_segments;
     double m_start_timestamp;
     double m_end_timestamp;
     std::string m_name;
     rocprofvis_dm_track_t m_dm_handle;
+    Trace* m_ctx;
 
 private:
     rocprofvis_result_t FetchFromDataModel(double start, double end);
+
 };
 
 }

@@ -304,6 +304,12 @@ void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
     RocProfVis::Controller::ArrayRef array(object);
     if (array.IsValid())
     {
+        if(array.Get()->GetContext() &&
+           ((RocProfVis::Controller::Trace*) array.Get()->GetContext())->GetMemoryManager())
+        {
+            ((RocProfVis::Controller::Trace*)array.Get()->GetContext())->GetMemoryManager()->CancelArrayOwnersip(
+                &array.Get()->GetVector());
+        }
         delete array.Get();
     }
 }

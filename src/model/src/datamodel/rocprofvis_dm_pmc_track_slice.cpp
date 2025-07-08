@@ -35,7 +35,9 @@ PmcTrackSlice::PmcTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start, rocpro
 //AddRecord method adds an object to a m_samples
 rocprofvis_dm_result_t PmcTrackSlice::AddRecord(rocprofvis_db_record_data_t & data){
     try{
-        m_samples.emplace_back(std::make_unique<PmcRecord>(data.pmc.timestamp,data.pmc.value));
+        void*        record_memory = Allocate(sizeof(PmcRecord));
+        PmcRecord* record        = new(record_memory) PmcRecord(data.pmc.timestamp, data.pmc.value);
+        m_samples.emplace_back(record);
     }
     catch(std::exception ex)
     {
@@ -53,8 +55,8 @@ size_t PmcTrackSlice::GetNumberOfRecords(){
 }
 
 rocprofvis_dm_result_t PmcTrackSlice::ConvertTimestampToIndex(const rocprofvis_dm_timestamp_t timestamp, rocprofvis_dm_index_t & index){
-    std::vector<std::unique_ptr<PmcRecord>>::iterator it = std::find_if( m_samples.begin(), m_samples.end(),
-            [&timestamp](std::unique_ptr < PmcRecord> & x) { return x.get()->Timestamp() >= timestamp;});
+    std::vector<PmcRecord*>::iterator it = std::find_if( m_samples.begin(), m_samples.end(),
+            [&timestamp](PmcRecord* & x) { return x->Timestamp() >= timestamp;});
     if (it != m_samples.end())
     {
         index = (rocprofvis_dm_index_t)(it - m_samples.begin());
@@ -65,13 +67,13 @@ rocprofvis_dm_result_t PmcTrackSlice::ConvertTimestampToIndex(const rocprofvis_d
 
 rocprofvis_dm_result_t PmcTrackSlice::GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    timestamp = m_samples[index].get()->Timestamp();
+    timestamp = m_samples[index]->Timestamp();
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t PmcTrackSlice::GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    value = m_samples[index].get()->Value();
+    value = m_samples[index]->Value();
     return kRocProfVisDmResultSuccess;
 }
 

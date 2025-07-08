@@ -22,11 +22,16 @@
 
 #include "rocprofvis_db.h"
 #include "sqlite3.h" 
+#include <unordered_set>
+#include <mutex>
+#include <condition_variable>
 
 namespace RocProfVis
 {
 namespace DataModel
 {
+
+#define MAX_CONNECTIONS 100
 
 // type of sqlite3_exec callback function
 typedef int (*RpvSqliteExecuteQueryCallback)(void*, int, sqlite3_stmt*, char**);
@@ -61,9 +66,7 @@ class SqliteDatabase : public Database
         // Database constructor
         // @param path - full path to database file
         SqliteDatabase( rocprofvis_db_filename_t path) : 
-                        Database(path), 
-                        m_db(nullptr),
-                        m_db_status(SQLITE_ERROR) {};
+                        Database(path) {};
         // SqliteDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~SqliteDatabase() {Close();}
         // Method to open sqlite database
@@ -76,11 +79,6 @@ class SqliteDatabase : public Database
         // Method to close sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Close() override;
-        // Method to check if database is open
-        // @return True if open
-        bool IsOpen() override {return m_db != nullptr && m_db_status == SQLITE_OK;}
-
-        sqlite3* Connection() { return m_db; }
 
     protected:
         // Method to create SQL table
@@ -108,16 +106,6 @@ class SqliteDatabase : public Database
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
                                                 const char* query, 
                                                 RpvSqliteExecuteQueryCallback callback);
-
-        // Method for SQL query execution with specified database connection and callback to process table rows
-        // @param future - future object for asynchronous execution status
-        // @param query - SQL query
-        // @param callback - sqlite3_exec callback method for data processing
-        // @return status of operation
-        rocprofvis_dm_result_t ExecuteSQLQuery(sqlite3* db_conn, 
-                                               Future* future,
-                                               const char*                   query,
-                                               RpvSqliteExecuteQueryCallback callback);
         // Method for single row and column SQL query execution returning result of the query as string 
         // @param future - future object for asynchronous execution status
         // @param query - SQL query
@@ -159,20 +147,6 @@ class SqliteDatabase : public Database
                                                 const char* query,
                                                 rocprofvis_dm_handle_t handle, 
                                                 RpvSqliteExecuteQueryCallback callback);
-        // Method for SQL query execution with specified database connection and handle parameter.
-        // Used for callbacks storing data into container with rocprofvis_dm_handle_t
-        // handle
-        // @param db_conn - database connection
-        // @param future - future object for asynchronous execution status
-        // @param query - SQL query
-        // @param handle - handle of a container processed rows to be stored
-        // @param callback - sqlite3_exec callback method for data processing
-        // @return status of operation
-        rocprofvis_dm_result_t ExecuteSQLQuery(sqlite3* db_conn, 
-                                               Future*  future,
-                                               const char*                   query,
-                                               rocprofvis_dm_handle_t        handle,
-                                               RpvSqliteExecuteQueryCallback callback);
          // Method for SQL query execution with multi-use subquery parameter. 
         // Used for callbacks storing data into container with rocprofvis_dm_handle_t handle
         // @param future - future object for asynchronous execution status
@@ -213,10 +187,10 @@ class SqliteDatabase : public Database
                                                RpvSqliteExecuteQueryCallback callback);
 
         // Method to check if table exists in database
-        // @param db - pointer to sqlite3 object built from the sqlite3 amalgamation
         // @param is_view - true if view
         // @param table - name of the table
-        static int DetectTable(sqlite3 *db, const char* table, bool is_view = true);
+        // @param conn - connection
+        static int DetectTable(sqlite3* conn, const char* table, bool is_view = true);
 
         // sqlite3_exec callback to read value from single column and single row
         // @param data - pointer to callback caller argument
@@ -235,31 +209,25 @@ class SqliteDatabase : public Database
 
         static rocprofvis_dm_result_t ExecuteSQLQueryStatic(
             SqliteDatabase* db, 
-            rocprofvis_db_connection_t conn,
             Future* future, 
             const char* query,
             RpvSqliteExecuteQueryCallback callback);
 
+        sqlite3* GetServiceConnection();
+
     private:     
 
-        // sqlite3_exec callback to succeed if table exists in database and fail otherwise
-        // @param data - pointer to callback caller argument
-        // @param argc - number of columns in the query
-        // @param argv - pointer to row values
-        // @param azColName - pointer to column names  
-        // @return SQLITE_OK if successful
-        static int CallbackTableExists(void *data, int argc, char** argv, char **azColName);
+        std::unordered_set<sqlite3*> m_available_connections;
+        std::unordered_set<sqlite3*> m_connections_inuse;
+        std::mutex         m_mutex;
+        std::condition_variable      m_inuse_cv;
 
-        // pointer to sqlite3 object built from the sqlite3 amalgamation
-        sqlite3 *m_db;
-        // curent database status
-        int m_db_status;
 
         // method to run SQL query
         // @param db_conn - database connection 
         // @param query - SQL query
         // @param params - set of parameters to be passed to sqlite3_exec callback
-        rocprofvis_dm_result_t ExecuteSQLQuery(sqlite3 *db_conn, const char* query, rocprofvis_db_sqlite_callback_parameters * params);
+        rocprofvis_dm_result_t ExecuteSQLQuery(const char* query, rocprofvis_db_sqlite_callback_parameters * params);
 
         // method to mimic slite3_exec using sqlite3_prepare_v2
         // @param db - database connection
@@ -269,6 +237,9 @@ class SqliteDatabase : public Database
         int Sqlite3Exec(sqlite3* db, const char* query,
                                         int (*callback)(void*, int, sqlite3_stmt*, char**),
                                         void* user_data);
+        sqlite3* GetConnection(); 
+        
+        void ReleaseConnection(sqlite3* conn);
 
 };
 

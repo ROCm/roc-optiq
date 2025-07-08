@@ -23,7 +23,7 @@ typedef struct rocprofvis_data_point_t
     double y_value;
 } rocprofvis_data_point_t;
 
-typedef struct rocprofvis_graph_map_t
+typedef struct rocprofvis_graph_t
 {
     enum
     {
@@ -38,7 +38,7 @@ typedef struct rocprofvis_graph_map_t
     bool                        make_boxplot;
     rocprofvis_color_by_value_t color_by_value_digits;
 
-} rocprofvis_graph_map_t;
+} rocprofvis_graph_t;
 
 }  // namespace View
 }  // namespace RocProfVis

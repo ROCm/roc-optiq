@@ -41,9 +41,9 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
 
         // loop trough tracks and filter out ones that don't match the table type
         std::vector<uint64_t> filtered_tracks;
-        for(uint64_t track_index : tracks)
+        for(uint64_t track_id : tracks)
         {
-            const track_info_t* track_info = m_data_provider.GetTrackInfo(track_index);
+            const track_info_t* track_info = m_data_provider.GetTrackInfo(track_id);
             if(track_info)
             {
                 if((track_info->track_type == kRPVControllerTrackTypeSamples &&
@@ -51,7 +51,7 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
                    (track_info->track_type == kRPVControllerTrackTypeEvents &&
                     m_table_type == TableType::kEventTable))
                 {
-                    filtered_tracks.push_back(track_index);
+                    filtered_tracks.push_back(track_id);
                 }
             }
         }
@@ -150,7 +150,7 @@ InfiniteScrollTable::Render()
     {
         row_count            = event_table_params->m_req_row_count;
         start_row            = event_table_params->m_start_row;
-        selected_track_count = event_table_params->m_track_indices.size();
+        selected_track_count = event_table_params->m_track_ids.size();
     }
     uint64_t end_row = start_row + row_count;
     if(end_row >= total_row_count)
@@ -329,7 +329,7 @@ InfiniteScrollTable::Render()
                                       scroll_y);
 
                         m_data_provider.FetchMultiTrackTable(TableRequestParams(
-                            m_req_table_type, event_table_params->m_track_indices,
+                            m_req_table_type, event_table_params->m_track_ids,
                             event_table_params->m_start_ts, event_table_params->m_end_ts,
                             new_start_pos, m_fetch_chunk_size,
                             event_table_params->m_sort_column_index,
@@ -360,7 +360,7 @@ InfiniteScrollTable::Render()
                                       scroll_y);
 
                         m_data_provider.FetchMultiTrackTable(TableRequestParams(
-                            m_req_table_type, event_table_params->m_track_indices,
+                            m_req_table_type, event_table_params->m_track_ids,
                             event_table_params->m_start_ts, event_table_params->m_end_ts,
                             new_start_pos, m_fetch_chunk_size,
                             event_table_params->m_sort_column_index,
@@ -396,7 +396,7 @@ InfiniteScrollTable::Render()
 
             // Fetch the event table with the updated params
             m_data_provider.FetchMultiTrackTable(TableRequestParams(
-                m_req_table_type, event_table_params->m_track_indices,
+                m_req_table_type, event_table_params->m_track_ids,
                 event_table_params->m_start_ts, event_table_params->m_end_ts,
                 event_table_params->m_start_row, event_table_params->m_req_row_count,
                 event_table_params->m_sort_column_index,

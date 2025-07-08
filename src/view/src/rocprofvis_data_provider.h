@@ -46,6 +46,7 @@ typedef struct track_info_t
     double                             min_ts;       // starting time stamp of track
     double                             max_ts;       // ending time stamp of track
     uint64_t                           num_entries;  // number of entries in the track
+    rocprofvis_handle_t*               graph_handle;  // handle to the graph object owned by the track 
 } track_info_t;
 
 
@@ -84,7 +85,7 @@ public:
 class TrackRequestParams : public RequestParamsBase
 {
 public:
-    uint64_t m_index;             // index of track that is being requested
+    uint64_t m_track_id;          // id of track that is being requested
     double   m_start_ts;          // start time stamp of data being requested
     double   m_end_ts;            // end time stamp of data being requested
     uint32_t m_horz_pixel_range;  // horizontal pixel range for the request
@@ -92,9 +93,9 @@ public:
     TrackRequestParams(const TrackRequestParams& other)            = default;
     TrackRequestParams& operator=(const TrackRequestParams& other) = default;
 
-    TrackRequestParams(uint64_t index, double start_ts, double end_ts,
+    TrackRequestParams(uint64_t track_id, double start_ts, double end_ts,
                        uint32_t horz_pixel_range)
-    : m_index(index)
+    : m_track_id(track_id)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
     , m_horz_pixel_range(horz_pixel_range)
@@ -106,7 +107,7 @@ class TableRequestParams : public RequestParamsBase
 {
 public:
     rocprofvis_controller_table_type_t m_table_type;  // type of the table
-    std::vector<uint64_t> m_track_indices;  // indices of the tracks in the table
+    std::vector<uint64_t> m_track_ids;  // ids of the tracks in the table
     double                m_start_ts;   // starting time stamp of the data in the table
     double                m_end_ts;     // ending time stamp of the data in the table
     uint64_t              m_start_row;  // starting row of the data in the table
@@ -119,12 +120,12 @@ public:
 
     TableRequestParams(
         rocprofvis_controller_table_type_t table_type,
-        const std::vector<uint64_t>& track_indices, double start_ts, double end_ts,
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending)
     : m_table_type(table_type)
-    , m_track_indices(track_indices)
+    , m_track_ids(track_ids)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
     , m_start_row(start_row)
@@ -206,22 +207,22 @@ public:
 
     /*
      * Fetches a track from the controller. Stores the data in a raw track buffer.
-     * @param index: The index of the track to select
+     * @param id: The id of the track to select
      * @param start_ts: The start timestamp of the track
      * @param end_ts: The end timestamp of the track
      * @param horz_pixel_range: The horizontal pixel range of the view
      */
-    bool FetchTrack(uint64_t index, double start_ts, double end_ts,
+    bool FetchTrack(uint64_t track_id, double start_ts, double end_ts,
                     uint32_t horz_pixel_range);
 
     bool FetchTrack(const TrackRequestParams& request_params);
 
-    bool FetchWholeTrack(uint64_t index, double start_ts, double end_ts,
+    bool FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
                          uint32_t horz_pixel_range);
 
     /*
      * Fetches an event table from the controller for a single track.
-     * @param index: The index of the track to select
+     * @param id: The id of the track to select
      * @param start_ts: The start timestamp of the event table
      * @param end_ts: The end timestamp of the event table
      * @param start_row: The starting row of the sample table
@@ -229,14 +230,13 @@ public:
      * @param sort_column_index: The index of the column to sort by
      * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackEventTable(
-        uint64_t index, double start_ts, double end_ts, uint64_t start_row = -1,
+    bool FetchSingleTrackEventTable(uint64_t track_id, double start_ts, double end_ts, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
     /*
      * Fetches a sample table from the controller for a single track.
-     * @param index: The index of the track to select
+     * @param id: The id of the track to select
      * @param start_ts: The start timestamp of the sample table
      * @param end_ts: The end timestamp of the sample table
      * @param start_row: The starting row of the sample table
@@ -244,8 +244,7 @@ public:
      * @param sort_column_index: The index of the column to sort by
      * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackSampleTable(
-        uint64_t index, double start_ts, double end_ts, uint64_t start_row = -1,
+    bool FetchSingleTrackSampleTable(uint64_t track_id, double start_ts, double end_ts, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
@@ -255,14 +254,12 @@ public:
      */
     bool FetchSingleTrackTable(const TableRequestParams& table_params);
 
-    bool FetchMultiTrackSampleTable(
-        const std::vector<uint64_t>& track_indices, double start_ts, double end_ts,
+    bool FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    bool FetchMultiTrackEventTable(
-        const std::vector<uint64_t>& track_indices, double start_ts, double end_ts,
+    bool FetchMultiTrackEventTable(const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
@@ -273,9 +270,9 @@ public:
 
     /*
      * Release memory buffer holding raw data for selected track
-     * @param index: The index of the track to select
+     * @param id: The id of the track to select
      */
-    bool FreeTrack(uint64_t index);
+    bool FreeTrack(uint64_t track_id);
 
     /*
      * Output track list meta data.
@@ -284,9 +281,9 @@ public:
 
     /*
      * Output raw data of a track to the log.
-     * @param index: The index of the track to dump.
+     * @param id: The id of the track to dump.
      */
-    bool DumpTrack(uint64_t index);
+    bool DumpTrack(uint64_t track_id);
 
     void DumpTable(TableType type);
 
@@ -312,13 +309,14 @@ public:
      * Get access to the raw track data.  The returned pointer should only be
      * considered valid until the next call to Update() or any of the memory
      * freeing functions and FetchTrace() or CloseController().
-     * @param index: The index of the track data to fetch.
+     * @param id: The id of the track data to fetch.
      * @return: Pointer to the raw track data
      * or null if data for this track has not been fetched.
      */
-    const RawTrackData* GetRawTrackData(uint64_t index);
+    const RawTrackData* GetRawTrackData(uint64_t track_id);
 
-    const track_info_t* GetTrackInfo(uint64_t index);
+    const track_info_t* GetTrackInfo(uint64_t track_id);
+    std::vector<const track_info_t*> GetTrackInfoList();
 
     uint64_t GetTrackCount();
 
@@ -349,9 +347,9 @@ private:
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
 
-    void CreateRawEventData(uint64_t index, rocprofvis_controller_array_t* track_data,
+    void CreateRawEventData(uint64_t track_id, rocprofvis_controller_array_t* track_data,
                             double min_ts, double max_ts);
-    void CreateRawSampleData(uint64_t index, rocprofvis_controller_array_t* track_data,
+    void CreateRawSampleData(uint64_t track_id, rocprofvis_controller_array_t* track_data,
                              double min_ts, double max_ts);
 
     rocprofvis_controller_future_t*   m_trace_future;
@@ -371,8 +369,8 @@ private:
     event_info_t m_event_info;  // Store event info for selected event
     flow_info_t  m_flow_info;   // Store flow info for selected event
 
-    std::vector<track_info_t>  m_track_metadata;
-    std::vector<RawTrackData*> m_raw_trackdata;
+    std::unordered_map<uint64_t, track_info_t>  m_track_metadata;
+    std::unordered_map<uint64_t, RawTrackData*> m_raw_trackdata;
 
     // Store table_info_t for each TableType in a vector
     std::vector<table_info_t> m_table_infos;

@@ -62,12 +62,12 @@ private:
 class TrackDataEvent : public RocEvent
 {
 public:
-    TrackDataEvent(int event_id, uint64_t track_index, const std::string& trace_path);
-    uint64_t           GetTrackIndex();
+    TrackDataEvent(int event_id, uint64_t track_id, const std::string& trace_path);
+    uint64_t           GetTrackID();
     const std::string& GetTracePath();
 
 private:
-    uint64_t    m_track_index;
+    uint64_t    m_track_id;
     std::string m_trace_path;
 };
 

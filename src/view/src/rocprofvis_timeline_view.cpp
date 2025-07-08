@@ -887,12 +887,15 @@ TimelineView::MakeGraphView()
     uint64_t num_graphs = m_data_provider.GetTrackCount();
     int      scale_x    = 1;
     m_graphs.resize(num_graphs);
-    for(const track_info_t* track_info : m_data_provider.GetTrackInfoList())
+
+    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
+    for(int i = 0; i < track_list.size(); i ++)
     {
+        const track_info_t* track_info = track_list[i];
         if(!track_info)
         {
             // log warning (should this be an error?)
-            spdlog::warn("Missing track meta data for track id {}", track_info->id);
+            spdlog::warn("Missing track meta data for track id {}", i);
             continue;
         }
 

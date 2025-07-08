@@ -648,7 +648,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
     uint64_t track_id = table_params.m_track_ids[0];
     const track_info_t* metadata = GetTrackInfo(track_id);
 
-    if(!metadata)
+    if(metadata)
     {
         uint64_t request_id = table_params.m_table_type == kRPVControllerTableTypeEvents
                                   ? EVENT_TABLE_REQUEST_ID

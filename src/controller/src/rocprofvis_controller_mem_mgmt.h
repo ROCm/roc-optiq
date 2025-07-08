@@ -29,8 +29,7 @@ namespace RocProfVis
 
         class ComputeTrace;
 
-#define MEM_MGMT_RELEASE_NUMBER_OF_OBJECTS_IN_SINGLE_RUN        1000000
-#define MEM_MGMT_DELETE_NUMBER_OF_OBJECTS_IN_SINGLE_RUN          1000
+        constexpr uint32_t kUseVailMemoryPercent = 50;
 
         constexpr uint32_t kMemPoolBitSetSize = 4096;
 

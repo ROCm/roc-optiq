@@ -6,6 +6,12 @@
 #include <chrono>
 #include <execution>
 #include "spdlog/spdlog.h"
+#if defined(_MSC_VER)
+#include <windows.h>
+#elif defined(__GNUC__) || defined(__clang__)
+#include <sys/sysinfo.h>
+#endif
+
 
 namespace RocProfVis
 {
@@ -40,7 +46,27 @@ MemoryManager::~MemoryManager()
 // start memory manager LRU processing when trace size is known
 void MemoryManager::Init(size_t trace_size)
 {
-    m_lru_storage_limit  = trace_size / 5;      // memory limit for data stored in segments   
+#if defined(_MSC_VER)
+    MEMORYSTATUSEX mem_info;
+    mem_info.dwLength = sizeof(MEMORYSTATUSEX);
+    GlobalMemoryStatusEx(&mem_info);
+
+    uint64_t avail_phys_mem = mem_info.ullAvailPhys;
+
+    m_lru_storage_limit = (mem_info.ullAvailPhys / 100) * kUseVailMemoryPercent;
+
+#elif defined(__GNUC__) || defined(__clang__)
+    struct sysinfo mem_info;
+    sysinfo(&mem_info);
+
+    uint64_t avail_phys_mem = mem_info.freeram;
+    avail_phys_mem *= mem_info.mem_unit;
+
+    m_lru_storage_limit = (avail_phys_mem / 100) * kUseVailMemoryPercent;
+#else
+    m_lru_storage_limit = trace_size / 5;  // memory limit for data stored in segments
+#endif
+    spdlog::debug("Memory manager memory limit = {}!", m_lru_storage_limit);
     m_lru_thread         = std::thread(&MemoryManager::ManageLRU, this);
     m_mem_mgmt_initialized = true;
 }

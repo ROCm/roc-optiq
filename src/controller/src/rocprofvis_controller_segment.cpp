@@ -36,7 +36,7 @@ Segment::~Segment()
         {
             for(auto& pair : level.second)
             {
-                ((Trace*) m_ctx->GetContext())->GetMemoryManager()->Delete(pair.second, m_ctx);
+                ((Trace*) m_ctx->GetContext())->GetMemoryManager()->Delete(pair.second);
             }
         }
     }

@@ -247,7 +247,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
                                 uint64_t event_id=0;
                                 events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);
-                                Event* event = m_ctx->GetMemoryManager()->NewEvent(event_id, event_min, event_max, this);
+                                Event* event = m_ctx->GetMemoryManager()->NewEvent(event_id, event_min, event_max);
                                 ROCPROFVIS_ASSERT(level != UINT64_MAX);
                                 event->SetUInt64(kRPVControllerEventLevel, 0, level);
                                 event->SetString(kRPVControllerEventName, 0,
@@ -282,7 +282,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
                 uint64_t event_id = 0;
                 events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);
-                Event* event = m_ctx->GetMemoryManager()->NewEvent(event_id, event_min, event_max, this);
+                Event* event = m_ctx->GetMemoryManager()->NewEvent(event_id, event_min, event_max);
                 ROCPROFVIS_ASSERT(level != UINT64_MAX);
                 event->SetUInt64(kRPVControllerEventLevel, 0, level);
                 event->SetString(kRPVControllerEventName, 0, combined_name.c_str(),
@@ -335,7 +335,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                             {
                                 SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
                                     (rocprofvis_controller_primitive_type_t) type, 0,
-                                    sample_start, samples, this);
+                                    sample_start, samples);
                                 Insert(lod_to_generate, sample_start, 0, new_sample);
                             }
 
@@ -365,7 +365,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
             {
                 SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
                     (rocprofvis_controller_primitive_type_t) type, 0,
-                                  sample_start, samples, this);
+                                  sample_start, samples);
                 Insert(lod_to_generate, sample_start, 0, new_sample);
             }
         }

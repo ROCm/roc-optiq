@@ -147,7 +147,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                         {
                                             Event* new_event = GetMemoryManager()->NewEvent(
                                                 event_id++, event.m_start_ts,
-                                                event.m_start_ts + event.m_duration, track);
+                                                event.m_start_ts + event.m_duration);
                                             if(new_event)
                                             {
                                                 result = new_event->SetString(
@@ -246,7 +246,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                             Sample* new_sample =
                                                 GetMemoryManager()->NewSample(
                                                 kRPVControllerPrimitiveTypeDouble,
-                                                sample_id++, sample.m_start_ts, track);
+                                                sample_id++, sample.m_start_ts);
                                             if(new_sample)
                                             {
                                                 new_sample->SetObject(

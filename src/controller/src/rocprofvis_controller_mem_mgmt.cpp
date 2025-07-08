@@ -23,7 +23,12 @@ MemoryManager::MemoryManager()
 , m_lru_storage_memory_used(0)
 , m_lru_mgmt_shutdown(false)
 , m_mem_mgmt_initialized(false)
+, m_mem_block_size(1024)
 { 
+    for(int type = 0; type < kRocProfVisNumberOfObjectTypes; type++)
+    {
+        m_current_pool[type] = m_object_pools.end();
+    }
 }
 
 MemoryManager::~MemoryManager()
@@ -66,7 +71,19 @@ void MemoryManager::Init(size_t trace_size)
 #else
     m_lru_storage_limit = trace_size / 5;  // memory limit for data stored in segments
 #endif
+
+    m_mem_block_size = m_lru_storage_limit / 1073741824;
+    if (m_mem_block_size == 0)
+    {
+        m_mem_block_size = 512;
+    }
+    else
+    {
+        m_mem_block_size *= 1024;
+    }
     spdlog::debug("Memory manager memory limit = {}!", m_lru_storage_limit);
+    spdlog::debug("Memory manager memory allocation block  size = {}!", m_mem_block_size);
+    
     m_lru_thread         = std::thread(&MemoryManager::ManageLRU, this);
     m_mem_mgmt_initialized = true;
 }
@@ -201,12 +218,6 @@ MemoryManager::ManageLRU()
                 {
                     break;
                 }
-                //if((++counter % 10000) == 0)
-                //{
-                //    lock.unlock();
-                //    std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                //    lock.lock();
-                //}
             }
         }    
     }
@@ -214,48 +225,54 @@ MemoryManager::ManageLRU()
 
 
 void*
-MemoryManager::Allocate(size_t size, Handle* owner)
+MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type)
 {
     std::lock_guard<std::mutex> lock(m_pool_mutex);
     MemoryPool* current_pool = nullptr;
-    auto owner_it = m_current_pool.find(owner);
-    if (owner_it != m_current_pool.end())
+    uint32_t first_zero_bit = 0;
+    if(m_current_pool[type] != m_object_pools.end())
     {
-        auto it = owner_it->second;
-        current_pool = it->second;
-    }
-
-    if(current_pool == nullptr || current_pool->m_pos == kMemPoolBitSetSize)
-    {
-        current_pool = new MemoryPool(size);
-        auto pair = m_object_pools[owner].insert(std::pair<void*, MemoryPool*>(current_pool->m_base, current_pool));
-        if(pair.second)
+        current_pool = m_current_pool[type]->second;
+        first_zero_bit =
+            current_pool->m_pos >= current_pool->m_bitmask.Size() || 
+                                   current_pool->m_bitmask.Test(current_pool->m_pos)
+                             ? current_pool->m_bitmask.FindFirstZero()
+                             : current_pool->m_pos++;
+        if (first_zero_bit == current_pool->m_bitmask.Size())
         {
-            m_current_pool[owner] = pair.first;
-            m_lru_storage_memory_used += size * kMemPoolBitSetSize;
+            current_pool = nullptr;
+            first_zero_bit = 0;
         }
     }
-    char* ptr = (char*)current_pool->m_base + (current_pool->m_pos * size);
-    current_pool->m_bitmask.set(current_pool->m_pos++);
+
+    if(current_pool == nullptr)
+    {
+        current_pool = new MemoryPool(size, m_mem_block_size);
+        auto pair = m_object_pools.insert(std::pair<void*, MemoryPool*>(current_pool->m_base, current_pool));
+        if(pair.second)
+        {
+            m_current_pool[type] = pair.first;
+            m_lru_storage_memory_used += size * current_pool->m_bitmask.Size();
+        }
+    }
+    char* ptr = (char*) current_pool->m_base + (first_zero_bit * size);
+    current_pool->m_bitmask.Set(first_zero_bit);
     return ptr;
 }
 
 void MemoryManager::CleanUp() {
 
-    for(auto pool = m_object_pools.begin(); pool != m_object_pools.end(); ++pool)
+    for(auto it = m_object_pools.begin(); it != m_object_pools.end(); ++it)
     {
-        for(auto it = pool->second.begin(); it != pool->second.end(); ++it)
-        {
             delete it->second;
-        }
     }
 }
 
 Event*
-MemoryManager::NewEvent(uint64_t id, double start_ts, double end_ts, Handle* owner)
+MemoryManager::NewEvent(uint64_t id, double start_ts, double end_ts)
 {
     Event* event = nullptr;
-    void* ptr = Allocate(sizeof(Event), owner);
+    void*  ptr   = Allocate(sizeof(Event), kRocProfVisObjectTypeEvent);
     if(ptr)
     {
         event = new(ptr) Event(id, start_ts, end_ts);
@@ -264,10 +281,10 @@ MemoryManager::NewEvent(uint64_t id, double start_ts, double end_ts, Handle* own
 }
 
 Event*
-MemoryManager::NewEvent(Event* other, Handle* owner)
+MemoryManager::NewEvent(Event* other)
 {
     Event* event = nullptr;
-    void*  ptr   = Allocate(sizeof(Event), owner);
+    void*  ptr   = Allocate(sizeof(Event), kRocProfVisObjectTypeEvent);
     if(ptr)
     {
         event = new(ptr) Event(other);
@@ -277,10 +294,10 @@ MemoryManager::NewEvent(Event* other, Handle* owner)
 
 Sample*
 MemoryManager::NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id,
-                         double timestamp, Handle* owner)
+                         double timestamp)
 {
     Sample* sample = nullptr;
-    void*  ptr   = Allocate(sizeof(Sample), owner);
+    void*   ptr    = Allocate(sizeof(Sample), kRocProfVisObjectTypeSample);
     if(ptr)
     {
         sample = new(ptr) Sample(type, id, timestamp);
@@ -290,11 +307,10 @@ MemoryManager::NewSample(rocprofvis_controller_primitive_type_t type, uint64_t i
 
 SampleLOD*
 MemoryManager::NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id,
-                            double timestamp, std::vector<Sample*>& children,
-                            Handle* owner)
+                            double timestamp, std::vector<Sample*>& children)
 {
     SampleLOD* sample = nullptr;
-    void*   ptr    = Allocate(sizeof(SampleLOD), owner);
+    void*      ptr    = Allocate(sizeof(SampleLOD), kRocProfVisObjectTypeSampleLOD);
     if(ptr)
     {
         sample = new(ptr) SampleLOD(type, id, timestamp, children);
@@ -304,26 +320,27 @@ MemoryManager::NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_
 }
 
 void
-MemoryManager::Delete(Handle* handle, Handle* owner)
+MemoryManager::Delete(Handle* handle)
 {
     void* ptr = handle;
     std::lock_guard<std::mutex> lock(m_pool_mutex);
-    auto  it = m_object_pools[owner].upper_bound(ptr);
+    auto  it = m_object_pools.upper_bound(ptr);
     --it;
     MemoryPool* pool = it->second;
     char*       base      = (char*)pool->m_base;
-    size_t      size      = pool->m_size * kMemPoolBitSetSize;
+    size_t      size      = pool->m_size * pool->m_bitmask.Size();
     char*       end       = base + size;
     if(ptr >= base && ptr < end) 
     {
         handle->~Handle();
         uint64_t index = ((char*)ptr - base) / pool->m_size;
-        pool->m_bitmask.reset(index);
+        pool->m_bitmask.Clear(index);
+        pool->m_pos = index;
         
-        if(pool->m_bitmask.none() && pool->m_pos == kMemPoolBitSetSize)
+        if(pool->m_bitmask.None())
         {
             m_lru_storage_memory_used -= size;
-            m_object_pools[owner].erase(it);
+            m_object_pools.erase(it);
             delete pool;
         }
     } else
@@ -333,6 +350,77 @@ MemoryManager::Delete(Handle* handle, Handle* owner)
     
 }
 
+
+void
+BitSet::Set(size_t pos)
+{
+    size_t word = pos / WORD_SIZE;
+    size_t bit  = pos % WORD_SIZE;
+    m_bits[word] |= (1ULL << bit);
+}
+
+void
+BitSet::Clear(size_t pos)
+{
+    size_t word = pos / WORD_SIZE;
+    size_t bit  = pos % WORD_SIZE;
+    m_bits[word] &= ~(1ULL << bit);
+}
+
+bool
+BitSet::Test(size_t pos) const
+{
+    size_t word = pos / WORD_SIZE;
+    size_t bit  = pos % WORD_SIZE;
+    return m_bits[word] & (1ULL << bit);
+}
+
+bool
+BitSet::None() const
+{
+    for(const auto& word : m_bits)
+    {
+        if(word != 0) return false;
+    }
+    return true;
+}
+
+uint32_t
+BitSet::FindFirstZero() const
+{
+    for(size_t i = 0; i < m_bits.size(); ++i)
+    {
+        uint64_t w = m_bits[i];
+        if(~w != 0)
+        {
+            uint64_t free_bits = ~w;
+#if defined(_MSC_VER)
+            unsigned long bit_index;
+            _BitScanForward64(&bit_index, free_bits);
+            size_t bit_pos = i * WORD_SIZE + bit_index;
+#else
+            size_t bit_index = __builtin_ctzll(free_bits);
+            size_t bit_pos   = i * WORD_SIZE + bit_index;
+#endif
+            if(bit_pos < Size()) return bit_pos;
+        }
+    }
+    return Size();
+}
+
+uint32_t
+BitSet::Count() const {
+    size_t total = 0;
+    for(const auto& word : m_bits)
+    {
+#if defined(_MSC_VER)
+        total += __popcnt64(word);
+#else
+        total += __builtin_popcountll(word);
+#endif
+    }
+    return total;
+}
 
 
 }  // namespace Controller

@@ -31,21 +31,48 @@ namespace RocProfVis
 
         constexpr uint32_t kUseVailMemoryPercent = 50;
 
-        constexpr uint32_t kMemPoolBitSetSize = 4096;
+        typedef enum rocprofvis_object_type_t
+        {
+            kRocProfVisObjectTypeEvent,
+            kRocProfVisObjectTypeSample,
+            kRocProfVisObjectTypeSampleLOD,
+            kRocProfVisNumberOfObjectTypes
+        } rocprofvis_object_type_t;
 
+        class BitSet
+        {
+        private:
+            std::vector<uint64_t>   m_bits;
+            static constexpr size_t WORD_SIZE = 64;
+
+        public:
+
+            BitSet(size_t total_bits)
+            : m_bits((total_bits + WORD_SIZE - 1) / WORD_SIZE, 0) {}
+
+            size_t Size() const { return m_bits.size() * WORD_SIZE; }
+            void Set(size_t pos);
+            void Clear(size_t pos);
+            bool Test(size_t pos) const;
+            uint32_t FindFirstZero() const;
+            bool   None() const;
+            uint32_t Count() const;
+            
+        };
 
         struct MemoryPool
         {
             void*                           m_base;
             size_t                          m_size;
-            std::bitset<kMemPoolBitSetSize> m_bitmask;
+            BitSet                          m_bitmask;
             uint32_t                        m_pos;
 
-            MemoryPool(size_t size)
-            : m_size(size)
+            MemoryPool(uint32_t object_size, uint32_t num_objects)
+            : m_size(object_size)
             , m_pos(0)
+            , m_bitmask(num_objects)
             {
-                m_base = ::operator new(size * kMemPoolBitSetSize);
+                m_base = ::operator new(object_size * m_bitmask.Size());
             }
 
             ~MemoryPool() {
@@ -83,13 +110,13 @@ namespace RocProfVis
             rocprofvis_result_t CancelArrayOwnersip(void* array_ptr);
             void                ManageLRU();
 
-            void*               Allocate(size_t size, Handle* owner);
-            void                Delete(Handle* handle, Handle* owner);
+            void*               Allocate(size_t size, rocprofvis_object_type_t type);
+            void                Delete(Handle* handle);
             void                CleanUp();
-            Event*              NewEvent(uint64_t id, double start_ts, double end_ts, Handle* owner);
-            Event*              NewEvent(Event* event, Handle* owner);
-            Sample*             NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, Handle* owner);
-            SampleLOD*          NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, std::vector<Sample*>& children, Handle* owner);
+            Event*              NewEvent(uint64_t id, double start_ts, double end_ts);
+            Event*              NewEvent(Event* event);
+            Sample*             NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp);
+            SampleLOD*          NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, std::vector<Sample*>& children);
 
             
 
@@ -106,9 +133,10 @@ namespace RocProfVis
             bool                                                        m_mem_mgmt_initialized;
             size_t                                                      m_lru_storage_limit;
             std::atomic<size_t>                                         m_lru_storage_memory_used;
+            uint32_t                                                    m_mem_block_size;
 
-            std::map < Handle*, std::map<void*, MemoryPool*>>           m_object_pools;
-            std::map<Handle*, std::map<void*, MemoryPool*>::iterator>   m_current_pool;
+            std::map<void*, MemoryPool*>                                m_object_pools;
+            std::map<void*, MemoryPool*>::iterator                      m_current_pool[kRocProfVisNumberOfObjectTypes];
             std::mutex                                                  m_pool_mutex;
 
         };

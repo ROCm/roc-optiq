@@ -249,7 +249,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                                 Event* new_event =
                                     m_ctx->GetMemoryManager()->NewEvent(
                                         event_id, timestamp,
-                                                                timestamp + duration, this);
+                                                                timestamp + duration);
                                 if(new_event)
                                 {
                                     result = new_event->SetUInt64(
@@ -301,7 +301,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
 
                                 Sample* new_sample = m_ctx->GetMemoryManager()->NewSample(
                                     kRPVControllerPrimitiveTypeDouble,
-                                                sample_id++, timestamp, this);
+                                                sample_id++, timestamp);
                                 if(new_sample)
                                 {
                                     new_sample->SetDouble(
@@ -761,7 +761,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                         if (object_type == kRPVControllerObjectTypeEvent)
                                         {
                                             Event* event = (Event*) object;
-                                            Event* event_duplicate = m_ctx->GetMemoryManager()->NewEvent(event, this);
+                                            Event* event_duplicate = m_ctx->GetMemoryManager()->NewEvent(event);
                                             segment->Insert(timestamp.start, level, event_duplicate);
                                             //spdlog::debug("Add duplicate event with id = {}", event_id);
                                         }

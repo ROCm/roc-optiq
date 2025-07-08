@@ -27,7 +27,7 @@ public:
 
     rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
     rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index);
-    rocprofvis_result_t DeleteSegment(void* target, uint32_t lod) override;
+    void LockSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
 
     rocprofvis_controller_object_type_t GetType(void) final;
     rocprofvis_dm_track_t GetDmHandle(void);

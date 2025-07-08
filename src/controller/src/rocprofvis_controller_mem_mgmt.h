@@ -73,7 +73,13 @@ namespace RocProfVis
             virtual ~MemoryManager();
 
             std::mutex&         GetMemoryManagerMutex();
-            rocprofvis_result_t AddLRUReference(SegmentTimeline* owner, Segment* reference, uint32_t lod, void* array_ptr);
+            std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
+                                GetDefaultLRUIterator();
+            std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
+                                AddLRUReference(SegmentTimeline* owner,
+                                                Segment* reference, uint32_t lod,
+                                                void* array_ptr);
+            rocprofvis_result_t EnterArrayOwnersip(void* array_ptr);
             rocprofvis_result_t CancelArrayOwnersip(void* array_ptr);
             void                ManageLRU();
 
@@ -94,6 +100,7 @@ namespace RocProfVis
             std::condition_variable                                     m_lru_cv;
             std::thread                                                 m_lru_thread;
             std::mutex                                                  m_lru_mutex;
+            std::mutex                                                  m_lru_inuse_mutex;
             bool                                                        m_lru_mgmt_shutdown;
             bool                                                        m_array_ownership_changed;
             bool                                                        m_mem_mgmt_initialized;

@@ -5,11 +5,13 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
+#include "rocprofvis_controller_mem_mgmt.h"
 #include <bitset>
 #include <map>
 #include <vector>
 #include <memory>
 #include <unordered_set>
+#include <unordered_map>
 #include <shared_mutex>
 
 namespace RocProfVis
@@ -52,6 +54,7 @@ struct SegmentItemKey
 class Segment
 {
     using rocprofvis_timeline_iterator_t = std::map<double, std::shared_ptr<Segment>>::iterator;
+    using rocprofvis_lru_iterator_t = std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator;
 public:
     Segment() = delete;
 
@@ -78,7 +81,9 @@ public:
 
     size_t              GetNumEntries();
     void                SetTimelineIterator(rocprofvis_timeline_iterator_t timeline_iterator);
+    void                SetLRUIterator(rocprofvis_lru_iterator_t lru_iterator);
     rocprofvis_timeline_iterator_t& GetTimelineIterator(void);
+    rocprofvis_lru_iterator_t& GetLRUIterator(void);
 
 private:
     Handle* m_ctx;
@@ -89,6 +94,7 @@ private:
     double m_max_timestamp;
     rocprofvis_controller_track_type_t m_type;
     rocprofvis_timeline_iterator_t  m_timeline_iterator;
+    rocprofvis_lru_iterator_t       m_lru_iterator;
 };
 
 typedef rocprofvis_result_t (*FetchSegmentsFunc)(double start, double end, Segment& segment, void* user_ptr, SegmentTimeline* owner); 
@@ -104,7 +110,8 @@ public:
     SegmentTimeline(SegmentTimeline&& other);
     SegmentTimeline& operator=(SegmentTimeline&& other);
 
-    void Init(double start_time, double segment_duration, uint32_t num_segments, Handle* ctx);
+    void Init(double start_time, double segment_duration, uint32_t num_segments);
+    void SetContext(Handle* ctx);
 
     rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
     rocprofvis_result_t Remove(Segment* segment);

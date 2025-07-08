@@ -44,6 +44,17 @@ Handle* Track::GetContext(void)
     return m_ctx;
 }
 
+
+void
+Track::LockSegments(double start, double end, void* user_ptr, FetchSegmentsFunc lock_func)
+{
+    if(m_start_timestamp <= end && m_end_timestamp >= start)
+    {
+        m_segments.SetContext(m_ctx);
+        m_segments.FetchSegments(start, end, user_ptr, lock_func);
+    }
+}
+
 rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
@@ -52,7 +63,8 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
         if (m_segments.GetSegmentDuration() == 0)
         {
             uint32_t num_segments = (uint32_t)ceil((m_end_timestamp - m_start_timestamp) / kSegmentDuration);
-            m_segments.Init(m_start_timestamp, kSegmentDuration, num_segments, m_ctx);
+            m_segments.Init(m_start_timestamp, kSegmentDuration, num_segments);
+            m_segments.SetContext(m_ctx);
         }
 
         start = std::max(start, m_start_timestamp);

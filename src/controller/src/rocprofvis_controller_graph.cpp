@@ -408,7 +408,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
             {
                 uint32_t num_segments = ceil((max_ts - min_ts) / segment_duration);
                 SegmentTimeline& segments = m_lods[lod_to_generate];
-                segments.Init(min_ts,segment_duration, num_segments, m_ctx);
+                segments.Init(min_ts,segment_duration, num_segments);
+                segments.SetContext(m_ctx);
                 it = m_lods.find(lod_to_generate);
             }
 
@@ -453,7 +454,23 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                         args.m_index       = 0;
                     	args.m_lru_params.m_ctx      = (Trace*)m_track->GetContext();
                     	args.m_lru_params.m_lod      = 0;
-                        result             = m_track->FetchSegments(
+                        m_ctx->GetMemoryManager()->EnterArrayOwnersip(&args.m_entries);
+                        m_track->LockSegments(
+                            fetch_start, fetch_end, &args,
+                            [](double start, double end, Segment& segment, void* user_ptr,
+                               SegmentTimeline* owner) -> rocprofvis_result_t {
+                                rocprofvis_result_t    result = kRocProfVisResultSuccess;
+                                FetchTrackSegmentArgs* args = (FetchTrackSegmentArgs*) user_ptr;
+                                auto it = segment.GetLRUIterator();
+                                if(it != args->m_lru_params.m_ctx->GetMemoryManager()
+                                             ->GetDefaultLRUIterator())
+                                {
+                                    it->second->m_array_ptr = &args->m_entries;
+                                }
+                                return result;
+                            });
+
+                        result = m_track->FetchSegments(
                             fetch_start, fetch_end, &args,
                             [](double start, double end, Segment& segment,
                                 void*            user_ptr,
@@ -543,7 +560,23 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
             args.m_index = &index;
             args.m_lru_params.m_ctx = m_ctx;
             args.m_lru_params.m_lod   = lod;
+            m_ctx->GetMemoryManager()->EnterArrayOwnersip(&args.m_array->GetVector());
             array.SetContext(m_ctx);
+
+            result = it->second.FetchSegments(
+                start, end, &args,
+                [](double start, double end, Segment& segment, void* user_ptr,
+                   SegmentTimeline* owner) -> rocprofvis_result_t {
+                    rocprofvis_result_t result = kRocProfVisResultSuccess;
+                    GraphFetchLODArgs*  args   = (GraphFetchLODArgs*) user_ptr;
+                    auto                it     = segment.GetLRUIterator();
+                    if(it != args->m_lru_params.m_ctx->GetMemoryManager()
+                                 ->GetDefaultLRUIterator())
+                    {
+                        it->second->m_array_ptr = &args->m_array->GetVector();
+                    }
+                    return result;
+                });
 
             result = it->second.FetchSegments(
                 start, end, &args,

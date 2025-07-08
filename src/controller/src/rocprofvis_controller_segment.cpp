@@ -197,7 +197,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
             }
             if(lru_params)
             {
-                lru_params->m_ctx->GetMemoryManager()->AddLRUReference(lru_params->m_owner, this, lru_params->m_lod, &array);
+                SetLRUIterator(lru_params->m_ctx->GetMemoryManager()->AddLRUReference(lru_params->m_owner, this, lru_params->m_lod, &array));
             }
         }
     }
@@ -259,10 +259,21 @@ Segment::SetTimelineIterator(rocprofvis_timeline_iterator_t timeline_iterator)
     m_timeline_iterator = timeline_iterator;
 }
 
+void
+Segment::SetLRUIterator(rocprofvis_lru_iterator_t lru_iterator)
+{
+    m_lru_iterator = lru_iterator;
+}
+
 Segment::rocprofvis_timeline_iterator_t&
 Segment::GetTimelineIterator(void)
 {
     return m_timeline_iterator;
+}
+
+Segment::rocprofvis_lru_iterator_t&
+Segment::GetLRUIterator(void) {
+    return m_lru_iterator;
 }
 
 size_t Segment::GetNumEntries()
@@ -307,14 +318,17 @@ SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
     return *this;
 }
 
-void SegmentTimeline::Init(double segment_start_time, double segment_duration, uint32_t num_segments, Handle* ctx)
+void SegmentTimeline::Init(double segment_start_time, double segment_duration, uint32_t num_segments)
 {
-    m_ctx                = ctx;
     m_segment_duration = segment_duration;
     m_num_segments = num_segments;
     m_segment_start_time = segment_start_time;
     uint32_t num_bitsets = (num_segments / kSegmentBitSetSize) + 1;
     m_valid_segments.resize(num_bitsets);
+}
+
+void SegmentTimeline::SetContext(Handle* ctx) {
+    m_ctx = ctx;
 }
 
 rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
@@ -375,6 +389,7 @@ SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment
     if(pair.second)
     {
         pair.first->second.get()->SetTimelineIterator(pair.first);
+        pair.first->second.get()->SetLRUIterator(((Trace*) m_ctx)->GetMemoryManager()->GetDefaultLRUIterator());
         result = kRocProfVisResultSuccess;
     }
     return result;

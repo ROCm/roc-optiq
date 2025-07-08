@@ -77,11 +77,17 @@ std::mutex& MemoryManager::GetMemoryManagerMutex()
     return m_lru_mutex;
 }
 
+std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
+MemoryManager::GetDefaultLRUIterator()
+{
+    return m_lru_array.end();
+}
+
 rocprofvis_result_t
 MemoryManager::CancelArrayOwnersip(void* array_ptr)
 {
 
-    std::unique_lock lock(m_lru_mutex);
+    std::unique_lock lock(m_lru_inuse_mutex);
     auto             it = m_lru_inuse_lookup.find(array_ptr);
     if(it != m_lru_inuse_lookup.end())
     {
@@ -95,20 +101,32 @@ MemoryManager::CancelArrayOwnersip(void* array_ptr)
 }
 
 rocprofvis_result_t
-MemoryManager::AddLRUReference(Handle* owner, Segment* reference, uint32_t lod, void* array_ptr)
+MemoryManager::EnterArrayOwnersip(void* array_ptr)
+{
+    std::unique_lock lock(m_lru_inuse_mutex);
+    auto             it = m_lru_inuse_lookup.find(array_ptr);
+    if(it == m_lru_inuse_lookup.end())
+    {
+        m_lru_inuse_lookup.insert(array_ptr);
+    }
+
+    return kRocProfVisResultSuccess;
+}
+
+
+std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
+MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint32_t lod, void* array_ptr)
 {
     uint64_t         ts  = std::chrono::time_point_cast<std::chrono::nanoseconds>(
                       std::chrono::system_clock::now())
                       .time_since_epoch()
                       .count();
 
-    auto     it                   = m_lru_array.find(reference);
-    rocprofvis_result_t result               = kRocProfVisResultMemoryAllocError;
+    auto it = reference->GetLRUIterator();
     if(it != m_lru_array.end())
     {
         it->second->m_timestamp = ts;
         it->second->m_array_ptr   = array_ptr;
-        result                 = kRocProfVisResultSuccess;
     } else
     {
         auto pair = m_lru_array.insert(std::pair<Segment*, std::unique_ptr<LRUMember>>(
@@ -116,21 +134,13 @@ MemoryManager::AddLRUReference(Handle* owner, Segment* reference, uint32_t lod, 
             std::make_unique<LRUMember>(LRUMember{ ts, owner, reference, array_ptr, lod })));
         if(pair.second)
         {
-            result = kRocProfVisResultSuccess;
+            it = pair.first;
         }
     }
 
-    if(result == kRocProfVisResultSuccess)
-    {
-        auto it  = m_lru_inuse_lookup.find(array_ptr);
-        if(it == m_lru_inuse_lookup.end())
-        {
-            m_lru_inuse_lookup.insert(array_ptr);
-        }
-    }
-
-    return result;
+    return it;
 }
+
 
 void
 MemoryManager::ManageLRU()
@@ -169,10 +179,13 @@ MemoryManager::ManageLRU()
             int counter = 0;
             for(auto* lru : sorted_lru_array)
             {
-                auto inuse = m_lru_inuse_lookup.find(lru->m_array_ptr);
-                if(inuse != m_lru_inuse_lookup.end())
                 {
-                    continue;
+                    std::unique_lock lock(m_lru_inuse_mutex);
+                    auto inuse = m_lru_inuse_lookup.find(lru->m_array_ptr);
+                    if(inuse != m_lru_inuse_lookup.end())
+                    {
+                        continue;
+                    }
                 }
 
                 Segment* reference    = lru->m_reference;

@@ -141,6 +141,10 @@ namespace RocProfVis
             void   CleanUp();
             size_t GetMemoryManagerSizeLimit();
 
+            inline static size_t                                               s_physical_memory_avail=0;
+            inline static size_t                                               s_total_loaded_size=0;
+            inline static uint32_t                                             s_num_traces=0;
+
         };
 
     }

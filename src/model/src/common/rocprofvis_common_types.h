@@ -108,8 +108,6 @@ typedef struct {
     rocprofvis_dm_timestamp_t min_ts;
     // maximum timestamp
     rocprofvis_dm_timestamp_t max_ts;
-    // sqlite connection handler
-    rocprofvis_db_connection_t db_connection;
     // list array to keep current events stack
     std::list<rocprofvis_event_timing_params_t> m_event_timing_params;
     // track query builing string, keep here for debugging purposes

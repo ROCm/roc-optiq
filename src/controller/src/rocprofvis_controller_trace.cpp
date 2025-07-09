@@ -21,6 +21,7 @@
 #include "rocprofvis_controller_process.h"
 #include "rocprofvis_controller_processor.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_core.h"
 
 #include <cfloat>
 #include <cstdint>
@@ -367,6 +368,9 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                 rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
                 if(nullptr != object2wait)
                 {
+                    std::map<uint64_t, Track*> queue_to_track;
+                    std::map<uint64_t, Track*> thread_to_track;
+                    
                     if(kRocProfVisDmResultSuccess ==
                        rocprofvis_db_read_metadata_async(db, object2wait))
                     {
@@ -446,6 +450,61 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                          0, min_ts);
                                         track->SetDouble(kRPVControllerTrackMaxTimestamp,
                                                          0, max_ts);
+
+                                        uint64_t num_ext_data = 0;
+                                        track->GetUInt64(
+                                            kRPVControllerTrackExtDataNumberOfEntries, 0,
+                                            &num_ext_data);
+                                        for (uint32_t idx = 0; idx < num_ext_data; idx++)
+                                        {
+                                            std::string category;
+                                            std::string name;
+                                            std::string value;
+                                            uint32_t    length = 0;
+                                            track->GetString(
+                                                kRPVControllerTrackExtDataCategoryIndexed,
+                                                idx, nullptr, &length);
+                                            category.resize(length);
+                                            track->GetString(
+                                                kRPVControllerTrackExtDataCategoryIndexed,
+                                                idx, category.data(), &length);
+
+                                            length = 0;
+                                            track->GetString(
+                                                kRPVControllerTrackExtDataNameIndexed,
+                                                idx, nullptr, &length);
+                                            name.resize(length);
+                                            track->GetString(
+                                                kRPVControllerTrackExtDataNameIndexed,
+                                                idx, name.data(), &length);
+
+                                            length = 0;
+                                            track->GetString(
+                                                kRPVControllerTrackExtDataValueIndexed,
+                                                idx, nullptr, &length);
+                                            value.resize(length);
+                                            track->GetString(
+                                                kRPVControllerTrackExtDataValueIndexed,
+                                                idx, value.data(), &length);
+
+                                            if (category == "Queue" && name == "id")
+                                            {
+                                                char*    end = nullptr;
+                                                uint64_t val = std::strtoull(
+                                                    value.c_str(), &end, 10);
+                                                queue_to_track[val] = track;
+                                            }
+                                            else if(category == "Thread" && name == "id")
+                                            {
+                                                char*    end = nullptr;
+                                                uint64_t val = std::strtoull(
+                                                    value.c_str(), &end, 10);
+                                                thread_to_track[val] = track;
+                                            }
+
+                                            spdlog::info("{} {} {}", category.c_str(),
+                                                         name.c_str(), value.c_str());
+                                        }
 
                                         uint32_t index = m_tracks.size();
                                         m_tracks.push_back(track);
@@ -1581,11 +1640,25 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     kRPVControllerThreadTid)
                                                             {
                                                                 char* end = nullptr;
-                                                                thread->SetUInt64(
-                                                                    columns[j], 0,
+                                                                uint64_t val =
                                                                     std::strtoull(
                                                                         prop_string, &end,
-                                                                        10));
+                                                                        10);
+                                                                thread->SetUInt64(
+                                                                    columns[j], 0,
+                                                                    val);
+
+                                                                if (columns[j] == kRPVControllerThreadId)
+                                                                {
+                                                                    Track* t =
+                                                                        thread_to_track
+                                                                            [val];
+                                                                    t->SetObject(
+                                                                        kRPVControllerTrackThread,
+                                                                        0,
+                                                                        (rocprofvis_handle_t*)
+                                                                            thread);
+                                                                }
                                                             }
                                                             else if(
                                                                 columns[j] ==
@@ -1826,6 +1899,13 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     queue->SetObject(
                                                                         kRPVControllerQueueProcessor, 0, (rocprofvis_handle_t*)p);
                                                                     queues[val] = queue;
+
+                                                                    Track* t =
+                                                                        queue_to_track
+                                                                            [val];
+                                                                    t->SetObject(
+                                                                        kRPVControllerTrackQueue,
+                                                                        0, (rocprofvis_handle_t*)queue);
                                                                 }
                                                             }
                                                             else
@@ -2062,10 +2142,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                         (rocprofvis_handle_t*)
                                                                             p);
 
-                                                                    std::set<
-                                                                        uint64_t>& set =
-                                                                        stream_to_queue
-                                                                            [val];
+                                                                    uint64_t>& set = stream_to_queue[val];
                                                                     for (uint64_t queue_id : set)
                                                                     {
                                                                         Queue* q = queues[queue_id];

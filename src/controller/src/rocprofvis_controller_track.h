@@ -16,6 +16,8 @@ namespace Controller
 {
 
 class Array;
+class Thread;
+class Queue;
 
 class Track : public Handle
 {
@@ -50,6 +52,8 @@ private:
     double m_end_timestamp;
     std::string m_name;
     rocprofvis_dm_track_t m_dm_handle;
+    Thread* m_thread;
+    Queue* m_queue;
 
 private:
     rocprofvis_result_t FetchFromDataModel(double start, double end);

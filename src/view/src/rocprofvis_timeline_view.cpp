@@ -51,10 +51,10 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_scrollbar_location_as_percentage(0)
 , m_artifical_scrollbar_active(false)
 , m_highlighted_region({ INVALID_SELECTION_TIME, INVALID_SELECTION_TIME })
-, m_new_track_token(-1)
-, m_scroll_to_track_token(-1)
+, m_new_track_token(static_cast<uint64_t>(-1))
+, m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_settings(Settings::GetInstance())
-, m_v_past_width(0)
+, m_v_past_width(0.0)
 , m_v_width(0)
 , m_viewport_past_position(0)
 , m_graph_size()
@@ -63,6 +63,10 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_region_selection_changed(false)
 , m_artificial_scrollbar_height(30)
 , m_display_time_format(TimeFormat::kTimecode)
+, m_grid_interval_ns(0.0)
+, m_recalculate_grid_interval(true)
+, m_last_zoom(1.0f)
+, m_last_graph_size(0.0f, 0.0f)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -211,7 +215,9 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
         const track_info_t* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
         if(!metadata)
         {
-            spdlog::debug("No metadata found for track id {}, cannot process new track data", tde->GetTrackID());
+            spdlog::debug(
+                "No metadata found for track id {}, cannot process new track data",
+                tde->GetTrackID());
             return;
         }
 
@@ -264,6 +270,12 @@ TimelineView::Render()
     {
         RenderGraphPoints();
     }
+    if(m_graph_size.x != m_last_graph_size.x || m_zoom != m_last_zoom) {
+        m_recalculate_grid_interval = true;
+    }
+
+    m_last_zoom = m_zoom;
+    m_last_graph_size = m_graph_size;
 }
 
 void
@@ -476,7 +488,7 @@ TimelineView::CalculateGridInterval()
     }
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
-    // calculate the number of intervals based on the graph size and label size
+    // calculate the number of intervals based on the graph width and label width
     int interval_count = m_graph_size.x / label_size.x;
 
     double interval_ns  = calculate_nice_interval(m_v_width, interval_count);
@@ -488,10 +500,13 @@ TimelineView::CalculateGridInterval()
     int loop_count = 0;
     while(step_size_px < label_size.x)
     {
+        spdlog::debug("Step size {} is smaller than label size {}, current interval_ns: {}, ",
+                      step_size_px, label_size.x, interval_ns);
         interval_count--;
-        double new_interval_ns = calculate_nice_interval(m_v_width, interval_count);
-        interval_ns            = new_interval_ns;
-        step_size_px           = interval_ns * m_pixels_per_ns;
+        interval_ns  = calculate_nice_interval(m_v_width, interval_count);
+        spdlog::debug("Adjusted interval count: {}, new interval_ns: {}",
+                      interval_count, interval_ns);
+        step_size_px = interval_ns * m_pixels_per_ns;
         loop_count++;
         // If the interval count is too small break out and pad it
         if(interval_count <= 3)
@@ -502,7 +517,7 @@ TimelineView::CalculateGridInterval()
     }
     if(loop_count > 0)
     {
-        spdlog::debug("Adjusted interval count: {}, new interval_ns: {}, step_size_px: "
+        spdlog::debug("Adjusted interval count: {}, new interval_ns: {}, step_size_px:"
                       "{} after {} iterations",
                       interval_count, interval_ns, step_size_px, loop_count);
     }
@@ -524,7 +539,11 @@ TimelineView::RenderGridAlt()
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImVec2(container_size.x - m_sidebar_size, container_size.y);
 
-    CalculateGridInterval();
+    if(m_recalculate_grid_interval)
+    {
+        CalculateGridInterval();
+        m_recalculate_grid_interval = false;
+    }
 
     constexpr float tick_height = 10.0f;
     double          start_ns    = m_view_time_offset_ns;
@@ -592,10 +611,6 @@ TimelineView::RenderGridAlt()
                 ImVec2(normalized_start,
                        cursor_position.y + content_size.y + tick_height - m_ruler_height),
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
-
-            DebugWindow::GetInstance()->AddDebugMessage(
-                "RenderGridAlt: grid_line_ns: " + std::to_string(grid_line_ns) +
-                ", normalized_start: " + std::to_string(normalized_start));
 
             switch(m_display_time_format)
             {
@@ -881,19 +896,16 @@ TimelineView::RenderGraphView()
 
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
                 ImGui::PushID(i);
-                if(ImGui::BeginChild("",
-                                     ImVec2(0, track_height), false,
+                if(ImGui::BeginChild("", ImVec2(0, track_height), false,
                                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                          ImGuiWindowFlags_NoScrollWithMouse |
                                          ImGuiWindowFlags_NoScrollbar))
                 {
                     if(m_is_control_held)
                     {
-                        ImGui::Selectable(
-                            ("Move Position " + std::to_string(i))
-                                .c_str(),
-                            false, ImGuiSelectableFlags_AllowDoubleClick,
-                            ImVec2(0, 20.0f));
+                        ImGui::Selectable(("Move Position " + std::to_string(i)).c_str(),
+                                          false, ImGuiSelectableFlags_AllowDoubleClick,
+                                          ImVec2(0, 20.0f));
 
                         /* TODO: Reordering
                         if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
@@ -1041,7 +1053,7 @@ TimelineView::MakeGraphView()
     m_range_x = m_max_x - m_min_x;
 
     m_v_width      = (m_range_x) / m_zoom;
-    m_v_past_width = m_v_width;
+    m_v_past_width = m_v_width + 1.0;  // hack to force recalculation of grid interval
 
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();
@@ -1049,7 +1061,7 @@ TimelineView::MakeGraphView()
     m_graphs.resize(num_graphs);
 
     std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
-    for(int i = 0; i < track_list.size(); i ++)
+    for(int i = 0; i < track_list.size(); i++)
     {
         const track_info_t* track_info = track_list[i];
         if(!track_info)
@@ -1356,7 +1368,7 @@ TimelineView::HandleTopSurfaceTouch()
             m_can_drag_to_pan = false;
         }
 
-        // Handle Panning (unchanged, but only if in graph area)
+        // Handle Panning (but only if in graph area)
         if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
            is_mouse_in_graph)
         {

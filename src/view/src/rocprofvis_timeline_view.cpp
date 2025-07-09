@@ -54,7 +54,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_new_track_token(static_cast<uint64_t>(-1))
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_settings(Settings::GetInstance())
-, m_v_past_width(0.0)
+, m_v_past_width(0)
 , m_v_width(0)
 , m_viewport_past_position(0)
 , m_graph_size()
@@ -479,7 +479,7 @@ TimelineView::CalculateGridInterval()
     std::string label;
     switch(m_display_time_format)
     {
-        // use the largest time point to determine the step size
+        // use the largest time point to determine the label size
         case TimeFormat::kTimecode:
             label = nanosecond_to_timecode_str(m_max_x - m_min_x) + "gap";
             break;
@@ -497,29 +497,17 @@ TimelineView::CalculateGridInterval()
     int pad_amount = 2;  // +2 for the first and last label
 
     // If the step size is smaller than the label size, try to adjust the interval count
-    int loop_count = 0;
     while(step_size_px < label_size.x)
     {
-        spdlog::debug("Step size {} is smaller than label size {}, current interval_ns: {}, ",
-                      step_size_px, label_size.x, interval_ns);
         interval_count--;
         interval_ns  = calculate_nice_interval(m_v_width, interval_count);
-        spdlog::debug("Adjusted interval count: {}, new interval_ns: {}",
-                      interval_count, interval_ns);
         step_size_px = interval_ns * m_pixels_per_ns;
-        loop_count++;
         // If the interval count is too small break out and pad it
         if(interval_count <= 3)
         {
             pad_amount++;
             break;
         }
-    }
-    if(loop_count > 0)
-    {
-        spdlog::debug("Adjusted interval count: {}, new interval_ns: {}, step_size_px:"
-                      "{} after {} iterations",
-                      interval_count, interval_ns, step_size_px, loop_count);
     }
 
     m_grid_interval_ns    = interval_ns;
@@ -552,7 +540,7 @@ TimelineView::RenderGridAlt()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    if(ImGui::BeginChild("Grid_alt"), content_size, true, window_flags)
+    if(ImGui::BeginChild("Grid"), content_size, true, window_flags)
     {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -1053,7 +1041,7 @@ TimelineView::MakeGraphView()
     m_range_x = m_max_x - m_min_x;
 
     m_v_width      = (m_range_x) / m_zoom;
-    m_v_past_width = m_v_width + 1.0;  // hack to force recalculation of grid interval
+    m_v_past_width = m_v_width;
 
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();

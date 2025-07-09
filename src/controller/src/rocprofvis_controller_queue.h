@@ -11,6 +11,8 @@ namespace RocProfVis
 namespace Controller
 {
 
+class Processor;
+
 class Queue : public Handle
 {
 public:
@@ -41,6 +43,7 @@ public:
 private:
     std::string m_name;
     std::string m_ext_data;
+    Processor*  m_processor;
     uint32_t    m_id;
     uint32_t    m_node_id;
     uint32_t    m_process_id;

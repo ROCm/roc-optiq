@@ -5,11 +5,15 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
 namespace Controller
 {
+
+class Processor;
+class Queue;
 
 class Stream : public Handle
 {
@@ -41,6 +45,8 @@ public:
 private:
     std::string m_name;
     std::string m_ext_data;
+    std::vector<Queue*> m_queues;
+    Processor*          m_processor;
     uint32_t    m_id;
     uint32_t    m_node_id;
     uint32_t    m_process_id;

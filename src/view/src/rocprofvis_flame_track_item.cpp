@@ -95,7 +95,7 @@ FlameTrackItem::ExtractPointsFromData()
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
                         rocprofvis_trace_event_t const& flame, float duration,
-                        ImDrawList* draw_list)
+                        ImDrawList* draw_list, double raw_start_time)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -139,14 +139,15 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
         // Select on click
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            if(m_selected_event_id != flame.m_id || m_dp.GetSelectedEventId() != flame.m_id)
+            if(m_selected_event_id != flame.m_id ||
+               m_dp.GetSelectedEventId() != flame.m_id)
             {
-                m_dp.SetSelectedEventId(flame.m_id);
+                m_dp.SetSelectedEventId(flame.m_id, raw_start_time, m_id);
                 m_selected_event_id = flame.m_id;
             }
             else
             {
-                m_dp.SetSelectedEventId(std::numeric_limits<uint64_t>::max());
+                m_dp.SetSelectedEventId(std::numeric_limits<uint64_t>::max(), 0, -1);
                 m_selected_event_id = std::numeric_limits<uint64_t>::max();
             }
         }
@@ -194,7 +195,8 @@ FlameTrackItem::RenderChart(float graph_width)
         }
 
         color_index = static_cast<long long>(flame.m_start_ts) % colorCount;
-        DrawBox(start_position, color_index, flame, normalized_duration, draw_list);
+        DrawBox(start_position, color_index, flame, normalized_duration, draw_list,
+                flame.m_start_ts);
     }
 
     ImGui::EndChild();

@@ -17,6 +17,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "rocprofvis_timeline_arrow.h"
 
 namespace RocProfVis
 {
@@ -49,6 +50,7 @@ public:
     void RenderGrid();
     void RenderScrubber(ImVec2 screen_pos);
     void RenderSplitter(ImVec2 screen_pos);
+    void RenderArrows(ImVec2 screen_pos);
     void RenderGraphView();
     void HandleTopSurfaceTouch();
     void CalibratePosition();
@@ -97,6 +99,8 @@ private:
     ImVec2                                m_graph_size;
     bool                                  m_region_selection_changed;
     TimeFormat                            m_display_time_format;
+    std::map<uint64_t, float>          m_track_height_total;
+    TimelineArrow                         m_arrow_layer;
 };
 
 }  // namespace View

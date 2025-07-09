@@ -4,7 +4,6 @@
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_structs.h"
-
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -47,7 +46,6 @@ typedef struct track_info_t
     double                             max_ts;       // ending time stamp of track
     uint64_t                           num_entries;  // number of entries in the track
 } track_info_t;
-
 
 typedef struct event_ext_data_t
 {
@@ -173,13 +171,19 @@ public:
     void               SetFlowInfo(const flow_info_t& info);
 
     bool FetchEventExtData(uint64_t event_id);
-    bool FetchEventFlowDetails( uint64_t event_id);
+    bool FetchEventFlowDetails(uint64_t event_id);
 
     // Get user selected event.
     uint64_t GetSelectedEventId();
 
-    //Set user selected event.
-    void SetSelectedEventId(uint64_t id);
+    // Set user selected event.
+    void SetSelectedEventId(uint64_t id, double event_position, int track_id);
+
+    // Get selected event start time
+    double GetEventPosition();
+
+    //Get track selected event sits in
+    int GetEventTrackPosition();
 
     /*
      *   Close the controller.
@@ -368,6 +372,8 @@ private:
     uint64_t     m_selected_event_id;
     double       m_selected_event_start;
     double       m_selected_event_end;
+    double       m_event_position;
+    int          m_selected_track_id;  // Track ID for the selected event
     event_info_t m_event_info;  // Store event info for selected event
     flow_info_t  m_flow_info;   // Store flow info for selected event
 

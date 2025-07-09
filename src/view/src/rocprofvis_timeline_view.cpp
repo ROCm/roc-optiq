@@ -7,6 +7,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings.h"
+#include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
@@ -64,6 +65,8 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_region_selection_changed(false)
 , m_artificial_scrollbar_height(30)
 , m_display_time_format(TimeFormat::kTimecode)
+, m_track_height_total({})
+, m_arrow_layer(TimelineArrow(m_data_provider))
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -519,7 +522,8 @@ TimelineView::RenderGrid()
         // Detect right mouse click in the ruler area
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
            ImGui::IsMouseHoveringRect(
-               ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
+               ImVec2(container_pos.x,
+                      cursor_position.y + content_size.y - m_ruler_height),
                ImVec2(container_pos.x + m_graph_size.x,
                       cursor_position.y + content_size.y)))
         {
@@ -535,7 +539,8 @@ TimelineView::RenderGrid()
             ImGui::Text("Time format:");
             ImGui::Separator();
 
-            if(ImGui::MenuItem("Timecode", nullptr, m_display_time_format == TimeFormat::kTimecode))
+            if(ImGui::MenuItem("Timecode", nullptr,
+                               m_display_time_format == TimeFormat::kTimecode))
             {
                 m_display_time_format = TimeFormat::kTimecode;
             }
@@ -569,7 +574,7 @@ TimelineView::RenderGrid()
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
             std::string label;
-            double time_point_ns =
+            double      time_point_ns =
                 m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
             switch(m_display_time_format)
             {
@@ -772,7 +777,6 @@ TimelineView::RenderGraphView()
                     m_resize_activity |= track_item.chart->GetResizeStatus();
                     track_item.chart->Render(m_graph_size.x);
 
-
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {
@@ -784,14 +788,14 @@ TimelineView::RenderGraphView()
                 }
                 ImGui::EndChild();
                 ImGui::PopStyleColor();
-                
+
                 // Draw border around the track
                 // This is done after the child window to ensure it is on top
                 ImVec2 p_min = ImGui::GetItemRectMin();
                 ImVec2 p_max = ImGui::GetItemRectMax();
                 ImGui::GetWindowDrawList()->AddRect(
-                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
-
+                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0,
+                    1.0f);
             }
             else
             {
@@ -876,8 +880,9 @@ TimelineView::MakeGraphView()
     m_v_past_width = m_v_width;
 
     /*This section makes the charts both line and flamechart are constructed here*/
-    uint64_t num_graphs = m_data_provider.GetTrackCount();
-    int      scale_x    = 1;
+    uint64_t num_graphs         = m_data_provider.GetTrackCount();
+    int      scale_x            = 1;
+    float    track_height_total = 0;
     for(uint64_t i = 0; i < num_graphs; i++)
     {
         const track_info_t* track_info = m_data_provider.GetTrackInfo(i);
@@ -910,7 +915,9 @@ TimelineView::MakeGraphView()
                 rocprofvis_color_by_value_t temp_color = {};
                 temp_flame.color_by_value_digits       = temp_color;
                 m_graph_map[track_info->index]         = temp_flame;
-
+                m_track_height_total[track_info->index] =
+                    track_height_total;  // Store the height of the flame chart
+                track_height_total += flame->GetTrackHeight();
                 break;
             }
             case kRPVControllerTrackTypeSamples:
@@ -943,7 +950,9 @@ TimelineView::MakeGraphView()
                 rocprofvis_color_by_value_t temp_color_line = {};
                 temp.color_by_value_digits                  = temp_color_line;
                 m_graph_map[track_info->index]              = temp;
-
+                m_track_height_total[track_info->index] =
+                    track_height_total;  // Store the height of the line chart
+                track_height_total += line->GetTrackHeight();
                 break;
             }
             default:
@@ -954,6 +963,89 @@ TimelineView::MakeGraphView()
     }
 
     m_meta_map_made = true;
+}
+
+void
+TimelineView::RenderArrows(ImVec2 screen_pos)
+{
+    float total_height = m_graph_size.y;
+    if(!m_track_height_total.empty())
+        total_height = std::prev(m_track_height_total.end())->second;
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoScrollWithMouse |
+                                    ImGuiWindowFlags_NoInputs;
+
+    ImGui::SetNextWindowSize(m_graph_size, ImGuiCond_Always);
+    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 255, 0, 40));
+
+    ImGui::BeginChild(
+        "Arrows Overlay",
+        ImVec2(m_graph_size.x, m_graph_size.y - m_artificial_scrollbar_height), false,
+        window_flags);
+
+    ImGui::SetScrollY(static_cast<float>(m_scroll_position));
+    ImGui::BeginChild("Arrows Overlay Content", ImVec2(m_graph_size.x, total_height),
+                      false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    ImDrawList* draw_list       = ImGui::GetWindowDrawList();
+    ImVec2      window_position = ImGui::GetWindowPos();
+
+    if(m_track_height_total.size() >= 3)
+    {
+        auto it    = m_track_height_total.begin();
+        auto first = it;
+        ++it;
+        ++it;
+        auto third = it;
+
+        double time_a = m_min_x;
+        double time_b = m_max_x;
+
+        float y_a = window_position.y + first->second + 30.0f;
+        float y_b = window_position.y + third->second + 30.0f;
+
+        if(ImGui::Button("add arrow"))
+        {
+            // Calculate start (first track, min_x)
+            float x_start = m_min_x;
+            float y_start = first->second + 30.0f;
+            m_arrow_layer.SetArrows({});
+            // Calculate end (third track, max_x)
+            float x_end = (m_max_x);
+            float y_end = third->second + 30.0f;
+
+            const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
+            if(!flowInfo.flow_data.empty())
+            {
+                for(const auto& item : flowInfo.flow_data)
+                {
+                    std::cout << "Flow ID: " << item.id
+                              << ", Timestamp: " << item.timestamp
+                              << ", Track ID: " << m_track_height_total[item.track_id]
+                              << ", Direction: " << item.direction << std::endl;
+                    std::cout << "Flow Position: " << m_data_provider.GetEventPosition()
+                              << ", Flow Track Position: "
+                              << m_data_provider.GetEventTrackPosition() << std::endl;
+
+                    m_arrow_layer.AddArrow(
+                        { ImVec2(m_data_provider.GetEventPosition(),
+                                 m_track_height_total[m_data_provider
+                                                          .GetEventTrackPosition()]),
+                          ImVec2(item.timestamp,
+                                 m_track_height_total[item.track_id] + 30.0f) });
+                }
+            }
+        }
+
+        m_arrow_layer.Draw(draw_list, m_v_min_x, m_pixels_per_ns, window_position);
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::EndChild();
 }
 
 void
@@ -998,6 +1090,7 @@ TimelineView::RenderGraphPoints()
         {
             RenderSplitter(screen_pos);
             RenderScrubber(screen_pos);
+            RenderArrows(screen_pos);
 
             if(!m_resize_activity)
             {
@@ -1112,13 +1205,12 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 m_can_drag_to_pan = true;
             }
-            
 
-            //Enables horizontal scrolling using mouse. 
+            // Enables horizontal scrolling using mouse.
             float scroll_wheel_h = io.MouseWheelH;
             if(scroll_wheel_h != 0.0f)
             {
-                const float scroll_speed = 0.1f; 
+                const float scroll_speed = 0.1f;
                 float       move_amount  = scroll_wheel_h * m_v_width * scroll_speed;
                 m_view_time_offset_ns -= move_amount;
 

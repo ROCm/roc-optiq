@@ -52,6 +52,8 @@ EventsView::Render()
             m_last_selected_event = selected_event;
         }
 
+
+
         const event_info_t& eventInfo = m_data_provider.GetEventInfoStruct();
         if(!eventInfo.ext_data.empty())
         {

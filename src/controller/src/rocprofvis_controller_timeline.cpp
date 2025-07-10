@@ -367,10 +367,6 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
                         {
                             m_graphs.erase(m_graphs.begin() + i);
                             is_replace = true;
-                            if (i < index)
-                            {
-                                index--;
-                            }
                             break;
                         }
                     }

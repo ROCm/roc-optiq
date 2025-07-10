@@ -38,22 +38,16 @@ DataProvider::GetEventInfoStruct() const
     return m_event_info;
 }
 
-void
-DataProvider::SetEventInfoStruct(const event_info_t& info)
-{
-    m_event_info = info;
-}
-
 const flow_info_t&
 DataProvider::GetFlowInfo() const
 {
     return m_flow_info;
 }
 
-void
-DataProvider::SetFlowInfo(const flow_info_t& info)
+const call_stack_info_t&
+DataProvider::GetCallStackInfo() const
 {
-    m_flow_info = info;
+    return m_call_stack_info;
 }
 
 uint64_t

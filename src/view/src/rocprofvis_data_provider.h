@@ -1,3 +1,4 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
@@ -184,13 +185,9 @@ public:
     DataProvider();
     ~DataProvider();
 
-    // Getter and Setter for m_event_info
     const event_info_t& GetEventInfoStruct() const;
-    void                SetEventInfoStruct(const event_info_t& info);
-
-    // Getter and Setter for m_flow_info
     const flow_info_t& GetFlowInfo() const;
-    void               SetFlowInfo(const flow_info_t& info);
+    const call_stack_info_t& GetCallStackInfo() const;
 
     bool FetchEventExtData(uint64_t event_id);
     bool FetchEventFlowDetails(uint64_t event_id);

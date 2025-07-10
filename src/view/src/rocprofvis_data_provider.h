@@ -334,6 +334,14 @@ public:
         const std::function<void(uint64_t, const std::string&)>& callback);
     void SetTraceLoadedCallback(const std::function<void(const std::string&)>& callback);
 
+    /*
+     * Moves a graph inside the controller's timeline to a specified index and updates the indexes of m_track_metadata. 
+     * @param track_id: The id of the track to move
+     * @param index: The desired index of the track.
+     * @return: True if operation is successful.
+     */
+    bool SetGraphIndex(uint64_t track_id, uint64_t index);
+
 private:
     void HandleLoadTrace();
     void HandleLoadTrackMetaData();

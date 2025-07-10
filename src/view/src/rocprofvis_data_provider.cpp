@@ -206,6 +206,41 @@ DataProvider::SetTraceLoadedCallback(
 }
 
 bool
+DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(m_state == ProviderState::kReady)
+    {
+        ROCPROFVIS_ASSERT(index < m_num_graphs);
+        const track_info_t* metadata = GetTrackInfo(track_id);
+        ROCPROFVIS_ASSERT(metadata);
+        result = rocprofvis_controller_set_object(m_trace_timeline,
+                                                  kRPVControllerTimelineGraphIndexed,
+                                                  index, metadata->graph_handle);
+        if(result == kRocProfVisResultSuccess)
+        {
+            rocprofvis_handle_t* graph = nullptr;
+            for (int i = 0; i < m_num_graphs; i++)
+            {
+                result = rocprofvis_controller_get_object(m_trace_timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
+                if(result == kRocProfVisResultSuccess && graph)
+                {
+                    uint64_t id = 0;
+                    result = rocprofvis_controller_get_uint64(graph, kRPVControllerGraphId, 0, &id);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        metadata = GetTrackInfo(id);
+                        ROCPROFVIS_ASSERT(metadata && metadata->graph_handle == graph);
+                        m_track_metadata[id].index = i;
+                    }
+                }
+            }
+        }
+    }
+    return (result == kRocProfVisResultSuccess);
+}
+
+bool
 DataProvider::FetchTrace(const std::string& file_path)
 {
     if(m_state == ProviderState::kLoading || m_state == ProviderState::kError)

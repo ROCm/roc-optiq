@@ -12,6 +12,7 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include <GLFW/glfw3.h>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <string>
@@ -55,6 +56,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_highlighted_region({ INVALID_SELECTION_TIME, INVALID_SELECTION_TIME })
 , m_new_track_token(-1)
 , m_scroll_to_track_token(-1)
+, m_add_arrow_token(-1)
 , m_settings(Settings::GetInstance())
 , m_v_past_width(0)
 , m_v_width(0)
@@ -85,6 +87,20 @@ TimelineView::TimelineView(DataProvider& dp)
     m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         scroll_to_track_handler);
+
+    // Used to add arrows when user selects a event
+    auto scroll_to_arrow_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<CreateArrowsView>(e);
+        if(evt)
+        {
+            std::cout << "Creating arrows for track: " << evt->GetTrackName()
+                      << std::endl;
+            this->AddArrows();
+        }
+    };
+    m_add_arrow_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kHandleUserArrowCreationEvent),
+        scroll_to_arrow_handler);
 }
 
 int
@@ -964,6 +980,22 @@ TimelineView::MakeGraphView()
 
     m_meta_map_made = true;
 }
+void
+TimelineView::AddArrows()
+{
+    const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
+    if(!flowInfo.flow_data.empty())
+    {
+        m_arrow_layer.SetArrows({});  // Clear previous arrows
+        for(const auto& item : flowInfo.flow_data)
+        {
+            m_arrow_layer.AddArrow(
+                { ImVec2(m_data_provider.GetEventPosition(),
+                         m_track_height_total[m_data_provider.GetEventTrackPosition()]),
+                  ImVec2(item.timestamp, m_track_height_total[item.track_id]) });
+        }
+    }
+}
 
 void
 TimelineView::RenderArrows(ImVec2 screen_pos)
@@ -993,55 +1025,7 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
 
-    if(m_track_height_total.size() >= 3)
-    {
-        auto it    = m_track_height_total.begin();
-        auto first = it;
-        ++it;
-        ++it;
-        auto third = it;
-
-        double time_a = m_min_x;
-        double time_b = m_max_x;
-
-        float y_a = window_position.y + first->second + 30.0f;
-        float y_b = window_position.y + third->second + 30.0f;
-
-        if(ImGui::Button("add arrow"))
-        {
-            // Calculate start (first track, min_x)
-            float x_start = m_min_x;
-            float y_start = first->second + 30.0f;
-            m_arrow_layer.SetArrows({});
-            // Calculate end (third track, max_x)
-            float x_end = (m_max_x);
-            float y_end = third->second + 30.0f;
-
-            const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
-            if(!flowInfo.flow_data.empty())
-            {
-                for(const auto& item : flowInfo.flow_data)
-                {
-                    std::cout << "Flow ID: " << item.id
-                              << ", Timestamp: " << item.timestamp
-                              << ", Track ID: " << m_track_height_total[item.track_id]
-                              << ", Direction: " << item.direction << std::endl;
-                    std::cout << "Flow Position: " << m_data_provider.GetEventPosition()
-                              << ", Flow Track Position: "
-                              << m_data_provider.GetEventTrackPosition() << std::endl;
-
-                    m_arrow_layer.AddArrow(
-                        { ImVec2(m_data_provider.GetEventPosition(),
-                                 m_track_height_total[m_data_provider
-                                                          .GetEventTrackPosition()]),
-                          ImVec2(item.timestamp,
-                                 m_track_height_total[item.track_id] + 30.0f) });
-                }
-            }
-        }
-
-        m_arrow_layer.Draw(draw_list, m_v_min_x, m_pixels_per_ns, window_position);
-    }
+    m_arrow_layer.Draw(draw_list, m_v_min_x, m_pixels_per_ns, window_position);
 
     ImGui::EndChild();
     ImGui::PopStyleColor();

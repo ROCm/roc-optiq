@@ -4,7 +4,7 @@
 #include "widgets/rocprofvis_widget.h"
 #include <string>
 #include <vector>
-
+ 
 namespace RocProfVis
 {
 namespace View

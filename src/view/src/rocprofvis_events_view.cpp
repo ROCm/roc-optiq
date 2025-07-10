@@ -9,7 +9,7 @@
 #include <map>
 #include <string>
 #include <vector>
-
+#include "rocprofvis_event_manager.h"
 namespace RocProfVis
 {
 namespace View
@@ -34,6 +34,12 @@ EventsView::Render()
     ImGui::BeginChild("LeftPanel", ImVec2(left_width, 0), true,
                       ImGuiWindowFlags_NoMove );
 
+    if(ImGui::Button("arrow Selection"))
+    {
+        auto evt = std::make_shared<CreateArrowsView>(
+            static_cast<int>(RocEvents::kHandleUserArrowCreationEvent));
+        EventManager::GetInstance()->AddEvent(evt);
+    }   
     uint64_t selected_event = m_data_provider.GetSelectedEventId();
     if(selected_event == std::numeric_limits<uint64_t>::max())
     {

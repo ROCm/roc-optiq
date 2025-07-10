@@ -51,6 +51,7 @@ public:
     void RenderScrubber(ImVec2 screen_pos);
     void RenderSplitter(ImVec2 screen_pos);
     void RenderArrows(ImVec2 screen_pos);
+    void AddArrows();
     void RenderGraphView();
     void HandleTopSurfaceTouch();
     void CalibratePosition();
@@ -84,6 +85,8 @@ private:
     bool                                  m_resize_activity;
     double                                m_scroll_position_x;
     EventManager::SubscriptionToken       m_scroll_to_track_token;
+    EventManager::SubscriptionToken       m_add_arrow_token;
+
     double                                m_v_past_width;
     double                                m_scrollbar_location_as_percentage;
     bool                                  m_artifical_scrollbar_active;

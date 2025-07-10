@@ -59,6 +59,7 @@ typedef struct event_ext_data_t
 
 typedef struct event_info_t
 {
+    uint64_t event_id; // id of the event for which the extended info is stored
     std::vector<event_ext_data_t> ext_data;
 } event_info_t;
 
@@ -72,8 +73,26 @@ typedef struct event_flow_data_t
 
 typedef struct flow_info_t
 {
+    uint64_t event_id; // id of the event for which the flow info is stored
     std::vector<event_flow_data_t> flow_data;
 } flow_info_t;
+
+typedef struct call_stack_data_t {
+    std::string function;          // Source code function name
+    std::string arguments;         // Source code function arguments
+    std::string file;              // Source code file path
+    std::string line;              // Source code line number
+
+    std::string isa_function;      // ISA/ASM function name
+    std::string isa_file;          // ISA/ASM file path
+    std::string isa_line;          // ISA/ASM line number
+} call_stack_data_t;
+
+typedef struct call_stack_info_t
+{
+    uint64_t event_id; // id of the event for which the call stack data is stored
+    std::vector<call_stack_data_t> call_stack_data; // vector of call stack entries
+} call_stack_info_t;
 
 class RequestParamsBase
 {
@@ -174,7 +193,8 @@ public:
     void               SetFlowInfo(const flow_info_t& info);
 
     bool FetchEventExtData(uint64_t event_id);
-    bool FetchEventFlowDetails( uint64_t event_id);
+    bool FetchEventFlowDetails(uint64_t event_id);
+    bool FetchEventCallStackData(uint64_t event_id);
 
     // Get user selected event.
     uint64_t GetSelectedEventId();
@@ -352,6 +372,12 @@ private:
     void CreateRawSampleData(uint64_t track_id, rocprofvis_controller_array_t* track_data,
                              double min_ts, double max_ts);
 
+    char*       GetStringAsCharArray(rocprofvis_handle_t*  handle,
+                                     rocprofvis_property_t property, uint64_t index);
+    void        FreeStringCharArray(char* str);
+    std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
+                          uint64_t index);
+
     rocprofvis_controller_future_t*   m_trace_future;
     rocprofvis_controller_t*          m_trace_controller;
     rocprofvis_controller_timeline_t* m_trace_timeline;
@@ -368,6 +394,8 @@ private:
     double       m_selected_event_end;
     event_info_t m_event_info;  // Store event info for selected event
     flow_info_t  m_flow_info;   // Store flow info for selected event
+    call_stack_info_t m_call_stack_info;  // Store call stack info for selected event
+
 
     std::unordered_map<uint64_t, track_info_t>  m_track_metadata;
     std::unordered_map<uint64_t, RawTrackData*> m_raw_trackdata;

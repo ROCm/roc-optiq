@@ -48,6 +48,7 @@ EventsView::Render()
             {
                 m_data_provider.FetchEventExtData(m_data_provider.GetSelectedEventId());
                 m_data_provider.FetchEventFlowDetails(m_data_provider.GetSelectedEventId());
+                m_data_provider.FetchEventCallStackData(m_data_provider.GetSelectedEventId());
             }
             m_last_selected_event = selected_event;
         }

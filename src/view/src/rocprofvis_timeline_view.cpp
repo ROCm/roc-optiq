@@ -417,11 +417,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     {
         float cursor_screen_percentage =
             (mouse_position.x - window_position.x) / m_graph_size.x;
-        char   text[20];
         double scrubber_position =
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
-        sprintf(text, "%.0f", scrubber_position);
+        char   text[20];
+        snprintf(text, 20, "%17.0f", scrubber_position);
         ImVec2 label_size = ImGui::CalcTextSize(text);
 
         constexpr float label_padding = 4.0f;
@@ -1332,7 +1332,7 @@ TimelineView::HandleTopSurfaceTouch()
 
                 // 5. Adjust m_movement so the world_x_under_cursor stays under the cursor
                 m_view_time_offset_ns =
-                    x_under_cursor - cursor_screen_percentage * new_v_width;
+                    x_under_cursor - double(cursor_screen_percentage) * double(new_v_width);
 
                 // 6. Update zoom and view width
                 m_zoom    = new_zoom;

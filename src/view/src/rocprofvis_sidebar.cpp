@@ -142,13 +142,9 @@ SideBar::ConstructTree()
                                        "Component Is: ");
 
                     ImGui::SameLine();
-                    std::string temp_movement_value =
-                        "Not In Frame by: " +
-                        std::to_string(graph.chart->GetDistanceToView()) +
-                        " units.";
                     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
                                            static_cast<int>(Colors::kTextError))),
-                                       temp_movement_value.c_str());
+                                        "Not In Frame by: %f units.", graph.chart->GetDistanceToView());
                 }
             }
             else

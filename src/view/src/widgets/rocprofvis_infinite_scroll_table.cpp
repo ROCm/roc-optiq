@@ -182,7 +182,7 @@ InfiniteScrollTable::Render()
 
     if(table_data.size() > 0 && m_selected_tracks.size() > 0)
     {
-        ImGui::Text("Cached %d to %d of %d events for %d tracks", start_row, end_row,
+        ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks", start_row, end_row,
                     total_row_count, selected_track_count);
 
         ImVec2 outer_size = ImVec2(0.0f, ImGui::GetContentRegionAvail().y);

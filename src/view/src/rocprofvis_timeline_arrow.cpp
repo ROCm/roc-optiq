@@ -4,19 +4,22 @@
 #include "rocprofvis_timeline_arrow.h"
 #include "spdlog/spdlog.h"
 #include <iostream>
+
 namespace RocProfVis
 {
 namespace View
 {
 
 void
-TimelineArrow::Draw(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
-                    ImVec2 window, std::map<uint64_t, float> track_height_total, ImU32 color,
-                    float thickness, float head_size)
+TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
+                      ImVec2 window, std::map<uint64_t, float> track_height_total,
+                      ImU32 color, float thickness, float head_size)
 {
     float scroll_y = ImGui::GetScrollY();
     for(const auto& arrow : m_arrows_to_render)
     {
+        // KEEP IN MIND START DOESNT CHANGE SO WE CAN SOP COMPUTING SOURCE EVERY LOOP
+
         // Map timeline X to screen X
         float start_x = (arrow.start_time - v_min_x) * pixels_per_ns;
         float end_x   = (arrow.end_time - v_min_x) * pixels_per_ns;
@@ -52,8 +55,20 @@ TimelineArrow::Draw(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
 TimelineArrow::TimelineArrow(DataProvider& data_provider)
 : m_data_provider(data_provider)
 , m_arrows_to_render({})
+, m_add_arrow_token(-1)
 {
-    // Constructor implementation (if needed)
+    auto scroll_to_arrow_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<CreateArrowsView>(e);
+        if(evt)
+        {
+            std::cout << "Creating arrows for track: " << evt->GetTrackName()
+                      << std::endl;
+            this->AddArrows();
+        }
+    };
+    m_add_arrow_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kHandleUserArrowCreationEvent),
+        scroll_to_arrow_handler);
 }
 
 void
@@ -65,24 +80,34 @@ TimelineArrow::SetArrows(const std::vector<TimelineArrowData>& arrows)
 void
 TimelineArrow::AddArrow(const TimelineArrowData& arrow)
 {
-
     m_arrows_to_render.push_back(arrow);
+}
+
+void
+TimelineArrow::AddArrows()
+{
+    const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
+    if(!flowInfo.flow_data.empty())
+    {
+        m_arrows_to_render = {};  // Clear previous arrows
+
+        double source_time  = m_data_provider.GetEventPosition();
+        int    source_track = m_data_provider.GetEventTrackPosition();
+
+        for(const auto& item : flowInfo.flow_data)
+        {
+            m_arrows_to_render.push_back({ source_time, source_track,
+                                           static_cast<double>(item.timestamp),
+                                           static_cast<int>(item.track_id) });
+        }
+    }
 }
 
 TimelineArrow::~TimelineArrow()
 {
     // Destructor implementation (if needed)
+    // Used to add arrows when user selects a event
 }
-
-void
-TimelineArrow::Update()
-{
-    // Update logic for TimelineArrow
-}
-
-void
-TimelineArrow::Render()
-{}
 
 }  // namespace View
 }  // namespace RocProfVis

@@ -88,19 +88,7 @@ TimelineView::TimelineView(DataProvider& dp)
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         scroll_to_track_handler);
 
-    // Used to add arrows when user selects a event
-    auto scroll_to_arrow_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto evt = std::dynamic_pointer_cast<CreateArrowsView>(e);
-        if(evt)
-        {
-            std::cout << "Creating arrows for track: " << evt->GetTrackName()
-                      << std::endl;
-            this->AddArrows();
-        }
-    };
-    m_add_arrow_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kHandleUserArrowCreationEvent),
-        scroll_to_arrow_handler);
+ 
 }
 
 int
@@ -980,25 +968,7 @@ TimelineView::MakeGraphView()
 
     m_meta_map_made = true;
 }
-void
-TimelineView::AddArrows()
-{
-    const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
-    if(!flowInfo.flow_data.empty())
-    {
-        m_arrow_layer.SetArrows({});  // Clear previous arrows
-
-        double source_time  = m_data_provider.GetEventPosition();
-        int    source_track = m_data_provider.GetEventTrackPosition();
-
-        for(const auto& item : flowInfo.flow_data)
-        {
-            m_arrow_layer.AddArrow({ source_time, source_track,
-                                     static_cast<double>(item.timestamp),
-                                     static_cast<int>(item.track_id) });
-        }
-    }
-}
+ 
 
 void
 TimelineView::RenderArrows(ImVec2 screen_pos)
@@ -1013,7 +983,7 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
 
     ImGui::SetNextWindowSize(m_graph_size, ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 255, 0, 40));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
 
     ImGui::BeginChild(
         "Arrows Overlay",
@@ -1028,12 +998,12 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
 
-    m_arrow_layer.Draw(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
+    m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
                        m_track_height_total);
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
-    ImGui::EndChild();
+     ImGui::EndChild();
 }
 
 void

@@ -87,8 +87,6 @@ TimelineView::TimelineView(DataProvider& dp)
     m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         scroll_to_track_handler);
-
- 
 }
 
 int
@@ -968,7 +966,6 @@ TimelineView::MakeGraphView()
 
     m_meta_map_made = true;
 }
- 
 
 void
 TimelineView::RenderArrows(ImVec2 screen_pos)
@@ -999,11 +996,11 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImVec2      window_position = ImGui::GetWindowPos();
 
     m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
-                       m_track_height_total);
+                         m_track_height_total);
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
-     ImGui::EndChild();
+    ImGui::EndChild();
 }
 
 void

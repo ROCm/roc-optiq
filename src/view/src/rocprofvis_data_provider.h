@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
- 
+
 namespace RocProfVis
 {
 namespace View
@@ -182,7 +182,7 @@ public:
     // Get selected event start time
     double GetEventPosition();
 
-    //Get track selected event sits in
+    // Get track selected event sits in
     int GetEventTrackPosition();
 
     /*
@@ -374,8 +374,8 @@ private:
     double       m_selected_event_end;
     double       m_event_position;
     int          m_selected_track_id;  // Track ID for the selected event
-    event_info_t m_event_info;  // Store event info for selected event
-    flow_info_t  m_flow_info;   // Store flow info for selected event
+    event_info_t m_event_info;         // Store event info for selected event
+    flow_info_t  m_flow_info;          // Store flow info for selected event
 
     std::vector<track_info_t>  m_track_metadata;
     std::vector<RawTrackData*> m_raw_trackdata;

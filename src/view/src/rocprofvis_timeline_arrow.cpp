@@ -12,19 +12,18 @@ namespace View
 
 void
 TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
-                      ImVec2 window, std::map<uint64_t, float> track_height_total,
-                      ImU32 color, float thickness, float head_size)
+                      ImVec2 window, std::map<uint64_t, float> track_height_total)
 {
+    ImU32 color     = IM_COL32(0, 0, 210, 80);
+    float thickness = 2.0f;
+    float head_size = 12.0f;
+
     float scroll_y = ImGui::GetScrollY();
     for(const auto& arrow : m_arrows_to_render)
     {
-        // KEEP IN MIND START DOESNT CHANGE SO WE CAN SOP COMPUTING SOURCE EVERY LOOP
-
-        // Map timeline X to screen X
         float start_x = (arrow.start_time - v_min_x) * pixels_per_ns;
         float end_x   = (arrow.end_time - v_min_x) * pixels_per_ns;
 
-        // Map track index to Y (use your m_track_height_total or similar)
         float start_y = track_height_total[arrow.start_track];
         float end_y   = track_height_total[arrow.end_track];
 
@@ -61,8 +60,6 @@ TimelineArrow::TimelineArrow(DataProvider& data_provider)
         auto evt = std::dynamic_pointer_cast<CreateArrowsView>(e);
         if(evt)
         {
-            std::cout << "Creating arrows for track: " << evt->GetTrackName()
-                      << std::endl;
             this->AddArrows();
         }
     };
@@ -89,7 +86,7 @@ TimelineArrow::AddArrows()
     const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
     if(!flowInfo.flow_data.empty())
     {
-        m_arrows_to_render = {};  // Clear previous arrows
+        m_arrows_to_render = {};
 
         double source_time  = m_data_provider.GetEventPosition();
         int    source_track = m_data_provider.GetEventTrackPosition();
@@ -105,8 +102,8 @@ TimelineArrow::AddArrows()
 
 TimelineArrow::~TimelineArrow()
 {
-    // Destructor implementation (if needed)
-    // Used to add arrows when user selects a event
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kHandleUserArrowCreationEvent), m_add_arrow_token);
 }
 
 }  // namespace View

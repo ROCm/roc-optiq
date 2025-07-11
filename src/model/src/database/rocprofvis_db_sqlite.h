@@ -22,7 +22,7 @@
 
 #include "rocprofvis_db.h"
 #include "sqlite3.h" 
-#include <unordered_set>
+#include <set>
 #include <mutex>
 #include <condition_variable>
 
@@ -217,8 +217,8 @@ class SqliteDatabase : public Database
 
     private:     
 
-        std::unordered_set<sqlite3*> m_available_connections;
-        std::unordered_set<sqlite3*> m_connections_inuse;
+        std::set<sqlite3*> m_available_connections;
+        std::set<sqlite3*> m_connections_inuse;
         std::mutex         m_mutex;
         std::condition_variable      m_inuse_cv;
 

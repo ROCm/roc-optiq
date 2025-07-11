@@ -36,6 +36,8 @@ public:
 
     virtual ~Trace();
 
+    rocprofvis_result_t Init();
+
     rocprofvis_result_t Load(char const* const filename, Future& future);
 
     rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,

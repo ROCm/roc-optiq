@@ -117,10 +117,21 @@ rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object
 rocprofvis_controller_t* rocprofvis_controller_alloc()
 {
     rocprofvis_controller_t* controller = nullptr;
-    RocProfVis::Controller::Trace* trace = new RocProfVis::Controller::Trace();
-    if (trace)
+    try
     {
-        controller = (rocprofvis_controller_t*) trace;
+        RocProfVis::Controller::Trace* trace = new RocProfVis::Controller::Trace();
+        if(trace->Init() == kRocProfVisResultSuccess)
+        {
+            controller = (rocprofvis_controller_t*) trace;
+        }
+        else
+        {
+            delete trace;
+        }
+    }
+    catch(const std::exception& e)
+    {
+        spdlog::error("Failed to allocate controller");
     }
     return controller;
 }

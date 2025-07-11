@@ -447,7 +447,13 @@ TabContainer::Render()
         if(m_active_tab_index != new_selected_tab)
         {
             m_active_tab_index = new_selected_tab;
-            // Todo: add event to notify of the change
+            if(new_selected_tab < m_tabs.size())
+            {
+                std::shared_ptr<TabSelectedEvent> e = std::make_shared<TabSelectedEvent>(
+                    static_cast<int>(RocEvents::kTabSelected),
+                    m_tabs[new_selected_tab].m_id);
+                EventManager::GetInstance()->AddEvent(e);
+            }
         }
 
         // clear the set active tab index

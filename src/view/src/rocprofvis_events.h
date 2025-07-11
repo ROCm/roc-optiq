@@ -15,6 +15,7 @@ enum class RocEvents
     kInvalidEvent = -1,
     kNewTrackData,
     kTabClosed,
+    kTabSelected,
     kTimelineSelectionChanged,
     kHandleUserGraphNavigationEvent,
 #ifdef COMPUTE_UI_SUPPORT
@@ -104,6 +105,12 @@ public:
 
 private:
     std::string m_tab_id;
+};
+
+class TabSelectedEvent : public TabClosedEvent
+{
+public:
+    TabSelectedEvent(int event_id, const std::string& tab_id);
 };
 
 class TrackSelectionChangedEvent : public RocEvent

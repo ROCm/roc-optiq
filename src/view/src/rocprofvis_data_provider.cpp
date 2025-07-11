@@ -91,6 +91,16 @@ DataProvider::CloseController()
 }
 
 void
+DataProvider::SetSelectedState(const std::string& id)
+{
+    if(id == m_trace_file_path)
+    {
+        rocprofvis_controller_set_uint64(m_trace_controller, kRPVControllerNotifySelected,
+                                         0, true);
+    }
+}
+
+void
 DataProvider::FreeRequests()
 {
     for(auto item : m_requests)

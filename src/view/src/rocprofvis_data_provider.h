@@ -187,6 +187,11 @@ public:
      */
     void CloseController();
 
+     /*
+     *   Notify controller it can consume more resources.
+     */
+    void SetSelectedState(const std::string & id);
+
     /*
      *   Free all requests. This does not cancel the requests on the controller end.
      */

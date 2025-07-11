@@ -86,6 +86,17 @@ TimelineView::TimelineView(DataProvider& dp)
     m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         scroll_to_track_handler);
+
+    auto new_tab_selected_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto ets = std::dynamic_pointer_cast<TabSelectedEvent>(e);
+        if(ets)
+        {
+            m_data_provider.SetSelectedState(ets->GetTabId());
+        }
+    };
+
+    m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 }
 
 int
@@ -158,6 +169,8 @@ TimelineView::~TimelineView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         m_scroll_to_track_token);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
+                                             m_tabselected_event_token);
 }
 
 void

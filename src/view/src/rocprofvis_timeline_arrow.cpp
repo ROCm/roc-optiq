@@ -67,8 +67,7 @@ TimelineArrow::SetArrows(const std::vector<TimelineArrowData>& arrows)
 void
 TimelineArrow::AddArrow(const TimelineArrowData& arrow)
 {
-    std::cout<< "Adding arrow from (" << arrow.start.x << ", " << arrow.start.y
-              << ") to (" << arrow.end.x << ", " << arrow.end.y << ")\n";
+
     m_arrows_to_render.push_back(arrow);
 }
 

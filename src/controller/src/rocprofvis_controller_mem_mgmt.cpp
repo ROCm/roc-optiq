@@ -72,7 +72,7 @@ void MemoryManager::Init(size_t trace_size)
         uint64_t avail_phys_mem = mem_info.freeram;
         avail_phys_mem *= mem_info.mem_unit;
 
-        g_physical_memory_avail = (avail_phys_mem / 100) * kUseVailMemoryPercent;
+        s_physical_memory_avail = (avail_phys_mem / 100) * kUseVailMemoryPercent;
 #endif
     }
 

@@ -4,6 +4,7 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
+#include <cstddef>
 #include <string>
 #include <vector>
 #include "rocprofvis_c_interface.h"
@@ -24,8 +25,8 @@ public:
     Event(Event* other);
     Event(uint64_t id, double start_ts, double end_ts);
 
-    Event& Event::operator=(Event&& other);
-    Event& Event::operator=(const Event& other);
+    Event& operator=(Event&& other);
+    Event& operator=(const Event& other);
 
     virtual ~Event();
 

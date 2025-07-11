@@ -21,7 +21,7 @@ public:
     SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp,
               std::vector<Sample*>& children);
 
-    SampleLOD& SampleLOD::operator=(SampleLOD&& other);
+    SampleLOD& operator=(SampleLOD&& other);
 
     virtual ~SampleLOD();
 

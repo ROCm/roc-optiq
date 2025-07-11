@@ -206,6 +206,41 @@ DataProvider::SetTraceLoadedCallback(
 }
 
 bool
+DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(m_state == ProviderState::kReady)
+    {
+        ROCPROFVIS_ASSERT(index < m_num_graphs);
+        const track_info_t* metadata = GetTrackInfo(track_id);
+        ROCPROFVIS_ASSERT(metadata);
+        result = rocprofvis_controller_set_object(m_trace_timeline,
+                                                  kRPVControllerTimelineGraphIndexed,
+                                                  index, metadata->graph_handle);
+        if(result == kRocProfVisResultSuccess)
+        {
+            rocprofvis_handle_t* graph = nullptr;
+            for (int i = 0; i < m_num_graphs; i++)
+            {
+                result = rocprofvis_controller_get_object(m_trace_timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
+                if(result == kRocProfVisResultSuccess && graph)
+                {
+                    uint64_t id = 0;
+                    result = rocprofvis_controller_get_uint64(graph, kRPVControllerGraphId, 0, &id);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        metadata = GetTrackInfo(id);
+                        ROCPROFVIS_ASSERT(metadata && metadata->graph_handle == graph);
+                        m_track_metadata[id].index = i;
+                    }
+                }
+            }
+        }
+    }
+    return (result == kRocProfVisResultSuccess);
+}
+
+bool
 DataProvider::FetchTrace(const std::string& file_path)
 {
     if(m_state == ProviderState::kLoading || m_state == ProviderState::kError)
@@ -441,7 +476,7 @@ DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
                 rocprofvis_controller_array_alloc(metadata->num_entries);
             rocprofvis_handle_t* track_handle = nullptr;
             rocprofvis_result_t  result       = rocprofvis_controller_get_object(
-                m_trace_controller, kRPVControllerTrackIndexed, track_id, &track_handle);
+                m_trace_controller, kRPVControllerTrackById, track_id, &track_handle);
 
             if(result == kRocProfVisResultSuccess && track_handle && track_future &&
                track_array)
@@ -501,8 +536,7 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
         return false;
     }
 
-    const track_info_t* metadata = GetTrackInfo(request_params.m_track_id);
-    if(metadata)
+    if(GetTrackInfo(request_params.m_track_id))
     {
         auto it = m_requests.find(request_params.m_track_id);
         // only allow load if a request for this id (track) is not pending
@@ -513,11 +547,9 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
                 rocprofvis_controller_array_alloc(32);
             rocprofvis_handle_t* graph_obj = nullptr;
 
-            // TODO: Switch to ID API. For now we convert the ID to index and fetch via
-            // index.
             rocprofvis_result_t result = rocprofvis_controller_get_object(
-                m_trace_timeline, kRPVControllerTimelineGraphIndexed,
-                metadata->index, &graph_obj);
+                m_trace_timeline, kRPVControllerTimelineGraphById,
+                request_params.m_track_id, &graph_obj);
 
             if(result == kRocProfVisResultSuccess && graph_obj && graph_future &&
                graph_array)

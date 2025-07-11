@@ -31,6 +31,7 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 , m_settings(Settings::GetInstance())
 , m_selected(false)
 , m_deferred_request(nullptr)
+, m_reorder_grip_width(20.0f)
 {}
 
 bool
@@ -136,6 +137,12 @@ TrackItem::Render(float width)
     ImGui::EndGroup();
 }
 
+float
+TrackItem::GetReorderGripWidth()
+{
+    return m_reorder_grip_width;
+}
+
 void
 TrackItem::RenderMetaArea()
 {
@@ -174,10 +181,30 @@ TrackItem::RenderMetaArea()
             }
         }
 
+        // Reordering grip decoration
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2 screen_pos = ImGui::GetCursorScreenPos();
+        ImU32 stroke_color = ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text));
+        draw_list->AddLine(
+            ImVec2(screen_pos.x + m_metadata_padding.x, screen_pos.y + container_size.y / 2 - m_metadata_padding.y), 
+            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x, screen_pos.y + container_size.y / 2 - m_metadata_padding.y), 
+            stroke_color
+        );
+        draw_list->AddLine(
+            ImVec2(screen_pos.x + m_metadata_padding.x, screen_pos.y + container_size.y / 2), 
+            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x, screen_pos.y + container_size.y / 2), 
+            stroke_color
+        );
+        draw_list->AddLine(
+            ImVec2(screen_pos.x + m_metadata_padding.x, screen_pos.y + container_size.y / 2 + m_metadata_padding.y), 
+            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x, screen_pos.y + container_size.y / 2 + m_metadata_padding.y), 
+            stroke_color
+        );
+
         // Set padding for the child window (Note this done using SetCursorPos
         // because ImGuiStyleVar_WindowPadding has no effect on child windows without
         // borders)
-        ImGui::SetCursorPos(m_metadata_padding);
+        ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
         // Adjust content size to account for padding
         content_size.x -= m_metadata_padding.x * 2;
         content_size.y -= m_metadata_padding.x * 2;
@@ -185,7 +212,7 @@ TrackItem::RenderMetaArea()
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 4.0f));
         if(ImGui::BeginChild(
                "MetaData Content",
-               ImVec2(content_size.x - m_meta_area_scale_width, content_size.y),
+               ImVec2(content_size.x - m_meta_area_scale_width - m_reorder_grip_width, content_size.y),
                ImGuiChildFlags_None))
         {
             ImGui::Text(m_name.c_str());

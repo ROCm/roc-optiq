@@ -59,6 +59,8 @@ public:
 
     bool IsMetaAreaClicked() const { return m_meta_area_clicked; }
 
+    float GetReorderGripWidth();
+
 
 protected:
     virtual void RenderMetaArea();
@@ -89,6 +91,7 @@ protected:
     bool                  m_meta_area_clicked;
     float                 m_meta_area_scale_width;
     bool                  m_selected;
+    float                 m_reorder_grip_width;
 
     std::shared_ptr<TrackRequestParams> m_deferred_request;
 

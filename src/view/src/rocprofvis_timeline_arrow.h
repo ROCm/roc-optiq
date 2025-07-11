@@ -12,9 +12,10 @@ namespace View
 
 struct TimelineArrowData
 {
-    ImVec2 start;
-    ImVec2 end;
-    // Optionally, add color, label, or type fields
+    double start_time;  // in ns
+    int    start_track;
+    double end_time;  // in ns
+    int    end_track;
 };
 
 class TimelineArrow
@@ -25,8 +26,9 @@ public:
     // Draws an arrow from (start_time, y_start) to (end_time, y_end) using the given
     // mapping
     void Draw(ImDrawList* draw_list, double v_min_x, double pixels_per_ns, ImVec2 window,
-              ImU32 color = IM_COL32(255, 0, 0, 255),
-                     float thickness = 4.0f, float head_size = 14.0f);
+              std::map<uint64_t, float> track_height_total,
+              ImU32 color = IM_COL32(255, 0, 0, 255), float thickness = 4.0f,
+              float head_size = 14.0f );
     void        Update();
     void        Render();
 

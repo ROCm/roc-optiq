@@ -11,23 +11,22 @@ namespace View
 
 void
 TimelineArrow::Draw(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
-                    ImVec2 window, ImU32 color, float thickness, float head_size)
+                    ImVec2 window, std::map<uint64_t, float> track_height_total, ImU32 color,
+                    float thickness, float head_size)
 {
     float scroll_y = ImGui::GetScrollY();
     for(const auto& arrow : m_arrows_to_render)
     {
-        // Use double for intermediate calculations
-        double start_x =
-            window.x + (static_cast<double>(arrow.start.x) - v_min_x) * pixels_per_ns;
-        double end_x =
-            window.x + (static_cast<double>(arrow.end.x) - v_min_x) * pixels_per_ns;
-        double start_y = window.y + static_cast<double>(arrow.start.y) - scroll_y;
-        double end_y   = window.y + static_cast<double>(arrow.end.y) - scroll_y;
+        // Map timeline X to screen X
+        float start_x = (arrow.start_time - v_min_x) * pixels_per_ns;
+        float end_x   = (arrow.end_time - v_min_x) * pixels_per_ns;
 
-     
+        // Map track index to Y (use your m_track_height_total or similar)
+        float start_y = track_height_total[arrow.start_track];
+        float end_y   = track_height_total[arrow.end_track];
 
-        ImVec2 p_start = ImVec2(static_cast<float>(start_x), static_cast<float>(start_y));
-        ImVec2 p_end   = ImVec2(static_cast<float>(end_x), static_cast<float>(end_y));
+        ImVec2 p_start = ImVec2(window.x + start_x, window.y + start_y - scroll_y);
+        ImVec2 p_end   = ImVec2(window.x + end_x, window.y + end_y - scroll_y);
 
         if(p_start.x == p_end.x && p_start.y == p_end.y) continue;
 
@@ -49,7 +48,6 @@ TimelineArrow::Draw(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
         draw_list->AddTriangleFilled(p1, p2, p3, color);
     }
 }
-
 
 TimelineArrow::TimelineArrow(DataProvider& data_provider)
 : m_data_provider(data_provider)

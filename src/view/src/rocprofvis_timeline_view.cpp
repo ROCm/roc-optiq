@@ -987,12 +987,15 @@ TimelineView::AddArrows()
     if(!flowInfo.flow_data.empty())
     {
         m_arrow_layer.SetArrows({});  // Clear previous arrows
+
+        double source_time  = m_data_provider.GetEventPosition();
+        int    source_track = m_data_provider.GetEventTrackPosition();
+
         for(const auto& item : flowInfo.flow_data)
         {
-            m_arrow_layer.AddArrow(
-                { ImVec2(m_data_provider.GetEventPosition(),
-                         m_track_height_total[m_data_provider.GetEventTrackPosition()]),
-                  ImVec2(item.timestamp, m_track_height_total[item.track_id]) });
+            m_arrow_layer.AddArrow({ source_time, source_track,
+                                     static_cast<double>(item.timestamp),
+                                     static_cast<int>(item.track_id) });
         }
     }
 }
@@ -1025,7 +1028,8 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
 
-    m_arrow_layer.Draw(draw_list, m_v_min_x, m_pixels_per_ns, window_position);
+    m_arrow_layer.Draw(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
+                       m_track_height_total);
 
     ImGui::EndChild();
     ImGui::PopStyleColor();

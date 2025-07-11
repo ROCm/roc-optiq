@@ -11,7 +11,7 @@ namespace Controller
 {
 
 Future::Future()
-: m_job(false)
+: m_job(nullptr)
 {
 }
 

@@ -2,17 +2,22 @@
 
 #pragma once
 
+#include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
-#include "rocprofvis_c_interface.h"
-#include <vector>
-#include <set>
-#include <unordered_set>
-#include <map>
-#include <unordered_map>
-#include <shared_mutex>
-#include <queue>
+#include <atomic>
 #include <bitset>
+#include <condition_variable>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <set>
+#include <shared_mutex>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace RocProfVis
 {

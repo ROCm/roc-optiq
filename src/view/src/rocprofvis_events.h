@@ -97,21 +97,16 @@ private:
     std::string m_search_term;
 };
 #endif
-class TabClosedEvent : public RocEvent
+class TabEvent : public RocEvent
 {
 public:
-    TabClosedEvent(int event_id, const std::string& tab_id);
+    TabEvent(int event_id, const std::string& tab_id);
     const std::string& GetTabId();
 
 private:
     std::string m_tab_id;
 };
 
-class TabSelectedEvent : public TabClosedEvent
-{
-public:
-    TabSelectedEvent(int event_id, const std::string& tab_id);
-};
 
 class TrackSelectionChangedEvent : public RocEvent
 {

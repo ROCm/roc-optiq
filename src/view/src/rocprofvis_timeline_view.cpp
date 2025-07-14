@@ -88,7 +88,7 @@ TimelineView::TimelineView(DataProvider& dp)
         scroll_to_track_handler);
 
     auto new_tab_selected_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto ets = std::dynamic_pointer_cast<TabSelectedEvent>(e);
+        auto ets = std::dynamic_pointer_cast<TabEvent>(e);
         if(ets)
         {
             m_data_provider.SetSelectedState(ets->GetTabId());

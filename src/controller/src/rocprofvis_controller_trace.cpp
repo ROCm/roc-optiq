@@ -1895,18 +1895,43 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 if (columns[j] ==
                                                                     kRPVControllerQueueId)
                                                                 {
-                                                                    Processor* p =
-                                                                        processors
-                                                                            [queue_to_device
-                                                                                 [val]];
-                                                                    queue->SetObject(
-                                                                        kRPVControllerQueueProcessor, 0, (rocprofvis_handle_t*)p);
-                                                                    queues[val] = queue;
+                                                                    auto it =
+                                                                        processors.find(
+                                                                            queue_to_device
+                                                                                [val]);
+                                                                    if(it !=
+                                                                       processors.end())
+                                                                    {
+                                                                        Processor* p =
+                                                                            it->second;
+                                                                        ROCPROFVIS_ASSERT(
+                                                                            p);
 
-                                                                    uint64_t count = 0;
-                                                                    p->GetUInt64(kRPVControllerProcessorNumQueues, 0, &count);
-                                                                    p->SetUInt64(kRPVControllerProcessorNumQueues, 0, count+1);
-                                                                    p->SetObject(kRPVControllerProcessorQueueIndexed, count, (rocprofvis_handle_t*)queue);
+                                                                        queue->SetObject(
+                                                                            kRPVControllerQueueProcessor,
+                                                                            0,
+                                                                            (rocprofvis_handle_t*)
+                                                                                p);
+                                                                        queues[val] =
+                                                                            queue;
+
+                                                                        uint64_t
+                                                                            count = 0;
+                                                                        p->GetUInt64(
+                                                                            kRPVControllerProcessorNumQueues,
+                                                                            0,
+                                                                            &count);
+                                                                        p->SetUInt64(
+                                                                            kRPVControllerProcessorNumQueues,
+                                                                            0,
+                                                                            count +
+                                                                                1);
+                                                                        p->SetObject(
+                                                                            kRPVControllerProcessorQueueIndexed,
+                                                                            count,
+                                                                            (rocprofvis_handle_t*)
+                                                                                queue);
+                                                                    }
 
                                                                     Track* t =
                                                                         queue_to_track

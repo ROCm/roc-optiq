@@ -11,6 +11,8 @@ namespace RocProfVis
 namespace Controller
 {
 
+class Track;
+
 class Thread : public Handle
 {
 public:
@@ -41,6 +43,7 @@ public:
 private:
     std::string m_name;
     std::string m_ext_data;
+    Track*      m_track;
     double      m_start_time;
     double      m_end_time;
     uint32_t    m_id;

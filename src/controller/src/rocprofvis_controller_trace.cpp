@@ -1659,6 +1659,8 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                         0,
                                                                         (rocprofvis_handle_t*)
                                                                             thread);
+
+                                                                    thread->SetObject(kRPVControllerThreadTrack, 0, (rocprofvis_handle_t*)t);
                                                                 }
                                                             }
                                                             else if(
@@ -1912,6 +1914,9 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     t->SetObject(
                                                                         kRPVControllerTrackQueue,
                                                                         0, (rocprofvis_handle_t*)queue);
+                                                                    queue->SetObject(
+                                                                        kRPVControllerQueueTrack,
+                                                                        0, (rocprofvis_handle_t*)t);
                                                                 }
                                                             }
                                                             else

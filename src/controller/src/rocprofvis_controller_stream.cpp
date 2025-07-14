@@ -3,6 +3,7 @@
 #include "rocprofvis_controller_stream.h"
 #include "rocprofvis_controller_processor.h"
 #include "rocprofvis_controller_queue.h"
+#include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
 
@@ -17,9 +18,12 @@ typedef Reference<rocprofvis_controller_processor_t, Processor,
 typedef Reference<rocprofvis_controller_queue_t, Queue,
                   kRPVControllerObjectTypeQueue>
     QueueRef;
+typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack>
+    TrackRef;
 
 Stream::Stream()
 : m_processor(nullptr)
+, m_track(nullptr)
 , m_id(0)
 , m_node_id(0)
 , m_process_id(0)
@@ -72,6 +76,7 @@ rocprofvis_result_t Stream::GetUInt64(rocprofvis_property_t property, uint64_t i
             case kRPVControllerStreamExtData:
             case kRPVControllerStreamProcessor:
             case kRPVControllerStreamQueueIndexed:
+            case kRPVControllerStreamTrack:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -101,6 +106,7 @@ rocprofvis_result_t Stream::GetDouble(rocprofvis_property_t property, uint64_t i
             case kRPVControllerStreamProcessor:
             case kRPVControllerStreamNumQueues:
             case kRPVControllerStreamQueueIndexed:
+            case kRPVControllerStreamTrack:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -136,6 +142,12 @@ rocprofvis_result_t Stream::GetObject(rocprofvis_property_t property, uint64_t i
                     *value = (rocprofvis_handle_t*) m_queues[index];
                     result = kRocProfVisResultSuccess;
                 }
+                break;
+            }
+            case kRPVControllerStreamTrack:
+            {
+                *value = (rocprofvis_handle_t*) m_track;
+                result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerStreamId:
@@ -192,6 +204,7 @@ rocprofvis_result_t Stream::GetString(rocprofvis_property_t property, uint64_t i
             }
             break;
         }
+        case kRPVControllerStreamTrack:
         case kRPVControllerStreamId:
         case kRPVControllerStreamNodeId:
         case kRPVControllerStreamProcessId:
@@ -243,6 +256,7 @@ rocprofvis_result_t Stream::SetUInt64(rocprofvis_property_t property, uint64_t i
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerStreamTrack:
         case kRPVControllerStreamName:
         case kRPVControllerStreamExtData:
         case kRPVControllerStreamProcessor:
@@ -265,6 +279,7 @@ rocprofvis_result_t Stream::SetDouble(rocprofvis_property_t property, uint64_t i
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
+        case kRPVControllerStreamTrack:
         case kRPVControllerStreamId:
         case kRPVControllerStreamNodeId:
         case kRPVControllerStreamProcessId:
@@ -294,6 +309,16 @@ rocprofvis_result_t Stream::SetObject(rocprofvis_property_t property, uint64_t i
     {
         switch(property)
         {
+            case kRPVControllerStreamTrack:
+            {
+                TrackRef ref(value);
+                if(ref.IsValid())
+                {
+                    m_track = ref.Get();
+                    result  = kRocProfVisResultSuccess;
+                }
+                break;
+            }
             case kRPVControllerStreamProcessor:
             {
                 ProcessorRef ref(value);
@@ -352,6 +377,7 @@ rocprofvis_result_t Stream::SetString(rocprofvis_property_t property, uint64_t i
             result     = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerStreamTrack:
         case kRPVControllerStreamId:
         case kRPVControllerStreamNodeId:
         case kRPVControllerStreamProcessId:

@@ -12,6 +12,7 @@ namespace Controller
 {
 
 class Processor;
+class Track;
 
 class Queue : public Handle
 {
@@ -44,6 +45,7 @@ private:
     std::string m_name;
     std::string m_ext_data;
     Processor*  m_processor;
+    Track*      m_track;
     uint32_t    m_id;
     uint32_t    m_node_id;
     uint32_t    m_process_id;

@@ -14,6 +14,7 @@ namespace Controller
 
 class Processor;
 class Queue;
+class Track;
 
 class Stream : public Handle
 {
@@ -43,13 +44,14 @@ public:
                                   char const* value, uint32_t length) final;
 
 private:
-    std::string m_name;
-    std::string m_ext_data;
+    std::string         m_name;
+    std::string         m_ext_data;
     std::vector<Queue*> m_queues;
     Processor*          m_processor;
-    uint32_t    m_id;
-    uint32_t    m_node_id;
-    uint32_t    m_process_id;
+    Track*              m_track;
+    uint32_t            m_id;
+    uint32_t            m_node_id;
+    uint32_t            m_process_id;
 };
 
 }

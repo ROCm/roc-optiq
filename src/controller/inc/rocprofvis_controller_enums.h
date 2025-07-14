@@ -295,6 +295,7 @@ typedef enum rocprofvis_controller_thread_properties_t
     kRPVControllerThreadExtData   = 0xF2000006,
     kRPVControllerThreadStartTime = 0xF2000007,
     kRPVControllerThreadEndTime   = 0xF2000008,
+    kRPVControllerThreadTrack     = 0xF2000009,
 } rocprofvis_controller_thread_properties_t;
 
 typedef enum rocprofvis_controller_queue_properties_t
@@ -304,7 +305,8 @@ typedef enum rocprofvis_controller_queue_properties_t
     kRPVControllerQueueProcessId = 0xF3000002,
     kRPVControllerQueueName      = 0xF3000004,
     kRPVControllerQueueExtData   = 0xF3000005,
-    kRPVControllerQueueProcessor    = 0xF3000006,
+    kRPVControllerQueueProcessor = 0xF3000006,
+    kRPVControllerQueueTrack     = 0xF3000007,
 } rocprofvis_controller_queue_properties_t;
 
 typedef enum rocprofvis_controller_stream_properties_t
@@ -317,6 +319,7 @@ typedef enum rocprofvis_controller_stream_properties_t
     kRPVControllerStreamProcessor    = 0xF4000006,
     kRPVControllerStreamNumQueues    = 0xF4000007,
     kRPVControllerStreamQueueIndexed = 0xF4000008,
+    kRPVControllerStreamTrack        = 0xF4000009,
 } rocprofvis_controller_stream_properties_t;
 
 typedef enum rocprofvis_controller_process_properties_t

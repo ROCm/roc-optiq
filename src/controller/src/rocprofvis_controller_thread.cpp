@@ -1,6 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_thread.h"
+#include "rocprofvis_controller_track.h"
+#include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
 
 namespace RocProfVis
@@ -8,9 +10,13 @@ namespace RocProfVis
 namespace Controller
 {
 
+typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack>
+    TrackRef;
+
 Thread::Thread()
 : m_start_time(0)
 , m_end_time(0)
+, m_track(nullptr)
 , m_id(0)
 , m_tid(0)
 , m_node_id(0)
@@ -68,6 +74,7 @@ Thread::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* valu
             case kRPVControllerThreadExtData:
             case kRPVControllerThreadStartTime:
             case kRPVControllerThreadEndTime:
+            case kRPVControllerThreadTrack:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -109,6 +116,7 @@ Thread::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
             case kRPVControllerThreadTid:
             case kRPVControllerThreadName:
             case kRPVControllerThreadExtData:
+            case kRPVControllerThreadTrack:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -128,25 +136,34 @@ Thread::GetObject(rocprofvis_property_t property, uint64_t index,
                   rocprofvis_handle_t** value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
+    if(value)
     {
-        case kRPVControllerThreadId:
-        case kRPVControllerThreadNodeId:
-        case kRPVControllerThreadProcessId:
-        case kRPVControllerThreadParentId:
-        case kRPVControllerThreadTid:
-        case kRPVControllerThreadName:
-        case kRPVControllerThreadExtData:
-        case kRPVControllerThreadStartTime:
-        case kRPVControllerThreadEndTime:
+        switch(property)
         {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
+            case kRPVControllerThreadTrack:
+            {
+                *value = (rocprofvis_handle_t*) m_track;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerThreadId:
+            case kRPVControllerThreadNodeId:
+            case kRPVControllerThreadProcessId:
+            case kRPVControllerThreadParentId:
+            case kRPVControllerThreadTid:
+            case kRPVControllerThreadName:
+            case kRPVControllerThreadExtData:
+            case kRPVControllerThreadStartTime:
+            case kRPVControllerThreadEndTime:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
         }
     }
     return result;
@@ -194,6 +211,7 @@ Thread::GetString(rocprofvis_property_t property, uint64_t index, char* value,
         case kRPVControllerThreadTid:
         case kRPVControllerThreadStartTime:
         case kRPVControllerThreadEndTime:
+        case kRPVControllerThreadTrack:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -247,6 +265,7 @@ Thread::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value
         case kRPVControllerThreadExtData:
         case kRPVControllerThreadStartTime:
         case kRPVControllerThreadEndTime:
+        case kRPVControllerThreadTrack:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -285,6 +304,7 @@ Thread::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
         case kRPVControllerThreadTid:
         case kRPVControllerThreadName:
         case kRPVControllerThreadExtData:
+        case kRPVControllerThreadTrack:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -303,25 +323,38 @@ Thread::SetObject(rocprofvis_property_t property, uint64_t index,
                   rocprofvis_handle_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
+    if(value)
     {
-        case kRPVControllerThreadId:
-        case kRPVControllerThreadNodeId:
-        case kRPVControllerThreadProcessId:
-        case kRPVControllerThreadParentId:
-        case kRPVControllerThreadTid:
-        case kRPVControllerThreadName:
-        case kRPVControllerThreadExtData:
-        case kRPVControllerThreadStartTime:
-        case kRPVControllerThreadEndTime:
+        switch(property)
         {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
+            case kRPVControllerThreadTrack:
+            {
+                TrackRef ref(value);
+                if (ref.IsValid())
+                {
+                    m_track = ref.Get();
+                    result  = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerThreadId:
+            case kRPVControllerThreadNodeId:
+            case kRPVControllerThreadProcessId:
+            case kRPVControllerThreadParentId:
+            case kRPVControllerThreadTid:
+            case kRPVControllerThreadName:
+            case kRPVControllerThreadExtData:
+            case kRPVControllerThreadStartTime:
+            case kRPVControllerThreadEndTime:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
         }
     }
     return result;
@@ -353,6 +386,7 @@ Thread::SetString(rocprofvis_property_t property, uint64_t index, char const* va
         case kRPVControllerThreadTid:
         case kRPVControllerThreadStartTime:
         case kRPVControllerThreadEndTime:
+        case kRPVControllerThreadTrack:
         {
             result = kRocProfVisResultInvalidType;
             break;

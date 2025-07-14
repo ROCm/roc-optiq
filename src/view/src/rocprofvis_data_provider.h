@@ -109,16 +109,18 @@ public:
     double   m_start_ts;          // start time stamp of data being requested
     double   m_end_ts;            // end time stamp of data being requested
     uint32_t m_horz_pixel_range;  // horizontal pixel range for the request
+    uint64_t m_data_group_id;     // group id for the request, used for grouping requests
 
     TrackRequestParams(const TrackRequestParams& other)            = default;
     TrackRequestParams& operator=(const TrackRequestParams& other) = default;
 
     TrackRequestParams(uint64_t track_id, double start_ts, double end_ts,
-                       uint32_t horz_pixel_range)
+                       uint32_t horz_pixel_range, uint64_t group_id = 0)
     : m_track_id(track_id)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
     , m_horz_pixel_range(horz_pixel_range)
+    , m_data_group_id(group_id)
     {}
 };
 
@@ -372,8 +374,8 @@ private:
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
 
-    void CreateRawEventData(uint64_t track_id, rocprofvis_controller_array_t* track_data,
-                            double min_ts, double max_ts);
+
+    void CreateRawEventData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);                           
     void CreateRawSampleData(uint64_t track_id, rocprofvis_controller_array_t* track_data,
                              double min_ts, double max_ts);
 

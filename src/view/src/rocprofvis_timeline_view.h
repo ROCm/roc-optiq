@@ -83,6 +83,7 @@ private:
     bool                                  m_resize_activity;
     double                                m_scroll_position_x;
     EventManager::SubscriptionToken       m_scroll_to_track_token;
+    EventManager::SubscriptionToken       m_tabselected_event_token;
     double                                m_v_past_width;
     double                                m_scrollbar_location_as_percentage;
     bool                                  m_artifical_scrollbar_active;

@@ -51,7 +51,7 @@ Trace::Trace()
     m_sample_table = new SystemTable(1);
     ROCPROFVIS_ASSERT(m_sample_table);
 
-    m_mem_mgmt = new MemoryManager();
+    m_mem_mgmt = new MemoryManager(m_id);
 }
 
 Trace::~Trace()
@@ -865,6 +865,7 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerEventTable:
             case kRPVControllerSampleTable:
             case kRPVControllerAnalysisViewIndexed:
+            case kRPVControllerNotifySelected:
 #ifdef COMPUTE_UI_SUPPORT
             case kRPVControllerComputeTrace:
 #endif
@@ -897,6 +898,7 @@ rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
+        case kRPVControllerNotifySelected:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif
@@ -985,6 +987,7 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerNumTracks:
             case kRPVControllerId:
             case kRPVControllerNumAnalysisView:
+            case kRPVControllerNotifySelected:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -1014,6 +1017,7 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
+        case kRPVControllerNotifySelected:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif
@@ -1055,6 +1059,14 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
             else
             {
                 result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerNotifySelected:
+        {
+            if(value > 0 && m_mem_mgmt != nullptr)
+            {
+                m_mem_mgmt->Configure(2.0);
             }
             break;
         }
@@ -1106,6 +1118,7 @@ rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
+        case kRPVControllerNotifySelected:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif
@@ -1191,6 +1204,7 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerId:
             case kRPVControllerNumAnalysisView:
             case kRPVControllerTrackById:
+            case kRPVControllerNotifySelected:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -1220,6 +1234,7 @@ rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
+        case kRPVControllerNotifySelected:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif

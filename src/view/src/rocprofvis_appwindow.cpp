@@ -266,7 +266,7 @@ AppWindow::RenderSettingsMenu()
 void
 AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 {
-    auto tab_closed_event = std::dynamic_pointer_cast<TabClosedEvent>(e);
+    auto tab_closed_event = std::dynamic_pointer_cast<TabEvent>(e);
     if(tab_closed_event)
     {
         auto it = m_open_views.find(tab_closed_event->GetTabId());

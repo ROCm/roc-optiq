@@ -147,6 +147,8 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerEventDataExtDataIndexed = 0x00000014,
     // Tracks by Id
     kRPVControllerTrackById = 0x00000015,
+    // Notify controller when user select the trace
+    kRPVControllerNotifySelected = 0x00000016,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {

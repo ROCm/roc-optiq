@@ -99,7 +99,7 @@ namespace RocProfVis
         class MemoryManager
         {
         public:
-            MemoryManager();
+            MemoryManager(uint64_t id);
             void Init(size_t num_objects);
 
             virtual ~MemoryManager();
@@ -113,7 +113,7 @@ namespace RocProfVis
                                                 void* array_ptr);
             rocprofvis_result_t EnterArrayOwnersip(void* array_ptr);
             rocprofvis_result_t CancelArrayOwnersip(void* array_ptr);
-            void                ManageLRU();
+            void                Configure(double weight);
 
             void                Delete(Handle* handle);
             Event*              NewEvent(uint64_t id, double start_ts, double end_ts);
@@ -125,30 +125,34 @@ namespace RocProfVis
 
         private:
 
+            uint64_t                                                    m_id;
             std::unordered_set<void*>                                   m_lru_inuse_lookup;
             std::unordered_map < Segment*, std::unique_ptr<LRUMember>>  m_lru_array;
             std::condition_variable                                     m_lru_cv;
             std::thread                                                 m_lru_thread;
             std::mutex                                                  m_lru_mutex;
             std::mutex                                                  m_lru_inuse_mutex;
-            bool                                                        m_lru_mgmt_shutdown;
-            bool                                                        m_array_ownership_changed;
+            std::atomic<bool>                                           m_lru_mgmt_shutdown;
+            bool                                                        m_lru_configured;
             bool                                                        m_mem_mgmt_initialized;
             std::atomic<size_t>                                         m_lru_storage_memory_used;
-            size_t                                                      m_trace_size;
             uint32_t                                                    m_mem_block_size;
+            size_t                                                      m_lru_size_limit;
+            size_t                                                      m_trace_size;
+            double                                                      m_trace_weight;
 
             std::map<void*, MemoryPool*>                                m_object_pools;
             std::map<void*, MemoryPool*>::iterator                      m_current_pool[kRocProfVisNumberOfObjectTypes];
             std::mutex                                                  m_pool_mutex;
 
+            void   ManageLRU();
             void*  Allocate(size_t size, rocprofvis_object_type_t type);
             void   CleanUp();
-            size_t GetMemoryManagerSizeLimit();
+            static void   UpdateSizeLimit();
 
-            inline static size_t                                               s_physical_memory_avail=0;
-            inline static size_t                                               s_total_loaded_size=0;
-            inline static uint32_t                                             s_num_traces=0;
+            inline static size_t                                        s_physical_memory_avail=0;
+            inline static std::vector<MemoryManager*>                   s_memory_manager_instances;
+            inline static std::mutex                                    s_lru_config_mutex;
 
         };
 

@@ -22,13 +22,14 @@ namespace RocProfVis
 namespace Controller
 {
 
-MemoryManager::MemoryManager()
+MemoryManager::MemoryManager(uint64_t id)
 : m_lru_storage_memory_used(0)
 , m_lru_mgmt_shutdown(false)
 , m_mem_mgmt_initialized(false)
 , m_mem_block_size(1024)
+, m_id(id)
+, m_trace_weight(1.0)
 { 
-    s_num_traces++;
     for(int type = 0; type < kRocProfVisNumberOfObjectTypes; type++)
     {
         m_current_pool[type] = m_object_pools.end();
@@ -50,7 +51,17 @@ MemoryManager::~MemoryManager()
         }
 
     }
-    s_num_traces--;
+    for (auto it = s_memory_manager_instances.begin();
+        it != s_memory_manager_instances.end(); ++it)
+    {
+        if (*it == this)
+        {
+            std::unique_lock lock(s_lru_config_mutex);
+            s_memory_manager_instances.erase(it);
+            UpdateSizeLimit();
+            break;
+        }
+    }
 }
 
 // start memory manager LRU processing when trace size is known
@@ -76,8 +87,7 @@ void MemoryManager::Init(size_t trace_size)
 #endif
     }
 
-    m_trace_size = trace_size;
-    s_total_loaded_size += trace_size;
+    m_trace_size =  trace_size;
 
     size_t num_gigabytes = (s_physical_memory_avail >> 29);
     size_t exponent      = 1;
@@ -87,23 +97,61 @@ void MemoryManager::Init(size_t trace_size)
         exponent <<= 1;
     }
     m_mem_block_size = exponent << 11;
+
     spdlog::debug("Physical memory = {}!", s_physical_memory_avail);
-    spdlog::debug("Trace size = {}!", m_trace_size);
-    spdlog::debug("All traces size = {}!", s_total_loaded_size);
-    spdlog::debug("Memory manager memory limit = {}!", GetMemoryManagerSizeLimit());
     spdlog::debug("Memory manager memory allocation block  size = {}!", m_mem_block_size);
     
     m_lru_thread         = std::thread(&MemoryManager::ManageLRU, this);
     m_mem_mgmt_initialized = true;
+
+    {
+        std::unique_lock lock(s_lru_config_mutex);
+        s_memory_manager_instances.push_back(this);
+        UpdateSizeLimit();
+    }
+ 
 }
 
-size_t
-MemoryManager::GetMemoryManagerSizeLimit()
-{ 
-    return std::max( 
-                    (int64_t)m_trace_size + (((int64_t) s_physical_memory_avail - (int64_t) s_total_loaded_size) / s_num_traces),
-                    (int64_t)100000000
-    );
+
+void
+MemoryManager::UpdateSizeLimit()
+{
+    size_t total_weighted_size = 0;
+
+    for(auto& instance : s_memory_manager_instances)
+    {
+        total_weighted_size += instance->m_trace_weight * instance->m_trace_size;
+    }
+
+    for(auto& instance : s_memory_manager_instances)
+    {
+        size_t size_limit =
+            ((instance->m_trace_weight * instance->m_trace_size) / total_weighted_size) *
+                            s_physical_memory_avail;
+        {
+            std::unique_lock<std::mutex> lock(instance->m_lru_mutex);
+            instance->m_lru_size_limit = size_limit;
+            instance->m_lru_configured = true;
+            instance->m_lru_cv.notify_one();
+        }
+
+        spdlog::debug("Trace[{}] size = {}!", instance->m_id,
+                      instance->m_trace_size);
+        spdlog::debug("Trace[{}] memory limit = {}!", instance->m_id, size_limit);
+    }
+}
+
+void
+MemoryManager::Configure(double weight)
+{
+    std::unique_lock lock(s_lru_config_mutex);
+
+    for(auto& instance : s_memory_manager_instances)
+    {
+        instance->m_trace_weight = 1.0;
+    }
+    m_trace_weight = weight;
+    UpdateSizeLimit();
 }
 
 
@@ -127,7 +175,7 @@ MemoryManager::CancelArrayOwnersip(void* array_ptr)
     if(it != m_lru_inuse_lookup.end())
     {
         m_lru_inuse_lookup.erase(it);
-        m_array_ownership_changed = true;
+        m_lru_configured = true;
         m_lru_cv.notify_one();
         return kRocProfVisResultSuccess;
     }
@@ -185,8 +233,8 @@ MemoryManager::ManageLRU()
     {
         std::unique_lock lock(m_lru_mutex);
         m_lru_cv.wait(lock, [&] {
-            return (m_array_ownership_changed &&
-                    m_lru_storage_memory_used > GetMemoryManagerSizeLimit()) ||
+            return (m_lru_configured &&
+                    m_lru_storage_memory_used > m_lru_size_limit) ||
                    m_lru_mgmt_shutdown;
         });
         if (m_lru_mgmt_shutdown)
@@ -196,8 +244,7 @@ MemoryManager::ManageLRU()
         }
         else
         {
-            size_t mem_size_limit = GetMemoryManagerSizeLimit();
-            m_array_ownership_changed = false;
+            m_lru_configured = false;
             std::vector<LRUMember*> sorted_lru_array;
             sorted_lru_array.reserve(m_lru_array.size());
             for(auto& [segment_ptr, lru_member] : m_lru_array)
@@ -234,7 +281,7 @@ MemoryManager::ManageLRU()
                 owner->Remove(reference);
 
                 
-                if(m_lru_storage_memory_used <= mem_size_limit)
+                if(m_lru_storage_memory_used <= m_lru_size_limit)
                 {
                     break;
                 }

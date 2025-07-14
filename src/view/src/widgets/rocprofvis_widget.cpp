@@ -447,7 +447,13 @@ TabContainer::Render()
         if(m_active_tab_index != new_selected_tab)
         {
             m_active_tab_index = new_selected_tab;
-            // Todo: add event to notify of the change
+            if(new_selected_tab < m_tabs.size())
+            {
+                std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
+                    static_cast<int>(RocEvents::kTabSelected),
+                    m_tabs[new_selected_tab].m_id);
+                EventManager::GetInstance()->AddEvent(e);
+            }
         }
 
         // clear the set active tab index
@@ -477,7 +483,7 @@ TabContainer::RemoveTab(const std::string& id)
     if(it != m_tabs.end())
     {
         // notify the event manager of the tab removal
-        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(
+        std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
             static_cast<int>(RocEvents::kTabClosed), it->m_id);
         EventManager::GetInstance()->AddEvent(e);
 
@@ -491,7 +497,7 @@ TabContainer::RemoveTab(int index)
     if(index >= 0 && index < static_cast<int>(m_tabs.size()))
     {
         // notify the event manager of the tab removal
-        std::shared_ptr<TabClosedEvent> e = std::make_shared<TabClosedEvent>(
+        std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
             static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id);
         EventManager::GetInstance()->AddEvent(e);
 

@@ -48,7 +48,7 @@ EventsView::Render()
 void
 EventsView::RenderLeftPanel()
 {
-    if(ImGui::BeginChild("LeftPanel", ImVec2(0, 0), true, ImGuiWindowFlags_NoMove))
+    if(ImGui::BeginChild("LeftPanel", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
     {
         uint64_t selected_event = m_data_provider.GetSelectedEventId();
         if(selected_event == std::numeric_limits<uint64_t>::max())
@@ -96,8 +96,8 @@ EventsView::RenderLeftPanel()
 void
 EventsView::RenderRightPanel()
 {
-    if(ImGui::BeginChild("RightPanel", ImVec2(0, 0), true,
-                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar))
+    if(ImGui::BeginChild("RightPanel", ImVec2(0, 0), ImGuiChildFlags_None,
+                         ImGuiWindowFlags_NoMove))
     {
         const call_stack_info_t& call_stack = m_data_provider.GetCallStackInfo();
         if(!call_stack.call_stack_data.empty())

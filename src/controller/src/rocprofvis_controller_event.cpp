@@ -31,9 +31,9 @@ Event::Event(Event* other)
 : m_id(other->m_id)
 , m_start_timestamp(other->m_start_timestamp)
 , m_end_timestamp(other->m_end_timestamp)
-, m_name(UINT64_MAX)
-, m_category(UINT64_MAX)
-, m_level(0)
+, m_name(other->m_name)
+, m_category(other->m_category)
+, m_level(other->m_level)
 {
 }
 
@@ -42,9 +42,9 @@ Event& Event::operator=(Event&& other)
     m_id              = other.m_id;
     m_start_timestamp = other.m_start_timestamp;
     m_end_timestamp   = other.m_end_timestamp;
-    m_name            = UINT64_MAX;
-    m_category        = UINT64_MAX;
-    m_level           = 0;    
+    m_name            = other.m_name;
+    m_category        = other.m_category;
+    m_level           = other.m_level;    
     return *this;
 }
 
@@ -54,9 +54,9 @@ Event::operator=(const Event& other)
     m_id              = other.m_id;
     m_start_timestamp = other.m_start_timestamp;
     m_end_timestamp   = other.m_end_timestamp;
-    m_name            = UINT64_MAX;
-    m_category        = UINT64_MAX;
-    m_level           = 0;
+    m_name            = other.m_name;
+    m_category        = other.m_category;
+    m_level           = other.m_level;
     return *this;
 }
 

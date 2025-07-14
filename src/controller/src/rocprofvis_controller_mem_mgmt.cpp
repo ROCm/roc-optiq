@@ -58,6 +58,7 @@ MemoryManager::~MemoryManager()
         {
             std::unique_lock lock(s_lru_config_mutex);
             s_memory_manager_instances.erase(it);
+            UpdateSizeLimit();
             break;
         }
     }

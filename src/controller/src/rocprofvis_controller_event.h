@@ -4,6 +4,7 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
+#include <cstddef>
 #include <string>
 #include <vector>
 #include "rocprofvis_c_interface.h"
@@ -21,7 +22,11 @@ class FlowControl;
 class Event : public Handle
 {
 public:
+    Event(Event* other);
     Event(uint64_t id, double start_ts, double end_ts);
+
+    Event& operator=(Event&& other);
+    Event& operator=(const Event& other);
 
     virtual ~Event();
 
@@ -48,10 +53,10 @@ private:
     size_t m_category;
     uint8_t m_level;
 
-private:
-    rocprofvis_result_t FetchDataModelFlowTraceProperty(Array& array, rocprofvis_dm_trace_t dm_trace_handle);
-    rocprofvis_result_t FetchDataModelStackTraceProperty(Array& array, rocprofvis_dm_trace_t dm_trace_handle);
-    rocprofvis_result_t FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm_trace_handle);
+public:
+    static rocprofvis_result_t FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array, rocprofvis_dm_trace_t dm_trace_handle);
+    static rocprofvis_result_t FetchDataModelStackTraceProperty(uint64_t event_id, Array& array, rocprofvis_dm_trace_t dm_trace_handle);
+    static rocprofvis_result_t FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocprofvis_dm_trace_t dm_trace_handle);
 };
 
 }

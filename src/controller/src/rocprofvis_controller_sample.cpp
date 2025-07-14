@@ -18,6 +18,14 @@ Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double 
 {
 }
 
+Sample& Sample::operator=(Sample&& other)
+{
+    m_id              = other.m_id;
+    m_data            = other.m_data;
+    m_timestamp       = other.m_timestamp;   
+    return *this;
+}
+
 Sample::~Sample()
 {
 }
@@ -323,15 +331,6 @@ rocprofvis_result_t Sample::SetObject(rocprofvis_property_t property, uint64_t i
         switch(property)
         {
             case kRPVControllerSampleTrack:
-            {
-                TrackRef track_ref(value);
-                if(track_ref.IsValid())
-                {
-                    m_track = track_ref.Get();
-                    result  = kRocProfVisResultSuccess;
-                }
-                break;
-            }
             case kRPVControllerSampleValue:
             case kRPVControllerSampleId:
             case kRPVControllerSampleType:

@@ -24,6 +24,7 @@ namespace View
 {
 
 constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
+constexpr float  REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;  // 20% top and bottom of the window size
 
 TimelineView::TimelineView(DataProvider& dp)
 : m_data_provider(dp)
@@ -41,8 +42,6 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_pixels_per_ns(0.0f)
 , m_meta_map_made(false)
 , m_previous_scroll_position(0.0f)
-, m_graph_map({})
-, m_is_control_held(false)
 , m_ruler_height(30)
 , m_ruler_padding(0.0f, 4.0f)
 , m_unload_track_distance(1000.0f)
@@ -52,8 +51,8 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_scrollbar_location_as_percentage(0)
 , m_artifical_scrollbar_active(false)
 , m_highlighted_region({ INVALID_SELECTION_TIME, INVALID_SELECTION_TIME })
-, m_new_track_token(-1)
-, m_scroll_to_track_token(-1)
+, m_new_track_token(static_cast<uint64_t>(-1))
+, m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_settings(Settings::GetInstance())
 , m_v_past_width(0)
 , m_v_width(0)
@@ -64,6 +63,11 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_region_selection_changed(false)
 , m_artificial_scrollbar_height(30)
 , m_display_time_format(TimeFormat::kTimecode)
+, m_grid_interval_ns(0.0)
+, m_recalculate_grid_interval(true)
+, m_last_zoom(1.0f)
+, m_last_graph_size(0.0f, 0.0f)
+, m_reorder_request({true, 0, 0})
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -87,11 +91,11 @@ TimelineView::TimelineView(DataProvider& dp)
 int
 TimelineView::FindTrackIdByName(const std::string& name)
 {
-    for(const auto& pair : m_graph_map)
+    for(int i = 0; i < m_graphs.size(); i++)
     {
-        if(pair.second.chart && pair.second.chart->GetName() == name)
+        if(m_graphs[i].chart && m_graphs[i].chart->GetName() == name)
         {
-            return pair.first;
+            return i;
         }
     }
     return -1;
@@ -101,12 +105,15 @@ float
 TimelineView::CalculateTrackOffsetY(int chart_id)
 {
     float offset = 0.0f;
-    for(const auto& pair : m_graph_map)
+    for(int i = 0; i < m_graphs.size(); i++)
     {
-        if(pair.first == chart_id) break;
-        if(pair.second.display && pair.second.chart)
+        if(i == chart_id)
         {
-            offset += pair.second.chart->GetTrackHeight();
+            break;
+        }
+        else if(m_graphs[i].display && m_graphs[i].chart)
+        {
+            offset += m_graphs[i].chart->GetTrackHeight();
         }
     }
     return offset;
@@ -206,7 +213,16 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     }
     else
     {
-        uint64_t           track_index = tde->GetTrackIndex();
+        const track_info_t* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
+        if(!metadata)
+        {
+            spdlog::debug(
+                "No metadata found for track id {}, cannot process new track data",
+                tde->GetTrackID());
+            return;
+        }
+
+        uint64_t           track_index = metadata->index;
         const std::string& trace_path  = tde->GetTracePath();
 
         if(m_data_provider.GetTraceFilePath() != trace_path)
@@ -216,12 +232,11 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             return;
         }
 
-        auto it = m_graph_map.find(track_index);
-        if(it != m_graph_map.end())
+        if(track_index < m_graphs.size())
         {
-            if(it->second.chart)
+            if(m_graphs[track_index].chart)
             {
-                it->second.chart->HandleTrackDataChanged();
+                m_graphs[track_index].chart->HandleTrackDataChanged();
             }
             else
             {
@@ -244,7 +259,22 @@ TimelineView::Update()
 {
     if(m_meta_map_made)
     {
-        // nothing for now
+        if(!m_reorder_request.handled)
+        {
+            if(m_data_provider.SetGraphIndex(m_reorder_request.track_id, m_reorder_request.new_index))
+            {
+                std::vector<rocprofvis_graph_t> m_graphs_reordered;
+                m_graphs_reordered.resize(m_data_provider.GetTrackCount());
+                for (rocprofvis_graph_t& graph : m_graphs)
+                {
+                    const track_info_t* metadata = m_data_provider.GetTrackInfo(graph.chart->GetID());
+                    ROCPROFVIS_ASSERT(metadata);
+                    m_graphs_reordered[metadata->index] = std::move(graph);
+                }
+                m_graphs = std::move(m_graphs_reordered);
+            }
+            m_reorder_request.handled = true;
+        }
     }
 }
 
@@ -256,6 +286,12 @@ TimelineView::Render()
     {
         RenderGraphPoints();
     }
+    if(m_graph_size.x != m_last_graph_size.x || m_zoom != m_last_zoom) {
+        m_recalculate_grid_interval = true;
+    }
+
+    m_last_zoom = m_zoom;
+    m_last_graph_size = m_graph_size;
 }
 
 void
@@ -269,7 +305,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     ImGui::SetNextWindowSize(ImVec2(1.0f, display_size.y), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kScrollBarColor));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
 
     ImGui::BeginChild("Splitter View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
 
@@ -307,7 +343,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     ImGui::SetCursorPos(
         ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kScrollBarColor));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
 
     ImGui::BeginChild("Splitter View Horizontal", ImVec2(0, 0), ImGuiChildFlags_None,
                       window_flags);
@@ -446,10 +482,160 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::PopStyleColor();
 }
 
-std::map<int, rocprofvis_graph_map_t>*
-TimelineView::GetGraphMap()
+std::vector<rocprofvis_graph_t>*
+TimelineView::GetGraphs()
 {
-    return &m_graph_map;
+    return &m_graphs;
+}
+
+void
+TimelineView::CalculateGridInterval()
+{
+    // measure the size of the label to determine the step size
+    std::string label;
+    switch(m_display_time_format)
+    {
+        // use the largest time point to determine the label size
+        case TimeFormat::kTimecode:
+            label = nanosecond_to_timecode_str(m_max_x - m_min_x) + "gap";
+            break;
+        case TimeFormat::kNanoseconds:
+        default: label = nanosecond_to_str(m_max_x - m_min_x) + "gap";
+    }
+    ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+
+    // calculate the number of intervals based on the graph width and label width
+    int interval_count = m_graph_size.x / label_size.x;
+
+    double interval_ns  = calculate_nice_interval(m_v_width, interval_count);
+    double step_size_px = interval_ns * m_pixels_per_ns;
+
+    int pad_amount = 2;  // +2 for the first and last label
+
+    // If the step size is smaller than the label size, try to adjust the interval count
+    while(step_size_px < label_size.x)
+    {
+        interval_count--;
+        interval_ns  = calculate_nice_interval(m_v_width, interval_count);
+        step_size_px = interval_ns * m_pixels_per_ns;
+        // If the interval count is too small break out and pad it
+        if(interval_count <= 3)
+        {
+            pad_amount++;
+            break;
+        }
+    }
+
+    m_grid_interval_ns    = interval_ns;
+    m_grid_interval_count = interval_count + pad_amount;
+}
+
+void
+TimelineView::RenderGridAlt()
+{
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoScrollWithMouse;
+
+    ImVec2 container_pos =
+        ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
+
+    ImVec2 container_size  = ImGui::GetWindowSize();
+    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+    ImVec2 content_size    = ImVec2(container_size.x - m_sidebar_size, container_size.y);
+
+    if(m_recalculate_grid_interval)
+    {
+        CalculateGridInterval();
+        m_recalculate_grid_interval = false;
+    }
+
+    constexpr float tick_height = 10.0f;
+    double          start_ns    = m_view_time_offset_ns;
+    double          grid_line_start_ns =
+        std::floor(start_ns / m_grid_interval_ns) * m_grid_interval_ns;
+
+    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+
+    if(ImGui::BeginChild("Grid"), content_size, true, window_flags)
+    {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+        ImVec2 child_win  = ImGui::GetWindowPos();
+        ImVec2 child_size = ImGui::GetWindowSize();
+
+        // Background for the ruler area
+        draw_list->AddRectFilled(
+            ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
+            ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
+            m_settings.GetColor(Colors::kRulerBgColor));
+
+        // Detect right mouse click in the ruler area
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
+           ImGui::IsMouseHoveringRect(
+               ImVec2(container_pos.x,
+                      cursor_position.y + content_size.y - m_ruler_height),
+               ImVec2(container_pos.x + m_graph_size.x,
+                      cursor_position.y + content_size.y)))
+        {
+            // Show context menu for time format selection
+            ImGui::OpenPopup("Time Format Selection");
+        }
+
+        // Context menu for time format selection
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
+        if(ImGui::BeginPopup("Time Format Selection"))
+        {
+            ImGui::Text("Time format:");
+            ImGui::Separator();
+
+            if(ImGui::MenuItem("Timecode", nullptr,
+                               m_display_time_format == TimeFormat::kTimecode))
+            {
+                m_display_time_format = TimeFormat::kTimecode;
+            }
+            if(ImGui::MenuItem("Nanoseconds", nullptr,
+                               m_display_time_format == TimeFormat::kNanoseconds))
+            {
+                m_display_time_format = TimeFormat::kNanoseconds;
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
+
+        std::string label;
+        for(auto i = 0; i < m_grid_interval_count; i++)
+        {
+            double grid_line_ns = grid_line_start_ns + (i * m_grid_interval_ns);
+            float  normalized_start =
+                child_win.x + (grid_line_ns - m_view_time_offset_ns) * m_pixels_per_ns;
+
+            draw_list->AddLine(
+                ImVec2(normalized_start, cursor_position.y),
+                ImVec2(normalized_start,
+                       cursor_position.y + content_size.y + tick_height - m_ruler_height),
+                m_settings.GetColor(Colors::kBoundBox), 0.5f);
+
+            switch(m_display_time_format)
+            {
+                // use the largest time point to determine the step size
+                case TimeFormat::kTimecode:
+                    label = nanosecond_to_timecode_str(grid_line_ns);
+                    break;
+                case TimeFormat::kNanoseconds:
+                default: label = nanosecond_to_str(grid_line_ns);
+            }
+
+            ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+            ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
+                                       cursor_position.y + content_size.y - label_size.y -
+                                           m_ruler_padding.y);
+            draw_list->AddText(label_pos, m_settings.GetColor(Colors::kGridColor),
+                               label.c_str());
+        }
+    }
+
+    ImGui::EndChild();
 }
 
 void
@@ -519,7 +705,8 @@ TimelineView::RenderGrid()
         // Detect right mouse click in the ruler area
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
            ImGui::IsMouseHoveringRect(
-               ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
+               ImVec2(container_pos.x,
+                      cursor_position.y + content_size.y - m_ruler_height),
                ImVec2(container_pos.x + m_graph_size.x,
                       cursor_position.y + content_size.y)))
         {
@@ -535,7 +722,8 @@ TimelineView::RenderGrid()
             ImGui::Text("Time format:");
             ImGui::Separator();
 
-            if(ImGui::MenuItem("Timecode", nullptr, m_display_time_format == TimeFormat::kTimecode))
+            if(ImGui::MenuItem("Timecode", nullptr,
+                               m_display_time_format == TimeFormat::kTimecode))
             {
                 m_display_time_format = TimeFormat::kTimecode;
             }
@@ -569,7 +757,7 @@ TimelineView::RenderGrid()
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
             std::string label;
-            double time_point_ns =
+            double      time_point_ns =
                 m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
             switch(m_display_time_format)
             {
@@ -611,8 +799,6 @@ TimelineView::RenderGraphView()
     ImGui::BeginChild("Graph View Main",
                       ImVec2(container_size.x, container_size.y - m_ruler_height), false,
                       window_flags);
-    ImGuiIO& io            = ImGui::GetIO();
-    m_is_control_held      = io.KeyCtrl;
     m_content_max_y_scroll = ImGui::GetScrollMaxY();
 
     // Prevent choppy behavior by preventing constant rerender.
@@ -648,9 +834,9 @@ TimelineView::RenderGraphView()
     }
 
     bool selection_changed = false;
-    for(const auto& graph_objects : m_graph_map)
+    for(int i = 0; i < m_graphs.size(); i++)
     {
-        const rocprofvis_graph_map_t& track_item = graph_objects.second;
+        rocprofvis_graph_t& track_item = m_graphs[i];
 
         if(track_item.display)
         {
@@ -674,10 +860,13 @@ TimelineView::RenderGraphView()
             track_item.chart->SetDistanceToView(
                 std::max(std::max(delta_bottom, delta_top), 0.0f));
 
+            // This item is being reordered if there is an active payload and its id matches the payload's id.
+            bool is_reordering = ImGui::GetDragDropPayload() && m_reorder_request.track_id == track_item.chart->GetID();
+
             // Check if the track is visible
             bool is_visible = (track_bottom >= m_scroll_position &&
-                               track_top <= m_scroll_position + m_graph_size.y);
-
+                               track_top <= m_scroll_position + m_graph_size.y) || is_reordering;
+            
             if(is_visible)
             {
                 // Request data for the chart if it doesn't have data
@@ -687,7 +876,7 @@ TimelineView::RenderGraphView()
                 {
                     // Request one viewport worth of data on each side of the current view
                     double buffer_distance = m_v_width;
-                    graph_objects.second.chart->RequestData(
+                    track_item.chart->RequestData(
                         (m_view_time_offset_ns - buffer_distance) + m_min_x,
                         (m_view_time_offset_ns + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
@@ -698,69 +887,24 @@ TimelineView::RenderGraphView()
                     track_item.chart->SetColorByValue(track_item.color_by_value_digits);
                 }
 
-                if(track_item.graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
+                if(track_item.graph_type == rocprofvis_graph_t::TYPE_LINECHART)
                 {
                     static_cast<LineTrackItem*>(track_item.chart)
                         ->SetShowBoxplot(track_item.make_boxplot);
                 }
 
                 ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
-                if(graph_objects.second.selected)
+                if(track_item.selected)
                 {
                     selection_color = m_settings.GetColor(Colors::kHighlightChart);
                 }
 
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
-                if(ImGui::BeginChild((std::to_string(graph_objects.first)).c_str(),
-                                     ImVec2(0, track_height), false,
-                                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                         ImGuiWindowFlags_NoScrollWithMouse |
+                ImGui::PushID(i);
+                if(ImGui::BeginChild("", ImVec2(0, track_height), false,
+                                     window_flags |
                                          ImGuiWindowFlags_NoScrollbar))
-                {
-                    if(m_is_control_held)
-                    {
-                        ImGui::Selectable(
-                            ("Move Position " + std::to_string(graph_objects.first))
-                                .c_str(),
-                            false, ImGuiSelectableFlags_AllowDoubleClick,
-                            ImVec2(0, 20.0f));
-
-                        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
-                        {
-                            ImGui::SetDragDropPayload("MY_PAYLOAD_TYPE",
-                                                      &graph_objects.second,
-                                                      sizeof(graph_objects.second));
-                            ImGui::EndDragDropSource();
-                        }
-                        if(ImGui::BeginDragDropTarget())
-                        {
-                            if(const ImGuiPayload* payload =
-                                   ImGui::AcceptDragDropPayload("MY_PAYLOAD_TYPE"))
-                            {
-                                // Handle the payload (here we just print it)
-                                rocprofvis_graph_map_t* payload_data =
-                                    (rocprofvis_graph_map_t*)
-                                        payload->Data;  // incoming (being dragged)
-                                rocprofvis_graph_map_t payload_data_copy = *payload_data;
-                                int payload_position = payload_data_copy.chart->GetID();
-                                rocprofvis_graph_map_t outgoing_chart =
-                                    m_graph_map[graph_objects.first];  // outgoing
-                                                                       // (getting
-                                                                       // replaced)
-                                int outgoing_position = outgoing_chart.chart->GetID();
-
-                                // Change position in object itself.
-                                payload_data_copy.chart->SetID(outgoing_position);
-                                outgoing_chart.chart->SetID(payload_position);
-
-                                // Swap Positions.
-                                m_graph_map[outgoing_position] = payload_data_copy;
-                                m_graph_map[payload_position]  = outgoing_chart;
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
-                    }
-
+                {   
                     // call update function (TODO: move this to timeline's update
                     // function?)
                     track_item.chart->Update();
@@ -770,28 +914,67 @@ TimelineView::RenderGraphView()
                                                      m_scroll_position);
 
                     m_resize_activity |= track_item.chart->GetResizeStatus();
-                    track_item.chart->Render(m_graph_size.x);
 
+                    if (is_reordering)
+                    {
+                        // Empty space if the track is being reordered
+                        ImGui::Dummy(ImVec2(0, track_height));
+                    }
+                    else
+                    {
+                        track_item.chart->Render(m_graph_size.x);
+                    }
+                    
+                    // Region for recieving reordering request.
+                    if(ImGui::BeginDragDropTarget())
+                    {                        
+                        if(ImGui::AcceptDragDropPayload("reorder_request"))
+                        {
+                            m_reorder_request.handled = false;
+                            m_reorder_request.new_index = i;
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                    
+                    ImGui::PopStyleColor(); // ImGuiCol_ChildBg
+
+                    ImGui::SetCursorPos(ImVec2(0, 0));
+                    // Transparent region where reordering can be initiated.
+                    if(ImGui::BeginChild("reorder_handle", ImVec2(track_item.chart->GetReorderGripWidth(), 0), false,
+                                     window_flags |
+                                         ImGuiWindowFlags_NoScrollbar))
+                    {                        
+                        if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
+                        {                            
+                            char dummy_payload;
+                            ImGui::SetDragDropPayload("reorder_request", &dummy_payload, sizeof(char));
+                            m_reorder_request.track_id = track_item.chart->GetID();
+                            ImGui::EndDragDropSource();
+                        }
+                    }
+                    ImGui::EndChild();
+
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);                    
 
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {
-                        m_graph_map[track_item.chart->GetID()].selected =
-                            !track_item.selected;
+                        track_item.selected = !track_item.selected;
                         track_item.chart->SetSelected(track_item.selected);
                         selection_changed = true;
                     }
                 }
                 ImGui::EndChild();
+                ImGui::PopID();
                 ImGui::PopStyleColor();
-                
+
                 // Draw border around the track
                 // This is done after the child window to ensure it is on top
                 ImVec2 p_min = ImGui::GetItemRectMin();
                 ImVec2 p_max = ImGui::GetItemRectMax();
                 ImGui::GetWindowDrawList()->AddRect(
-                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
-
+                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0,
+                    1.0f);
             }
             else
             {
@@ -807,6 +990,38 @@ TimelineView::RenderGraphView()
                 // Render dummy to maintain layout
                 ImGui::Dummy(ImVec2(0, track_height));
             }
+            
+            if (is_reordering)
+            {
+                // Show the track as tooltip while being reordered.
+                ImVec2 graph_view_pos = ImGui::GetWindowPos();
+                ImVec2 mouse_pos = ImGui::GetMousePos();
+                ImVec2 mouse_relative_pos = mouse_pos - graph_view_pos;
+                ImGui::SetNextWindowPos(ImVec2(graph_view_pos.x, mouse_pos.y + ImGui::GetFrameHeight()));
+                ImGui::BeginTooltip();
+                track_item.chart->Render(m_graph_size.x);
+                ImGui::EndTooltip();                
+                
+                // Scroll the view if the mouse is near the top or bottom of the window.
+                // Speed is proportional to frame height and depth of mouse inside auto-scroll zone 
+                if (mouse_relative_pos.y < container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)
+                {
+                    ImGui::SetScrollY(m_scroll_position - ImGui::GetFrameHeight() * 
+                                      std::min(1.0f, 
+                                               (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD - mouse_relative_pos.y) / (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)
+                                      )
+                    );
+                }
+                else if (mouse_relative_pos.y > container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD))
+                {
+                    ImGui::SetScrollY(m_scroll_position + ImGui::GetFrameHeight() * 
+                                      std::min(1.0f, 
+                                               (mouse_relative_pos.y - container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD)) / (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)
+                                      )
+                    );
+                }
+                m_scroll_position = ImGui::GetScrollY();
+            }
         }
     }
 
@@ -818,11 +1033,11 @@ TimelineView::RenderGraphView()
     {
         m_region_selection_changed = false;
         std::vector<uint64_t> selected_graphs;
-        for(const auto& graph_objects : m_graph_map)
+        for(int i = 0; i < m_graphs.size(); i++)
         {
-            if(graph_objects.second.selected)
+            if(m_graphs[i].selected)
             {
-                selected_graphs.push_back(graph_objects.first);
+                selected_graphs.push_back(m_graphs[i].chart->GetID());
             }
         }
 
@@ -849,15 +1064,12 @@ TimelineView::RenderGraphView()
 void
 TimelineView::DestroyGraphs()
 {
-    for(const auto& graph_object : m_graph_map)
+    for(rocprofvis_graph_t& graph : m_graphs)
     {
-        if(graph_object.second.chart)
-        {
-            delete graph_object.second.chart;
-        }
+        delete graph.chart;
     }
 
-    m_graph_map.clear();
+    m_graphs.clear();
     m_meta_map_made = false;
 }
 
@@ -878,13 +1090,16 @@ TimelineView::MakeGraphView()
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();
     int      scale_x    = 1;
-    for(uint64_t i = 0; i < num_graphs; i++)
+    m_graphs.resize(num_graphs);
+
+    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
+    for(int i = 0; i < track_list.size(); i++)
     {
-        const track_info_t* track_info = m_data_provider.GetTrackInfo(i);
+        const track_info_t* track_info = track_list[i];
         if(!track_info)
         {
             // log warning (should this be an error?)
-            spdlog::warn("Missing track meta data for track at index {}", i);
+            spdlog::warn("Missing track meta data for track id {}", i);
             continue;
         }
 
@@ -894,22 +1109,22 @@ TimelineView::MakeGraphView()
             {
                 // Create FlameChart
                 FlameTrackItem* flame = new FlameTrackItem(
-                    m_data_provider, track_info->index, track_info->name, m_zoom,
+                    m_data_provider, track_info->id, track_info->name, m_zoom,
                     m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
                                              static_cast<float>(track_info->max_ts));
 
-                rocprofvis_graph_map_t temp_flame;
+                rocprofvis_graph_t temp_flame;
                 temp_flame.chart          = flame;
-                temp_flame.graph_type     = rocprofvis_graph_map_t::TYPE_FLAMECHART;
+                temp_flame.graph_type     = rocprofvis_graph_t::TYPE_FLAMECHART;
                 temp_flame.display        = true;
                 temp_flame.color_by_value = false;
                 temp_flame.selected       = false;
                 rocprofvis_color_by_value_t temp_color = {};
                 temp_flame.color_by_value_digits       = temp_color;
-                m_graph_map[track_info->index]         = temp_flame;
+                m_graphs[track_info->index]            = std::move(temp_flame);
 
                 break;
             }
@@ -917,7 +1132,7 @@ TimelineView::MakeGraphView()
             {
                 // Linechart
                 LineTrackItem* line = new LineTrackItem(
-                    m_data_provider, track_info->index, track_info->name, m_zoom,
+                    m_data_provider, track_info->id, track_info->name, m_zoom,
                     m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns);
 
                 std::tuple<float, float> temp_min_max_flame =
@@ -933,17 +1148,16 @@ TimelineView::MakeGraphView()
                     m_max_x = std::get<1>(temp_min_max_flame);
                 }
 
-                rocprofvis_graph_map_t temp;
+                rocprofvis_graph_t temp;
                 temp.chart          = line;
                 temp.make_boxplot   = false;
-                temp.graph_type     = rocprofvis_graph_map_t::TYPE_LINECHART;
+                temp.graph_type     = rocprofvis_graph_t::TYPE_LINECHART;
                 temp.display        = true;
                 temp.color_by_value = false;
                 temp.selected       = false;
                 rocprofvis_color_by_value_t temp_color_line = {};
                 temp.color_by_value_digits                  = temp_color_line;
-                m_graph_map[track_info->index]              = temp;
-
+                m_graphs[track_info->index]                 = std::move(temp);
                 break;
             }
             default:
@@ -985,25 +1199,16 @@ TimelineView::RenderGraphPoints()
         m_v_max_x       = m_v_min_x + m_v_width;
         m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
 
-        RenderGrid();
+        // RenderGrid();
+        RenderGridAlt();
+        RenderGraphView();
+        RenderSplitter(screen_pos);
+        RenderScrubber(screen_pos);
 
-        if(m_meta_map_made)
+        if(!m_resize_activity)
         {
-            RenderGraphView();
-        }
-
-        ImGuiIO& io       = ImGui::GetIO();
-        m_is_control_held = io.KeyCtrl;
-        if(!m_is_control_held)
-        {
-            RenderSplitter(screen_pos);
-            RenderScrubber(screen_pos);
-
-            if(!m_resize_activity)
-            {
-                // Funtion enables user interactions to be captured
-                HandleTopSurfaceTouch();
-            }
+            // Funtion enables user interactions to be captured
+            HandleTopSurfaceTouch();
         }
 
         ImGui::EndChild();  // End of Grid View 2
@@ -1071,146 +1276,142 @@ TimelineView::RenderGraphPoints()
 void
 TimelineView::HandleTopSurfaceTouch()
 {
-    if(!m_is_control_held)
+    ImVec2 container_pos  = ImGui::GetWindowPos();
+    ImVec2 container_size = ImGui::GetWindowSize();
+
+    // Define sidebar and graph areas
+    ImVec2 sidebar_min = container_pos;
+    ImVec2 sidebar_max =
+        ImVec2(container_pos.x + m_sidebar_size, container_pos.y + m_graph_size.y);
+
+    ImVec2 graph_area_min = ImVec2(container_pos.x + m_sidebar_size, container_pos.y);
+    ImVec2 graph_area_max = ImVec2(container_pos.x + m_sidebar_size + m_graph_size.x,
+                                    container_pos.y + m_graph_size.y);
+
+    bool is_mouse_in_sidebar = ImGui::IsMouseHoveringRect(sidebar_min, sidebar_max);
+    bool is_mouse_in_graph =
+        ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Sidebar: scroll wheel pans vertically
+    if(is_mouse_in_sidebar)
     {
-        ImVec2 container_pos  = ImGui::GetWindowPos();
-        ImVec2 container_size = ImGui::GetWindowSize();
-
-        // Define sidebar and graph areas
-        ImVec2 sidebar_min = container_pos;
-        ImVec2 sidebar_max =
-            ImVec2(container_pos.x + m_sidebar_size, container_pos.y + m_graph_size.y);
-
-        ImVec2 graph_area_min = ImVec2(container_pos.x + m_sidebar_size, container_pos.y);
-        ImVec2 graph_area_max = ImVec2(container_pos.x + m_sidebar_size + m_graph_size.x,
-                                       container_pos.y + m_graph_size.y);
-
-        bool is_mouse_in_sidebar = ImGui::IsMouseHoveringRect(sidebar_min, sidebar_max);
-        bool is_mouse_in_graph =
-            ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
-
-        ImGuiIO& io = ImGui::GetIO();
-
-        // Sidebar: scroll wheel pans vertically
-        if(is_mouse_in_sidebar)
+        float scroll_wheel = io.MouseWheel;
+        if(scroll_wheel != 0.0f)
         {
-            float scroll_wheel = io.MouseWheel;
-            if(scroll_wheel != 0.0f)
-            {
-                // Adjust scroll speed as needed (here, 40.0f per scroll step)
-                float scroll_speed = 100.0f;
-                m_scroll_position  = clamp(
-                    static_cast<float>(m_scroll_position - scroll_wheel * scroll_speed),
-                    0.0f, static_cast<float>(m_content_max_y_scroll));
-            }
+            // Adjust scroll speed as needed (here, 40.0f per scroll step)
+            float scroll_speed = 100.0f;
+            m_scroll_position  = clamp(
+                static_cast<float>(m_scroll_position - scroll_wheel * scroll_speed),
+                0.0f, static_cast<float>(m_content_max_y_scroll));
+        }
+    }
+
+    // Graph area: allow full interaction
+    if(is_mouse_in_graph)
+    {
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_can_drag_to_pan = true;
         }
 
-        // Graph area: allow full interaction
-        if(is_mouse_in_graph)
+        // Enables horizontal scrolling using mouse.
+        float scroll_wheel_h = io.MouseWheelH;
+        if(scroll_wheel_h != 0.0f)
         {
-            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-            {
-                m_can_drag_to_pan = true;
-            }
-            
+            const float scroll_speed = 0.1f;
+            float       move_amount  = scroll_wheel_h * m_v_width * scroll_speed;
+            m_view_time_offset_ns -= move_amount;
 
-            //Enables horizontal scrolling using mouse. 
-            float scroll_wheel_h = io.MouseWheelH;
-            if(scroll_wheel_h != 0.0f)
-            {
-                const float scroll_speed = 0.1f; 
-                float       move_amount  = scroll_wheel_h * m_v_width * scroll_speed;
-                m_view_time_offset_ns -= move_amount;
-
-                if(m_view_time_offset_ns < 0.0f) m_view_time_offset_ns = 0.0f;
-                if(m_view_time_offset_ns > m_range_x - m_v_width)
-                    m_view_time_offset_ns = m_range_x - m_v_width;
-            }
-
-            // Handle Zoom at Cursor
-            float scroll_wheel = io.MouseWheel;
-            if(scroll_wheel != 0.0f)
-            {
-                // 1. Get mouse position relative to graph area
-                ImVec2 mouse_pos        = ImGui::GetMousePos();
-                ImVec2 graph_pos        = graph_area_min;
-                float  mouse_x_in_graph = mouse_pos.x - graph_pos.x;
-
-                // 2. Calculate the world coordinate under the cursor before zoom
-                float  cursor_screen_percentage = mouse_x_in_graph / m_graph_size.x;
-                double x_under_cursor =
-                    m_view_time_offset_ns + cursor_screen_percentage * m_v_width;
-
-                // 3. Apply zoom
-                const float zoom_speed = 0.1f;
-                float       new_zoom   = m_zoom;
-                if(scroll_wheel > 0)
-                {
-                    if(m_pixels_per_ns < 1.0)
-                    {
-                        new_zoom *= 1.0f + zoom_speed;
-                    }
-                }
-                else
-                {
-                    new_zoom *= 1.0f - zoom_speed;
-                }
-                new_zoom = std::max(new_zoom, 0.9f);
-
-                // 4. Calculate new view width
-                float new_v_width = m_range_x / new_zoom;
-
-                // 5. Adjust m_movement so the world_x_under_cursor stays under the cursor
-                m_view_time_offset_ns =
-                    x_under_cursor - cursor_screen_percentage * new_v_width;
-
-                // 6. Update zoom and view width
-                m_zoom    = new_zoom;
-                m_v_width = new_v_width;
-                m_v_min_x = m_min_x + m_view_time_offset_ns;
-                m_v_max_x = m_v_min_x + m_v_width;
-            }
-
-            if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
-            {
-                m_view_time_offset_ns -= (1 / m_graph_size.x) * m_v_width;
-            }
-            if(ImGui::IsKeyPressed(ImGuiKey_RightArrow))
-            {
-                m_view_time_offset_ns -= (-1 / m_graph_size.x) * m_v_width;
-            }
+            if(m_view_time_offset_ns < 0.0f) m_view_time_offset_ns = 0.0f;
+            if(m_view_time_offset_ns > m_range_x - m_v_width)
+                m_view_time_offset_ns = m_range_x - m_v_width;
         }
 
-        if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        // Handle Zoom at Cursor
+        float scroll_wheel = io.MouseWheel;
+        if(scroll_wheel != 0.0f)
         {
-            m_can_drag_to_pan = false;
-        }
+            // 1. Get mouse position relative to graph area
+            ImVec2 mouse_pos        = ImGui::GetMousePos();
+            ImVec2 graph_pos        = graph_area_min;
+            float  mouse_x_in_graph = mouse_pos.x - graph_pos.x;
 
-        // Handle Panning (unchanged, but only if in graph area)
-        if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
-           is_mouse_in_graph)
-        {
-            float drag_y      = io.MouseDelta.y;
-            m_scroll_position = clamp(static_cast<float>(m_scroll_position - drag_y),
-                                      0.0f, static_cast<float>(m_content_max_y_scroll));
-            float drag        = io.MouseDelta.x;
-            float view_width  = (m_range_x) / m_zoom;
+            // 2. Calculate the world coordinate under the cursor before zoom
+            float  cursor_screen_percentage = mouse_x_in_graph / m_graph_size.x;
+            double x_under_cursor =
+                m_view_time_offset_ns + cursor_screen_percentage * m_v_width;
 
-            float user_requested_move = (drag / m_graph_size.x) * view_width;
-
-            if(user_requested_move < 0)
+            // 3. Apply zoom
+            const float zoom_speed = 0.1f;
+            float       new_zoom   = m_zoom;
+            if(scroll_wheel > 0)
             {
-                if(m_view_time_offset_ns < (m_range_x))
+                if(m_pixels_per_ns < 1.0)
                 {
-                    m_view_time_offset_ns -= user_requested_move;
+                    new_zoom *= 1.0f + zoom_speed;
                 }
             }
             else
             {
-                if(m_view_time_offset_ns > 0)
-                {
-                    m_view_time_offset_ns -= user_requested_move;
-                }
+                new_zoom *= 1.0f - zoom_speed;
+            }
+            new_zoom = std::max(new_zoom, 0.9f);
+
+            // 4. Calculate new view width
+            float new_v_width = m_range_x / new_zoom;
+
+            // 5. Adjust m_movement so the world_x_under_cursor stays under the cursor
+            m_view_time_offset_ns =
+                x_under_cursor - cursor_screen_percentage * new_v_width;
+
+            // 6. Update zoom and view width
+            m_zoom    = new_zoom;
+            m_v_width = new_v_width;
+            m_v_min_x = m_min_x + m_view_time_offset_ns;
+            m_v_max_x = m_v_min_x + m_v_width;
+        }
+
+        if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
+        {
+            m_view_time_offset_ns -= (1 / m_graph_size.x) * m_v_width;
+        }
+        if(ImGui::IsKeyPressed(ImGuiKey_RightArrow))
+        {
+            m_view_time_offset_ns -= (-1 / m_graph_size.x) * m_v_width;
+        }
+    }
+
+    if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    {
+        m_can_drag_to_pan = false;
+    }
+
+    // Handle Panning (but only if in graph area)
+    if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
+        is_mouse_in_graph)
+    {
+        float drag_y      = io.MouseDelta.y;
+        m_scroll_position = clamp(static_cast<float>(m_scroll_position - drag_y),
+                                    0.0f, static_cast<float>(m_content_max_y_scroll));
+        float drag        = io.MouseDelta.x;
+        float view_width  = (m_range_x) / m_zoom;
+
+        float user_requested_move = (drag / m_graph_size.x) * view_width;
+
+        if(user_requested_move < 0)
+        {
+            if(m_view_time_offset_ns < (m_range_x))
+            {
+                m_view_time_offset_ns -= user_requested_move;
+            }
+        }
+        else
+        {
+            if(m_view_time_offset_ns > 0)
+            {
+                m_view_time_offset_ns -= user_requested_move;
             }
         }
     }

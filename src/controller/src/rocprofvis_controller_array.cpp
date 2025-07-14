@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_array.h"
+#include "rocprofvis_controller_trace.h"
 
 namespace RocProfVis
 {
@@ -8,7 +9,8 @@ namespace Controller
 {
 
 Array::Array()
-{
+{ 
+    m_ctx = nullptr; 
 }
 
 Array::~Array()
@@ -23,6 +25,15 @@ std::vector<Data>& Array::GetVector(void)
 rocprofvis_controller_object_type_t Array::GetType(void) 
 {
     return kRPVControllerObjectTypeArray;
+}
+
+void Array::SetContext(Handle* ctx)
+{
+    m_ctx = (Trace*)ctx;
+}
+
+Handle* Array::GetContext(void) {
+    return m_ctx;
 }
 
 rocprofvis_result_t Array::GetUInt64(rocprofvis_property_t property, uint64_t index,
@@ -187,40 +198,37 @@ rocprofvis_result_t Array::SetUInt64(rocprofvis_property_t property, uint64_t in
                                 uint64_t value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
+    switch(property)
     {
-        switch(property)
+        case kRPVControllerArrayEntryIndexed:
         {
-            case kRPVControllerArrayEntryIndexed:
+            if(index < m_array.size())
             {
-                if(index < m_array.size())
-                {
-                    result = m_array[index].SetUInt64(value);
-                }
-                else
-                {
-                    result = kRocProfVisResultOutOfRange;
-                }
-                break;
+                result = m_array[index].SetUInt64(value);
             }
-            case kRPVControllerArrayNumEntries:
+            else
             {
-                if(value != m_array.size())
-                {
-                    m_array.resize(value);
-                    result = m_array.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
-                }
-                else
-                {
-                    result = kRocProfVisResultSuccess;
-                }
-                break;
+                result = kRocProfVisResultOutOfRange;
             }
-            default:
+            break;
+        }
+        case kRPVControllerArrayNumEntries:
+        {
+            if(value != m_array.size())
             {
-                result = kRocProfVisResultInvalidEnum;
-                break;
+                m_array.resize(value);
+                result = m_array.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
             }
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
         }
     }
     return result;

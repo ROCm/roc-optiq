@@ -22,6 +22,8 @@
 
 #include "rocprofvis_common_types.h"
 #include "rocprofvis_dm_base.h"
+#include <bitset>
+#include <map>
 
 namespace RocProfVis
 {
@@ -29,6 +31,28 @@ namespace DataModel
 {
 
 class Track;
+
+constexpr uint32_t kMemPoolBitSetSize = 1024;
+
+
+struct MemoryPool
+{
+    void*                           m_base;
+    size_t                          m_size;
+    uint32_t                        m_pos;
+
+    MemoryPool(size_t size)
+    : m_size(size)
+    , m_pos(0)
+    {
+        m_base = ::operator new(size * kMemPoolBitSetSize);
+    }
+
+    ~MemoryPool() { 
+        ::operator delete(m_base); 
+    }
+};
+
 
 // Base class for PMC and Event time slices
 // Defines set of virtual methods to access an array of POD storage objects 
@@ -42,9 +66,10 @@ class TrackSlice : public DmBase {
                             rocprofvis_dm_timestamp_t end) : 
                             m_ctx(ctx), 
                             m_start_timestamp(start), 
-                            m_end_timestamp(end) {}; 
+                            m_end_timestamp(end), 
+                            m_current_pool(nullptr) {}; 
         // TrackSlice class destructor, required in order to free resources of derived classes
-        virtual ~TrackSlice() {}
+        virtual ~TrackSlice() { Cleanup(); }
         // Pure virtual method to add a record to a time slice
         // @param data - reference to a structure with record data
         // @return status of operation       
@@ -175,6 +200,13 @@ class TrackSlice : public DmBase {
         Track*                                      m_ctx;
         // object mutex, for shared access
         mutable std::shared_mutex                   m_lock;
+        std::map<void*, MemoryPool*>                m_object_pools;
+        MemoryPool*                                 m_current_pool;
+
+        void  Cleanup();
+
+    protected:
+        void* Allocate(size_t rec_size);
 };
 
 }  // namespace DataModel

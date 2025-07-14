@@ -15,36 +15,38 @@ using namespace RocProfVis::View;
 SideBar::SideBar(DataProvider& dp)
 : m_data_provider(dp)
 , m_dropdown_select(0)
-, m_graph_map(nullptr)
+, m_graphs(nullptr)
 , m_settings(Settings::GetInstance())
 {}
 
 SideBar::~SideBar() {}
 
 void
-SideBar::SetGraphMap(std::map<int, rocprofvis_graph_map_t>* graph_map)
+SideBar::SetGraphs(std::vector<rocprofvis_graph_t>* graphs)
 {
-    m_graph_map = graph_map;
+    m_graphs = graphs;
 }
 
 void
 SideBar::Render()
 {
-    ConstructTree(m_graph_map);
+    ConstructTree();
 }
 
 void
-SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
+SideBar::ConstructTree()
 {
-    if(!tree)
+    
+    if(!m_graphs)
     {
         return;
     }
 
     if(ImGui::CollapsingHeader("Project 1"))
     {
-        for(auto& tree_item : *tree)
+        for (int i = 0; i < (*m_graphs).size(); i ++)
         {
+            rocprofvis_graph_t& graph = (*m_graphs)[i];
             ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(static_cast<int>(
                                                        Colors::kTransparent)));
             ImGui::PushStyleColor(
@@ -55,55 +57,55 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                 ImGuiCol_HeaderActive,
                 m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
 
-            std::string header_label = "Chart #" + std::to_string(tree_item.first) +
-                                       ": " + tree_item.second.chart->GetName();
+            std::string header_label = "Chart #" + std::to_string(i) +
+                                       ": " + graph.chart->GetName();
             bool open = ImGui::CollapsingHeader(header_label.c_str());
 
             if(open)
             {
                 std::string btn_id =
-                    "Go To Track###GoToTrackBtn" + tree_item.second.chart->GetName();
+                    "Go To Track###GoToTrackBtn" + graph.chart->GetName();
                 if(ImGui::Button(btn_id.c_str()))
                 {
                     auto evt = std::make_shared<ScrollToTrackByNameEvent>(
                         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                        tree_item.second.chart->GetName());
+                        graph.chart->GetName());
                     EventManager::GetInstance()->AddEvent(evt);
                 }
                 if(ImGui::Checkbox(
-                       (" Enable/Disable Chart #" + std::to_string((tree_item.first)))
+                       (" Enable/Disable Chart #" + std::to_string(i))
                            .c_str(),
-                       &tree_item.second.display))
+                       &graph.display))
                 {
                 }
-                if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_FLAMECHART)
+                if(graph.graph_type == rocprofvis_graph_t::TYPE_FLAMECHART)
                 {
                     if(ImGui::Checkbox(
-                           ("Turn off color #" + std::to_string(tree_item.first)).c_str(),
-                           &tree_item.second.colorful_flamechart))
+                           ("Turn off color #" + std::to_string(i)).c_str(),
+                           &graph.colorful_flamechart))
 
                     {
-                        static_cast<FlameTrackItem*>(tree_item.second.chart)
-                            ->SetRandomColorFlag(tree_item.second.colorful_flamechart);
+                        static_cast<FlameTrackItem*>(graph.chart)
+                            ->SetRandomColorFlag(graph.colorful_flamechart);
                     }
                 }
-                if(tree_item.second.graph_type == rocprofvis_graph_map_t::TYPE_LINECHART)
+                if(graph.graph_type == rocprofvis_graph_t::TYPE_LINECHART)
                 {
                     if(ImGui::Checkbox(
-                           (" Color By Value #" + std::to_string((tree_item.first)))
+                           (" Color By Value #" + std::to_string(i))
                                .c_str(),
-                           &tree_item.second.color_by_value))
+                           &graph.color_by_value))
 
                     {
                     }
                     if(ImGui::Checkbox(
-                           (" Convert to Boxplot #" + std::to_string((tree_item.first)))
+                           (" Convert to Boxplot #" + std::to_string(i))
                                .c_str(),
-                           &tree_item.second.make_boxplot))
+                           &graph.make_boxplot))
 
                     {
                     }
-                    if(tree_item.second.color_by_value)
+                    if(graph.color_by_value)
                     {
                         ImGui::Text("Color By Value");
                         ImGui::Spacing();
@@ -111,18 +113,18 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                         // Use this menu to expand user options in the future
                         ImGui::InputFloat(
                             "Region of Interest Min",
-                            &tree_item.second.color_by_value_digits.interest_1_min);
+                            &graph.color_by_value_digits.interest_1_min);
 
                         ImGui::InputFloat(
                             "Region of Interest Max",
-                            &tree_item.second.color_by_value_digits.interest_1_max);
+                            &graph.color_by_value_digits.interest_1_max);
 
                         ImGui::PopItemWidth();
                     }
                 }
 
                 // Lets you know if component is in Frame. Dev purpose only.
-                if(tree_item.second.chart->IsInViewVertical())
+                if(graph.chart->IsInViewVertical())
                 {
                     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
                                            static_cast<int>(Colors::kTextSuccess))),
@@ -142,7 +144,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
                     ImGui::SameLine();
                     std::string temp_movement_value =
                         "Not In Frame by: " +
-                        std::to_string(tree_item.second.chart->GetDistanceToView()) +
+                        std::to_string(graph.chart->GetDistanceToView()) +
                         " units.";
                     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
                                            static_cast<int>(Colors::kTextError))),
@@ -151,7 +153,7 @@ SideBar::ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree)
             }
             else
             {
-                // tree_item.second.selected = false;
+                // graph.selected = false;
             }
             ImGui::PopStyleColor(3);
         }

@@ -278,12 +278,13 @@ rocprofvis_dm_result_t Trace::AddTrack(const rocprofvis_dm_trace_t object, rocpr
 rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     rocprofvis_dm_track_t track = nullptr;
     rocprofvis_dm_result_t result = trace->GetTrackAtIndex(track_id, track);
     if (result == kRocProfVisDmResultSuccess)
     {
         ROCPROFVIS_ASSERT_MSG_RETURN(track, ERROR_TRACK_CANNOT_BE_NULL, nullptr);
+        TimedLock<std::unique_lock<std::shared_mutex>> lock(*((Track*)track)->Mutex(), __func__,
+                                                            trace);
         return ((Track*)track)->AddSlice(start, end);
     }
     else

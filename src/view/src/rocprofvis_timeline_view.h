@@ -39,13 +39,14 @@ public:
     void                                   MakeGraphView();
     void                                   ResetView();
     void                                   DestroyGraphs();
-    std::map<int, rocprofvis_graph_map_t>* GetGraphMap();
+    std::vector<rocprofvis_graph_t>*   GetGraphs();
     int                                    FindTrackIdByName(const std::string& name);
     void                                   ScrollToTrack(uint64_t position);
     float                                  CalculateTrackOffsetY(int chart_id);
     void                                   ScrollToTrackByName(const std::string& name);
     void SetViewTimePosition(double time_pos_ns, bool center);
     void RenderGraphPoints();
+    void RenderGridAlt();
     void RenderGrid();
     void RenderScrubber(ImVec2 screen_pos);
     void RenderSplitter(ImVec2 screen_pos);
@@ -53,9 +54,10 @@ public:
     void HandleTopSurfaceTouch();
     void CalibratePosition();
     void HandleNewTrackData(std::shared_ptr<RocEvent> e);
+    void CalculateGridInterval();
 
 private:
-    std::map<int, rocprofvis_graph_map_t> m_graph_map;
+    std::vector<rocprofvis_graph_t>       m_graphs;
     int                                   m_ruler_height;
     ImVec2                                m_ruler_padding;
     double                                m_v_min_x;
@@ -78,7 +80,6 @@ private:
     bool                                  m_meta_map_made;
     bool                                  m_has_zoom_happened;
     bool                                  m_show_graph_customization_window;
-    bool                                  m_is_control_held;
     bool                                  m_resize_activity;
     double                                m_scroll_position_x;
     EventManager::SubscriptionToken       m_scroll_to_track_token;
@@ -97,6 +98,16 @@ private:
     ImVec2                                m_graph_size;
     bool                                  m_region_selection_changed;
     TimeFormat                            m_display_time_format;
+    double                                m_grid_interval_ns;
+    int                                   m_grid_interval_count;
+    bool                                  m_recalculate_grid_interval;
+    ImVec2                                m_last_graph_size;
+    float                                 m_last_zoom;
+    struct {
+        bool handled;
+        uint64_t track_id;
+        int new_index;
+    }                                     m_reorder_request;
 };
 
 }  // namespace View

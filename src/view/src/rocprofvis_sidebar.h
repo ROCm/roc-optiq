@@ -23,12 +23,12 @@ public:
     ~SideBar();
     virtual void Render();
 
-    void SetGraphMap(std::map<int, rocprofvis_graph_map_t>* graph_map);
-    void ConstructTree(std::map<int, rocprofvis_graph_map_t>* tree);
+    void SetGraphs(std::vector<rocprofvis_graph_t>* graphs);
+    void ConstructTree();
 
 private:
-    int                                    m_dropdown_select;
-    std::map<int, rocprofvis_graph_map_t>* m_graph_map;
+    int                              m_dropdown_select;
+    std::vector<rocprofvis_graph_t>* m_graphs;
 
     Settings&     m_settings;
     DataProvider& m_data_provider;

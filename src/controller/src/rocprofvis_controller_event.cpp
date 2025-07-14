@@ -27,6 +27,40 @@ Event::Event(uint64_t id, double start_ts, double end_ts)
 {
 }
 
+Event::Event(Event* other) 
+: m_id(other->m_id)
+, m_start_timestamp(other->m_start_timestamp)
+, m_end_timestamp(other->m_end_timestamp)
+, m_name(other->m_name)
+, m_category(other->m_category)
+, m_level(other->m_level)
+{
+}
+
+Event& Event::operator=(Event&& other)
+{
+    m_id              = other.m_id;
+    m_start_timestamp = other.m_start_timestamp;
+    m_end_timestamp   = other.m_end_timestamp;
+    m_name            = other.m_name;
+    m_category        = other.m_category;
+    m_level           = other.m_level;    
+    return *this;
+}
+
+Event&
+Event::operator=(const Event& other)
+{
+    m_id              = other.m_id;
+    m_start_timestamp = other.m_start_timestamp;
+    m_end_timestamp   = other.m_end_timestamp;
+    m_name            = other.m_name;
+    m_category        = other.m_category;
+    m_level           = other.m_level;
+    return *this;
+}
+
+
 Event::~Event()
 { 
 }
@@ -38,11 +72,11 @@ rocprofvis_controller_object_type_t Event::GetType(void)
 
 
 rocprofvis_result_t
-Event::FetchDataModelFlowTraceProperty(Array&                array,
+Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                         rocprofvis_dm_trace_t dm_trace_handle)
 {
     rocprofvis_result_t      result      = kRocProfVisResultUnknownError;
-    rocprofvis_dm_event_id_t dm_event_id = *(rocprofvis_dm_event_id_t*) &m_id;
+    rocprofvis_dm_event_id_t dm_event_id = *(rocprofvis_dm_event_id_t*) &event_id;
     if(dm_trace_handle)
     {
         rocprofvis_dm_stacktrace_t dm_flowtrace = nullptr;
@@ -57,11 +91,11 @@ Event::FetchDataModelFlowTraceProperty(Array&                array,
                    rocprofvis_db_read_event_property_async(db, kRPVDMEventFlowTrace,
                                                            dm_event_id, object))
                 {
-                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, 2))
+                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, UINT64_MAX))
                     {
                         if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_handle(
-                                   dm_trace_handle, kRPVDMStackTraceHandleByEventID, m_id,
+                                   dm_trace_handle, kRPVDMFlowTraceHandleByEventID, event_id,
                                    &dm_flowtrace) &&
                            dm_flowtrace != nullptr)
                         {
@@ -72,12 +106,13 @@ Event::FetchDataModelFlowTraceProperty(Array&                array,
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
+                                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     uint64_t id   = 0;
                                     uint64_t timestamp = 0;
                                     uint64_t track_id  = 0;
-                                    char* codeline = nullptr;
                                     if(kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_uint64(
                                                dm_flowtrace,
@@ -99,8 +134,6 @@ Event::FetchDataModelFlowTraceProperty(Array&                array,
                                             id, timestamp, track_id,
                                             dm_event_id.bitfield.event_op ==
                                                 kRocProfVisDmOperationLaunch ? 0 : 1);
-                                        result = array.SetUInt64(
-                                            kRPVControllerArrayNumEntries, 0, 1);
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(
@@ -131,11 +164,11 @@ Event::FetchDataModelFlowTraceProperty(Array&                array,
 }
 
 rocprofvis_result_t
-Event::FetchDataModelStackTraceProperty(Array& array,
+Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                           rocprofvis_dm_trace_t dm_trace_handle)
 {
     rocprofvis_result_t      result      = kRocProfVisResultUnknownError;
-    rocprofvis_dm_event_id_t dm_event_id = *(rocprofvis_dm_event_id_t*) &m_id;
+    rocprofvis_dm_event_id_t dm_event_id = *(rocprofvis_dm_event_id_t*) &event_id;
     if(dm_trace_handle)
     {
         rocprofvis_dm_stacktrace_t dm_stacktrace = nullptr;
@@ -150,11 +183,11 @@ Event::FetchDataModelStackTraceProperty(Array& array,
                    rocprofvis_db_read_event_property_async(db, kRPVDMEventStackTrace,
                                                            dm_event_id, object))
                 {
-                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, 2))
+                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, UINT64_MAX))
                     {
                         if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_handle(
-                                   dm_trace_handle, kRPVDMStackTraceHandleByEventID, m_id,
+                                   dm_trace_handle, kRPVDMStackTraceHandleByEventID, event_id,
                                    &dm_stacktrace) &&
                            dm_stacktrace != nullptr)
                         {
@@ -165,6 +198,7 @@ Event::FetchDataModelStackTraceProperty(Array& array,
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     char* symbol = nullptr;
@@ -188,8 +222,6 @@ Event::FetchDataModelStackTraceProperty(Array& array,
                                     {
                                         CallStack* call_stack =
                                             new CallStack(symbol, args, codeline);
-                                        result = array.SetUInt64(
-                                            kRPVControllerArrayNumEntries, 0, 1);
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(
@@ -219,10 +251,10 @@ Event::FetchDataModelStackTraceProperty(Array& array,
 }
 
 rocprofvis_result_t
-Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm_trace_handle)
+Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocprofvis_dm_trace_t dm_trace_handle)
 {
     rocprofvis_result_t      result      = kRocProfVisResultUnknownError;
-    rocprofvis_dm_event_id_t dm_event_id = *(rocprofvis_dm_event_id_t*) &m_id;
+    rocprofvis_dm_event_id_t dm_event_id = *(rocprofvis_dm_event_id_t*) &event_id;
     if(dm_trace_handle)
     {
         rocprofvis_dm_stacktrace_t dm_extdata = nullptr;
@@ -237,11 +269,11 @@ Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm
                    rocprofvis_db_read_event_property_async(db, kRPVDMEventExtData,
                                                            dm_event_id, object))
                 {
-                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, 2))
+                    if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object, UINT64_MAX))
                     {
                         if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_handle(
-                                   dm_trace_handle, kRPVDMExtInfoHandleByEventID, m_id,
+                                   dm_trace_handle, kRPVDMExtInfoHandleByEventID, event_id,
                                    &dm_extdata) &&
                           dm_extdata != nullptr)
                         {
@@ -252,6 +284,7 @@ Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     char* category = nullptr;
@@ -265,18 +298,17 @@ Event::FetchDataModelExtendedDataProperty(Array& array, rocprofvis_dm_trace_t dm
                                        kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_extdata,
-                                               kRPVDMExtDataCategoryCharPtrIndexed, index,
+                                               kRPVDMExtDataNameCharPtrIndexed, index,
                                                &name) &&
                                        kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_extdata,
-                                               kRPVDMExtDataCategoryCharPtrIndexed, index,
+                                               kRPVDMExtDataValueCharPtrIndexed, index,
                                                &value))
                                     {
                                         ExtData* ext_data =
                                             new ExtData(category, name, value);
-                                        result = array.SetUInt64(
-                                            kRPVControllerArrayNumEntries, 0, 1);
+
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(
@@ -310,20 +342,16 @@ rocprofvis_result_t
 Event::Fetch(rocprofvis_property_t property, Array& array,
              rocprofvis_dm_trace_t dm_trace_handle)
 {
-    rocprofvis_result_t      result      = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
     if(dm_trace_handle)
     {
         switch(property)
         {
-            case kRPVControllerEventDataExtData:
-                result = FetchDataModelExtendedDataProperty(array, dm_trace_handle);
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
                 break;
-            case kRPVControllerEventDataCallStack:
-                result = FetchDataModelStackTraceProperty(array, dm_trace_handle);
-                break;
-            case kRPVControllerEventDataFlowControl:
-                result = FetchDataModelFlowTraceProperty(array, dm_trace_handle);
-                break;
+            }
         }
     }
     return result;
@@ -464,12 +492,12 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
                 char const* name = StringTable::Get().GetString(m_name);
                 char const* category = StringTable::Get().GetString(m_category);
                 ROCPROFVIS_ASSERT(name && category);
-                std::string full_name = category;
+                std::string full_name = name;
                 if(full_name.size() > 0)
                 {
                     full_name += " ";
                 }
-                full_name += name; 
+                full_name += category; 
                 strncpy(value, full_name.c_str(), *length);
        
                 result = kRocProfVisResultSuccess;
@@ -639,15 +667,13 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerEventName:
             {
-                std::string name = value;
-                m_name = StringTable::Get().AddString(name);
+                m_name = StringTable::Get().AddString(value, length > 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventCategory:
             {
-                std::string category = value;
-                m_category = StringTable::Get().AddString(category);
+                m_category = StringTable::Get().AddString(value, length > 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }

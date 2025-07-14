@@ -74,7 +74,7 @@ class PmcTrackSlice : public TrackSlice {
 
     private:
         // vector array of PMC records
-        std::vector<std::unique_ptr<PmcRecord>>      m_samples;
+        std::vector<PmcRecord*>      m_samples;
 };
 
 }  // namespace DataModel

@@ -13,6 +13,7 @@ namespace Controller
 
 class Array;
 class Track;
+class Trace;
 
 class Graph : public Handle
 {
@@ -21,13 +22,16 @@ class Graph : public Handle
     void Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object);
 
 public:
-    Graph(rocprofvis_controller_graph_type_t type, uint64_t id);
+    Graph(Handle* ctx, rocprofvis_controller_graph_type_t type, uint64_t id);
+
+    Handle* GetContext() override;
 
     virtual ~Graph();
 
     rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index);
 
     rocprofvis_controller_object_type_t GetType(void) final;
+    rocprofvis_result_t                 CombineEventNames(std::vector<Event*>& events, std::string& combined_name);
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -44,6 +48,7 @@ private:
     std::map<uint32_t, SegmentTimeline> m_lods;
     uint64_t m_id;
     Track* m_track;
+    Trace* m_ctx;
     rocprofvis_controller_graph_type_t m_type;
 };
 

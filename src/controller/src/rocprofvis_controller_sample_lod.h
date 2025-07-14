@@ -21,9 +21,13 @@ public:
     SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp,
               std::vector<Sample*>& children);
 
+    SampleLOD& operator=(SampleLOD&& other);
+
     virtual ~SampleLOD();
 
     rocprofvis_controller_object_type_t GetType(void) final;
+
+    size_t GetNumChildren();
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,

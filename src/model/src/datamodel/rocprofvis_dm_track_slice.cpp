@@ -159,5 +159,33 @@ rocprofvis_dm_result_t   TrackSlice::GetPropertyAsDouble(rocprofvis_dm_property_
 
 }
 
+void*
+TrackSlice::Allocate(size_t rec_size)
+{
+    void*       ptr          = nullptr;
+    MemoryPool* current_pool = m_current_pool;
+    if(current_pool == nullptr)
+    {
+        current_pool  = new MemoryPool(rec_size);
+        m_object_pools[current_pool->m_base] = current_pool;
+        m_current_pool = current_pool;
+    }
+    ptr = static_cast<char*>(current_pool->m_base) + (current_pool->m_pos * rec_size);
+    if(++current_pool->m_pos == kMemPoolBitSetSize)
+    {
+        m_current_pool = nullptr;
+    }
+    return ptr;
+}
+
+void
+TrackSlice::Cleanup()
+{
+    for(auto it = m_object_pools.begin(); it != m_object_pools.end(); ++it)
+    {
+        delete it->second;
+    }
+}
+
 }  // namespace DataModel
 }  // namespace RocProfVis

@@ -20,9 +20,9 @@ TraceView::TraceView()
 , m_analysis(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback(
-        [](uint64_t track_index, const std::string& trace_path) {
+        [](uint64_t track_id, const std::string& trace_path) {
             std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
-                static_cast<int>(RocEvents::kNewTrackData), track_index, trace_path);
+                static_cast<int>(RocEvents::kNewTrackData), track_id, trace_path);
             EventManager::GetInstance()->AddEvent(e);
         });
 }
@@ -51,7 +51,7 @@ TraceView::Update()
             m_timeline_view->MakeGraphView();
             if(m_sidebar)
             {
-                m_sidebar->SetGraphMap(m_timeline_view->GetGraphMap());
+                m_sidebar->SetGraphs(m_timeline_view->GetGraphs());
             }
         }
     }

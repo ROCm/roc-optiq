@@ -20,8 +20,8 @@ enum class TrackDataRequestState
 class TrackItem
 {
 public:
-    TrackItem(DataProvider& dp, int id, std::string name, float zoom, float movement,
-              double& min_x, double& max_x, float scale_x);
+    TrackItem(DataProvider& dp, int id, std::string name, float zoom, double time_offset_ns,
+              double& min_x, double& max_x, double scale_x);
 
     virtual ~TrackItem() {}
     void               SetID(int id);
@@ -31,9 +31,9 @@ public:
     void               Update();
     const std::string& GetName();
 
-    virtual void UpdateMovement(float zoom, float movement, double& min_x, double& max_x,
-                                float scale_x,
-                                float m_scroll_position);  // movement should be double?
+    virtual void UpdateMovement(float zoom, double time_offset_ns, double& min_x, double& max_x,
+                                double scale_x,
+                                float m_scroll_position);
 
     virtual void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) = 0;
     bool         IsInViewVertical();
@@ -59,6 +59,8 @@ public:
 
     bool IsMetaAreaClicked() const { return m_meta_area_clicked; }
 
+    float GetReorderGripWidth();
+
 
 protected:
     virtual void RenderMetaArea();
@@ -69,7 +71,7 @@ protected:
     void FetchHelper();
 
     float                 m_zoom;
-    double                m_movement;
+    double                m_time_offset_ns;
     double                m_min_x;
     double                m_max_x;
     double                m_scale_x;
@@ -89,6 +91,7 @@ protected:
     bool                  m_meta_area_clicked;
     float                 m_meta_area_scale_width;
     bool                  m_selected;
+    float                 m_reorder_grip_width;
 
     std::shared_ptr<TrackRequestParams> m_deferred_request;
 

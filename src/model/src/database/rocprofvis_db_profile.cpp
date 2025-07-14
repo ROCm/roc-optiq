@@ -252,7 +252,6 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
         {
             futures[i]->SetWorker(std::move(
                 std::thread(SqliteDatabase::ExecuteSQLQueryStatic, this,
-                            TrackPropertiesAt(i)->db_connection,
                             futures[i],
                             TrackPropertiesAt(i)->async_query.c_str(), callback)));
         } catch(std::exception ex)
@@ -464,7 +463,7 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
         slice_array_t slices;
         if (BuildSliceQuery(start, end, num, tracks, query, slices) != kRocProfVisDmResultSuccess) break;
         ShowProgress(100, query.c_str(), kRPVDbBusy, future);
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery((sqlite3*) TrackPropertiesAt(tracks[0])->db_connection, 
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery( 
                 future, query.c_str(), &slices , &CallbackAddAnyRecord)) break;
 #endif
         ShowProgress(100 - future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);

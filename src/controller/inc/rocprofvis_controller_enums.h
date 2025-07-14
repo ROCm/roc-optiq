@@ -83,12 +83,14 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeProcessor = 14,
     // Extended data object
     kRPVControllerObjectTypeExtData = 15,
+#ifdef COMPUTE_UI_SUPPORT
     // Compute trace object
     kRPVControllerObjectTypeComputeTrace = 16,
     // Plot object
     kRPVControllerObjectTypePlot = 17,
     // Plot series object
     kRPVControllerObjectTypePlotSeries = 18,
+#endif
     // Process object
     kRPVControllerObjectTypeProcess = 19,
     // Thread object
@@ -139,8 +141,20 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerTrackIndexed = 0x00000008,
     // Global sample table controller
     kRPVControllerSampleTable = 0x00000009,
+#ifdef COMPUTE_UI_SUPPORT
     // Compute trace controller
     kRPVControllerComputeTrace = 0x00000010,
+#endif
+    // Indexed event in the trace
+    kRPVControllerEventIndexed = 0x00000011,
+    // Load Event Flow control properties
+    kRPVControllerEventDataFlowControlIndexed = 0x00000012,
+    // Load Event Callstack properties
+    kRPVControllerEventDataCallStackIndexed = 0x00000013,
+    // Load Event Extended data properties
+    kRPVControllerEventDataExtDataIndexed = 0x00000014,
+    // Tracks by Id
+    kRPVControllerTrackById = 0x00000015,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {
@@ -169,6 +183,8 @@ typedef enum rocprofvis_controller_timeline_properties_t
     kRPVControllerTimelineMaxTimestamp = 0x10000003,
     // Indexed graphs
     kRPVControllerTimelineGraphIndexed = 0x10000004,
+    // Graphs by Id
+    kRPVControllerTimelineGraphById = 0x10000005,
 } rocprofvis_controller_timeline_properties_t;
 /* JSON: RPVTimeline
 {
@@ -732,6 +748,7 @@ typedef enum rocprofvis_controller_sort_order_t
     kRPVControllerSortOrderDescending,
 } rocprofvis_controller_sort_order_t;
 
+#ifdef COMPUTE_UI_SUPPORT
 /*
 * Identifiers for each table in a compute trace.
 */
@@ -906,3 +923,4 @@ typedef enum rocprofvis_controller_plot_series_properties_t
     // Series name
     kRPVControllerPlotSeriesName = 0x2A000003,
 } rocprofvis_controller_plot_series_properties_t;
+#endif

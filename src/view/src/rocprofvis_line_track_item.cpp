@@ -417,7 +417,7 @@ LineTrackItem::RenderMetaAreaScale(ImVec2& container_size)
     ImVec2      child_window_size = ImGui::GetWindowSize();
 
     char text_buffer[32];
-    snprintf(text_buffer, 32, "%29.1f", m_max_y);
+    snprintf(text_buffer, 32, "%.1f", m_max_y);
     ImVec2 text_size = ImGui::CalcTextSize(text_buffer);
 
     ImGui::SetCursorPos(ImVec2(child_window_size.x - (text_size.x + m_metadata_padding.x),
@@ -433,11 +433,14 @@ LineTrackItem::RenderMetaAreaScale(ImVec2& container_size)
         m_is_in_view_vertical = false;
     }
 
+    snprintf(text_buffer, 32, "%.1f", m_min_y);
+    text_size = ImGui::CalcTextSize(text_buffer);
+    
     ImGui::SetCursorPos(
+
         ImVec2(child_window_size.x - (text_size.x + m_metadata_padding.x),
                child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
     
-    snprintf(text_buffer, 32, "%29.1f", m_min_y);
     ImGui::Text("%s", text_buffer);
 
     ImGui::SetCursorPos(ImVec2(0, 0));

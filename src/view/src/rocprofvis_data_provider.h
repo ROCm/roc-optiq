@@ -369,9 +369,6 @@ private:
     void CreateRawSampleData(uint64_t track_id, rocprofvis_controller_array_t* track_data,
                              double min_ts, double max_ts);
 
-    char*       GetStringAsCharArray(rocprofvis_handle_t*  handle,
-                                     rocprofvis_property_t property, uint64_t index);
-    void        FreeStringCharArray(char* str);
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                           uint64_t index);
 

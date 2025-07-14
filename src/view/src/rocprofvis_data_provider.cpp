@@ -1910,35 +1910,6 @@ bool DataProvider::FetchEventCallStackData(uint64_t event_id)
 
     return ret_value;
 }
-                
-char * DataProvider::GetStringAsCharArray(rocprofvis_handle_t* handle,
-                                            rocprofvis_property_t  property, uint64_t index)
-{
-    uint32_t length = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_string(
-        handle, property, index, nullptr, &length);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-    if(length == 0)
-    {
-        return nullptr;
-    }
-
-    char* data = new char[length + 1];
-    data[length] = '\0';
-    result = rocprofvis_controller_get_string(handle, property, index, data, &length);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-    return data;
-}   
-
-void DataProvider::FreeStringCharArray(char* str)
-{
-    if(str)
-    {
-        delete[] str;
-    }
-}
 
 std::string
 DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property, uint64_t index)

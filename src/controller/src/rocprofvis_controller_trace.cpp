@@ -43,6 +43,7 @@ typedef Reference<rocprofvis_controller_process_t, Process, kRPVControllerObject
 typedef Reference<rocprofvis_controller_thread_t, Thread, kRPVControllerObjectTypeThread> ThreadRef;
 typedef Reference<rocprofvis_controller_queue_t, Queue, kRPVControllerObjectTypeQueue> QueueRef;
 typedef Reference<rocprofvis_controller_stream_t, Stream, kRPVControllerObjectTypeStream> StreamRef;
+typedef Reference<rocprofvis_controller_node_t, Node, kRPVControllerObjectTypeNode> NodeRef;
 
 Trace::Trace()
 : m_id(s_trace_id.GetNextId())
@@ -2142,7 +2143,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                         (rocprofvis_handle_t*)
                                                                             p);
 
-                                                                    uint64_t>& set = stream_to_queue[val];
+                                                                    auto& set = stream_to_queue[val];
                                                                     for (uint64_t queue_id : set)
                                                                     {
                                                                         Queue* q = queues[queue_id];
@@ -2508,6 +2509,11 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                 break;
             }
             case kRPVControllerNumNodes:
+            {
+                *value = m_nodes.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerNodeIndexed:
             case kRPVControllerTimeline:
             case kRPVControllerTrackIndexed:
@@ -2607,8 +2613,20 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerNumNodes:
             case kRPVControllerNodeIndexed:
+            {
+                if(index < m_nodes.size())
+                {
+                    *value = (rocprofvis_handle_t*)m_nodes[index];
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerNumNodes:
             case kRPVControllerNumTracks:
             case kRPVControllerId:
             case kRPVControllerNumAnalysisView:
@@ -2689,7 +2707,20 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerNumNodes:
         {
-            ROCPROFVIS_UNIMPLEMENTED;
+            if (m_nodes.size() != value)
+            {
+                for (uint32_t i = value; i < m_nodes.size(); i++)
+                {
+                    delete m_nodes[i];
+                    m_nodes[i] = nullptr;
+                }
+                m_nodes.resize(value);
+                result = m_nodes.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
+            }
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
             break;
         }
         case kRPVControllerTimeline:
@@ -2800,9 +2831,25 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
+            case kRPVControllerNodeIndexed:
+            {
+                NodeRef node(value);
+                if(node.IsValid())
+                {
+                    if(index < m_nodes.size())
+                    {
+                        m_nodes[index] = node.Get();
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultOutOfRange;
+                    }
+                }
+                break;
+            }
             case kRPVControllerComputeTrace:
             case kRPVControllerNumNodes:
-            case kRPVControllerNodeIndexed:
             case kRPVControllerNumTracks:
             case kRPVControllerId:
             case kRPVControllerNumAnalysisView:

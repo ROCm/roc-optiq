@@ -20,7 +20,6 @@ typedef Reference<rocprofvis_controller_queue_t, Queue,
 
 Stream::Stream()
 : m_processor(nullptr)
-, m_queue(nullptr)
 , m_id(0)
 , m_node_id(0)
 , m_process_id(0)

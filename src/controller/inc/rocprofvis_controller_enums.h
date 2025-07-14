@@ -263,6 +263,10 @@ typedef enum rocprofvis_controller_processor_properties_t
     kRPVControllerProcessorType = 0xD0000008,
     kRPVControllerProcessorTypeIndex = 0xD0000009,
     kRPVControllerProcessorNodeId = 0xD000000A,
+    kRPVControllerProcessorNumQueues   = 0xD000000B,
+    kRPVControllerProcessorNumStreams  = 0xD000000C,
+    kRPVControllerProcessorQueueIndexed   = 0xD000000D,
+    kRPVControllerProcessorStreamIndexed = 0xD000000E,
 } rocprofvis_controller_processor_properties_t;
 /* JSON: RPVProcessor
 {

@@ -1,12 +1,20 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_processor.h"
+#include "rocprofvis_controller_stream.h"
+#include "rocprofvis_controller_queue.h"
+#include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
 
 namespace RocProfVis
 {
 namespace Controller
 {
+
+typedef Reference<rocprofvis_controller_queue_t, Queue, kRPVControllerObjectTypeQueue>
+    QueueRef;
+typedef Reference<rocprofvis_controller_stream_t, Stream, kRPVControllerObjectTypeStream>
+    StreamRef;
 
 Processor::Processor() {}
 
@@ -44,6 +52,20 @@ Processor::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* v
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerProcessorNumQueues:
+            {
+                *value = m_queues.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorNumStreams:
+            {
+                *value = m_streams.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorQueueIndexed:
+            case kRPVControllerProcessorStreamIndexed:
             case kRPVControllerProcessorName:
             case kRPVControllerProcessorModelName:
             case kRPVControllerProcessorUserName:
@@ -83,6 +105,10 @@ Processor::GetDouble(rocprofvis_property_t property, uint64_t index, double* val
         case kRPVControllerProcessorType:
         case kRPVControllerProcessorTypeIndex:
         case kRPVControllerProcessorNodeId:
+        case kRPVControllerProcessorNumQueues:
+        case kRPVControllerProcessorNumStreams:
+        case kRPVControllerProcessorQueueIndexed:
+        case kRPVControllerProcessorStreamIndexed:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -101,27 +127,58 @@ Processor::GetObject(rocprofvis_property_t property, uint64_t index,
                      rocprofvis_handle_t** value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
+    if(value)
     {
-        case kRPVControllerProcessorId:
-        case kRPVControllerProcessorName:
-        case kRPVControllerProcessorModelName:
-        case kRPVControllerProcessorUserName:
-        case kRPVControllerProcessorVendorName:
-        case kRPVControllerProcessorProductName:
-        case kRPVControllerProcessorExtData:
-        case kRPVControllerProcessorUUID:
-        case kRPVControllerProcessorType:
-        case kRPVControllerProcessorTypeIndex:
-        case kRPVControllerProcessorNodeId:
+        switch(property)
         {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
+            case kRPVControllerProcessorQueueIndexed:
+            {
+                if(index < m_queues.size())
+                {
+                    *value = (rocprofvis_handle_t*) m_queues[index];
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerProcessorStreamIndexed:
+            {
+                if(index < m_streams.size())
+                {
+                    *value = (rocprofvis_handle_t*) m_streams[index];
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerProcessorId:
+            case kRPVControllerProcessorName:
+            case kRPVControllerProcessorModelName:
+            case kRPVControllerProcessorUserName:
+            case kRPVControllerProcessorVendorName:
+            case kRPVControllerProcessorProductName:
+            case kRPVControllerProcessorExtData:
+            case kRPVControllerProcessorUUID:
+            case kRPVControllerProcessorType:
+            case kRPVControllerProcessorTypeIndex:
+            case kRPVControllerProcessorNodeId:
+            case kRPVControllerProcessorNumQueues:
+            case kRPVControllerProcessorNumStreams:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
         }
     }
     return result;
@@ -249,6 +306,10 @@ Processor::GetString(rocprofvis_property_t property, uint64_t index, char* value
         case kRPVControllerProcessorId:
         case kRPVControllerProcessorTypeIndex:
         case kRPVControllerProcessorNodeId:
+        case kRPVControllerProcessorNumQueues:
+        case kRPVControllerProcessorNumStreams:
+        case kRPVControllerProcessorQueueIndexed:
+        case kRPVControllerProcessorStreamIndexed:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -286,6 +347,44 @@ Processor::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t va
             result    = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerProcessorNumQueues:
+        {
+            if(m_queues.size() != value)
+            {
+                for(uint32_t i = value; i < m_queues.size(); i++)
+                {
+                    delete m_queues[i];
+                    m_queues[i] = nullptr;
+                }
+                m_queues.resize(value);
+                result = m_queues.size() == value ? kRocProfVisResultSuccess
+                                                  : kRocProfVisResultMemoryAllocError;
+            }
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorNumStreams:
+        {
+            if(m_streams.size() != value)
+            {
+                for(uint32_t i = value; i < m_streams.size(); i++)
+                {
+                    delete m_streams[i];
+                    m_streams[i] = nullptr;
+                }
+                m_streams.resize(value);
+                result = m_streams.size() == value ? kRocProfVisResultSuccess
+                                                  : kRocProfVisResultMemoryAllocError;
+            }
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
         case kRPVControllerProcessorName:
         case kRPVControllerProcessorModelName:
         case kRPVControllerProcessorUserName:
@@ -294,6 +393,8 @@ Processor::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t va
         case kRPVControllerProcessorExtData:
         case kRPVControllerProcessorUUID:
         case kRPVControllerProcessorType:
+        case kRPVControllerProcessorQueueIndexed:
+        case kRPVControllerProcessorStreamIndexed:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -324,6 +425,10 @@ Processor::SetDouble(rocprofvis_property_t property, uint64_t index, double valu
         case kRPVControllerProcessorType:
         case kRPVControllerProcessorTypeIndex:
         case kRPVControllerProcessorNodeId:
+        case kRPVControllerProcessorNumQueues:
+        case kRPVControllerProcessorNumStreams:
+        case kRPVControllerProcessorQueueIndexed:
+        case kRPVControllerProcessorStreamIndexed:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -343,27 +448,66 @@ Processor::SetObject(rocprofvis_property_t property, uint64_t index,
 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
+    if(value)
     {
-        case kRPVControllerProcessorId:
-        case kRPVControllerProcessorName:
-        case kRPVControllerProcessorModelName:
-        case kRPVControllerProcessorUserName:
-        case kRPVControllerProcessorVendorName:
-        case kRPVControllerProcessorProductName:
-        case kRPVControllerProcessorExtData:
-        case kRPVControllerProcessorUUID:
-        case kRPVControllerProcessorType:
-        case kRPVControllerProcessorTypeIndex:
-        case kRPVControllerProcessorNodeId:
+        switch(property)
         {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
+            case kRPVControllerProcessorQueueIndexed:
+            {
+                if (index < m_queues.size())
+                {
+                    QueueRef ref(value);
+                    if(ref.IsValid())
+                    {
+                        m_queues[index] = ref.Get();
+                        result = kRocProfVisResultSuccess;
+                    }
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerProcessorStreamIndexed:
+            {
+                if(index < m_streams.size())
+                {
+                    StreamRef ref(value);
+                    if(ref.IsValid())
+                    {
+                        m_streams[index] = ref.Get();
+                        result          = kRocProfVisResultSuccess;
+                    }
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerProcessorId:
+            case kRPVControllerProcessorName:
+            case kRPVControllerProcessorModelName:
+            case kRPVControllerProcessorUserName:
+            case kRPVControllerProcessorVendorName:
+            case kRPVControllerProcessorProductName:
+            case kRPVControllerProcessorExtData:
+            case kRPVControllerProcessorUUID:
+            case kRPVControllerProcessorType:
+            case kRPVControllerProcessorTypeIndex:
+            case kRPVControllerProcessorNodeId:
+            case kRPVControllerProcessorNumQueues:
+            case kRPVControllerProcessorNumStreams:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
         }
     }
     return result;
@@ -429,6 +573,10 @@ Processor::SetString(rocprofvis_property_t property, uint64_t index, char const*
             case kRPVControllerProcessorId:
             case kRPVControllerProcessorTypeIndex:
             case kRPVControllerProcessorNodeId:
+            case kRPVControllerProcessorNumQueues:
+            case kRPVControllerProcessorNumStreams:
+            case kRPVControllerProcessorQueueIndexed:
+            case kRPVControllerProcessorStreamIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;

@@ -1901,6 +1901,11 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                         kRPVControllerQueueProcessor, 0, (rocprofvis_handle_t*)p);
                                                                     queues[val] = queue;
 
+                                                                    uint64_t count = 0;
+                                                                    p->GetUInt64(kRPVControllerProcessorNumQueues, 0, &count);
+                                                                    p->SetUInt64(kRPVControllerProcessorNumQueues, 0, count+1);
+                                                                    p->SetObject(kRPVControllerProcessorQueueIndexed, count, (rocprofvis_handle_t*)queue);
+
                                                                     Track* t =
                                                                         queue_to_track
                                                                             [val];
@@ -2142,6 +2147,11 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                         0,
                                                                         (rocprofvis_handle_t*)
                                                                             p);
+
+                                                                    uint64_t count = 0;
+                                                                    p->GetUInt64(kRPVControllerProcessorNumStreams, 0, &count);
+                                                                    p->SetUInt64(kRPVControllerProcessorNumStreams, 0, count+1);
+                                                                    p->SetObject(kRPVControllerProcessorStreamIndexed, count, (rocprofvis_handle_t*)stream);
 
                                                                     auto& set = stream_to_queue[val];
                                                                     for (uint64_t queue_id : set)

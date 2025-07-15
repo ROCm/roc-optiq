@@ -449,7 +449,7 @@ DataProvider::HandleLoadTrackMetaData()
 
 bool
 DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
-                              uint32_t horz_pixel_range)
+                              uint32_t horz_pixel_range, uint64_t group_id)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -490,7 +490,7 @@ DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
             request_info.request_type       = RequestType::kFetchTrack;
 
             auto params = std::make_shared<TrackRequestParams>(track_id, start_ts, end_ts,
-                                                               horz_pixel_range);
+                                                               horz_pixel_range, group_id);
             request_info.custom_params = params;
 
             m_requests.emplace(request_info.request_id, request_info);
@@ -514,9 +514,9 @@ DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
 
 bool
 DataProvider::FetchTrack(uint64_t track_id, double start_ts, double end_ts,
-                         uint32_t horz_pixel_range)
+                         uint32_t horz_pixel_range, uint64_t group_id)
 {
-    TrackRequestParams request_params(track_id, start_ts, end_ts, horz_pixel_range);
+    TrackRequestParams request_params(track_id, start_ts, end_ts, horz_pixel_range, group_id);
     return FetchTrack(request_params);
 }
 
@@ -1582,7 +1582,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
     {
         delete m_raw_trackdata[params.m_track_id];
         m_raw_trackdata[params.m_track_id] = nullptr;
-        spdlog::debug("Replacing existing track data with id {}", params.m_data_group_id);
+        spdlog::debug("Replacing existing track data with id {}", params.m_track_id);
     }
 
     if(!raw_sample_data)
@@ -1656,7 +1656,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams&      params,
     {
         delete m_raw_trackdata[params.m_track_id];
         m_raw_trackdata[params.m_track_id] = nullptr;
-        spdlog::debug("Replacing existing track data with id {}", params.m_data_group_id);
+        spdlog::debug("Replacing existing track data with id {}", params.m_track_id);
     }
 
     if(!raw_event_data)

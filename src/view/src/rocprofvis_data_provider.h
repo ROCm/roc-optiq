@@ -115,7 +115,7 @@ public:
     TrackRequestParams& operator=(const TrackRequestParams& other) = default;
 
     TrackRequestParams(uint64_t track_id, double start_ts, double end_ts,
-                       uint32_t horz_pixel_range, uint64_t group_id = 0)
+                       uint32_t horz_pixel_range, uint64_t group_id)
     : m_track_id(track_id)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
@@ -230,14 +230,15 @@ public:
      * @param start_ts: The start timestamp of the track
      * @param end_ts: The end timestamp of the track
      * @param horz_pixel_range: The horizontal pixel range of the view
+     * @param group_id: The group id for the request, used for grouping requests
      */
     bool FetchTrack(uint64_t track_id, double start_ts, double end_ts,
-                    uint32_t horz_pixel_range);
+                    uint32_t horz_pixel_range, uint64_t group_id);
 
     bool FetchTrack(const TrackRequestParams& request_params);
 
     bool FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
-                         uint32_t horz_pixel_range);
+                         uint32_t horz_pixel_range, uint64_t group_id);
 
     /*
      * Fetches an event table from the controller for a single track.

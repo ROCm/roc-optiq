@@ -867,6 +867,18 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                     columns.push_back(
                                                         kRPVControllerProcessorTypeIndex);
                                                 }
+                                                else if(strcmp(column_name,
+                                                               "absolute_index") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorIndex);
+                                                }
+                                                else if(strcmp(column_name,
+                                                               "logical_index") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerProcessorLogicalIndex);
+                                                }
                                                 else if(strcmp(column_name, "uuid") ==
                                                         0)
                                                 {
@@ -949,6 +961,10 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     kRPVControllerProcessorId ||
                                                                 columns[j] ==
                                                                     kRPVControllerProcessorNodeId ||
+                                                                columns[j] ==
+                                                                    kRPVControllerProcessorIndex ||
+                                                                columns[j] ==
+                                                                    kRPVControllerProcessorLogicalIndex ||
                                                                 columns[j] ==
                                                                     kRPVControllerProcessorTypeIndex)
                                                             {

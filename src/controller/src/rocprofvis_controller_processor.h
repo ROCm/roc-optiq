@@ -56,6 +56,8 @@ private:
     uint32_t    m_id;
     uint32_t    m_node_id;
     uint32_t    m_type_index;
+    uint32_t    m_index;
+    uint32_t    m_logical_index;
 };
 
 }

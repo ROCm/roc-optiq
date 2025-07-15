@@ -472,10 +472,28 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackMaximumTimestampUInt64, 0);
+                                        double min_value =
+                                            rocprofvis_dm_get_property_as_double(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackMinimumValueDouble, 0);
+                                        double max_value =
+                                            rocprofvis_dm_get_property_as_double(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackMaximumValueDouble, 0);
+                                        uint64_t node =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackNodeIdUInt64, 0);
                                         track->SetDouble(kRPVControllerTrackMinTimestamp,
                                                          0, min_ts);
                                         track->SetDouble(kRPVControllerTrackMaxTimestamp,
                                                          0, max_ts);
+                                        track->SetDouble(kRPVControllerTrackMinValue,
+                                                         0, min_value);
+                                        track->SetDouble(kRPVControllerTrackMaxValue,
+                                                         0, max_value);
+                                        track->SetUInt64(kRPVControllerTrackNode, 0,
+                                                         node);
 
                                         uint64_t num_ext_data = 0;
                                         track->GetUInt64(

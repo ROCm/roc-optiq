@@ -99,12 +99,10 @@ class ProfileDatabase : public SqliteDatabase
     // method to build a query to read time slice of records for single track 
     // @param index - track index 
     // @param query - reference to query string  
-    // @param for_time_slice - specifies if query is used for retrieving time slice
     // @return status of operation
         rocprofvis_dm_result_t BuildTrackQuery(
                             rocprofvis_dm_index_t index,
-                            rocprofvis_dm_string_t& query,
-                            bool for_time_slice) override;
+                            rocprofvis_dm_string_t& query) override;
     // method to build a query to read time slice of records for all tracks in one shot 
     // @param start - start timestamp of time slice 
     // @param end - end timestamp of time slice 

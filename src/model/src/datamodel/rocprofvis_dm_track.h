@@ -64,6 +64,10 @@ public:
     rocprofvis_dm_timestamp_t                           MinTimestamp() { return m_track_params->min_ts; }
     // Return track maximum timestamp
     rocprofvis_dm_timestamp_t                           MaxTimestamp() { return m_track_params->max_ts; }
+    // Return track minimum level or value
+    rocprofvis_dm_value_t                               MinValue() { return m_track_params->min_value; }
+    // Return track maximum level or value
+    rocprofvis_dm_value_t                               MaxValue() { return m_track_params->max_value; }
     // Returns pointer to category string
     rocprofvis_dm_charptr_t                             CategoryString();
     // Method to get slice handle at provided index
@@ -108,6 +112,14 @@ public:
     // @param value - pointer reference to uint64_t return value
     // @return status of operation  
     rocprofvis_dm_result_t                              GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) override;
+    // Method to read Track object property as double
+    // @param property - property enumeration rocprofvis_dm_track_property_t
+    // @param index - index of any indexed property
+    // @param value - pointer reference to double return value
+    // @return status of operation    
+    rocprofvis_dm_result_t GetPropertyAsDouble(rocprofvis_dm_property_t       property,
+                                               rocprofvis_dm_property_index_t index,
+                                               double* value) override;
     // Method to read Track object property as char*
     // @param property - property enumeration rocprofvis_dm_track_property_t
     // @param index - index of any indexed property

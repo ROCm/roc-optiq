@@ -48,11 +48,14 @@ public:
 
 private:
     uint64_t m_id;
+    uint64_t m_node;
     uint64_t m_num_entries;
     rocprofvis_controller_track_type_t m_type;
     SegmentTimeline m_segments;
     double m_start_timestamp;
     double m_end_timestamp;
+    double m_min_value;
+    double m_max_value;
     std::string m_name;
     rocprofvis_dm_track_t m_dm_handle;
     Thread* m_thread;

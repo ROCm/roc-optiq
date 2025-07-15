@@ -376,8 +376,7 @@ private:
 
 
     void CreateRawEventData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);                           
-    void CreateRawSampleData(uint64_t track_id, rocprofvis_controller_array_t* track_data,
-                             double min_ts, double max_ts);
+    void CreateRawSampleData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);
 
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                           uint64_t index);

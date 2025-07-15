@@ -1466,8 +1466,7 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(track_params->m_track_id, req.request_array,
-                                track_params->m_start_ts, track_params->m_end_ts);
+            CreateRawSampleData(*track_params, req.request_array);
             break;
         }
         default:
@@ -1539,7 +1538,7 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(track_params->m_track_id, req.request_array, min_ts, max_ts);
+            CreateRawSampleData(*track_params, req.request_array);
             break;
         }
         default:
@@ -1563,28 +1562,42 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
 }
 
 void
-DataProvider::CreateRawSampleData(uint64_t                       track_id,
-                                  rocprofvis_controller_array_t* track_data,
-                                  double min_ts, double max_ts)
+DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
+                                  rocprofvis_controller_array_t* track_data)
 {
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    RawTrackSampleData* raw_sample_data = new RawTrackSampleData(track_id, min_ts, max_ts, 0);
-    spdlog::debug("Create sample track {} data with {} entries", track_id, count);
+    RawTrackSampleData* raw_sample_data = nullptr;
 
-    if(GetRawTrackData(track_id))
+    const RawTrackData* existing_raw_data = GetRawTrackData(params.m_track_id);
+    if(existing_raw_data && existing_raw_data->GetDataGroupID() == params.m_data_group_id)
     {
-        delete m_raw_trackdata[track_id];
-        m_raw_trackdata[track_id] = nullptr;
-        spdlog::debug("replacing existing track data with id {}", track_id);
+        raw_sample_data =
+            dynamic_cast<RawTrackSampleData*>(m_raw_trackdata[params.m_track_id]);
     }
-    m_raw_trackdata[track_id] = raw_sample_data;
+    else if(existing_raw_data)
+    {
+        delete m_raw_trackdata[params.m_track_id];
+        m_raw_trackdata[params.m_track_id] = nullptr;
+        spdlog::debug("Replacing existing track data with id {}", params.m_data_group_id);
+    }
 
-    std::vector<rocprofvis_trace_counter_t> buffer;
-    buffer.reserve(count);
+    if(!raw_sample_data)
+    {
+        spdlog::debug("Create sample track {} data with {} entries", params.m_track_id,
+                      count);
+        raw_sample_data = new RawTrackSampleData(params.m_track_id, params.m_start_ts,
+                                                 params.m_end_ts, params.m_data_group_id);
+    }
+
+    std::vector<rocprofvis_trace_counter_t>& buffer = raw_sample_data->GetWritableData();
+    uint64_t                                 current_size = buffer.size();
+    buffer.reserve(count + current_size);
+
+    std::unordered_set timepoint_set = raw_sample_data->GetWritableTimepoints();
 
     for(uint64_t i = 0; i < count; i++)
     {
@@ -1593,14 +1606,22 @@ DataProvider::CreateRawSampleData(uint64_t                       track_id,
             track_data, kRPVControllerArrayEntryIndexed, i, &sample);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
 
-        // Construct rocprofvis_trace_counter_t item in-place
-        buffer.emplace_back();
-        rocprofvis_trace_counter_t& trace_counter = buffer.back();
-
         double start_ts = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
                                                   0, &start_ts);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        auto [_, inserted] = timepoint_set.insert(start_ts);
+        if(!inserted)
+        {
+            spdlog::debug("Skipping duplicate sample timepoint {} on track {}", start_ts,
+                          params.m_track_id);
+            continue;  // skip duplicate samples
+        }
+
+        // Construct rocprofvis_trace_counter_t item in-place
+        buffer.emplace_back();
+        rocprofvis_trace_counter_t& trace_counter = buffer.back();
 
         double value = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
@@ -1611,8 +1632,7 @@ DataProvider::CreateRawSampleData(uint64_t                       track_id,
         trace_counter.m_value    = value;
     }
 
-    raw_sample_data->SetData(std::move(buffer));
-    m_raw_trackdata[track_id] = raw_sample_data;
+    m_raw_trackdata[params.m_track_id] = raw_sample_data;
 }
 
 void

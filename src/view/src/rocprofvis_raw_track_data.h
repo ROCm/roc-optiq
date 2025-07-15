@@ -44,8 +44,14 @@ public:
     const std::vector<rocprofvis_trace_counter_t>& GetData() const;
     void SetData(std::vector<rocprofvis_trace_counter_t>&& data);
 
+    std::vector<rocprofvis_trace_counter_t>& GetWritableData();
+    std::unordered_set<double>& GetWritableTimepoints();
+    
 private:
     std::vector<rocprofvis_trace_counter_t> m_data;
+    // Use start timestamps as unique identifiers for samples
+    std::unordered_set<double> m_timepoints;
+
 };
 
 class RawTrackEventData : public RawTrackData
@@ -62,8 +68,8 @@ public:
 
 private:
     std::vector<rocprofvis_trace_event_t> m_data;
-    std::unordered_set<uint64_t>
-        m_event_ids;  // Store unique event IDs to avoid duplicates
+    // Store unique event IDs to avoid duplicates
+    std::unordered_set<uint64_t> m_event_ids;
 };
 
 }  // namespace View

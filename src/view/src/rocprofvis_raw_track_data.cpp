@@ -62,6 +62,18 @@ RawTrackSampleData::SetData(std::vector<rocprofvis_trace_counter_t>&& data)
     m_data = std::move(data);
 }
 
+std::vector<rocprofvis_trace_counter_t>&
+RawTrackSampleData::GetWritableData()
+{
+    return m_data;
+}
+
+std::unordered_set<double>&
+RawTrackSampleData::GetWritableTimepoints()
+{
+    return m_timepoints;
+}
+
 RawTrackEventData::RawTrackEventData(uint64_t track_id, double start_ts, double end_ts,
                                      uint64_t data_group_id)
 : RawTrackData(kRPVControllerTrackTypeEvents, track_id, start_ts, end_ts, data_group_id)

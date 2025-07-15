@@ -51,6 +51,8 @@ private:
     SegmentTimeline m_segments;
     double m_start_timestamp;
     double m_end_timestamp;
+    double m_min_level;
+    double m_max_level;
     std::string m_name;
     rocprofvis_dm_track_t m_dm_handle;
     Trace* m_ctx;

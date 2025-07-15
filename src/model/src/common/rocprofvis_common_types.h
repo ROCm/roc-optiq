@@ -112,6 +112,10 @@ typedef struct {
     std::list<rocprofvis_event_timing_params_t> m_event_timing_params;
     // track query builing string, keep here for debugging purposes
     std::string async_query;
+    // minimum level or value
+    rocprofvis_dm_value_t min_level;
+    // maximum level or value
+    rocprofvis_dm_value_t max_level;
 } rocprofvis_dm_track_params_t;
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model and database. Physically located in trace object and referenced by a pointer in binding structure.

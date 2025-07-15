@@ -444,6 +444,18 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerTrackMinLevel:
+            {
+                *value = m_min_level;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTrackMaxLevel:
+            {
+                *value = m_max_level;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerTrackId:
             case kRPVControllerTrackType:
             case kRPVControllerTrackNumberOfEntries:
@@ -646,6 +658,18 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
         {
             m_end_timestamp = value;
             result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerTrackMinLevel:
+        {
+            m_min_level = value;
+            result            = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerTrackMaxLevel:
+        {
+            m_max_level = value;
+            result          = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackEntry:

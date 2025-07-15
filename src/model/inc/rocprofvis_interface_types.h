@@ -202,7 +202,11 @@ typedef enum rocprofvis_dm_track_property_t {
     // Database handle
 	kRPVDMTrackDatabaseHandle,
     // Trace handle
-    kRPVDMTrackTraceHandle
+    kRPVDMTrackTraceHandle,
+    // Track minimum level or value
+    kRPVDMTrackMinimumLevelDouble,
+    // Track maximum level or value
+    kRPVDMTrackMaximumLevelDouble,
 } rocprofvis_dm_track_property_t;
 
 // Slice properties

@@ -30,17 +30,20 @@ namespace DataModel
 int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_stmt* stmt,
                                             char** azColName)
 {
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 5, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 7, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params =
         (rocprofvis_db_sqlite_callback_parameters*) data;
     ProfileDatabase*            db = (ProfileDatabase*) callback_params->db;
     if(callback_params->future->Interrupted()) return 1;
-    uint32_t index = sqlite3_column_int(stmt, 4);
+    uint32_t index = sqlite3_column_int(stmt, 6);
     db->TrackPropertiesAt(index)->record_count = sqlite3_column_int64(stmt, 0);
     db->TrackPropertiesAt(index)->min_ts       = sqlite3_column_int64(stmt, 1);
     db->TrackPropertiesAt(index)->max_ts       = sqlite3_column_int64(stmt, 2);
     int op                                     = sqlite3_column_int(stmt, 3);
+    db->TrackPropertiesAt(index)->min_level    = sqlite3_column_double(stmt, 4);
+    db->TrackPropertiesAt(index)->max_level    = sqlite3_column_double(stmt, 5);
+
     db->TraceProperties()->events_count[op] += db->TrackPropertiesAt(index)->record_count;
     db->TraceProperties()->start_time = std::min(db->TraceProperties()->start_time,db->TrackPropertiesAt(index)->min_ts);
     db->TraceProperties()->end_time  = std::max(db->TraceProperties()->end_time,db->TrackPropertiesAt(index)->max_ts);
@@ -77,7 +80,7 @@ int ProfileDatabase::CallbackAddPmcRecord(void *data, int argc, sqlite3_stmt* st
     rocprofvis_db_record_data_t record;
     if (callback_params->future->Interrupted()) return 1;
     record.pmc.timestamp = sqlite3_column_int64(stmt, 1);
-    record.pmc.value = sqlite3_column_int(stmt,2 );
+    record.pmc.value = sqlite3_column_double(stmt,2 );
     if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     callback_params->future->CountThisRow();
     return 0;
@@ -166,8 +169,7 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
 
 rocprofvis_dm_result_t
 ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
-                                 rocprofvis_dm_string_t& query, 
-                                 bool for_time_slice)
+                                 rocprofvis_dm_string_t& query)
 {
     std::stringstream ss;
     int size = TrackPropertiesAt(index)->query.size();
@@ -175,25 +177,7 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
     ss << query << " FROM (";
     for (int i=0; i < size; i++){
         if (i > 0) ss << " UNION ";
-        std::string q = TrackPropertiesAt(index)->query[i];
-        if(!for_time_slice)
-        {
-            for(int i = 0; i < 2; i++)
-            {
-                size_t start = q.find('{');
-                size_t end   = q.find('}');
-                if(start != std::string::npos && end != std::string::npos && end > start)
-                {
-                    q.erase(start, end - start + 1);
-                }
-            }
-        }
-        else
-        {
-            std::replace(q.begin(), q.end(), '{', ' ');
-            std::replace(q.begin(), q.end(), '}', ' ');
-        }
-        ss << q;
+        ss << TrackPropertiesAt(index)->query[i];
     } 
     ss << ") where ";
     int count = 0;
@@ -241,7 +225,7 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
         }
         TrackPropertiesAt(i)->async_query = prefix;
         TrackPropertiesAt(i)->async_query += std::to_string(i);
-        if(BuildTrackQuery(i, TrackPropertiesAt(i)->async_query, false) !=
+        if(BuildTrackQuery(i, TrackPropertiesAt(i)->async_query) !=
            kRocProfVisDmResultSuccess)
         {
             continue;

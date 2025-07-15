@@ -404,6 +404,12 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                     m_dm_handle, kRPVDMNumberOfTrackExtDataRecordsUInt64, 0);
                 break;
             }
+            case kRPVControllerTrackNode:
+            {
+                *value = m_node;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerTrackMinTimestamp:
             case kRPVControllerTrackMaxTimestamp:
             case kRPVControllerTrackEntry:
@@ -616,11 +622,19 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackType:
         {
             m_type = (rocprofvis_controller_track_type_t)value;
+            result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackNumberOfEntries:
         {
             m_num_entries = value;
+            result  = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerTrackNode:
+        {
+            m_node = value;
+            result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackMinTimestamp:

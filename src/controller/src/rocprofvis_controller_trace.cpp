@@ -458,6 +458,10 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             rocprofvis_dm_get_property_as_double(
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackMaximumValueDouble, 0);
+                                        uint64_t node =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackNodeIdUInt64, 0);
                                         track->SetDouble(kRPVControllerTrackMinTimestamp,
                                                          0, min_ts);
                                         track->SetDouble(kRPVControllerTrackMaxTimestamp,
@@ -466,6 +470,8 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                          0, min_value);
                                         track->SetDouble(kRPVControllerTrackMaxValue,
                                                          0, max_value);
+                                        track->SetUInt64(kRPVControllerTrackNode, 0,
+                                                         node);
 
                                         uint32_t index = m_tracks.size();
                                         m_tracks.push_back(track);

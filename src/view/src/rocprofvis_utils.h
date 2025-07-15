@@ -123,5 +123,11 @@ std::string nanosecond_to_str(double time_point_ns);
  */
 double calculate_nice_interval(double view_range, int target_divisions);
 
+namespace TimeConstants {
+    constexpr uint64_t nanoseconds_per_second = 1'000'000'000;
+    constexpr uint64_t seconds_per_minute     = 60;
+    constexpr uint64_t minute_ns = seconds_per_minute * nanoseconds_per_second;
+} // namespace TimeConstants
+
 } // namespace View
 } // namespace RocProfVis

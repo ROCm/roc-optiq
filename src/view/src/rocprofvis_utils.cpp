@@ -69,12 +69,12 @@ RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
     }
 
     uint32_t nanoseconds_part =
-        static_cast<uint32_t>(ns_duration_magnitude % 1000000000ULL);
-    uint64_t total_seconds   = ns_duration_magnitude / 1000000000ULL;
-    uint8_t  display_seconds = static_cast<uint8_t>(total_seconds % 60);
-    uint64_t total_minutes   = total_seconds / 60;
-    uint8_t  display_minutes = static_cast<uint8_t>(total_minutes % 60);
-    uint64_t display_hours   = total_minutes / 60;
+        static_cast<uint32_t>(ns_duration_magnitude % TimeConstants::nanoseconds_per_second);
+    uint64_t total_seconds   = ns_duration_magnitude / TimeConstants::nanoseconds_per_second;
+    uint8_t  display_seconds = static_cast<uint8_t>(total_seconds % TimeConstants::seconds_per_minute);
+    uint64_t total_minutes   = total_seconds / TimeConstants::seconds_per_minute;
+    uint8_t  display_minutes = static_cast<uint8_t>(total_minutes % TimeConstants::seconds_per_minute);
+    uint64_t display_hours   = total_minutes / TimeConstants::seconds_per_minute;
 
     std::ostringstream oss;
     oss << sign_prefix;

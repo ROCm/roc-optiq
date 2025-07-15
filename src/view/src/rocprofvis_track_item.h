@@ -4,6 +4,8 @@
 #include "rocprofvis_settings.h"
 #include "rocprofvis_view_structs.h"
 
+#include <deque>
+
 namespace RocProfVis
 {
 namespace View
@@ -93,7 +95,9 @@ protected:
     bool                  m_selected;
     float                 m_reorder_grip_width;
 
-    std::shared_ptr<TrackRequestParams> m_deferred_request;
+    uint64_t m_group_id_counter = 0;  // Counter for grouping requests
+
+    std::deque<TrackRequestParams> m_request_queue;
 
     static float s_metadata_width;
 };

@@ -115,11 +115,11 @@ void
 TrackItem::UpdateMovement(float zoom, double time_offset_ns, double& min_x, double& max_x,
                           double scale_x, float y_scroll_position)
 {
-    m_zoom     = zoom;
+    m_zoom           = zoom;
     m_time_offset_ns = time_offset_ns;
-    m_scale_x  = scale_x;
-    m_min_x    = min_x;
-    m_max_x    = max_x;
+    m_scale_x        = scale_x;
+    m_min_x          = min_x;
+    m_max_x          = max_x;
     (void) y_scroll_position;
 }
 
@@ -182,24 +182,27 @@ TrackItem::RenderMetaArea()
         }
 
         // Reordering grip decoration
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImVec2 screen_pos = ImGui::GetCursorScreenPos();
+        ImDrawList* draw_list  = ImGui::GetWindowDrawList();
+        ImVec2      screen_pos = ImGui::GetCursorScreenPos();
         ImU32 stroke_color = ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text));
         draw_list->AddLine(
-            ImVec2(screen_pos.x + m_metadata_padding.x, screen_pos.y + container_size.y / 2 - m_metadata_padding.y), 
-            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x, screen_pos.y + container_size.y / 2 - m_metadata_padding.y), 
-            stroke_color
-        );
+            ImVec2(screen_pos.x + m_metadata_padding.x,
+                   screen_pos.y + container_size.y / 2 - m_metadata_padding.y),
+            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x,
+                   screen_pos.y + container_size.y / 2 - m_metadata_padding.y),
+            stroke_color);
         draw_list->AddLine(
-            ImVec2(screen_pos.x + m_metadata_padding.x, screen_pos.y + container_size.y / 2), 
-            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x, screen_pos.y + container_size.y / 2), 
-            stroke_color
-        );
+            ImVec2(screen_pos.x + m_metadata_padding.x,
+                   screen_pos.y + container_size.y / 2),
+            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x,
+                   screen_pos.y + container_size.y / 2),
+            stroke_color);
         draw_list->AddLine(
-            ImVec2(screen_pos.x + m_metadata_padding.x, screen_pos.y + container_size.y / 2 + m_metadata_padding.y), 
-            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x, screen_pos.y + container_size.y / 2 + m_metadata_padding.y), 
-            stroke_color
-        );
+            ImVec2(screen_pos.x + m_metadata_padding.x,
+                   screen_pos.y + container_size.y / 2 + m_metadata_padding.y),
+            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x,
+                   screen_pos.y + container_size.y / 2 + m_metadata_padding.y),
+            stroke_color);
 
         // Set padding for the child window (Note this done using SetCursorPos
         // because ImGuiStyleVar_WindowPadding has no effect on child windows without
@@ -212,7 +215,8 @@ TrackItem::RenderMetaArea()
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 4.0f));
         if(ImGui::BeginChild(
                "MetaData Content",
-               ImVec2(content_size.x - m_meta_area_scale_width - m_reorder_grip_width, content_size.y),
+               ImVec2(content_size.x - m_meta_area_scale_width - m_reorder_grip_width,
+                      content_size.y),
                ImGuiChildFlags_None))
         {
             ImGui::Text(m_name.c_str());

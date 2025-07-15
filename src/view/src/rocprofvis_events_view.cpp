@@ -3,6 +3,7 @@
 #include "rocprofvis_events_view.h"
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_event_manager.h"
 #include <algorithm>
 #include <iostream>
 #include <limits>
@@ -48,7 +49,8 @@ EventsView::Render()
 void
 EventsView::RenderLeftPanel()
 {
-    if(ImGui::BeginChild("LeftPanel", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
+    if(ImGui::BeginChild("LeftPanel", ImVec2(0, 0), ImGuiChildFlags_None,
+                         ImGuiWindowFlags_NoMove))
     {
         uint64_t selected_event = m_data_provider.GetSelectedEventId();
         if(selected_event == std::numeric_limits<uint64_t>::max())
@@ -87,6 +89,10 @@ EventsView::RenderLeftPanel()
                 ImGui::NewLine();
                 ImGui::Separator();
                 RenderEventFlowInfo(flowInfo.flow_data);
+                // Run arrows after flow because all info needed is now there.
+                auto evt = std::make_shared<CreateArrowsView>(
+                    static_cast<int>(RocEvents::kHandleUserArrowCreationEvent));
+                EventManager::GetInstance()->AddEvent(evt);
             }
         }
     }

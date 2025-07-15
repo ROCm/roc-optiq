@@ -10,6 +10,7 @@
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_structs.h"
+#include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
@@ -34,81 +35,86 @@ class TimelineView : public RocWidget
 public:
     TimelineView(DataProvider& dp);
     ~TimelineView();
-    virtual void                           Render();
-    void                                   Update();
-    void                                   MakeGraphView();
-    void                                   ResetView();
-    void                                   DestroyGraphs();
-    std::vector<rocprofvis_graph_t>*   GetGraphs();
-    int                                    FindTrackIdByName(const std::string& name);
-    void                                   ScrollToTrack(uint64_t position);
-    float                                  CalculateTrackOffsetY(int chart_id);
-    void                                   ScrollToTrackByName(const std::string& name);
-    void SetViewTimePosition(double time_pos_ns, bool center);
-    void RenderGraphPoints();
-    void RenderGridAlt();
-    void RenderGrid();
-    void RenderScrubber(ImVec2 screen_pos);
-    void RenderSplitter(ImVec2 screen_pos);
-    void RenderGraphView();
-    void HandleTopSurfaceTouch();
-    void CalibratePosition();
-    void HandleNewTrackData(std::shared_ptr<RocEvent> e);
-    void CalculateGridInterval();
+    virtual void                     Render();
+    void                             Update();
+    void                             MakeGraphView();
+    void                             ResetView();
+    void                             DestroyGraphs();
+    std::vector<rocprofvis_graph_t>* GetGraphs();
+    int                              FindTrackIdByName(const std::string& name);
+    void                             RenderArrows(ImVec2 screen_pos);
+    void                             ScrollToTrack(uint64_t position);
+    float                            CalculateTrackOffsetY(int chart_id);
+    void                             ScrollToTrackByName(const std::string& name);
+    void                             SetViewTimePosition(double time_pos_ns, bool center);
+    void                             RenderGraphPoints();
+    void                             RenderGridAlt();
+    void                             RenderGrid();
+    void                             RenderScrubber(ImVec2 screen_pos);
+    void                             RenderSplitter(ImVec2 screen_pos);
+    void                             RenderGraphView();
+    void                             HandleTopSurfaceTouch();
+    void                             CalibratePosition();
+    void                             HandleNewTrackData(std::shared_ptr<RocEvent> e);
+    void                             CalculateGridInterval();
 
 private:
-    std::vector<rocprofvis_graph_t>       m_graphs;
-    int                                   m_ruler_height;
-    ImVec2                                m_ruler_padding;
-    double                                m_v_min_x;
-    double                                m_v_max_x;
-    double                                m_min_x;
-    double                                m_max_x;
-    double                                m_min_y;
-    double                                m_max_y;
-    float                                 m_zoom;
-    int                                   m_sidebar_size;
-    double                                m_view_time_offset_ns;
-    double                                m_scrubber_position;
-    double                                m_v_width;
-    double                                m_pixels_per_ns;
-    double                                m_scroll_position;
-    double                                m_content_max_y_scroll;
-    bool                                  m_can_drag_to_pan;
-    double                                m_previous_scroll_position;
-    bool                                  m_user_adjusting_graph_height;
-    bool                                  m_meta_map_made;
-    bool                                  m_has_zoom_happened;
-    bool                                  m_show_graph_customization_window;
-    bool                                  m_resize_activity;
-    double                                m_scroll_position_x;
-    EventManager::SubscriptionToken       m_scroll_to_track_token;
-    EventManager::SubscriptionToken       m_tabselected_event_token;
-    double                                m_v_past_width;
-    double                                m_scrollbar_location_as_percentage;
-    bool                                  m_artifical_scrollbar_active;
-    float                                 m_unload_track_distance;
-    float                                 m_universal_content_size;
-    double                                m_range_x;
-    DataProvider&                         m_data_provider;
-    std::pair<double, double>             m_highlighted_region;
-    Settings&                             m_settings;
-    EventManager::SubscriptionToken       m_new_track_token;
-    double                                m_viewport_past_position;
-    int                                   m_artificial_scrollbar_height;
-    ImVec2                                m_graph_size;
-    bool                                  m_region_selection_changed;
-    TimeFormat                            m_display_time_format;
-    double                                m_grid_interval_ns;
-    int                                   m_grid_interval_count;
-    bool                                  m_recalculate_grid_interval;
-    ImVec2                                m_last_graph_size;
-    float                                 m_last_zoom;
-    struct {
-        bool handled;
+    std::vector<rocprofvis_graph_t> m_graphs;
+    int                             m_ruler_height;
+    ImVec2                          m_ruler_padding;
+    double                          m_v_min_x;
+    double                          m_v_max_x;
+    double                          m_min_x;
+    double                          m_max_x;
+    double                          m_min_y;
+    double                          m_max_y;
+    float                           m_zoom;
+    int                             m_sidebar_size;
+    double                          m_view_time_offset_ns;
+    double                          m_scrubber_position;
+    double                          m_v_width;
+    double                          m_pixels_per_ns;
+    double                          m_scroll_position;
+    double                          m_content_max_y_scroll;
+    bool                            m_can_drag_to_pan;
+    double                          m_previous_scroll_position;
+    bool                            m_user_adjusting_graph_height;
+    bool                            m_meta_map_made;
+    bool                            m_has_zoom_happened;
+    bool                            m_show_graph_customization_window;
+    bool                            m_resize_activity;
+    double                          m_scroll_position_x;
+    EventManager::SubscriptionToken m_scroll_to_track_token;
+    EventManager::SubscriptionToken m_tabselected_event_token;
+    double                          m_v_past_width;
+    double                          m_scrollbar_location_as_percentage;
+    bool                            m_artifical_scrollbar_active;
+    float                           m_unload_track_distance;
+    float                           m_universal_content_size;
+    double                          m_range_x;
+    DataProvider&                   m_data_provider;
+    std::pair<double, double>       m_highlighted_region;
+    Settings&                       m_settings;
+    EventManager::SubscriptionToken m_new_track_token;
+    double                          m_viewport_past_position;
+    int                             m_artificial_scrollbar_height;
+    ImVec2                          m_graph_size;
+    bool                            m_region_selection_changed;
+    TimeFormat                      m_display_time_format;
+    double                          m_grid_interval_ns;
+    int                             m_grid_interval_count;
+    bool                            m_recalculate_grid_interval;
+    ImVec2                          m_last_graph_size;
+    float                           m_last_zoom;
+    TimelineArrow                   m_arrow_layer;
+    std::map<uint64_t, float>       m_track_height_total;
+
+    struct
+    {
+        bool     handled;
         uint64_t track_id;
-        int new_index;
-    }                                     m_reorder_request;
+        int      new_index;
+    } m_reorder_request;
 };
 
 }  // namespace View

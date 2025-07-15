@@ -22,14 +22,29 @@ DataProvider::DataProvider()
 , m_trace_file_path("")
 , m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
 , m_selected_event_id(std::numeric_limits<uint64_t>::max())
+, m_event_position(FLT_MAX)
+, m_selected_track_id(-1)
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
 
 void
-DataProvider::SetSelectedEventId(uint64_t id)
+DataProvider::SetSelectedEventId(uint64_t id, double event_position, int track_id)
 {
     m_selected_event_id = id;
+    m_event_position    = event_position;
+    m_selected_track_id = track_id;
+}
+
+double
+DataProvider::GetEventPosition()
+{
+    return m_event_position;
+}
+int
+DataProvider::GetEventTrackPosition()
+{
+    return m_selected_track_id;
 }
 
 const event_info_t&

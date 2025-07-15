@@ -28,6 +28,12 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_call_stack.cpp
     src/rocprofvis_controller_ext_data.cpp
 	src/rocprofvis_controller_job_system.cpp
+	src/rocprofvis_controller_thread.cpp
+	src/rocprofvis_controller_queue.cpp
+	src/rocprofvis_controller_stream.cpp
+	src/rocprofvis_controller_process.cpp
+	src/rocprofvis_controller_processor.cpp
+	src/rocprofvis_controller_node.cpp
     src/rocprofvis_controller_mem_mgmt.cpp
 )
 

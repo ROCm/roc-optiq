@@ -91,6 +91,14 @@ typedef enum rocprofvis_controller_object_type_t
     // Plot series object
     kRPVControllerObjectTypePlotSeries = 18,
 #endif
+    // Process object
+    kRPVControllerObjectTypeProcess = 19,
+    // Thread object
+    kRPVControllerObjectTypeThread = 20,
+    // Queue object
+    kRPVControllerObjectTypeQueue = 21,
+    // Stream object
+    kRPVControllerObjectTypeStream = 22
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -229,38 +237,139 @@ typedef enum rocprofvis_controller_track_type_t
 typedef enum rocprofvis_controller_node_properties_t
 {
     kRPVControllerNodeId = 0xC0000000,
-    kRPVControllerNodeName = 0xC0000001,
-    kRPVControllerNodeDescription = 0xC0000002,
-    kRPVControllerNodeNumProcessors = 0xC0000003,
-    kRPVControllerNodeProcessorIndexed = 0xC0000004,
+    kRPVControllerNodeHostName = 0xC0000001,
+    kRPVControllerNodeDomainName = 0xC0000002,
+    kRPVControllerNodeOSName = 0xC0000003,
+    kRPVControllerNodeOSRelease = 0xC0000004,
+    kRPVControllerNodeOSVersion = 0xC0000005,
+    kRPVControllerNodeHardwareName = 0xC0000006,
+    kRPVControllerNodeMachineId = 0xC0000007,
+    kRPVControllerNodeNumProcessors = 0xC0000008,
+    kRPVControllerNodeProcessorIndexed = 0xC0000009,
+    kRPVControllerNodeNumProcesses    = 0xC000000A,
+    kRPVControllerNodeProcessIndexed = 0xC000000B,
+    kRPVControllerNodeMachineGuid = 0xC000000C,
+    kRPVControllerNodeHash = 0xC000000D
 } rocprofvis_controller_node_properties_t;
 /* JSON: RPVNode
 {
     id: Int,
-    name: String,
-    description: String,
+    host_name: String,
+    domain_name: String,
+    os_name: String,
+    os_release: String,
+    os_version: String,
+    hardware_name: String,
+    machine_id: String,
     num_processors: Int,
-    processors: Array[RPVProcessor]
+    processors: Array[RPVProcessor],
+    num_processes: Int,
+    processes: Array[RPVProcess]
 }
 */
 
 typedef enum rocprofvis_controller_processor_properties_t
 {
     kRPVControllerProcessorId = 0xD0000000,
-    kRPVControllerProcessorName = 0xD0000001,
-    kRPVControllerProcessorDescription = 0xD0000002,
-    kRPVControllerProcessorNumTracks = 0xD0000003,
-    kRPVControllerProcessorTrackIndexed = 0xD0000004,
-    kRPVControllerProcessorNode = 0xD0000005,
+    kRPVControllerProcessorName      = 0xD0000001,
+    kRPVControllerProcessorModelName = 0xD0000002,
+    kRPVControllerProcessorUserName = 0xD0000003,
+    kRPVControllerProcessorVendorName = 0xD0000004,
+    kRPVControllerProcessorProductName = 0xD0000005,
+    kRPVControllerProcessorExtData = 0xD0000006,
+    kRPVControllerProcessorUUID = 0xD0000007,
+    kRPVControllerProcessorType = 0xD0000008,
+    kRPVControllerProcessorTypeIndex = 0xD0000009,
+    kRPVControllerProcessorNodeId = 0xD000000A,
+    kRPVControllerProcessorNumQueues   = 0xD000000B,
+    kRPVControllerProcessorNumStreams  = 0xD000000C,
+    kRPVControllerProcessorQueueIndexed   = 0xD000000D,
+    kRPVControllerProcessorStreamIndexed = 0xD000000E,
 } rocprofvis_controller_processor_properties_t;
 /* JSON: RPVProcessor
 {
     id: Int,
     name: String,
-    description: String,
-    num_track: Int,
-    track: Array[RPVTrack],
-    node: RPVNode
+    model_name: String,
+    user_name: String,
+    vendor_name: String,
+    product_name: String,
+    ext_data: String,
+    uuid: String,
+    type: String,
+    type_index: Int,
+    node_id: Int
+}
+*/
+
+typedef enum rocprofvis_controller_thread_properties_t
+{
+    kRPVControllerThreadId        = 0xF2000000,
+    kRPVControllerThreadNodeId    = 0xF2000001,
+    kRPVControllerThreadProcessId = 0xF2000002,
+    kRPVControllerThreadParentId  = 0xF2000003,
+    kRPVControllerThreadTid       = 0xF2000004,
+    kRPVControllerThreadName      = 0xF2000005,
+    kRPVControllerThreadExtData   = 0xF2000006,
+    kRPVControllerThreadStartTime = 0xF2000007,
+    kRPVControllerThreadEndTime   = 0xF2000008,
+    kRPVControllerThreadTrack     = 0xF2000009,
+} rocprofvis_controller_thread_properties_t;
+
+typedef enum rocprofvis_controller_queue_properties_t
+{
+    kRPVControllerQueueId        = 0xF3000000,
+    kRPVControllerQueueNodeId    = 0xF3000001,
+    kRPVControllerQueueProcessId = 0xF3000002,
+    kRPVControllerQueueName      = 0xF3000004,
+    kRPVControllerQueueExtData   = 0xF3000005,
+    kRPVControllerQueueProcessor = 0xF3000006,
+    kRPVControllerQueueTrack     = 0xF3000007,
+} rocprofvis_controller_queue_properties_t;
+
+typedef enum rocprofvis_controller_stream_properties_t
+{
+    kRPVControllerStreamId           = 0xF4000000,
+    kRPVControllerStreamNodeId       = 0xF4000001,
+    kRPVControllerStreamProcessId    = 0xF4000002,
+    kRPVControllerStreamName         = 0xF4000004,
+    kRPVControllerStreamExtData      = 0xF4000005,
+    kRPVControllerStreamProcessor    = 0xF4000006,
+    kRPVControllerStreamNumQueues    = 0xF4000007,
+    kRPVControllerStreamQueueIndexed = 0xF4000008,
+    kRPVControllerStreamTrack        = 0xF4000009,
+} rocprofvis_controller_stream_properties_t;
+
+typedef enum rocprofvis_controller_process_properties_t
+{
+    kRPVControllerProcessId = 0xF1000000,
+    kRPVControllerProcessNodeId = 0xF1000001,
+    kRPVControllerProcessInitTime = 0xF1000002,
+    kRPVControllerProcessFinishTime = 0xF1000003,
+    kRPVControllerProcessStartTime = 0xF1000004,
+    kRPVControllerProcessEndTime = 0xF1000005,
+    kRPVControllerProcessCommand = 0xF1000006,
+    kRPVControllerProcessEnvironment = 0xF1000007,
+    kRPVControllerProcessExtData = 0xF1000008,
+    kRPVControllerProcessParentId = 0xF1000009,
+    kRPVControllerProcessNumThreads = 0xF100000A,
+    kRPVControllerProcessNumQueues = 0xF100000B,
+    kRPVControllerProcessNumStreams = 0xF100000C,
+    kRPVControllerProcessThreadIndexed = 0xF100000D,
+    kRPVControllerProcessQueueIndexed = 0xF100000E,
+    kRPVControllerProcessStreamIndexed = 0xF100000F,
+} rocprofvis_controller_process_properties_t;
+/* JSON: RPVProcess
+{
+    id: Int,
+    node_id: Int,
+    init_time: Double,
+    finish_time: Double,
+    start_time: Double,
+    end_time: Double,
+    command: String,
+    environment: String,
+    ext_data: String
 }
 */
 
@@ -300,6 +409,10 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackExtDataNameIndexed = 0x3000000E,
     // Track extended data value
     kRPVControllerTrackExtDataValueIndexed = 0x3000000F,
+    // The CPU thread that the track represents - can be NULL
+    kRPVControllerTrackThread = 0x30000010,
+    // The GPU queue that the track represents - can be NULL
+    kRPVControllerTrackQueue = 0x30000011,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {

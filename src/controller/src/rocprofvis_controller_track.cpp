@@ -4,6 +4,9 @@
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_queue.h"
+#include "rocprofvis_controller_thread.h"
+#include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_controller_trace.h"
 
@@ -18,6 +21,9 @@ namespace RocProfVis
 namespace Controller
 {
 
+typedef Reference<rocprofvis_controller_thread_t, Thread, kRPVControllerObjectTypeThread> ThreadRef;
+typedef Reference<rocprofvis_controller_queue_t, Queue, kRPVControllerObjectTypeQueue> QueueRef;
+
 Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, Trace * ctx)
 : m_id(id)
 , m_num_entries(0)
@@ -25,6 +31,8 @@ Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm
 , m_start_timestamp(DBL_MIN)
 , m_end_timestamp(DBL_MAX)
 , m_dm_handle(dm_handle)
+, m_thread(nullptr)
+, m_queue(nullptr)
 , m_ctx(ctx)
 { 
 }
@@ -411,6 +419,8 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackExtDataCategoryIndexed:
             case kRPVControllerTrackExtDataNameIndexed:
             case kRPVControllerTrackExtDataValueIndexed:
+            case kRPVControllerTrackThread:
+            case kRPVControllerTrackQueue:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -453,6 +463,8 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackExtDataCategoryIndexed:
             case kRPVControllerTrackExtDataNameIndexed:
             case kRPVControllerTrackExtDataValueIndexed:
+            case kRPVControllerTrackThread:
+            case kRPVControllerTrackQueue:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -476,6 +488,18 @@ rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackEntry:
             {
                 result = kRocProfVisResultNotSupported;
+                break;
+            }
+            case kRPVControllerTrackThread:
+            {
+                *value = (rocprofvis_handle_t*)m_thread;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTrackQueue:
+            {
+                *value = (rocprofvis_handle_t*)m_queue;
+                result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackId:
@@ -525,7 +549,7 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackExtDataCategoryIndexed:
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
-                    m_dm_handle, kRPVDMTrackExtDataCategoryCharPtrIndexed, 0);
+                    m_dm_handle, kRPVDMTrackExtDataCategoryCharPtrIndexed, index);
             if (length && (!value || *length == 0))
             {
                 *length = strlen(str);
@@ -541,7 +565,7 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackExtDataNameIndexed:
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
-                    m_dm_handle, kRPVDMTrackExtDataNameCharPtrIndexed, 0);
+                    m_dm_handle, kRPVDMTrackExtDataNameCharPtrIndexed, index);
             if (length && (!value || *length == 0))
             {
                 *length = strlen(str);
@@ -557,7 +581,7 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackExtDataValueIndexed:
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
-                    m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, 0);
+                    m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, index);
             if (length && (!value || *length == 0))
             {
                 *length = strlen(str);
@@ -578,6 +602,8 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackNumberOfEntries:
         case kRPVControllerTrackEntry:
         case kRPVControllerTrackExtDataNumberOfEntries:
+        case kRPVControllerTrackThread:
+        case kRPVControllerTrackQueue:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -619,6 +645,8 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackExtDataCategoryIndexed:
         case kRPVControllerTrackExtDataNameIndexed:
         case kRPVControllerTrackExtDataValueIndexed:
+        case kRPVControllerTrackThread:
+        case kRPVControllerTrackQueue:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -657,6 +685,8 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackExtDataCategoryIndexed:
         case kRPVControllerTrackExtDataNameIndexed:
         case kRPVControllerTrackExtDataValueIndexed:
+        case kRPVControllerTrackThread:
+        case kRPVControllerTrackQueue:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -776,6 +806,26 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
+            case kRPVControllerTrackThread:
+            {
+                ThreadRef ref(value);
+                if(ref.IsValid())
+                {
+                    m_thread = ref.Get();
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerTrackQueue:
+            {
+                QueueRef ref(value);
+                if(ref.IsValid())
+                {
+                    m_queue = ref.Get();
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
             case kRPVControllerTrackId:
             case kRPVControllerTrackType:
             case kRPVControllerTrackNumberOfEntries:
@@ -822,6 +872,8 @@ rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackExtDataCategoryIndexed:
             case kRPVControllerTrackExtDataNameIndexed:
             case kRPVControllerTrackExtDataValueIndexed:
+            case kRPVControllerTrackThread:
+            case kRPVControllerTrackQueue:
             {
                 result = kRocProfVisResultInvalidType;
                 break;

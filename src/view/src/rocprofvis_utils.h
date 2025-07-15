@@ -4,6 +4,7 @@
 #include <iostream>
 #include <deque>
 #include <string>  
+#include <cstdint>
 
 namespace RocProfVis
 {

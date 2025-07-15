@@ -65,9 +65,9 @@ public:
     // Return track maximum timestamp
     rocprofvis_dm_timestamp_t                           MaxTimestamp() { return m_track_params->max_ts; }
     // Return track minimum level or value
-    rocprofvis_dm_value_t                               MinLevel() { return m_track_params->min_level; }
+    rocprofvis_dm_value_t                               MinValue() { return m_track_params->min_value; }
     // Return track maximum level or value
-    rocprofvis_dm_value_t                               MaxLevel() { return m_track_params->max_level; }
+    rocprofvis_dm_value_t                               MaxValue() { return m_track_params->max_value; }
     // Returns pointer to category string
     rocprofvis_dm_charptr_t                             CategoryString();
     // Method to get slice handle at provided index

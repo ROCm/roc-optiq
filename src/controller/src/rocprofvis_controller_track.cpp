@@ -444,15 +444,15 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerTrackMinLevel:
+            case kRPVControllerTrackMinValue:
             {
-                *value = m_min_level;
+                *value = m_min_value;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerTrackMaxLevel:
+            case kRPVControllerTrackMaxValue:
             {
-                *value = m_max_level;
+                *value = m_max_value;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -660,15 +660,15 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerTrackMinLevel:
+        case kRPVControllerTrackMinValue:
         {
-            m_min_level = value;
+            m_min_value = value;
             result            = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerTrackMaxLevel:
+        case kRPVControllerTrackMaxValue:
         {
-            m_max_level = value;
+            m_max_value = value;
             result          = kRocProfVisResultSuccess;
             break;
         }

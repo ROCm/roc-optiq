@@ -41,8 +41,8 @@ int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_st
     db->TrackPropertiesAt(index)->min_ts       = sqlite3_column_int64(stmt, 1);
     db->TrackPropertiesAt(index)->max_ts       = sqlite3_column_int64(stmt, 2);
     int op                                     = sqlite3_column_int(stmt, 3);
-    db->TrackPropertiesAt(index)->min_level    = sqlite3_column_double(stmt, 4);
-    db->TrackPropertiesAt(index)->max_level    = sqlite3_column_double(stmt, 5);
+    db->TrackPropertiesAt(index)->min_value    = sqlite3_column_double(stmt, 4);
+    db->TrackPropertiesAt(index)->max_value    = sqlite3_column_double(stmt, 5);
 
     db->TraceProperties()->events_count[op] += db->TrackPropertiesAt(index)->record_count;
     db->TraceProperties()->start_time = std::min(db->TraceProperties()->start_time,db->TrackPropertiesAt(index)->min_ts);

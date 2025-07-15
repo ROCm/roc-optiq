@@ -300,10 +300,6 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackExtDataNameIndexed = 0x3000000E,
     // Track extended data value
     kRPVControllerTrackExtDataValueIndexed = 0x3000000F,
-    // Minimum level o value for the track
-    kRPVControllerTrackMinLevel = 0x30000010,
-    // Maximum level or value for the track
-    kRPVControllerTrackMaxLevel = 0x30000011,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {

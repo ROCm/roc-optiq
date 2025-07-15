@@ -450,22 +450,22 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackMaximumTimestampUInt64, 0);
-                                        double min_level =
+                                        double min_value =
                                             rocprofvis_dm_get_property_as_double(
                                                 track->GetDmHandle(),
-                                                kRPVDMTrackMinimumLevelDouble, 0);
-                                        double max_level =
+                                                kRPVDMTrackMinimumValueDouble, 0);
+                                        double max_value =
                                             rocprofvis_dm_get_property_as_double(
                                                 track->GetDmHandle(),
-                                                kRPVDMTrackMaximumLevelDouble, 0);
+                                                kRPVDMTrackMaximumValueDouble, 0);
                                         track->SetDouble(kRPVControllerTrackMinTimestamp,
                                                          0, min_ts);
                                         track->SetDouble(kRPVControllerTrackMaxTimestamp,
                                                          0, max_ts);
-                                        track->SetDouble(kRPVControllerTrackMinLevel,
-                                                         0, min_level);
-                                        track->SetDouble(kRPVControllerTrackMaxLevel,
-                                                         0, max_level);
+                                        track->SetDouble(kRPVControllerTrackMinValue,
+                                                         0, min_value);
+                                        track->SetDouble(kRPVControllerTrackMaxValue,
+                                                         0, max_value);
 
                                         uint32_t index = m_tracks.size();
                                         m_tracks.push_back(track);

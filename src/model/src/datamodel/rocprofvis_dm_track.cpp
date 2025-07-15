@@ -231,11 +231,11 @@ Track::GetPropertyAsDouble(rocprofvis_dm_property_t       property,
                                  kRocProfVisDmResultNotLoaded);
     switch(property)
     {
-        case kRPVDMTrackMinimumLevelDouble:
-            *value = MinLevel();
+        case kRPVDMTrackMinimumValueDouble:
+            *value = MinValue();
             return kRocProfVisDmResultSuccess;
-        case kRPVDMTrackMaximumLevelDouble:
-            *value = MaxLevel();
+        case kRPVDMTrackMaximumValueDouble:
+            *value = MaxValue();
             return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER,
@@ -318,9 +318,9 @@ const char*  Track::GetPropertySymbol(rocprofvis_dm_property_t property) {
         case kRPVDMTrackMaximumTimestampUInt64:
             return "kRPVDMTrackMaximumTimestampUInt64";
         case kRPVDMTrackMinimumLevelDouble:
-            return "kRPVDMTrackMinimumLevelDouble";
+            return "kRPVDMTrackMinimumValueDouble";
         case kRPVDMTrackMaximumLevelDouble:
-            return "kRPVDMTrackMaximumLevelDouble";
+            return "kRPVDMTrackMaximumValueDouble";
         default:
             return "Unknown property";
     }   

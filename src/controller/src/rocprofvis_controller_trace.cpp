@@ -1618,12 +1618,12 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 else if(strcmp(column_name, "nid") == 0)
                                                 {
                                                     columns.push_back(
-                                                        kRPVControllerThreadNodeId);
+                                                        kRPVControllerThreadNode);
                                                 }
                                                 else if(strcmp(column_name, "pid") == 0)
                                                 {
                                                     columns.push_back(
-                                                        kRPVControllerThreadProcessId);
+                                                        kRPVControllerThreadProcess);
                                                 }
                                                 else if(strcmp(column_name,
                                                                "ppid") == 0)
@@ -1700,10 +1700,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 columns[j] ==
                                                                     kRPVControllerThreadId ||
                                                                 columns[j] ==
-                                                                    kRPVControllerThreadNodeId ||
-                                                                columns[j] ==
-                                                                    kRPVControllerThreadProcessId ||
-                                                                columns[j] ==
                                                                     kRPVControllerThreadParentId ||
                                                                 columns[j] ==
                                                                     kRPVControllerThreadTid)
@@ -1731,6 +1727,51 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     thread->SetObject(kRPVControllerThreadTrack, 0, (rocprofvis_handle_t*)t);
                                                                 }
                                                             }
+                                                            else if (columns[j] ==
+                                                                kRPVControllerThreadNode)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+                                                                
+                                                                Node* n = nodes[val];
+                                                                ROCPROFVIS_ASSERT(n);
+
+                                                                thread->SetObject(
+                                                                    kRPVControllerThreadNode,
+                                                                    0, (rocprofvis_handle_t*)n);
+                                                            }
+                                                            else if (columns[j] ==
+                                                                kRPVControllerThreadProcess)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+
+                                                                Process* p = processes[val];
+                                                                ROCPROFVIS_ASSERT(p);
+
+                                                                thread->SetObject(
+                                                                    kRPVControllerThreadProcess,
+                                                                    0, (rocprofvis_handle_t*)p);
+
+                                                                uint64_t num_threads = 0;
+                                                                p->GetUInt64(
+                                                                    kRPVControllerProcessNumThreads,
+                                                                    0, &num_threads);
+                                                                p->SetUInt64(
+                                                                    kRPVControllerProcessNumThreads,
+                                                                    0, num_threads + 1);
+                                                                p->SetObject(
+                                                                    kRPVControllerProcessThreadIndexed,
+                                                                    num_threads,
+                                                                    (rocprofvis_handle_t*)
+                                                                        thread);
+                                                            }
                                                             else if(
                                                                 columns[j] ==
                                                                     kRPVControllerThreadStartTime ||
@@ -1751,70 +1792,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     strlen(prop_string));
                                                             }
                                                         }
-
-                                                        uint64_t node_id = 0;
-                                                        thread->GetUInt64(
-                                                            kRPVControllerThreadNodeId,
-                                                            0, &node_id);
-                                                        uint64_t process_id = 0;
-                                                        thread->GetUInt64(
-                                                            kRPVControllerThreadProcessId, 0,
-                                                            &process_id);
-                                                        for(auto* node : m_nodes)
-                                                        {
-                                                            uint64_t id = 0;
-                                                            node->GetUInt64(
-                                                                kRPVControllerNodeId, 0,
-                                                                &id);
-                                                            if(id == node_id)
-                                                            {
-                                                                uint64_t num_procs = 0;
-                                                                node->GetUInt64(
-                                                                    kRPVControllerNodeNumProcesses,
-                                                                    0, &num_procs);
-
-                                                                for (uint32_t i = 0; i < num_procs; i++)
-                                                                {
-                                                                    ProcessRef ref;
-                                                                    if (node->GetObject(
-                                                                        kRPVControllerNodeProcessIndexed,
-                                                                        i,
-                                                                        ref.GetHandleAddress()) == kRocProfVisResultSuccess && ref.IsValid())
-                                                                    {
-                                                                        uint64_t proc_id =
-                                                                            0;
-                                                                        ref->GetUInt64(
-                                                                            kRPVControllerProcessId,
-                                                                            0, &proc_id);
-
-                                                                        if (proc_id == process_id)
-                                                                        {
-                                                                            uint64_t num_threads = 0;
-                                                                            ref->GetUInt64(
-                                                                                kRPVControllerProcessNumThreads,
-                                                                                0,
-                                                                                &num_threads);
-                                                                            ref->SetUInt64(
-                                                                                kRPVControllerProcessNumThreads,
-                                                                                0,
-                                                                                num_threads +
-                                                                                    1);
-                                                                            ref->SetObject(
-                                                                                kRPVControllerProcessThreadIndexed,
-                                                                                num_threads,
-                                                                                (rocprofvis_handle_t*)
-                                                                                    thread);
-                                                                            thread =
-                                                                                nullptr;
-                                                                            break;
-                                                                        }
-                                                                    }
-                                                                }
-
-                                                                break;
-                                                            }
-                                                        }
-                                                        ROCPROFVIS_ASSERT(!thread);
                                                     }
                                                 }
                                             }
@@ -1889,12 +1866,12 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 else if(strcmp(column_name, "nid") == 0)
                                                 {
                                                     columns.push_back(
-                                                        kRPVControllerQueueNodeId);
+                                                        kRPVControllerQueueNode);
                                                 }
                                                 else if(strcmp(column_name, "pid") == 0)
                                                 {
                                                     columns.push_back(
-                                                        kRPVControllerQueueProcessId);
+                                                        kRPVControllerQueueProcess);
                                                 }
                                                 else if(strcmp(column_name, "name") == 0)
                                                 {
@@ -1944,13 +1921,58 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             {
                                                                 continue;
                                                             }
+                                                            else if (columns[j] ==
+                                                                kRPVControllerQueueNode)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+
+                                                                Node* n = nodes[val];
+                                                                ROCPROFVIS_ASSERT(n);
+
+                                                                queue->SetObject(
+                                                                    kRPVControllerQueueNode,
+                                                                    0,
+                                                                    (rocprofvis_handle_t*)
+                                                                        n);
+                                                            }
+                                                            else if (columns[j] ==
+                                                                kRPVControllerQueueProcess)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+
+                                                                Process* n = processes[val];
+                                                                ROCPROFVIS_ASSERT(n);
+
+                                                                queue->SetObject(
+                                                                    kRPVControllerQueueProcess,
+                                                                    0,
+                                                                    (rocprofvis_handle_t*)
+                                                                        n);
+
+                                                                uint64_t num_queues = 0;
+                                                                n->GetUInt64(
+                                                                    kRPVControllerProcessNumQueues,
+                                                                    0, &num_queues);
+                                                                n->SetUInt64(
+                                                                    kRPVControllerProcessNumQueues,
+                                                                    0, num_queues + 1);
+                                                                n->SetObject(
+                                                                    kRPVControllerProcessQueueIndexed,
+                                                                    num_queues,
+                                                                    (rocprofvis_handle_t*)
+                                                                        queue);
+                                                            }
                                                             else if(
                                                                 columns[j] ==
-                                                                    kRPVControllerQueueId ||
-                                                                columns[j] ==
-                                                                    kRPVControllerQueueNodeId ||
-                                                                columns[j] ==
-                                                                    kRPVControllerQueueProcessId)
+                                                                    kRPVControllerQueueId)
                                                             {
                                                                 char* end = nullptr;
                                                                 uint64_t val =
@@ -2020,76 +2042,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     strlen(prop_string));
                                                             }
                                                         }
-
-                                                        uint64_t node_id = 0;
-                                                        queue->GetUInt64(
-                                                            kRPVControllerQueueNodeId, 0,
-                                                            &node_id);
-                                                        uint64_t process_id = 0;
-                                                        queue->GetUInt64(
-                                                            kRPVControllerQueueProcessId,
-                                                            0, &process_id);
-                                                        for(auto* node : m_nodes)
-                                                        {
-                                                            uint64_t id = 0;
-                                                            node->GetUInt64(
-                                                                kRPVControllerNodeId, 0,
-                                                                &id);
-                                                            if(id == node_id)
-                                                            {
-                                                                uint64_t num_procs = 0;
-                                                                node->GetUInt64(
-                                                                    kRPVControllerNodeNumProcesses,
-                                                                    0, &num_procs);
-
-                                                                for(uint32_t i = 0;
-                                                                    i < num_procs; i++)
-                                                                {
-                                                                    ProcessRef ref;
-                                                                    if(node->GetObject(
-                                                                           kRPVControllerNodeProcessIndexed,
-                                                                           i,
-                                                                           ref.GetHandleAddress()) ==
-                                                                           kRocProfVisResultSuccess &&
-                                                                       ref.IsValid())
-                                                                    {
-                                                                        uint64_t proc_id =
-                                                                            0;
-                                                                        ref->GetUInt64(
-                                                                            kRPVControllerProcessId,
-                                                                            0, &proc_id);
-
-                                                                        if(proc_id ==
-                                                                           process_id)
-                                                                        {
-                                                                            uint64_t
-                                                                                num_queues =
-                                                                                    0;
-                                                                            ref->GetUInt64(
-                                                                                kRPVControllerProcessNumQueues,
-                                                                                0,
-                                                                                &num_queues);
-                                                                            ref->SetUInt64(
-                                                                                kRPVControllerProcessNumQueues,
-                                                                                0,
-                                                                                num_queues +
-                                                                                    1);
-                                                                            ref->SetObject(
-                                                                                kRPVControllerProcessQueueIndexed,
-                                                                                num_queues,
-                                                                                (rocprofvis_handle_t*)
-                                                                                    queue);
-                                                                            queue =
-                                                                                nullptr;
-                                                                            break;
-                                                                        }
-                                                                    }
-                                                                }
-
-                                                                break;
-                                                            }
-                                                        }
-                                                        ROCPROFVIS_ASSERT(!queue);
                                                     }
                                                 }
                                             }
@@ -2163,12 +2115,12 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 else if(strcmp(column_name, "nid") == 0)
                                                 {
                                                     columns.push_back(
-                                                        kRPVControllerStreamNodeId);
+                                                        kRPVControllerStreamNode);
                                                 }
                                                 else if(strcmp(column_name, "pid") == 0)
                                                 {
                                                     columns.push_back(
-                                                        kRPVControllerStreamProcessId);
+                                                        kRPVControllerStreamProcess);
                                                 }
                                                 else if(strcmp(column_name, "name") == 0)
                                                 {
@@ -2218,13 +2170,58 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             {
                                                                 continue;
                                                             }
+                                                            else if (columns[j] ==
+                                                                kRPVControllerStreamNode)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+
+                                                                Node* n = nodes[val];
+                                                                ROCPROFVIS_ASSERT(n);
+
+                                                                stream->SetObject(
+                                                                    kRPVControllerStreamNode,
+                                                                    0,
+                                                                    (rocprofvis_handle_t*)
+                                                                        n);
+                                                            }
+                                                            else if (columns[j] ==
+                                                                kRPVControllerStreamProcess)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+
+                                                                Process* n = processes[val];
+                                                                ROCPROFVIS_ASSERT(n);
+
+                                                                stream->SetObject(
+                                                                    kRPVControllerStreamProcess,
+                                                                    0,
+                                                                    (rocprofvis_handle_t*)
+                                                                        n);
+
+                                                                uint64_t num_streams = 0;
+                                                                n->GetUInt64(
+                                                                    kRPVControllerProcessNumStreams,
+                                                                    0, &num_streams);
+                                                                n->SetUInt64(
+                                                                    kRPVControllerProcessNumStreams,
+                                                                    0, num_streams + 1);
+                                                                n->SetObject(
+                                                                    kRPVControllerProcessStreamIndexed,
+                                                                    num_streams,
+                                                                    (rocprofvis_handle_t*)
+                                                                        stream);
+                                                            }
                                                             else if(
                                                                 columns[j] ==
-                                                                    kRPVControllerStreamId ||
-                                                                columns[j] ==
-                                                                    kRPVControllerStreamNodeId ||
-                                                                columns[j] ==
-                                                                    kRPVControllerStreamProcessId)
+                                                                    kRPVControllerStreamId)
                                                             {
                                                                 char*    end = nullptr;
                                                                 uint64_t val =
@@ -2294,76 +2291,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     strlen(prop_string));
                                                             }
                                                         }
-
-                                                        uint64_t node_id = 0;
-                                                        stream->GetUInt64(
-                                                            kRPVControllerStreamNodeId, 0,
-                                                            &node_id);
-                                                        uint64_t process_id = 0;
-                                                        stream->GetUInt64(
-                                                            kRPVControllerStreamProcessId,
-                                                            0, &process_id);
-                                                        for(auto* node : m_nodes)
-                                                        {
-                                                            uint64_t id = 0;
-                                                            node->GetUInt64(
-                                                                kRPVControllerNodeId, 0,
-                                                                &id);
-                                                            if(id == node_id)
-                                                            {
-                                                                uint64_t num_procs = 0;
-                                                                node->GetUInt64(
-                                                                    kRPVControllerNodeNumProcesses,
-                                                                    0, &num_procs);
-
-                                                                for(uint32_t i = 0;
-                                                                    i < num_procs; i++)
-                                                                {
-                                                                    ProcessRef ref;
-                                                                    if(node->GetObject(
-                                                                           kRPVControllerNodeProcessIndexed,
-                                                                           i,
-                                                                           ref.GetHandleAddress()) ==
-                                                                           kRocProfVisResultSuccess &&
-                                                                       ref.IsValid())
-                                                                    {
-                                                                        uint64_t proc_id =
-                                                                            0;
-                                                                        ref->GetUInt64(
-                                                                            kRPVControllerProcessId,
-                                                                            0, &proc_id);
-
-                                                                        if(proc_id ==
-                                                                           process_id)
-                                                                        {
-                                                                            uint64_t
-                                                                                num_streams =
-                                                                                    0;
-                                                                            ref->GetUInt64(
-                                                                                kRPVControllerProcessNumStreams,
-                                                                                0,
-                                                                                &num_streams);
-                                                                            ref->SetUInt64(
-                                                                                kRPVControllerProcessNumStreams,
-                                                                                0,
-                                                                                num_streams +
-                                                                                    1);
-                                                                            ref->SetObject(
-                                                                                kRPVControllerProcessStreamIndexed,
-                                                                                num_streams,
-                                                                                (rocprofvis_handle_t*)
-                                                                                    stream);
-                                                                            stream =
-                                                                                nullptr;
-                                                                            break;
-                                                                        }
-                                                                    }
-                                                                }
-
-                                                                break;
-                                                            }
-                                                        }
-                                                        ROCPROFVIS_ASSERT(!stream);
                                                     }
                                                 }
                                             }

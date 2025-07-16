@@ -3,6 +3,8 @@
 #include "rocprofvis_controller_queue.h"
 #include "rocprofvis_controller_processor.h"
 #include "rocprofvis_controller_track.h"
+#include "rocprofvis_controller_node.h"
+#include "rocprofvis_controller_process.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
 
@@ -11,6 +13,8 @@ namespace RocProfVis
 namespace Controller
 {
 
+typedef Reference<rocprofvis_controller_process_t, Process, kRPVControllerObjectTypeProcess> ProcessRef;
+typedef Reference<rocprofvis_controller_node_t, Node, kRPVControllerObjectTypeNode> NodeRef;
 typedef Reference<rocprofvis_controller_processor_t, Processor,
                   kRPVControllerObjectTypeProcessor>
     ProcessorRef;
@@ -18,11 +22,11 @@ typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectType
     TrackRef;
 
 Queue::Queue()
-: m_processor(nullptr)
+: m_node(nullptr)
+, m_process(nullptr)
+, m_processor(nullptr)
 , m_track(nullptr)
 , m_id(0)
-, m_node_id(0)
-, m_process_id(0)
 {
 }
 
@@ -49,18 +53,8 @@ rocprofvis_result_t Queue::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerQueueNodeId:
-            {
-                *value = m_node_id;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerQueueProcessId:
-            {
-                *value = m_process_id;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
+            case kRPVControllerQueueNode:
+            case kRPVControllerQueueProcess:
             case kRPVControllerQueueName:
             case kRPVControllerQueueExtData:
             case kRPVControllerQueueProcessor:
@@ -87,8 +81,8 @@ rocprofvis_result_t Queue::GetDouble(rocprofvis_property_t property, uint64_t in
         switch(property)
         {
             case kRPVControllerQueueId:
-            case kRPVControllerQueueNodeId:
-            case kRPVControllerQueueProcessId:
+            case kRPVControllerQueueNode:
+            case kRPVControllerQueueProcess:
             case kRPVControllerQueueName:
             case kRPVControllerQueueExtData:
             case kRPVControllerQueueProcessor:
@@ -115,6 +109,18 @@ rocprofvis_result_t Queue::GetObject(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
+            case kRPVControllerQueueNode:
+            {
+                *value = (rocprofvis_handle_t*) m_node;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerQueueProcess:
+            {
+                *value = (rocprofvis_handle_t*) m_process;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerQueueProcessor:
             {
                 *value = (rocprofvis_handle_t*) m_processor;
@@ -128,8 +134,6 @@ rocprofvis_result_t Queue::GetObject(rocprofvis_property_t property, uint64_t in
                 break;
             }
             case kRPVControllerQueueId:
-            case kRPVControllerQueueNodeId:
-            case kRPVControllerQueueProcessId:
             case kRPVControllerQueueName:
             case kRPVControllerQueueExtData:
             {
@@ -182,8 +186,8 @@ rocprofvis_result_t Queue::GetString(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerQueueTrack:
         case kRPVControllerQueueId:
-        case kRPVControllerQueueNodeId:
-        case kRPVControllerQueueProcessId:
+        case kRPVControllerQueueNode:
+        case kRPVControllerQueueProcess:
         case kRPVControllerQueueProcessor:
         {
             result = kRocProfVisResultInvalidType;
@@ -209,18 +213,8 @@ rocprofvis_result_t Queue::SetUInt64(rocprofvis_property_t property, uint64_t in
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerQueueNodeId:
-        {
-            m_node_id  = value;
-            result = kRocProfVisResultSuccess;
-            break;
-        }
-        case kRPVControllerQueueProcessId:
-        {
-            m_process_id  = value;
-            result = kRocProfVisResultSuccess;
-            break;
-        }
+        case kRPVControllerQueueNode:
+        case kRPVControllerQueueProcess:
         case kRPVControllerQueueName:
         case kRPVControllerQueueExtData:
         case kRPVControllerQueueProcessor:
@@ -244,8 +238,8 @@ rocprofvis_result_t Queue::SetDouble(rocprofvis_property_t property, uint64_t in
     switch(property)
     {
         case kRPVControllerQueueId:
-        case kRPVControllerQueueNodeId:
-        case kRPVControllerQueueProcessId:
+        case kRPVControllerQueueNode:
+        case kRPVControllerQueueProcess:
         case kRPVControllerQueueName:
         case kRPVControllerQueueExtData:
         case kRPVControllerQueueProcessor:
@@ -291,9 +285,27 @@ rocprofvis_result_t Queue::SetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
+            case kRPVControllerQueueNode:
+            {
+                NodeRef ref(value);
+                if (ref.IsValid())
+                {
+                    m_node = ref.Get();
+                    result      = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerQueueProcess:
+            {
+                ProcessRef ref(value);
+                if (ref.IsValid())
+                {
+                    m_process = ref.Get();
+                    result      = kRocProfVisResultSuccess;
+                }
+                break;
+            }
             case kRPVControllerQueueId:
-            case kRPVControllerQueueNodeId:
-            case kRPVControllerQueueProcessId:
             case kRPVControllerQueueName:
             case kRPVControllerQueueExtData:
             {
@@ -330,8 +342,8 @@ rocprofvis_result_t Queue::SetString(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerQueueTrack:
         case kRPVControllerQueueId:
-        case kRPVControllerQueueNodeId:
-        case kRPVControllerQueueProcessId:
+        case kRPVControllerQueueNode:
+        case kRPVControllerQueueProcess:
         case kRPVControllerQueueProcessor:
         {
             result = kRocProfVisResultInvalidType;

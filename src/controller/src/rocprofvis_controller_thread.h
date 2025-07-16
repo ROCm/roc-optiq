@@ -11,6 +11,8 @@ namespace RocProfVis
 namespace Controller
 {
 
+class Node;
+class Process;
 class Track;
 
 class Thread : public Handle
@@ -43,13 +45,13 @@ public:
 private:
     std::string m_name;
     std::string m_ext_data;
+    Node*       m_node;
+    Process*    m_process;
     Track*      m_track;
     double      m_start_time;
     double      m_end_time;
     uint32_t    m_id;
     uint32_t    m_tid;
-    uint32_t    m_node_id;
-    uint32_t    m_process_id;
     uint32_t    m_parent_id;
 };
 

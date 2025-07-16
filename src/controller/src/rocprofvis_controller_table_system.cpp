@@ -532,16 +532,7 @@ rocprofvis_result_t SystemTable::GetString(rocprofvis_property_t property, uint6
             {
                 if (index < m_columns.size())
                 {
-                    if(!value && length)
-                    {
-                        *length = m_columns[index].m_name.size();
-                        result  = kRocProfVisResultSuccess;
-                    }
-                    else if (value && length)
-                    {
-                        strncpy(value, m_columns[index].m_name.c_str(), *length);
-                        result = kRocProfVisResultSuccess;
-                    }
+                    result = GetStdStringImpl(value, length, m_columns[index].m_name);
                 }
                 break;
             }

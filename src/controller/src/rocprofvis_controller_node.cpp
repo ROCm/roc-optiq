@@ -193,114 +193,42 @@ Node::GetString(rocprofvis_property_t property, uint64_t index, char* value,
     {
         case kRPVControllerNodeHostName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_host_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_host_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_host_name);
             break;
         }
         case kRPVControllerNodeDomainName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_domain_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_domain_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_domain_name);
             break;
         }
         case kRPVControllerNodeOSName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_os_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_os_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_os_name);
             break;
         }
         case kRPVControllerNodeOSRelease:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_os_release.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_os_release.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_os_release);
             break;
         }
         case kRPVControllerNodeOSVersion:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_os_version.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_os_version.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_os_version);
             break;
         }
         case kRPVControllerNodeHardwareName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_hardware_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_hardware_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_hardware_name);
             break;
         }
         case kRPVControllerNodeMachineId:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_machine_id.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_machine_id.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_machine_id);
             break;
         }
         case kRPVControllerNodeMachineGuid:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_guid.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_guid.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_guid);
             break;
         }
         case kRPVControllerNodeId:

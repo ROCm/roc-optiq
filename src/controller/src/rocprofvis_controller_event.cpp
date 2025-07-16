@@ -479,55 +479,22 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerEventName:
         {
-            if (length && (!value || *length == 0))
+            char const* name     = StringTable::Get().GetString(m_name);
+            char const* category = StringTable::Get().GetString(m_category);
+            ROCPROFVIS_ASSERT(name && category);
+            std::string full_name = name;
+            if(full_name.size() > 0)
             {
-                char const* name = StringTable::Get().GetString(m_name);
-                char const* category = StringTable::Get().GetString(m_category);
-                ROCPROFVIS_ASSERT(name && category);
-                *length = strlen(name) + strlen(category)+1;
-                result = kRocProfVisResultSuccess;
+                full_name += " ";
             }
-            else if (length && value && *length > 0)
-            {
-                char const* name = StringTable::Get().GetString(m_name);
-                char const* category = StringTable::Get().GetString(m_category);
-                ROCPROFVIS_ASSERT(name && category);
-                std::string full_name = name;
-                if(full_name.size() > 0)
-                {
-                    full_name += " ";
-                }
-                full_name += category; 
-                strncpy(value, full_name.c_str(), *length);
-       
-                result = kRocProfVisResultSuccess;
-            }
-            else
-            {
-                result = kRocProfVisResultInvalidArgument;
-            }
+            full_name += category; 
+            result = GetStdStringImpl(value, length, full_name);
             break;
         }
         case kRPVControllerEventCategory:
         {
-            if (length && (!value || *length == 0))
-            {
-                char const* category = StringTable::Get().GetString(m_category);
-                ROCPROFVIS_ASSERT(category);
-                *length = strlen(category);
-                result = kRocProfVisResultSuccess;
-            }
-            else if (length && value && *length > 0)
-            {
-                char const* category = StringTable::Get().GetString(m_category);
-                ROCPROFVIS_ASSERT(category);
-                strncpy(value, category, *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else
-            {
-                result = kRocProfVisResultInvalidArgument;
-            }
+            char const* category = StringTable::Get().GetString(m_category);
+            result = GetStringImpl(value, length, category, strlen(category));
             break;
         }
         case kRPVControllerEventStartTimestamp:

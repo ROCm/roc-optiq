@@ -562,16 +562,7 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerTrackName:
         {
-            if (length && (!value || *length == 0))
-            {
-                *length = m_name.length();
-                result = kRocProfVisResultSuccess;
-            }
-            else if (value && length && *length > 0)
-            {
-                strncpy(value, m_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_name);
             break;
         }
 
@@ -579,48 +570,21 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
                     m_dm_handle, kRPVDMTrackExtDataCategoryCharPtrIndexed, index);
-            if (length && (!value || *length == 0))
-            {
-                *length = strlen(str);
-                result = kRocProfVisResultSuccess;
-            }
-            else if (value && length && *length > 0)
-            {
-                strncpy(value, str, *length);
-                result = kRocProfVisResultSuccess;
-            }
+            result = GetStringImpl(value, length, str, strlen(str));
             break;
         }
         case kRPVControllerTrackExtDataNameIndexed:
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
                     m_dm_handle, kRPVDMTrackExtDataNameCharPtrIndexed, index);
-            if (length && (!value || *length == 0))
-            {
-                *length = strlen(str);
-                result = kRocProfVisResultSuccess;
-            }
-            else if (value && length && *length > 0)
-            {
-                strncpy(value, str, *length);
-                result = kRocProfVisResultSuccess;
-            }
+            result = GetStringImpl(value, length, str, strlen(str));
             break;
         }
         case kRPVControllerTrackExtDataValueIndexed:
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
-                    m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, index);
-            if (length && (!value || *length == 0))
-            {
-                *length = strlen(str);
-                result = kRocProfVisResultSuccess;
-            }
-            else if (value && length && *length > 0)
-            {
-                strncpy(value, str, *length);
-                result = kRocProfVisResultSuccess;
-            }
+                m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, index);
+            result = GetStringImpl(value, length, str, strlen(str));
             break;
         }
 

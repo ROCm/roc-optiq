@@ -209,114 +209,42 @@ Processor::GetString(rocprofvis_property_t property, uint64_t index, char* value
     {
         case kRPVControllerProcessorName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_name);
             break;
         }
         case kRPVControllerProcessorModelName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_model_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_model_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_model_name);
             break;
         }
         case kRPVControllerProcessorUserName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_user_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_user_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_user_name);
             break;
         }
         case kRPVControllerProcessorVendorName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_vendor_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_vendor_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_vendor_name);
             break;
         }
         case kRPVControllerProcessorProductName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_product_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_product_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_product_name);
             break;
         }
         case kRPVControllerProcessorExtData:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_ext_data.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_ext_data.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_ext_data);
             break;
         }
         case kRPVControllerProcessorUUID:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_uuid.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_uuid.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_uuid);
             break;
         }
         case kRPVControllerProcessorType:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_type.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_type.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_type);
             break;
         }
         case kRPVControllerProcessorId:

@@ -284,44 +284,17 @@ Process::GetString(rocprofvis_property_t property, uint64_t index, char* value,
     {
         case kRPVControllerProcessCommand:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_command.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_command.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_command);
             break;
         }
         case kRPVControllerProcessEnvironment:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_environment.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_environment.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_environment);
             break;
         }
         case kRPVControllerProcessExtData:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_ext_data.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_ext_data.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_ext_data);
             break;
         }
         case kRPVControllerProcessId:

@@ -182,30 +182,12 @@ Thread::GetString(rocprofvis_property_t property, uint64_t index, char* value,
     {
         case kRPVControllerThreadName:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_name.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_name.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_name);
             break;
         }
         case kRPVControllerThreadExtData:
         {
-            if(value && length && *length)
-            {
-                strncpy(value, m_ext_data.c_str(), *length);
-                result = kRocProfVisResultSuccess;
-            }
-            else if(length)
-            {
-                *length = m_ext_data.length();
-                result  = kRocProfVisResultSuccess;
-            }
+            result = GetStdStringImpl(value, length, m_ext_data);
             break;
         }
         case kRPVControllerThreadId:

@@ -283,8 +283,7 @@ rocprofvis_dm_size_t Database::GetMemoryFootprint()
 
 bool
 Database::TrackExist(rocprofvis_dm_track_params_t& newprops,
-                     rocprofvis_dm_charptr_t       newquery,
-                     rocprofvis_dm_charptr_t       newtablequery)
+                     rocprofvis_dm_charptr_t*      newqueries)
 {
     std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator it = 
         std::find_if(TrackPropertiesBegin(), TrackPropertiesEnd(), [newprops] (std::unique_ptr<rocprofvis_dm_track_params_t> & params) {
@@ -309,22 +308,37 @@ Database::TrackExist(rocprofvis_dm_track_params_t& newprops,
         });
     if (it != TrackPropertiesEnd()) {
             std::vector<rocprofvis_dm_string_t>::iterator s = 
-            std::find_if(it->get()->query.begin(), it->get()->query.end(), [newquery] (rocprofvis_dm_string_t & str) {
-                return str == newquery;});
-            if (s == it->get()->query.end()) {
-                it->get()->query.push_back(newquery);
+            std::find_if(   it->get()->query[kRPVQuerySlice].begin(), 
+                            it->get()->query[kRPVQuerySlice].end(), [newqueries] (rocprofvis_dm_string_t & str) {
+                             return str == newqueries[kRPVSqliteQuerySlice];
+                         });
+            if (s == it->get()->query[kRPVQuerySlice].end()) {
+                it->get()->query[kRPVQuerySlice].push_back(newqueries[kRPVSqliteQuerySlice]);
             }
-            s = std::find_if(
-                it->get()->table_query.begin(), it->get()->table_query.end(),
-                [newtablequery](rocprofvis_dm_string_t& str) { return str == newtablequery; });
-            if(s == it->get()->table_query.end())
+            
+            s = std::find_if(it->get()->query[kRPVQueryTable].begin(),
+                             it->get()->query[kRPVQueryTable].end(),
+                             [newqueries](rocprofvis_dm_string_t& str) {
+                                 return str == newqueries[kRPVSqliteQueryTable];
+                             });
+            if(s == it->get()->query[kRPVQueryTable].end())
             {
-                it->get()->table_query.push_back(newtablequery);
+                it->get()->query[kRPVQueryTable].push_back(newqueries[kRPVSqliteQueryTable]);
+            }
+            s = std::find_if(it->get()->query[kRPVQueryLevel].begin(),
+                             it->get()->query[kRPVQueryLevel].end(),
+                             [newqueries](rocprofvis_dm_string_t& str) {
+                                 return str == newqueries[kRPVSqliteQueryLevel];
+                             });
+            if(s == it->get()->query[kRPVQueryLevel].end())
+            {
+                it->get()->query[kRPVQueryLevel].push_back(newqueries[kRPVSqliteQueryLevel]);
             }
         return true;
     } 
-    newprops.query.push_back(newquery);
-    newprops.table_query.push_back(newtablequery);
+    newprops.query[kRPVQuerySlice].push_back(newqueries[kRPVSqliteQuerySlice]);
+    newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSqliteQueryTable]);
+    newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSqliteQueryLevel]);
     return false;    
 }
 

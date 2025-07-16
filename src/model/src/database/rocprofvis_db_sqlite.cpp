@@ -218,13 +218,27 @@ void SqliteDatabase::ReleaseConnection(sqlite3* conn)
 
 
 rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query){
-    rocprofvis_db_sqlite_callback_parameters params = {this, future, nullptr, nullptr,query,"","", static_cast<rocprofvis_dm_track_id_t>(-1)};
+    rocprofvis_db_sqlite_callback_parameters params = {
+        this,
+        future,
+        nullptr,
+        nullptr,
+        { query, "", "", "" },
+        static_cast<rocprofvis_dm_track_id_t>(-1)
+    };
     return SqliteDatabase::ExecuteSQLQuery(query, &params);
 }
 
 rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query, 
                                                         RpvSqliteExecuteQueryCallback callback){
-    rocprofvis_db_sqlite_callback_parameters params = {this, future, nullptr, callback,query,"","",static_cast<rocprofvis_dm_track_id_t>(-1)};
+    rocprofvis_db_sqlite_callback_parameters params = {
+        this,
+        future,
+        nullptr,
+        callback,
+        { query, "", "", "" },
+        static_cast<rocprofvis_dm_track_id_t>(-1)
+    };
     return SqliteDatabase::ExecuteSQLQuery(query, &params);
 }
 
@@ -232,7 +246,14 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future, const ch
 rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query, 
                                                 RpvSqliteExecuteQueryCallback callback,
                                                 rocprofvis_dm_string_t* value){
-    rocprofvis_db_sqlite_callback_parameters params = {this, future, (rocprofvis_dm_handle_t)value, callback,query,"","",static_cast<rocprofvis_dm_track_id_t>(-1)};
+    rocprofvis_db_sqlite_callback_parameters params = {
+        this,
+        future,
+        (rocprofvis_dm_handle_t) value,
+        callback,
+        { query, "", "", "" },
+        static_cast<rocprofvis_dm_track_id_t>(-1)
+    };
     return SqliteDatabase::ExecuteSQLQuery(query, &params);
 }
 
@@ -264,17 +285,31 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future,
                                                         const char* query,
                                                         rocprofvis_dm_handle_t handle, 
                                                         RpvSqliteExecuteQueryCallback callback){
-    rocprofvis_db_sqlite_callback_parameters params = {this, future, handle, callback,query,"","",static_cast<rocprofvis_dm_track_id_t>(-1)};
+    rocprofvis_db_sqlite_callback_parameters params = {
+        this,
+        future,
+        handle,
+        callback,
+        { query, "", "", "" },
+        static_cast<rocprofvis_dm_track_id_t>(-1)
+    };
     return SqliteDatabase::ExecuteSQLQuery(query, &params);
 }
 
 
 rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, 
                                                         const char* query,
-                                                        const char* subquery,
+                                                        const char* cache_table_name,
                                                         rocprofvis_dm_handle_t handle, 
                                                         RpvSqliteExecuteQueryCallback callback){
-    rocprofvis_db_sqlite_callback_parameters params = {this, future, handle, callback,query,subquery,"",static_cast<rocprofvis_dm_track_id_t>(-1)};
+    rocprofvis_db_sqlite_callback_parameters params = {
+        this,
+        future,
+        handle,
+        callback,
+        { query, "", "", "", cache_table_name},
+        static_cast<rocprofvis_dm_track_id_t>(-1)
+    };
     return SqliteDatabase::ExecuteSQLQuery(query, &params);
 }
 
@@ -284,17 +319,32 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
                                                         const char* subquery,
                                                         RpvSqliteExecuteQueryCallback callback)
 {
-    rocprofvis_db_sqlite_callback_parameters params = {this, future, nullptr, callback,query,subquery,"",static_cast<rocprofvis_dm_track_id_t>(-1)};
+    rocprofvis_db_sqlite_callback_parameters params = {
+        this,
+        future,
+        nullptr,
+        callback,
+        { query, subquery, "", "" },
+        static_cast<rocprofvis_dm_track_id_t>(-1)
+    };
     return SqliteDatabase::ExecuteSQLQuery(query, &params);
 }
 
 rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future, 
                                                         const char* query, 
+                                                        const char* level_subquery,
                                                         const char* timeline_subquery,
                                                         const char* table_subquery,
                                                         RpvSqliteExecuteQueryCallback callback)
 {
-    rocprofvis_db_sqlite_callback_parameters params = {this, future, nullptr, callback,query,timeline_subquery, table_subquery,static_cast<rocprofvis_dm_track_id_t>(-1)};
+    rocprofvis_db_sqlite_callback_parameters params = {
+        this,
+        future,
+        nullptr,
+        callback,
+        { query, timeline_subquery, table_subquery, level_subquery },
+        static_cast<rocprofvis_dm_track_id_t>(-1)
+    };
     return SqliteDatabase::ExecuteSQLQuery(query, &params);
 }
 

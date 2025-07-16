@@ -263,10 +263,12 @@ class Database
                                                                 Future* object) = 0;
         // method to build a query to read time slice of records for single track 
         // @param index - track index 
-        // @param query - reference to query string  
+        // @param type - query type
+        // @param query - reference to output query string  
         // @return status of operation
         virtual rocprofvis_dm_result_t  BuildTrackQuery(           
                                                                 rocprofvis_dm_index_t index, 
+                                                                rocprofvis_dm_index_t type,
                                                                 rocprofvis_dm_string_t & query) = 0;
 
         // method to build a query to read time slice of records for all tracks in one shot 
@@ -327,8 +329,7 @@ class Database
         // @return True if exists
         bool                            TrackExist(
                                                                 rocprofvis_dm_track_params_t & newprops, 
-                                                                rocprofvis_dm_charptr_t newquery,
-                                                                rocprofvis_dm_charptr_t newtablequery);
+                                                                rocprofvis_dm_charptr_t* newqueries);
         // calls Future object callback method, if provided. The callback method is optionally provided by caller in order to display or save current database progress.
         // @param step - approximate percentage of single database operation
         // @param action - database operation description

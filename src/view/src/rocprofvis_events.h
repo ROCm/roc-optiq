@@ -18,7 +18,7 @@ enum class RocEvents
     kTabSelected,
     kTimelineSelectionChanged,
     kHandleUserGraphNavigationEvent,
-    kHandleUserArrowCreationEvent
+    kHandleUserArrowCreationEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeDataDirty,
     kComputeBlockNavigationChanged,
@@ -33,7 +33,7 @@ enum class RocEventType
     kTabEvent,
     kTimelineSelectionChangedEvent,
     kScrollToTrackByNameEvent,
-    kCreateArrowsView,
+    kCreateArrowsViewEvent,
 #ifdef  COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
 #endif
@@ -75,15 +75,14 @@ private:
 };
 
 
-class CreateArrowsView : public RocEvent
+class CreateArrowsViewEvent : public RocEvent
 {
 public:
-    CreateArrowsView(int event_id)
+    CreateArrowsViewEvent(int event_id)
     : RocEvent(event_id)
     {
-        m_event_type = RocEventType::kCreateArrowsView;
+        m_event_type = RocEventType::kCreateArrowsViewEvent;
     }
-    const std::string& GetTrackName() const { return "m_track_name"; }
 
 private:
     std::string m_track_name;

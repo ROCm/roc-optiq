@@ -29,6 +29,7 @@ enum class Colors
     kScrollBarColor,
     kHighlightChart,
     kRulerBgColor,
+    kArrowColor,
     kBorderColor,
     kSplitterColor,
     // Used to get the size of the enum, insert new colors before this line

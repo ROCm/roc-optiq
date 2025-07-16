@@ -4,6 +4,7 @@
 #include "rocprofvis_timeline_arrow.h"
 #include "spdlog/spdlog.h"
 #include <iostream>
+#include "rocprofvis_settings.h"
 
 namespace RocProfVis
 {
@@ -14,21 +15,21 @@ void
 TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
                       ImVec2 window, std::map<uint64_t, float> track_height_total)
 {
-    ImU32 color     = IM_COL32(0, 0, 210, 80);
+    ImU32 color     = Settings::GetInstance().GetColor(Colors::kArrowColor);
     float thickness = 2.0f;
     float head_size = 12.0f;
 
     float scroll_y = ImGui::GetScrollY();
     for(const auto& arrow : m_arrows_to_render)
     {
-        float start_x = (arrow.start_time - v_min_x) * pixels_per_ns;
-        float end_x   = (arrow.end_time - v_min_x) * pixels_per_ns;
+        float start_x_ns = (arrow.start_time_ns - v_min_x) * pixels_per_ns;
+        float end_x_ns   = (arrow.end_time_ns - v_min_x) * pixels_per_ns;
 
-        float start_y = track_height_total[arrow.start_track];
-        float end_y   = track_height_total[arrow.end_track];
+        float start_y_px = track_height_total[arrow.start_track_px];
+        float end_y_px   = track_height_total[arrow.end_track_px];
 
-        ImVec2 p_start = ImVec2(window.x + start_x, window.y + start_y - scroll_y);
-        ImVec2 p_end   = ImVec2(window.x + end_x, window.y + end_y - scroll_y);
+        ImVec2 p_start = ImVec2(window.x + start_x_ns, window.y + start_y_px - scroll_y);
+        ImVec2 p_end   = ImVec2(window.x + end_x_ns, window.y + end_y_px - scroll_y);
 
         if(p_start.x == p_end.x && p_start.y == p_end.y) continue;
 
@@ -57,7 +58,7 @@ TimelineArrow::TimelineArrow(DataProvider& data_provider)
 , m_add_arrow_token(-1)
 {
     auto scroll_to_arrow_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto evt = std::dynamic_pointer_cast<CreateArrowsView>(e);
+        auto evt = std::dynamic_pointer_cast<CreateArrowsViewEvent>(e);
         if(evt)
         {
             this->AddArrows();

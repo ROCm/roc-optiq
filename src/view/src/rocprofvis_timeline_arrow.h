@@ -12,10 +12,10 @@ namespace View
 
 struct TimelineArrowData
 {
-    double start_time;  // in ns
-    int    start_track;
-    double end_time;  // in ns
-    int    end_track;
+    double start_time_ns;  // in ns
+    int    start_track_px;
+    double end_time_ns;  // in ns
+    int    end_track_px;
 };
 
 class TimelineArrow

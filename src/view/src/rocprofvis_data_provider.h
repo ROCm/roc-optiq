@@ -61,7 +61,7 @@ typedef struct selected_event_t
 {
     uint64_t event_id;     // id of the selected event
     double   position_ns;  // position of the event in the timeline
-    int      track_id;     // id of the track where the event is located
+    uint64_t track_id;     // id of the track where the event is located
 } selected_event_t;
 
 typedef struct event_info_t

@@ -90,7 +90,7 @@ EventsView::RenderLeftPanel()
                 ImGui::Separator();
                 RenderEventFlowInfo(flowInfo.flow_data);
                 // Run arrows after flow because all info needed is now there.
-                auto evt = std::make_shared<CreateArrowsView>(
+                auto evt = std::make_shared<CreateArrowsViewEvent>(
                     static_cast<int>(RocEvents::kHandleUserArrowCreationEvent));
                 EventManager::GetInstance()->AddEvent(evt);
             }

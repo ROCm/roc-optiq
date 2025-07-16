@@ -17,8 +17,9 @@ namespace View
 
 constexpr int MIN_LABEL_WIDTH = 40;
 
-FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float zoom,
-                               float movement, double min_x, double max_x, float scale_x)
+FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, double zoom,
+                               double movement, double min_x, double max_x,
+                               double scale_x)
 : TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
 , m_request_random_color(true)
 , m_text_padding(ImVec2(4.0f, 2.0f))
@@ -94,7 +95,7 @@ FlameTrackItem::ExtractPointsFromData()
 
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
-                        rocprofvis_trace_event_t const& flame, float duration,
+                        rocprofvis_trace_event_t const& flame, double duration,
                         ImDrawList* draw_list, double raw_start_time)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
@@ -182,7 +183,7 @@ FlameTrackItem::RenderChart(float graph_width)
             container_pos.x +
             (flame.m_start_ts - (m_min_x + m_time_offset_ns)) * m_scale_x;
 
-        double normalized_duration = flame.m_duration * m_scale_x;
+        double normalized_duration = std::max(flame.m_duration * m_scale_x, 1.0);
         double normalized_end      = normalized_start + normalized_duration;
 
         ImVec2 start_position;

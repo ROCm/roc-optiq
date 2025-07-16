@@ -18,9 +18,9 @@ namespace View
 constexpr int MIN_LABEL_WIDTH = 40;
 
 FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, double zoom,
-                               double movement, double min_x, double max_x,
+                               double time_offset_ns, double min_x, double max_x,
                                double scale_x)
-: TrackItem(dp, id, name, zoom, movement, min_x, max_x, scale_x)
+: TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_request_random_color(true)
 , m_text_padding(ImVec2(4.0f, 2.0f))
 , m_flame_height(40.0f)

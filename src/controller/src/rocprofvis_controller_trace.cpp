@@ -3,6 +3,7 @@
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_array.h"
+#include "rocprofvis_controller_counter.h"
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_ext_data.h"
 #include "rocprofvis_controller_future.h"
@@ -390,6 +391,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                 {
                     std::map<uint64_t, Track*> queue_to_track;
                     std::map<uint64_t, Track*> thread_to_track;
+                    std::map<uint64_t, Track*> counter_to_track;
                     
                     if(kRocProfVisDmResultSuccess ==
                        rocprofvis_db_read_metadata_async(db, object2wait))
@@ -526,6 +528,16 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 uint64_t val = std::strtoull(
                                                     value.c_str(), &end, 10);
                                                 thread_to_track[val] = track;
+                                            }
+                                            else if(category == "PMC")
+                                            {
+                                                if(name == "id")
+                                                {
+                                                    char*    end = nullptr;
+                                                    uint64_t val = std::strtoull(
+                                                        value.c_str(), &end, 10);
+                                                    counter_to_track[val] = track;
+                                                }
                                             }
 
                                             spdlog::info("{} {} {}", category.c_str(),
@@ -2352,6 +2364,317 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             }
                                                         }
                                                         ROCPROFVIS_ASSERT(!stream);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                rocprofvis_dm_delete_table_at(m_dm_handle, table_id);
+                            }
+
+                            rocprofvis_db_future_free(future);
+                        }
+                    }
+
+                    if(result == kRocProfVisDmResultSuccess)
+                    {
+                        rocprofvis_db_future_t future =
+                            rocprofvis_db_future_alloc(nullptr);
+                        if(future)
+                        {
+                            std::string pmc_query = "SELECT id, guid, nid, pid, agent_id, target_arch, COALESCE(event_code,0) as event_code, COALESCE(instance_id,0) as instance_id, name, symbol, description, long_description, component, units, value_type, block, expression, is_constant, is_derived, extdata from rocpd_info_pmc;";
+                            rocprofvis_dm_table_id_t table_id = 0;
+                            auto dm_result = rocprofvis_db_execute_query_async(
+                                db, pmc_query.c_str(), "Fetch PMC info", future,
+                                &table_id);
+                            if(dm_result == kRocProfVisDmResultSuccess)
+                            {
+                                dm_result = rocprofvis_db_future_wait(future, UINT64_MAX);
+                            }
+
+                            if(dm_result == kRocProfVisDmResultSuccess)
+                            {
+                                uint64_t num_tables =
+                                    rocprofvis_dm_get_property_as_uint64(
+                                        m_dm_handle, kRPVDMNumberOfTablesUInt64, 0);
+                                if(num_tables > 0)
+                                {
+                                    rocprofvis_dm_table_t table =
+                                        rocprofvis_dm_get_property_as_handle(
+                                            m_dm_handle, kRPVDMTableHandleByID, table_id);
+                                    if(nullptr != table)
+                                    {
+                                        char* table_query =
+                                            rocprofvis_dm_get_property_as_charptr(
+                                                table, kRPVDMExtTableQueryCharPtr, 0);
+                                        uint64_t num_columns =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                table, kRPVDMNumberOfTableColumnsUInt64,
+                                                0);
+                                        uint64_t num_rows =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                table, kRPVDMNumberOfTableRowsUInt64, 0);
+                                        if(strcmp(table_query, pmc_query.c_str()) == 0)
+                                        {
+                                            std::vector<
+                                                rocprofvis_controller_counter_properties_t>
+                                                columns;
+                                            for(int i = 0; i < num_columns; i++)
+                                            {
+                                                char const* column_name =
+                                                    rocprofvis_dm_get_property_as_charptr(
+                                                        table,
+                                                        kRPVDMExtTableColumnNameCharPtrIndexed,
+                                                        i);
+
+                                                if(strcmp(column_name, "id") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterId);
+                                                }
+                                                else if(strcmp(column_name, "nid") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterNode);
+                                                }
+                                                else if(strcmp(column_name, "pid") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterProcess);
+                                                }
+                                                else if(strcmp(column_name, "agent_id") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterProcessor);
+                                                }
+                                                else if(strcmp(column_name, "name") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterName);
+                                                }
+                                                else if(strcmp(column_name, "symbol") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterSymbol);
+                                                }
+                                                else if(strcmp(column_name, "description") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterDescription);
+                                                }
+                                                else if(strcmp(column_name, "long_description") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterExtendedDesc);
+                                                }
+                                                else if(strcmp(column_name, "component") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterComponent);
+                                                }
+                                                else if(strcmp(column_name, "units") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterUnits);
+                                                }
+                                                else if(strcmp(column_name, "value_type") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterValueType);
+                                                }
+                                                else if(strcmp(column_name, "block") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterBlock);
+                                                }
+                                                else if(strcmp(column_name, "expression") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterExpression);
+                                                }
+                                                else if(strcmp(column_name, "guid") == 0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterGuid);
+                                                }
+                                                else if(strcmp(column_name, "extdata") ==
+                                                        0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterExtData);
+                                                }
+                                                else if(strcmp(column_name, "target_arch") ==
+                                                        0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterTargetArch);
+                                                }
+                                                else if(strcmp(column_name, "event_code") ==
+                                                        0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterEventCode);
+                                                }
+                                                else if(strcmp(column_name, "instance_id") ==
+                                                        0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterInstanceId);
+                                                }
+                                                else if(strcmp(column_name, "is_constant") ==
+                                                        0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterIsConstant);
+                                                }
+                                                else if(strcmp(column_name, "is_derived") ==
+                                                        0)
+                                                {
+                                                    columns.push_back(
+                                                        kRPVControllerCounterIsDerived);
+                                                }
+                                                else
+                                                {
+                                                    columns.push_back((
+                                                        rocprofvis_controller_counter_properties_t) 0);
+                                                }
+                                            }
+                                            for(int i = 0; i < num_rows; i++)
+                                            {
+                                                rocprofvis_dm_table_row_t table_row =
+                                                    rocprofvis_dm_get_property_as_handle(
+                                                        table,
+                                                        kRPVDMExtTableRowHandleIndexed,
+                                                        i);
+                                                if(table_row != nullptr)
+                                                {
+                                                    uint64_t num_cells =
+                                                        rocprofvis_dm_get_property_as_uint64(
+                                                            table_row,
+                                                            kRPVDMNumberOfTableRowCellsUInt64,
+                                                            0);
+                                                    if(num_cells == num_columns)
+                                                    {
+                                                        Counter* counter = new Counter;
+
+                                                        std::vector<std::string> row;
+                                                        for(int j = 0; j < num_cells; j++)
+                                                        {
+                                                            char const* prop_string =
+                                                                rocprofvis_dm_get_property_as_charptr(
+                                                                    table_row,
+                                                                    kRPVDMExtTableRowCellValueCharPtrIndexed,
+                                                                    j);
+                                                            if(columns[j] ==
+                                                               (rocprofvis_controller_counter_properties_t) 0)
+                                                            {
+                                                                continue;
+                                                            }
+                                                            else if(
+                                                                columns[j] ==
+                                                                    kRPVControllerCounterId ||
+                                                                columns[j] ==
+                                                                    kRPVControllerCounterEventCode ||
+                                                                columns[j] ==
+                                                                    kRPVControllerCounterInstanceId ||
+                                                                columns[j] ==
+                                                                    kRPVControllerCounterIsConstant ||
+                                                                columns[j] ==
+                                                                    kRPVControllerCounterIsDerived)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+                                                                counter->SetUInt64(
+                                                                    columns[j], 0, val);
+
+                                                                if(columns[j] ==
+                                                                   kRPVControllerCounterId)
+                                                                {
+                                                                    Track* t =
+                                                                        counter_to_track
+                                                                            [val];
+                                                                    if(t)
+                                                                    {
+                                                                        counter->SetObject(
+                                                                            kRPVControllerCounterTrack,
+                                                                            0,
+                                                                            (rocprofvis_handle_t*)
+                                                                                t);
+
+                                                                        t->SetObject(
+                                                                            kRPVControllerTrackCounter,
+                                                                            0,
+                                                                            (rocprofvis_handle_t*)
+                                                                                counter);
+                                                                    }
+                                                                }
+                                                            }
+                                                            else if(columns[j] ==
+                                                                    kRPVControllerCounterNode)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+                                                                Node* n = nodes[val];
+                                                                ROCPROFVIS_ASSERT(n);
+                                                                counter->SetObject(
+                                                                    kRPVControllerCounterNode,
+                                                                    0, (rocprofvis_handle_t*)n);
+                                                            }
+                                                            else if (columns[j] ==
+                                                                kRPVControllerCounterProcess)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+                                                                Process* p = processes[val];
+                                                                ROCPROFVIS_ASSERT(p);
+                                                                counter->SetObject(
+                                                                    kRPVControllerCounterProcess,
+                                                                    0,
+                                                                    (rocprofvis_handle_t*)
+                                                                        p);
+
+                                                                uint64_t count = 0;
+                                                                p->GetUInt64(kRPVControllerProcessNumCounters, 0, &count);
+                                                                p->SetUInt64(kRPVControllerProcessNumCounters, 0, count+1);
+                                                                p->SetObject(kRPVControllerProcessCounterIndexed, count, (rocprofvis_handle_t*)counter);
+                                                            }
+                                                            else if(
+                                                                columns[j] ==
+                                                                kRPVControllerCounterProcessor)
+                                                            {
+                                                                char*    end = nullptr;
+                                                                uint64_t val =
+                                                                    std::strtoull(
+                                                                        prop_string, &end,
+                                                                        10);
+                                                                Processor* p =
+                                                                    processors[val];
+                                                                ROCPROFVIS_ASSERT(p);
+                                                                counter->SetObject(
+                                                                    kRPVControllerCounterProcessor,
+                                                                    0,
+                                                                    (rocprofvis_handle_t*)
+                                                                        p);
+                                                            }
+                                                            else
+                                                            {
+                                                                counter->SetString(
+                                                                    columns[j], 0,
+                                                                    prop_string,
+                                                                    strlen(prop_string));
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }

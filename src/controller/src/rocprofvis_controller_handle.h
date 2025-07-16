@@ -3,6 +3,7 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -30,7 +31,12 @@ public:
     virtual rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) = 0;
 
     virtual Handle* GetContext() { return nullptr; }
+
+protected:
+    rocprofvis_result_t GetStringImpl(char* value, uint32_t* length, char const* data, uint32_t data_len);
 };
 
 }
 }
+
+#define GetStdStringImpl(value, length, data) GetStringImpl(value, length, data.c_str(), data.length())

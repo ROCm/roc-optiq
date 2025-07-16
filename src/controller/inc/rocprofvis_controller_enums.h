@@ -98,7 +98,9 @@ typedef enum rocprofvis_controller_object_type_t
     // Queue object
     kRPVControllerObjectTypeQueue = 21,
     // Stream object
-    kRPVControllerObjectTypeStream = 22
+    kRPVControllerObjectTypeStream = 22,
+    // Counter metadata object
+    kRPVControllerObjectTypeCounter = 23
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -329,6 +331,31 @@ typedef enum rocprofvis_controller_queue_properties_t
     kRPVControllerQueueTrack     = 0xF3000007,
 } rocprofvis_controller_queue_properties_t;
 
+typedef enum rocprofvis_controller_counter_properties_t
+{
+    kRPVControllerCounterId = 0xF5000000,
+    kRPVControllerCounterNode = 0xF5000001,
+    kRPVControllerCounterProcess = 0xF5000002,
+    kRPVControllerCounterProcessor = 0xF5000003,
+    kRPVControllerCounterName = 0xF5000004,
+    kRPVControllerCounterSymbol = 0xF5000005,
+    kRPVControllerCounterDescription = 0xF5000006,
+    kRPVControllerCounterExtendedDesc = 0xF5000007,
+    kRPVControllerCounterComponent = 0xF5000008,
+    kRPVControllerCounterUnits = 0xF5000009,
+    kRPVControllerCounterValueType = 0xF500000A,
+    kRPVControllerCounterBlock = 0xF500000B,
+    kRPVControllerCounterExpression = 0xF500000C,
+    kRPVControllerCounterGuid = 0xF500000D,
+    kRPVControllerCounterExtData = 0xF500000E,
+    kRPVControllerCounterTargetArch = 0xF500000F,
+    kRPVControllerCounterEventCode = 0xF5000010,
+    kRPVControllerCounterInstanceId = 0xF5000011,
+    kRPVControllerCounterIsConstant = 0xF5000012,
+    kRPVControllerCounterIsDerived = 0xF5000013,
+    kRPVControllerCounterTrack = 0xF5000014,
+} rocprofvis_controller_counter_properties_t;
+
 typedef enum rocprofvis_controller_stream_properties_t
 {
     kRPVControllerStreamId           = 0xF4000000,
@@ -360,6 +387,8 @@ typedef enum rocprofvis_controller_process_properties_t
     kRPVControllerProcessThreadIndexed = 0xF100000D,
     kRPVControllerProcessQueueIndexed = 0xF100000E,
     kRPVControllerProcessStreamIndexed = 0xF100000F,
+    kRPVControllerProcessNumCounters = 0xF1000010,
+    kRPVControllerProcessCounterIndexed = 0xF1000011,
 } rocprofvis_controller_process_properties_t;
 /* JSON: RPVProcess
 {
@@ -415,6 +444,8 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackThread = 0x30000010,
     // The GPU queue that the track represents - can be NULL
     kRPVControllerTrackQueue = 0x30000011,
+    // The HW counter that the track represents - can be NULL
+    kRPVControllerTrackCounter = 0x30000012,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {

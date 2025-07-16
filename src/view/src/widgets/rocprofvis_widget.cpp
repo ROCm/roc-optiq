@@ -411,8 +411,11 @@ TabContainer::Render()
                 {
                     p_open = nullptr;
                 }
+                bool tab_visible = false;
+                ImGui::PushID(tab.m_id.c_str());
                 if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags))
                 {
+                    tab_visible = true;
                     // show tooltip for the active tab if header is hovered
                     if(m_allow_tool_tips && ImGui::IsItemHovered())
                     {
@@ -426,8 +429,9 @@ TabContainer::Render()
                     }
                     ImGui::EndTabItem();
                 }
+                ImGui::PopID();
                 // show tooltip for inactive tabs if header is hovered
-                else if(ImGui::IsItemHovered())
+                if(!tab_visible && ImGui::IsItemHovered())
                 {
                     if(m_allow_tool_tips)
                     {
@@ -463,6 +467,11 @@ TabContainer::Render()
         if(index_to_remove != -1)
         {
             RemoveTab(index_to_remove);
+            if(m_active_tab_index == index_to_remove)
+            {
+                // If the active tab was closed, reset to -1
+                m_active_tab_index = -1;
+            }   
         }
     }
     ImGui::EndChild();

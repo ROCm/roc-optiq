@@ -15,6 +15,7 @@ namespace Controller
 class Thread;
 class Queue;
 class Stream;
+class Counter;
 
 class Process : public Handle
 {
@@ -47,6 +48,7 @@ private:
     std::vector<Thread*> m_threads;
     std::vector<Queue*>  m_queues;
     std::vector<Stream*> m_streams;
+    std::vector<Counter*> m_counters;
     std::string          m_command;
     std::string          m_environment;
     std::string          m_ext_data;

@@ -4,6 +4,7 @@
 #include "rocprofvis_controller_thread.h"
 #include "rocprofvis_controller_queue.h"
 #include "rocprofvis_controller_stream.h"
+#include "rocprofvis_controller_counter.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_controller_reference.h"
 
@@ -18,10 +19,32 @@ typedef Reference<rocprofvis_controller_queue_t, Queue, kRPVControllerObjectType
     QueueRef;
 typedef Reference<rocprofvis_controller_stream_t, Stream, kRPVControllerObjectTypeStream>
     StreamRef;
+typedef Reference<rocprofvis_controller_counter_t, Counter, kRPVControllerObjectTypeCounter>
+    CounterRef;
 
-Process::Process() {}
+Process::Process()
+{
+}
 
-Process::~Process() {}
+Process::~Process()
+{
+    for (auto* thread : m_threads)
+    {
+        delete thread;
+    }
+    for(auto* queue : m_queues)
+    {
+        delete queue;
+    }
+    for(auto* stream : m_streams)
+    {
+        delete stream;
+    }
+    for(auto* counter : m_counters)
+    {
+        delete counter;
+    }
+}
 
 rocprofvis_controller_object_type_t
 Process::GetType(void)
@@ -73,6 +96,12 @@ Process::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* val
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerProcessNumCounters:
+            {
+                *value = m_counters.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerProcessInitTime:
             case kRPVControllerProcessFinishTime:
             case kRPVControllerProcessStartTime:
@@ -83,6 +112,7 @@ Process::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* val
             case kRPVControllerProcessThreadIndexed:
             case kRPVControllerProcessQueueIndexed:
             case kRPVControllerProcessStreamIndexed:
+            case kRPVControllerProcessCounterIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -129,6 +159,7 @@ Process::GetDouble(rocprofvis_property_t property, uint64_t index, double* value
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerProcessNumCounters:
             case kRPVControllerProcessId:
             case kRPVControllerProcessNodeId:
             case kRPVControllerProcessParentId:
@@ -141,6 +172,7 @@ Process::GetDouble(rocprofvis_property_t property, uint64_t index, double* value
             case kRPVControllerProcessThreadIndexed:
             case kRPVControllerProcessQueueIndexed:
             case kRPVControllerProcessStreamIndexed:
+            case kRPVControllerProcessCounterIndexed:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -195,6 +227,19 @@ Process::GetObject(rocprofvis_property_t property, uint64_t index,
                 if(index < m_streams.size())
                 {
                     *value = (rocprofvis_handle_t*) m_streams[index];
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerProcessCounterIndexed:
+            {
+                if(index < m_counters.size())
+                {
+                    *value = (rocprofvis_handle_t*) m_counters[index];
                     result = kRocProfVisResultSuccess;
                 }
                 else
@@ -292,6 +337,8 @@ Process::GetString(rocprofvis_property_t property, uint64_t index, char* value,
         case kRPVControllerProcessThreadIndexed:
         case kRPVControllerProcessQueueIndexed:
         case kRPVControllerProcessStreamIndexed:
+        case kRPVControllerProcessNumCounters:
+        case kRPVControllerProcessCounterIndexed:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -356,6 +403,16 @@ Process::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t valu
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerProcessNumCounters:
+        {
+            if(value > m_counters.size())
+            {
+                m_counters.resize(value);
+            }
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerProcessCounterIndexed:
         case kRPVControllerProcessInitTime:
         case kRPVControllerProcessFinishTime:
         case kRPVControllerProcessStartTime:
@@ -409,6 +466,8 @@ Process::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
             result     = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerProcessNumCounters:
+        case kRPVControllerProcessCounterIndexed:
         case kRPVControllerProcessId:
         case kRPVControllerProcessNodeId:
         case kRPVControllerProcessParentId:
@@ -493,6 +552,24 @@ Process::SetObject(rocprofvis_property_t property, uint64_t index,
             }
             break;
         }
+        case kRPVControllerProcessCounterIndexed:
+        {
+            CounterRef ref(value);
+            if(ref.IsValid())
+            {
+                if(index < m_counters.size())
+                {
+                    m_counters[index] = ref.Get();
+                    result           = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+            }
+            break;
+        }
+        case kRPVControllerProcessNumCounters:
         case kRPVControllerProcessId:
         case kRPVControllerProcessNodeId:
         case kRPVControllerProcessParentId:
@@ -546,6 +623,8 @@ Process::SetString(rocprofvis_property_t property, uint64_t index, char const* v
                 result     = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerProcessNumCounters:
+            case kRPVControllerProcessCounterIndexed:
             case kRPVControllerProcessId:
             case kRPVControllerProcessNodeId:
             case kRPVControllerProcessParentId:

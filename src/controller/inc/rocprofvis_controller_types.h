@@ -28,3 +28,4 @@ typedef rocprofvis_handle_t rocprofvis_controller_plot_t;
 typedef rocprofvis_handle_t rocprofvis_controller_thread_t;
 typedef rocprofvis_handle_t rocprofvis_controller_queue_t;
 typedef rocprofvis_handle_t rocprofvis_controller_stream_t;
+typedef rocprofvis_handle_t rocprofvis_controller_counter_t;

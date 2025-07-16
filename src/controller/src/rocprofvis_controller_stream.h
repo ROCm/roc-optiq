@@ -12,6 +12,8 @@ namespace RocProfVis
 namespace Controller
 {
 
+class Node;
+class Process;
 class Processor;
 class Queue;
 class Track;
@@ -47,11 +49,11 @@ private:
     std::string         m_name;
     std::string         m_ext_data;
     std::vector<Queue*> m_queues;
+    Node*               m_node;
+    Process*            m_process;
     Processor*          m_processor;
     Track*              m_track;
     uint32_t            m_id;
-    uint32_t            m_node_id;
-    uint32_t            m_process_id;
 };
 
 }

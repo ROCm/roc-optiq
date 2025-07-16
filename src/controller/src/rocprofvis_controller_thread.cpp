@@ -2,6 +2,8 @@
 
 #include "rocprofvis_controller_thread.h"
 #include "rocprofvis_controller_track.h"
+#include "rocprofvis_controller_node.h"
+#include "rocprofvis_controller_process.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
 
@@ -10,17 +12,19 @@ namespace RocProfVis
 namespace Controller
 {
 
+typedef Reference<rocprofvis_controller_process_t, Process, kRPVControllerObjectTypeProcess> ProcessRef;
+typedef Reference<rocprofvis_controller_node_t, Node, kRPVControllerObjectTypeNode> NodeRef;
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack>
     TrackRef;
 
 Thread::Thread()
 : m_start_time(0)
 , m_end_time(0)
+, m_node(nullptr)
+, m_process(nullptr)
 , m_track(nullptr)
 , m_id(0)
 , m_tid(0)
-, m_node_id(0)
-, m_process_id(0)
 , m_parent_id(0)
 {}
 
@@ -46,18 +50,6 @@ Thread::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* valu
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerThreadNodeId:
-            {
-                *value = m_node_id;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerThreadProcessId:
-            {
-                *value = m_process_id;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
             case kRPVControllerThreadParentId:
             {
                 *value = m_parent_id;
@@ -70,6 +62,8 @@ Thread::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* valu
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerThreadNode:
+            case kRPVControllerThreadProcess:
             case kRPVControllerThreadName:
             case kRPVControllerThreadExtData:
             case kRPVControllerThreadStartTime:
@@ -110,8 +104,8 @@ Thread::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
                 break;
             }
             case kRPVControllerThreadId:
-            case kRPVControllerThreadNodeId:
-            case kRPVControllerThreadProcessId:
+            case kRPVControllerThreadNode:
+            case kRPVControllerThreadProcess:
             case kRPVControllerThreadParentId:
             case kRPVControllerThreadTid:
             case kRPVControllerThreadName:
@@ -140,6 +134,18 @@ Thread::GetObject(rocprofvis_property_t property, uint64_t index,
     {
         switch(property)
         {
+            case kRPVControllerThreadNode:
+            {
+                *value = (rocprofvis_handle_t*) m_node;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerThreadProcess:
+            {
+                *value = (rocprofvis_handle_t*) m_process;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerThreadTrack:
             {
                 *value = (rocprofvis_handle_t*) m_track;
@@ -147,8 +153,6 @@ Thread::GetObject(rocprofvis_property_t property, uint64_t index,
                 break;
             }
             case kRPVControllerThreadId:
-            case kRPVControllerThreadNodeId:
-            case kRPVControllerThreadProcessId:
             case kRPVControllerThreadParentId:
             case kRPVControllerThreadTid:
             case kRPVControllerThreadName:
@@ -205,8 +209,8 @@ Thread::GetString(rocprofvis_property_t property, uint64_t index, char* value,
             break;
         }
         case kRPVControllerThreadId:
-        case kRPVControllerThreadNodeId:
-        case kRPVControllerThreadProcessId:
+        case kRPVControllerThreadNode:
+        case kRPVControllerThreadProcess:
         case kRPVControllerThreadParentId:
         case kRPVControllerThreadTid:
         case kRPVControllerThreadStartTime:
@@ -237,18 +241,6 @@ Thread::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerThreadNodeId:
-        {
-            m_node_id = value;
-            result    = kRocProfVisResultSuccess;
-            break;
-        }
-        case kRPVControllerThreadProcessId:
-        {
-            m_process_id = value;
-            result       = kRocProfVisResultSuccess;
-            break;
-        }
         case kRPVControllerThreadParentId:
         {
             m_parent_id = value;
@@ -261,6 +253,8 @@ Thread::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerThreadNode:
+        case kRPVControllerThreadProcess:
         case kRPVControllerThreadName:
         case kRPVControllerThreadExtData:
         case kRPVControllerThreadStartTime:
@@ -298,8 +292,8 @@ Thread::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
             break;
         }
         case kRPVControllerThreadId:
-        case kRPVControllerThreadNodeId:
-        case kRPVControllerThreadProcessId:
+        case kRPVControllerThreadNode:
+        case kRPVControllerThreadProcess:
         case kRPVControllerThreadParentId:
         case kRPVControllerThreadTid:
         case kRPVControllerThreadName:
@@ -337,9 +331,27 @@ Thread::SetObject(rocprofvis_property_t property, uint64_t index,
                 }
                 break;
             }
+            case kRPVControllerThreadNode:
+            {
+                NodeRef ref(value);
+                if (ref.IsValid())
+                {
+                    m_node = ref.Get();
+                    result  = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerThreadProcess:
+            {
+                ProcessRef ref(value);
+                if (ref.IsValid())
+                {
+                    m_process = ref.Get();
+                    result  = kRocProfVisResultSuccess;
+                }
+                break;
+            }
             case kRPVControllerThreadId:
-            case kRPVControllerThreadNodeId:
-            case kRPVControllerThreadProcessId:
             case kRPVControllerThreadParentId:
             case kRPVControllerThreadTid:
             case kRPVControllerThreadName:
@@ -380,8 +392,8 @@ Thread::SetString(rocprofvis_property_t property, uint64_t index, char const* va
             break;
         }
         case kRPVControllerThreadId:
-        case kRPVControllerThreadNodeId:
-        case kRPVControllerThreadProcessId:
+        case kRPVControllerThreadNode:
+        case kRPVControllerThreadProcess:
         case kRPVControllerThreadParentId:
         case kRPVControllerThreadTid:
         case kRPVControllerThreadStartTime:

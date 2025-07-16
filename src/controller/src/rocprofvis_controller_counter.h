@@ -13,13 +13,14 @@ namespace Controller
 
 class Node;
 class Process;
+class Processor;
 class Track;
 
-class Thread : public Handle
+class Counter : public Handle
 {
 public:
-    Thread();
-    virtual ~Thread();
+    Counter();
+    virtual ~Counter();
 
     rocprofvis_controller_object_type_t GetType(void) override;
 
@@ -43,16 +44,27 @@ public:
                                   char const* value, uint32_t length) final;
 
 private:
+    Node* m_node;
+    Process* m_process;
+    Processor* m_processor;
+    Track* m_track;
     std::string m_name;
-    std::string m_ext_data;
-    Node*       m_node;
-    Process*    m_process;
-    Track*      m_track;
-    double      m_start_time;
-    double      m_end_time;
+    std::string m_symbol;
+    std::string m_description;
+    std::string m_long_description;
+    std::string m_component;
+    std::string m_units;
+    std::string m_value_type;
+    std::string m_block;
+    std::string m_expression;
+    std::string m_guid;
+    std::string m_extdata;
+    std::string m_target_arch;
     uint32_t    m_id;
-    uint32_t    m_tid;
-    uint32_t    m_parent_id;
+    uint32_t    m_event_code;
+    uint32_t    m_instance_id;
+    bool        m_is_constant;
+    bool        m_is_derived;
 };
 
 }

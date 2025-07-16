@@ -19,6 +19,7 @@ class Array;
 class Thread;
 class Queue;
 class Trace;
+class Counter;
 
 class Track : public Handle
 {
@@ -60,6 +61,7 @@ private:
     rocprofvis_dm_track_t m_dm_handle;
     Thread* m_thread;
     Queue* m_queue;
+    Counter* m_counter;
     Trace* m_ctx;
 
 private:

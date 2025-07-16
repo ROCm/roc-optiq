@@ -136,11 +136,20 @@ JobSystem& JobSystem::Get()
 
 Job* JobSystem::IssueJob(JobFunction function)
 {
-    Job* job = new Job(function);
-    if(job && EnqueueJob(job) != kRocProfVisResultSuccess)
+    Job* job = nullptr;
+    try
     {
-        delete job;
-        job = nullptr;
+        job = new Job(function);
+        if(EnqueueJob(job) != kRocProfVisResultSuccess)
+        {
+            spdlog::error("Failed to enqueue job");
+            delete job;
+            job = nullptr;
+        }
+    }
+    catch (std::exception)
+    {
+        spdlog::error("Failed to allocate job");
     }
     ROCPROFVIS_ASSERT(job);
     return job;

@@ -158,7 +158,7 @@ void GenerateRandomSlice(   rocprofvis_dm_trace_t trace,
         start_time = start_time + pie1 * tenth_time;
         end_time = start_time +  pie2 * tenth_time;
     }
-    PrintHeader("Testing slice for %ld ns and %ld tracks", end_time - start_time, count);
+    PrintHeader("Testing slice for %llu ns and %u tracks", end_time - start_time, (uint32_t)count);
     spdlog::info("Track indexes: [");
     for (int i=0; i < count; i++) spdlog::info("{}", tracks[i]);
     spdlog::info("]");
@@ -398,7 +398,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                         uint64_t num_ext_data = rocprofvis_dm_get_property_as_uint64(
                             track, kRPVDMNumberOfTrackExtDataRecordsUInt64, 0);
                         PrintHeader(
-                            "Track id=%ld node=%ld category=%s process=%s subprocess=%s",
+                            "Track id=%llu node=%llu category=%s process=%s subprocess=%s",
                             id, node_id, track_category_name, track_process_name,
                             track_sub_process_name);
 
@@ -527,7 +527,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                         if(flowtrace != nullptr)
                                         {
                                             PrintHeader(
-                                                "Data flow trace for event id = %ld",
+                                                "Data flow trace for event id = %llu",
                                                 event_id.bitfield.event_id);
                                             uint64_t num_endpoints =
                                                 rocprofvis_dm_get_property_as_uint64(
@@ -580,7 +580,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                         REQUIRE(stacktrace != nullptr);
                                         if(stacktrace != nullptr)
                                         {
-                                            PrintHeader("Stack trace for event id = %ld",
+                                            PrintHeader("Stack trace for event id = %llu",
                                                         event_id.bitfield.event_id);
                                             uint64_t num_frames =
                                                 rocprofvis_dm_get_property_as_uint64(
@@ -636,7 +636,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                         if(extdata != nullptr)
                                         {
                                             PrintHeader(
-                                                "Extended data for event id = %ld",
+                                                "Extended data for event id = %llu",
                                                 event_id.bitfield.event_id);
                                             uint64_t num_records =
                                                 rocprofvis_dm_get_property_as_uint64(

@@ -156,20 +156,22 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
         for(uint32_t i = index;
             (result == kRocProfVisResultSuccess) && i < index + num_records; i++)
         {
-            Array* row_array = new Array();
-            if(row_array)
+            try
             {
-                auto& row_vec = row_array->GetVector();
-                row_vec.resize(m_rows[i].size());
-                for (uint32_t j = 0; j < m_rows[i].size(); j++)
+                Array* row_array = new Array();
                 {
-                    row_vec[j].SetType(m_rows[i][j].GetType());
-                    row_vec[j] = m_rows[i][j];
+                    auto& row_vec = row_array->GetVector();
+                    row_vec.resize(m_rows[i].size());
+                    for (uint32_t j = 0; j < m_rows[i].size(); j++)
+                    {
+                        row_vec[j].SetType(m_rows[i][j].GetType());
+                        row_vec[j] = m_rows[i][j];
+                    }
+                    result = array.SetObject(kRPVControllerArrayEntryIndexed, i - index,
+                                    (rocprofvis_handle_t*)row_array);
                 }
-                result = array.SetObject(kRPVControllerArrayEntryIndexed, i - index,
-                                (rocprofvis_handle_t*)row_array);
             }
-            else
+            catch(const std::exception&)
             {
                 result = kRocProfVisResultMemoryAllocError;
             }

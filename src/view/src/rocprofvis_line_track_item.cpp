@@ -179,8 +179,8 @@ LineTrackItem::LineTrackRender(float graph_width)
     if(show_tooltip == true)
     {
         ImGui::BeginTooltip();
-        ImGui::Text(("X Value: " + std::to_string(tooltip_x)).c_str());
-        ImGui::Text((("Y Value: " + std::to_string(tooltip_y)).c_str()));
+        ImGui::Text("X Value: %f", tooltip_x);
+        ImGui::Text("Y Value: %f", tooltip_y);
         ImGui::EndTooltip();
     }
     ImGui::EndChild();
@@ -236,8 +236,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
     if(show_tooltip == true)
     {
         ImGui::BeginTooltip();
-        ImGui::Text(("X Value: " + std::to_string(tooltip_x)).c_str());
-        ImGui::Text((("Y Value: " + std::to_string(tooltip_y)).c_str()));
+        ImGui::Text("X Value: %f", tooltip_x);
+        ImGui::Text("Y Value: %f", tooltip_y);
         ImGui::EndTooltip();
     }
     ImGui::EndChild();
@@ -416,13 +416,13 @@ LineTrackItem::RenderMetaAreaScale(ImVec2& container_size)
     ImDrawList* draw_list         = ImGui::GetWindowDrawList();
     ImVec2      child_window_size = ImGui::GetWindowSize();
 
-    char max_y_print[32];
-    std::sprintf(max_y_print, "%.1f", m_max_y);
-    ImVec2 text_size = ImGui::CalcTextSize(max_y_print);
+    char text_buffer[32];
+    snprintf(text_buffer, 32, "%29.1f", m_max_y);
+    ImVec2 text_size = ImGui::CalcTextSize(text_buffer);
 
     ImGui::SetCursorPos(ImVec2(child_window_size.x - (text_size.x + m_metadata_padding.x),
                                ImGui::GetStyle().WindowPadding.y));
-    ImGui::Text(max_y_print);
+    ImGui::Text("%s", text_buffer);
 
     if(ImGui::IsItemVisible())
     {
@@ -433,14 +433,14 @@ LineTrackItem::RenderMetaAreaScale(ImVec2& container_size)
         m_is_in_view_vertical = false;
     }
 
-    char min_y_print[32];
-    std::sprintf(min_y_print, "%.1f", m_min_y);
-    text_size = ImGui::CalcTextSize(max_y_print);
-
+    snprintf(text_buffer, 32, "%29.1f", m_min_y);
+    text_size = ImGui::CalcTextSize(text_buffer);
+    
     ImGui::SetCursorPos(
         ImVec2(child_window_size.x - (text_size.x + m_metadata_padding.x),
                child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
-    ImGui::Text(min_y_print);
+    
+    ImGui::Text("%s", text_buffer);
 
     ImGui::SetCursorPos(ImVec2(0, 0));
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();

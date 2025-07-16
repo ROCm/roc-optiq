@@ -4,12 +4,9 @@ project(datamodel VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/database/sqlite3/sqlite3.c
-   COMMAND cmake -E tar xzf sqlite3.zip WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/database/sqlite3/
-   COMMENT "Unpacking sqlite3.zip" VERBATIM)
-set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/database/sqlite3/sqlite3.c PROPERTIES GENERATED TRUE)
+add_subdirectory(../../thirdparty/sqlite3 thirdparty/sqlite3)
 
-include_directories(inc ${CMAKE_CURRENT_SOURCE_DIR}/src/common ${CMAKE_CURRENT_SOURCE_DIR}/src/database ${CMAKE_CURRENT_SOURCE_DIR}/src/database/sqlite3 ${CMAKE_CURRENT_SOURCE_DIR}/src/datamodel )
+include_directories(inc ${CMAKE_CURRENT_SOURCE_DIR}/src/common ${CMAKE_CURRENT_SOURCE_DIR}/src/database ${CMAKE_CURRENT_SOURCE_DIR}/src/datamodel )
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
@@ -35,13 +32,13 @@ cmake_print_variables(CMAKE_C_FLAGS)
 file(GLOB COMMON_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.cpp")
 file(GLOB DATAMODEL_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/datamodel/*.cpp")
 file(GLOB DATABASE_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/database/*.cpp")
-set(SQLITE3_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/database/sqlite3/sqlite3.c")
 file(GLOB MAIN_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/test/*.cpp")
 
 
-add_library(${PROJECT_NAME} ${DATAMODEL_SRC} ${DATABASE_SRC} ${DATABASE_SRC} ${COMMON_SRC} ${SQLITE3_SRC} )
+add_library(${PROJECT_NAME} ${DATAMODEL_SRC} ${DATABASE_SRC} ${DATABASE_SRC} ${COMMON_SRC} )
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
 target_link_libraries(${PROJECT_NAME} rocprof-visualizer-core)
+target_link_libraries(${PROJECT_NAME} sqlite3)
 target_link_libraries(${PROJECT_NAME} spdlog)
 
 add_executable(${PROJECT_NAME}-test ${MAIN_SRC} )
@@ -49,6 +46,7 @@ target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_D
 target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}-test rocprof-visualizer-core)
 target_link_libraries(${PROJECT_NAME}-test spdlog)
+target_link_libraries(${PROJECT_NAME}-test sqlite3)
 
 add_executable(${PROJECT_NAME}-basic-tests src/tests/basic_tests.cpp)
 target_include_directories(${PROJECT_NAME}-basic-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
@@ -56,5 +54,6 @@ target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE ${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE Catch2::Catch2WithMain)
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE rocprof-visualizer-core)
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE spdlog)
+target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE sqlite3)
 add_test(NAME ${PROJECT_NAME}-basic-tests COMMAND ${PROJECT_NAME}-basic-tests)
 set_tests_properties(${PROJECT_NAME}-basic-tests PROPERTIES RUN_SERIAL ON)

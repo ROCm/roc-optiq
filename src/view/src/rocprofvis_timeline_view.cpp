@@ -446,11 +446,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     {
         float cursor_screen_percentage =
             (mouse_position.x - window_position.x) / m_graph_size.x;
-        char   text[20];
         double scrubber_position =
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
-        sprintf(text, "%.0f", scrubber_position);
+        char   text[20];
+        snprintf(text, 20, "%17.0f", scrubber_position);
         ImVec2 label_size = ImGui::CalcTextSize(text);
 
         constexpr float label_padding = 4.0f;

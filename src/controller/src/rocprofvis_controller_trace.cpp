@@ -56,17 +56,33 @@ Trace::Trace()
 , m_event_table(nullptr)
 , m_sample_table(nullptr)
 , m_dm_handle(nullptr)
+, m_mem_mgmt(nullptr)
 #ifdef COMPUTE_UI_SUPPORT
 , m_compute_trace(nullptr)
 #endif
 {
-    m_event_table = new SystemTable(0);
-    ROCPROFVIS_ASSERT(m_event_table);
+    
+}
 
-    m_sample_table = new SystemTable(1);
-    ROCPROFVIS_ASSERT(m_sample_table);
+rocprofvis_result_t Trace::Init()
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    try
+    {
+        m_event_table = new SystemTable(0);
 
-    m_mem_mgmt = new MemoryManager(m_id);
+        m_sample_table = new SystemTable(1);
+
+        m_mem_mgmt = new MemoryManager(m_id);
+
+        result = kRocProfVisResultSuccess;
+    }
+    catch(const std::exception&)
+    {
+        spdlog::error("Failed to allocate trace tables & memory manager");
+        result = kRocProfVisResultMemoryAllocError;
+    }
+    return result;
 }
 
 Trace::~Trace()
@@ -101,9 +117,9 @@ Trace::GetMemoryManager(){
 #ifdef JSON_SUPPORT
 rocprofvis_result_t Trace::LoadJson(char const* const filename) {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    m_timeline                 = new Timeline(0);
-    if(m_timeline)
+    try
     {
+        m_timeline                 = new Timeline(0);
         rocprofvis_controller_json_trace_data_t trace_object;
         std::future<bool>                       future =
             rocprofvis_controller_json_trace_async_load(filename, trace_object);
@@ -134,7 +150,6 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                : kRPVControllerTrackTypeSamples;
                             Graph* graph = nullptr;
                             Track* track = new Track(type, track_id++, nullptr, this);
-                            if(track)
                             {
                                 track->SetString(kRPVControllerTrackName, 0,
                                                  thread.first.c_str(),
@@ -199,7 +214,6 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                 graph = new Graph(this,
                                                     kRPVControllerGraphTypeFlame,
                                                     graph_id++);
-                                                if(graph)
                                                 {
                                                     result = graph->SetObject(
                                                         kRPVControllerGraphTrack, 0,
@@ -224,11 +238,6 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                             delete graph;
                                                         }
                                                     }
-                                                }
-                                                else
-                                                {
-                                                    result =
-                                                        kRocProfVisResultMemoryAllocError;
                                                 }
                                             }
                                             else
@@ -295,7 +304,6 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                 graph =
                                                     new Graph(this, kRPVControllerGraphTypeLine,
                                                               graph_id++);
-                                                if(graph)
                                                 {
                                                     result = graph->SetObject(
                                                         kRPVControllerGraphTrack, 0,
@@ -321,11 +329,6 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                                         }
                                                     }
                                                 }
-                                                else
-                                                {
-                                                    result =
-                                                        kRocProfVisResultMemoryAllocError;
-                                                }
                                             }
                                             else
                                             {
@@ -343,18 +346,13 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                     }
                                 }
                             }
-                            else
-                            {
-                                result = kRocProfVisResultMemoryAllocError;
-                                break;
-                            }
                         }
                     }
                 }
             }
         }
     }
-    else
+    catch(const std::exception&)
     {
         result = kRocProfVisResultMemoryAllocError;
     }
@@ -373,10 +371,10 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
 
 rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    m_timeline                 = new Timeline(0);
-    size_t trace_size          = 0;
-    if(m_timeline)
+    try
     {
+        m_timeline                 = new Timeline(0);
+        size_t trace_size          = 0;
         m_dm_handle = rocprofvis_dm_create_trace();
         if(nullptr != m_dm_handle)
         {
@@ -430,7 +428,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                       : kRPVControllerTrackTypeEvents;
                                     Track* track =
                                         new Track(type, track_id, dm_track_handle, this);
-                                    if(track)
                                     {
                                         std::string dm_track_name =
                                             rocprofvis_dm_get_property_as_charptr(
@@ -565,7 +562,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 ? kRPVControllerGraphTypeLine
                                                 : kRPVControllerGraphTypeFlame,
                                             track_id);
-                                        if(graph)
                                         {
                                             result = graph->SetObject(
                                                 kRPVControllerGraphTrack, 0,
@@ -2399,7 +2395,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
             result = kRocProfVisResultMemoryAllocError;
         }
     }
-    else
+    catch(const std::exception&)
     {
         result = kRocProfVisResultMemoryAllocError;
     }

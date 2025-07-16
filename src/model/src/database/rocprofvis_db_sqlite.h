@@ -41,6 +41,16 @@ typedef struct SQLInsertParams
     const char* type;
 } SQLInsertParams;
 
+typedef enum rocprofvis_db_sqlite_query_type_t
+{
+    kRPVSqliteQueryTrack,
+    kRPVSqliteQuerySlice,
+    kRPVSqliteQueryTable,
+    kRPVSqliteQueryLevel,
+    kRPVSqliteCacheTableName,
+    kRPVNumSqliteQueryTypes
+} rocprofvis_db_sqlite_query_type_t;
+
 // structure to pass parameters to sqlite3_exec callbacks
 typedef struct{
     // pointer tp Database object
@@ -52,10 +62,7 @@ typedef struct{
     // callback method pointer
     RpvSqliteExecuteQueryCallback callback;
     // pointer to query string, convenient for multiuse callback debugging
-    rocprofvis_dm_charptr_t query;
-    // multi-use string  
-    rocprofvis_dm_charptr_t subquery;
-    rocprofvis_dm_charptr_t table_subquery;
+    rocprofvis_dm_charptr_t query[kRPVNumSqliteQueryTypes];
     rocprofvis_dm_track_id_t track_id;
 } rocprofvis_db_sqlite_callback_parameters;
 
@@ -168,7 +175,7 @@ class SqliteDatabase : public Database
         // @return status of operation
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
                                                 const char* query,
-                                                const char* subquery,
+                                                const char* cache_table_name,
                                                 rocprofvis_dm_handle_t handle, 
                                                 RpvSqliteExecuteQueryCallback callback);
         // Method for SQL query execution for requesting track information and building track related data.
@@ -182,6 +189,7 @@ class SqliteDatabase : public Database
         // @param callback - sqlite3_exec callback method for data processing
         // @return status of operation
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query,
+                                               const char* level_subquery,
                                                const char* timeline_subquery,
                                                const char* table_subquery,
                                                RpvSqliteExecuteQueryCallback callback);

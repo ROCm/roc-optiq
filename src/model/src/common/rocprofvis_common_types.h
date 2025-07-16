@@ -83,6 +83,14 @@ typedef struct
     uint32_t level;
 } rocprofvis_event_timing_params_t;
 
+typedef enum rocprofvis_db_query_type_t
+{
+    kRPVQuerySlice,
+    kRPVQueryTable,
+    kRPVQueryLevel,
+    kRPVNumQueryTypes
+} rocprofvis_db_query_type_t;
+
 typedef struct {
     // 32-bit track id
     rocprofvis_dm_track_id_t track_id;   
@@ -95,9 +103,7 @@ typedef struct {
     // is identifier numeric or string
     bool process_id_numeric[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
     // SQL query to get data for this track, may have multiple sub-queries
-    std::vector<rocprofvis_dm_string_t> query;  
-    // SQL query to get table data for this track, may have multiple sub-queries
-    std::vector<rocprofvis_dm_string_t> table_query;  
+    std::vector<rocprofvis_dm_string_t> query[kRPVNumQueryTypes];  
     // track category enumeration (PMC, Region, Kernel, SQQT, NIC, etc)
     rocprofvis_dm_track_category_t track_category;   
     // handle of extended data object  

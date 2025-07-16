@@ -1,3 +1,4 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
@@ -59,6 +60,7 @@ typedef struct event_ext_data_t
 
 typedef struct event_info_t
 {
+    uint64_t event_id; // id of the event for which the extended info is stored
     std::vector<event_ext_data_t> ext_data;
 } event_info_t;
 
@@ -72,8 +74,26 @@ typedef struct event_flow_data_t
 
 typedef struct flow_info_t
 {
+    uint64_t event_id; // id of the event for which the flow info is stored
     std::vector<event_flow_data_t> flow_data;
 } flow_info_t;
+
+typedef struct call_stack_data_t {
+    std::string function;          // Source code function name
+    std::string arguments;         // Source code function arguments
+    std::string file;              // Source code file path
+    std::string line;              // Source code line number
+
+    std::string isa_function;      // ISA/ASM function name
+    std::string isa_file;          // ISA/ASM file path
+    std::string isa_line;          // ISA/ASM line number
+} call_stack_data_t;
+
+typedef struct call_stack_info_t
+{
+    uint64_t event_id; // id of the event for which the call stack data is stored
+    std::vector<call_stack_data_t> call_stack_data; // vector of call stack entries
+} call_stack_info_t;
 
 class RequestParamsBase
 {
@@ -89,16 +109,18 @@ public:
     double   m_start_ts;          // start time stamp of data being requested
     double   m_end_ts;            // end time stamp of data being requested
     uint32_t m_horz_pixel_range;  // horizontal pixel range for the request
+    uint64_t m_data_group_id;     // group id for the request, used for grouping requests
 
     TrackRequestParams(const TrackRequestParams& other)            = default;
     TrackRequestParams& operator=(const TrackRequestParams& other) = default;
 
     TrackRequestParams(uint64_t track_id, double start_ts, double end_ts,
-                       uint32_t horz_pixel_range)
+                       uint32_t horz_pixel_range, uint64_t group_id)
     : m_track_id(track_id)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
     , m_horz_pixel_range(horz_pixel_range)
+    , m_data_group_id(group_id)
     {}
 };
 
@@ -165,16 +187,13 @@ public:
     DataProvider();
     ~DataProvider();
 
-    // Getter and Setter for m_event_info
     const event_info_t& GetEventInfoStruct() const;
-    void                SetEventInfoStruct(const event_info_t& info);
-
-    // Getter and Setter for m_flow_info
     const flow_info_t& GetFlowInfo() const;
-    void               SetFlowInfo(const flow_info_t& info);
+    const call_stack_info_t& GetCallStackInfo() const;
 
     bool FetchEventExtData(uint64_t event_id);
-    bool FetchEventFlowDetails( uint64_t event_id);
+    bool FetchEventFlowDetails(uint64_t event_id);
+    bool FetchEventCallStackData(uint64_t event_id);
 
     // Get user selected event.
     uint64_t GetSelectedEventId();
@@ -186,6 +205,11 @@ public:
      *   Close the controller.
      */
     void CloseController();
+
+     /*
+     *   Notify controller it can consume more resources.
+     */
+    void SetSelectedState(const std::string & id);
 
     /*
      *   Free all requests. This does not cancel the requests on the controller end.
@@ -211,14 +235,15 @@ public:
      * @param start_ts: The start timestamp of the track
      * @param end_ts: The end timestamp of the track
      * @param horz_pixel_range: The horizontal pixel range of the view
+     * @param group_id: The group id for the request, used for grouping requests
      */
     bool FetchTrack(uint64_t track_id, double start_ts, double end_ts,
-                    uint32_t horz_pixel_range);
+                    uint32_t horz_pixel_range, uint64_t group_id);
 
     bool FetchTrack(const TrackRequestParams& request_params);
 
     bool FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
-                         uint32_t horz_pixel_range);
+                         uint32_t horz_pixel_range, uint64_t group_id);
 
     /*
      * Fetches an event table from the controller for a single track.
@@ -355,10 +380,12 @@ private:
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
 
-    void CreateRawEventData(uint64_t track_id, rocprofvis_controller_array_t* track_data,
-                            double min_ts, double max_ts);
-    void CreateRawSampleData(uint64_t track_id, rocprofvis_controller_array_t* track_data,
-                             double min_ts, double max_ts);
+
+    void CreateRawEventData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);                           
+    void CreateRawSampleData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);
+
+    std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
+                          uint64_t index);
 
     rocprofvis_controller_future_t*   m_trace_future;
     rocprofvis_controller_t*          m_trace_controller;
@@ -376,6 +403,8 @@ private:
     double       m_selected_event_end;
     event_info_t m_event_info;  // Store event info for selected event
     flow_info_t  m_flow_info;   // Store flow info for selected event
+    call_stack_info_t m_call_stack_info;  // Store call stack info for selected event
+
 
     std::unordered_map<uint64_t, track_info_t>  m_track_metadata;
     std::unordered_map<uint64_t, RawTrackData*> m_raw_trackdata;

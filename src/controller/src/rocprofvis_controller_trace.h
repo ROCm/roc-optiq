@@ -8,6 +8,7 @@
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller_mem_mgmt.h"
+#include <string>
 #include <vector>
 
 namespace RocProfVis
@@ -23,6 +24,7 @@ class Graph;
 class Timeline;
 class Event;
 class Table;
+class Node;
 class SystemTable;
 #ifdef COMPUTE_UI_SUPPORT
 class Plot;
@@ -79,6 +81,7 @@ public:
 
 private:
     std::vector<Track*>   m_tracks;
+    std::vector<Node*> m_nodes;
     uint64_t              m_id;
     Timeline*             m_timeline;
     SystemTable*          m_event_table;

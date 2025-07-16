@@ -219,6 +219,30 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
     }
 }
 
+ 
+rocprofvis_dm_result_t
+Track::GetPropertyAsDouble(rocprofvis_dm_property_t       property,
+                           rocprofvis_dm_property_index_t index,
+                           double*        value)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED,
+                                 kRocProfVisDmResultNotLoaded);
+    switch(property)
+    {
+        case kRPVDMTrackMinimumValueDouble:
+            *value = MinValue();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackMaximumValueDouble:
+            *value = MaxValue();
+            return kRocProfVisDmResultSuccess;
+        default:
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER,
+                                                kRocProfVisDmResultInvalidProperty);
+    }
+}
+
 
 rocprofvis_dm_result_t  Track::GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
@@ -293,6 +317,10 @@ const char*  Track::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMTrackMinimumTimestampUInt64";
         case kRPVDMTrackMaximumTimestampUInt64:
             return "kRPVDMTrackMaximumTimestampUInt64";
+        case kRPVDMTrackMinimumLevelDouble:
+            return "kRPVDMTrackMinimumValueDouble";
+        case kRPVDMTrackMaximumLevelDouble:
+            return "kRPVDMTrackMaximumValueDouble";
         default:
             return "Unknown property";
     }   

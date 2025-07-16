@@ -329,6 +329,7 @@ RenderProviderTest(DataProvider& provider)
 
     static char track_index_buffer[64]     = "0";
     static char end_track_index_buffer[64] = "1";  // for setting table track range
+    static uint64_t group_id_counter = 0;
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
@@ -410,13 +411,14 @@ RenderProviderTest(DataProvider& provider)
 
     if(ImGui::Button("Fetch Track"))
     {
-        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000);
+        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
+                            group_id_counter++);
     }
 
     if(ImGui::Button("Fetch Whole Track"))
     {
         provider.FetchWholeTrack(index, provider.GetStartTime(), provider.GetEndTime(),
-                                 1000);
+                                 1000, group_id_counter++);
     }
     if(ImGui::Button("Delete Track"))
     {

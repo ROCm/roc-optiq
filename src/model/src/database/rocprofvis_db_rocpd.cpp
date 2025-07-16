@@ -194,21 +194,21 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                         "select DISTINCT 0 as const, pid, tid, 2 as category from rocpd_api;", 
-                        "select 1 as op, start, end, apiName_id, args_id, id, 0, pid, tid {,L.level} from rocpd_api {INNER JOIN event_levels_api L ON id = L.eid} ",
+                        "select 1 as op, start, end, apiName_id, args_id, id, 0, pid, tid ,L.level as level from rocpd_api INNER JOIN event_levels_api L ON id = L.eid ",
                         "select id, apiName, args, start, end, pid, tid from api ",
                         &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding GPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                         "select DISTINCT 0 as const, gpuId, queueId, 3 as category from rocpd_op;",
-                        "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId  {,L.level} from rocpd_op {INNER JOIN event_levels_op L ON id = L.eid} ",
+                        "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId , L.level as level from rocpd_op INNER JOIN event_levels_op L ON id = L.eid ",
                         "select id, opType, description, start, end,  gpuId, queueId  from op ",
                         &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding PMC tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                         "select DISTINCT 0 as const, deviceId, monitorType, 1 as category from rocpd_monitor where deviceId > 0;", 
-                        "select 0 as op, start, value, start as end, 0, 0, 0, deviceId, monitorType {,0} from rocpd_monitor ",
+                        "select 0 as op, start, value, start as end, 0, 0, 0, deviceId, monitorType , value as level from rocpd_monitor ",
                         "select id, monitorType, CAST(value AS REAL) as value, start, start as end, deviceId  from rocpd_monitor ",
                         &CallBackAddTrack)) break;
 
@@ -223,7 +223,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 
         if(kRocProfVisDmResultSuccess !=
            ExecuteQueryForAllTracksAsync(true,
-               "SELECT COUNT(*), MIN(start), MAX(end), op, ", ";", &CallbackGetTrackProperties,
+               "SELECT COUNT(*), MIN(start), MAX(end), op, MIN(CAST(level as REAL)), MAX(CAST(level as REAL)), ", ";", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {
                }))
         {

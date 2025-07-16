@@ -30,7 +30,6 @@ TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
 , m_meta_area_scale_width(0.0f)
 , m_settings(Settings::GetInstance())
 , m_selected(false)
-, m_deferred_request(nullptr)
 , m_reorder_grip_width(20.0f)
 {}
 
@@ -306,12 +305,36 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 void
 TrackItem::RequestData(double min, double max, float width)
 {
-    if(m_deferred_request)
+    //create request chunks with ranges of 1 minute max
+    double range = max - min;
+
+    size_t chunk_count = static_cast<size_t>(std::ceil(range / TimeConstants::minute_ns));
+    m_group_id_counter++;
+    std::deque<TrackRequestParams> temp_request_queue;
+
+    for (size_t i = 0; i < chunk_count; ++i)
     {
-        spdlog::warn("Overwriting existing deferred request for track {}", m_id);
+        double chunk_start = min + i * TimeConstants::minute_ns;
+        double chunk_end   = std::min(chunk_start + TimeConstants::minute_ns, max);
+
+        double chunk_range = chunk_end - chunk_start;
+        float percentage = static_cast<float>(chunk_range / range);
+        float chunk_width = width * percentage;
+
+        TrackRequestParams request_params(m_id, chunk_start, chunk_end,
+                                          static_cast<uint32_t>(chunk_width), m_group_id_counter);
+        
+        temp_request_queue.push_back(request_params);
+        spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
+                      m_id, chunk_start, chunk_end, chunk_range, chunk_width);
     }
-    m_deferred_request = std::make_shared<TrackRequestParams>(
-        m_id, min, max, static_cast<uint32_t>(width));
+
+    if(!m_request_queue.empty())
+    {
+        m_request_queue.clear();
+        spdlog::warn("Overwriting existing request queue for track {}", m_id);
+    }
+    m_request_queue = std::move(temp_request_queue);
 
     if(m_request_state == TrackDataRequestState::kIdle)
     {
@@ -328,7 +351,7 @@ TrackItem::Update()
 {
     if(m_request_state == TrackDataRequestState::kIdle)
     {
-        if(m_deferred_request && !m_data_provider.IsRequestPending(m_id))
+        if(!m_request_queue.empty() && !m_data_provider.IsRequestPending(m_id))
         {
             FetchHelper();
         }
@@ -338,19 +361,26 @@ TrackItem::Update()
 void
 TrackItem::FetchHelper()
 {
-    bool result = m_data_provider.FetchTrack(*m_deferred_request);
-    if(!result)
+    if(!m_request_queue.empty())
     {
-        spdlog::error("Request for track {} failed", m_id);
+        TrackRequestParams& req    = m_request_queue.front();
+        bool                result = m_data_provider.FetchTrack(req);
+        if(!result)
+        {
+            spdlog::error("Request for track {} failed", m_id);
+        }
+        else
+        {
+            spdlog::debug("Fetching from {} to {} ( {} ) at zoom {} for track {} part of group {}",
+                          req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts,
+                          m_zoom, m_id, req.m_data_group_id);
+
+            m_request_state = TrackDataRequestState::kRequesting;
+        }
+        m_request_queue.pop_front();
     }
     else
     {
-        spdlog::debug("Fetching from {} to {} ( {} ) at zoom {} for track {}",
-                      m_deferred_request->m_start_ts, m_deferred_request->m_end_ts,
-                      m_deferred_request->m_end_ts - m_deferred_request->m_start_ts,
-                      m_zoom, m_id);
-
-        m_deferred_request.reset();
-        m_request_state = TrackDataRequestState::kRequesting;
+        spdlog::warn("No requests in queue for track {}", m_id);
     }
 }

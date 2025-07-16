@@ -185,21 +185,21 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as nodeId, pid, tid, 2 as category from rocpd_region;", 
-                    "select 1 as op, R.start, R.end, E.category_id, R.name_id, R.id, R.nid as nodeId, R.pid, R.tid {,L.level} from rocpd_region R INNER JOIN rocpd_event E ON E.id = R.event_id {INNER JOIN event_levels_launch L ON R.id = L.eid} " , 
+                    "select 1 as op, R.start, R.end, E.category_id, R.name_id, R.id, R.nid as nodeId, R.pid, R.tid ,L.level as level from rocpd_region R INNER JOIN rocpd_event E ON E.id = R.event_id INNER JOIN event_levels_launch L ON R.id = L.eid " , 
                     "select id, category, name, nid as nodeId, pid, tid, start, end, duration from regions " ,
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Kernel Dispatch tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as nodeId, agent_id as agentId, queue_id as queueId, 3 as category from rocpd_kernel_dispatch;", 
-                    "select 2 as op, KD.start, KD.end, E.category_id, KD.kernel_id, KD.id, KD.nid as nodeId, KD.agent_id as agentId, KD.queue_id as queueId {,L.level} from rocpd_kernel_dispatch KD INNER JOIN rocpd_event E ON E.id = KD.event_id {INNER JOIN event_levels_dispatch L ON KD.id = L.eid} ", 
+                    "select 2 as op, KD.start, KD.end, E.category_id, KD.kernel_id, KD.id, KD.nid as nodeId, KD.agent_id as agentId, KD.queue_id as queueId ,L.level as level from rocpd_kernel_dispatch KD INNER JOIN rocpd_event E ON E.id = KD.event_id INNER JOIN event_levels_dispatch L ON KD.id = L.eid ", 
                     "select id, category, name, nid as nodeId, agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from kernels " ,
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Memory Allocation tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as nodeId, agent_id as agentId, queue_id as queueId, 3 as category from rocpd_memory_allocate;", 
-                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as nodeId, MA.agent_id as agentId, MA.queue_id as queueId {,L.level} from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id {INNER JOIN event_levels_mem_alloc L ON MA.id = L.eid} ", 
+                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as nodeId, MA.agent_id as agentId, MA.queue_id as queueId ,L.level as level from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id INNER JOIN event_levels_mem_alloc L ON MA.id = L.eid ", 
                     "select id, category, type as name, nid as nodeId, agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from memory_allocations " ,
                     &CallBackAddTrack)) break;
         /*
@@ -215,7 +215,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding Memory Copy tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as nodeId, dst_agent_id as agentId, queue_id as queueId, 3 as category from rocpd_memory_copy;", 
-                    "select 4 as op, MC.start, MC.end, E.category_id, MC.name_id, MC.id, MC.nid as nodeId, MC.dst_agent_id as agentId, MC.queue_id as queueId {,L.level} from rocpd_memory_copy MC INNER JOIN rocpd_event E ON E.id = MC.event_id {INNER JOIN event_levels_mem_copy L ON MC.id = L.eid} ",
+                    "select 4 as op, MC.start, MC.end, E.category_id, MC.name_id, MC.id, MC.nid as nodeId, MC.dst_agent_id as agentId, MC.queue_id as queueId ,L.level as level from rocpd_memory_copy MC INNER JOIN rocpd_event E ON E.id = MC.event_id INNER JOIN event_levels_mem_copy L ON MC.id = L.eid ",
                     "select id, category, name, nid as nodeId, dst_agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from memory_copies " ,
                     &CallBackAddTrack)) break;
         
@@ -226,7 +226,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                                                                     "rocpd_info_pmc PMC_I ON PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid "
                                                                     "INNER JOIN "
                                                                     "rocpd_kernel_dispatch K ON K.event_id = PMC_E.event_id AND K.guid = PMC_E.guid ",                                  
-                                                                    "select 0 as op, K.start, PMC_E.value AS counter_value, K.end, 0, 0, K.nid as nodeId, K.agent_id as agentId, PMC_I.id AS counter_id {,0} FROM rocpd_pmc_event PMC_E "
+                                                                    "select 0 as op, K.start, PMC_E.value AS counter_value, K.end, 0, 0, K.nid as nodeId, K.agent_id as agentId, PMC_I.id AS counter_id , PMC_E.value as level FROM rocpd_pmc_event PMC_E "
                                                                     "INNER JOIN "
                                                                     "rocpd_info_pmc PMC_I ON PMC_I.id = PMC_E.pmc_id AND  PMC_I.guid = PMC_E.guid "
                                                                     "INNER JOIN "
@@ -256,7 +256,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         if(kRocProfVisDmResultSuccess !=
            ExecuteQueryForAllTracksAsync(true,
-               "SELECT COUNT(*), MIN(start), MAX(end), op, ", "", &CallbackGetTrackProperties,
+               "SELECT COUNT(*), MIN(start), MAX(end), op, MIN(CAST(level as REAL)), MAX(CAST(level as REAL)), ", "", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {}))
         {
             break;

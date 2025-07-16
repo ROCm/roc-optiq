@@ -22,11 +22,9 @@ class FlowControl;
 class Event : public Handle
 {
 public:
-    Event(Event* other);
     Event(uint64_t id, double start_ts, double end_ts);
 
     Event& operator=(Event&& other);
-    Event& operator=(const Event& other);
 
     virtual ~Event();
 
@@ -46,6 +44,7 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) override;
 
 private:
+    Array* m_children;
     uint64_t m_id;
     double m_start_timestamp;
     double m_end_timestamp;

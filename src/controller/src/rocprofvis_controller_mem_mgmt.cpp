@@ -347,18 +347,6 @@ MemoryManager::NewEvent(uint64_t id, double start_ts, double end_ts)
     return event;
 }
 
-Event*
-MemoryManager::NewEvent(Event* other)
-{
-    Event* event = nullptr;
-    void*  ptr   = Allocate(sizeof(Event), kRocProfVisObjectTypeEvent);
-    if(ptr)
-    {
-        event = new(ptr) Event(other);
-    }
-    return event;
-}
-
 Sample*
 MemoryManager::NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id,
                          double timestamp)

@@ -6,7 +6,6 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_event.h"
-#include "rocprofvis_controller_event_lod.h"
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_sample_lod.h"
 #include "rocprofvis_controller_track.h"

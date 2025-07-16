@@ -253,6 +253,20 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                                 event->SetString(kRPVControllerEventName, 0,
                                                     combined_name.c_str(),
                                                     combined_name.size());
+
+                                event->SetUInt64(kRPVControllerEventNumChildren, 0,
+                                                 events.size());
+                                for (uint32_t e_idx = 0; e_idx < events.size(); e_idx++)
+                                {
+                                    auto* e = events[e_idx];
+                                    uint64_t e_id = 0;
+                                    if (e->GetUInt64(kRPVControllerEventId, 0, &e_id) == kRocProfVisResultSuccess)
+                                    {
+                                        event->SetUInt64(kRPVControllerEventChildIndexed,
+                                                         e_idx, e_id);
+                                    }
+                                }
+
                                 Insert(lod_to_generate, event_min, level, event);
                             }
 
@@ -287,6 +301,19 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 event->SetUInt64(kRPVControllerEventLevel, 0, level);
                 event->SetString(kRPVControllerEventName, 0, combined_name.c_str(),
                                     combined_name.size());
+
+                event->SetUInt64(kRPVControllerEventNumChildren, 0, events.size());
+                for(uint32_t e_idx = 0; e_idx < events.size(); e_idx++)
+                {
+                    auto*    e    = events[e_idx];
+                    uint64_t e_id = 0;
+                    if(e->GetUInt64(kRPVControllerEventId, 0, &e_id) ==
+                       kRocProfVisResultSuccess)
+                    {
+                        event->SetUInt64(kRPVControllerEventChildIndexed, e_idx, e_id);
+                    }
+                }
+
                 Insert(lod_to_generate, event_min, level, event);
 
                 events.clear();

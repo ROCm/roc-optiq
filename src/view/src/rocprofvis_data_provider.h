@@ -57,6 +57,13 @@ typedef struct event_ext_data_t
     std::string value;
 } event_ext_data_t;
 
+typedef struct selected_event_t
+{
+    uint64_t event_id;     // id of the selected event
+    double   position_ns;  // position of the event in the timeline
+    int      track_id;     // id of the track where the event is located
+} selected_event_t;
+
 typedef struct event_info_t
 {
     uint64_t event_id;  // id of the event for which the extended info is stored
@@ -197,13 +204,10 @@ public:
     uint64_t GetSelectedEventId();
 
     // Set user selected event.
-    void SetSelectedEventId(uint64_t id, double event_position, int track_id);
+    void SetSelectedEvent(selected_event_t event);
 
-    // Get selected event start time
-    double GetEventPosition();
-
-    // Get track selected event sits in
-    int GetEventTrackPosition();
+    // Get user selected event.
+    selected_event_t GetSelectedEvent();
 
     /*
      *   Close the controller.
@@ -407,11 +411,7 @@ private:
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
 
-    uint64_t          m_selected_event_id;
-    double            m_selected_event_start;
-    double            m_selected_event_end;
-    double            m_event_position;
-    int               m_selected_track_id;
+    selected_event_t  m_selected_event;   // Store selected event info
     event_info_t      m_event_info;       // Store event info for selected event
     flow_info_t       m_flow_info;        // Store flow info for selected event
     call_stack_info_t m_call_stack_info;  // Store call stack info for selected event

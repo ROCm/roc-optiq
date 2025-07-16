@@ -88,8 +88,8 @@ TimelineArrow::AddArrows()
     {
         m_arrows_to_render = {};
 
-        double source_time  = m_data_provider.GetEventPosition();
-        int    source_track = m_data_provider.GetEventTrackPosition();
+        double source_time  = m_data_provider.GetSelectedEvent().position_ns;
+        int    source_track = m_data_provider.GetSelectedEvent().track_id;
 
         for(const auto& item : flowInfo.flow_data)
         {

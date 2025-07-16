@@ -142,12 +142,13 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
             if(m_selected_event_id != flame.m_id ||
                m_dp.GetSelectedEventId() != flame.m_id)
             {
-                m_dp.SetSelectedEventId(flame.m_id, raw_start_time, m_id);
+                selected_event_t selected_event = { flame.m_id, raw_start_time, m_id };
+                m_dp.SetSelectedEvent(selected_event);
                 m_selected_event_id = flame.m_id;
             }
             else
             {
-                m_dp.SetSelectedEventId(std::numeric_limits<uint64_t>::max(), 0, -1);
+                m_dp.SetSelectedEvent({});
                 m_selected_event_id = std::numeric_limits<uint64_t>::max();
             }
         }

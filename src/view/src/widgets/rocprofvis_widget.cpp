@@ -48,6 +48,12 @@ RocWidget::GenUniqueName(std::string name)
     return oss.str();
 }
 
+const std::string&
+RocWidget::GetWidgetName() const
+{
+    return m_widget_name;
+}
+
 //------------------------------------------------------------------
 RocCustomWidget::RocCustomWidget(const std::function<void()>& callback)
 : m_callback(callback)
@@ -373,6 +379,14 @@ TabContainer::TabContainer()
 
 TabContainer::~TabContainer() { m_tabs.clear(); }
 
+void TabContainer::SetEventSourceName(const std::string& source_name) {
+    m_event_source_name = source_name;
+}
+
+const std::string& TabContainer::GetEventSourceName() const {
+    return m_event_source_name;
+}
+
 void
 TabContainer::Update()
 {
@@ -455,7 +469,8 @@ TabContainer::Render()
             {
                 std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
                     static_cast<int>(RocEvents::kTabSelected),
-                    m_tabs[new_selected_tab].m_id);
+                    m_tabs[new_selected_tab].m_id,
+                    m_event_source_name.empty() ? m_widget_name : m_event_source_name);
                 EventManager::GetInstance()->AddEvent(e);
             }
         }
@@ -493,7 +508,8 @@ TabContainer::RemoveTab(const std::string& id)
     {
         // notify the event manager of the tab removal
         std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-            static_cast<int>(RocEvents::kTabClosed), it->m_id);
+            static_cast<int>(RocEvents::kTabClosed), it->m_id,
+            m_event_source_name.empty() ? m_widget_name : m_event_source_name);
         EventManager::GetInstance()->AddEvent(e);
 
         m_tabs.erase(it, m_tabs.end());
@@ -507,7 +523,8 @@ TabContainer::RemoveTab(int index)
     {
         // notify the event manager of the tab removal
         std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-            static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id);
+            static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id,
+            m_event_source_name.empty() ? m_widget_name : m_event_source_name);
         EventManager::GetInstance()->AddEvent(e);
 
         m_tabs.erase(m_tabs.begin() + index);

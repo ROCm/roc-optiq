@@ -99,19 +99,26 @@ RocProfVis::View::ComputeTableSearchEvent::GetSearchTerm()
     return m_search_term;
 }
 #endif
-TabEvent::TabEvent(int event_id, const std::string& tab_id)
+
+TabEvent::TabEvent(int event_id, const std::string& tab_id, const std::string& tab_source)
 : RocEvent(event_id)
 , m_tab_id(tab_id)
+, m_tab_source(tab_source)
 {
     m_event_type = RocEventType::kTabEvent;
 }
 
 const std::string&
-TabEvent::GetTabId()
+TabEvent::GetTabId() const
 {
     return m_tab_id;
 }
 
+const std::string&
+TabEvent::GetTabSource() const
+{
+    return m_tab_source;
+}
 
 TrackSelectionChangedEvent::TrackSelectionChangedEvent(int                   event_id,
                                              std::vector<uint64_t> selected_tracks,

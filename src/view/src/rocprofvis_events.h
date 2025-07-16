@@ -87,6 +87,7 @@ private:
     std::string m_track_name;
 };
 #ifdef COMPUTE_UI_SUPPORT
+
 class ComputeTableSearchEvent : public RocEvent
 {
 public:
@@ -100,13 +101,14 @@ private:
 class TabEvent : public RocEvent
 {
 public:
-    TabEvent(int event_id, const std::string& tab_id);
-    const std::string& GetTabId();
+    TabEvent(int event_id, const std::string& tab_id, const std::string& tab_source);
+    const std::string& GetTabId() const;
+    const std::string& GetTabSource() const;
 
 private:
     std::string m_tab_id;
+    std::string m_tab_source;
 };
-
 
 class TrackSelectionChangedEvent : public RocEvent
 {

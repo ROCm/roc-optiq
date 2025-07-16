@@ -16,6 +16,8 @@
 using namespace RocProfVis::View;
 
 constexpr ImVec2 FILE_DIALOG_SIZE = ImVec2(480.0f, 360.0f);
+constexpr char* FILE_DIALOG_NAME = "ChooseFileDlgKey";
+constexpr char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 
 // For testing DataProvider
 void
@@ -85,6 +87,7 @@ AppWindow::Init()
     LayoutItem main_area_item(-1, -30.0f);
 
     m_tab_container = std::make_shared<TabContainer>();
+    m_tab_container->SetEventSourceName(TAB_CONTAINER_SRC_NAME);
 #ifdef COMPUTE_UI_SUPPORT
     NavigationManager::GetInstance()->RegisterRootContainer(m_tab_container);
 #endif
@@ -105,6 +108,12 @@ AppWindow::Init()
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
 
     return result;
+}
+
+const std::string&
+AppWindow::GetMainTabSourceName() const
+{
+    return m_tab_container->GetEventSourceName();
 }
 
 void
@@ -158,7 +167,7 @@ AppWindow::Render()
 #ifdef COMPUTE_UI_SUPPORT
                 supported_extensions += ",.csv";
 #endif
-                ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File",
+                ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, "Choose File",
                                                         supported_extensions.c_str(),
                                                         config);
             }
@@ -189,7 +198,7 @@ AppWindow::Render()
         ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
         ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
-    if(ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
+    if(ImGuiFileDialog::Instance()->Display(FILE_DIALOG_NAME))
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {

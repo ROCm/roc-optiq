@@ -48,6 +48,12 @@ RocWidget::GenUniqueName(std::string name)
     return oss.str();
 }
 
+const std::string&
+RocWidget::GetWidgetName() const
+{
+    return m_widget_name;
+}
+
 //------------------------------------------------------------------
 RocCustomWidget::RocCustomWidget(const std::function<void()>& callback)
 : m_callback(callback)
@@ -373,6 +379,14 @@ TabContainer::TabContainer()
 
 TabContainer::~TabContainer() { m_tabs.clear(); }
 
+void TabContainer::SetEventSourceName(const std::string& source_name) {
+    m_event_source_name = source_name;
+}
+
+const std::string& TabContainer::GetEventSourceName() const {
+    return m_event_source_name;
+}
+
 void
 TabContainer::Update()
 {
@@ -411,8 +425,11 @@ TabContainer::Render()
                 {
                     p_open = nullptr;
                 }
+                bool tab_visible = false;
+                ImGui::PushID(tab.m_id.c_str());
                 if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags))
                 {
+                    tab_visible = true;
                     // show tooltip for the active tab if header is hovered
                     if(m_allow_tool_tips && ImGui::IsItemHovered())
                     {
@@ -426,8 +443,9 @@ TabContainer::Render()
                     }
                     ImGui::EndTabItem();
                 }
+                ImGui::PopID();
                 // show tooltip for inactive tabs if header is hovered
-                else if(ImGui::IsItemHovered())
+                if(!tab_visible && ImGui::IsItemHovered())
                 {
                     if(m_allow_tool_tips)
                     {
@@ -451,7 +469,8 @@ TabContainer::Render()
             {
                 std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
                     static_cast<int>(RocEvents::kTabSelected),
-                    m_tabs[new_selected_tab].m_id);
+                    m_tabs[new_selected_tab].m_id,
+                    m_event_source_name.empty() ? m_widget_name : m_event_source_name);
                 EventManager::GetInstance()->AddEvent(e);
             }
         }
@@ -463,6 +482,11 @@ TabContainer::Render()
         if(index_to_remove != -1)
         {
             RemoveTab(index_to_remove);
+            if(m_active_tab_index == index_to_remove)
+            {
+                // If the active tab was closed, reset to -1
+                m_active_tab_index = -1;
+            }   
         }
     }
     ImGui::EndChild();
@@ -484,7 +508,8 @@ TabContainer::RemoveTab(const std::string& id)
     {
         // notify the event manager of the tab removal
         std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-            static_cast<int>(RocEvents::kTabClosed), it->m_id);
+            static_cast<int>(RocEvents::kTabClosed), it->m_id,
+            m_event_source_name.empty() ? m_widget_name : m_event_source_name);
         EventManager::GetInstance()->AddEvent(e);
 
         m_tabs.erase(it, m_tabs.end());
@@ -498,7 +523,8 @@ TabContainer::RemoveTab(int index)
     {
         // notify the event manager of the tab removal
         std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-            static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id);
+            static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id,
+            m_event_source_name.empty() ? m_widget_name : m_event_source_name);
         EventManager::GetInstance()->AddEvent(e);
 
         m_tabs.erase(m_tabs.begin() + index);

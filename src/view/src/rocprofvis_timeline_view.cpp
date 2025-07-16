@@ -70,7 +70,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_last_graph_size(0.0f, 0.0f)
 , m_reorder_request({ true, 0, 0 })
 , m_track_height_total({})
-, m_arrow_layer(TimelineArrow(m_data_provider))
+, m_arrow_layer(m_data_provider)
 
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -90,17 +90,6 @@ TimelineView::TimelineView(DataProvider& dp)
     m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         scroll_to_track_handler);
-
-    auto new_tab_selected_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto ets = std::dynamic_pointer_cast<TabEvent>(e);
-        if(ets)
-        {
-            m_data_provider.SetSelectedState(ets->GetTabId());
-        }
-    };
-
-    m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 }
 
 int
@@ -218,8 +207,6 @@ TimelineView::~TimelineView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         m_scroll_to_track_token);
-    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
-                                             m_tabselected_event_token);
 }
 
 void
@@ -521,11 +508,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     {
         float cursor_screen_percentage =
             (mouse_position.x - window_position.x) / m_graph_size.x;
-        char   text[20];
         double scrubber_position =
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
-        sprintf(text, "%.0f", scrubber_position);
+        char   text[20];
+        snprintf(text, 20, "%17.0f", scrubber_position);
         ImVec2 label_size = ImGui::CalcTextSize(text);
 
         constexpr float label_padding = 4.0f;

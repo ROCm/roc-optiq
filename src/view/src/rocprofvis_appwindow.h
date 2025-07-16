@@ -23,6 +23,8 @@ public:
     void Render() override;
     void Update() override;
 
+    const std::string& GetMainTabSourceName() const;
+
 private:
     AppWindow();
     ~AppWindow();

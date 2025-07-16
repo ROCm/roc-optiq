@@ -59,7 +59,6 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
     {
         try {
             RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::RocpdDatabase(filename);
-            ROCPROFVIS_ASSERT_MSG_RETURN(db, RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL, nullptr);
             if (kRocProfVisDmResultSuccess == db->Open()) {
                 return db;
             } else {
@@ -77,8 +76,6 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
         {
             try {
                 RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::RocprofDatabase(filename);
-                ROCPROFVIS_ASSERT_MSG_RETURN(
-                    db, RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL, nullptr);
                 if (kRocProfVisDmResultSuccess == db->Open()) {
                     return db;
                 }

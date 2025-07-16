@@ -2,6 +2,7 @@
 #include "rocprofvis_trace_view.h"
 #include "imgui.h"
 #include "rocprofvis_analysis_view.h"
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_sidebar.h"
@@ -25,9 +26,31 @@ TraceView::TraceView()
                 static_cast<int>(RocEvents::kNewTrackData), track_id, trace_path);
             EventManager::GetInstance()->AddEvent(e);
         });
+
+    auto new_tab_selected_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto ets = std::dynamic_pointer_cast<TabEvent>(e);
+        if(ets)
+        {
+            //Only handle the event if the tab source is the main tab source
+            if(ets->GetTabSource() == AppWindow::GetInstance()->GetMainTabSourceName())
+            {
+                m_data_provider.SetSelectedState(ets->GetTabId());
+            }
+        }
+    };
+
+    m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
+        
+    m_widget_name = GenUniqueName("TraceView");
 }
 
-TraceView::~TraceView() { m_data_provider.SetTrackDataReadyCallback(nullptr); }
+TraceView::~TraceView()
+{
+    m_data_provider.SetTrackDataReadyCallback(nullptr);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
+                                             m_tabselected_event_token);
+}
 
 void
 TraceView::Update()
@@ -93,7 +116,7 @@ TraceView::CreateView()
     traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
 
     m_container = std::make_shared<HSplitContainer>(left, traceArea);
-    m_container->SetSplit(0.2);
+    m_container->SetSplit(0.2f);
     m_container->SetMinRightWidth(400);
 }
 

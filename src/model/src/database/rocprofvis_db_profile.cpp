@@ -337,32 +337,6 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
 
 }
 
-// enum rocprofvis_db_compare_ops
-// {
-//     kRocProfVisDBCompareOpsEqual,
-//     kRocProfVisDBCompareOpsNotEqual,
-//     kRocProfVisDBCompareOpsLess,
-//     kRocProfVisDBCompareOpsGreater,
-//     kRocProfVisDBCompareOpsLessOrEqual,
-//     kRocProfVisDBCompareOpsGreaterOrEqual,
-//     kRocProfVisDBCompareOpsAll,
-//     kRocProfVisDBCompareOpsAnd,
-//     kRocProfVisDBCompareOpsAny,
-//     kRocProfVisDBCompareOpsBetween,
-//     kRocProfVisDBCompareOpsExists,
-//     kRocProfVisDBCompareOpsIn,
-//     kRocProfVisDBCompareOpsLike,
-//     kRocProfVisDBCompareOpsNot,
-//     kRocProfVisDBCompareOpsOr,
-// };
-
-// struct rocprofvis_db_filter_query
-// {
-//     rocprofvis_dm_charptr_t m_column;
-//     rocprofvis_dm_charptr_t m_value;
-//     rocprofvis_db_compare_ops m_comparison;
-// };
-
 rocprofvis_dm_result_t
 ProfileDatabase::BuildTableQuery(
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,

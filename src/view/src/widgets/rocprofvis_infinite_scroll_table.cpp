@@ -68,7 +68,8 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
         {
             // Fetch table data for the selected tracks
             TableRequestParams event_table_params(m_req_table_type, filtered_tracks,
-                                                  start_ns, end_ns, m_filter.size() ? m_filter.data() : "", 
+                                                  start_ns, end_ns, m_filter.size() ? m_filter.data() : "",
+                                                  m_group.size() ? m_group.data() : "",
                                                   0, m_fetch_chunk_size);
 
             bool result = m_data_provider.FetchMultiTrackTable(event_table_params);
@@ -184,6 +185,26 @@ InfiniteScrollTable::Render()
     {
         ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks", start_row, end_row,
                     total_row_count, selected_track_count);
+        
+        if(m_table_type == TableType::kEventTable)
+        {
+            if(m_group.size() == 0 || strlen(m_group.data()) == m_group.size())
+            {
+                m_group.resize(m_group.size() + 256);
+            }
+
+            if(ImGui::InputTextWithHint("Group", "Column to GROUP BY", m_group.data(),
+                                        m_group.size()))
+            {
+                filter_changed = true;
+            }
+
+            if(strlen(m_group.data()) == 0)
+            {
+                m_group.resize(256);
+                memset(m_group.data(), 0, m_group.size());
+            }
+        }
 
         if(m_filter.size() == 0 || strlen(m_filter.data()) == m_filter.size())
         {
@@ -195,8 +216,7 @@ InfiniteScrollTable::Render()
             filter_changed = true;
         }
 
-        uint32_t filter_len = strlen(m_filter.data());
-        if(filter_len == 0)
+        if(strlen(m_filter.data()) == 0)
         {
             m_filter.resize(256);
             memset(m_filter.data(), 0, m_filter.size());
@@ -349,6 +369,7 @@ InfiniteScrollTable::Render()
                             m_req_table_type, event_table_params->m_track_ids,
                             event_table_params->m_start_ts, event_table_params->m_end_ts, 
                             event_table_params->m_filter.c_str(),
+                            event_table_params->m_group.c_str(),
                             new_start_pos, m_fetch_chunk_size,
                             event_table_params->m_sort_column_index,
                             event_table_params->m_sort_order));
@@ -381,6 +402,7 @@ InfiniteScrollTable::Render()
                             m_req_table_type, event_table_params->m_track_ids,
                             event_table_params->m_start_ts, event_table_params->m_end_ts, 
                             event_table_params->m_filter.c_str(),
+                            event_table_params->m_group.c_str(),
                             new_start_pos, m_fetch_chunk_size,
                             event_table_params->m_sort_column_index,
                             event_table_params->m_sort_order));
@@ -407,6 +429,7 @@ InfiniteScrollTable::Render()
             event_table_params->m_sort_column_index = sort_colunn_index;
             event_table_params->m_sort_order        = sort_order;
             event_table_params->m_filter            = m_filter.data();
+            event_table_params->m_group             = m_group.size() ? m_group.data() : "";
 
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
@@ -414,7 +437,7 @@ InfiniteScrollTable::Render()
             m_data_provider.FetchMultiTrackTable(TableRequestParams(
                 m_req_table_type, event_table_params->m_track_ids,
                 event_table_params->m_start_ts, event_table_params->m_end_ts, 
-                event_table_params->m_filter.c_str(),
+                event_table_params->m_filter.c_str(), event_table_params->m_group.c_str(),
                 event_table_params->m_start_row, event_table_params->m_req_row_count,
                 event_table_params->m_sort_column_index,
                 event_table_params->m_sort_order));

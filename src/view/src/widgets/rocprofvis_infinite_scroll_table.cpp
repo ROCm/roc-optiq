@@ -20,6 +20,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_last_table_size(0, 0)
 , m_track_selection_event_to_handle(nullptr)
 , m_settings(Settings::GetInstance())
+, m_current_group_selection_idx(0)
 , m_req_table_type(table_type == TableType::kEventTable ? kRPVControllerTableTypeEvents
                                                         : kRPVControllerTableTypeSamples)
 {
@@ -188,21 +189,25 @@ InfiniteScrollTable::Render()
         
         if(m_table_type == TableType::kEventTable)
         {
-            if(m_group.size() == 0 || strlen(m_group.data()) == m_group.size())
-            {
-                m_group.resize(m_group.size() + 256);
+            std::vector<const char*> items;
+            items.reserve(column_names.size()+1);
+            items.push_back("-- None --");
+            for (const auto& col : column_names) {
+                items.push_back(col.c_str());
             }
-
-            if(ImGui::InputTextWithHint("Group", "Column to GROUP BY", m_group.data(),
-                                        m_group.size()))
+            
+            if (ImGui::Combo("##combo", &m_current_group_selection_idx, items.data(), items.size()))
             {
+                if (m_current_group_selection_idx > 0 &&
+                    m_current_group_selection_idx <= column_names.size())
+                {
+                    m_group = column_names[m_current_group_selection_idx - 1];
+                }
+                else
+                {
+                    m_group.clear();
+                }
                 filter_changed = true;
-            }
-
-            if(strlen(m_group.data()) == 0)
-            {
-                m_group.resize(256);
-                memset(m_group.data(), 0, m_group.size());
             }
         }
 
@@ -429,7 +434,7 @@ InfiniteScrollTable::Render()
             event_table_params->m_sort_column_index = sort_colunn_index;
             event_table_params->m_sort_order        = sort_order;
             event_table_params->m_filter            = m_filter.data();
-            event_table_params->m_group             = m_group.size() ? m_group.data() : "";
+            event_table_params->m_group             = m_group;//.size() ? m_group.data() : "";
 
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 

@@ -149,31 +149,29 @@ rocprofvis_result_t CallStack::GetString(rocprofvis_property_t property, uint64_
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        switch(property)
+        case kRPVControllerCallstackFunction:
+            result = m_symbol.GetString(value, length);
+            break;
+        case kRPVControllerCallstackArguments:
+            result = m_args.GetString(value, length);
+            break;
+        case kRPVControllerCallstackLine:
+            result = m_line.GetString(value, length);
+            break;
+        case kRPVControllerCallstackFile:
+        case kRPVControllerCallstackISAFunction:
+        case kRPVControllerCallstackISAFile:
+        case kRPVControllerCallstackISALine:
         {
-            case kRPVControllerCallstackFunction:
-                result = m_symbol.GetString(value, length);
-                break;
-            case kRPVControllerCallstackArguments:
-                result = m_args.GetString(value, length);
-                break;
-            case kRPVControllerCallstackLine:
-                result = m_line.GetString(value, length);
-                break;
-            case kRPVControllerCallstackFile:
-            case kRPVControllerCallstackISAFunction:
-            case kRPVControllerCallstackISAFile:
-            case kRPVControllerCallstackISALine:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
+            result = kRocProfVisResultInvalidType;
+            break;
         }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+
     }
     return result;
 }
@@ -184,25 +182,23 @@ rocprofvis_result_t CallStack::SetUInt64(rocprofvis_property_t property, uint64_
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        switch(property)
+        case kRPVControllerCallstackFunction:
+        case kRPVControllerCallstackArguments:
+        case kRPVControllerCallstackFile:
+        case kRPVControllerCallstackLine:
+        case kRPVControllerCallstackISAFunction:
+        case kRPVControllerCallstackISAFile:
+        case kRPVControllerCallstackISALine:
         {
-            case kRPVControllerCallstackFunction:
-            case kRPVControllerCallstackArguments:
-            case kRPVControllerCallstackFile:
-            case kRPVControllerCallstackLine:
-            case kRPVControllerCallstackISAFunction:
-            case kRPVControllerCallstackISAFile:
-            case kRPVControllerCallstackISALine:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
+            result = kRocProfVisResultInvalidType;
+            break;
         }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+
     }
     return result;
 }
@@ -212,25 +208,23 @@ rocprofvis_result_t CallStack::SetDouble(rocprofvis_property_t property, uint64_
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        switch(property)
+        case kRPVControllerCallstackFunction:
+        case kRPVControllerCallstackArguments:
+        case kRPVControllerCallstackFile:
+        case kRPVControllerCallstackLine:
+        case kRPVControllerCallstackISAFunction:
+        case kRPVControllerCallstackISAFile:
+        case kRPVControllerCallstackISALine:
         {
-            case kRPVControllerCallstackFunction:
-            case kRPVControllerCallstackArguments:
-            case kRPVControllerCallstackFile:
-            case kRPVControllerCallstackLine:
-            case kRPVControllerCallstackISAFunction:
-            case kRPVControllerCallstackISAFile:
-            case kRPVControllerCallstackISALine:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
+            result = kRocProfVisResultInvalidType;
+            break;
         }
+        default:
+        {
+            result = kRocProfVisResultInvalidEnum;
+            break;
+        }
+
     }
     return result;
 }

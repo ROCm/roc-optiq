@@ -90,6 +90,15 @@ private:
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
     static int CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
+    // sqlite3_exec callback to process stack trace information query and add stack trace
+    // object to StackTrace container
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
+                                     char** azColName);
     // method to remap string IDs. Main reason for remapping is having strings and kernel symbol names in one array 
     // @param record - event record structure
     // @return status of operation

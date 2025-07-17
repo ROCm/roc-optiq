@@ -59,7 +59,7 @@ rocprofvis_result_t Future::Cancel()
 rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (value && (property == kRPVControllerFutureResult))
+    if (value)
     {
         switch (property)
         {
@@ -106,7 +106,7 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
 rocprofvis_result_t Future::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value && (property == kRPVControllerFutureResult))
+    if(value)
     {
         switch(property)
         {
@@ -133,7 +133,7 @@ rocprofvis_result_t Future::GetDouble(rocprofvis_property_t property, uint64_t i
 rocprofvis_result_t Future::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value && (property == kRPVControllerFutureResult))
+    if(value)
     {
         switch(property)
         {
@@ -160,7 +160,7 @@ rocprofvis_result_t Future::GetObject(rocprofvis_property_t property, uint64_t i
 rocprofvis_result_t Future::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value && (property == kRPVControllerFutureResult))
+    if(value)
     {
         switch(property)
         {

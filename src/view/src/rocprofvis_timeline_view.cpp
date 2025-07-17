@@ -116,31 +116,29 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
                                     ImGuiWindowFlags_NoScrollWithMouse |
                                     ImGuiWindowFlags_NoInputs;
 
-    ImGui::SetNextWindowSize(m_graph_size, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(m_graph_size.x, m_graph_size.y - m_ruler_height -
+                                                        m_artificial_scrollbar_height),
+                             ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-
-    ImGui::BeginChild(
-        "Arrows Overlay",
-        ImVec2(m_graph_size.x, m_graph_size.y  ), false,
-        window_flags);
+    //  ImGui::SetCursorPos(
+    // ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
+    ImGui::BeginChild("Arrows Overlay", ImVec2(m_graph_size.x, m_graph_size.y), false,
+                      window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position));
-    ImGui::BeginChild(
-        "Arrows Overlay Content",
-        ImVec2(m_graph_size.x,
-               total_height ),
+    ImGui::BeginChild("Arrows Overlay Content", ImVec2(m_graph_size.x, total_height),
                       false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
     ImVec2      clip_min        = window_position;
-    ImVec2      clip_max        = ImVec2(m_graph_size.x + window_position.x,
-                                         m_graph_size.y);
+    ImVec2      clip_max =
+        ImVec2(m_graph_size.x + window_position.x,
+               m_graph_size.y );
 
     draw_list->PushClipRect(clip_min, clip_max, true);
-
 
     m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
                          m_track_height_total);
@@ -511,7 +509,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         double scrubber_position =
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
-        char   text[20];
+        char text[20];
         snprintf(text, 20, "%17.0f", scrubber_position);
         ImVec2 label_size = ImGui::CalcTextSize(text);
 

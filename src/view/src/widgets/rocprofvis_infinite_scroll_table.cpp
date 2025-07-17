@@ -186,28 +186,44 @@ InfiniteScrollTable::Render()
     {
         ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks", start_row, end_row,
                     total_row_count, selected_track_count);
-        
+
         if(m_table_type == TableType::kEventTable)
         {
-            std::vector<const char*> items;
-            items.reserve(column_names.size()+1);
-            items.push_back("-- None --");
-            for (const auto& col : column_names) {
-                items.push_back(col.c_str());
-            }
-            
-            if (ImGui::Combo("##combo", &m_current_group_selection_idx, items.data(), items.size()))
+            if(m_current_group_selection_idx != 0)
             {
-                if (m_current_group_selection_idx > 0 &&
-                    m_current_group_selection_idx <= column_names.size())
+                if(ImGui::Button("Clear Group Selection"))
                 {
-                    m_group = column_names[m_current_group_selection_idx - 1];
-                }
-                else
-                {
+                    m_current_group_selection_idx = 0;
                     m_group.clear();
+                    filter_changed = true;
                 }
-                filter_changed = true;
+            }
+            else
+            {
+                std::vector<const char*> items;
+                items.reserve(column_names.size() + 1);
+                items.push_back("-- None --");
+                for(const auto& col : column_names)
+                {
+                    items.push_back(col.c_str());
+                }
+
+                if(ImGui::Combo("##combo", &m_current_group_selection_idx, items.data(),
+                                items.size()))
+                {
+                    if(m_current_group_selection_idx > 0 &&
+                       m_current_group_selection_idx <= column_names.size())
+                    {
+                        m_group = column_names[m_current_group_selection_idx - 1];
+                    }
+                    else
+                    {
+                        m_group.clear();
+                    }
+                    filter_changed = true;
+                }
+                ImGui::SameLine();
+                ImGui::Text("Group by");
             }
         }
 

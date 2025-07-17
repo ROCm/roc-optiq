@@ -30,8 +30,11 @@ private:
     ~AppWindow();
 
     void RenderSettingsMenu();
+    void RenderHelpMenu();
+    
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
 
+    void RenderAboutDialog();
 
     static AppWindow* s_instance;
 
@@ -51,6 +54,7 @@ private:
 
     bool         m_show_metrics;
     bool         m_show_debug_window;
+    bool         m_open_about_dialog;
     DataProvider m_test_data_provider;
     bool         m_show_provider_test_widow;
 #endif

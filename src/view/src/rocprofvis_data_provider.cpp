@@ -35,7 +35,7 @@ DataProvider::SetSelectedEvent(selected_event_t event)
 selected_event_t
 DataProvider::GetSelectedEvent()
 {
-    return m_selected_event;
+     return m_selected_event;
 }
 
 const event_info_t&

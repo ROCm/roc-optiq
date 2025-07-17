@@ -84,16 +84,14 @@ EventsView::RenderLeftPanel()
             }
 
             const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
-            if(!flowInfo.flow_data.empty())
-            {
-                ImGui::NewLine();
-                ImGui::Separator();
-                RenderEventFlowInfo(flowInfo.flow_data);
-                // Run arrows after flow because all info needed is now there.
-                auto evt = std::make_shared<CreateArrowsViewEvent>(
-                    static_cast<int>(RocEvents::kHandleUserArrowCreationEvent));
-                EventManager::GetInstance()->AddEvent(evt);
-            }
+
+            ImGui::NewLine();
+            ImGui::Separator();
+            RenderEventFlowInfo(flowInfo.flow_data);
+            // Run arrows after flow because all info needed is now there.
+            auto evt = std::make_shared<CreateArrowsViewEvent>(
+                static_cast<int>(RocEvents::kHandleUserArrowCreationEvent));
+            EventManager::GetInstance()->AddEvent(evt);
         }
     }
     ImGui::EndChild();

@@ -2,9 +2,9 @@
 #pragma once
 
 #include "rocprofvis_timeline_arrow.h"
+#include "rocprofvis_settings.h"
 #include "spdlog/spdlog.h"
 #include <iostream>
-#include "rocprofvis_settings.h"
 
 namespace RocProfVis
 {
@@ -84,11 +84,10 @@ TimelineArrow::AddArrow(const TimelineArrowData& arrow)
 void
 TimelineArrow::AddArrows()
 {
+    m_arrows_to_render          = {};
     const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
     if(!flowInfo.flow_data.empty())
     {
-        m_arrows_to_render = {};
-
         double source_time  = m_data_provider.GetSelectedEvent().position_ns;
         int    source_track = m_data_provider.GetSelectedEvent().track_id;
 

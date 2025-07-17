@@ -1,10 +1,10 @@
 /build
 /out
 
-out/build/x64-Debug/
-/out/build/x64-Debug/
-
 .vs
+.vscode
+
+src/app/inc/rocprofvis_version.h
 
 .vs/rocprofiler-visualizer/v17
 sqlite3.c

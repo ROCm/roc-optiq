@@ -1,0 +1,31 @@
+#include "windows.h"
+
+#define FILEVERSION_MAJOR        @PROJECT_VERSION_MAJOR@
+#define FILEVERSION_MINOR        @PROJECT_VERSION_MINOR@
+#define FILEVERSION_PATCH        @PROJECT_VERSION_PATCH@
+#define FILEVERSION_BUILD        @PROJECT_VERSION_BUILD@
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+1 VERSIONINFO
+FILEVERSION FILEVERSION_MAJOR, FILEVERSION_MINOR, FILEVERSION_PATCH, FILEVERSION_BUILD
+PRODUCTVERSION FILEVERSION_MAJOR, FILEVERSION_MINOR, FILEVERSION_PATCH, FILEVERSION_BUILD
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0" // Language and codepage: U.S. English, Unicode
+        BEGIN
+            VALUE "CompanyName", "AMD\0"
+            VALUE "FileDescription", "Rocprof Visualizer\0"
+            VALUE "FileVersion", STR(FILEVERSION_MAJOR) "." STR(FILEVERSION_MINOR) "." STR(FILEVERSION_PATCH) "." STR(FILEVERSION_BUILD) "\0"
+            VALUE "ProductVersion", STR(FILEVERSION_MAJOR) "." STR(FILEVERSION_MINOR) "." STR(FILEVERSION_PATCH) "." STR(FILEVERSION_BUILD) "\0"
+            VALUE "InternalName", "Rocprof Visualizer\0"
+            VALUE "ProductName","Rocprof Visualizer\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

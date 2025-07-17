@@ -143,13 +143,14 @@ public:
     uint64_t m_req_row_count;      // number of rows requested
     uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
+    std::string           m_filter;
 
     TableRequestParams(const TableRequestParams& table_params)            = default;
     TableRequestParams& operator=(const TableRequestParams& table_params) = default;
 
     TableRequestParams(
         rocprofvis_controller_table_type_t table_type,
-        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts, char const* filter,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending)
@@ -161,6 +162,7 @@ public:
     , m_req_row_count(req_row_count)
     , m_sort_column_index(sort_column_index)
     , m_sort_order(sort_order)
+    , m_filter(filter)
     {}
 };
 
@@ -265,8 +267,7 @@ public:
      * @param sort_column_index: The index of the column to sort by
      * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackEventTable(
-        uint64_t track_id, double start_ts, double end_ts, uint64_t start_row = -1,
+    bool FetchSingleTrackEventTable(uint64_t track_id, double start_ts, double end_ts, char const* filter, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
@@ -280,8 +281,7 @@ public:
      * @param sort_column_index: The index of the column to sort by
      * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackSampleTable(
-        uint64_t track_id, double start_ts, double end_ts, uint64_t start_row = -1,
+    bool FetchSingleTrackSampleTable(uint64_t track_id, double start_ts, double end_ts, char const* filter, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
@@ -291,14 +291,12 @@ public:
      */
     bool FetchSingleTrackTable(const TableRequestParams& table_params);
 
-    bool FetchMultiTrackSampleTable(
-        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
+    bool FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_ids, double start_ts, double end_ts, char const* filter,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    bool FetchMultiTrackEventTable(
-        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
+    bool FetchMultiTrackEventTable(const std::vector<uint64_t>& track_ids, double start_ts, double end_ts, char const* filter,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);

@@ -151,6 +151,28 @@ int RocprofDatabase::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt
     return 0;
 }
 
+int
+RocprofDatabase::CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
+                                       char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    RocprofDatabase*           db = (RocprofDatabase*) callback_params->db;
+    rocprofvis_db_stack_data_t record;
+    if(callback_params->future->Interrupted()) return 1;
+    record.symbol = (char*) sqlite3_column_text(stmt, 0);
+    record.line   = (char*) sqlite3_column_text(stmt, 1);
+    record.args   = "";
+    record.depth  = callback_params->future->GetProcessedRowsCount();
+    if(db->BindObject()->FuncAddStackFrame(callback_params->handle, record) !=
+       kRocProfVisDmResultSuccess)
+        return 1;
+    callback_params->future->CountThisRow();
+    return 0;
+}   
+
 rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
@@ -250,7 +272,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );
         BindObject()->FuncAddString(BindObject()->trace_object, ""); // 0 index string
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT string FROM rocpd_string;", &CallBackAddString)) break;
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT string FROM rocpd_string ORDER BY id;", &CallBackAddString)) break;
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT COUNT(*) FROM rocpd_string;", &CallbackGetValue, m_symbols_offset)) break;
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT display_name FROM rocpd_info_kernel_symbol;", &CallBackAddString)) break;
 
@@ -459,9 +481,44 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)
 {
-    return future->SetPromise(kRocProfVisDmResultNotSupported);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    while(true)
+    {
+        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties,
+                                    ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded,
+                                    ERROR_METADATA_IS_NOT_LOADED);
+        rocprofvis_dm_stacktrace_t stacktrace =
+            BindObject()->FuncAddStackTrace(BindObject()->trace_object, event_id);
+        ROCPROFVIS_ASSERT_MSG_BREAK(stacktrace, ERROR_EXT_DATA_CANNOT_BE_NULL);
+        std::stringstream query;
+        if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
+        {
+            query << "select call_stack, line_info from regions where id == ";
+            query << event_id.bitfield.event_id << ";";
+            ShowProgress(0, query.str().c_str(), kRPVDbBusy, future);
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(),
+                                                             stacktrace,
+                                                             &CallbackAddStackTrace))
+            {
+                break;
+            }
 
-    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+        }
+        else
+        {
+            ShowProgress(0, "Stack trace is not available for specified operation type!",
+                         kRPVDbError, future);
+            return future->SetPromise(kRocProfVisDmResultInvalidParameter);
+        }
+
+        ShowProgress(100, "Extended data successfully loaded!", kRPVDbSuccess, future);
+        return future->SetPromise(kRocProfVisDmResultSuccess);
+    }
+    ShowProgress(0, "Extended data  not loaded!", kRPVDbError, future);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout
+                                                    : kRocProfVisDmResultDbAccessFailed);
 }
 
 

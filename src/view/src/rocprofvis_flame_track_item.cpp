@@ -17,7 +17,7 @@ namespace View
 
 constexpr int MIN_LABEL_WIDTH = 40;
 
-FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, float zoom,
+FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, double zoom,
                                double time_offset_ns, double min_x, double max_x,
                                double scale_x)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
@@ -95,8 +95,8 @@ FlameTrackItem::ExtractPointsFromData()
 
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
-                        rocprofvis_trace_event_t const& flame, float duration,
-                        ImDrawList* draw_list)
+                        rocprofvis_trace_event_t const& flame, double duration,
+                        ImDrawList* draw_list, double raw_start_time)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -143,12 +143,13 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
             if(m_selected_event_id != flame.m_id ||
                m_dp.GetSelectedEventId() != flame.m_id)
             {
-                m_dp.SetSelectedEventId(flame.m_id);
+                selected_event_t selected_event = { flame.m_id, raw_start_time, m_id };
+                m_dp.SetSelectedEvent(selected_event);
                 m_selected_event_id = flame.m_id;
             }
             else
             {
-                m_dp.SetSelectedEventId(std::numeric_limits<uint64_t>::max());
+                m_dp.SetSelectedEvent({});
                 m_selected_event_id = std::numeric_limits<uint64_t>::max();
             }
         }
@@ -181,24 +182,24 @@ FlameTrackItem::RenderChart(float graph_width)
         double normalized_start =
             container_pos.x +
             (flame.m_start_ts - (m_min_x + m_time_offset_ns)) * m_scale_x;
-        // If size of flame duration is too large for a float, cap it to FLT_MAX
-        float normalized_duration =
-            static_cast<float>(std::min<double>(flame.m_duration * m_scale_x, FLT_MAX));
-        // Any event must be visible on screen, having at least one point duration 
-        normalized_duration   = std::max(normalized_duration, 1.0F);
-        double normalized_end = normalized_start + normalized_duration;
+
+        double normalized_duration = std::max(flame.m_duration * m_scale_x, 1.0);
+        double normalized_end      = normalized_start + normalized_duration;
+
+        ImVec2 start_position;
+
+        // Calculate the start position based on the normalized start time and level
+        start_position = ImVec2(normalized_start, flame.m_level * m_flame_height);
 
         if(normalized_end < container_pos.x ||
            normalized_start > container_pos.x + graph_width)
         {
             continue;  // Skip if the flame is not visible in the current view
         }
-        
-        // Calculate the start position based on the normalized start time and level
-        ImVec2 start_position(static_cast<float>(normalized_start), flame.m_level * m_flame_height);
 
         color_index = static_cast<long long>(flame.m_start_ts) % colorCount;
-        DrawBox(start_position, color_index, flame, normalized_duration, draw_list);
+        DrawBox(start_position, color_index, flame, normalized_duration, draw_list,
+                flame.m_start_ts);
     }
 
     ImGui::EndChild();

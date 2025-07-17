@@ -47,9 +47,8 @@ typedef struct track_info_t
     double                             min_ts;       // starting time stamp of track
     double                             max_ts;       // ending time stamp of track
     uint64_t                           num_entries;  // number of entries in the track
-    rocprofvis_handle_t*               graph_handle;  // handle to the graph object owned by the track 
+    rocprofvis_handle_t* graph_handle;  // handle to the graph object owned by the track
 } track_info_t;
-
 
 typedef struct event_ext_data_t
 {
@@ -58,9 +57,16 @@ typedef struct event_ext_data_t
     std::string value;
 } event_ext_data_t;
 
+typedef struct selected_event_t
+{
+    uint64_t event_id;     // id of the selected event
+    double   position_ns;  // position of the event in the timeline
+    uint64_t track_id;     // id of the track where the event is located
+} selected_event_t;
+
 typedef struct event_info_t
 {
-    uint64_t event_id; // id of the event for which the extended info is stored
+    uint64_t event_id;  // id of the event for which the extended info is stored
     std::vector<event_ext_data_t> ext_data;
 } event_info_t;
 
@@ -74,25 +80,26 @@ typedef struct event_flow_data_t
 
 typedef struct flow_info_t
 {
-    uint64_t event_id; // id of the event for which the flow info is stored
+    uint64_t event_id;  // id of the event for which the flow info is stored
     std::vector<event_flow_data_t> flow_data;
 } flow_info_t;
 
-typedef struct call_stack_data_t {
-    std::string function;          // Source code function name
-    std::string arguments;         // Source code function arguments
-    std::string file;              // Source code file path
-    std::string line;              // Source code line number
+typedef struct call_stack_data_t
+{
+    std::string function;   // Source code function name
+    std::string arguments;  // Source code function arguments
+    std::string file;       // Source code file path
+    std::string line;       // Source code line number
 
-    std::string isa_function;      // ISA/ASM function name
-    std::string isa_file;          // ISA/ASM file path
-    std::string isa_line;          // ISA/ASM line number
+    std::string isa_function;  // ISA/ASM function name
+    std::string isa_file;      // ISA/ASM file path
+    std::string isa_line;      // ISA/ASM line number
 } call_stack_data_t;
 
 typedef struct call_stack_info_t
 {
-    uint64_t event_id; // id of the event for which the call stack data is stored
-    std::vector<call_stack_data_t> call_stack_data; // vector of call stack entries
+    uint64_t event_id;  // id of the event for which the call stack data is stored
+    std::vector<call_stack_data_t> call_stack_data;  // vector of call stack entries
 } call_stack_info_t;
 
 class RequestParamsBase
@@ -129,12 +136,12 @@ class TableRequestParams : public RequestParamsBase
 {
 public:
     rocprofvis_controller_table_type_t m_table_type;  // type of the table
-    std::vector<uint64_t> m_track_ids;  // ids of the tracks in the table
-    double                m_start_ts;   // starting time stamp of the data in the table
-    double                m_end_ts;     // ending time stamp of the data in the table
-    uint64_t              m_start_row;  // starting row of the data in the table
-    uint64_t              m_req_row_count;            // number of rows requested
-    uint64_t              m_sort_column_index;        // index of the column to sort by
+    std::vector<uint64_t>              m_track_ids;   // ids of the tracks in the table
+    double   m_start_ts;           // starting time stamp of the data in the table
+    double   m_end_ts;             // ending time stamp of the data in the table
+    uint64_t m_start_row;          // starting row of the data in the table
+    uint64_t m_req_row_count;      // number of rows requested
+    uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
 
     TableRequestParams(const TableRequestParams& table_params)            = default;
@@ -187,8 +194,8 @@ public:
     DataProvider();
     ~DataProvider();
 
-    const event_info_t& GetEventInfoStruct() const;
-    const flow_info_t& GetFlowInfo() const;
+    const event_info_t&      GetEventInfoStruct() const;
+    const flow_info_t&       GetFlowInfo() const;
     const call_stack_info_t& GetCallStackInfo() const;
 
     bool FetchEventExtData(uint64_t event_id);
@@ -198,18 +205,21 @@ public:
     // Get user selected event.
     uint64_t GetSelectedEventId();
 
-    //Set user selected event.
-    void SetSelectedEventId(uint64_t id);
+    // Set user selected event.
+    void SetSelectedEvent(selected_event_t event);
+
+    // Get user selected event.
+    selected_event_t GetSelectedEvent();
 
     /*
      *   Close the controller.
      */
     void CloseController();
 
-     /*
+    /*
      *   Notify controller it can consume more resources.
      */
-    void SetSelectedState(const std::string & id);
+    void SetSelectedState(const std::string& id);
 
     /*
      *   Free all requests. This does not cancel the requests on the controller end.
@@ -255,7 +265,8 @@ public:
      * @param sort_column_index: The index of the column to sort by
      * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackEventTable(uint64_t track_id, double start_ts, double end_ts, uint64_t start_row = -1,
+    bool FetchSingleTrackEventTable(
+        uint64_t track_id, double start_ts, double end_ts, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
@@ -269,7 +280,8 @@ public:
      * @param sort_column_index: The index of the column to sort by
      * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackSampleTable(uint64_t track_id, double start_ts, double end_ts, uint64_t start_row = -1,
+    bool FetchSingleTrackSampleTable(
+        uint64_t track_id, double start_ts, double end_ts, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
@@ -279,12 +291,14 @@ public:
      */
     bool FetchSingleTrackTable(const TableRequestParams& table_params);
 
-    bool FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
+    bool FetchMultiTrackSampleTable(
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    bool FetchMultiTrackEventTable(const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
+    bool FetchMultiTrackEventTable(
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
@@ -340,7 +354,7 @@ public:
      */
     const RawTrackData* GetRawTrackData(uint64_t track_id);
 
-    const track_info_t* GetTrackInfo(uint64_t track_id);
+    const track_info_t*              GetTrackInfo(uint64_t track_id);
     std::vector<const track_info_t*> GetTrackInfoList();
 
     uint64_t GetTrackCount();
@@ -360,7 +374,8 @@ public:
     void SetTraceLoadedCallback(const std::function<void(const std::string&)>& callback);
 
     /*
-     * Moves a graph inside the controller's timeline to a specified index and updates the indexes of m_track_metadata. 
+     * Moves a graph inside the controller's timeline to a specified index and updates the
+     * indexes of m_track_metadata.
      * @param track_id: The id of the track to move
      * @param index: The desired index of the track.
      * @return: True if operation is successful.
@@ -398,13 +413,10 @@ private:
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
 
-    uint64_t     m_selected_event_id;
-    double       m_selected_event_start;
-    double       m_selected_event_end;
-    event_info_t m_event_info;  // Store event info for selected event
-    flow_info_t  m_flow_info;   // Store flow info for selected event
+    selected_event_t  m_selected_event;   // Store selected event info
+    event_info_t      m_event_info;       // Store event info for selected event
+    flow_info_t       m_flow_info;        // Store flow info for selected event
     call_stack_info_t m_call_stack_info;  // Store call stack info for selected event
-
 
     std::unordered_map<uint64_t, track_info_t>  m_track_metadata;
     std::unordered_map<uint64_t, RawTrackData*> m_raw_trackdata;

@@ -10,6 +10,7 @@
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_structs.h"
+#include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
@@ -34,27 +35,28 @@ class TimelineView : public RocWidget
 public:
     TimelineView(DataProvider& dp);
     ~TimelineView();
-    virtual void                           Render();
-    void                                   Update();
-    void                                   MakeGraphView();
-    void                                   ResetView();
-    void                                   DestroyGraphs();
-    std::vector<rocprofvis_graph_t>*   GetGraphs();
-    int                                    FindTrackIdByName(const std::string& name);
-    void                                   ScrollToTrack(uint64_t position);
-    float                                  CalculateTrackOffsetY(int chart_id);
-    void                                   ScrollToTrackByName(const std::string& name);
-    void SetViewTimePosition(double time_pos_ns, bool center);
-    void RenderGraphPoints();
-    void RenderGridAlt();
-    void RenderGrid();
-    void RenderScrubber(ImVec2 screen_pos);
-    void RenderSplitter(ImVec2 screen_pos);
-    void RenderGraphView();
-    void HandleTopSurfaceTouch();
-    void CalibratePosition();
-    void HandleNewTrackData(std::shared_ptr<RocEvent> e);
-    void CalculateGridInterval();
+    virtual void                     Render();
+    void                             Update();
+    void                             MakeGraphView();
+    void                             ResetView();
+    void                             DestroyGraphs();
+    std::vector<rocprofvis_graph_t>* GetGraphs();
+    int                              FindTrackIdByName(const std::string& name);
+    void                             RenderArrows(ImVec2 screen_pos);
+    void                             ScrollToTrack(uint64_t position);
+    float                            CalculateTrackOffsetY(int chart_id);
+    void                             ScrollToTrackByName(const std::string& name);
+    void                             SetViewTimePosition(double time_pos_ns, bool center);
+    void                             RenderGraphPoints();
+    void                             RenderGridAlt();
+    void                             RenderGrid();
+    void                             RenderScrubber(ImVec2 screen_pos);
+    void                             RenderSplitter(ImVec2 screen_pos);
+    void                             RenderGraphView();
+    void                             HandleTopSurfaceTouch();
+    void                             CalibratePosition();
+    void                             HandleNewTrackData(std::shared_ptr<RocEvent> e);
+    void                             CalculateGridInterval();
 
 private:
     std::vector<rocprofvis_graph_t>       m_graphs;
@@ -102,12 +104,14 @@ private:
     int                                   m_grid_interval_count;
     bool                                  m_recalculate_grid_interval;
     ImVec2                                m_last_graph_size;
+    std::map<uint64_t, float>                  m_track_height_total;  // Track index to height
+    TimelineArrow                         m_arrow_layer;
     float                                 m_last_zoom;
     struct {
         bool handled;
         uint64_t track_id;
-        int new_index;
-    }                                     m_reorder_request;
+        int      new_index;
+    } m_reorder_request;
 };
 
 }  // namespace View

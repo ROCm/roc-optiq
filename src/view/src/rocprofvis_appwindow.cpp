@@ -8,6 +8,8 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 #include "widgets/rocprofvis_debug_window.h"
+#include "rocprofvis_version.h"
+
 #ifdef COMPUTE_UI_SUPPORT
 #include "rocprofvis_navigation_manager.h"
 #endif
@@ -18,6 +20,7 @@ using namespace RocProfVis::View;
 constexpr ImVec2 FILE_DIALOG_SIZE = ImVec2(480.0f, 360.0f);
 constexpr char* FILE_DIALOG_NAME = "ChooseFileDlgKey";
 constexpr char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
+constexpr char* ABOUT_DIALOG_NAME = "About##_dialog";
 
 // For testing DataProvider
 void
@@ -56,6 +59,7 @@ AppWindow::AppWindow()
 , m_show_debug_window(false)
 , m_show_provider_test_widow(false)
 , m_show_metrics(false)
+, m_open_about_dialog(false)
 #endif
 {}
 
@@ -176,6 +180,7 @@ AppWindow::Render()
         }
 
         RenderSettingsMenu();
+        RenderHelpMenu();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         RenderDeveloperMenu();
 #endif
@@ -187,6 +192,12 @@ AppWindow::Render()
     {
         m_main_view->Render();
     }
+
+    if(m_open_about_dialog) {
+        ImGui::OpenPopup(ABOUT_DIALOG_NAME);
+        m_open_about_dialog = false;  // Reset the flag after opening the dialog
+    }
+    RenderAboutDialog();
 
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
@@ -272,6 +283,17 @@ AppWindow::RenderSettingsMenu()
     }
 }
 
+void AppWindow::RenderHelpMenu() {
+    if(ImGui::BeginMenu("Help"))
+    {
+        if(ImGui::MenuItem("About"))
+        {
+           m_open_about_dialog = true;
+        }
+        ImGui::EndMenu();
+    }
+}
+
 void
 AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 {
@@ -288,6 +310,27 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
     NavigationManager::GetInstance()->RefreshNavigationTree();
 #endif
 }
+
+void AppWindow::RenderAboutDialog() 
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("RocProfiler Visualizer");
+        ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR, ROCPROFVIS_VERSION_MINOR,
+                    ROCPROFVIS_VERSION_PATCH);
+        ImGui::Text("Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
+
+        if(ImGui::Button("Close"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding   
+}
+
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void

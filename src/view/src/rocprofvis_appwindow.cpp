@@ -59,8 +59,8 @@ AppWindow::AppWindow()
 , m_show_debug_window(false)
 , m_show_provider_test_widow(false)
 , m_show_metrics(false)
-, m_open_about_dialog(false)
 #endif
+, m_open_about_dialog(false)
 {}
 
 AppWindow::~AppWindow()

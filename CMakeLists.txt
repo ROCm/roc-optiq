@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.15)
 project(rocprof-visualizer)
 
+# Define the version numbers
+set(PROJECT_VERSION_MAJOR 0)
+set(PROJECT_VERSION_MINOR 1)
+set(PROJECT_VERSION_PATCH 1)
+set(PROJECT_VERSION_BUILD 0)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
@@ -69,6 +75,23 @@ list(APPEND VIEW_FILES
     src/view/src/widgets/rocprofvis_compute_widget.cpp
 )
 endif(COMPUTE_UI_SUPPORT)
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/resources/version.h.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc/rocprofvis_version.h"
+    @ONLY
+)
+
+if(WIN32)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/rocprofvis_app.rc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
+        @ONLY
+    )
+    list(APPEND VIEW_FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
+        )
+endif(WIN32)
 
 add_executable(rocprof-visualizer 
     src/app/src/rocprofvis_imgui_vulkan.cpp 

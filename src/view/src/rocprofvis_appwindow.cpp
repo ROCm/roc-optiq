@@ -20,6 +20,7 @@ using namespace RocProfVis::View;
 constexpr ImVec2 FILE_DIALOG_SIZE = ImVec2(480.0f, 360.0f);
 constexpr char* FILE_DIALOG_NAME = "ChooseFileDlgKey";
 constexpr char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
+constexpr char* ABOUT_DIALOG_NAME = "About##_dialog";
 
 // For testing DataProvider
 void
@@ -193,7 +194,7 @@ AppWindow::Render()
     }
 
     if(m_open_about_dialog) {
-        ImGui::OpenPopup("About##_dialog");
+        ImGui::OpenPopup(ABOUT_DIALOG_NAME);
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
     RenderAboutDialog();
@@ -314,7 +315,7 @@ void AppWindow::RenderAboutDialog()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
-    if(ImGui::BeginPopupModal("About##_dialog", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::Text("RocProfiler Visualizer");
         ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR, ROCPROFVIS_VERSION_MINOR,

@@ -30,6 +30,8 @@ private:
 
     void RenderLoadingIndicator();
 
+    std::vector<char> m_filter;
+
     TableType m_table_type;  // Type of table (e.g., EventTable, SampleTable)
     rocprofvis_controller_table_type_t m_req_table_type;
 

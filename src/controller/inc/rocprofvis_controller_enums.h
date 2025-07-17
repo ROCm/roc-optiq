@@ -723,6 +723,7 @@ typedef enum rocprofvis_controller_table_arguments_t
     kRPVControllerTableArgsSortOrder = 0xE0000006,
     kRPVControllerTableArgsStartIndex = 0xE0000007,
     kRPVControllerTableArgsStartCount = 0xE0000008,
+    kRPVControllerTableArgsFilter = 0xE0000009,
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t

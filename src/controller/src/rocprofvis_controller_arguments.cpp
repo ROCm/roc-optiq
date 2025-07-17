@@ -84,18 +84,15 @@ rocprofvis_result_t Arguments::GetString(rocprofvis_property_t property, uint64_
                                 char* value, uint32_t* length) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
+    switch(property)
     {
-        switch(property)
+        default:
         {
-            default:
+            if(m_args[property].size() > index)
             {
-                if(m_args[property].size() > index)
-                {
-                    result = m_args[property][index].GetString(value, length);
-                }
-                break;
+                result = m_args[property][index].GetString(value, length);
             }
+            break;
         }
     }
     return result;

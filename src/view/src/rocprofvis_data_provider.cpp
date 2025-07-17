@@ -635,6 +635,11 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                               table_params.m_sort_order);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+    result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0,
+                                              table_params.m_filter.data(),
+                                              table_params.m_filter.length());
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
     if(table_params.m_start_row != -1)
     {
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex,
@@ -653,25 +658,28 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
 
 bool
 DataProvider::FetchSingleTrackSampleTable(uint64_t track_id, double start_ts,
-                                          double end_ts, uint64_t start_row,
+                                          double end_ts, char const* filter,
+                                          uint64_t start_row,                   
                                           uint64_t req_row_count,
                                           uint64_t sort_column_index,
                                           rocprofvis_controller_sort_order_t sort_order)
 {
     return FetchSingleTrackTable(
-        TableRequestParams(kRPVControllerTableTypeSamples, { track_id }, start_ts, end_ts,
+        TableRequestParams(kRPVControllerTableTypeSamples, { track_id }, start_ts, end_ts, filter,
                            start_row, req_row_count, sort_column_index, sort_order));
 }
 
 bool
 DataProvider::FetchSingleTrackEventTable(uint64_t track_id, double start_ts,
-                                         double end_ts, uint64_t start_row,
+                                         double end_ts,
+                                         char const* filter, 
+                                         uint64_t start_row,
                                          uint64_t req_row_count,
                                          uint64_t sort_column_index,
                                          rocprofvis_controller_sort_order_t sort_order)
 {
     return FetchSingleTrackTable(
-        TableRequestParams(kRPVControllerTableTypeEvents, { track_id }, start_ts, end_ts,
+        TableRequestParams(kRPVControllerTableTypeEvents, { track_id }, start_ts, end_ts, filter,
                            start_row, req_row_count, sort_column_index, sort_order));
 }
 
@@ -827,25 +835,26 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
 bool
 DataProvider::FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_ids,
                                          double start_ts, double end_ts,
+                                         char const* filter,
                                          uint64_t start_row, uint64_t req_row_count,
                                          uint64_t sort_column_index,
                                          rocprofvis_controller_sort_order_t sort_order)
 {
-    return FetchMultiTrackTable(
-        TableRequestParams(kRPVControllerTableTypeSamples, track_ids, start_ts, end_ts,
-                           start_row, req_row_count, sort_column_index, sort_order));
+    return FetchMultiTrackTable(TableRequestParams(
+        kRPVControllerTableTypeSamples, track_ids, start_ts, end_ts, filter, start_row, req_row_count, sort_column_index, sort_order));
 }
 
 bool
 DataProvider::FetchMultiTrackEventTable(const std::vector<uint64_t>& track_ids,
                                         double start_ts, double end_ts,
+                                        char const* filter,
                                         uint64_t start_row, uint64_t req_row_count,
                                         uint64_t sort_column_index,
                                         rocprofvis_controller_sort_order_t sort_order)
 
 {
     return FetchMultiTrackTable(
-        TableRequestParams(kRPVControllerTableTypeEvents, track_ids, start_ts, end_ts,
+        TableRequestParams(kRPVControllerTableTypeEvents, track_ids, start_ts, end_ts, filter,
                            start_row, req_row_count, sort_column_index, sort_order));
 }
 

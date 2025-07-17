@@ -374,7 +374,7 @@ rocprofvis_result_t rocprofvis_controller_set_object(rocprofvis_handle_t* object
 * @param length Length of string to write.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_set_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char* value, uint32_t length);
+rocprofvis_result_t rocprofvis_controller_set_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length);
 
 /*
 * Frees the provided track

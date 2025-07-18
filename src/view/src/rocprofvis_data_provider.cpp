@@ -819,6 +819,9 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
             track_ids.push_back(track_id);
 
             auto params = std::make_shared<TableRequestParams>(table_params);
+            params->m_track_ids = std::move(track_ids);
+            request_info.custom_params = params;
+                        
             m_requests.emplace(request_id, request_info);
             spdlog::debug("Fetching {} table data",
                           (table_params.m_table_type == kRPVControllerTableTypeEvents)

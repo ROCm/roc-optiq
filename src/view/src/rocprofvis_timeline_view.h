@@ -9,7 +9,6 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings.h"
-#include "rocprofvis_structs.h"
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"

@@ -4,15 +4,30 @@
 
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
-#include "rocprofvis_structs.h"
 
 #include <unordered_set>
+#include <string>
 #include <vector>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+typedef struct rocprofvis_trace_event_t
+{
+    uint64_t    m_id;
+    std::string m_name;
+    double      m_start_ts;
+    double      m_duration;
+    uint32_t    m_level;
+} rocprofvis_trace_event_t;
+
+typedef struct rocprofvis_trace_counter_t
+{
+    double m_start_ts;
+    double m_value;
+} rocprofvis_trace_counter_t;
 
 class RawTrackData
 {

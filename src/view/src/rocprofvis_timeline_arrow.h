@@ -4,7 +4,9 @@
 
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "imgui.h"
 #include <memory>
+
 namespace RocProfVis
 {
 namespace View

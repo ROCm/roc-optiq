@@ -3,7 +3,6 @@
 #include "rocprofvis_sidebar.h"
 #include "imgui.h"
 #include "rocprofvis_settings.h"
-#include "rocprofvis_structs.h"
 #include <iostream>
 #include <map>
 #include <string>

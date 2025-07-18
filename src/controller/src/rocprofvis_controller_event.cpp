@@ -491,15 +491,7 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerEventName:
         {
             char const* name     = StringTable::Get().GetString(m_name);
-            char const* category = StringTable::Get().GetString(m_category);
-            ROCPROFVIS_ASSERT(name && category);
-            std::string full_name = name;
-            if(full_name.size() > 0)
-            {
-                full_name += " ";
-            }
-            full_name += category; 
-            result = GetStdStringImpl(value, length, full_name);
+            result = GetStringImpl(value, length, name, strlen(name));
             break;
         }
         case kRPVControllerEventCategory:

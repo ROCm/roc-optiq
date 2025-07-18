@@ -470,7 +470,7 @@ InfiniteScrollTable::Render()
             event_table_params->m_sort_order        = sort_order;
             event_table_params->m_filter            = m_filter.data();
             event_table_params->m_group             = m_group;
-            event_table_params->m_group_columns     = m_group_columns.data();
+            event_table_params->m_group_columns     = m_group_columns.size() ? m_group_columns.data() : "";
 
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 

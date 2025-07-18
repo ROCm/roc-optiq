@@ -4,6 +4,7 @@
 
 #include "spdlog/spdlog.h"
 
+#include <cfloat>
 #include <iostream>
 #include <sstream>
 

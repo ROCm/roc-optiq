@@ -4,8 +4,9 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
-#include "rocprofvis_structs.h"
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -47,6 +48,8 @@ typedef struct track_info_t
     double                             min_ts;       // starting time stamp of track
     double                             max_ts;       // ending time stamp of track
     uint64_t                           num_entries;  // number of entries in the track
+    double min_value;  // minimum value in the track (for samples) or level (for events) 
+    double max_value;  // maximum value in the track (for samples) or level (for events)
     rocprofvis_handle_t* graph_handle;  // handle to the graph object owned by the track
 } track_info_t;
 

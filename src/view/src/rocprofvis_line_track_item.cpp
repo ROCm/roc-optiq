@@ -260,21 +260,20 @@ LineTrackItem::HandleTrackDataChanged()
     result          = ExtractPointsFromData();
     if(result)
     {
-        FindMaxMin();
-
-        // This statement is needed to prevent render errors when all y values are the
-        // same.
+        const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+        if(track_info)
+        {
+            m_min_y = track_info->min_value;
+            m_max_y = track_info->max_value;
+        }
+        else
+        {
+            spdlog::warn("Track info not found for track ID: {}", m_id);
+        }
+        // Ensure that min and max are not equal to allow rendering
         if(m_max_y == m_min_y)
         {
-            if(m_max_y == 0)
-            {
-                m_max_y = 1.0;
-                m_min_y = -1.0;
-            }
-            else
-            {
-                m_max_y = m_min_y + 1.0;
-            }
+            m_max_y = m_min_y + 1.0;
         }
     }
     return result;
@@ -295,76 +294,15 @@ LineTrackItem::ExtractPointsFromData()
         spdlog::debug("No data for track {}", m_id);
         return false;
     }
-
-    std::vector<rocprofvis_data_point_t> aggregated_points;
-
-    ImVec2 display_size = ImGui::GetIO().DisplaySize;
-    int    screen_width = static_cast<int>(display_size.x);
-
-    double effective_width = screen_width / m_zoom;
-    double bin_size        = (m_max_x - m_min_x) / effective_width;
-
-    double bin_sum_x         = 0.0;
-    double bin_sum_y         = 0.0;
-    int    bin_count         = 0;
-    double current_bin_start = DBL_MAX;
-
     const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
     uint64_t                                      count      = track_data.size();
 
-    rocprofvis_trace_counter_t counter;
-    bool                       enable_binning = false;
+    m_data.clear();
+    m_data.reserve(count);
     for(uint64_t i = 0; i < count; i++)
     {
-        if(enable_binning)
-        {
-            counter.m_start_ts = track_data[i].m_start_ts;
-            counter.m_value    = track_data[i].m_value;
-
-            if(i == 0)
-            {
-                current_bin_start = counter.m_start_ts;
-            }
-
-            if(counter.m_start_ts < current_bin_start + bin_size)
-            {
-                bin_sum_x += counter.m_start_ts;
-                bin_sum_y += counter.m_value;
-                bin_count++;
-            }
-            else
-            {
-                if(bin_count > 0)
-                {
-                    rocprofvis_data_point_t binned_point;
-                    binned_point.x_value = bin_sum_x / bin_count;
-                    binned_point.y_value = bin_sum_y / bin_count;
-                    aggregated_points.push_back(binned_point);
-                }
-                current_bin_start += bin_size;
-                bin_sum_x = counter.m_start_ts;
-                bin_sum_y = counter.m_value;
-                bin_count = 1;
-            }
-        }
-        else
-        {
-            rocprofvis_data_point_t binned_point;
-            binned_point.x_value = track_data[i].m_start_ts;
-            binned_point.y_value = track_data[i].m_value;
-            aggregated_points.push_back(binned_point);
-        }
+        m_data.emplace_back(rocprofvis_data_point_t{track_data[i].m_start_ts, track_data[i].m_value});
     }
-
-    if(bin_count > 0)
-    {
-        rocprofvis_data_point_t binned_point;
-        binned_point.x_value = bin_sum_x / bin_count;
-        binned_point.y_value = bin_sum_y / bin_count;
-        aggregated_points.push_back(binned_point);
-    }
-
-    m_data = aggregated_points;
     return true;
 }
 

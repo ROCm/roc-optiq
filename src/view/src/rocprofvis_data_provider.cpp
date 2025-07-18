@@ -444,10 +444,16 @@ DataProvider::HandleLoadTrackMetaData()
                 track, kRPVControllerTrackNumberOfEntries, 0, &track_info.num_entries);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+            result = rocprofvis_controller_get_double(
+                track, kRPVControllerTrackMinValue, 0, &track_info.min_value);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_get_double(
+                track, kRPVControllerTrackMaxValue, 0, &track_info.max_value);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            
             // Todo:
             // kRPVControllerTrackDescription = 0x30000007,
-            // kRPVControllerTrackMinValue = 0x30000008,
-            // kRPVControllerTrackMaxValue = 0x30000009,
             // kRPVControllerTrackNode = 0x3000000A,
             // kRPVControllerTrackProcessor = 0x3000000B,
 
@@ -1114,12 +1120,13 @@ DataProvider::DumpMetaData()
     for(const track_info_t* track_info : GetTrackInfoList())
     {
         spdlog::debug("Track index {}, id {}, name {}, min ts {}, max ts {}, type {}, "
-                      "num entries {}",
-                      track_info->index, track_info->id, track_info->name,
-                      track_info->min_ts, track_info->max_ts,
+                      "num entries {}, min value {}, max value {}",
+                      track_info->index, track_info->id, track_info->name, track_info->min_ts,
+                      track_info->max_ts,
                       track_info->track_type == kRPVControllerTrackTypeSamples ? "Samples"
-                                                                               : "Events",
-                      track_info->num_entries);
+                                                                              : "Events",
+                      track_info->num_entries, track_info->min_value,
+                      track_info->max_value);
     }
 }
 

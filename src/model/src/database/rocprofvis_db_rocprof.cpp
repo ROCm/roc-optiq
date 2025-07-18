@@ -217,7 +217,12 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     "select DISTINCT nid as nodeId, pid, tid, 2 as category from rocpd_region;", 
                     "select 1 as op, start, end, id, nid as nodeId, pid, tid from rocpd_region " , 
                     "select 1 as op, R.start, R.end, E.category_id, R.name_id, R.id, R.nid as nodeId, R.pid, R.tid ,L.level as level from rocpd_region R INNER JOIN rocpd_event E ON E.id = R.event_id INNER JOIN event_levels_launch L ON R.id = L.eid " , 
-                    "select id, category, name, nid as nodeId, pid, tid, start, end, duration from regions " ,
+                    "SELECT * FROM (SELECT R.id, ( SELECT string FROM `rocpd_string` RS WHERE RS.id = E.category_id AND RS.guid = E.guid) AS category, "
+                       "S.string AS name, R.nid as nodeId, P.pid as process, T.tid as thread, R.start, R.end, (R.end - R.start) AS duration, R.pid, R.tid FROM rocpd_region R "
+                       "INNER JOIN `rocpd_event` E ON E.id = R.event_id AND E.guid = R.guid "
+                       "INNER JOIN `rocpd_string` S ON S.id = R.name_id AND S.guid = R.guid "
+                       "INNER JOIN `rocpd_info_process` P ON P.id = R.pid AND P.guid = R.guid "
+                       "INNER JOIN `rocpd_info_thread` T ON T.id = R.tid AND T.guid = R.guid) ",
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Kernel Dispatch tracks", kRPVDbBusy, future );
@@ -225,15 +230,39 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     "select DISTINCT nid as nodeId, agent_id as agentId, queue_id as queueId, 3 as category from rocpd_kernel_dispatch;", 
                     "select 2 as op,start, end, id, nid as nodeId, agent_id as agentId, queue_id as queueId from rocpd_kernel_dispatch ",
                     "select 2 as op, KD.start, KD.end, E.category_id, KD.kernel_id, KD.id, KD.nid as nodeId, KD.agent_id as agentId, KD.queue_id as queueId ,L.level as level from rocpd_kernel_dispatch KD INNER JOIN rocpd_event E ON E.id = KD.event_id INNER JOIN event_levels_dispatch L ON KD.id = L.eid ", 
-                    "select id, category, name, nid as nodeId, agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from kernels " ,
+                    
+                    "SELECT K.id, ( SELECT string FROM `rocpd_string` RS WHERE RS.id = E.category_id AND RS.guid = E.guid) AS category, "
+                    "R.string AS region, S.display_name AS name, K.nid as nodeId, K.tid as thread, Q.pid as process, "
+                    "A.absolute_index AS agent_abs_index, A.logical_index AS agent_log_index, A.type_index AS agent_type_index, "
+                    "A.type AS agent_type, Q.name AS queue, ST.name AS stream, K.start, K.end, (K.end - K.start) AS duration, "
+                    "K.grid_size_x AS grid_x, K.grid_size_y AS grid_y, K.grid_size_z AS grid_z, "
+                    "K.workgroup_size_x AS workgroup_x, K.workgroup_size_y AS workgroup_y, K.workgroup_size_z AS workgroup_z, "
+                    "K.group_segment_size AS lds_size, K.private_segment_size AS scratch_size, S.group_segment_size AS static_lds_size, "
+                    "S.private_segment_size AS static_scratch_size, K.agent_id as agentId, K.queue_id as queueId FROM rocpd_kernel_dispatch K "
+                    "INNER JOIN rocpd_info_agent A ON A.id = K.agent_id AND A.guid = K.guid "
+                    "INNER JOIN rocpd_event E ON E.id = K.event_id AND E.guid = K.guid "
+                    "INNER JOIN rocpd_string R ON R.id = K.region_name_id AND R.guid = K.guid "
+                    "INNER JOIN rocpd_info_kernel_symbol S ON S.id = K.kernel_id AND S.guid = K.guid "
+                    "LEFT JOIN rocpd_info_stream ST ON ST.id = K.stream_id AND ST.guid = K.guid "
+                    "LEFT JOIN rocpd_info_queue Q ON Q.id = K.queue_id AND Q.guid = K.guid ",
+
                     &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding Memory Allocation tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                     "select DISTINCT nid as nodeId, agent_id as agentId, queue_id as queueId, 3 as category from rocpd_memory_allocate;", 
                     "select 3 as op, start, end, id, nid as nodeId, agent_id as agentId, queue_id as queueId from rocpd_memory_allocate ",
-                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as nodeId, MA.agent_id as agentId, MA.queue_id as queueId ,L.level as level from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id INNER JOIN event_levels_mem_alloc L ON MA.id = L.eid ", 
-                    "select id, category, type as name, nid as nodeId, agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from memory_allocations " ,
+                    "select 3 as op, MA.start, MA.end, E.category_id, 0, MA.id, MA.nid as nodeId, MA.agent_id as agentId, MA.queue_id as queueId ,L.level as level from rocpd_memory_allocate MA INNER JOIN rocpd_event E ON E.id = MA.event_id INNER JOIN event_levels_mem_alloc L ON MA.id = L.eid ",
+                    "SELECT M.id, ( SELECT string FROM `rocpd_string` RS WHERE RS.id = E.category_id AND RS.guid = E.guid) AS category, "
+                    "M.nid as nodeId, M.pid as process, M.tid as thread, M.start, M.end, (M.end - M.start) AS duration, M.type, M.level, "
+                    "A.name AS agent_name, A.absolute_index AS agent_abs_index, A.logical_index AS agent_log_index, A.type_index AS agent_type_index, "
+                    "A.type AS agent_type, M.address, M.size, Q.name AS queue_name, ST.name AS stream_name, "
+                    "M.agent_id as agentId, M.queue_id as queueId "
+                    "FROM rocpd_memory_allocate M "
+                    "LEFT JOIN rocpd_info_agent A ON M.agent_id = A.id AND M.guid = A.guid "
+                    "LEFT JOIN rocpd_info_queue Q ON Q.id = M.queue_id AND Q.guid = M.guid "
+                    "LEFT JOIN rocpd_info_stream ST ON ST.id = M.stream_id AND ST.guid = M.guid "
+                    "INNER JOIN rocpd_event E ON E.id = M.event_id AND E.guid = M.guid ",
                     &CallBackAddTrack)) break;
         /*
 // This will not work if full track is not requested
@@ -250,7 +279,20 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     "select DISTINCT nid as nodeId, dst_agent_id as agentId, queue_id as queueId, 3 as category from rocpd_memory_copy;", 
                     "select 4 as op, start, end, id, nid as nodeId, dst_agent_id as agentId, queue_id as queueId from rocpd_memory_copy ",
                     "select 4 as op, MC.start, MC.end, E.category_id, MC.name_id, MC.id, MC.nid as nodeId, MC.dst_agent_id as agentId, MC.queue_id as queueId ,L.level as level from rocpd_memory_copy MC INNER JOIN rocpd_event E ON E.id = MC.event_id INNER JOIN event_levels_mem_copy L ON MC.id = L.eid ",
-                    "select id, category, name, nid as nodeId, dst_agent_abs_index as agentId, queue_id as queueId, stream_id as stream, pid, tid, start, end, duration from memory_copies " ,
+                    "SELECT M.id, ( SELECT string FROM `rocpd_string` RS WHERE RS.id = E.category_id AND RS.guid = E.guid) AS category, "
+                    "M.nid as nodeId, M.pid as process, M.tid as thread, M.start, M.end, (M.end - M.start) AS duration, S.string AS name, "
+                    "R.string AS region_name, ST.name AS stream_name, Q.name AS queue_name, M.size, "
+                    "dst_agent.name AS dst_device, dst_agent.absolute_index AS dst_abs_index, dst_agent.logical_index AS dst_log_index, dst_agent.type_index AS dst_type_index, dst_agent.type AS dst_agent_type, M.dst_address, "
+                    "src_agent.name AS src_device, src_agent.absolute_index AS src_abs_index, src_agent.logical_index AS src_log_index, src_agent.type_index AS src_type_index, src_agent.type AS src_agent_type, M.src_address, "
+                    "M.dst_agent_id as agentId, M.queue_id as queueId "
+                    "FROM rocpd_memory_copy M "
+                    "INNER JOIN rocpd_string S ON S.id = M.name_id AND S.guid = M.guid "
+                    "LEFT JOIN rocpd_string R ON R.id = M.region_name_id AND R.guid = M.guid "
+                    "INNER JOIN rocpd_info_agent dst_agent ON dst_agent.id = M.dst_agent_id AND dst_agent.guid = M.guid "
+                    "INNER JOIN rocpd_info_agent src_agent ON src_agent.id = M.src_agent_id AND src_agent.guid = M.guid "
+                    "LEFT JOIN rocpd_info_queue Q ON Q.id = M.queue_id AND Q.guid = M.guid "
+                    "LEFT JOIN rocpd_info_stream ST ON ST.id = M.stream_id AND ST.guid = M.guid "
+                    "INNER JOIN rocpd_event E ON E.id = M.event_id AND E.guid = M.guid ",
                     &CallBackAddTrack)) break;
         
         // PMC schema is not fully defined yet

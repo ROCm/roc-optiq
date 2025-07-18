@@ -194,7 +194,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
                         "select DISTINCT 0 as const, pid, tid, 2 as category from rocpd_api;", 
                         "select 1 as op, start, end, id, 0, pid, tid  from rocpd_api ",
-                        "select 1 as op, start, end, apiName_id, args_id, id, 0, pid, tid ,L.level as level from rocpd_api INNER JOIN event_levels_api L ON id = L.eid ",
+                        "select 1 as op, start, end, args_id, apiName_id, id, 0, pid, tid ,L.level as level from rocpd_api INNER JOIN event_levels_api L ON id = L.eid ",
                         "select id, apiName, args, start, end, pid, tid from api ",
                         &CallBackAddTrack)) break;
 

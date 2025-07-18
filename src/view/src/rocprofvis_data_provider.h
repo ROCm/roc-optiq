@@ -144,6 +144,8 @@ public:
     uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
     std::string           m_filter;
+    std::string           m_group;
+    std::string           m_group_columns;
 
     TableRequestParams(const TableRequestParams& table_params)            = default;
     TableRequestParams& operator=(const TableRequestParams& table_params) = default;
@@ -151,7 +153,7 @@ public:
     TableRequestParams(
         rocprofvis_controller_table_type_t table_type,
         const std::vector<uint64_t>& track_ids, double start_ts, double end_ts, char const* filter,
-        uint64_t start_row = -1, uint64_t req_row_count = -1,
+        char const* group, char const* group_cols, uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending)
     : m_table_type(table_type)
@@ -163,6 +165,8 @@ public:
     , m_sort_column_index(sort_column_index)
     , m_sort_order(sort_order)
     , m_filter(filter)
+    , m_group(group)
+    , m_group_columns(group_cols)
     {}
 };
 
@@ -262,12 +266,17 @@ public:
      * @param id: The id of the track to select
      * @param start_ts: The start timestamp of the event table
      * @param end_ts: The end timestamp of the event table
+     * @param filter: The SQL filter for the sample table
+     * @param group: The SQL column name to group by for the event table
+     * @param group_cols: The SQL column definition when grouping the event table
      * @param start_row: The starting row of the sample table
      * @param req_row_count: The number of rows to request
      * @param sort_column_index: The index of the column to sort by
      * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackEventTable(uint64_t track_id, double start_ts, double end_ts, char const* filter, uint64_t start_row = -1,
+    bool FetchSingleTrackEventTable(
+        uint64_t track_id, double start_ts, double end_ts, char const* filter,
+        char const* group, char const* group_cols, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
@@ -276,13 +285,15 @@ public:
      * @param id: The id of the track to select
      * @param start_ts: The start timestamp of the sample table
      * @param end_ts: The end timestamp of the sample table
+     * @param filter: The SQL filter for the sample table
      * @param start_row: The starting row of the sample table
      * @param req_row_count: The number of rows to request
      * @param sort_column_index: The index of the column to sort by
      * @param sort_order: The sort order of the column
      */
-    bool FetchSingleTrackSampleTable(uint64_t track_id, double start_ts, double end_ts, char const* filter, uint64_t start_row = -1,
-        uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
+    bool FetchSingleTrackSampleTable(
+        uint64_t track_id, double start_ts, double end_ts, char const* filter,
+        uint64_t start_row = -1, uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
     /*
@@ -297,7 +308,7 @@ public:
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
     bool FetchMultiTrackEventTable(const std::vector<uint64_t>& track_ids, double start_ts, double end_ts, char const* filter,
-        uint64_t start_row = -1, uint64_t req_row_count = -1,
+        char const* group, char const* group_cols, uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 

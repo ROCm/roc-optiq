@@ -20,6 +20,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_last_table_size(0, 0)
 , m_track_selection_event_to_handle(nullptr)
 , m_settings(Settings::GetInstance())
+, m_current_group_selection_idx(0)
 , m_req_table_type(table_type == TableType::kEventTable ? kRPVControllerTableTypeEvents
                                                         : kRPVControllerTableTypeSamples)
 {
@@ -68,7 +69,9 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
         {
             // Fetch table data for the selected tracks
             TableRequestParams event_table_params(m_req_table_type, filtered_tracks,
-                                                  start_ns, end_ns, m_filter.size() ? m_filter.data() : "", 
+                                                  start_ns, end_ns, m_filter.size() ? m_filter.data() : "",
+                                                  m_group.size() ? m_group.data() : "",
+                                                  m_group_columns.size() ? m_group_columns.data() : "",
                                                   0, m_fetch_chunk_size);
 
             bool result = m_data_provider.FetchMultiTrackTable(event_table_params);
@@ -185,6 +188,62 @@ InfiniteScrollTable::Render()
         ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks", start_row, end_row,
                     total_row_count, selected_track_count);
 
+        if(m_table_type == TableType::kEventTable)
+        {
+            if(m_current_group_selection_idx != 0)
+            {
+                if(ImGui::Button("Clear Group Selection"))
+                {
+                    m_current_group_selection_idx = 0;
+                    m_group.clear();
+                    filter_changed = true;
+                }
+            }
+            else
+            {
+                std::vector<const char*> items;
+                items.reserve(column_names.size() + 1);
+                items.push_back("-- None --");
+                for(const auto& col : column_names)
+                {
+                    items.push_back(col.c_str());
+                }
+
+                if(ImGui::Combo("##combo", &m_current_group_selection_idx, items.data(),
+                                items.size()))
+                {
+                    if(m_current_group_selection_idx > 0 &&
+                       m_current_group_selection_idx <= column_names.size())
+                    {
+                        m_group = column_names[m_current_group_selection_idx - 1];
+                    }
+                    else
+                    {
+                        m_group.clear();
+                    }
+                    filter_changed = true;
+                }
+                ImGui::SameLine();
+                ImGui::Text("Group by");
+            }
+        
+            if(m_group_columns.size() == 0 || strlen(m_group_columns.data()) == m_group_columns.size())
+            {
+                m_group_columns.resize(m_group_columns.size()+256);
+            }
+
+            if(ImGui::InputTextWithHint("Group columns", "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, MIN(duration) as min_duration, MAX(duration) as max_duration", m_group_columns.data(), m_group_columns.size()))
+            {
+                filter_changed = true;
+            }
+
+            if(strlen(m_group_columns.data()) == 0)
+            {
+                m_group_columns.resize(256);
+                memset(m_group_columns.data(), 0, m_group_columns.size());
+            }
+        }
+
         if(m_filter.size() == 0 || strlen(m_filter.data()) == m_filter.size())
         {
             m_filter.resize(m_filter.size()+256);
@@ -195,8 +254,7 @@ InfiniteScrollTable::Render()
             filter_changed = true;
         }
 
-        uint32_t filter_len = strlen(m_filter.data());
-        if(filter_len == 0)
+        if(strlen(m_filter.data()) == 0)
         {
             m_filter.resize(256);
             memset(m_filter.data(), 0, m_filter.size());
@@ -349,6 +407,8 @@ InfiniteScrollTable::Render()
                             m_req_table_type, event_table_params->m_track_ids,
                             event_table_params->m_start_ts, event_table_params->m_end_ts, 
                             event_table_params->m_filter.c_str(),
+                            event_table_params->m_group.c_str(),
+                            event_table_params->m_group_columns.c_str(),
                             new_start_pos, m_fetch_chunk_size,
                             event_table_params->m_sort_column_index,
                             event_table_params->m_sort_order));
@@ -381,6 +441,8 @@ InfiniteScrollTable::Render()
                             m_req_table_type, event_table_params->m_track_ids,
                             event_table_params->m_start_ts, event_table_params->m_end_ts, 
                             event_table_params->m_filter.c_str(),
+                            event_table_params->m_group.c_str(),
+                            event_table_params->m_group_columns.c_str(),
                             new_start_pos, m_fetch_chunk_size,
                             event_table_params->m_sort_column_index,
                             event_table_params->m_sort_order));
@@ -407,6 +469,8 @@ InfiniteScrollTable::Render()
             event_table_params->m_sort_column_index = sort_colunn_index;
             event_table_params->m_sort_order        = sort_order;
             event_table_params->m_filter            = m_filter.data();
+            event_table_params->m_group             = m_group;
+            event_table_params->m_group_columns     = m_group_columns.data();
 
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
@@ -414,7 +478,8 @@ InfiniteScrollTable::Render()
             m_data_provider.FetchMultiTrackTable(TableRequestParams(
                 m_req_table_type, event_table_params->m_track_ids,
                 event_table_params->m_start_ts, event_table_params->m_end_ts, 
-                event_table_params->m_filter.c_str(),
+                event_table_params->m_filter.c_str(), event_table_params->m_group.c_str(), 
+                event_table_params->m_group_columns.c_str(),
                 event_table_params->m_start_row, event_table_params->m_req_row_count,
                 event_table_params->m_sort_column_index,
                 event_table_params->m_sort_order));

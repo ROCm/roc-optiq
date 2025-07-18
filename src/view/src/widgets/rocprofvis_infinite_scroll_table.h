@@ -31,6 +31,8 @@ private:
     void RenderLoadingIndicator();
 
     std::vector<char> m_filter;
+    std::vector<char> m_group_columns;
+    std::string m_group;
 
     TableType m_table_type;  // Type of table (e.g., EventTable, SampleTable)
     rocprofvis_controller_table_type_t m_req_table_type;
@@ -45,6 +47,8 @@ private:
     // Internal state flags below
     bool     m_skip_data_fetch;
     uint64_t m_last_total_row_count;
+    int m_current_group_selection_idx;
+
 
     ImVec2 m_last_table_size;
     std::shared_ptr<TrackSelectionChangedEvent> m_track_selection_event_to_handle;

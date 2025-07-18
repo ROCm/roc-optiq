@@ -341,7 +341,8 @@ rocprofvis_dm_result_t
 ProfileDatabase::BuildTableQuery(
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t filter,
-    rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
+    rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, rocprofvis_dm_charptr_t sort_column,
+    rocprofvis_dm_sort_order_t sort_order,
     uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
 {
     slice_query_t slice_query_map;
@@ -385,6 +386,21 @@ ProfileDatabase::BuildTableQuery(
     { 
         query = "SELECT * FROM ( "; 
     } 
+    if (group && strlen(group))
+    {
+        query += "SELECT ";
+
+        if (group_cols && strlen(group_cols))
+        {
+            query += group_cols;
+        }
+        else
+        {
+            query += "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, MIN(duration) as min_duration, MAX(duration) as max_duration";
+        }
+
+        query += " FROM ( "; 
+    }
     for (std::map<std::string, std::string>::iterator it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
         if (it_query!=slice_query_map.begin()) query += " UNION ";
         query += it_query->first;
@@ -393,6 +409,11 @@ ProfileDatabase::BuildTableQuery(
         query += std::to_string(start);
         query += " and end < ";
         query += std::to_string(end);
+    }
+    if(group && strlen(group))
+    {
+        query += ") GROUP BY ";
+        query += group;
     }
     query += ")";
     if (filter && strlen(filter))

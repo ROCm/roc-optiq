@@ -82,16 +82,24 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
     {
         db->find_track_map[track_params.process_id[TRACK_ID_NODE]][track_params.process_id[TRACK_ID_PID_OR_AGENT]][track_params.process_id[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
         if (track_params.track_category == kRocProfVisDmRegionTrack) {
-            track_params.process_name[TRACK_ID_PID] = ProcessNameSuffixFor(track_params.track_category);
-            track_params.process_name[TRACK_ID_PID] += (char*) sqlite3_column_text(stmt,TRACK_ID_PID);
-            track_params.process_name[TRACK_ID_TID] = SubProcessNameSuffixFor(track_params.track_category);
-            track_params.process_name[TRACK_ID_TID] += (char*) sqlite3_column_text(stmt,TRACK_ID_TID);
 
+            track_params.process_name[TRACK_ID_PID] = db->CachedTables()->GetTableCell("Process", track_params.process_id[TRACK_ID_PID], "command");
+            track_params.process_name[TRACK_ID_PID] += "(";
+            track_params.process_name[TRACK_ID_PID] += std::to_string(track_params.process_id[TRACK_ID_PID]);
+            track_params.process_name[TRACK_ID_PID] += ")";
+
+            track_params.process_name[TRACK_ID_TID] = db->CachedTables()->GetTableCell("Thread", track_params.process_id[TRACK_ID_TID], "name");
+            track_params.process_name[TRACK_ID_TID] += "(";
+            track_params.process_name[TRACK_ID_TID] += std::to_string(track_params.process_id[TRACK_ID_TID]);
+            track_params.process_name[TRACK_ID_TID] += ")";
         } else
             if (track_params.track_category == kRocProfVisDmKernelTrack || track_params.track_category == kRocProfVisDmPmcTrack) {
-                track_params.process_name[TRACK_ID_AGENT] = db->CachedTables()->GetTableCell("Agent", track_params.process_id[TRACK_ID_AGENT], "type");
+                track_params.process_name[TRACK_ID_AGENT] = db->CachedTables()->GetTableCell("Agent", track_params.process_id[TRACK_ID_AGENT], "product_name");
+                track_params.process_name[TRACK_ID_AGENT] += "(";
                 track_params.process_name[TRACK_ID_AGENT] += db->CachedTables()->GetTableCell("Agent", track_params.process_id[TRACK_ID_AGENT], "type_index");
-                if (track_params.track_category == kRocProfVisDmKernelTrack) {
+                track_params.process_name[TRACK_ID_AGENT] += ")";
+                if(track_params.track_category == kRocProfVisDmKernelTrack)
+                {
                     track_params.process_name[TRACK_ID_QUEUE] = db->CachedTables()->GetTableCell("Queue", track_params.process_id[TRACK_ID_QUEUE], "name");
                 }
                 else {

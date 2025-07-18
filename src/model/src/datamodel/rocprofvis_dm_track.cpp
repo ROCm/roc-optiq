@@ -144,11 +144,11 @@ rocprofvis_dm_size_t   Track::GetMemoryFootprint()
 
 rocprofvis_dm_charptr_t  Track::CategoryString(){
     switch (m_track_params->track_category){
-        case kRocProfVisDmPmcTrack: return "Counters Track";
-        case kRocProfVisDmRegionTrack: return "Launch Track";
-        case kRocProfVisDmKernelTrack: return "Dispatch Track";
-        case kRocProfVisDmSQTTTrack: return "SQTT Track";
-        case kRocProfVisDmNICTrack: return "NIC Track";
+        case kRocProfVisDmPmcTrack: return "Counter";
+        case kRocProfVisDmRegionTrack: return "CPU Thread";
+        case kRocProfVisDmKernelTrack: return "GPU Queue";
+        case kRocProfVisDmSQTTTrack: return "Shader Execution";
+        case kRocProfVisDmNICTrack: return "Network Activity";
     }
     return "Invalid track";
 }

@@ -31,6 +31,7 @@ private:
     void RenderLoadingIndicator();
 
     std::vector<char> m_filter;
+    std::vector<char> m_group_columns;
     std::string m_group;
 
     TableType m_table_type;  // Type of table (e.g., EventTable, SampleTable)

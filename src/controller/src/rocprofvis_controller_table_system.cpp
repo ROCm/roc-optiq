@@ -35,6 +35,7 @@ void SystemTable::Reset()
     m_tracks.clear();
     m_filter.clear();
     m_group.clear();
+    m_group_cols.clear();
 }
 
 rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array)
@@ -50,7 +51,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
 
         char* fetch_query = nullptr;
         rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
-            db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_filter.c_str(), m_group.c_str(), sort_column,
+            db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), sort_column,
             (rocprofvis_dm_sort_order_t)m_sort_order, count,
             index, false, &fetch_query);
         rocprofvis_dm_table_id_t table_id = 0;
@@ -201,6 +202,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
     double   start_ts   = 0;
     std::string filter;
     std::string group;
+    std::string group_cols;
     rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeSamples;
     uint64_t table_type = kRPVControllerTableTypeEvents;
     result = args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
@@ -308,6 +310,16 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
             result = args.GetString(kRPVControllerTableArgsGroup, 0, group.data(), &length);
         }
     }
+    if(result == kRocProfVisResultSuccess)
+    {
+        uint32_t length = 0;
+        result = args.GetString(kRPVControllerTableArgsGroupColumns, 0, nullptr, &length);
+        if(result == kRocProfVisResultSuccess)
+        {
+            group_cols.resize(length);
+            result = args.GetString(kRPVControllerTableArgsGroupColumns, 0, group_cols.data(), &length);
+        }
+    }
 
     if (result == kRocProfVisResultSuccess)
     {
@@ -321,6 +333,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
         m_track_type  = track_type;
         m_filter      = filter;
         m_group       = group;
+        m_group_cols  = group_cols;
 
         if(result == kRocProfVisResultSuccess)
         {
@@ -333,7 +346,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
 
             char*                  count_query = nullptr;
             rocprofvis_dm_result_t dm_result   = rocprofvis_db_build_table_query(
-                db, start_ts, end_ts, tracks.size(), tracks.data(), filter.c_str(), group.c_str(), nullptr,
+                db, start_ts, end_ts, tracks.size(), tracks.data(), filter.c_str(), group.c_str(), m_group_cols.c_str(), nullptr,
                 (rocprofvis_dm_sort_order_t) m_sort_order, 0, 0, true,
                 &count_query);
             rocprofvis_dm_table_id_t table_id = 0;
@@ -421,7 +434,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
                 char*                  fetch_query = nullptr;
                 rocprofvis_dm_result_t dm_result   = rocprofvis_db_build_table_query(
                     db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_filter.c_str(),
-                    m_group.c_str(), sort_column, (rocprofvis_dm_sort_order_t) m_sort_order, 1, 0, false,
+                    m_group.c_str(), m_group_cols.c_str(), sort_column, (rocprofvis_dm_sort_order_t) m_sort_order, 1, 0, false,
                     &fetch_query);
                 rocprofvis_dm_table_id_t table_id = 0;
                 if(dm_result == kRocProfVisDmResultSuccess)

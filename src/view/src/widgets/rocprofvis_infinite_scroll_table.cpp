@@ -71,6 +71,7 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
             TableRequestParams event_table_params(m_req_table_type, filtered_tracks,
                                                   start_ns, end_ns, m_filter.size() ? m_filter.data() : "",
                                                   m_group.size() ? m_group.data() : "",
+                                                  m_group_columns.size() ? m_group_columns.data() : "",
                                                   0, m_fetch_chunk_size);
 
             bool result = m_data_provider.FetchMultiTrackTable(event_table_params);
@@ -224,6 +225,22 @@ InfiniteScrollTable::Render()
                 }
                 ImGui::SameLine();
                 ImGui::Text("Group by");
+            }
+        
+            if(m_group_columns.size() == 0 || strlen(m_group_columns.data()) == m_group_columns.size())
+            {
+                m_group_columns.resize(m_group_columns.size()+256);
+            }
+
+            if(ImGui::InputTextWithHint("Group columns", "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, MIN(duration) as min_duration, MAX(duration) as max_duration", m_group_columns.data(), m_group_columns.size()))
+            {
+                filter_changed = true;
+            }
+
+            if(strlen(m_group_columns.data()) == 0)
+            {
+                m_group_columns.resize(256);
+                memset(m_group_columns.data(), 0, m_group_columns.size());
             }
         }
 
@@ -391,6 +408,7 @@ InfiniteScrollTable::Render()
                             event_table_params->m_start_ts, event_table_params->m_end_ts, 
                             event_table_params->m_filter.c_str(),
                             event_table_params->m_group.c_str(),
+                            event_table_params->m_group_columns.c_str(),
                             new_start_pos, m_fetch_chunk_size,
                             event_table_params->m_sort_column_index,
                             event_table_params->m_sort_order));
@@ -424,6 +442,7 @@ InfiniteScrollTable::Render()
                             event_table_params->m_start_ts, event_table_params->m_end_ts, 
                             event_table_params->m_filter.c_str(),
                             event_table_params->m_group.c_str(),
+                            event_table_params->m_group_columns.c_str(),
                             new_start_pos, m_fetch_chunk_size,
                             event_table_params->m_sort_column_index,
                             event_table_params->m_sort_order));
@@ -450,7 +469,8 @@ InfiniteScrollTable::Render()
             event_table_params->m_sort_column_index = sort_colunn_index;
             event_table_params->m_sort_order        = sort_order;
             event_table_params->m_filter            = m_filter.data();
-            event_table_params->m_group             = m_group;//.size() ? m_group.data() : "";
+            event_table_params->m_group             = m_group;
+            event_table_params->m_group_columns     = m_group_columns.data();
 
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
@@ -458,7 +478,8 @@ InfiniteScrollTable::Render()
             m_data_provider.FetchMultiTrackTable(TableRequestParams(
                 m_req_table_type, event_table_params->m_track_ids,
                 event_table_params->m_start_ts, event_table_params->m_end_ts, 
-                event_table_params->m_filter.c_str(), event_table_params->m_group.c_str(),
+                event_table_params->m_filter.c_str(), event_table_params->m_group.c_str(), 
+                event_table_params->m_group_columns.c_str(),
                 event_table_params->m_start_row, event_table_params->m_req_row_count,
                 event_table_params->m_sort_column_index,
                 event_table_params->m_sort_order));

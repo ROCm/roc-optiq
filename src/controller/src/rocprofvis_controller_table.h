@@ -42,6 +42,7 @@ protected:
     std::map<uint64_t, std::vector<Data>> m_rows;
     std::string m_filter;
     std::string m_group;
+    std::string m_group_cols;
     uint64_t m_num_items;
     uint64_t m_id;
     uint64_t m_sort_column;

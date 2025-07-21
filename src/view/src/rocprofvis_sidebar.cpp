@@ -602,7 +602,7 @@ SideBar::RenderTrackItem(const int& index)
                 ->SetRandomColorFlag(graph.colorful_flamechart);
         }
     }
-    if(graph.graph_type == rocprofvis_graph_t::TYPE_LINECHART)
+    else if(graph.graph_type == rocprofvis_graph_t::TYPE_LINECHART)
     {
         ImGui::Checkbox("Color By Value", &graph.color_by_value);
 

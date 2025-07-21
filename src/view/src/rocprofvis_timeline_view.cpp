@@ -1211,6 +1211,7 @@ TimelineView::MakeGraphView()
                 temp_flame.display        = true;
                 temp_flame.color_by_value = false;
                 temp_flame.selected       = false;
+                temp_flame.colorful_flamechart = true;
                 rocprofvis_color_by_value_t temp_color = {};
                 temp_flame.color_by_value_digits       = temp_color;
                 m_graphs[track_info->index]            = std::move(temp_flame);
@@ -1246,6 +1247,7 @@ TimelineView::MakeGraphView()
                 temp.display        = true;
                 temp.color_by_value = false;
                 temp.selected       = false;
+                temp.colorful_flamechart = false;
                 rocprofvis_color_by_value_t temp_color_line = {};
                 temp.color_by_value_digits                  = temp_color_line;
                 m_graphs[track_info->index]                 = std::move(temp);

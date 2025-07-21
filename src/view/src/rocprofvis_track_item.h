@@ -26,7 +26,7 @@ public:
               double& min_x, double& max_x, double scale_x);
 
     virtual ~TrackItem() {}
-    uint64_t           SetID(uint64_t id);
+    void               SetID(uint64_t id);
     uint64_t           GetID();
     virtual float      GetTrackHeight();
     virtual void       Render(float width);

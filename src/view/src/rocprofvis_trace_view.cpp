@@ -72,10 +72,6 @@ TraceView::Update()
         if(m_timeline_view)
         {
             m_timeline_view->MakeGraphView();
-            if(m_sidebar)
-            {
-                m_sidebar->SetGraphs(m_timeline_view->GetGraphs());
-            }
         }
     }
 
@@ -83,22 +79,22 @@ TraceView::Update()
     {
         m_timeline_view->Update();
     }
-    if(m_analysis)
-    {
-        m_analysis->Update();
-    }
     if(m_sidebar)
     {
         m_sidebar->Update();
+    }
+    if(m_analysis)
+    {
+        m_analysis->Update();
     }
 }
 
 void
 TraceView::CreateView()
 {
-    m_sidebar       = std::make_shared<SideBar>(m_data_provider);
     m_timeline_view = std::make_shared<TimelineView>(m_data_provider);
     m_analysis      = std::make_shared<AnalysisView>(m_data_provider);
+    m_sidebar       = std::make_shared<SideBar>(m_data_provider, m_timeline_view->GetGraphs());
 
     LayoutItem left;
     left.m_item = m_sidebar;

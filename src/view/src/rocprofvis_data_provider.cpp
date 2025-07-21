@@ -1,6 +1,8 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_event_manager.h"
+#include "rocprofvis_events.h"
 
 #include "spdlog/spdlog.h"
 
@@ -157,6 +159,69 @@ DataProvider::GetTrackCount()
     return m_num_graphs;
 }
 
+std::vector<const node_info_t*>
+DataProvider::GetNodeInfoList() const
+{
+    std::vector<const node_info_t*> nodes(m_node_infos.size());
+    int count = 0;
+    for(auto& it : m_node_infos)
+    {
+        nodes[count] = &it.second;
+        count ++;
+    }
+    return nodes;
+}
+
+const device_info_t*
+DataProvider::GetDeviceInfo(uint64_t device_id) const
+{
+    if (m_device_infos.count(device_id) > 0)
+    {
+        return &m_device_infos.at(device_id);
+    }
+    return nullptr;
+}
+
+const process_info_t*
+DataProvider::GetProcessInfo(uint64_t process_id) const
+{
+    if (m_process_infos.count(process_id) > 0)
+    {
+        return &m_process_infos.at(process_id);
+    }
+    return nullptr;
+}
+
+const thread_info_t*
+DataProvider::GetThreadInfo(uint64_t thread_id) const
+{
+    if (m_thread_infos.count(thread_id) > 0)
+    {
+        return &m_thread_infos.at(thread_id);
+    }
+    return nullptr;
+}
+
+const queue_info_t*
+DataProvider::GetQueueInfo(uint64_t queue_id) const
+{
+    if (m_queue_infos.count(queue_id) > 0)
+    {
+        return &m_queue_infos.at(queue_id);
+    }
+    return nullptr;
+}
+
+const counter_info_t*
+DataProvider::GetCounterInfo(uint64_t counter_id) const
+{
+    if (m_counter_infos.count(counter_id) > 0)
+    {
+        return &m_counter_infos.at(counter_id);
+    }
+    return nullptr;
+}
+
 const std::string&
 DataProvider::GetTraceFilePath()
 {
@@ -248,6 +313,7 @@ DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
                     }
                 }
             }
+            EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackMetadataChanged)));
         }
     }
     return (result == kRocProfVisResultSuccess);
@@ -329,6 +395,8 @@ DataProvider::HandleLoadTrace()
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
                               uint64_result == kRocProfVisResultSuccess);
 
+            HandleLoadSystemTopology();
+
             result = rocprofvis_controller_get_object(
                 m_trace_controller, kRPVControllerTimeline, 0, &m_trace_timeline);
 
@@ -369,6 +437,150 @@ DataProvider::HandleLoadTrace()
         {
             // timed out, do nothing and try again later
         }
+    }
+}
+
+void
+DataProvider::HandleLoadSystemTopology()
+{
+    uint64_t num_nodes;
+    rocprofvis_result_t result = rocprofvis_controller_get_uint64(m_trace_controller, kRPVControllerNumNodes, 0, &num_nodes);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    // Query nodes...
+    for (int i = 0; i < num_nodes; i ++)
+    {
+        rocprofvis_handle_t* node_handle;
+        result = rocprofvis_controller_get_object(m_trace_controller, kRPVControllerNodeIndexed, i, &node_handle);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && node_handle);
+        node_info_t node_info;
+        result = rocprofvis_controller_get_uint64(node_handle, kRPVControllerNodeId, 0, &node_info.id);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        node_info.host_name = GetString(node_handle, kRPVControllerNodeHostName, 0);
+        node_info.os_name = GetString(node_handle, kRPVControllerNodeOSName, 0);
+        node_info.os_release = GetString(node_handle, kRPVControllerNodeOSRelease, 0);
+        node_info.os_version = GetString(node_handle, kRPVControllerNodeOSVersion, 0);
+        uint64_t num_processors;
+        result = rocprofvis_controller_get_uint64(node_handle, kRPVControllerNodeNumProcessors, 0, &num_processors);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        node_info.device_ids.resize(num_processors);
+        // Query devices...
+        for (int j = 0; j < num_processors; j ++)
+        {
+            rocprofvis_handle_t* processor_handle;
+            result = rocprofvis_controller_get_object(node_handle, kRPVControllerNodeProcessorIndexed, j, &processor_handle);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && processor_handle);
+            device_info_t device_info;
+            result = rocprofvis_controller_get_uint64(processor_handle, kRPVControllerProcessorId, 0, &device_info.id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            device_info.product_name = GetString(processor_handle, kRPVControllerProcessorProductName, 0);
+            device_info.type = GetString(processor_handle, kRPVControllerProcessorType, 0);
+            result = rocprofvis_controller_get_uint64(processor_handle, kRPVControllerProcessorTypeIndex, 0, &device_info.type_index);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            m_device_infos[device_info.id] = std::move(device_info);
+            node_info.device_ids[j] = device_info.id;
+        }
+        uint64_t num_processes;
+        result = rocprofvis_controller_get_uint64(node_handle, kRPVControllerNodeNumProcesses, 0, &num_processes);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        node_info.process_ids.resize(num_processes);
+        // Query processes...
+        for (int j = 0; j < num_processes; j ++)
+        {
+            rocprofvis_handle_t* process_handle;
+            result = rocprofvis_controller_get_object(node_handle, kRPVControllerNodeProcessIndexed, j, &process_handle);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && node_handle);
+            process_info_t process_info;
+            result = rocprofvis_controller_get_uint64(process_handle, kRPVControllerProcessId, 0, &process_info.id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_get_double(process_handle, kRPVControllerProcessStartTime, 0, &process_info.start_time);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_get_double(process_handle, kRPVControllerProcessEndTime, 0, &process_info.end_time);
+            process_info.command = GetString(process_handle, kRPVControllerProcessCommand, 0);
+            process_info.environment = GetString(process_handle, kRPVControllerProcessEnvironment, 0);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            uint64_t num_threads;
+            result = rocprofvis_controller_get_uint64(process_handle, kRPVControllerProcessNumThreads, 0, &num_threads);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            process_info.thread_ids.resize(num_threads);
+            // Query threads...
+            for (int k = 0; k < num_threads; k ++)
+            {
+                rocprofvis_handle_t* thread_handle;
+                result = rocprofvis_controller_get_object(process_handle, kRPVControllerProcessThreadIndexed, k, &thread_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && thread_handle);
+                thread_info_t thread_info;
+                result = rocprofvis_controller_get_uint64(thread_handle, kRPVControllerThreadId, 0, &thread_info.id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                thread_info.name = GetString(thread_handle, kRPVControllerThreadName, 0);
+                result = rocprofvis_controller_get_double(thread_handle, kRPVControllerThreadStartTime, 0, &thread_info.start_time);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_double(thread_handle, kRPVControllerThreadEndTime, 0, &thread_info.end_time);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                m_thread_infos[thread_info.id] = std::move(thread_info);
+                process_info.thread_ids[k] = thread_info.id;
+            }
+            uint64_t num_queues;
+            result = rocprofvis_controller_get_uint64(process_handle, kRPVControllerProcessNumQueues, 0, &num_queues);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            process_info.queue_ids.resize(num_queues);
+            // Query queues...
+            for (int k = 0; k < num_queues; k ++)
+            {
+                rocprofvis_handle_t* queue_handle;
+                result = rocprofvis_controller_get_object(process_handle, kRPVControllerProcessQueueIndexed, k, &queue_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && queue_handle);
+                queue_info_t queue_info;
+                result = rocprofvis_controller_get_uint64(queue_handle, kRPVControllerQueueId, 0, &queue_info.id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                queue_info.name = GetString(queue_handle, kRPVControllerQueueName, 0);
+                rocprofvis_handle_t* processor_handle;
+                result = rocprofvis_controller_get_object(queue_handle, kRPVControllerQueueProcessor, 0, &processor_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                if (processor_handle)
+                {
+                    result = rocprofvis_controller_get_uint64(processor_handle, kRPVControllerProcessorId, 0, &queue_info.device_id);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                }                
+                m_queue_infos[queue_info.id] = std::move(queue_info);
+                process_info.queue_ids[k] = queue_info.id;
+            }
+            uint64_t num_counters;
+            result = rocprofvis_controller_get_uint64(process_handle, kRPVControllerProcessNumCounters, 0, &num_counters);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            // Query counters...
+            for (int k = 0; k < num_counters; k ++)
+            {
+                rocprofvis_handle_t* counter_handle;
+                result = rocprofvis_controller_get_object(process_handle, kRPVControllerProcessCounterIndexed, k, &counter_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && counter_handle);
+                rocprofvis_handle_t* track;
+                result = rocprofvis_controller_get_object(counter_handle, kRPVControllerCounterTrack, 0, &track);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                if(track)
+                {
+                    counter_info_t counter_info;
+                    result = rocprofvis_controller_get_uint64(counter_handle, kRPVControllerCounterId, 0, &counter_info.id);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    counter_info.name = GetString(counter_handle, kRPVControllerCounterName, 0);
+                    rocprofvis_handle_t* processor_handle;
+                    result = rocprofvis_controller_get_object(counter_handle, kRPVControllerCounterProcessor, 0, &processor_handle);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    if (processor_handle)
+                    {
+                        result = rocprofvis_controller_get_uint64(processor_handle, kRPVControllerProcessorId, 0, &counter_info.device_id);
+                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    }
+                    counter_info.description = GetString(counter_handle, kRPVControllerCounterDescription, 0);
+                    counter_info.units = GetString(counter_handle, kRPVControllerCounterUnits, 0);
+                    counter_info.value_type = GetString(counter_handle, kRPVControllerCounterValueType, 0);
+                    m_counter_infos[counter_info.id] = std::move(counter_info);
+                    process_info.counter_ids.push_back(counter_info.id);
+                }
+            }
+            m_process_infos[process_info.id] = std::move(process_info);
+            node_info.process_ids[j] = process_info.id;
+        }
+        m_node_infos[node_info.id] = std::move(node_info);
     }
 }
 
@@ -453,6 +665,92 @@ DataProvider::HandleLoadTrackMetaData()
                 track, kRPVControllerTrackMaxValue, 0, &track_info.max_value);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             
+            // Determine queue/thread/counter that this track represents.
+            rocprofvis_handle_t* queue = nullptr;
+            result = rocprofvis_controller_get_object(
+                track, kRPVControllerTrackQueue, 0, &queue);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            rocprofvis_handle_t* thread = nullptr;
+            result = rocprofvis_controller_get_object(
+                track, kRPVControllerTrackThread, 0, &thread);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            rocprofvis_handle_t* counter = nullptr;
+            result = rocprofvis_controller_get_object(
+                track, kRPVControllerTrackCounter, 0, &counter);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            rocprofvis_handle_t* process = nullptr;
+            rocprofvis_handle_t* node = nullptr;
+            rocprofvis_handle_t* processor = nullptr;
+            if(queue)
+            {
+                result = rocprofvis_controller_get_uint64(
+                    queue, kRPVControllerQueueId, 0, &track_info.topology.id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    queue, kRPVControllerQueueProcess, 0, &process);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    queue, kRPVControllerQueueNode, 0, &node);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    queue, kRPVControllerQueueProcessor, 0, &processor);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                track_info.topology.type = track_info_t::Topology::Queue;
+            }
+            else if(thread)
+            {
+                result = rocprofvis_controller_get_uint64(
+                    thread, kRPVControllerThreadId, 0, &track_info.topology.id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    thread, kRPVControllerThreadProcess, 0, &process);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    thread, kRPVControllerThreadNode, 0, &node);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                track_info.topology.type = track_info_t::Topology::Thread;
+            }
+            else if(counter)
+            {
+                result = rocprofvis_controller_get_uint64(
+                    counter, kRPVControllerCounterId, 0, &track_info.topology.id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    counter, kRPVControllerCounterProcess, 0, &process);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    counter, kRPVControllerCounterNode, 0, &node);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    queue, kRPVControllerCounterProcessor, 0, &processor);
+                track_info.topology.type = track_info_t::Topology::Counter;
+            }
+            else
+            {
+                track_info.topology.type = track_info_t::Topology::Unknown;
+                spdlog::warn("No thread/queue/counter binding found for track {}",
+                              track_info.id);
+            }
+            // Determine process, device, node this track belongs to.
+            if(process)
+            {
+                result = rocprofvis_controller_get_uint64(
+                    process, kRPVControllerProcessId, 0, &track_info.topology.process_id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            }
+            if(node)
+            {
+                result = rocprofvis_controller_get_uint64(
+                    node, kRPVControllerNodeId, 0, &track_info.topology.node_id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            }
+            if(processor)
+            {
+                result = rocprofvis_controller_get_uint64(
+                    processor, kRPVControllerProcessorId, 0, &track_info.topology.device_id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            }
+
             // Todo:
             // kRPVControllerTrackDescription = 0x30000007,
             // kRPVControllerTrackNode = 0x3000000A,

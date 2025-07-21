@@ -19,6 +19,7 @@ enum class RocEvents
     kTimelineSelectionChanged,
     kHandleUserGraphNavigationEvent,
     kHandleUserArrowCreationEvent,
+    kTrackMetadataChanged,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeDataDirty,
     kComputeBlockNavigationChanged,

@@ -48,9 +48,23 @@ typedef struct track_info_t
     double                             min_ts;       // starting time stamp of track
     double                             max_ts;       // ending time stamp of track
     uint64_t                           num_entries;  // number of entries in the track
-    double min_value;  // minimum value in the track (for samples) or level (for events) 
-    double max_value;  // maximum value in the track (for samples) or level (for events)
-    rocprofvis_handle_t* graph_handle;  // handle to the graph object owned by the track
+    double                             min_value;  // minimum value in the track (for samples) or level (for events) 
+    double                             max_value;  // maximum value in the track (for samples) or level (for events)
+    rocprofvis_handle_t*               graph_handle;  // handle to the graph object owned by the track
+    struct Topology
+    {
+        uint64_t                       node_id;       // ID of track's parent node
+        uint64_t                       process_id;    // ID of track's parent process
+        uint64_t                       device_id;     // ID of track's parent device
+        enum
+        {
+            Unknown,
+            Queue,
+            Thread,
+            Counter
+        }                              type;
+        uint64_t                       id;            // ID of queue/thread/counter
+    }                                  topology;
 } track_info_t;
 
 typedef struct event_ext_data_t
@@ -104,6 +118,62 @@ typedef struct call_stack_info_t
     uint64_t event_id;  // id of the event for which the call stack data is stored
     std::vector<call_stack_data_t> call_stack_data;  // vector of call stack entries
 } call_stack_info_t;
+
+typedef struct node_info_t
+{
+    uint64_t              id;
+    std::string           host_name;
+    std::string           os_name;
+    std::string           os_release;
+    std::string           os_version;
+    std::vector<uint64_t> device_ids;   // IDs of this node's devices
+    std::vector<uint64_t> process_ids;  // IDs of this node's processes
+} node_info_t;
+
+typedef struct device_info_t
+{
+    uint64_t    id;
+    std::string product_name;
+    std::string type;           // GPU/CPU
+    uint64_t    type_index;     // GPU0, GPU1...etc
+} device_info_t;
+
+typedef struct process_info_t
+{
+    uint64_t              id;
+    double                start_time;
+    double                end_time;
+    std::string           command;
+    std::string           environment;
+    std::vector<uint64_t> thread_ids;   // IDs of this process' threads
+    std::vector<uint64_t> queue_ids;    // IDs of this process' queues
+    std::vector<uint64_t> counter_ids;  // IDs of this process' counters
+} process_info_t;
+
+typedef struct thread_info_t
+{
+    uint64_t    id;
+    std::string name;
+    double      start_time;
+    double      end_time;
+} thread_info_t;
+
+typedef struct queue_info_t
+{
+    uint64_t    id;
+    std::string name;
+    uint64_t    device_id;  // ID of owning device.
+} queue_info_t;
+
+typedef struct counter_info_t
+{
+    uint64_t    id;
+    std::string name;
+    uint64_t    device_id;  // ID of owning device.
+    std::string description;
+    std::string units;
+    std::string value_type;
+} counter_info_t;
 
 class RequestParamsBase
 {
@@ -368,8 +438,14 @@ public:
 
     const track_info_t*              GetTrackInfo(uint64_t track_id);
     std::vector<const track_info_t*> GetTrackInfoList();
-
     uint64_t GetTrackCount();
+   
+    std::vector<const node_info_t*> GetNodeInfoList() const;
+    const device_info_t*            GetDeviceInfo(uint64_t device_id) const;
+    const process_info_t*           GetProcessInfo(uint64_t process_id) const;
+    const thread_info_t*            GetThreadInfo(uint64_t thread_id) const;
+    const queue_info_t*             GetQueueInfo(uint64_t queue_id) const;
+    const counter_info_t*           GetCounterInfo(uint64_t counter_id) const;
 
     const std::string& GetTraceFilePath();
 
@@ -396,6 +472,7 @@ public:
 
 private:
     void HandleLoadTrace();
+    void HandleLoadSystemTopology();
     void HandleLoadTrackMetaData();
     void HandleRequests();
 
@@ -432,6 +509,13 @@ private:
 
     std::unordered_map<uint64_t, track_info_t>  m_track_metadata;
     std::unordered_map<uint64_t, RawTrackData*> m_raw_trackdata;
+
+    std::unordered_map<uint64_t, node_info_t>    m_node_infos;
+    std::unordered_map<uint64_t, device_info_t>  m_device_infos;
+    std::unordered_map<uint64_t, process_info_t> m_process_infos;
+    std::unordered_map<uint64_t, thread_info_t>  m_thread_infos;
+    std::unordered_map<uint64_t, queue_info_t>   m_queue_infos;
+    std::unordered_map<uint64_t, counter_info_t> m_counter_infos;
 
     // Store table_info_t for each TableType in a vector
     std::vector<table_info_t> m_table_infos;

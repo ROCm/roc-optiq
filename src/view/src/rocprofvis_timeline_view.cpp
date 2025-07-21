@@ -81,28 +81,15 @@ TimelineView::TimelineView(DataProvider& dp)
 
     // Used to move to track when tree view clicks on it.
     auto scroll_to_track_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto evt = std::dynamic_pointer_cast<ScrollToTrackByNameEvent>(e);
+        auto evt = std::dynamic_pointer_cast<ScrollToTrackEvent>(e);
         if(evt)
         {
-            this->ScrollToTrackByName(evt->GetTrackName());
+            this->ScrollToTrack(evt->GetTrackID());
         }
     };
     m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         scroll_to_track_handler);
-}
-
-int
-TimelineView::FindTrackIdByName(const std::string& name)
-{
-    for(int i = 0; i < m_graphs.size(); i++)
-    {
-        if(m_graphs[i].chart && m_graphs[i].chart->GetName() == name)
-        {
-            return i;
-        }
-    }
-    return -1;
 }
 
 void
@@ -148,40 +135,14 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImGui::EndChild();
 }
 
-float
-TimelineView::CalculateTrackOffsetY(int chart_id)
+void
+TimelineView::ScrollToTrack(const uint64_t& track_id)
 {
-    float offset = 0.0f;
-    for(int i = 0; i < m_graphs.size(); i++)
+    if(m_track_height_total.count(track_id) > 0)
     {
-        if(i == chart_id)
-        {
-            break;
-        }
-        else if(m_graphs[i].display && m_graphs[i].chart)
-        {
-            offset += m_graphs[i].chart->GetTrackHeight();
-        }
+        m_scroll_position = std::min(m_content_max_y_scroll, static_cast<double>(m_track_height_total[track_id]));
+        ImGui::SetScrollY(m_scroll_position);    
     }
-    return offset;
-}
-void
-TimelineView::ScrollToTrack(uint64_t position)
-{
-    float offset      = CalculateTrackOffsetY(position);
-    m_scroll_position = offset;
-    ImGui::SetScrollY(m_scroll_position);
-}
-
-void
-TimelineView::ScrollToTrackByName(const std::string& name)
-{
-    int chart_id = FindTrackIdByName(name);
-    if(chart_id == -1) return;
-
-    float offset      = CalculateTrackOffsetY(chart_id);
-    m_scroll_position = offset;
-    ImGui::SetScrollY(m_scroll_position);
 }
 void
 TimelineView::SetViewTimePosition(double time_pos_ns, bool center)

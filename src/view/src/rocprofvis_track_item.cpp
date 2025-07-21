@@ -8,7 +8,7 @@ using namespace RocProfVis::View;
 
 float TrackItem::s_metadata_width = 400.0f;
 
-TrackItem::TrackItem(DataProvider& dp, int id, std::string name, float zoom,
+TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                      double time_offset_ns, double& min_x, double& max_x, double scale_x)
 : m_data_provider(dp)
 , m_id(id)
@@ -50,7 +50,7 @@ TrackItem::GetName()
     return m_name;
 }
 
-int
+uint64_t
 TrackItem::GetID()
 {
     return m_id;
@@ -87,7 +87,7 @@ TrackItem::SetInViewVertical(bool in_view)
 }
 
 void
-TrackItem::SetID(int id)
+TrackItem::SetID(uint64_t id)
 {
     m_id = id;
 }

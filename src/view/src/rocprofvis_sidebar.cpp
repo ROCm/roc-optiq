@@ -587,10 +587,9 @@ SideBar::RenderTrackItem(const int& index)
     ImGui::Text(label.c_str());
     if(ImGui::Button("Go To Track"))
     {
-        auto evt = std::make_shared<ScrollToTrackByNameEvent>(
+        EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
             static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-            graph.chart->GetName());
-        EventManager::GetInstance()->AddEvent(evt);
+            graph.chart->GetID()));
     }
     ImGui::Checkbox("Enable/Disable Track", &graph.display);
     if(graph.graph_type == rocprofvis_graph_t::TYPE_FLAMECHART)

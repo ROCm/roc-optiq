@@ -40,11 +40,8 @@ public:
     void                             ResetView();
     void                             DestroyGraphs();
     std::vector<rocprofvis_graph_t>* GetGraphs();
-    int                              FindTrackIdByName(const std::string& name);
     void                             RenderArrows(ImVec2 screen_pos);
-    void                             ScrollToTrack(uint64_t position);
-    float                            CalculateTrackOffsetY(int chart_id);
-    void                             ScrollToTrackByName(const std::string& name);
+    void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             RenderGraphPoints();
     void                             RenderGridAlt();
@@ -103,14 +100,14 @@ private:
     int                                   m_grid_interval_count;
     bool                                  m_recalculate_grid_interval;
     ImVec2                                m_last_graph_size;
-    std::map<uint64_t, float>                  m_track_height_total;  // Track index to height
+    std::map<uint64_t, float>             m_track_height_total;  // Track index to height
     TimelineArrow                         m_arrow_layer;
     float                                 m_last_zoom;
     struct {
         bool handled;
         uint64_t track_id;
         int      new_index;
-    } m_reorder_request;
+    }                                     m_reorder_request;
 };
 
 }  // namespace View

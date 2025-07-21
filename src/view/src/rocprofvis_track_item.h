@@ -22,12 +22,12 @@ enum class TrackDataRequestState
 class TrackItem
 {
 public:
-    TrackItem(DataProvider& dp, int id, std::string name, float zoom, double time_offset_ns,
+    TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom, double time_offset_ns,
               double& min_x, double& max_x, double scale_x);
 
     virtual ~TrackItem() {}
-    void               SetID(int id);
-    int                GetID();
+    uint64_t           SetID(uint64_t id);
+    uint64_t           GetID();
     virtual float      GetTrackHeight();
     virtual void       Render(float width);
     void               Update();
@@ -77,7 +77,7 @@ protected:
     double                m_min_x;
     double                m_max_x;
     double                m_scale_x;
-    int                   m_id;
+    uint64_t              m_id;
     float                 m_track_height;
     float                 m_track_content_height;
     float                 m_min_track_height;

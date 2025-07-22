@@ -31,7 +31,8 @@ enum class RequestType
     kFetchTrackEventTable,
     kFetchTrackSampleTable,
     kFetchEventExtendedData,
-    kFetchEventFlowDetails
+    kFetchEventFlowDetails,
+    kFetchEventCallStack
 };
 
 enum class TableType
@@ -271,6 +272,13 @@ class DataProvider
 public:
     static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = static_cast<uint64_t>(-1);
     static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = static_cast<uint64_t>(-2);
+    static constexpr uint64_t EVENT_EXTENDED_DATA_REQUEST_ID  = static_cast<uint64_t>(-3);
+    static constexpr uint64_t EVENT_FLOW_DATA_REQUEST_ID     = static_cast<uint64_t>(-4);
+    static constexpr uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID =
+        static_cast<uint64_t>(-5);
+
+
+
 
     DataProvider();
     ~DataProvider();

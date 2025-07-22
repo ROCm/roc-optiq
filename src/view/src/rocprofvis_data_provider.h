@@ -29,7 +29,9 @@ enum class RequestType
     kFetchTrack,
     kFetchGraph,
     kFetchTrackEventTable,
-    kFetchTrackSampleTable
+    kFetchTrackSampleTable,
+    kFetchEventExtendedData,
+    kFetchEventFlowDetails
 };
 
 enum class TableType
@@ -477,6 +479,9 @@ private:
     void HandleRequests();
 
     void ProcessRequest(data_req_info_t& req);
+    void ProcessEventExtendedRequest(data_req_info_t& req);
+    void ProcessEventFlowDetailsRequest(data_req_info_t& req);
+    void ProcessEventCallStackRequest(data_req_info_t& req);
     void ProcessGraphRequest(data_req_info_t& req);
     void ProcessTrackRequest(data_req_info_t& req);
     void ProcessTableRequest(data_req_info_t& req);

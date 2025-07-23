@@ -42,7 +42,7 @@ ComputeRoot::ComputeRoot()
 
 ComputeRoot::~ComputeRoot() 
 {
-    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kComputeDataDirty), data_dirty_event_handler);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kComputeDataDirty), m_data_dirty_event_token);
     NavigationManager::GetInstance()->UnregisterContainer(m_tab_container, m_id, m_id);
 }
 

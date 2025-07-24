@@ -365,7 +365,8 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             {
                 *value = sizeof(Track);
                 result = kRocProfVisResultSuccess;
-                for(auto& pair : m_segments.GetSegments())
+                SharedSegmentLock locked_segments(m_segments.GetSharedSegments());
+                for(auto& pair : locked_segments.GetObject())
                 {
                     *value += sizeof(pair);
                     uint64_t entry_size = 0;
@@ -385,7 +386,8 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             {
                 *value = sizeof(Track);
                 result = kRocProfVisResultSuccess;
-                for(auto& pair : m_segments.GetSegments())
+                SharedSegmentLock locked_segments(m_segments.GetSharedSegments());
+                for(auto& pair : locked_segments.GetObject())
                 {
                     *value += sizeof(pair);
                 }
@@ -776,8 +778,9 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                     m_start_timestamp +
                                     (current_segment * kSegmentDuration);
 
-                                if(m_segments.GetSegments().find(segment_start) ==
-                                   m_segments.GetSegments().end())
+                                UniqueSegmentLock lock(m_segments.GetUniqueSegments());
+                                auto& locked_segments = lock.GetObject();
+                                if (locked_segments.find(segment_start) == locked_segments.end())
                                 {
                                     double segment_end = segment_start + kSegmentDuration;
                                     std::unique_ptr<Segment> segment =
@@ -793,7 +796,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                 if(result == kRocProfVisResultSuccess)
                                 {
                                     std::shared_ptr<Segment>& segment =
-                                        m_segments.GetSegments()[segment_start];
+                                        locked_segments[segment_start];
                                     segment->SetMinTimestamp(
                                         std::min(segment->GetMinTimestamp(), timestamp.start));
                                     segment->SetMaxTimestamp(std::max(

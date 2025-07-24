@@ -5,9 +5,11 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
 
+#include <map>
 #include <unordered_set>
 #include <string>
 #include <vector>
+#include <type_traits>
 
 namespace RocProfVis
 {
@@ -33,13 +35,15 @@ class RawTrackData
 {
 public:
     RawTrackData(rocprofvis_controller_track_type_t track_type, uint64_t track_id,
-                 double start_ts, double end_ts, uint64_t data_group_id);
-    virtual ~RawTrackData() = 0;
+                 double start_ts, double end_ts, uint64_t data_group_id, size_t chunk_count);
+    virtual ~RawTrackData() = default;
     rocprofvis_controller_track_type_t GetType() const;
     double                             GetStartTs() const;
     double                             GetEndTs() const;
     uint64_t                           GetTrackID() const;
     uint64_t                           GetDataGroupID() const;
+    size_t                             GetChunkCount() const;
+    bool                               AllDataReady() const;
 
 protected:
     rocprofvis_controller_track_type_t m_track_type;
@@ -48,44 +52,52 @@ protected:
     double   m_end_ts;         // ending time stamp of track data
     uint64_t m_track_id;       // id of the track
     uint64_t m_data_group_id;  // group id for the data, used for grouping requests
+    uint64_t m_expected_chunk_count; // expected number of chunks
+    std::map<size_t, size_t> m_chunk_info; //map containing chunk sizes
 };
 
-class RawTrackSampleData : public RawTrackData
+// Trait to get data properties from the data type
+template <typename T>
+struct data_traits;
+
+template <>
+struct data_traits<rocprofvis_trace_event_t>
+{
+    using id_type = uint64_t;
+    static constexpr rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeEvents;
+};
+
+template <>
+struct data_traits<rocprofvis_trace_counter_t>
+{
+    using id_type = double;
+    static constexpr rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeSamples;
+};
+
+template <typename T>
+class TemplatedRawTrackData : public RawTrackData
 {
 public:
-    RawTrackSampleData(uint64_t track_id, double start_ts, double end_ts,
-                       uint64_t data_group_id);
-    virtual ~RawTrackSampleData();
-    const std::vector<rocprofvis_trace_counter_t>& GetData() const;
-    void SetData(std::vector<rocprofvis_trace_counter_t>&& data);
+    using id_type = typename data_traits<T>::id_type;
 
-    std::vector<rocprofvis_trace_counter_t>& GetWritableData();
-    std::unordered_set<double>& GetWritableTimepoints();
-    
-private:
-    std::vector<rocprofvis_trace_counter_t> m_data;
-    // Use start timestamps as unique identifiers for samples
-    std::unordered_set<double> m_timepoints;
+    TemplatedRawTrackData(uint64_t track_id, double start_ts, double end_ts,
+                          uint64_t data_group_id, size_t chunk_count);
+    virtual ~TemplatedRawTrackData();
 
-};
+    const std::vector<T>& GetData() const;
+    void SetData(std::vector<T>&& data);
 
-class RawTrackEventData : public RawTrackData
-{
-public:
-    RawTrackEventData(uint64_t track_id, double start_ts, double end_ts,
-                      uint64_t data_group_id);
-    virtual ~RawTrackEventData();
-    const std::vector<rocprofvis_trace_event_t>& GetData() const;
-    void SetData(std::vector<rocprofvis_trace_event_t>&& data);
+    std::unordered_set<id_type>& GetWritableIdSet();
 
-    std::vector<rocprofvis_trace_event_t>& GetWritableData();
-    std::unordered_set<uint64_t>&          GetWritableEventSet();
+    bool AddChunk(size_t chunk_index, const std::vector<T> &&chunk_data);
 
 private:
-    std::vector<rocprofvis_trace_event_t> m_data;
-    // Store unique event IDs to avoid duplicates
-    std::unordered_set<uint64_t> m_event_ids;
+    std::vector<T> m_data;
+    std::unordered_set<id_type> m_ids;
 };
+
+using RawTrackSampleData = TemplatedRawTrackData<rocprofvis_trace_counter_t>;
+using RawTrackEventData = TemplatedRawTrackData<rocprofvis_trace_event_t>;
 
 }  // namespace View
 }  // namespace RocProfVis

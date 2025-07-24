@@ -95,9 +95,46 @@ private:
     rocprofvis_controller_track_type_t m_type;
     rocprofvis_timeline_iterator_t  m_timeline_iterator;
     rocprofvis_lru_iterator_t       m_lru_iterator;
+    std::shared_mutex m_mutex;
 };
 
 typedef rocprofvis_result_t (*FetchSegmentsFunc)(double start, double end, Segment& segment, void* user_ptr, SegmentTimeline* owner); 
+
+template<typename Type, typename LockType>
+class SegmentLock
+{
+public:
+    SegmentLock(Type& t, std::shared_mutex& mutex)
+    : m_lock(mutex)
+    , m_object(t)
+    {
+
+    }
+
+    SegmentLock(SegmentLock&& other)
+    : m_lock(std::move(other.m_lock))
+    , m_object(other.m_object)
+    {
+    }
+
+    ~SegmentLock()
+    {
+
+    }
+
+    Type& GetObject()
+    {
+        return m_object;
+    }
+
+private:
+    LockType m_lock;
+    Type& m_object;
+};
+
+typedef SegmentLock<std::map<double, std::shared_ptr<Segment>>, std::shared_lock<std::shared_mutex>> SharedSegmentLock;
+typedef SegmentLock<std::map<double, std::shared_ptr<Segment>>, std::unique_lock<std::shared_mutex>> UniqueSegmentLock;
+
 
 class SegmentTimeline
 {
@@ -116,7 +153,10 @@ public:
     rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
     rocprofvis_result_t Remove(Segment* segment);
     rocprofvis_result_t Insert(double segment_start, std::unique_ptr<Segment>&& segment);
-    std::map<double, std::shared_ptr<Segment>>& GetSegments();
+    
+    SharedSegmentLock GetSharedSegments();
+    UniqueSegmentLock GetUniqueSegments();
+
     bool IsValid(uint32_t segment_index) const;
     void SetValid(uint32_t segment_index);
     void SetInvalid(uint32_t segment_index);
@@ -130,7 +170,7 @@ private:
     double                                     m_segment_start_time;
     double                                     m_segment_duration;
     uint32_t                                   m_num_segments;
-    std::shared_mutex                          m_mutex;
+    mutable std::shared_mutex                  m_mutex;
     Handle*                                    m_ctx;
 };
 

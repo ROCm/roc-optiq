@@ -124,11 +124,13 @@ void Segment::SetMaxTimestamp(double value)
 
 void Segment::Insert(double timestamp, uint8_t level, Handle* event)
 {
+    std::unique_lock lock(m_mutex);
     m_entries[level].insert(std::make_pair(timestamp, event));
 }
 
 rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params)
 {
+    std::unique_lock lock(m_mutex);
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     double last_timestamp = std::max(m_end_timestamp, m_max_timestamp);
     if(m_start_timestamp <= end && last_timestamp >= start)
@@ -206,6 +208,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
 
 rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property)
 {
+    std::unique_lock lock(m_mutex);
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -320,6 +323,7 @@ SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
 
 void SegmentTimeline::Init(double segment_start_time, double segment_duration, uint32_t num_segments)
 {
+    std::unique_lock lock(m_mutex);
     m_segment_duration = segment_duration;
     m_num_segments = num_segments;
     m_segment_start_time = segment_start_time;
@@ -328,11 +332,13 @@ void SegmentTimeline::Init(double segment_start_time, double segment_duration, u
 }
 
 void SegmentTimeline::SetContext(Handle* ctx) {
+    std::unique_lock lock(m_mutex);
     m_ctx = ctx;
 }
 
 rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
+    std::unique_lock inner_lock(m_mutex);
     std::unique_lock<std::mutex> lock(
         ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
@@ -392,18 +398,30 @@ SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment
         pair.first->second.get()->SetLRUIterator(((Trace*) m_ctx)->GetMemoryManager()->GetDefaultLRUIterator());
         result = kRocProfVisResultSuccess;
     }
+    else
+    {
+        result = kRocProfVisResultDuplicate;
+    }
     return result;
 }
 
-std::map<double, std::shared_ptr<Segment>>& SegmentTimeline::GetSegments()
+SharedSegmentLock SegmentTimeline::GetSharedSegments()
 {
-    return m_segments;
+    SharedSegmentLock lock(m_segments, m_mutex);
+    return lock;
+}
+
+UniqueSegmentLock SegmentTimeline::GetUniqueSegments()
+{
+    UniqueSegmentLock lock(m_segments, m_mutex);
+    return lock;
 }
 
 bool
 SegmentTimeline::IsValid(uint32_t segment_index) const
 {
-    bool is_set = false;
+    std::shared_lock lock(m_mutex);
+    bool             is_set = false;
     if(segment_index < m_num_segments)
     {
         uint32_t array_index = segment_index / kSegmentBitSetSize;
@@ -417,6 +435,7 @@ SegmentTimeline::IsValid(uint32_t segment_index) const
 void
 SegmentTimeline::SetValid(uint32_t segment_index)
 {
+    std::unique_lock lock(m_mutex);
     if(segment_index < m_num_segments)
     {
         uint32_t array_index = segment_index / kSegmentBitSetSize;
@@ -429,6 +448,7 @@ SegmentTimeline::SetValid(uint32_t segment_index)
 void
 SegmentTimeline::SetInvalid(uint32_t segment_index)
 {
+    std::unique_lock lock(m_mutex);
     if(segment_index < m_num_segments)
     {
         uint32_t array_index = segment_index / kSegmentBitSetSize;
@@ -444,7 +464,8 @@ double SegmentTimeline::GetSegmentDuration() const
 }
 
 rocprofvis_result_t SegmentTimeline::Remove(Segment* target)
-{ 
+{
+    std::unique_lock         lock(m_mutex);
     std::shared_ptr<Segment>                    segment;    
     int segment_index =
         (target->GetStartTimestamp() - m_segment_start_time) / m_segment_duration;

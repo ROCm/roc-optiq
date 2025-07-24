@@ -112,7 +112,7 @@ AppWindow::Init()
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
 
     // default dark mode
-    Settings::GetInstance().DarkMode();
+    //Settings::GetInstance().DarkMode();
 
     return result;
 }

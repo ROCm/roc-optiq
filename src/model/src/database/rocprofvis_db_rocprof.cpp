@@ -527,31 +527,6 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
     return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
 }
 
-typedef struct rocprofvis_db_sqlite_trim_parameters
-{
-    // Table names as we can't issue recursively
-    std::map<std::string, std::string> tables;
-} rocprofvis_db_sqlite_trim_parameters;
-
-static int RocprofDatabaseTrimTableQueryCallback(void* data, int argc, sqlite3_stmt* stmt, char** azColName)
-{
-    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params =
-        (rocprofvis_db_sqlite_callback_parameters*) data;
-    RocprofDatabase* db = (RocprofDatabase*) callback_params->db;
-    rocprofvis_db_sqlite_trim_parameters* params =
-        (rocprofvis_db_sqlite_trim_parameters*) callback_params->handle;
-    rocprofvis_db_ext_data_t record;
-    if(callback_params->future->Interrupted()) return 1;
-
-    char* table_name = (char*) sqlite3_column_text(stmt, 0);
-    char* table_sql = (char*) sqlite3_column_text(stmt, 1);
-    params->tables.insert(std::make_pair(table_name, table_sql));
-
-    callback_params->future->CountThisRow();
-    return 0;
-}
-
 rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t start,
     rocprofvis_dm_timestamp_t end,
                                  rocprofvis_dm_charptr_t new_db_path, Future* future)
@@ -580,7 +555,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                 this,
                 internal_future,
                 &trim_tables,
-                RocprofDatabaseTrimTableQueryCallback,
+                &CallbackTrimTableQuery,
                 { query.c_str(), "", "", "" },
                 static_cast<rocprofvis_dm_track_id_t>(-1)
             };
@@ -623,7 +598,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                 this,
                 internal_future,
                 &trim_views,
-                RocprofDatabaseTrimTableQueryCallback,
+                &CallbackTrimTableQuery,
                 { query.c_str(), "", "", "" },
                 static_cast<rocprofvis_dm_track_id_t>(-1)
             };

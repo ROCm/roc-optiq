@@ -569,7 +569,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
     Future* internal_future = new Future(nullptr);
 
     {
-        RocprofDatabase                      rpDb(new_db_path);
+        RocprofDatabase rpDb(new_db_path);
         result = rpDb.Open();
 
         if(result == kRocProfVisDmResultSuccess)
@@ -662,75 +662,75 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
             }
         }
 
-        result = rpDb.Close();
-    }
-
-    if(result == kRocProfVisDmResultSuccess)
-    {
-        ShowProgress(0, "Attaching new DB", kRPVDbBusy, future);
-        query = "ATTACH DATABASE '";
-        query += new_db_path;
-        query += "' as 'newDb';";
-        result = ExecuteSQLQuery(internal_future, query.c_str());
-    }
-
-    if (result == kRocProfVisDmResultSuccess)
-    {
-        for(auto const& table : trim_tables.tables)
+        if(result == kRocProfVisDmResultSuccess)
         {
-            if(table.first != "sqlite_master" && table.first != "sqlite_sequence")
-            {
-                if(result == kRocProfVisDmResultSuccess)
-                {
-                    std::string msg = "Copy table " + table.first;
-                    ShowProgress(1, msg.c_str(), kRPVDbBusy, future);
+            ShowProgress(0, "Attaching old DB to new", kRPVDbBusy, future);
+            query = "ATTACH DATABASE '";
+            query += Path();
+            query += "' as 'oldDb';";
+            result = rpDb.ExecuteSQLQuery(internal_future, query.c_str());
+        }
 
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            for(auto const& table : trim_tables.tables)
+            {
+                if(table.first != "sqlite_master" && table.first != "sqlite_sequence")
+                {
                     if(result == kRocProfVisDmResultSuccess)
                     {
-                        if(strstr(table.first.c_str(), "rocpd_kernel_dispatch") ||
-                           strstr(table.first.c_str(), "rocpd_memory_allocate") ||
-                           strstr(table.first.c_str(), "rocpd_memory_copy") ||
-                           strstr(table.first.c_str(), "rocpd_region"))
+                        std::string msg = "Copy table " + table.first;
+                        ShowProgress(1, msg.c_str(), kRPVDbBusy, future);
+
+                        if(result == kRocProfVisDmResultSuccess)
                         {
-                            query = "INSERT INTO newDb.";
-                            query += table.first;
-                            query += " SELECT * FROM ";
-                            query += table.first;
-                            query += " WHERE start < ";
-                            query += std::to_string(end);
-                            query += " AND end > ";
-                            query += std::to_string(start);
-                            query += ";";
+                            if(strstr(table.first.c_str(), "rocpd_kernel_dispatch") ||
+                               strstr(table.first.c_str(), "rocpd_memory_allocate") ||
+                               strstr(table.first.c_str(), "rocpd_memory_copy") ||
+                               strstr(table.first.c_str(), "rocpd_region"))
+                            {
+                                query = "INSERT INTO ";
+                                query += table.first;
+                                query += " SELECT * FROM oldDb.";
+                                query += table.first;
+                                query += " WHERE start < ";
+                                query += std::to_string(end);
+                                query += " AND end > ";
+                                query += std::to_string(start);
+                                query += ";";
+                            }
+                            else
+                            {
+                                query = "INSERT INTO ";
+                                query += table.first;
+                                query += " SELECT * FROM oldDb.";
+                                query += table.first;
+                                query += ";";
+                            }
+
+                            result = rpDb.ExecuteSQLQuery(internal_future, query.c_str());
                         }
                         else
                         {
-                            query = "INSERT INTO newDb.";
-                            query += table.first;
-                            query += " SELECT * FROM ";
-                            query += table.first;
-                            query += ";";
+                            break;
                         }
-
-                        result = ExecuteSQLQuery(internal_future, query.c_str());
                     }
                     else
                     {
                         break;
                     }
                 }
-                else
-                {
-                    break;
-                }
             }
         }
-    }
 
-    if (result == kRocProfVisDmResultSuccess)
-    {
-        ShowProgress(0, "Detaching new DB", kRPVDbBusy, future);
-        query  = "DETACH newDb;";
-        result = ExecuteSQLQuery(internal_future, query.c_str());
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            ShowProgress(0, "Detaching old DB", kRPVDbBusy, future);
+            query  = "DETACH oldDb;";
+            result = rpDb.ExecuteSQLQuery(internal_future, query.c_str());
+        }
+
+        result = rpDb.Close();
     }
 
     if (result == kRocProfVisDmResultSuccess)

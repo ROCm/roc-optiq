@@ -322,7 +322,7 @@ TrackItem::RequestData(double min, double max, float width)
         float chunk_width = width * percentage;
 
         TrackRequestParams request_params(m_id, chunk_start, chunk_end,
-                                          static_cast<uint32_t>(chunk_width), m_group_id_counter);
+                                          static_cast<uint32_t>(chunk_width), m_group_id_counter, i, chunk_count);
         
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
@@ -361,7 +361,7 @@ TrackItem::Update()
 void
 TrackItem::FetchHelper()
 {
-    if(!m_request_queue.empty())
+    while(!m_request_queue.empty())
     {
         TrackRequestParams& req    = m_request_queue.front();
         bool                result = m_data_provider.FetchTrack(req);
@@ -379,8 +379,9 @@ TrackItem::FetchHelper()
         }
         m_request_queue.pop_front();
     }
-    else
-    {
-        spdlog::warn("No requests in queue for track {}", m_id);
-    }
+
+    // else
+    // {
+    //     spdlog::warn("No requests in queue for track {}", m_id);
+    // }
 }

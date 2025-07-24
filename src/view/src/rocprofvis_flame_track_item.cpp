@@ -61,7 +61,6 @@ FlameTrackItem::ReleaseData()
 bool
 FlameTrackItem::HandleTrackDataChanged()
 {
-    m_request_state = TrackDataRequestState::kIdle;
     bool result     = false;
     result          = ExtractPointsFromData();
     if(result)
@@ -77,10 +76,16 @@ FlameTrackItem::ExtractPointsFromData()
     const RawTrackData*      rtd         = m_data_provider.GetRawTrackData(m_id);
     const RawTrackEventData* event_track = dynamic_cast<const RawTrackEventData*>(rtd);
 
+
+
     if(!event_track)
     {
         spdlog::debug("Invalid track data type for track {}", m_id);
         return false;
+    }
+
+    if(event_track->AllDataReady()) {
+        m_request_state = TrackDataRequestState::kIdle;
     }
 
     if(event_track->GetData().empty())

@@ -131,6 +131,41 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t
+Database::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
+                               rocprofvis_dm_timestamp_t end,
+                               rocprofvis_dm_charptr_t new_db_path,
+                               rocprofvis_db_future_t object)
+{
+    Future* future = (Future*) object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(new_db_path, "New DB path cannot be NULL.",
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED,
+                                 kRocProfVisDmResultResourceBusy);
+    rocprofvis_dm_result_t result = kRocProfVisDmResultUnknownError;
+    try
+    {
+        future->SetWorker(std::move(std::thread(&SaveTrimmedDataStatic, this, start, end, new_db_path, future)));
+    } catch(std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t Database::SaveTrimmedDataStatic(Database* db, rocprofvis_dm_timestamp_t start,
+    rocprofvis_dm_timestamp_t end, rocprofvis_dm_charptr_t new_db_path, Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(new_db_path, "New DB path cannot be NULL.",
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    return db->SaveTrimmedData(start, end, new_db_path, future);
+}
+
+
 rocprofvis_dm_result_t  Database::ExecuteQueryAsync(
                                                     rocprofvis_dm_charptr_t query,
                                                     rocprofvis_dm_charptr_t description,

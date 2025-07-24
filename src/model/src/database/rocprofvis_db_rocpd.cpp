@@ -300,6 +300,16 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
     return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
 }
 
+rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t start,
+                                 rocprofvis_dm_timestamp_t end,
+                                 rocprofvis_dm_charptr_t new_db_path, Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(new_db_path, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+    return result;
+}
+
 rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)

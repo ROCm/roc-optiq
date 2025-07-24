@@ -527,6 +527,224 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
     return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
 }
 
+typedef struct rocprofvis_db_sqlite_trim_parameters
+{
+    // Table names as we can't issue recursively
+    std::map<std::string, std::string> tables;
+} rocprofvis_db_sqlite_trim_parameters;
+
+static int RocprofDatabaseTrimTableQueryCallback(void* data, int argc, sqlite3_stmt* stmt, char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    RocprofDatabase* db = (RocprofDatabase*) callback_params->db;
+    rocprofvis_db_sqlite_trim_parameters* params =
+        (rocprofvis_db_sqlite_trim_parameters*) callback_params->handle;
+    rocprofvis_db_ext_data_t record;
+    if(callback_params->future->Interrupted()) return 1;
+
+    char* table_name = (char*) sqlite3_column_text(stmt, 0);
+    char* table_sql = (char*) sqlite3_column_text(stmt, 1);
+    params->tables.insert(std::make_pair(table_name, table_sql));
+
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
+rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t start,
+    rocprofvis_dm_timestamp_t end,
+                                 rocprofvis_dm_charptr_t new_db_path, Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(new_db_path, "New DB path cannot be NULL.",
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+
+    std::string query;
+    rocprofvis_db_sqlite_trim_parameters trim_tables;
+    rocprofvis_db_sqlite_trim_parameters trim_views;
+
+    Future* internal_future = new Future(nullptr);
+
+    {
+        RocprofDatabase                      rpDb(new_db_path);
+        result = rpDb.Open();
+
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            sqlite3* connection = nullptr;
+            result = rpDb.OpenConnection(&connection);
+        }
+
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            ShowProgress(1, "Iterate over tables", kRPVDbBusy, future);
+            query = "SELECT name, sql FROM sqlite_master WHERE type='table';";
+            rocprofvis_db_sqlite_callback_parameters params = {
+                this,
+                internal_future,
+                &trim_tables,
+                RocprofDatabaseTrimTableQueryCallback,
+                { query.c_str(), "", "", "" },
+                static_cast<rocprofvis_dm_track_id_t>(-1)
+            };
+
+            result = ExecuteSQLQuery(query.c_str(), &params);
+        }
+
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            for(auto const& table : trim_tables.tables)
+            {
+                if(table.first != "sqlite_master" && table.first != "sqlite_sequence")
+                {
+                    if(result == kRocProfVisDmResultSuccess)
+                    {
+                        std::string msg = "Copy table " + table.first;
+                        ShowProgress(1, msg.c_str(), kRPVDbBusy, future);
+
+                        query = "DROP TABLE ";
+                        query += table.first;
+                        query += ";";
+                        rpDb.ExecuteSQLQuery(internal_future, query.c_str());
+
+                        query = table.second;
+                        result = rpDb.ExecuteSQLQuery(internal_future, query.c_str());
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            ShowProgress(1, "Iterate over views", kRPVDbBusy, future);
+            query = "SELECT name, sql FROM sqlite_master WHERE type='view';";
+            rocprofvis_db_sqlite_callback_parameters params = {
+                this,
+                internal_future,
+                &trim_views,
+                RocprofDatabaseTrimTableQueryCallback,
+                { query.c_str(), "", "", "" },
+                static_cast<rocprofvis_dm_track_id_t>(-1)
+            };
+
+            result = ExecuteSQLQuery(query.c_str(), &params);
+        }
+
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            for(auto const& view : trim_views.tables)
+            {
+                if(result == kRocProfVisDmResultSuccess)
+                {
+                    std::string msg = "Copy views " + view.first;
+                    ShowProgress(1, msg.c_str(), kRPVDbBusy, future);
+
+                    query = "DROP VIEW ";
+                    query += view.first;
+                    query += ";";
+                    rpDb.ExecuteSQLQuery(internal_future, query.c_str());
+
+                    query = view.second;
+
+                    result = rpDb.ExecuteSQLQuery(internal_future, query.c_str());
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        result = rpDb.Close();
+    }
+
+    if(result == kRocProfVisDmResultSuccess)
+    {
+        ShowProgress(0, "Attaching new DB", kRPVDbBusy, future);
+        query = "ATTACH DATABASE '";
+        query += new_db_path;
+        query += "' as 'newDb';";
+        result = ExecuteSQLQuery(internal_future, query.c_str());
+    }
+
+    if (result == kRocProfVisDmResultSuccess)
+    {
+        for(auto const& table : trim_tables.tables)
+        {
+            if(table.first != "sqlite_master" && table.first != "sqlite_sequence")
+            {
+                if(result == kRocProfVisDmResultSuccess)
+                {
+                    std::string msg = "Copy table " + table.first;
+                    ShowProgress(1, msg.c_str(), kRPVDbBusy, future);
+
+                    if(result == kRocProfVisDmResultSuccess)
+                    {
+                        if(strstr(table.first.c_str(), "rocpd_kernel_dispatch") ||
+                           strstr(table.first.c_str(), "rocpd_memory_allocate") ||
+                           strstr(table.first.c_str(), "rocpd_memory_copy") ||
+                           strstr(table.first.c_str(), "rocpd_region"))
+                        {
+                            query = "INSERT INTO newDb.";
+                            query += table.first;
+                            query += " SELECT * FROM ";
+                            query += table.first;
+                            query += " WHERE start < ";
+                            query += std::to_string(end);
+                            query += " AND end > ";
+                            query += std::to_string(start);
+                            query += ";";
+                        }
+                        else
+                        {
+                            query = "INSERT INTO newDb.";
+                            query += table.first;
+                            query += " SELECT * FROM ";
+                            query += table.first;
+                            query += ";";
+                        }
+
+                        result = ExecuteSQLQuery(internal_future, query.c_str());
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    if (result == kRocProfVisDmResultSuccess)
+    {
+        ShowProgress(0, "Detaching new DB", kRPVDbBusy, future);
+        query  = "DETACH newDb;";
+        result = ExecuteSQLQuery(internal_future, query.c_str());
+    }
+
+    if (result == kRocProfVisDmResultSuccess)
+    {
+        ShowProgress(100, "Trace trimmed successfully!", kRPVDbSuccess, future);        
+    }
+    else
+    {
+        ShowProgress(0, "Failed to trim track!", kRPVDbError, future);
+    }
+
+    return future->SetPromise(result);
+}
+
 rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)

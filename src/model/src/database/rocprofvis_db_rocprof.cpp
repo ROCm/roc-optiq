@@ -574,12 +574,6 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
 
         if(result == kRocProfVisDmResultSuccess)
         {
-            sqlite3* connection = nullptr;
-            result = rpDb.OpenConnection(&connection);
-        }
-
-        if(result == kRocProfVisDmResultSuccess)
-        {
             ShowProgress(1, "Iterate over tables", kRPVDbBusy, future);
             query = "SELECT name, sql FROM sqlite_master WHERE type='table';";
             rocprofvis_db_sqlite_callback_parameters params = {
@@ -729,8 +723,6 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
             query  = "DETACH oldDb;";
             result = rpDb.ExecuteSQLQuery(internal_future, query.c_str());
         }
-
-        result = rpDb.Close();
     }
 
     if (result == kRocProfVisDmResultSuccess)

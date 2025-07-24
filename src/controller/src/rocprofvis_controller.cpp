@@ -123,6 +123,20 @@ rocprofvis_result_t rocprofvis_controller_set_string(rocprofvis_handle_t* object
     }
     return result;
 }
+rocprofvis_result_t rocprofvis_controller_save_trimmed_trace(rocprofvis_handle_t* object, double start, double end, char const* path, rocprofvis_controller_future_t* future)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(object && path)
+    {
+        RocProfVis::Controller::TraceRef trace(object);
+        RocProfVis::Controller::FutureRef future_ref(future);
+        if (trace.IsValid() && future_ref.IsValid())
+        {
+            result = trace->SaveTrimmedTrace(*future_ref.Get(), start, end, path);
+        }
+    }
+    return result;
+}
 rocprofvis_controller_t* rocprofvis_controller_alloc()
 {
     rocprofvis_controller_t* controller = nullptr;

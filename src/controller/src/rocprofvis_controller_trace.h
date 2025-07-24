@@ -42,6 +42,8 @@ public:
 
     rocprofvis_result_t Load(char const* const filename, Future& future);
 
+    rocprofvis_result_t SaveTrimmedTrace(Future& future, double start, double end, char const* path);
+
     rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
                                    double start, double end);
 

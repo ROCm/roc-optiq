@@ -1652,6 +1652,7 @@ DataProvider::ProcessEventCallStackRequest(data_req_info_t& req)
     {
         spdlog::error("Failed to get call stack array entry count, result: {}",
                       static_cast<int>(result));
+        rocprofvis_controller_array_free(req.request_array);
         return;
     }
 
@@ -1700,6 +1701,7 @@ DataProvider::ProcessEventExtendedRequest(data_req_info_t& req)
     {
         spdlog::error("Failed to get extended data array entry count, result: {}",
                       static_cast<int>(result));
+        rocprofvis_controller_array_free(req.request_array);
         return;
     }
 
@@ -1744,6 +1746,7 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
     {
         spdlog::error("Failed to get flow details array entry count, result: {}",
                       static_cast<int>(result));
+        rocprofvis_controller_array_free(req.request_array);
         return;
     }
 
@@ -2344,7 +2347,7 @@ DataProvider::FetchEventExtData(uint64_t event_id)
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventExtendedData;
 
-        m_requests.emplace(event_id, request_info);
+        m_requests.emplace(request_info.request_id, request_info);
         return true;
     }
     else
@@ -2390,7 +2393,7 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventFlowDetails;
 
-        m_requests.emplace(EVENT_FLOW_DATA_REQUEST_ID, request_info);
+        m_requests.emplace(request_info.request_id, request_info);
         return true;
     }
     else
@@ -2436,7 +2439,7 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventCallStack;
 
-        m_requests.emplace(EVENT_CALL_STACK_DATA_REQUEST_ID, request_info);
+        m_requests.emplace(request_info.request_id, request_info);
         return true;
     }
     else

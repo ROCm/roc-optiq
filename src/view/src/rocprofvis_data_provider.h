@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
@@ -185,22 +186,26 @@ public:
 class TrackRequestParams : public RequestParamsBase
 {
 public:
-    uint64_t m_track_id;          // id of track that is being requested
+    uint32_t m_track_id;          // id of track that is being requested
     double   m_start_ts;          // start time stamp of data being requested
     double   m_end_ts;            // end time stamp of data being requested
     uint32_t m_horz_pixel_range;  // horizontal pixel range for the request
-    uint64_t m_data_group_id;     // group id for the request, used for grouping requests
-
+    uint8_t  m_data_group_id;     // group id for the request, used for grouping requests
+    uint16_t m_chunk_index;       // index of the chunk being requested
+    size_t   m_chunk_count;       // total number of chunks for the track
+    
     TrackRequestParams(const TrackRequestParams& other)            = default;
     TrackRequestParams& operator=(const TrackRequestParams& other) = default;
 
-    TrackRequestParams(uint64_t track_id, double start_ts, double end_ts,
-                       uint32_t horz_pixel_range, uint64_t group_id)
+    TrackRequestParams(uint32_t track_id, double start_ts, double end_ts,
+                       uint32_t horz_pixel_range, uint8_t group_id, uint16_t chunk_index, size_t chunk_count)
     : m_track_id(track_id)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
     , m_horz_pixel_range(horz_pixel_range)
     , m_data_group_id(group_id)
+    , m_chunk_index(chunk_index)
+    , m_chunk_count(chunk_count)
     {}
 };
 
@@ -253,6 +258,8 @@ typedef struct data_req_info_t
     ProviderState                      loading_state;       // state of the request
     RequestType                        request_type;        // type of request
     std::shared_ptr<RequestParamsBase> custom_params;       // custom request parameters
+    
+    std::chrono::steady_clock::time_point request_time;     // time when the request was made
 } data_req_info_t;
 
 typedef struct table_info_t
@@ -269,6 +276,19 @@ class DataProvider
 public:
     static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = static_cast<uint64_t>(-1);
     static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = static_cast<uint64_t>(-2);
+
+    static constexpr uint8_t TRACK_REQUEST_TYPE = 1;
+
+    static constexpr uint8_t CHUNK_OFFSET_BITS = sizeof(uint32_t) * 8;
+    static constexpr uint8_t GROUP_OFFSET_BITS = sizeof(uint16_t) * 8 + CHUNK_OFFSET_BITS;
+    static constexpr uint8_t REQUEST_TYPE_OFFSET_BITS = sizeof(uint8_t) * 8 + GROUP_OFFSET_BITS; 
+
+    static uint64_t MakeGraphRequestId(uint32_t track_id, uint16_t chunk_index, uint8_t group_id) {
+        return (static_cast<uint64_t>(RequestType::kFetchGraph) << REQUEST_TYPE_OFFSET_BITS) |
+            (static_cast<uint64_t>(group_id) << GROUP_OFFSET_BITS) |
+            (static_cast<uint64_t>(chunk_index) << CHUNK_OFFSET_BITS) |
+            (static_cast<uint64_t>(track_id));
+    }
 
     DataProvider();
     ~DataProvider();
@@ -326,13 +346,13 @@ public:
      * @param horz_pixel_range: The horizontal pixel range of the view
      * @param group_id: The group id for the request, used for grouping requests
      */
-    bool FetchTrack(uint64_t track_id, double start_ts, double end_ts,
-                    uint32_t horz_pixel_range, uint64_t group_id);
+    bool FetchTrack(uint32_t track_id, double start_ts, double end_ts,
+                    uint32_t horz_pixel_range, uint8_t group_id, uint16_t chunk_index = 0, size_t chunk_count = 1);
 
     bool FetchTrack(const TrackRequestParams& request_params);
 
-    bool FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
-                         uint32_t horz_pixel_range, uint64_t group_id);
+    bool FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
+                         uint32_t horz_pixel_range, uint8_t group_id, uint16_t chunk_index = 0, size_t chunk_count = 1);
 
     /*
      * Fetches an event table from the controller for a single track.

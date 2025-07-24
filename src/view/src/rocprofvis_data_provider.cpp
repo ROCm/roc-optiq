@@ -771,8 +771,9 @@ DataProvider::HandleLoadTrackMetaData()
 }
 
 bool
-DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
-                              uint32_t horz_pixel_range, uint64_t group_id)
+DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
+                              uint32_t horz_pixel_range, uint8_t group_id,
+                              uint16_t chunk_index, size_t chunk_count)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -813,9 +814,10 @@ DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
             request_info.request_type       = RequestType::kFetchTrack;
 
             auto params = std::make_shared<TrackRequestParams>(track_id, start_ts, end_ts,
-                                                               horz_pixel_range, group_id);
+                                                               horz_pixel_range, group_id, chunk_index, chunk_count);
             request_info.custom_params = params;
 
+            request_info.request_time = std::chrono::steady_clock::now();
             m_requests.emplace(request_info.request_id, request_info);
 
             spdlog::debug("Fetching track graph data {}", track_id);
@@ -837,10 +839,10 @@ DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
 }
 
 bool
-DataProvider::FetchTrack(uint64_t track_id, double start_ts, double end_ts,
-                         uint32_t horz_pixel_range, uint64_t group_id)
+DataProvider::FetchTrack(uint32_t track_id, double start_ts, double end_ts,
+                         uint32_t horz_pixel_range, uint8_t group_id, uint16_t chunk_index, size_t chunk_count)
 {
-    TrackRequestParams request_params(track_id, start_ts, end_ts, horz_pixel_range, group_id);
+    TrackRequestParams request_params(track_id, start_ts, end_ts, horz_pixel_range, group_id, chunk_index, chunk_count);
     return FetchTrack(request_params);
 }
 
@@ -854,9 +856,13 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
         return false;
     }
 
+    uint64_t request_id =
+        MakeGraphRequestId(request_params.m_track_id, request_params.m_data_group_id,
+                           request_params.m_chunk_index);
+
     if(GetTrackInfo(request_params.m_track_id))
     {
-        auto it = m_requests.find(request_params.m_track_id);
+        auto it = m_requests.find(request_id);//request_params.m_track_id);
         // only allow load if a request for this id (track) is not pending
         if(it == m_requests.end())
         {
@@ -885,13 +891,14 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
             request_info.request_future     = graph_future;
             request_info.request_obj_handle = graph_obj;
             request_info.request_args       = nullptr;
-            request_info.request_id         = request_params.m_track_id;
+            request_info.request_id         = request_id;//request_params.m_track_id;
             request_info.loading_state      = ProviderState::kLoading;
             request_info.request_type       = RequestType::kFetchGraph;
 
             auto params = std::make_shared<TrackRequestParams>(request_params);
             request_info.custom_params = params;
 
+            request_info.request_time = std::chrono::steady_clock::now();
             m_requests.emplace(request_info.request_id, request_info);
 
             spdlog::debug("Fetching track data {} from controller {}",
@@ -1937,14 +1944,14 @@ DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
         spdlog::debug("Create sample track {} data with {} entries", params.m_track_id,
                       count);
         raw_sample_data = new RawTrackSampleData(params.m_track_id, params.m_start_ts,
-                                                 params.m_end_ts, params.m_data_group_id);
+                                                 params.m_end_ts, params.m_data_group_id, params.m_chunk_count);
     }
 
-    std::vector<rocprofvis_trace_counter_t>& buffer = raw_sample_data->GetWritableData();
-    uint64_t                                 current_size = buffer.size();
-    buffer.reserve(count + current_size);
+    std::vector<rocprofvis_trace_counter_t> buffer;// = raw_sample_data->GetWritableData();
+    //uint64_t                                 current_size = buffer.size();
+    buffer.reserve(count);// + current_size);
 
-    std::unordered_set timepoint_set = raw_sample_data->GetWritableTimepoints();
+    std::unordered_set timepoint_set = raw_sample_data->GetWritableIdSet();
 
     for(uint64_t i = 0; i < count; i++)
     {
@@ -1979,6 +1986,8 @@ DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
         trace_counter.m_value    = value;
     }
 
+    raw_sample_data->AddChunk(params.m_chunk_index, std::move(buffer));
+
     m_raw_trackdata[params.m_track_id] = raw_sample_data;
 }
 
@@ -2011,18 +2020,19 @@ DataProvider::CreateRawEventData(const TrackRequestParams&      params,
         spdlog::debug("Creating event track {} data with {} entries", params.m_track_id,
                       count);
         raw_event_data = new RawTrackEventData(params.m_track_id, params.m_start_ts,
-                                               params.m_end_ts, params.m_data_group_id);
+                                               params.m_end_ts, params.m_data_group_id, params.m_chunk_count);
     }
 
-    std::vector<rocprofvis_trace_event_t>& buffer = raw_event_data->GetWritableData();
-    uint64_t                               current_size = buffer.size();
-    buffer.reserve(count + current_size);
+    std::vector<rocprofvis_trace_event_t>  buffer;// = raw_event_data->GetWritableData();
+    //uint64_t                               current_size = buffer.size();
+    buffer.reserve(count);// + current_size);
 
     size_t str_buffer_length = 128;
     char*  str_buffer        = new char[str_buffer_length];
 
-    std::unordered_set event_set = raw_event_data->GetWritableEventSet();
+    std::unordered_set event_set = raw_event_data->GetWritableIdSet();
 
+    size_t real_count = 0;
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_event_t* event = nullptr;
@@ -2083,11 +2093,17 @@ DataProvider::CreateRawEventData(const TrackRequestParams&      params,
                                                   str_buffer, &length);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_name.assign(str_buffer);
+        real_count++;
     }
 
+    // Add the buffer to the raw event data
+    spdlog::debug("Adding {} event entries to track id {}", real_count, params.m_track_id);
+    raw_event_data->AddChunk(params.m_chunk_index, std::move(buffer));
     delete[] str_buffer;
 
+    //raw_event_data->SetChunkSize(params.m_chunk_count, real_count);
     m_raw_trackdata[params.m_track_id] = raw_event_data;
+
 }
 
 bool

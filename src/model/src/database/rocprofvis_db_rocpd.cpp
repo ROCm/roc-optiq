@@ -481,6 +481,8 @@ rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t 
         ShowProgress(0, "Failed to trim track!", kRPVDbError, future);
     }
 
+    delete internal_future;
+
     return future->SetPromise(result);
 }
 

@@ -24,9 +24,8 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
-constexpr float  REORDER_AUTO_SCROLL_THRESHOLD =
-    0.2f;  // 20% top and bottom of the window size
+// 20% top and bottom of the window size
+constexpr float  REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 
 TimelineView::TimelineView(DataProvider&                      dp,
                            std::shared_ptr<TimelineSelection> timeline_selection)
@@ -53,7 +52,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_scroll_position_x(0)
 , m_scrollbar_location_as_percentage(0)
 , m_artifical_scrollbar_active(false)
-, m_highlighted_region({ INVALID_SELECTION_TIME, INVALID_SELECTION_TIME })
+, m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME, TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(static_cast<uint64_t>(-1))
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_settings(Settings::GetInstance())
@@ -422,7 +421,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // Render range selction box
     ImVec2 cursor_position = screen_pos;
 
-    if(m_highlighted_region.first != INVALID_SELECTION_TIME)
+    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
         double normalized_start_box_highlighted =
             window_position.x +
@@ -433,7 +432,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                                   cursor_position.y + container_size.y - m_ruler_height),
                            m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
     }
-    if(m_highlighted_region.first != INVALID_SELECTION_TIME)
+    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
         double normalized_start_box_highlighted_end =
             window_position.x +
@@ -445,8 +444,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                    cursor_position.y + container_size.y - m_ruler_height),
             m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
     }
-    if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
-       m_highlighted_region.second != INVALID_SELECTION_TIME)
+    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
+       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
     {
         double normalized_start_box_highlighted =
             window_position.x +
@@ -493,12 +492,12 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         // Code below is for detecting range selection by double clicking
         if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
         {
-            if(m_highlighted_region.first == INVALID_SELECTION_TIME)
+            if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.first =
                     m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
             }
-            else if(m_highlighted_region.second == INVALID_SELECTION_TIME)
+            else if(m_highlighted_region.second == TimelineSelection::INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.second =
                     m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
@@ -510,8 +509,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             }
             else
             {
-                m_highlighted_region.first  = INVALID_SELECTION_TIME;
-                m_highlighted_region.second = INVALID_SELECTION_TIME;
+                m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
+                m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
                 m_selection->SelectTimeRange(m_min_x, m_max_x);
             }
         }
@@ -1194,7 +1193,7 @@ TimelineView::MakeGraphView()
             }
         }
     }
-    m_selection->Init(m_min_x, m_max_x);
+    //m_selection->Init(m_min_x, m_max_x);
     m_meta_map_made = true;
 }
 

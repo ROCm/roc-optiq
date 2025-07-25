@@ -11,8 +11,8 @@ namespace View
 {
 
 TimelineSelection::TimelineSelection()
-: m_selected_range_start(-1)
-, m_selected_range_end(-1)
+: m_selected_range_start(INVALID_SELECTION_TIME)
+, m_selected_range_end(INVALID_SELECTION_TIME)
 , m_tracks_changed(false)
 , m_range_changed(false)
 {}
@@ -89,6 +89,24 @@ TimelineSelection::SelectTimeRange(double start_ts, double end_ts)
         m_selected_range_end   = end_ts;
         m_range_changed        = true;
     }
+}
+
+bool TimelineSelection::GetSelectedTimeRange(double& start_ts_out, double& end_ts_out) const
+{
+    if(!HasValidTimeRangeSelection())
+    {
+        return false;  // No valid selection
+    }
+    
+    start_ts_out = m_selected_range_start;
+    end_ts_out = m_selected_range_end;
+    return true;
+}
+
+bool TimelineSelection::HasValidTimeRangeSelection() const
+{
+    return m_selected_range_start != TimelineSelection::INVALID_SELECTION_TIME ||
+           m_selected_range_end != TimelineSelection::INVALID_SELECTION_TIME; 
 }
 
 }  // namespace View

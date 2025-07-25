@@ -32,6 +32,11 @@ public:
     void ToggleSelectTrack(rocprofvis_graph_t& graph);
     void SelectTimeRange(double start_ts, double end_ts);
 
+    bool GetSelectedTimeRange(double& start_ts_out, double& end_ts_out) const;
+    bool HasValidTimeRangeSelection() const;
+
+    static constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
+
 private:
     std::unordered_set<uint64_t> m_selected_track_ids;
     double                       m_selected_range_start;

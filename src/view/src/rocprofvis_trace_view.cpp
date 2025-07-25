@@ -166,6 +166,23 @@ TraceView::Render()
                                          0.20;  // Scale font by DPI. -0.20 should be
                                                 // removed once font lib is in place.
         m_container->Render();
+
+        if(m_open_save_popup)
+        {
+            ImGui::OpenPopup("Saved Trimmed Trace");
+            m_open_save_popup = false;
+        }
+
+        if(ImGui::BeginPopupModal("Saved Trimmed Trace", nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("Trace has been saved successfully.");
+            if(ImGui::Button("OK"))
+            {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
         return;
     }
 
@@ -173,22 +190,6 @@ TraceView::Render()
     {
         ImGui::OpenPopup("Loading");
         m_open_loading_popup = false;
-    }
-
-    if(m_open_save_popup)
-    {
-        ImGui::OpenPopup("Saved Trimmed Trace");
-        m_open_save_popup = false;
-    }
-
-    if(ImGui::BeginPopupModal("Saved Trimmed Trace", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-    {
-        ImGui::Text("Trace has been saved successfully.");
-        if(ImGui::Button("OK"))
-        {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
     }
 
     if(m_data_provider.GetState() == ProviderState::kLoading)

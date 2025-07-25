@@ -844,7 +844,8 @@ DataProvider::SaveTrimmedTrace(const std::string& path, double start_ns, double 
     }
 
     rocprofvis_handle_t* trim_future = rocprofvis_controller_future_alloc();
-
+    ROCPROFVIS_ASSERT(trim_future);
+    
     rocprofvis_result_t result = rocprofvis_controller_save_trimmed_trace(m_trace_controller, start_ns,
     end_ns, path.c_str(), trim_future);
 
@@ -859,6 +860,8 @@ DataProvider::SaveTrimmedTrace(const std::string& path, double start_ns, double 
         request_info.request_id         = SAVE_TRIMMED_TRACE_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kSaveTrimmedTrace;
+
+        m_requests.emplace(request_info.request_id, request_info);
         return true;
     }
     else

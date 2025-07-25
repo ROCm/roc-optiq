@@ -817,6 +817,17 @@ DataProvider::HandleLoadTrackMetaData()
 }
 
 bool
+DataProvider::SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns)
+{
+    spdlog::debug("Saving trimmed trace to path: {}, start: {}, end: {}",
+                  path, start_ns, end_ns);
+    // todo: rocprofvis_result_t
+    // rocprofvis_controller_save_trimmed_trace(rocprofvis_handle_t* object, double start,
+    // double end, char const* path, rocprofvis_controller_future_t* future);
+    return false;  // Not implemented yet
+}
+
+bool
 DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
                               uint32_t horz_pixel_range, uint64_t group_id)
 {

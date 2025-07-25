@@ -29,6 +29,10 @@ public:
     void CreateView();
     void DestroyView();
 
+    bool HasTrimActiveTrimSelection() const;
+
+    bool SaveSelection(const std::string& file_path);
+
 private:
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<SideBar>           m_sidebar;

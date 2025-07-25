@@ -480,6 +480,8 @@ public:
      */
     bool SetGraphIndex(uint64_t track_id, uint64_t index);
 
+    bool SaveTrimmedTrace(const std::string &path, double start_ns, double end_ns);
+    
 private:
     void HandleLoadTrace();
     void HandleLoadSystemTopology();

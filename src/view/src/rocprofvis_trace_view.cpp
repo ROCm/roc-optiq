@@ -211,4 +211,35 @@ TraceView::Render()
     {
         ImGui::CloseCurrentPopup();
     }
+
+}
+
+bool TraceView::HasTrimActiveTrimSelection() const
+{
+    if(m_timeline_selection)
+    {
+        return m_timeline_selection->HasValidTimeRangeSelection();
+    }
+    return false;
+}
+
+bool TraceView::SaveSelection(const std::string& file_path) {
+    if(m_timeline_selection)
+    {
+        if(!m_timeline_selection->HasValidTimeRangeSelection()) {
+            spdlog::warn("No valid time range selection to save.");
+            return false;
+        }
+
+        double start_ns = 0.0;
+        double end_ns = 0.0;
+        m_timeline_selection->GetSelectedTimeRange(start_ns, end_ns);
+
+        m_data_provider.SaveTrimmedTrace(file_path, start_ns, end_ns);
+        return true;
+
+    } else {
+        spdlog::warn("Timeline selection is not initialized.");
+    }
+    return false;
 }

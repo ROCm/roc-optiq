@@ -788,6 +788,11 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                     segment->SetMaxTimestamp(timestamp.end);                                 
                                     result = m_segments.Insert(segment_start,
                                                                std::move(segment));
+                                    if(result == kRocProfVisResultDuplicate) {
+                                        spdlog::warn("Segment already exists at {}",
+                                                segment_start);
+                                        result = kRocProfVisResultSuccess;
+                                    }                                                               
                                 }
 
                                 if(result == kRocProfVisResultSuccess)

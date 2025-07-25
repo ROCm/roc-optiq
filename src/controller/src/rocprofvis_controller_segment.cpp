@@ -392,6 +392,10 @@ SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment
         pair.first->second.get()->SetLRUIterator(((Trace*) m_ctx)->GetMemoryManager()->GetDefaultLRUIterator());
         result = kRocProfVisResultSuccess;
     }
+    else
+    {
+        result = kRocProfVisResultDuplicate;
+    }
     return result;
 }
 

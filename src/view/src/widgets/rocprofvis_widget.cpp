@@ -553,6 +553,15 @@ TabContainer::SetActiveTab(const std::string& id)
     }
 }
 
+const TabItem* TabContainer::GetActiveTab() const
+{
+    if(m_active_tab_index >= 0 && m_active_tab_index < static_cast<int>(m_tabs.size()))
+    {
+        return &m_tabs[m_active_tab_index];
+    }
+    return nullptr;
+}
+
 void
 TabContainer::SetAllowToolTips(bool allow_tool_tips)
 {

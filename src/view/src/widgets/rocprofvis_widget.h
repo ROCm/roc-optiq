@@ -154,6 +154,8 @@ public:
     void SetActiveTab(int index);
     void SetActiveTab(const std::string& id);
 
+    const TabItem* GetActiveTab() const;
+
     void SetAllowToolTips(bool allow_tool_tips);
     bool GetAllowToolTips() const;
 

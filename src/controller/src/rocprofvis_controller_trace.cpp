@@ -2709,7 +2709,20 @@ rocprofvis_result_t Trace::SaveTrimmedTrace(Future& future, double start, double
                                   if (object2wait)
                                   {
                                     auto error = rocprofvis_db_trim_save_async(db, start, end, path, object2wait);
-                                    result = (error == kRocProfVisDmResultSuccess) ? kRocProfVisResultSuccess : result;
+                                      result = (error == kRocProfVisDmResultSuccess)
+                                                   ? kRocProfVisResultSuccess
+                                                   : kRocProfVisResultUnknownError;
+
+                                    if (error == kRocProfVisDmResultSuccess)
+                                    {
+                                        error = rocprofvis_db_future_wait(object2wait,
+                                                                          UINT64_MAX);
+                                        result = (error == kRocProfVisDmResultSuccess)
+                                                     ? kRocProfVisResultSuccess
+                                                     : kRocProfVisResultUnknownError;
+                                    }
+
+                                    rocprofvis_db_future_free(object2wait);
                                   }
                               }
                               return result;

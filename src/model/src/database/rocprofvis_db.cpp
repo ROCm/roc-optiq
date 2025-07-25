@@ -134,11 +134,11 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
 rocprofvis_dm_result_t
 Database::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
                                rocprofvis_dm_timestamp_t end,
-                               rocprofvis_dm_charptr_t new_db_path,
+                               rocprofvis_dm_string_t new_db_path,
                                rocprofvis_db_future_t object)
 {
     Future* future = (Future*) object;
-    ROCPROFVIS_ASSERT_MSG_RETURN(new_db_path, "New DB path cannot be NULL.",
+    ROCPROFVIS_ASSERT_MSG_RETURN(!new_db_path.empty(), "New DB path cannot be empty.",
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
@@ -156,13 +156,13 @@ Database::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
 }
 
 rocprofvis_dm_result_t Database::SaveTrimmedDataStatic(Database* db, rocprofvis_dm_timestamp_t start,
-    rocprofvis_dm_timestamp_t end, rocprofvis_dm_charptr_t new_db_path, Future* future)
+    rocprofvis_dm_timestamp_t end, rocprofvis_dm_string_t new_db_path, Future* future)
 {
-    ROCPROFVIS_ASSERT_MSG_RETURN(new_db_path, "New DB path cannot be NULL.",
+    ROCPROFVIS_ASSERT_MSG_RETURN(!new_db_path.empty(), "New DB path cannot be empty.",
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
-    return db->SaveTrimmedData(start, end, new_db_path, future);
+    return db->SaveTrimmedData(start, end, new_db_path.c_str(), future);
 }
 
 

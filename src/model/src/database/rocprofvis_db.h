@@ -162,13 +162,13 @@ class Database
 
        rocprofvis_dm_result_t SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
                                                    rocprofvis_dm_timestamp_t end,
-                                                   rocprofvis_dm_charptr_t new_db_path, 
+                                                   rocprofvis_dm_string_t new_db_path, 
                                                    rocprofvis_db_future_t object);
 
        static rocprofvis_dm_result_t SaveTrimmedDataStatic(Database* db, 
                                                     rocprofvis_dm_timestamp_t start,
                                                     rocprofvis_dm_timestamp_t end, 
-                                                    rocprofvis_dm_charptr_t new_db_path,
+                                                    rocprofvis_dm_string_t new_db_path,
                                                     Future* object);
 
     private:

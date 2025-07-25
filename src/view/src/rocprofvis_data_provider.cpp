@@ -19,6 +19,7 @@ DataProvider::DataProvider()
 , m_trace_timeline(nullptr)
 , m_track_data_ready_callback(nullptr)
 , m_trace_data_ready_callback(nullptr)
+, m_save_trace_callback(nullptr)
 , m_num_graphs(0)
 , m_min_ts(0)
 , m_max_ts(0)
@@ -279,6 +280,13 @@ DataProvider::SetTraceLoadedCallback(
     const std::function<void(const std::string&)>& callback)
 {
     m_trace_data_ready_callback = callback;
+}
+
+void
+DataProvider::SetSaveTraceCallback(
+    const std::function<void()>& callback)
+{
+    m_save_trace_callback = callback;
 }
 
 bool
@@ -821,10 +829,46 @@ DataProvider::SaveTrimmedTrace(const std::string& path, double start_ns, double 
 {
     spdlog::debug("Saving trimmed trace to path: {}, start: {}, end: {}",
                   path, start_ns, end_ns);
-    // todo: rocprofvis_result_t
-    // rocprofvis_controller_save_trimmed_trace(rocprofvis_handle_t* object, double start,
-    // double end, char const* path, rocprofvis_controller_future_t* future);
-    return false;  // Not implemented yet
+
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::debug("Cannot save, provider not ready or error, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+
+    if(m_requests.find(SAVE_TRIMMED_TRACE_REQUEST_ID) != m_requests.end())
+    {
+        spdlog::debug("Save request already pending");
+        return false;
+    }
+
+    rocprofvis_handle_t* trim_future = rocprofvis_controller_future_alloc();
+
+    rocprofvis_result_t result = rocprofvis_controller_save_trimmed_trace(m_trace_controller, start_ns,
+    end_ns, path.c_str(), trim_future);
+
+    if(result == kRocProfVisResultSuccess && trim_future)
+    {
+        spdlog::debug("Trimmed trace save request submitted successfully");
+        data_req_info_t request_info;
+        request_info.request_array      = nullptr;
+        request_info.request_future     = trim_future;
+        request_info.request_obj_handle = nullptr;
+        request_info.request_args       = nullptr;
+        request_info.request_id         = SAVE_TRIMMED_TRACE_REQUEST_ID;
+        request_info.loading_state      = ProviderState::kLoading;
+        request_info.request_type       = RequestType::kSaveTrimmedTrace;
+        return true;
+    }
+    else
+    {
+        spdlog::error("Failed to submit trimmed trace save request, result: {}",
+                      static_cast<int>(result));
+        rocprofvis_controller_future_free(trim_future);
+    }
+
+    return false;
 }
 
 bool
@@ -1841,10 +1885,27 @@ DataProvider::ProcessRequest(data_req_info_t& req)
         spdlog::debug("Processing table data {}", req.request_id);
         ProcessTableRequest(req);
     }
+    else if(req.request_type == RequestType::kSaveTrimmedTrace) 
+    {
+        ProcessSaveTrimmedTraceRequest(req);
+    }
     else
     {
         spdlog::debug("Unknown request type {}", static_cast<int>(req.request_type));
         return;
+    }
+}
+
+void 
+DataProvider::ProcessSaveTrimmedTraceRequest(data_req_info_t& req)
+{
+    spdlog::debug("Save trimmed trace request complete");
+
+    rocprofvis_controller_future_free(req.request_future);
+    // call the new data ready callback
+    if(m_save_trace_callback)
+    {
+        m_save_trace_callback();
     }
 }
 

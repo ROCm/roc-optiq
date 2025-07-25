@@ -43,7 +43,7 @@ private:
     DataProvider m_data_provider;
     bool         m_view_created;
     bool         m_open_loading_popup;
-
+    bool         m_open_save_popup;
     EventManager::SubscriptionToken       m_tabselected_event_token;
 };
 

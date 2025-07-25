@@ -19,6 +19,7 @@ TraceView::TraceView()
 , m_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
+, m_open_save_popup(false)
 , m_analysis(nullptr)
 , m_timeline_selection(nullptr)
 {
@@ -40,6 +41,11 @@ TraceView::TraceView()
             }
         }
     };
+
+    m_data_provider.SetSaveTraceCallback(
+        [this]() {
+            m_open_save_popup = true;
+        });
 
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
@@ -167,6 +173,22 @@ TraceView::Render()
     {
         ImGui::OpenPopup("Loading");
         m_open_loading_popup = false;
+    }
+
+    if(m_open_save_popup)
+    {
+        ImGui::OpenPopup("Saved Trimmed Trace");
+        m_open_save_popup = false;
+    }
+
+    if(ImGui::BeginPopupModal("Saved Trimmed Trace", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("Trace has been saved successfully.");
+        if(ImGui::Button("OK"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 
     if(m_data_provider.GetState() == ProviderState::kLoading)

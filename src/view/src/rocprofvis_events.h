@@ -84,8 +84,8 @@ public:
         m_event_type = RocEventType::kCreateArrowsViewEvent;
     }
 
-private:
-    std::string m_track_id;
+// private:
+//     std::string m_track_id;
 };
 
 class ScrollToTrackEvent : public RocEvent

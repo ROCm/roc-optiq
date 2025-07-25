@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_raw_track_data.h"
+#include <spdlog/spdlog.h>
 
 using namespace RocProfVis::View;
 
@@ -52,6 +53,8 @@ RawTrackData::GetChunkCount() const
 bool
 RawTrackData::AllDataReady() const
 {
+    spdlog::debug("All data ready? track ID {}: expected {}, received {}",
+             m_track_id, m_expected_chunk_count, m_chunk_info.size());
     // Check if the number of chunks received matches the expected count
     return m_chunk_info.size() == m_expected_chunk_count;
 }

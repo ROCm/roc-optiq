@@ -310,7 +310,7 @@ class Database
         // binding structure contains methods to transfer data between database and trace objects 
         rocprofvis_dm_db_bind_struct *m_binding_info;
         // database file path
-        rocprofvis_db_filename_t m_path;
+        std::string m_path;
         // vector array of track parameters. Used as a reference for data model Track objects and for Database component to generate proper database queries 
         std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>> m_track_properties;
         // map array of cached tables, mostly with non-essential Track information
@@ -320,7 +320,7 @@ class Database
         // returns pointer to binding structure
         rocprofvis_dm_db_bind_struct *  BindObject() {return m_binding_info;}
         // returns pointer to database file path
-        rocprofvis_db_filename_t        Path() {return m_path;}
+        rocprofvis_db_filename_t        Path() {return m_path.c_str();}
         // return current number of tracks
         rocprofvis_dm_size_t            NumTracks() { return m_track_properties.size(); }
         // returns pointer to track properties structure. Takes index of track as a parameter 

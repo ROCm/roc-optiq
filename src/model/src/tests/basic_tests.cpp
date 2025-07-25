@@ -265,6 +265,24 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
         }
     }
 
+    SECTION("Trim trace")
+    {
+        PrintHeader("Allocate future");
+        rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(db_progress);
+        REQUIRE(nullptr != object2wait);
+
+        
+        GenerateRandomSlice(m_trace, num_tracks, tracks_selection, start_time, end_time);
+        auto result = rocprofvis_db_trim_save_async(
+            m_db, start_time, (start_time + ((end_time - start_time) / 2)),
+                                      "../../../sample/trace_70b_1024_32.trim.rpd",
+                                      object2wait);
+        REQUIRE(result == kRocProfVisDmResultSuccess);
+
+        auto read_wait = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+        REQUIRE(kRocProfVisDmResultSuccess == read_wait);
+    }
+
     uint32_t total_num_tracks = num_tracks;
 
     SECTION("Whole Trace Read")

@@ -33,10 +33,6 @@ typedef struct rocprofvis_graph_t
     bool                        display;
     TrackItem*                  chart;
     bool                        selected;
-    bool                        color_by_value;
-    bool                        colorful_flamechart;
-    bool                        make_boxplot;
-    rocprofvis_color_by_value_t color_by_value_digits;
 
 } rocprofvis_graph_t;
 

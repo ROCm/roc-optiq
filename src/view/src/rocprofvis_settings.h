@@ -42,6 +42,7 @@ enum class FontType
     kMedium,
     kMedLarge,
     kLarge,
+    kIcon,
     // Used to get the size of the enum, insert new fonts before this line
     __kLastFont,
     kDefault = kMedium

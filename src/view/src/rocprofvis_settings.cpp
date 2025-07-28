@@ -3,6 +3,7 @@
 #include "rocprofvis_settings.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_icon_font.h"
 
 #include "imgui.h"
 #include "implot.h"
@@ -60,7 +61,12 @@ FontManager::Init()
         m_fonts[i] = font;
     }
 
-    io.FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
+    config.SizePixels = 13.0f;
+    config.FontDataOwnedByAtlas = false;
+    ImWchar icon_range[] = { 0x0041, 0x0045, 0 };
+    font = io.Fonts->AddFontFromMemoryTTF(icon_font_data, sizeof(icon_font_data), 13.0f, &config, icon_range);
+    m_fonts[static_cast<int>(FontType::kIcon)] = font;
+
     return io.Fonts->Build();
 }
 

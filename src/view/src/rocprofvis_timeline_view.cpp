@@ -7,6 +7,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
@@ -27,7 +28,8 @@ constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
 constexpr float  REORDER_AUTO_SCROLL_THRESHOLD =
     0.2f;  // 20% top and bottom of the window size
 
-TimelineView::TimelineView(DataProvider& dp)
+TimelineView::TimelineView(DataProvider&                      dp,
+                           std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
 , m_zoom(1.0f)
 , m_view_time_offset_ns(0.0f)
@@ -61,7 +63,6 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_graph_size()
 , m_range_x(0.0f)
 , m_can_drag_to_pan(false)
-, m_region_selection_changed(false)
 , m_artificial_scrollbar_height(30)
 , m_display_time_format(TimeFormat::kTimecode)
 , m_grid_interval_ns(0.0)
@@ -71,7 +72,7 @@ TimelineView::TimelineView(DataProvider& dp)
 , m_reorder_request({ true, 0, 0 })
 , m_track_height_total({})
 , m_arrow_layer(m_data_provider)
-
+, m_selection(timeline_selection)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -141,7 +142,7 @@ TimelineView::ScrollToTrack(const uint64_t& track_id)
     if(m_track_height_total.count(track_id) > 0)
     {
         m_scroll_position = std::min(m_content_max_y_scroll, static_cast<double>(m_track_height_total[track_id]));
-        ImGui::SetScrollY(m_scroll_position);    
+        ImGui::SetScrollY(m_scroll_position); 
     }
 }
 void
@@ -502,13 +503,17 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             {
                 m_highlighted_region.second =
                     m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
-                m_region_selection_changed = true;
+                m_selection->SelectTimeRange(
+                    std::min(m_highlighted_region.first, m_highlighted_region.second) +
+                        m_min_x,
+                    std::max(m_highlighted_region.first, m_highlighted_region.second) +
+                        m_min_x);
             }
             else
             {
                 m_highlighted_region.first  = INVALID_SELECTION_TIME;
                 m_highlighted_region.second = INVALID_SELECTION_TIME;
-                m_region_selection_changed  = true;
+                m_selection->SelectTimeRange(m_min_x, m_max_x);
             }
         }
     }
@@ -868,7 +873,6 @@ TimelineView::RenderGraphView()
         m_v_past_width = m_v_width;
     }
 
-    bool selection_changed = false;
     for(int i = 0; i < m_graphs.size(); i++)
     {
         rocprofvis_graph_t& track_item = m_graphs[i];
@@ -999,9 +1003,7 @@ TimelineView::RenderGraphView()
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {
-                        track_item.selected = !track_item.selected;
-                        track_item.chart->SetSelected(track_item.selected);
-                        selection_changed = true;
+                        m_selection->ToggleSelectTrack(track_item);
                     }
                 }
                 ImGui::EndChild();
@@ -1079,37 +1081,6 @@ TimelineView::RenderGraphView()
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
-
-    if(selection_changed || m_region_selection_changed)
-    {
-        m_region_selection_changed = false;
-        std::vector<uint64_t> selected_graphs;
-        for(int i = 0; i < m_graphs.size(); i++)
-        {
-            if(m_graphs[i].selected)
-            {
-                selected_graphs.push_back(m_graphs[i].chart->GetID());
-            }
-        }
-
-        double start_ns = m_min_x;
-        double end_ns   = m_max_x;
-        if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
-           m_highlighted_region.second != INVALID_SELECTION_TIME)
-        {
-            start_ns = std::min(m_highlighted_region.first, m_highlighted_region.second) +
-                       m_min_x;
-            end_ns = std::max(m_highlighted_region.first, m_highlighted_region.second) +
-                     m_min_x;
-        }
-
-        // notify the event manager of the section change
-        std::shared_ptr<TrackSelectionChangedEvent> e =
-            std::make_shared<TrackSelectionChangedEvent>(
-                static_cast<int>(RocEvents::kTimelineSelectionChanged),
-                std::move(selected_graphs), start_ns, end_ns);
-        EventManager::GetInstance()->AddEvent(e);
-    }
 }
 
 void
@@ -1225,7 +1196,7 @@ TimelineView::MakeGraphView()
             }
         }
     }
-
+    m_selection->Init(m_min_x, m_max_x);
     m_meta_map_made = true;
 }
 

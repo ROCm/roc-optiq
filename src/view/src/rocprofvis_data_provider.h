@@ -30,7 +30,10 @@ enum class RequestType
     kFetchTrack,
     kFetchGraph,
     kFetchTrackEventTable,
-    kFetchTrackSampleTable
+    kFetchTrackSampleTable,
+    kFetchEventExtendedData,
+    kFetchEventFlowDetails,
+    kFetchEventCallStack
 };
 
 enum class TableType
@@ -292,6 +295,9 @@ public:
     
     static const uint64_t EVENT_TABLE_REQUEST_ID;
     static const uint64_t SAMPLE_TABLE_REQUEST_ID;
+    static const uint64_t EVENT_EXTENDED_DATA_REQUEST_ID;
+    static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
+    static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
 
     DataProvider();
     ~DataProvider();
@@ -502,6 +508,9 @@ private:
     void HandleRequests();
 
     void ProcessRequest(data_req_info_t& req);
+    void ProcessEventExtendedRequest(data_req_info_t& req);
+    void ProcessEventFlowDetailsRequest(data_req_info_t& req);
+    void ProcessEventCallStackRequest(data_req_info_t& req);
     void ProcessGraphRequest(data_req_info_t& req);
     void ProcessTrackRequest(data_req_info_t& req);
     void ProcessTableRequest(data_req_info_t& req);

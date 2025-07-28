@@ -97,6 +97,7 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
     rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end); 
     if(result != kRocProfVisDmResultNotLoaded)
     {
+        spdlog::debug("Slice ({},{}) exists!", start, end);
         return future->SetPromise(result);
     }
     try {

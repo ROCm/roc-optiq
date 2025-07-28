@@ -206,3 +206,9 @@ typedef struct
         rocprofvis_dm_check_event_property_exists_t FuncCheckEventPropertyExists;        // Called by database async interface before quering an event property with the same parameters
         rocprofvis_dm_check_table_exists_t FuncCheckTableExists;        // Called by database async interface before quering a table with the same parameters
 } rocprofvis_dm_db_bind_struct;
+
+inline uint64_t hash_combine(uint64_t a, uint64_t b)
+{
+    a ^= b + 0x9e3779b97f4a7c15 + (a << 12) + (a >> 4);
+    return a;
+}

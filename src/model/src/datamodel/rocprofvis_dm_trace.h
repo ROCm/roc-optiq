@@ -73,6 +73,11 @@ class Trace : public DmBase{
         // @param stop - time slice stop timestamp
         // @return status of operation 
         rocprofvis_dm_result_t                          DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
+        // Method to delete a time slice with provided handle
+        // param track - track id to delete slice from
+        // @param slice - handle
+        // @return status of operation
+        rocprofvis_dm_result_t DeleteSliceByHandle(rocprofvis_dm_track_id_t track, rocprofvis_dm_handle_t   slice);
         // Method to delete all time slices
         // @return status of operation 
         rocprofvis_dm_result_t                          DeleteAllSlices();

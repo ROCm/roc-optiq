@@ -328,7 +328,7 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type)
 }
 
 void MemoryManager::CleanUp() {
-
+    std::lock_guard<std::mutex> lock(m_pool_mutex);
     for(auto it = m_object_pools.begin(); it != m_object_pools.end(); ++it)
     {
             delete it->second;

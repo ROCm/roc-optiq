@@ -125,12 +125,15 @@ public:
     double GetSegmentDuration() const;
 
 private:
+    void SetInvalidImpl(uint32_t segment_index);
+
+private:
     std::map<double, std::shared_ptr<Segment>> m_segments;
     std::vector<std::bitset<kSegmentBitSetSize>> m_valid_segments;
     double                                     m_segment_start_time;
     double                                     m_segment_duration;
     uint32_t                                   m_num_segments;
-    std::shared_mutex                          m_mutex;
+    mutable std::shared_mutex                  m_mutex;
     Handle*                                    m_ctx;
 };
 

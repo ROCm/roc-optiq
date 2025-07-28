@@ -47,6 +47,7 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
     if(result == kRocProfVisResultSuccess && timestamp >= start_timestamp &&
        timestamp <= end_timestamp)
     {
+        std::unique_lock lock(m_mutex);
         double scale = 1.0;
         for(uint32_t i = 0; i < lod; i++)
         {
@@ -435,8 +436,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
             {
                 uint32_t num_segments = ceil((max_ts - min_ts) / segment_duration);
                 SegmentTimeline& segments = m_lods[lod_to_generate];
-                segments.Init(min_ts,segment_duration, num_segments);
                 segments.SetContext(m_ctx);
+                segments.Init(min_ts,segment_duration, num_segments);    
                 it = m_lods.find(lod_to_generate);
             }
 

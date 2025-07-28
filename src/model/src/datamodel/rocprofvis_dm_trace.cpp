@@ -71,6 +71,13 @@ rocprofvis_dm_result_t Trace::DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t s
     return kRocProfVisDmResultNotLoaded;
 }
 
+rocprofvis_dm_result_t
+Trace::DeleteSliceByHandle(rocprofvis_dm_track_id_t track, rocprofvis_dm_handle_t slice)
+{
+    m_tracks[track].get()->DeleteSliceByHandle(slice);
+    return kRocProfVisDmResultNotLoaded;
+}
+
 rocprofvis_dm_result_t Trace::DeleteAllSlices(){
    
     for(int i = 0; i < m_tracks.size(); i++)

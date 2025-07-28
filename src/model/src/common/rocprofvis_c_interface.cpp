@@ -393,7 +393,28 @@ rocprofvis_dm_result_t rocprofvis_dm_delete_time_slice(
     ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     return ((RocProfVis::DataModel::Trace*)trace)->DeleteSliceAtTimeRange(start, end);
-}   
+}  
+
+/****************************************************************************************************
+ * @brief Delete time slice with specified handle
+ *
+ * @param trace trace object handle created with rocprofvis_dm_create_trace()
+ * @param track_id track id
+ * @param slice hadle
+ *
+ * @return status of operation
+ *
+ ***************************************************************************************************/
+rocprofvis_dm_result_t
+rocprofvis_dm_delete_time_slice_handle(   rocprofvis_dm_trace_t    trace,
+                                          rocprofvis_dm_track_id_t track,
+                                          rocprofvis_dm_slice_t    handle)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    return ((RocProfVis::DataModel::Trace*) trace)->DeleteSliceByHandle(track, handle);
+}
 
 /****************************************************************************************************
  * @brief Delete all time slices 

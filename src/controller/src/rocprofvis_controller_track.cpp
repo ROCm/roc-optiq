@@ -38,6 +38,7 @@ Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm
 , m_counter(nullptr)
 , m_ctx(ctx)
 { 
+    s_data_model_load = 0;
 }
 
 Track::~Track()
@@ -74,8 +75,8 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
         if (m_segments.GetSegmentDuration() == 0)
         {
             uint32_t num_segments = (uint32_t)ceil((m_end_timestamp - m_start_timestamp) / kSegmentDuration);
-            m_segments.Init(m_start_timestamp, kSegmentDuration, num_segments);
             m_segments.SetContext(m_ctx);
+            m_segments.Init(m_start_timestamp, kSegmentDuration, num_segments);
         }
 
         start = std::max(start, m_start_timestamp);
@@ -115,13 +116,16 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
             {
                 double fetch_start = m_start_timestamp + (range.first * kSegmentDuration);
                 double fetch_end   = m_start_timestamp + ((range.second + 1) * kSegmentDuration);
-
+                for(uint32_t i = range.first; i <= range.second; i++)
+                {
+                    m_segments.SetValid(i);
+                }
                 result = FetchFromDataModel(fetch_start, fetch_end);
-                if (result == kRocProfVisResultSuccess)
+                if (result != kRocProfVisResultSuccess)
                 {
                     for(uint32_t i = range.first; i <= range.second; i++)
                     {
-                        m_segments.SetValid(i);
+                        m_segments.SetInvalid(i);
                     }
                 }
                 else
@@ -173,8 +177,15 @@ rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_
     return result;
 }
 
+inline uint64_t hash_combine(uint64_t a, uint64_t b)
+{
+    a ^= b + 0x9e3779b97f4a7c15 + (a << 12) + (a >> 4);
+    return a;
+}
+
 rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
 {
+    s_data_model_load++;
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
 
     rocprofvis_dm_trace_t trace = rocprofvis_dm_get_property_as_handle(
@@ -194,8 +205,10 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
     double rounded_segment    = ceil_segment * kSegmentDuration;
     double fetch_end          = m_start_timestamp + rounded_segment;
 
+    size_t total_thread_count = std::thread::hardware_concurrency();
     int num_threads = 1;
-    const int max_num_threads = 5;
+    const int max_num_threads =
+        std::min(total_thread_count / s_data_model_load.load(), 5llu);
     const int min_entries_per_thread = 100000;   
     double    approx_entries_per_request = m_num_entries * std::max(0.0, std::min(m_end_timestamp, fetch_end) -
                         std::max(m_start_timestamp, fetch_start)) / (m_end_timestamp - m_start_timestamp);
@@ -229,7 +242,8 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
         if(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(futures[i], UINT64_MAX))
         {
             rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
-                m_dm_handle, kRPVDMSliceHandleTimed, fetch_start + (i * time_per_query));
+                m_dm_handle, kRPVDMSliceHandleTimed,
+                hash_combine(fetch_start + (i * time_per_query),fetch_start + ((i+1) * time_per_query)));
             if(nullptr != slice)
             {
                 uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
@@ -338,14 +352,15 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                         }
                     }
                 }
-                rocprofvis_dm_delete_time_slice(trace, fetch_start + (i * time_per_query),
-                                                fetch_start + ((i+1) * time_per_query));
+                rocprofvis_dm_delete_time_slice_handle(trace, m_id, slice);
+                
                     
                     
             }
         }
         rocprofvis_db_future_free(futures[i]);
     }
+    s_data_model_load--;
     return kRocProfVisResultSuccess;
 }
 
@@ -765,6 +780,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                         if(timestamp.start >= m_start_timestamp &&
                            timestamp.end <= m_end_timestamp)
                         {
+                            std::unique_lock lock(m_mutex);
                             timestamp_pair relative  = { timestamp.start - m_start_timestamp,
                                                     timestamp.end - m_start_timestamp };
                             timestamp_pair num_segments = {floor(relative.start / kSegmentDuration),

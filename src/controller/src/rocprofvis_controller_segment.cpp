@@ -320,6 +320,8 @@ SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
 
 void SegmentTimeline::Init(double segment_start_time, double segment_duration, uint32_t num_segments)
 {
+    std::unique_lock<std::mutex> lock(
+        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
     m_segment_duration = segment_duration;
     m_num_segments = num_segments;
     m_segment_start_time = segment_start_time;
@@ -407,6 +409,8 @@ std::map<double, std::shared_ptr<Segment>>& SegmentTimeline::GetSegments()
 bool
 SegmentTimeline::IsValid(uint32_t segment_index) const
 {
+    std::unique_lock<std::mutex> lock(
+        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
     bool is_set = false;
     if(segment_index < m_num_segments)
     {
@@ -421,6 +425,8 @@ SegmentTimeline::IsValid(uint32_t segment_index) const
 void
 SegmentTimeline::SetValid(uint32_t segment_index)
 {
+    std::unique_lock<std::mutex> lock(
+        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
     if(segment_index < m_num_segments)
     {
         uint32_t array_index = segment_index / kSegmentBitSetSize;
@@ -432,6 +438,14 @@ SegmentTimeline::SetValid(uint32_t segment_index)
 
 void
 SegmentTimeline::SetInvalid(uint32_t segment_index)
+{
+    std::unique_lock<std::mutex> lock(
+        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
+    SetInvalidImpl(segment_index);
+}
+
+void
+SegmentTimeline::SetInvalidImpl(uint32_t segment_index)
 {
     if(segment_index < m_num_segments)
     {
@@ -452,7 +466,7 @@ rocprofvis_result_t SegmentTimeline::Remove(Segment* target)
     std::shared_ptr<Segment>                    segment;    
     int segment_index =
         (target->GetStartTimestamp() - m_segment_start_time) / m_segment_duration;
-    SetInvalid(segment_index);
+    SetInvalidImpl(segment_index);
     segment = target->GetTimelineIterator()->second;
     m_segments.erase(target->GetTimelineIterator());
     segment.reset();

@@ -79,7 +79,7 @@ public:
     // @param start - slice start timestamp
     // @param slice - handle to slice
     // @return status of operation 
-    rocprofvis_dm_result_t                              GetSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_slice_t & slice);
+    rocprofvis_dm_result_t                              GetSliceAtTime(rocprofvis_dm_timestamp_t time, rocprofvis_dm_slice_t & slice);
     // Method to get slice index for provided start and end timestamp
     // @param start - slice start timestamp
     // @param start - slice end timestamp
@@ -91,6 +91,10 @@ public:
     // @param slice - handle to slice
     // @return status of operation 
     rocprofvis_dm_result_t                              DeleteSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
+    // Method to delete slice by handle
+    // @param slice - handle to slice
+    // @return status of operation
+    rocprofvis_dm_result_t                              DeleteSliceByHandle(rocprofvis_dm_slice_t slice);
     // Method to delete all slices
     // @return status of operation
     rocprofvis_dm_result_t                              DeleteAllSlices();

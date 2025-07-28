@@ -63,10 +63,12 @@ private:
     Queue* m_queue;
     Counter* m_counter;
     Trace* m_ctx;
+    std::mutex m_mutex;
 
 private:
     rocprofvis_result_t FetchFromDataModel(double start, double end);
 
+    inline static std::atomic<uint32_t> s_data_model_load;
 };
 
 }

@@ -11,6 +11,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <filesystem>
 
 namespace RocProfVis
 {
@@ -20,42 +21,42 @@ namespace View
 bool
 FontManager::Init()
 {
-    ImGuiIO&     io = ImGui::GetIO();
-    ImFontConfig config;
+    ImGuiIO& io = ImGui::GetIO();
+    m_fonts.clear();
 
-    ImFont* font = nullptr;
-    if(io.Fonts->Fonts.empty())
-    {
-        font = io.Fonts->AddFontDefault();  // Adds ProggyClean @ 13px
-    }
-    else
-    {
-        font = io.Fonts->Fonts[0];  // Assume the first one is the default
-    }
-    ROCPROFVIS_ASSERT(font != nullptr);
+    constexpr float font_sizes[] = { 10.0f, 13.0f, 16.0f, 20.0f };
 
-    // Store the default font in the manager also known as "Medium" font
+    //List of fonts windows and linux paths. 
+     const char* font_paths[] = {
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"
+    };
+
+    const char* font_path = nullptr;
+
+     // Check if any of the font paths exist
+    for(const char* path : font_paths)
+    {
+        if(std::filesystem::exists(path))
+        {
+            font_path = path;
+            break;
+        }
+    }
+
     m_fonts.resize(static_cast<int>(FontType::__kLastFont));
-    m_fonts[static_cast<int>(FontType::kDefault)] = font;
+    for(int i = 0; i < static_cast<int>(FontType::__kLastFont); ++i)
+    {
+        ImFont* font = nullptr;
+        if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, font_sizes[i]);
+        if(!font) font = io.Fonts->AddFontDefault();  // Back to ImGUI font if good font cannot be found 
+        m_fonts[i] = font;
+    }
 
-    // Small font
-    config.SizePixels = 10.0f;
-    font              = io.Fonts->AddFontDefault(&config);
-    ROCPROFVIS_ASSERT(font != nullptr);
-    m_fonts[static_cast<int>(FontType::kSmall)] = font;
-
-    // Medium large font
-    config.SizePixels = 16.0f;
-    font              = io.Fonts->AddFontDefault(&config);
-    ROCPROFVIS_ASSERT(font != nullptr);
-    m_fonts[static_cast<int>(FontType::kMedLarge)] = font;
-
-    // Large font
-    config.SizePixels = 20.0f;
-    font              = io.Fonts->AddFontDefault(&config);
-    ROCPROFVIS_ASSERT(font != nullptr);
-    m_fonts[static_cast<int>(FontType::kLarge)] = font;
-
+    io.FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
     return io.Fonts->Build();
 }
 

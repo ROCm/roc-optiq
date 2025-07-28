@@ -84,7 +84,6 @@ TimelineArrow::AddArrow(const TimelineArrowData& arrow)
 void
 TimelineArrow::AddArrows()
 {
-    std::cout << "RANNNN22222" << std::endl;
     m_arrows_to_render          = {};
     const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
     if(!flowInfo.flow_data.empty())

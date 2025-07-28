@@ -31,6 +31,8 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_settings(Settings::GetInstance())
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
+, m_chunk_duration_ns(TimeConstants::nanoseconds_per_second *
+                      30)  // Default chunk duration
 {}
 
 bool
@@ -154,7 +156,9 @@ TrackItem::RenderMetaArea()
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
-                                     : m_settings.GetColor(Colors::kMetaDataColor));
+                                     : (m_request_state == TrackDataRequestState::kError ?
+                                        m_settings.GetColor(Colors::kGridRed) :
+                                        m_settings.GetColor(Colors::kMetaDataColor)));
     ImGui::SetCursorPos(m_metadata_shrink_padding);
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
@@ -305,10 +309,9 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 void
 TrackItem::RequestData(double min, double max, float width)
 {
-    //create request chunks with ranges of 1 minute max
+    //create request chunks with ranges of m_chunk_duration_ns  max
     double range = max - min;
-
-    size_t chunk_count = static_cast<size_t>(std::ceil(range / TimeConstants::minute_ns));
+    size_t chunk_count = static_cast<size_t>(std::ceil(range / m_chunk_duration_ns));
     m_group_id_counter++;
     std::deque<TrackRequestParams> temp_request_queue;
 
@@ -342,7 +345,8 @@ TrackItem::RequestData(double min, double max, float width)
     }
     else
     {
-        spdlog::warn("Fetch request rejected for track {}, already pending...", m_id);
+        spdlog::warn(
+            "Fetch request deferred for track {}, requests are already pending...", m_id);
     }
 }
 
@@ -351,7 +355,7 @@ TrackItem::Update()
 {
     if(m_request_state == TrackDataRequestState::kIdle)
     {
-        if(!m_request_queue.empty() && !m_data_provider.IsRequestPending(m_id))
+        if(!m_request_queue.empty())
         {
             FetchHelper();
         }
@@ -380,8 +384,4 @@ TrackItem::FetchHelper()
         m_request_queue.pop_front();
     }
 
-    // else
-    // {
-    //     spdlog::warn("No requests in queue for track {}", m_id);
-    // }
 }

@@ -5,11 +5,12 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
 
+#include <chrono>
 #include <map>
-#include <unordered_set>
 #include <string>
-#include <vector>
 #include <type_traits>
+#include <unordered_set>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -45,6 +46,11 @@ public:
     size_t                             GetChunkCount() const;
     bool                               AllDataReady() const;
 
+    void SetDataRequestTimePoint(
+        const std::chrono::steady_clock::time_point& request_time);
+
+    const std::chrono::steady_clock::time_point& GetDataRequestTimePoint() const;
+
 protected:
     rocprofvis_controller_track_type_t m_track_type;
 
@@ -54,6 +60,8 @@ protected:
     uint64_t m_data_group_id;  // group id for the data, used for grouping requests
     uint64_t m_expected_chunk_count; // expected number of chunks
     std::map<size_t, size_t> m_chunk_info; //map containing chunk sizes
+
+    std::chrono::steady_clock::time_point m_request_time;
 };
 
 // Trait to get data properties from the data type

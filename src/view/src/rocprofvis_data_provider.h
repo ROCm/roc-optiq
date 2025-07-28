@@ -274,21 +274,24 @@ typedef struct table_info_t
 class DataProvider
 {
 public:
-    static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = static_cast<uint64_t>(-1);
-    static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = static_cast<uint64_t>(-2);
+    static constexpr uint8_t TRACK_CHUNK_OFFSET_BITS = sizeof(uint32_t) * 8;
+    static constexpr uint8_t TRACK_GROUP_OFFSET_BITS = sizeof(uint16_t) * 8 + TRACK_CHUNK_OFFSET_BITS;
+    static constexpr uint8_t REQUEST_TYPE_OFFSET_BITS = sizeof(uint8_t) * 8 + TRACK_GROUP_OFFSET_BITS;
 
-    static constexpr uint8_t TRACK_REQUEST_TYPE = 1;
-
-    static constexpr uint8_t CHUNK_OFFSET_BITS = sizeof(uint32_t) * 8;
-    static constexpr uint8_t GROUP_OFFSET_BITS = sizeof(uint16_t) * 8 + CHUNK_OFFSET_BITS;
-    static constexpr uint8_t REQUEST_TYPE_OFFSET_BITS = sizeof(uint8_t) * 8 + GROUP_OFFSET_BITS; 
-
-    static uint64_t MakeGraphRequestId(uint32_t track_id, uint16_t chunk_index, uint8_t group_id) {
-        return (static_cast<uint64_t>(RequestType::kFetchGraph) << REQUEST_TYPE_OFFSET_BITS) |
-            (static_cast<uint64_t>(group_id) << GROUP_OFFSET_BITS) |
-            (static_cast<uint64_t>(chunk_index) << CHUNK_OFFSET_BITS) |
+    static uint64_t MakeTrackDataRequestId(uint32_t track_id, uint16_t chunk_index, uint8_t group_id, RequestType request_type) {
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+            (static_cast<uint64_t>(group_id) << TRACK_GROUP_OFFSET_BITS) |
+            (static_cast<uint64_t>(chunk_index) << TRACK_CHUNK_OFFSET_BITS) |
             (static_cast<uint64_t>(track_id));
     }
+
+    static uint64_t MakeRequestId(RequestType request_type) {
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+            static_cast<uint64_t>(0);
+    }
+    
+    static const uint64_t EVENT_TABLE_REQUEST_ID;
+    static const uint64_t SAMPLE_TABLE_REQUEST_ID;
 
     DataProvider();
     ~DataProvider();
@@ -412,8 +415,10 @@ public:
     /*
      * Release memory buffer holding raw data for selected track
      * @param id: The id of the track to select
+     * @param force: If true, the track will be freed even if not all data is ready.
+     * @return: True if the track was freed, false if not.
      */
-    bool FreeTrack(uint64_t track_id);
+    bool FreeTrack(uint64_t track_id, bool force = false);
 
     /*
      * Output track list meta data.
@@ -504,9 +509,12 @@ private:
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
 
-
-    void CreateRawEventData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);                           
-    void CreateRawSampleData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);
+    void CreateRawEventData(const TrackRequestParams&                    params,
+                            rocprofvis_controller_array_t*               track_data,
+                            const std::chrono::steady_clock::time_point& request_time);
+    void CreateRawSampleData(const TrackRequestParams&                    params,
+                             rocprofvis_controller_array_t*               track_data,
+                             const std::chrono::steady_clock::time_point& request_time);
 
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                           uint64_t index);

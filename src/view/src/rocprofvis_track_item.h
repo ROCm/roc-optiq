@@ -49,7 +49,7 @@ public:
 
     virtual std::tuple<double, double> GetMinMax();
     virtual bool                       HandleTrackDataChanged() = 0;
-    // virtual bool                       SetRawData(const RawTrackData* raw_data) = 0;
+    
     bool        GetResizeStatus();
     static void SetSidebarSize(int sidebar_size);
 
@@ -94,7 +94,8 @@ protected:
     float                 m_meta_area_scale_width;
     bool                  m_selected;
     float                 m_reorder_grip_width;
-
+    
+    uint64_t m_chunk_duration_ns = 0;  // Duration of each chunk in nanoseconds
     uint64_t m_group_id_counter = 0;  // Counter for grouping requests
 
     std::deque<TrackRequestParams> m_request_queue;

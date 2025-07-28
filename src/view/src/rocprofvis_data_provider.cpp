@@ -12,6 +12,9 @@
 
 using namespace RocProfVis::View;
 
+const uint64_t DataProvider::EVENT_TABLE_REQUEST_ID  = MakeRequestId(RequestType::kFetchTrackEventTable);
+const uint64_t DataProvider::SAMPLE_TABLE_REQUEST_ID = MakeRequestId(RequestType::kFetchTrackSampleTable);
+
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
 , m_trace_future(nullptr)
@@ -782,10 +785,14 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
         return false;
     }
 
+    uint64_t request_id =
+        MakeTrackDataRequestId(track_id, group_id, chunk_index, RequestType::kFetchTrack);
+
     const track_info_t* metadata = GetTrackInfo(track_id);
     if(metadata)
     {
-        auto it = m_requests.find(track_id);
+
+        auto it = m_requests.find(request_id);
         // only allow load if a request for this id (track) is not pending
         if(it == m_requests.end())
         {
@@ -857,8 +864,8 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
     }
 
     uint64_t request_id =
-        MakeGraphRequestId(request_params.m_track_id, request_params.m_data_group_id,
-                           request_params.m_chunk_index);
+        MakeTrackDataRequestId(request_params.m_track_id, request_params.m_data_group_id,
+                           request_params.m_chunk_index, RequestType::kFetchGraph);
 
     if(GetTrackInfo(request_params.m_track_id))
     {
@@ -1397,12 +1404,18 @@ RocProfVis::View::DataProvider::GetTrackInfoList()
 }
 
 bool
-DataProvider::FreeTrack(uint64_t track_id)
+DataProvider::FreeTrack(uint64_t track_id, bool force /* = false */)
 {
     if(m_raw_trackdata.count(track_id) > 0)
     {
         if(m_raw_trackdata[track_id])
         {
+            if(!m_raw_trackdata[track_id]->AllDataReady() && !force) {
+                // spdlog::debug("Cannot delete track data, not all data is ready for id: {}",
+                //               track_id);
+                return false;
+            }
+
             delete m_raw_trackdata[track_id];
             m_raw_trackdata[track_id] = nullptr;
             spdlog::debug("Deleted track id: {}", track_id);
@@ -1815,16 +1828,17 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
     {
         case kRPVControllerTrackTypeEvents:
         {
-            CreateRawEventData(*track_params, req.request_array);
+            CreateRawEventData(*track_params, req.request_array, req.request_time);
             break;
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(*track_params, req.request_array);
+            CreateRawSampleData(*track_params, req.request_array, req.request_time);
             break;
         }
         default:
         {
+            spdlog::debug("Unknown track type for track id {}, skipping", track_params->m_track_id);
             break;
         }
     }
@@ -1883,16 +1897,17 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
     // use the track type to determine what type of data is present in the graph array
     const track_info_t* metadata = GetTrackInfo(track_params->m_track_id);
     ROCPROFVIS_ASSERT(metadata);
+    
     switch(metadata->track_type)
     {
         case kRPVControllerTrackTypeEvents:
         {
-            CreateRawEventData(*track_params, req.request_array);
+            CreateRawEventData(*track_params, req.request_array, req.request_time);
             break;
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(*track_params, req.request_array);
+            CreateRawSampleData(*track_params, req.request_array, req.request_time);
             break;
         }
         default:
@@ -1917,7 +1932,8 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
 
 void
 DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
-                                  rocprofvis_controller_array_t* track_data)
+                                  rocprofvis_controller_array_t* track_data,
+                                  const std::chrono::steady_clock::time_point& request_time)
 {
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
@@ -1932,8 +1948,21 @@ DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
         raw_sample_data =
             dynamic_cast<RawTrackSampleData*>(m_raw_trackdata[params.m_track_id]);
     }
+    // If group id does not match ...
     else if(existing_raw_data)
     {
+        auto existing_timepoint =
+            m_raw_trackdata[params.m_track_id]->GetDataRequestTimePoint();
+
+        // check if the existing data is newer than the request time of this response
+        if(existing_timepoint > request_time)
+        {
+            spdlog::debug("Skipping track data with id {} for group {}, existing data is "
+                          "part of newer group ({})",
+                          params.m_track_id, params.m_data_group_id,
+                          existing_raw_data->GetDataGroupID());
+            return;
+        }
         delete m_raw_trackdata[params.m_track_id];
         m_raw_trackdata[params.m_track_id] = nullptr;
         spdlog::debug("Replacing existing track data with id {}", params.m_track_id);
@@ -1947,9 +1976,8 @@ DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
                                                  params.m_end_ts, params.m_data_group_id, params.m_chunk_count);
     }
 
-    std::vector<rocprofvis_trace_counter_t> buffer;// = raw_sample_data->GetWritableData();
-    //uint64_t                                 current_size = buffer.size();
-    buffer.reserve(count);// + current_size);
+    std::vector<rocprofvis_trace_counter_t> buffer;
+    buffer.reserve(count);
 
     std::unordered_set timepoint_set = raw_sample_data->GetWritableIdSet();
 
@@ -1993,7 +2021,8 @@ DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
 
 void
 DataProvider::CreateRawEventData(const TrackRequestParams&      params,
-                                 rocprofvis_controller_array_t* track_data)
+                                 rocprofvis_controller_array_t* track_data,
+                                 const std::chrono::steady_clock::time_point& request_time)
 {
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
@@ -2001,18 +2030,36 @@ DataProvider::CreateRawEventData(const TrackRequestParams&      params,
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     RawTrackEventData* raw_event_data = nullptr;
-
     const RawTrackData* existing_raw_data = GetRawTrackData(params.m_track_id);
+
+    // If group id matches, reuse existing raw data
     if(existing_raw_data && existing_raw_data->GetDataGroupID() == params.m_data_group_id)
     {
         raw_event_data =
             dynamic_cast<RawTrackEventData*>(m_raw_trackdata[params.m_track_id]);
     }
+    // If group id does not match ...
     else if(existing_raw_data)
     {
+        auto existing_timepoint =
+            m_raw_trackdata[params.m_track_id]->GetDataRequestTimePoint();
+
+        // check if the existing data is newer than the request time of this response
+        if(existing_timepoint > request_time)
+        {
+            spdlog::debug("Skipping track data with id {} for group {}, existing data is "
+                          "part of newer group ({})",
+                          params.m_track_id, params.m_data_group_id,
+                          existing_raw_data->GetDataGroupID());
+            return;
+        }
+
         delete m_raw_trackdata[params.m_track_id];
         m_raw_trackdata[params.m_track_id] = nullptr;
-        spdlog::debug("Replacing existing track data with id {}", params.m_track_id);
+        spdlog::debug(
+            "Replacing existing track data from group {} with group {} for id {}",
+            existing_raw_data->GetDataGroupID(), params.m_data_group_id,
+            params.m_track_id);
     }
 
     if(!raw_event_data)
@@ -2021,11 +2068,11 @@ DataProvider::CreateRawEventData(const TrackRequestParams&      params,
                       count);
         raw_event_data = new RawTrackEventData(params.m_track_id, params.m_start_ts,
                                                params.m_end_ts, params.m_data_group_id, params.m_chunk_count);
+        
     }
 
-    std::vector<rocprofvis_trace_event_t>  buffer;// = raw_event_data->GetWritableData();
-    //uint64_t                               current_size = buffer.size();
-    buffer.reserve(count);// + current_size);
+    std::vector<rocprofvis_trace_event_t> buffer;
+    buffer.reserve(count);
 
     size_t str_buffer_length = 128;
     char*  str_buffer        = new char[str_buffer_length];

@@ -221,18 +221,9 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     }
     else
     {
-        const track_info_t* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
-        if(!metadata)
-        {
-            spdlog::debug(
-                "No metadata found for track id {}, cannot process new track data",
-                tde->GetTrackID());
-            return;
-        }
-
-        uint64_t           track_index = metadata->index;
         const std::string& trace_path  = tde->GetTracePath();
-
+        //check if event trace path matches the current our data provider's trace path
+        //since events are global for all views
         if(m_data_provider.GetTraceFilePath() != trace_path)
         {
             spdlog::debug("Trace path {} does not match current trace path {}",
@@ -240,6 +231,16 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             return;
         }
 
+        const track_info_t* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
+        if(!metadata)
+        {
+            spdlog::warn(
+                "No metadata found for track id {}, cannot process new track data",
+                tde->GetTrackID());
+            return;
+        }
+
+        uint64_t track_index = metadata->index;
         if(track_index < m_graphs.size())
         {
             if(m_graphs[track_index].chart)
@@ -1022,8 +1023,9 @@ TimelineView::RenderGraphView()
                 if(track_item.chart->GetDistanceToView() > m_unload_track_distance &&
                    track_item.chart->HasData())
                 {
-                    track_item.chart->ReleaseData();
-                    m_data_provider.FreeTrack(track_item.chart->GetID());
+                    if(m_data_provider.FreeTrack(track_item.chart->GetID())) {
+                        track_item.chart->ReleaseData();
+                    }
                 }
 
                 // Render dummy to maintain layout

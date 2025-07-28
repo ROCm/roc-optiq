@@ -15,6 +15,17 @@ RawTrackData::RawTrackData(rocprofvis_controller_track_type_t track_type,
 , m_expected_chunk_count(chunk_count)
 {}
 
+void
+RawTrackData::SetDataRequestTimePoint(
+    const std::chrono::steady_clock::time_point& request_time)
+{
+    m_request_time = request_time;
+}
+
+const std::chrono::steady_clock::time_point& RawTrackData::GetDataRequestTimePoint() const
+{
+    return m_request_time;
+}
 
 rocprofvis_controller_track_type_t
 RawTrackData::GetType() const

@@ -73,14 +73,24 @@ FlameTrackItem::HandleTrackDataChanged()
 bool
 FlameTrackItem::ExtractPointsFromData()
 {
-    const RawTrackData*      rtd         = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackData* rtd = m_data_provider.GetRawTrackData(m_id);
+
+    // If no raw track data is found, this means the track was unloaded before the
+    // response was processed
+    if(!rtd)
+    {
+        spdlog::error("No raw track data found for track {}", m_id);
+        // Reset the request state to idle
+        m_request_state = TrackDataRequestState::kIdle;
+        return false;
+    }
+
     const RawTrackEventData* event_track = dynamic_cast<const RawTrackEventData*>(rtd);
-
-
 
     if(!event_track)
     {
         spdlog::debug("Invalid track data type for track {}", m_id);
+        m_request_state = TrackDataRequestState::kError;
         return false;
     }
 

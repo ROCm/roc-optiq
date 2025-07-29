@@ -20,13 +20,6 @@ TimelineSelection::TimelineSelection()
 TimelineSelection::~TimelineSelection() {}
 
 void
-TimelineSelection::Init(double min_ts, double max_ts)
-{
-    m_selected_range_start = min_ts;
-    m_selected_range_end = max_ts;
-}
-
-void
 TimelineSelection::Update()
 {
     if(m_tracks_changed || m_range_changed)

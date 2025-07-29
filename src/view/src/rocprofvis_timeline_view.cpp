@@ -1193,7 +1193,6 @@ TimelineView::MakeGraphView()
             }
         }
     }
-    //m_selection->Init(m_min_x, m_max_x);
     m_meta_map_made = true;
 }
 

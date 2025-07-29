@@ -16,12 +16,7 @@ class TimelineSelection
 public:
     TimelineSelection();
     ~TimelineSelection();
-    /*
-     * Sets the initial selection range.
-     * @param min_ts The min timestamp from the selectable range.
-     * @param max_ts The max timestamp from the selectable range.
-     */
-    void Init(double min_ts, double max_ts);
+
     /*
      * Notifies event manager if selections have changed.
      */

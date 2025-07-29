@@ -33,7 +33,7 @@ void
 DataProvider::SetSelectedEvent(selected_event_t event)
 {
     m_selected_event = event;
-    FetchEventFlowDetails(event.event_id);
+    FetchEventFlowDetails(event.event_id); //Trigger arrow render if applicable on UI if applicable 
 }
 
 selected_event_t

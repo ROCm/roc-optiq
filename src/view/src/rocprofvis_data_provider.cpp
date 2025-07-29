@@ -33,6 +33,7 @@ void
 DataProvider::SetSelectedEvent(selected_event_t event)
 {
     m_selected_event = event;
+    FetchEventFlowDetails(event.event_id);
 }
 
 selected_event_t
@@ -1796,6 +1797,11 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
             m_flow_info.flow_data[j].direction = static_cast<uint32_t>(data);
         }
     }
+
+    // Trigger UI to create arrows for flow control events.
+    auto evt = std::make_shared<CreateArrowsViewEvent>(
+        static_cast<int>(RocEvents::kHandleUserArrowCreationEvent));
+    EventManager::GetInstance()->AddEvent(evt);
 
     rocprofvis_controller_array_free(req.request_array);
     req.request_array = nullptr;

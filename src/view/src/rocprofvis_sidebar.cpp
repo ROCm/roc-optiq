@@ -2,7 +2,6 @@
 
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_flame_track_item.h"
-#include "rocprofvis_icons.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_track_topology.h"
@@ -190,28 +189,24 @@ SideBar::RenderTrackItem(const int& index)
                           m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
-    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon));
     bool display = graph.display;
-    if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
+    if(ImGui::Button(display ? "V" : "V"))
     {
         graph.display = !graph.display;
     }
-    ImGui::PopFont();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
     if(ImGui::BeginItemTooltip())
     {
         ImGui::TextUnformatted("Toggle Track Visibility");
         ImGui::EndTooltip();
     }
-    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon));
     ImGui::SameLine();
-    if(ImGui::Button(ICON_MAGNIFY_LIST))
+    if(ImGui::Button("S"))
     {
         EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
             static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
             graph.chart->GetID()));
     }
-    ImGui::PopFont();
     if(ImGui::BeginItemTooltip())
     {
         ImGui::TextUnformatted("Scroll To Track");

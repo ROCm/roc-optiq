@@ -1,5 +1,4 @@
 #include "rocprofvis_track_item.h"
-#include "rocprofvis_icons.h"
 #include "rocprofvis_settings.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
@@ -248,9 +247,7 @@ TrackItem::RenderMetaArea()
                               m_settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                               m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon));
-        ImGui::Button(ICON_DOTS);
-        ImGui::PopFont();
+        ImGui::Button("O");
         ImGui::PopStyleColor(3);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
         if(ImGui::BeginItemTooltip())

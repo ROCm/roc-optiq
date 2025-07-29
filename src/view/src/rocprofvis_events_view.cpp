@@ -62,7 +62,7 @@ EventsView::RenderLeftPanel()
             ImGui::Text("Event ID: %llu", m_data_provider.GetSelectedEventId());
             if(selected_event != m_last_selected_event)
             {
-               /* if(selected_event != std::numeric_limits<uint64_t>::max())
+                if(selected_event != std::numeric_limits<uint64_t>::max())
                 {
                     m_data_provider.FetchEventExtData(
                         m_data_provider.GetSelectedEventId());
@@ -70,7 +70,7 @@ EventsView::RenderLeftPanel()
                         m_data_provider.GetSelectedEventId());
                     m_data_provider.FetchEventCallStackData(
                         m_data_provider.GetSelectedEventId());
-                }*/
+                }
                 m_last_selected_event = selected_event;
             }
 
@@ -88,7 +88,6 @@ EventsView::RenderLeftPanel()
             ImGui::NewLine();
             ImGui::Separator();
             RenderEventFlowInfo(flowInfo.flow_data);
-         
         }
     }
     ImGui::EndChild();

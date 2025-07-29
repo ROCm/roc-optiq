@@ -8,6 +8,7 @@
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_view.h"
+#include "rocprofvis_track_topology.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
@@ -21,6 +22,7 @@ TraceView::TraceView()
 , m_open_loading_popup(false)
 , m_analysis(nullptr)
 , m_timeline_selection(nullptr)
+, m_track_topology(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path) {
@@ -81,9 +83,9 @@ TraceView::Update()
     {
         m_timeline_view->Update();
     }
-    if(m_sidebar)
+    if(m_track_topology)
     {
-        m_sidebar->Update();
+        m_track_topology->Update();
     }
     if(m_analysis)
     {
@@ -99,12 +101,14 @@ void
 TraceView::CreateView()
 {
     m_timeline_selection = std::make_shared<TimelineSelection>();
+	m_track_topology = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view  = std::make_shared<TimelineView>(m_data_provider, m_timeline_selection);
-    m_sidebar = std::make_shared<SideBar>(m_data_provider, m_timeline_view->GetGraphs());
-    m_analysis = std::make_shared<AnalysisView>(m_data_provider);
+    m_sidebar = std::make_shared<SideBar>(m_track_topology, m_timeline_selection, m_timeline_view->GetGraphs()); 	
+    m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology);
 
     LayoutItem left;
     left.m_item = m_sidebar;
+    left.m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
     LayoutItem top;
     top.m_item = m_timeline_view;

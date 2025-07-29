@@ -908,6 +908,8 @@ TimelineView::RenderGraphView()
                                track_top <= m_scroll_position + m_graph_size.y) ||
                               is_reordering;
 
+            track_item.chart->SetInViewVertical(is_visible);
+
             if(is_visible)
             {
                 // Request data for the chart if it doesn't have data
@@ -922,18 +924,6 @@ TimelineView::RenderGraphView()
                         (m_view_time_offset_ns + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
                 }
-
-                if(track_item.color_by_value)
-                {
-                    track_item.chart->SetColorByValue(track_item.color_by_value_digits);
-                }
-
-                if(track_item.graph_type == rocprofvis_graph_t::TYPE_LINECHART)
-                {
-                    static_cast<LineTrackItem*>(track_item.chart)
-                        ->SetShowBoxplot(track_item.make_boxplot);
-                }
-
                 ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
                 if(track_item.selected)
                 {
@@ -1141,11 +1131,7 @@ TimelineView::MakeGraphView()
                 temp_flame.chart          = flame;
                 temp_flame.graph_type     = rocprofvis_graph_t::TYPE_FLAMECHART;
                 temp_flame.display        = true;
-                temp_flame.color_by_value = false;
                 temp_flame.selected       = false;
-                temp_flame.colorful_flamechart = true;
-                rocprofvis_color_by_value_t temp_color = {};
-                temp_flame.color_by_value_digits       = temp_color;
                 m_graphs[track_info->index]            = std::move(temp_flame);
                 m_track_height_total[track_info->index] =
                     track_height_total;  // Store the height of the flame chart
@@ -1174,14 +1160,9 @@ TimelineView::MakeGraphView()
 
                 rocprofvis_graph_t temp;
                 temp.chart          = line;
-                temp.make_boxplot   = false;
                 temp.graph_type     = rocprofvis_graph_t::TYPE_LINECHART;
                 temp.display        = true;
-                temp.color_by_value = false;
                 temp.selected       = false;
-                temp.colorful_flamechart = false;
-                rocprofvis_color_by_value_t temp_color_line = {};
-                temp.color_by_value_digits                  = temp_color_line;
                 m_graphs[track_info->index]                 = std::move(temp);
                 m_track_height_total[track_info->index] =
                     track_height_total;  // Store the height of the line chart
@@ -1318,7 +1299,7 @@ TimelineView::HandleTopSurfaceTouch()
                                    container_pos.y + m_graph_size.y);
 
     bool is_mouse_in_sidebar = ImGui::IsMouseHoveringRect(sidebar_min, sidebar_max);
-    bool is_mouse_in_graph   = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
+    bool is_mouse_in_graph   = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max) && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
     ImGuiIO& io = ImGui::GetIO();
 

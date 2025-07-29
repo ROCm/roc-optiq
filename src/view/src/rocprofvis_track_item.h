@@ -66,7 +66,8 @@ public:
 
 protected:
     virtual void RenderMetaArea();
-    virtual void RenderMetaAreaScale(ImVec2& container_size);
+    virtual void RenderMetaAreaScale() = 0;
+    virtual void RenderMetaAreaOptions() = 0;
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
 

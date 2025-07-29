@@ -4,9 +4,13 @@
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 float TrackItem::s_metadata_width = 400.0f;
+constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                      double time_offset_ns, double& min_x, double& max_x, double scale_x)
@@ -134,6 +138,15 @@ TrackItem::Render(float width)
     RenderResizeBar(ImVec2(width + s_metadata_width, m_track_height));
 
     ImGui::EndGroup();
+
+    if(ImGui::IsItemVisible())
+    {
+        m_is_in_view_vertical = true;
+    }
+    else
+    {
+        m_is_in_view_vertical = false;
+    }
 }
 
 float
@@ -159,26 +172,13 @@ TrackItem::RenderMetaArea()
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
                                                       m_metadata_shrink_padding.y * 2.0f),
-                         ImGuiChildFlags_None))
+                         ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar))
     {
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 
         // handle mouse click
-        ImVec2 container_pos  = ImGui::GetWindowPos();
+        ImVec2 container_pos  = ImGui::GetWindowPos() + ImVec2(m_reorder_grip_width, 0);
         ImVec2 container_size = ImGui::GetWindowSize();
-
-        bool is_mouse_inside = ImGui::IsMouseHoveringRect(
-            container_pos, ImVec2(container_pos.x + container_size.x,
-                                  container_pos.y + container_size.y));
-
-        m_meta_area_clicked = false;
-        if(is_mouse_inside)
-        {
-            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-            {
-                m_meta_area_clicked = true;
-            }
-        }
 
         // Reordering grip decoration
         ImDrawList* draw_list  = ImGui::GetWindowDrawList();
@@ -203,6 +203,8 @@ TrackItem::RenderMetaArea()
                    screen_pos.y + container_size.y / 2 + m_metadata_padding.y),
             stroke_color);
 
+        float menu_button_width = ImGui::CalcTextSize(":").x + 2 * m_metadata_padding.x;
+
         // Set padding for the child window (Note this done using SetCursorPos
         // because ImGuiStyleVar_WindowPadding has no effect on child windows without
         // borders)
@@ -211,54 +213,70 @@ TrackItem::RenderMetaArea()
         content_size.x -= m_metadata_padding.x * 2;
         content_size.y -= m_metadata_padding.x * 2;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 4.0f));
-        if(ImGui::BeginChild(
-               "MetaData Content",
-               ImVec2(content_size.x - m_meta_area_scale_width - m_reorder_grip_width,
-                      content_size.y),
-               ImGuiChildFlags_None))
+        ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
+                               menu_button_width);
+        ImGui::Text(m_name.c_str());
+        ImGui::PopTextWrapPos();
+
+        if(m_request_state != TrackDataRequestState::kIdle)
         {
-            ImGui::Text(m_name.c_str());
+            ImGuiStyle& style = ImGui::GetStyle();
 
-            ImGui::Text(std::to_string(m_id).c_str());
+            float  dot_radius  = 10.0f;
+            int    num_dots    = 3;
+            float  dot_spacing = 5.0f;
+            float  anim_speed  = 7.0f;
+            ImVec2 dot_size =
+                MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
 
-            if(m_request_state != TrackDataRequestState::kIdle)
-            {
-                ImGuiStyle& style = ImGui::GetStyle();
+            ImVec2 cursor_pos = ImGui::GetCursorPos();
+            ImGui::SetCursorPos(
+                ImVec2(cursor_pos.x + (content_size.x - dot_size.x) * 0.5f,
+                       cursor_pos.y + style.ItemSpacing.y));
 
-                float  dot_radius  = 10.0f;
-                int    num_dots    = 3;
-                float  dot_spacing = 5.0f;
-                float  anim_speed  = 7.0f;
-                ImVec2 dot_size =
-                    MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
-
-                ImVec2 cursor_pos = ImGui::GetCursorPos();
-                ImGui::SetCursorPos(
-                    ImVec2(cursor_pos.x + (content_size.x - dot_size.x) * 0.5f,
-                           cursor_pos.y + style.ItemSpacing.y));
-
-                RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                                           m_settings.GetColor(Colors::kScrollBarColor),
-                                           anim_speed);
-            }
+            RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
+                                       m_settings.GetColor(Colors::kScrollBarColor),
+                                       anim_speed);
         }
-        ImGui::EndChild();
+
+        ImGui::SetCursorPos(
+            ImVec2(m_metadata_padding.x, 0) +
+            ImVec2(content_size.x - m_meta_area_scale_width - menu_button_width, 0));
+        ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              m_settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                              m_settings.GetColor(Colors::kTransparent));
+        ImGui::Button("O");
+        ImGui::PopStyleColor(3);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
+        if(ImGui::BeginItemTooltip())
+        {
+            ImGui::TextUnformatted("Track Options");
+            ImGui::EndTooltip();
+        }
+        ImGui::SetNextWindowPos(
+            ImGui::GetCursorScreenPos() +
+            ImVec2(content_size.x - m_meta_area_scale_width - menu_button_width, 0));
+        if(ImGui::BeginPopupContextItem("", ImGuiPopupFlags_MouseButtonLeft))
+        {
+            RenderMetaAreaOptions();
+            ImGui::EndPopup();
+        }
         ImGui::PopStyleVar();
-
-        ImGui::SameLine();
-
-        ImVec2 scale_container_size(m_meta_area_scale_width, content_size.y);
-        RenderMetaAreaScale(scale_container_size);
+        RenderMetaAreaScale();
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();
-}
 
-void
-TrackItem::RenderMetaAreaScale(ImVec2& container_size)
-{
-    (void) container_size;
+    if(ImGui::IsItemClicked(ImGuiMouseButton_Left))
+    {
+        m_meta_area_clicked = true;
+    }
+    else
+    {
+        m_meta_area_clicked = false;
+    }
 }
 
 void
@@ -323,7 +341,6 @@ TrackItem::RequestData(double min, double max, float width)
 
         TrackRequestParams request_params(m_id, chunk_start, chunk_end,
                                           static_cast<uint32_t>(chunk_width), m_group_id_counter);
-        
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
                       m_id, chunk_start, chunk_end, chunk_range, chunk_width);
@@ -384,3 +401,6 @@ TrackItem::FetchHelper()
         spdlog::warn("No requests in queue for track {}", m_id);
     }
 }
+
+}  // namespace View
+}  // namespace RocProfVis

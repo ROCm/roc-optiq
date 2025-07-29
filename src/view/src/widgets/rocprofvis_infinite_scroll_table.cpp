@@ -3,11 +3,14 @@
 #include "rocprofvis_infinite_scroll_table.h"
 
 #include "spdlog/spdlog.h"
+#include <sstream>
 
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_debug_window.h"
 
 using namespace RocProfVis::View;
+
+constexpr const char* ROWCONTEXTMENU_POPUP_NAME = "RowContextMenu";
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 : m_data_provider(dp)
@@ -352,6 +355,11 @@ InfiniteScrollTable::Render()
                                 // For now, just log the row and column clicked
                                 spdlog::info("Row clicked: {} {}", col, row_n);
                             }
+                            if(ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                                ImGui::OpenPopup(ROWCONTEXTMENU_POPUP_NAME);
+                                m_selected_row = row_n;
+                                spdlog::info("Row right-clicked: {} {} {}", col, row_n, m_selected_row);
+                            }                            
                         }
                         else
                         {
@@ -449,8 +457,45 @@ InfiniteScrollTable::Render()
                     }
                 }
             }
+
+            // Render context menu for row actions
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
+            if(ImGui::BeginPopup(ROWCONTEXTMENU_POPUP_NAME))
+            {
+                if(ImGui::MenuItem("Copy Row Data", nullptr, false))
+                {
+                    if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
+                    {
+                        spdlog::warn("Selected row index out of bounds: {}",
+                                     m_selected_row);
+                    }
+                    else
+                    {
+                        // Build and copy the data from the selected row
+                        std::ostringstream str_collector;
+                        for(size_t i = 0; i < table_data[m_selected_row].size(); ++i)
+                        {
+                            if(i > 0) str_collector << ",";
+                            str_collector << table_data[m_selected_row][i];
+                        }
+                        std::string row_data = str_collector.str();
+
+                        // Copy the row data to the clipboard
+                        ImGui::SetClipboardText(row_data.c_str());
+                    }
+                }
+                ImGui::EndPopup();
+            }
+            ImGui::PopStyleVar(2);  // Pop the style vars for window padding and item spacing
+
             ImGui::EndTable();
         }  // End BeginTable
+        else 
+        {
+            ImGui::Separator();
+            ImGui::Text("No data available for the selected tracks or filters.");
+        }
     }
 
     if(show_loading_indicator)

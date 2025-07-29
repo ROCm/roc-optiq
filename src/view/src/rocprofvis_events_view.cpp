@@ -64,6 +64,8 @@ EventsView::RenderLeftPanel()
             {
                 if(selected_event != std::numeric_limits<uint64_t>::max())
                 {
+                    // Do not request flow info here it is done on event selection in data
+                    // provider.
                     m_data_provider.FetchEventExtData(
                         m_data_provider.GetSelectedEventId());
                     m_data_provider.FetchEventCallStackData(

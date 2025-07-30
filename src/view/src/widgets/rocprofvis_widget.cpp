@@ -20,7 +20,8 @@ LayoutItem::LayoutItem()
 , m_item(nullptr)
 , m_item_spacing(ImVec2(0, 0))
 , m_window_padding(ImVec2(0, 0))
-, m_child_window_flags(ImGuiChildFlags_Borders)
+, m_child_flags(ImGuiChildFlags_Borders)
+, m_window_flags(ImGuiWindowFlags_None)
 {}
 
 LayoutItem::LayoutItem(float w, float h)
@@ -30,7 +31,8 @@ LayoutItem::LayoutItem(float w, float h)
 , m_item(nullptr)
 , m_item_spacing(ImVec2(0, 0))
 , m_window_padding(ImVec2(0, 0))
-, m_child_window_flags(ImGuiChildFlags_Borders)
+, m_child_flags(ImGuiChildFlags_Borders)
+, m_window_flags(ImGuiWindowFlags_None)
 {}
 
 //------------------------------------------------------------------
@@ -113,7 +115,7 @@ VFixedContainer::Render()
 
         ImGui::BeginChild(ImGui::GetID(i),
                           ImVec2(m_children[i].m_width, m_children[i].m_height),
-                          m_children[i].m_child_window_flags);
+                          m_children[i].m_child_flags, m_children[i].m_window_flags);
         if(m_children[i].m_item)
         {
             m_children[i].m_item->Render();
@@ -190,7 +192,7 @@ HSplitContainer::Render()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_left_name.c_str(), ImVec2(left_col_width, col_height),
-                      m_left.m_child_window_flags);
+                      m_left.m_child_flags, m_left.m_window_flags);
     if(m_left.m_item)
     {
         m_left.m_item->Render();
@@ -239,7 +241,7 @@ HSplitContainer::Render()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_right_name.c_str(), ImVec2(-1, col_height),
-                      m_right.m_child_window_flags);
+                      m_right.m_child_flags, m_right.m_window_flags);
     if(m_right.m_item)
     {
         m_right.m_item->Render();
@@ -314,7 +316,7 @@ VSplitContainer::Render()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_top_name.c_str(), ImVec2(col_width, top_row_height),
-                      m_top.m_child_window_flags);
+                      m_top.m_child_flags, m_top.m_window_flags);
     if(m_top.m_item)
     {
         m_top.m_item->Render();
@@ -358,7 +360,7 @@ VSplitContainer::Render()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_bottom_name.c_str(), ImVec2(col_width, 0),
-                      m_bottom.m_child_window_flags);
+                      m_bottom.m_child_flags, m_bottom.m_window_flags);
     if(m_bottom.m_item)
     {
         m_bottom.m_item->Render();

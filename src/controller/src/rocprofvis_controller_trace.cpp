@@ -33,7 +33,7 @@
 #include <cstdint>
 #include <cstring>
 #include <set>
- 
+
 namespace RocProfVis
 {
 namespace Controller
@@ -529,7 +529,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             track->GetString(
                                                 kRPVControllerTrackExtDataValueIndexed,
                                                 idx, value.data(), &length);
-
+                                                
                                             if (category == "Queue" && name == "id")
                                             {
                                                 char*    end = nullptr;
@@ -1727,18 +1727,22 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     columns[j], 0,
                                                                     val);
 
-                                                                if (columns[j] == kRPVControllerThreadId)
+                                                                if(columns[j] ==
+                                                                   kRPVControllerThreadId)
                                                                 {
-                                                                    Track* t =
-                                                                        thread_to_track
-                                                                            [val];
-                                                                    t->SetObject(
-                                                                        kRPVControllerTrackThread,
-                                                                        0,
-                                                                        (rocprofvis_handle_t*)
-                                                                            thread);
-
-                                                                    thread->SetObject(kRPVControllerThreadTrack, 0, (rocprofvis_handle_t*)t);
+                                                                    auto it = thread_to_track.find(val);
+                                                                    if(it != thread_to_track.end() &&it->second != nullptr)
+                                                                    {
+                                                                        Track* t = it->second;
+                                                                        t->SetObject(kRPVControllerTrackThread,
+                                                                            0, (rocprofvis_handle_t*)thread);
+                                                                        thread->SetObject(kRPVControllerThreadTrack,
+                                                                            0, (rocprofvis_handle_t*)t);
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        spdlog::warn("Thread ID {} not found in thread_to_track map", val);
+                                                                    }
                                                                 }
                                                             }
                                                             else if (columns[j] ==
@@ -2037,15 +2041,19 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                                 queue);
                                                                     }
 
-                                                                    Track* t =
-                                                                        queue_to_track
-                                                                            [val];
-                                                                    t->SetObject(
-                                                                        kRPVControllerTrackQueue,
-                                                                        0, (rocprofvis_handle_t*)queue);
-                                                                    queue->SetObject(
-                                                                        kRPVControllerQueueTrack,
-                                                                        0, (rocprofvis_handle_t*)t);
+                                                                    auto it_q = queue_to_track.find(val);
+                                                                    if(it_q != queue_to_track.end() && it_q->second != nullptr)
+                                                                    {
+                                                                        Track* t = it_q->second;
+                                                                        t->SetObject(kRPVControllerTrackQueue,
+                                                                            0, (rocprofvis_handle_t*)queue);
+                                                                        queue->SetObject(kRPVControllerQueueTrack,
+                                                                            0, (rocprofvis_handle_t*)t);
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        spdlog::warn("Queue ID {} not found in queue_to_track map", val);
+                                                                    }
                                                                 }
                                                             }
                                                             else
@@ -2536,22 +2544,17 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 if(columns[j] ==
                                                                    kRPVControllerCounterId)
                                                                 {
-                                                                    Track* t =
-                                                                        counter_to_track
-                                                                            [val];
-                                                                    if(t)
+                                                                    auto it = counter_to_track.find(val);
+                                                                    if(it != counter_to_track.end() && it->second)
                                                                     {
-                                                                        counter->SetObject(
-                                                                            kRPVControllerCounterTrack,
-                                                                            0,
-                                                                            (rocprofvis_handle_t*)
-                                                                                t);
+                                                                        Track* t = it->second;
+                                                                        counter->SetObject(kRPVControllerCounterTrack,
+                                                                            0, (rocprofvis_handle_t*)t);
 
-                                                                        t->SetObject(
-                                                                            kRPVControllerTrackCounter,
-                                                                            0,
-                                                                            (rocprofvis_handle_t*)
-                                                                                counter);
+                                                                        t->SetObject(kRPVControllerTrackCounter,
+                                                                            0, (rocprofvis_handle_t*)counter);
+                                                                    } else {
+                                                                        spdlog::warn("Counter ID {} not found in counter_to_track map", val);
                                                                     }
                                                                 }
                                                             }

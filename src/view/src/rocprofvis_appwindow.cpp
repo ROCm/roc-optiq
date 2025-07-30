@@ -7,6 +7,8 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_settings.h"
+#include "widgets/rocprofvis_debug_window.h"
 #include "rocprofvis_version.h"
 #include "widgets/rocprofvis_debug_window.h"
 

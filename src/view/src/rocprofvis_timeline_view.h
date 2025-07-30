@@ -23,6 +23,8 @@ namespace RocProfVis
 namespace View
 {
 
+class TimelineSelection;
+
 enum class TimeFormat
 {
     kTimecode,
@@ -32,7 +34,7 @@ enum class TimeFormat
 class TimelineView : public RocWidget
 {
 public:
-    TimelineView(DataProvider& dp);
+    TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
     ~TimelineView();
     virtual void                     Render();
     void                             Update();
@@ -94,7 +96,6 @@ private:
     double                                m_viewport_past_position;
     int                                   m_artificial_scrollbar_height;
     ImVec2                                m_graph_size;
-    bool                                  m_region_selection_changed;
     TimeFormat                            m_display_time_format;
     double                                m_grid_interval_ns;
     int                                   m_grid_interval_count;
@@ -103,6 +104,7 @@ private:
     std::map<uint64_t, float>             m_track_height_total;  // Track index to height
     TimelineArrow                         m_arrow_layer;
     float                                 m_last_zoom;
+    std::shared_ptr<TimelineSelection>    m_selection;
     struct {
         bool handled;
         uint64_t track_id;

@@ -35,6 +35,9 @@ public:
 
 protected:
     void RenderChart(float graph_width) override;
+    void RenderMetaAreaScale() override;
+    void RenderMetaAreaOptions() override;
+
 
 private:
     std::vector<rocprofvis_trace_event_t> m_flames;

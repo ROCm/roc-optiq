@@ -7,6 +7,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -20,42 +21,46 @@ namespace View
 bool
 FontManager::Init()
 {
-    ImGuiIO&     io = ImGui::GetIO();
-    ImFontConfig config;
+    ImGuiIO& io = ImGui::GetIO();
+    m_fonts.clear();
 
-    ImFont* font = nullptr;
-    if(io.Fonts->Fonts.empty())
-    {
-        font = io.Fonts->AddFontDefault();  // Adds ProggyClean @ 13px
-    }
-    else
-    {
-        font = io.Fonts->Fonts[0];  // Assume the first one is the default
-    }
-    ROCPROFVIS_ASSERT(font != nullptr);
+    constexpr float font_sizes[] = { 10.0f, 13.0f, 16.0f, 20.0f };
 
-    // Store the default font in the manager also known as "Medium" font
+#ifdef _WIN32
+    const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
+#else
+    const char* font_paths[] = {
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"
+    };
+#endif
+
+    const char* font_path = nullptr;
+
+    // Check if any of the font paths exist
+    for(const char* path : font_paths)
+    {
+        if(std::filesystem::exists(path))
+        {
+            font_path = path;
+            break;
+        }
+    }
+
     m_fonts.resize(static_cast<int>(FontType::__kLastFont));
-    m_fonts[static_cast<int>(FontType::kDefault)] = font;
+    for(int i = 0; i < static_cast<int>(FontType::__kLastFont); ++i)
+    {
+        ImFont* font = nullptr;
+        if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, font_sizes[i]);
+        if(!font)
+            font = io.Fonts->AddFontDefault();  // Back to ImGUI font if good font cannot
+                                                // be found
+        m_fonts[i] = font;
+    }
 
-    // Small font
-    config.SizePixels = 10.0f;
-    font              = io.Fonts->AddFontDefault(&config);
-    ROCPROFVIS_ASSERT(font != nullptr);
-    m_fonts[static_cast<int>(FontType::kSmall)] = font;
-
-    // Medium large font
-    config.SizePixels = 16.0f;
-    font              = io.Fonts->AddFontDefault(&config);
-    ROCPROFVIS_ASSERT(font != nullptr);
-    m_fonts[static_cast<int>(FontType::kMedLarge)] = font;
-
-    // Large font
-    config.SizePixels = 20.0f;
-    font              = io.Fonts->AddFontDefault(&config);
-    ROCPROFVIS_ASSERT(font != nullptr);
-    m_fonts[static_cast<int>(FontType::kLarge)] = font;
-
+    io.FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
     return io.Fonts->Build();
 }
 
@@ -109,6 +114,12 @@ const std::vector<ImU32> DARK_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kTableRowBg)]          = IM_COL32(33, 33, 33, 255);
     colors[static_cast<int>(Colors::kTableRowBgAlt)]       = IM_COL32(38, 38, 38, 255);
     colors[static_cast<int>(Colors::kLineChartColor)]      = IM_COL32(250, 250, 250, 255);
+    colors[static_cast<int>(Colors::kButton)] =
+        IM_COL32(60, 60, 60, 255);  // Neutral dark gray
+    colors[static_cast<int>(Colors::kButtonHovered)] =
+        IM_COL32(90, 90, 90, 255);  // Lighter gray on hover
+    colors[static_cast<int>(Colors::kButtonActive)] =
+        IM_COL32(120, 120, 120, 255);  // Even lighter when active
 
     return colors;
 }();
@@ -153,7 +164,12 @@ const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kTableRowBg)]          = IM_COL32(255, 253, 250, 255);
     colors[static_cast<int>(Colors::kTableRowBgAlt)]       = IM_COL32(252, 250, 248, 255);
     colors[static_cast<int>(Colors::kLineChartColor)]      = IM_COL32(0, 0, 0, 255);
-
+    colors[static_cast<int>(Colors::kButton)] =
+        IM_COL32(230, 230, 230, 255);  // Neutral light gray
+    colors[static_cast<int>(Colors::kButtonHovered)] =
+        IM_COL32(210, 210, 210, 255);  // Slightly darker on hover
+    colors[static_cast<int>(Colors::kButtonActive)] =
+        IM_COL32(180, 180, 180, 255);  // Even darker when active
     return colors;
 }();
 
@@ -195,6 +211,10 @@ Settings::Styling()
     ImVec4 textDim    = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTextDim));
     ImVec4 scrollBg   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kScrollBg));
     ImVec4 scrollGrab = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kScrollGrab));
+    ImVec4 button     = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kButton));
+    ImVec4 buttonHovered =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kButtonHovered));
+    ImVec4 buttonActive = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kButtonActive));
 
     // Window
     style.Colors[ImGuiCol_WindowBg]     = bgMain;
@@ -259,9 +279,9 @@ Settings::Styling()
     style.Colors[ImGuiCol_SliderGrabActive] = accentRedActive;
 
     // Buttons
-    style.Colors[ImGuiCol_Button]        = accentRed;
-    style.Colors[ImGuiCol_ButtonHovered] = accentRedHover;
-    style.Colors[ImGuiCol_ButtonActive]  = accentRedActive;
+    style.Colors[ImGuiCol_Button]        = button;
+    style.Colors[ImGuiCol_ButtonHovered] = buttonHovered;
+    style.Colors[ImGuiCol_ButtonActive]  = buttonActive;
 
     // Tabs
     style.Colors[ImGuiCol_Tab]                = bgPanel;

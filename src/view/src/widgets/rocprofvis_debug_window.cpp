@@ -70,7 +70,7 @@ DebugWindow::DebugWindow()
         content.m_item       = m_v_spilt_container;
         m_split_button_label = "Split Horizontally";
     }
-    content.m_child_window_flags = ImGuiChildFlags_None;
+    content.m_child_flags = ImGuiChildFlags_None;
 
     std::vector<LayoutItem> layoutItems;
     layoutItems.push_back(nav_bar);
@@ -87,7 +87,7 @@ DebugWindow::RenderNav()
         m_do_h_split = !m_do_h_split;
         LayoutItem tmp(0, 0.0f);
         tmp.m_window_padding     = ImVec2(2, 0);
-        tmp.m_child_window_flags = ImGuiChildFlags_None;
+        tmp.m_child_flags = ImGuiChildFlags_None;
 
         if(m_do_h_split)
         {

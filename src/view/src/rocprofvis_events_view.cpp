@@ -64,9 +64,9 @@ EventsView::RenderLeftPanel()
             {
                 if(selected_event != std::numeric_limits<uint64_t>::max())
                 {
+                    // Do not request flow info here it is done on event selection in data
+                    // provider.
                     m_data_provider.FetchEventExtData(
-                        m_data_provider.GetSelectedEventId());
-                    m_data_provider.FetchEventFlowDetails(
                         m_data_provider.GetSelectedEventId());
                     m_data_provider.FetchEventCallStackData(
                         m_data_provider.GetSelectedEventId());
@@ -88,10 +88,6 @@ EventsView::RenderLeftPanel()
             ImGui::NewLine();
             ImGui::Separator();
             RenderEventFlowInfo(flowInfo.flow_data);
-            // Run arrows after flow because all info needed is now there.
-            auto evt = std::make_shared<CreateArrowsViewEvent>(
-                static_cast<int>(RocEvents::kHandleUserArrowCreationEvent));
-            EventManager::GetInstance()->AddEvent(evt);
         }
     }
     ImGui::EndChild();

@@ -4,16 +4,23 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events_view.h"
+#include "rocprofvis_track_details.h"
 #include "spdlog/spdlog.h"
 
+#include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_debug_window.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
-AnalysisView::AnalysisView(DataProvider& dp)
+AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology)
 : m_data_provider(dp)
 , m_event_table(std::make_shared<InfiniteScrollTable>(dp, TableType::kEventTable))
 , m_sample_table(std::make_shared<InfiniteScrollTable>(dp, TableType::kSampleTable))
+, m_events_view(std::make_shared<EventsView>(dp))
+, m_track_details(std::make_shared<TrackDetails>(dp, topology))
 {
     m_widget_name = GenUniqueName("Analysis View");
 
@@ -32,13 +39,17 @@ AnalysisView::AnalysisView(DataProvider& dp)
     tab_item.m_widget    = m_sample_table;
     m_tab_container->AddTab(tab_item);
 
-    m_events_view = std::make_shared<EventsView>(m_data_provider);
-
     // Add EventsView tab
     tab_item.m_label     = "Events View";
     tab_item.m_id        = "events_view";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_events_view;
+    m_tab_container->AddTab(tab_item);
+
+    tab_item.m_label     = "Track Details";
+    tab_item.m_id        = "track_details";
+    tab_item.m_can_close = false;
+    tab_item.m_widget    = m_track_details;
     m_tab_container->AddTab(tab_item);
 
     m_tab_container->SetAllowToolTips(false);
@@ -90,6 +101,13 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
             {
                 m_sample_table->HandleTrackSelectionChanged(selection_changed_event);
             }
+            if(m_track_details)
+            {
+                m_track_details->HandleTrackSelectionChanged(selection_changed_event);
+            }
         }
     }
 }
+
+}  // namespace View
+}  // namespace RocProfVis

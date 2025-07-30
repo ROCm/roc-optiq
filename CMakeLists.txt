@@ -4,7 +4,7 @@ project(rocprof-visualizer)
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 1)
-set(PROJECT_VERSION_PATCH 1)
+set(PROJECT_VERSION_PATCH 2)
 set(PROJECT_VERSION_BUILD 0)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -58,6 +58,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_event_manager.cpp
     src/view/src/rocprofvis_utils.cpp
 	src/view/src/rocprofvis_timeline_selection.cpp
+	src/view/src/rocprofvis_track_topology.cpp
+	src/view/src/rocprofvis_track_details.cpp
     src/view/src/widgets/rocprofvis_widget.cpp	
     src/view/src/widgets/rocprofvis_debug_window.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
@@ -86,11 +88,11 @@ configure_file(
 if(WIN32)
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/rocprofvis_app.rc.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
+        "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_res.rc"
         @ONLY
     )
     list(APPEND VIEW_FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
+        "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_res.rc"
         )
 endif(WIN32)
 
@@ -98,6 +100,11 @@ add_executable(rocprof-visualizer
     src/app/src/rocprofvis_imgui_vulkan.cpp 
     src/app/src/main.cpp
     ${VIEW_FILES})
+
+if(WIN32)
+    set_target_properties(rocprof-visualizer PROPERTIES WIN32_EXECUTABLE TRUE)
+    set_target_properties(rocprof-visualizer PROPERTIES LINK_FLAGS "/ENTRY:mainCRTStartup")
+endif(WIN32)
 
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)

@@ -26,7 +26,9 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, doubl
 , m_flame_height(40.0f)
 , m_selected_event_id(std::numeric_limits<uint64_t>::max())
 , m_dp(dp)
-{}
+{
+    m_meta_area_scale_width = 0.0f;
+}
 
 void
 FlameTrackItem::SetRandomColorFlag(bool set_color)
@@ -203,6 +205,16 @@ FlameTrackItem::RenderChart(float graph_width)
     }
 
     ImGui::EndChild();
+}
+
+void
+FlameTrackItem::RenderMetaAreaScale()
+{}
+
+void
+FlameTrackItem::RenderMetaAreaOptions()
+{
+    ImGui::Checkbox("Color Events", &m_request_random_color);  
 }
 
 }  // namespace View

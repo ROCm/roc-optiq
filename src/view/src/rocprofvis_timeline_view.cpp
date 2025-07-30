@@ -511,7 +511,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             {
                 m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
                 m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
-                m_selection->SelectTimeRange(m_min_x, m_max_x);
+                m_selection->ClearTimeRange();
             }
         }
     }

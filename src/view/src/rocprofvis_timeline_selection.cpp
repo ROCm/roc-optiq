@@ -96,6 +96,14 @@ bool TimelineSelection::GetSelectedTimeRange(double& start_ts_out, double& end_t
     return true;
 }
 
+void
+TimelineSelection::ClearTimeRange()
+{
+    m_selected_range_start = TimelineSelection::INVALID_SELECTION_TIME;
+    m_selected_range_end   = TimelineSelection::INVALID_SELECTION_TIME;
+    m_range_changed        = true;
+}
+
 bool TimelineSelection::HasValidTimeRangeSelection() const
 {
     return m_selected_range_start != TimelineSelection::INVALID_SELECTION_TIME ||

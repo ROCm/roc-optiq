@@ -26,8 +26,8 @@ public:
     void UnselectTrack(rocprofvis_graph_t& graph);
     void ToggleSelectTrack(rocprofvis_graph_t& graph);
     void SelectTimeRange(double start_ts, double end_ts);
-
     bool GetSelectedTimeRange(double& start_ts_out, double& end_ts_out) const;
+    void ClearTimeRange();
     bool HasValidTimeRangeSelection() const;
 
     static constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();

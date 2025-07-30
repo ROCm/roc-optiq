@@ -108,6 +108,7 @@ const std::vector<ImU32> DARK_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kTableBorderLight)]    = IM_COL32(33, 33, 33, 255);
     colors[static_cast<int>(Colors::kTableRowBg)]          = IM_COL32(33, 33, 33, 255);
     colors[static_cast<int>(Colors::kTableRowBgAlt)]       = IM_COL32(38, 38, 38, 255);
+    colors[static_cast<int>(Colors::kLineChartColor)]      = IM_COL32(250, 250, 250, 255);
 
     return colors;
 }();
@@ -151,6 +152,7 @@ const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kTableBorderLight)]    = IM_COL32(240, 235, 230, 255);
     colors[static_cast<int>(Colors::kTableRowBg)]          = IM_COL32(255, 253, 250, 255);
     colors[static_cast<int>(Colors::kTableRowBgAlt)]       = IM_COL32(252, 250, 248, 255);
+    colors[static_cast<int>(Colors::kLineChartColor)]      = IM_COL32(0, 0, 0, 255);
 
     return colors;
 }();

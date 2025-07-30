@@ -78,45 +78,79 @@ const std::vector<ImU32> DARK_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kTransparent)]           = IM_COL32(0, 0, 0, 0);
     colors[static_cast<int>(Colors::kTextError)]             = IM_COL32(220, 38, 38, 255);
     colors[static_cast<int>(Colors::kTextSuccess)]           = IM_COL32(0, 255, 0, 255);
-    colors[static_cast<int>(Colors::kFlameChartColor)] = IM_COL32(160, 160, 160, 255);
-    colors[static_cast<int>(Colors::kGridColor)]       = IM_COL32(255, 255, 255, 255);
-    colors[static_cast<int>(Colors::kGridRed)]         = IM_COL32(220, 38, 38, 255);
-    colors[static_cast<int>(Colors::kSelectionBorder)] = IM_COL32(255, 71, 87, 255);
-    colors[static_cast<int>(Colors::kHighlightChart)]  = IM_COL32(255, 71, 87, 100);
-    colors[static_cast<int>(Colors::kSelection)]       = IM_COL32(220, 38, 38, 80);
-    colors[static_cast<int>(Colors::kBoundBox)]        = IM_COL32(160, 160, 160, 255);
-    colors[static_cast<int>(Colors::kFillerColor)]     = IM_COL32(18, 18, 18, 255);
-    colors[static_cast<int>(Colors::kScrollBarColor)]  = IM_COL32(64, 64, 64, 255);
-    colors[static_cast<int>(Colors::kRulerBgColor)]    = IM_COL32(40, 40, 40, 255);
-    colors[static_cast<int>(Colors::kBorderColor)]     = IM_COL32(40, 40, 40, 255);
-    colors[static_cast<int>(Colors::kSplitterColor)]   = IM_COL32(64, 64, 64, 255);
-    colors[static_cast<int>(Colors::kArrowColor)]      = IM_COL32(220, 38, 38, 180);
+    colors[static_cast<int>(Colors::kFlameChartColor)]     = IM_COL32(160, 160, 160, 255);
+    colors[static_cast<int>(Colors::kGridColor)]           = IM_COL32(255, 255, 255, 255);
+    colors[static_cast<int>(Colors::kGridRed)]             = IM_COL32(220, 38, 38, 255);
+    colors[static_cast<int>(Colors::kSelectionBorder)]     = IM_COL32(255, 71, 87, 255);
+    colors[static_cast<int>(Colors::kHighlightChart)]      = IM_COL32(255, 71, 87, 100);
+    colors[static_cast<int>(Colors::kSelection)]           = IM_COL32(220, 38, 38, 80);
+    colors[static_cast<int>(Colors::kBoundBox)]            = IM_COL32(160, 160, 160, 255);
+    colors[static_cast<int>(Colors::kFillerColor)]         = IM_COL32(18, 18, 18, 255);
+    colors[static_cast<int>(Colors::kScrollBarColor)]      = IM_COL32(64, 64, 64, 255);
+    colors[static_cast<int>(Colors::kRulerBgColor)]        = IM_COL32(40, 40, 40, 255);
+    colors[static_cast<int>(Colors::kRulerTextColor)]      = IM_COL32(250, 250, 250, 255);
+    colors[static_cast<int>(Colors::kBorderColor)]         = IM_COL32(40, 40, 40, 255);
+    colors[static_cast<int>(Colors::kScrubberNumberColor)] = IM_COL32(255, 255, 255, 255);
+    colors[static_cast<int>(Colors::kSplitterColor)]       = IM_COL32(64, 64, 64, 255);
+    colors[static_cast<int>(Colors::kArrowColor)]          = IM_COL32(220, 38, 38, 180);
+    colors[static_cast<int>(Colors::kBgMain)]              = IM_COL32(18, 18, 18, 255);
+    colors[static_cast<int>(Colors::kBgPanel)]             = IM_COL32(28, 28, 28, 255);
+    colors[static_cast<int>(Colors::kAccentRed)]           = IM_COL32(219, 38, 38, 255);
+    colors[static_cast<int>(Colors::kAccentRedHover)]      = IM_COL32(255, 71, 87, 255);
+    colors[static_cast<int>(Colors::kAccentRedActive)]     = IM_COL32(181, 30, 30, 255);
+    colors[static_cast<int>(Colors::kBorderGray)]          = IM_COL32(41, 41, 41, 255);
+    colors[static_cast<int>(Colors::kTextMain)]            = IM_COL32(255, 255, 255, 255);
+    colors[static_cast<int>(Colors::kTextDim)]             = IM_COL32(161, 161, 161, 255);
+    colors[static_cast<int>(Colors::kScrollBg)]            = IM_COL32(33, 33, 33, 255);
+    colors[static_cast<int>(Colors::kScrollGrab)]          = IM_COL32(64, 64, 64, 255);
+    colors[static_cast<int>(Colors::kTableHeaderBg)]       = IM_COL32(41, 41, 41, 255);
+    colors[static_cast<int>(Colors::kTableBorderStrong)]   = IM_COL32(51, 51, 51, 255);
+    colors[static_cast<int>(Colors::kTableBorderLight)]    = IM_COL32(33, 33, 33, 255);
+    colors[static_cast<int>(Colors::kTableRowBg)]          = IM_COL32(33, 33, 33, 255);
+    colors[static_cast<int>(Colors::kTableRowBgAlt)]       = IM_COL32(38, 38, 38, 255);
 
     return colors;
 }();
 
 const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
     std::vector<ImU32> colors(static_cast<int>(Colors::__kLastColor));
-    colors[static_cast<int>(Colors::kMetaDataColor)] = IM_COL32(240, 240, 240, 255);
+    colors[static_cast<int>(Colors::kMetaDataColor)] = IM_COL32(252, 250, 248, 255);
     colors[static_cast<int>(Colors::kMetaDataColorSelected)] =
-        IM_COL32(200, 200, 200, 255);
-    colors[static_cast<int>(Colors::kMetaDataSeparator)] = IM_COL32(248, 248, 248, 255);
-    colors[static_cast<int>(Colors::kTransparent)]       = IM_COL32(0, 0, 0, 0);
-    colors[static_cast<int>(Colors::kTextError)]         = IM_COL32(255, 0, 0, 255);
-    colors[static_cast<int>(Colors::kTextSuccess)]       = IM_COL32(0, 255, 0, 255);
-    colors[static_cast<int>(Colors::kFlameChartColor)]   = IM_COL32(128, 128, 128, 255);
-    colors[static_cast<int>(Colors::kHighlightChart)]    = IM_COL32(66, 150, 250, 50);
-    colors[static_cast<int>(Colors::kGridColor)]         = IM_COL32(0, 0, 0, 255);
-    colors[static_cast<int>(Colors::kGridRed)]           = IM_COL32(255, 0, 0, 255);
-    colors[static_cast<int>(Colors::kSelectionBorder)]   = IM_COL32(0, 0, 200, 255);
-    colors[static_cast<int>(Colors::kSelection)]         = IM_COL32(0, 0, 100, 80);
-    colors[static_cast<int>(Colors::kBoundBox)]          = IM_COL32(100, 100, 100, 150);
-    colors[static_cast<int>(Colors::kFillerColor)]       = IM_COL32(255, 255, 255, 255);
-    colors[static_cast<int>(Colors::kScrollBarColor)]    = IM_COL32(200, 200, 200, 255);
-    colors[static_cast<int>(Colors::kRulerBgColor)]      = IM_COL32(250, 250, 220, 255);
-    colors[static_cast<int>(Colors::kBorderColor)]       = IM_COL32(178, 178, 178, 255);
-    colors[static_cast<int>(Colors::kSplitterColor)]     = IM_COL32(200, 200, 200, 255);
-    colors[static_cast<int>(Colors::kArrowColor)]        = IM_COL32(0, 0, 210, 80);
+        IM_COL32(242, 235, 230, 255);
+    colors[static_cast<int>(Colors::kMetaDataSeparator)]   = IM_COL32(225, 220, 215, 255);
+    colors[static_cast<int>(Colors::kTransparent)]         = IM_COL32(0, 0, 0, 0);
+    colors[static_cast<int>(Colors::kTextError)]           = IM_COL32(242, 90, 70, 255);
+    colors[static_cast<int>(Colors::kTextSuccess)]         = IM_COL32(60, 170, 60, 255);
+    colors[static_cast<int>(Colors::kFlameChartColor)]     = IM_COL32(170, 140, 120, 255);
+    colors[static_cast<int>(Colors::kGridColor)]           = IM_COL32(220, 210, 200, 80);
+    colors[static_cast<int>(Colors::kGridRed)]             = IM_COL32(242, 90, 70, 255);
+    colors[static_cast<int>(Colors::kSelectionBorder)]     = IM_COL32(242, 90, 70, 255);
+    colors[static_cast<int>(Colors::kHighlightChart)]      = IM_COL32(255, 160, 140, 80);
+    colors[static_cast<int>(Colors::kSelection)]           = IM_COL32(242, 90, 70, 40);
+    colors[static_cast<int>(Colors::kBoundBox)]            = IM_COL32(220, 210, 200, 180);
+    colors[static_cast<int>(Colors::kFillerColor)]         = IM_COL32(255, 253, 250, 255);
+    colors[static_cast<int>(Colors::kScrollBarColor)]      = IM_COL32(235, 230, 225, 255);
+    colors[static_cast<int>(Colors::kRulerBgColor)]        = IM_COL32(235, 235, 235, 255);
+    colors[static_cast<int>(Colors::kRulerTextColor)]      = IM_COL32(0, 0, 0, 255);
+    colors[static_cast<int>(Colors::kBorderColor)]         = IM_COL32(225, 220, 215, 255);
+    colors[static_cast<int>(Colors::kSplitterColor)]       = IM_COL32(235, 230, 225, 255);
+    colors[static_cast<int>(Colors::kArrowColor)]          = IM_COL32(242, 90, 70, 180);
+    colors[static_cast<int>(Colors::kScrubberNumberColor)] = IM_COL32(30, 30, 30, 255);
+    colors[static_cast<int>(Colors::kBgMain)]              = IM_COL32(255, 253, 250, 255);
+    colors[static_cast<int>(Colors::kBgPanel)]             = IM_COL32(250, 245, 240, 255);
+    colors[static_cast<int>(Colors::kAccentRed)]           = IM_COL32(242, 90, 70, 255);
+    colors[static_cast<int>(Colors::kAccentRedHover)]      = IM_COL32(255, 140, 120, 255);
+    colors[static_cast<int>(Colors::kAccentRedActive)]     = IM_COL32(255, 110, 90, 255);
+    colors[static_cast<int>(Colors::kBorderGray)]          = IM_COL32(230, 225, 220, 255);
+    colors[static_cast<int>(Colors::kTextMain)]            = IM_COL32(40, 30, 25, 255);
+    colors[static_cast<int>(Colors::kTextDim)]             = IM_COL32(150, 130, 120, 255);
+    colors[static_cast<int>(Colors::kScrollBg)]            = IM_COL32(250, 245, 240, 255);
+    colors[static_cast<int>(Colors::kScrollGrab)]          = IM_COL32(230, 225, 220, 255);
+    colors[static_cast<int>(Colors::kTableHeaderBg)]       = IM_COL32(250, 245, 240, 255);
+    colors[static_cast<int>(Colors::kTableBorderStrong)]   = IM_COL32(230, 225, 220, 255);
+    colors[static_cast<int>(Colors::kTableBorderLight)]    = IM_COL32(240, 235, 230, 255);
+    colors[static_cast<int>(Colors::kTableRowBg)]          = IM_COL32(255, 253, 250, 255);
+    colors[static_cast<int>(Colors::kTableRowBgAlt)]       = IM_COL32(252, 250, 248, 255);
 
     return colors;
 }();
@@ -143,24 +177,22 @@ Settings::HorizontalRender()
 }
 
 void
-Settings::DarkMode()
+Settings::Styling()
 {
-    m_color_store = DARK_THEME_COLORS;
-    ImGui::StyleColorsDark();
-    ImPlot::StyleColorsDark();
-
     ImGuiStyle& style = ImGui::GetStyle();
 
-    ImVec4 bgMain          = ImVec4(0.07f, 0.07f, 0.07f, 1.0f);
-    ImVec4 bgPanel         = ImVec4(0.11f, 0.11f, 0.11f, 1.0f);
-    ImVec4 accentRed       = ImVec4(0.86f, 0.15f, 0.15f, 1.0f);
-    ImVec4 accentRedHover  = ImVec4(1.00f, 0.28f, 0.34f, 1.0f);
-    ImVec4 accentRedActive = ImVec4(0.71f, 0.12f, 0.12f, 1.0f);
-    ImVec4 borderGray      = ImVec4(0.16f, 0.16f, 0.16f, 1.0f);
-    ImVec4 textMain        = ImVec4(1.00f, 1.00f, 1.00f, 1.0f);
-    ImVec4 textDim         = ImVec4(0.63f, 0.63f, 0.63f, 1.0f);
-    ImVec4 scrollBg        = ImVec4(0.13f, 0.13f, 0.13f, 1.0f);
-    ImVec4 scrollGrab      = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
+    ImVec4 bgMain    = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgMain));
+    ImVec4 bgPanel   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgPanel));
+    ImVec4 accentRed = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRed));
+    ImVec4 accentRedHover =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedHover));
+    ImVec4 accentRedActive =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedActive));
+    ImVec4 borderGray = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBorderGray));
+    ImVec4 textMain   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTextMain));
+    ImVec4 textDim    = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTextDim));
+    ImVec4 scrollBg   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kScrollBg));
+    ImVec4 scrollGrab = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kScrollGrab));
 
     // Window
     style.Colors[ImGuiCol_WindowBg]     = bgMain;
@@ -183,21 +215,31 @@ Settings::DarkMode()
     style.Colors[ImGuiCol_MenuBarBg] = bgPanel;
 
     // Modern table styling
-    style.Colors[ImGuiCol_TableHeaderBg] =
-        ImVec4(0.16f, 0.16f, 0.16f, 1.0f);  // Slightly lighter than panel
-    style.Colors[ImGuiCol_TableBorderStrong] =
-        ImVec4(0.20f, 0.20f, 0.20f, 1.0f);  // Soft border
-    style.Colors[ImGuiCol_TableBorderLight] =
-        ImVec4(0.13f, 0.13f, 0.13f, 1.0f);  // Even softer
-    style.Colors[ImGuiCol_TableRowBg] =
-        ImVec4(0.13f, 0.13f, 0.13f, 1.0f);  // Alternating row background
-    style.Colors[ImGuiCol_TableRowBgAlt] =
-        ImVec4(0.15f, 0.15f, 0.15f, 1.0f);  // Slightly lighter for alt rows
+    ImVec4 tableHeaderBg =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTableHeaderBg));
+    ImVec4 tableBorderStrong =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTableBorderStrong));
+    ImVec4 tableBorderLight =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTableBorderLight));
+    ImVec4 tableRowBg = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTableRowBg));
+    ImVec4 tableRowBgAlt =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTableRowBgAlt));
 
-    style.CellPadding      = ImVec2(8, 4);  // More space in cells
-    style.FrameBorderSize  = 0.0f;          // Remove thick borders
-    style.WindowBorderSize = 1.0f;          // Keep window border thin
-    style.TabBorderSize    = 0.0f;          // Remove tab border
+    style.Colors[ImGuiCol_TableHeaderBg]     = tableHeaderBg;
+    style.Colors[ImGuiCol_TableBorderStrong] = tableBorderStrong;
+    style.Colors[ImGuiCol_TableBorderLight]  = tableBorderLight;
+    style.Colors[ImGuiCol_TableRowBg]        = tableRowBg;
+    style.Colors[ImGuiCol_TableRowBgAlt]     = tableRowBgAlt;
+
+    style.CellPadding       = ImVec2(10, 6);
+    style.FrameBorderSize   = 0.0f;
+    style.WindowBorderSize  = 1.0f;
+    style.TabBorderSize     = 0.0f;
+    style.FrameRounding     = 6.0f;
+    style.GrabRounding      = 6.0f;
+    style.TabRounding       = 6.0f;
+    style.WindowRounding    = 8.0f;
+    style.ScrollbarRounding = 8.0f;
 
     // Scrollbar
     style.Colors[ImGuiCol_ScrollbarBg]   = scrollBg;
@@ -258,7 +300,7 @@ Settings::DarkMode()
     // Modal window dim
     style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0, 0, 0, 0.7f);
 
-    // Optional: tweak rounding and spacing for a modern look
+    // Rounding the windows to look modern
     style.FrameRounding     = 8.0f;
     style.GrabRounding      = 6.0f;
     style.TabRounding       = 6.0f;
@@ -268,9 +310,16 @@ Settings::DarkMode()
     style.ItemSpacing       = ImVec2(10, 8);
     style.WindowPadding     = ImVec2(14, 10);
 
-    // Optional: make fonts slightly larger for readability
-    ImGui::GetIO().FontGlobalScale = 1.08f;
+    return;
+}
 
+void
+Settings::DarkMode()
+{
+    m_color_store = DARK_THEME_COLORS;
+    ImGui::StyleColorsDark();
+    ImPlot::StyleColorsDark();
+    Styling();
     m_use_dark_mode = true;
 }
 
@@ -280,6 +329,7 @@ Settings::LightMode()
     m_color_store = LIGHT_THEME_COLORS;
     ImGui::StyleColorsLight();
     ImPlot::StyleColorsLight();
+    Styling();
     m_use_dark_mode = false;
 }
 

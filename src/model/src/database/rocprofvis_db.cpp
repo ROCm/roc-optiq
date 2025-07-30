@@ -20,6 +20,8 @@
 
 #include "rocprofvis_db.h"
 #include "rocprofvis_db_profile.h"
+#include <cstdio>
+#include <fstream> 
 #include <sstream>
 #include <cstring>
 
@@ -162,6 +164,22 @@ rocprofvis_dm_result_t Database::SaveTrimmedDataStatic(Database* db, rocprofvis_
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
+
+
+    //check if a db file exists and if it does delete it (we will overwrite it)
+    std::ifstream file(new_db_path);
+    if(file.good())
+    {
+        file.close();
+        int remove_result = std::remove(new_db_path.c_str());
+        if(remove_result != 0)
+        {
+            spdlog::error("Failed to overwrite existing file: {}, code: {}", new_db_path,
+                          remove_result);
+            return kRocProfVisDmResultDbAccessFailed;
+        }
+    }
+
     return db->SaveTrimmedData(start, end, new_db_path.c_str(), future);
 }
 

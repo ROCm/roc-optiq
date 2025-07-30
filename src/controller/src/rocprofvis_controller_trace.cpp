@@ -2700,7 +2700,8 @@ rocprofvis_result_t Trace::SaveTrimmedTrace(Future& future, double start, double
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
-    future.Set(JobSystem::Get().IssueJob([start, end, path, dm_handle]() -> rocprofvis_result_t {
+    std::string path_str = path;
+    future.Set(JobSystem::Get().IssueJob([start, end, path_str, dm_handle]() -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
                               if (db)
@@ -2708,7 +2709,7 @@ rocprofvis_result_t Trace::SaveTrimmedTrace(Future& future, double start, double
                                   rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
                                   if (object2wait)
                                   {
-                                    auto error = rocprofvis_db_trim_save_async(db, start, end, path, object2wait);
+                                    auto error = rocprofvis_db_trim_save_async(db, start, end, path_str.c_str(), object2wait);
                                       result = (error == kRocProfVisDmResultSuccess)
                                                    ? kRocProfVisResultSuccess
                                                    : kRocProfVisResultUnknownError;

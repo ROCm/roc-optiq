@@ -30,6 +30,8 @@ enum class RequestType
     kFetchGraph,
     kFetchTrackEventTable,
     kFetchTrackSampleTable,
+    kClearTrackEventTable,
+    kClearTrackSampleTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
     kFetchEventCallStack
@@ -255,6 +257,7 @@ typedef struct data_req_info_t
     rocprofvis_controller_arguments_t* request_args;        // arguments for the request
     ProviderState                      loading_state;       // state of the request
     RequestType                        request_type;        // type of request
+    bool                               internal_request;    // true if request is handled by view (and not controller)
     std::shared_ptr<RequestParamsBase> custom_params;       // custom request parameters
 } data_req_info_t;
 
@@ -397,6 +400,8 @@ public:
 
     bool FetchMultiTrackTable(const TableRequestParams& table_params);
 
+    bool QueueClearTrackTableRequest(rocprofvis_controller_table_type_t table_type);
+
     bool IsRequestPending(uint64_t request_id);
 
     /*
@@ -465,7 +470,6 @@ public:
     const std::vector<std::vector<std::string>>& GetTableData(TableType type);
     std::shared_ptr<TableRequestParams>          GetTableParams(TableType type);
     uint64_t                                     GetTableTotalRowCount(TableType type);
-    void                                         ClearTable(TableType type);
 
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&)>& callback);
@@ -496,6 +500,11 @@ private:
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
+    /*
+    Clears data for a given table type.
+    This should not be called directly, instead use QueueClearTrackTableRequest().
+    */
+    void ClearTable(TableType type);
 
 
     void CreateRawEventData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);                           

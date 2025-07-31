@@ -483,7 +483,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         ImVec2 text_pos  = ImVec2(rect_pos1.x + label_padding, rect_pos1.y);
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
-                                 m_settings.GetColor(Colors::kGridColor));
+                                 m_settings.GetColor(Colors::kScrubberNumberColor));
         draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), text);
         draw_list->AddLine(
             ImVec2(mouse_position.x, screen_pos.y),
@@ -669,7 +669,7 @@ TimelineView::RenderGridAlt()
             ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
                                        cursor_position.y + content_size.y - label_size.y -
                                            m_ruler_padding.y);
-            draw_list->AddText(label_pos, m_settings.GetColor(Colors::kGridColor),
+            draw_list->AddText(label_pos, m_settings.GetColor(Colors::kRulerTextColor),
                                label.c_str());
         }
     }

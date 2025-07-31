@@ -10,18 +10,19 @@
 #include "rocprofvis_settings.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "rocprofvis_version.h"
+#include "widgets/rocprofvis_debug_window.h"
 
 #ifdef COMPUTE_UI_SUPPORT
-#include "rocprofvis_navigation_manager.h"
+#    include "rocprofvis_navigation_manager.h"
 #endif
 #include <filesystem>
 
 using namespace RocProfVis::View;
 
-constexpr ImVec2 FILE_DIALOG_SIZE = ImVec2(480.0f, 360.0f);
-constexpr char* FILE_DIALOG_NAME = "ChooseFileDlgKey";
-constexpr char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
-constexpr char* ABOUT_DIALOG_NAME = "About##_dialog";
+constexpr ImVec2 FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
+constexpr char*  FILE_DIALOG_NAME       = "ChooseFileDlgKey";
+constexpr char*  TAB_CONTAINER_SRC_NAME = "MainTabContainer";
+constexpr char*  ABOUT_DIALOG_NAME      = "About##_dialog";
 
 // For testing DataProvider
 void
@@ -112,6 +113,9 @@ AppWindow::Init()
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
 
+    // default dark mode
+    //Settings::GetInstance().DarkMode();
+
     return result;
 }
 
@@ -194,7 +198,8 @@ AppWindow::Render()
         m_main_view->Render();
     }
 
-    if(m_open_about_dialog) {
+    if(m_open_about_dialog)
+    {
         ImGui::OpenPopup(ABOUT_DIALOG_NAME);
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
@@ -284,12 +289,14 @@ AppWindow::RenderSettingsMenu()
     }
 }
 
-void AppWindow::RenderHelpMenu() {
+void
+AppWindow::RenderHelpMenu()
+{
     if(ImGui::BeginMenu("Help"))
     {
         if(ImGui::MenuItem("About"))
         {
-           m_open_about_dialog = true;
+            m_open_about_dialog = true;
         }
         ImGui::EndMenu();
     }
@@ -312,16 +319,19 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 #endif
 }
 
-void AppWindow::RenderAboutDialog() 
+void
+AppWindow::RenderAboutDialog()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
-    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::Text("RocProfiler Visualizer");
-        ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR, ROCPROFVIS_VERSION_MINOR,
-                    ROCPROFVIS_VERSION_PATCH);
-        ImGui::Text("Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
+        ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR,
+                    ROCPROFVIS_VERSION_MINOR, ROCPROFVIS_VERSION_PATCH);
+        ImGui::Text(
+            "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
 
         if(ImGui::Button("Close"))
         {
@@ -329,9 +339,8 @@ void AppWindow::RenderAboutDialog()
         }
         ImGui::EndPopup();
     }
-    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding   
+    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
 }
-
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void
@@ -364,9 +373,9 @@ AppWindow::RenderDeveloperMenu()
             IGFD::FileDialogConfig config;
             config.path                      = ".";
             std::string supported_extensions = ".db,.rpd";
-#ifdef JSON_SUPPORT
+#    ifdef JSON_SUPPORT
             supported_extensions += ",.json";
-#endif
+#    endif
             ImGuiFileDialog::Instance()->OpenDialog("DebugFile", "Choose File",
                                                     supported_extensions.c_str(), config);
         }
@@ -380,9 +389,9 @@ RenderProviderTest(DataProvider& provider)
 {
     ImGui::Begin("Data Provider Test Window", nullptr, ImGuiWindowFlags_None);
 
-    static char track_index_buffer[64]     = "0";
-    static char end_track_index_buffer[64] = "1";  // for setting table track range
-    static uint64_t group_id_counter = 0;
+    static char     track_index_buffer[64]     = "0";
+    static char     end_track_index_buffer[64] = "1";  // for setting table track range
+    static uint64_t group_id_counter           = 0;
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
@@ -421,7 +430,8 @@ RenderProviderTest(DataProvider& provider)
     if(ImGui::Button("Fetch Single Track Event Table"))
     {
         provider.FetchSingleTrackEventTable(index, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", "", "", start_row, row_count);
+                                            provider.GetEndTime(), "", "", "", start_row,
+                                            row_count);
     }
     if(ImGui::Button("Fetch Multi Track Event Table"))
     {
@@ -432,7 +442,8 @@ RenderProviderTest(DataProvider& provider)
             vect.push_back(i);
         }
         provider.FetchMultiTrackEventTable(vect, provider.GetStartTime(),
-                                           provider.GetEndTime(), "", "", "", start_row, row_count);
+                                           provider.GetEndTime(), "", "", "", start_row,
+                                           row_count);
     }
     if(ImGui::Button("Print Event Table"))
     {
@@ -442,7 +453,8 @@ RenderProviderTest(DataProvider& provider)
     if(ImGui::Button("Fetch Single Track Sample Table"))
     {
         provider.FetchSingleTrackSampleTable(index, provider.GetStartTime(),
-                                             provider.GetEndTime(), "", start_row, row_count);
+                                             provider.GetEndTime(), "", start_row,
+                                             row_count);
     }
     if(ImGui::Button("Fetch Multi Track Sample Table"))
     {
@@ -453,7 +465,8 @@ RenderProviderTest(DataProvider& provider)
             vect.push_back(i);
         }
         provider.FetchMultiTrackSampleTable(vect, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", start_row, row_count);
+                                            provider.GetEndTime(), "", start_row,
+                                            row_count);
     }
     if(ImGui::Button("Print Sample Table"))
     {
@@ -534,6 +547,6 @@ AppWindow::RenderDebugOuput()
     if(m_show_provider_test_widow)
     {
         RenderProviderTest(m_test_data_provider);
-    }    
+    }
 }
 #endif  // ROCPROFVIS_DEVELOPER_MODE

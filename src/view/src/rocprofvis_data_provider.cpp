@@ -1687,7 +1687,7 @@ DataProvider::HandleRequests()
                 result = rocprofvis_controller_get_uint64(req.request_future, kRPVControllerFutureResult,
                                     0, &req.response_code);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                
+
                 rocprofvis_controller_future_free(req.request_future);
                 req.request_future = nullptr;
 
@@ -1915,9 +1915,9 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 void 
 DataProvider::ProcessSaveTrimmedTraceRequest(data_req_info_t& req)
 {
-    spdlog::debug("Save trimmed trace request complete");
+    spdlog::debug("Save trimmed trace request complete with result: {}", req.response_code);
 
-    // call the new data ready callback
+    // call the trim complete callback
     if(m_save_trace_callback)
     {
         m_save_trace_callback(req.response_code == kRocProfVisResultSuccess);

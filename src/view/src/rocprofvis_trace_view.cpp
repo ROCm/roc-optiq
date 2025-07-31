@@ -175,20 +175,22 @@ TraceView::Render()
         if(m_save_trace_popup_info.show_popup)
 
         {
-            ImGui::OpenPopup("Saved Trimmed Trace");
+            ImGui::OpenPopup("Trimmed Trace");
             m_save_trace_popup_info.show_popup = false;
         }
 
-        if(ImGui::BeginPopupModal("Saved Trimmed Trace", nullptr,
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));        
+        if(ImGui::BeginPopupModal("Trimmed Trace", nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize))
         {
             if(m_save_trace_popup_info.success)
             {
-                ImGui::Text("Trace has been saved successfully.");
+                ImGui::Text("Trimmed trace has been saved successfully.");
             }
             else
             {
-                ImGui::Text("Failed to save the trace.");
+                ImGui::Text("Failed to save the trimmed trace.");
             }
             if(ImGui::Button("OK"))
             {
@@ -196,6 +198,7 @@ TraceView::Render()
             }
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar(2);
         return;
     }
 

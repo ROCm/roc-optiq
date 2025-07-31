@@ -64,7 +64,6 @@ AppWindow::AppWindow()
 , m_show_metrics(false)
 #endif
 , m_open_about_dialog(false)
-, m_save_allowed(false)
 {}
 
 AppWindow::~AppWindow()
@@ -134,8 +133,13 @@ AppWindow::Update()
     m_test_data_provider.Update();
 #endif
 
+
+}
+
+bool AppWindow::IsTrimSaveAllowed() {
+
     // Check if save is allowed
-    m_save_allowed  = false;
+    bool save_allowed  = false;
     auto active_tab = m_tab_container->GetActiveTab();
     if(active_tab)
     {
@@ -144,9 +148,10 @@ AppWindow::Update()
         if(trace_view)
         {
             // Check if the trace view has a selection that can be saved
-            m_save_allowed = trace_view->HasTrimActiveTrimSelection();
+            save_allowed = trace_view->IsTrimSaveAllowed();
         }
     }
+    return save_allowed;
 }
 
 void
@@ -193,7 +198,7 @@ AppWindow::Render()
                                                         supported_extensions.c_str(),
                                                         config);
             }
-            if(ImGui::MenuItem("Save Selection", nullptr, false, m_save_allowed))
+            if(ImGui::MenuItem("Save Selection", nullptr, false, IsTrimSaveAllowed()))
             {
                 // Save the currently selected tab's content
                 auto active_tab = m_tab_container->GetActiveTab();

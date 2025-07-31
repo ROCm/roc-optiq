@@ -1455,7 +1455,7 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
 }
 
 bool
-DataProvider::IsRequestPending(uint64_t request_id)
+DataProvider::IsRequestPending(uint64_t request_id) const
 {
     auto it = m_requests.find(request_id);
     if(it != m_requests.end())

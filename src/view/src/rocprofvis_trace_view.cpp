@@ -262,6 +262,17 @@ bool TraceView::HasTrimActiveTrimSelection() const
     return false;
 }
 
+bool TraceView::IsTrimSaveAllowed() const {
+    bool save_allowed = false;
+    if(m_timeline_selection)
+    {
+        save_allowed = m_timeline_selection->HasValidTimeRangeSelection();
+        save_allowed &= !m_data_provider.IsRequestPending(DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID);
+    }
+
+    return save_allowed;
+}
+
 bool TraceView::SaveSelection(const std::string& file_path) {
     if(m_timeline_selection)
     {

@@ -29,7 +29,8 @@ public:
     void DestroyView();
 
     bool HasTrimActiveTrimSelection() const;
-
+    bool IsTrimSaveAllowed() const;
+    
     bool SaveSelection(const std::string& file_path);
 
 private:

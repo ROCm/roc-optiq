@@ -397,7 +397,7 @@ public:
 
     bool FetchMultiTrackTable(const TableRequestParams& table_params);
 
-    bool IsRequestPending(uint64_t request_id);
+    bool IsRequestPending(uint64_t request_id) const;
 
     /*
      * Release memory buffer holding raw data for selected track

@@ -38,6 +38,8 @@ private:
 
     void RenderAboutDialog();
 
+    bool IsTrimSaveAllowed();
+
     static AppWindow* s_instance;
 
     std::shared_ptr<RocWidget>    m_main_view;
@@ -60,7 +62,6 @@ private:
     bool         m_show_provider_test_widow;
 #endif
     bool m_open_about_dialog;
-    bool m_save_allowed;
 };
 
 }  // namespace View

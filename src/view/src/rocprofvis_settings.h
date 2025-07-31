@@ -29,9 +29,31 @@ enum class Colors
     kScrollBarColor,
     kHighlightChart,
     kRulerBgColor,
+    kRulerTextColor,
+    kScrubberNumberColor,
     kArrowColor,
     kBorderColor,
     kSplitterColor,
+    kBgMain,
+    kBgPanel,
+    kAccentRed,
+    kAccentRedHover,
+    kAccentRedActive,
+    kBorderGray,
+    kTextMain,
+    kTextDim,
+    kScrollBg,
+    kScrollGrab,
+    kTableHeaderBg,
+    kTableBorderStrong,
+    kTableBorderLight,
+    kTableRowBg,
+    kTableRowBgAlt,
+    kEventHighlight,
+    kLineChartColor,
+    kButton,
+    kButtonHovered,
+    kButtonActive,
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -85,6 +107,7 @@ public:
     bool IsDarkMode() const;
     bool HorizontalRender();
     bool IsHorizontalRender();
+    void Styling();
 
     FontManager& GetFontManager() { return m_font_manager; }
 

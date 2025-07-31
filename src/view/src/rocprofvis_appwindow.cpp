@@ -18,12 +18,11 @@
 
 using namespace RocProfVis::View;
 
-constexpr ImVec2 FILE_DIALOG_SIZE      = ImVec2(480.0f, 360.0f);
-constexpr char*  FILE_DIALOG_NAME      = "ChooseFileDlgKey";
-constexpr char*  FILE_SAVE_DIALOG_NAME = "SaveFileDlgKey";
-
-constexpr char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
-constexpr char* ABOUT_DIALOG_NAME      = "About##_dialog";
+constexpr ImVec2 FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
+constexpr char*  FILE_DIALOG_NAME       = "ChooseFileDlgKey";
+constexpr char*  FILE_SAVE_DIALOG_NAME  = "SaveFileDlgKey";
+constexpr char*  TAB_CONTAINER_SRC_NAME = "MainTabContainer";
+constexpr char*  ABOUT_DIALOG_NAME      = "About##_dialog";
 
 // For testing DataProvider
 void
@@ -113,6 +112,9 @@ AppWindow::Init()
     };
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
+
+    // default dark mode
+    //Settings::GetInstance().DarkMode();
 
     return result;
 }

@@ -861,7 +861,7 @@ DataProvider::SaveTrimmedTrace(const std::string& path, double start_ns, double 
         request_info.request_id         = SAVE_TRIMMED_TRACE_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kSaveTrimmedTrace;
-
+        request_info.internal_request   = false;
         m_requests.emplace(request_info.request_id, request_info);
         return true;
     }
@@ -903,42 +903,51 @@ DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
             if(result == kRocProfVisResultSuccess && track_handle && track_future &&
                track_array)
             {
-                rocprofvis_result_t result = rocprofvis_controller_track_fetch_async(
+                result = rocprofvis_controller_track_fetch_async(
                     m_trace_controller, (rocprofvis_controller_track_t*) track_handle,
                     start_ts, end_ts, track_future, track_array);
+            
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                data_req_info_t request_info;
+                request_info.request_array      = track_array;
+                request_info.request_future     = track_future;
+                request_info.request_obj_handle = track_handle;
+                request_info.request_args       = nullptr;
+                request_info.request_id         = track_id;
+                request_info.loading_state      = ProviderState::kLoading;
+                request_info.request_type       = RequestType::kFetchTrack;
+                request_info.internal_request   = false;
+
+                auto params = std::make_shared<TrackRequestParams>(
+                    track_id, start_ts, end_ts, horz_pixel_range, group_id);
+                request_info.custom_params = params;
+
+                m_requests.emplace(request_info.request_id, request_info);
+
+                spdlog::debug("Fetching track graph data {}", track_id);
+                return true;
+            } 
+            else 
+            {
+                rocprofvis_controller_array_free(track_array);
+                rocprofvis_controller_future_free(track_future);
+                spdlog::debug("Failed to fetch track graph data {}, result: {}",
+                              track_id, static_cast<int>(result));
             }
-
-            data_req_info_t request_info;
-            request_info.request_array      = track_array;
-            request_info.request_future     = track_future;
-            request_info.request_obj_handle = track_handle;
-            request_info.request_args       = nullptr;
-            request_info.request_id         = track_id;
-            request_info.loading_state      = ProviderState::kLoading;
-            request_info.request_type       = RequestType::kFetchTrack;
-
-            auto params = std::make_shared<TrackRequestParams>(
-                track_id, start_ts, end_ts, horz_pixel_range, group_id);
-            request_info.custom_params = params;
-
-            m_requests.emplace(request_info.request_id, request_info);
-
-            spdlog::debug("Fetching track graph data {}", track_id);
-            return true;
         }
         else
         {
             // request for item already exists
             spdlog::debug("Request for this track, index {}, is already pending",
                           track_id);
-            return false;
         }
     }
     else
     {
         spdlog::debug("Cannot fetch Track index {} is out of range", track_id);
-        return false;
     }
+    return false;
 }
 
 bool
@@ -984,40 +993,48 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
                     graph_future, graph_array);
 
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            
+
+                data_req_info_t request_info;
+                request_info.request_array      = graph_array;
+                request_info.request_future     = graph_future;
+                request_info.request_obj_handle = graph_obj;
+                request_info.request_args       = nullptr;
+                request_info.request_id         = request_params.m_track_id;
+                request_info.loading_state      = ProviderState::kLoading;
+                request_info.request_type       = RequestType::kFetchGraph;
+                request_info.internal_request   = false;
+
+                auto params = std::make_shared<TrackRequestParams>(request_params);
+                request_info.custom_params = params;
+
+                m_requests.emplace(request_info.request_id, request_info);
+
+                spdlog::debug("Fetching track data {} from controller {}",
+                            request_params.m_track_id,
+                            reinterpret_cast<unsigned long long>(m_trace_controller));
+                return true;
             }
-
-            data_req_info_t request_info;
-            request_info.request_array      = graph_array;
-            request_info.request_future     = graph_future;
-            request_info.request_obj_handle = graph_obj;
-            request_info.request_args       = nullptr;
-            request_info.request_id         = request_params.m_track_id;
-            request_info.loading_state      = ProviderState::kLoading;
-            request_info.request_type       = RequestType::kFetchGraph;
-
-            auto params = std::make_shared<TrackRequestParams>(request_params);
-            request_info.custom_params = params;
-
-            m_requests.emplace(request_info.request_id, request_info);
-
-            spdlog::debug("Fetching track data {} from controller {}",
-                          request_params.m_track_id,
-                          reinterpret_cast<unsigned long long>(m_trace_controller));
-            return true;
+            else 
+            {
+                rocprofvis_controller_array_free(graph_array);
+                rocprofvis_controller_future_free(graph_future);
+                spdlog::debug("Failed to fetch track graph data {}, result: {}",
+                              request_params.m_track_id, static_cast<int>(result));
+            }            
         }
         else
         {
             // request for item already exists
             spdlog::debug("Request for this track, id {}, is already pending",
                           request_params.m_track_id);
-            return false;
         }
     }
     else
     {
         spdlog::debug("Cannot fetch Track id {} is invalid", request_params.m_track_id);
-        return false;
     }
+    return false;
 }
 
 bool
@@ -1223,6 +1240,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
                 (table_params.m_table_type == kRPVControllerTableTypeEvents)
                     ? RequestType::kFetchTrackEventTable
                     : RequestType::kFetchTrackSampleTable;
+            request_info.internal_request = false;
 
             std::vector<uint64_t> track_ids;
             track_ids.push_back(track_id);
@@ -1427,6 +1445,7 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
                 (table_params.m_table_type == kRPVControllerTableTypeEvents)
                     ? RequestType::kFetchTrackEventTable
                     : RequestType::kFetchTrackSampleTable;
+            request_info.internal_request = false;
 
             auto params         = std::make_shared<TableRequestParams>(table_params);
             params->m_track_ids = std::move(filtered_track_ids);
@@ -1450,6 +1469,48 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
     else
     {
         spdlog::debug("Cannot fetch table, no track id provided");
+        return false;
+    }
+}
+
+bool
+DataProvider::QueueClearTrackTableRequest(rocprofvis_controller_table_type_t table_type)
+{
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
+                     static_cast<int>(m_state));
+        return false;
+    }
+    uint64_t request_id = table_type == kRPVControllerTableTypeEvents
+                              ? EVENT_TABLE_REQUEST_ID
+                              : SAMPLE_TABLE_REQUEST_ID;
+
+    auto it = m_requests.find(request_id);
+    // only allow load if a request for a table of this type is not pending
+    if(it == m_requests.end())
+    {
+        data_req_info_t request_info;
+        request_info.loading_state = ProviderState::kLoading;
+        if(table_type == kRPVControllerTableTypeEvents)
+        {
+            request_info.request_id   = EVENT_TABLE_REQUEST_ID;
+            request_info.request_type = RequestType::kClearTrackEventTable;
+        }
+        else
+        {
+            request_info.request_id   = SAMPLE_TABLE_REQUEST_ID;
+            request_info.request_type = RequestType::kClearTrackSampleTable;
+        }
+        request_info.internal_request = true;
+        m_requests.emplace(request_id, request_info);
+        return true;
+    }
+    else
+    {
+        // request for item already exists
+        spdlog::debug("Request for this table, type {}, is already pending",
+                      static_cast<uint64_t>(table_type));
         return false;
     }
 }
@@ -1673,31 +1734,39 @@ DataProvider::HandleRequests()
         {
             data_req_info_t& req = it->second;
 
-            rocprofvis_result_t result =
-                rocprofvis_controller_future_wait(req.request_future, 0);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
-                              result == kRocProfVisResultTimeout);
-                              
-            // this graph is ready
-            if(result == kRocProfVisResultSuccess)
+            if(req.internal_request)
             {
-                req.loading_state  = ProviderState::kReady;
-                req.response_code = kRocProfVisResultSuccess;
-                uint64_t future_result = 0;
-                result = rocprofvis_controller_get_uint64(req.request_future, kRPVControllerFutureResult,
-                                    0, &req.response_code);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                rocprofvis_controller_future_free(req.request_future);
-                req.request_future = nullptr;
-
+                req.loading_state = ProviderState::kReady;
                 ProcessRequest(req);
-                // remove request from processing container
                 it = m_requests.erase(it);
             }
             else
             {
-                ++it;
+                rocprofvis_result_t result =
+                    rocprofvis_controller_future_wait(req.request_future, 0);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
+                                  result == kRocProfVisResultTimeout);
+
+                // the response is ready
+                if(result == kRocProfVisResultSuccess)
+                {
+                    req.loading_state  = ProviderState::kReady;
+                    req.response_code = kRocProfVisResultSuccess;
+                    uint64_t future_result = 0;
+                    result = rocprofvis_controller_get_uint64(req.request_future, kRPVControllerFutureResult,
+                                        0, &req.response_code);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                    rocprofvis_controller_future_free(req.request_future);
+                    req.request_future = nullptr;
+                        ProcessRequest(req);
+                        // remove request from processing container
+                        it = m_requests.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
             }
         }
     }
@@ -1875,40 +1944,60 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
 void
 DataProvider::ProcessRequest(data_req_info_t& req)
 {
-    if(req.request_type == RequestType::kFetchGraph)
+    switch(req.request_type)
     {
-        ProcessGraphRequest(req);
-    }
-    else if(req.request_type == RequestType::kFetchTrack)
-    {
-        ProcessTrackRequest(req);
-    }
-    else if(req.request_type == RequestType::kFetchEventExtendedData)
-    {
-        ProcessEventExtendedRequest(req);
-    }
-    else if(req.request_type == RequestType::kFetchEventCallStack)
-    {
-        ProcessEventCallStackRequest(req);
-    }
-    else if(req.request_type == RequestType::kFetchEventFlowDetails)
-    {
-        ProcessEventFlowDetailsRequest(req);
-    }
-    else if(req.request_type == RequestType::kFetchTrackEventTable ||
-            req.request_type == RequestType::kFetchTrackSampleTable)
-    {
-        spdlog::debug("Processing table data {}", req.request_id);
-        ProcessTableRequest(req);
-    }
-    else if(req.request_type == RequestType::kSaveTrimmedTrace) 
-    {
-        ProcessSaveTrimmedTraceRequest(req);
-    }
-    else
-    {
-        spdlog::debug("Unknown request type {}", static_cast<int>(req.request_type));
-        return;
+        case RequestType::kFetchGraph:
+        {
+            ProcessGraphRequest(req);
+            break;
+        }
+        case RequestType::kFetchTrack:
+        {
+            ProcessTrackRequest(req);
+            break;
+        }
+        case RequestType::kFetchEventExtendedData:
+        {
+            ProcessEventExtendedRequest(req);
+            break;
+        }
+        case RequestType::kFetchEventCallStack:
+        {
+            ProcessEventCallStackRequest(req);
+            break;
+        }
+        case RequestType::kFetchEventFlowDetails:
+        {
+            ProcessEventFlowDetailsRequest(req);
+            break;
+        }
+        case RequestType::kFetchTrackEventTable:
+        case RequestType::kFetchTrackSampleTable:
+        {
+            spdlog::debug("Processing table data {}", req.request_id);
+            ProcessTableRequest(req);
+            break;
+        }
+        case RequestType::kClearTrackEventTable:
+        {
+            ClearTable(TableType::kEventTable);
+            break;
+        }
+        case RequestType::kClearTrackSampleTable:
+        {
+            ClearTable(TableType::kSampleTable);
+            break;
+        }
+        case RequestType::kSaveTrimmedTrace:
+        {
+            ProcessSaveTrimmedTraceRequest(req);
+            break;
+        }        
+        default:
+        {
+            spdlog::debug("Unknown request type {}", static_cast<int>(req.request_type));
+            return;
+        }
     }
 }
 
@@ -2433,6 +2522,7 @@ DataProvider::FetchEventExtData(uint64_t event_id)
         request_info.request_id         = EVENT_EXTENDED_DATA_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventExtendedData;
+        request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
         return true;
@@ -2479,6 +2569,7 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
         request_info.request_id         = EVENT_FLOW_DATA_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventFlowDetails;
+        request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
         return true;
@@ -2525,6 +2616,7 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         request_info.request_id         = EVENT_CALL_STACK_DATA_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventCallStack;
+        request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
         return true;

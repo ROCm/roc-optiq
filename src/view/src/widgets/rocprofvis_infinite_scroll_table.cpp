@@ -69,13 +69,11 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
             }
         }
 
+        bool result = false;
         // if no tracks match the table type, clear the table
         if(filtered_tracks.empty())
         {
-            m_data_provider.ClearTable(m_table_type);
-            // Todo: Clear any pending requests for this table type?
-            // clear any pending track selection event
-            m_track_selection_event_to_handle = nullptr;
+            result = m_data_provider.QueueClearTrackTableRequest(m_req_table_type);
         }
         else
         {
@@ -86,20 +84,21 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
                                                   m_group_columns.size() ? m_group_columns.data() : "",
                                                   0, m_fetch_chunk_size);
 
-            bool result = m_data_provider.FetchMultiTrackTable(event_table_params);
-            if(!result)
-            {
-                spdlog::error("Failed to fetch table data for tracks: {}",
-                              filtered_tracks.size());
-                // save this selection event to reprocess it later (it's ok to replace the
-                // previous one as the new one reflects the current selection)
-                m_track_selection_event_to_handle = selection_changed_event;
-            }
-            else
-            {
-                // clear any pending track selection event
-                m_track_selection_event_to_handle = nullptr;
-            }
+            result = m_data_provider.FetchMultiTrackTable(event_table_params);
+        }
+
+        if(!result)
+        {
+            spdlog::error("Failed to queue table request for tracks: {}",
+                            filtered_tracks.size());
+            // save this selection event to reprocess it later (it's ok to replace the
+            // previous one as the new one reflects the current selection)
+            m_track_selection_event_to_handle = selection_changed_event;
+        }
+        else
+        {
+            // clear any pending track selection event
+            m_track_selection_event_to_handle = nullptr;
         }
         // Update the selected tracks for this table type
         m_selected_tracks = std::move(filtered_tracks);

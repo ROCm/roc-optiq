@@ -142,7 +142,9 @@ TrackDetails::RenderTable(InfoTable& table)
         float table_width = ImGui::GetContentRegionAvail().x - FRAME_PADDING_X;
         float table_x_max = table_x_min + table_width;
         if(ImGui::BeginTable("", cols,
-                             ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit |
+                             ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
+                                 ImGuiTableFlags_BordersV |
+                                 ImGuiTableFlags_SizingFixedFit |
                                  ImGuiTableFlags_NoKeepColumnsVisible,
                              ImVec2(table_width, 0)))
         {

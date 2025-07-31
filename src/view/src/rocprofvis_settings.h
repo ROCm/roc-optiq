@@ -84,9 +84,11 @@ public:
     bool Init();
 
     ImFont* GetFont(FontType font_type);
+    ImFont* GetIconFont(FontType font_type);
 
 private:
     std::vector<ImFont*> m_fonts;
+    std::vector<ImFont*> m_icon_fonts;
 };
 
 class Settings

@@ -23,3 +23,6 @@
 [submodule "thirdparty/csv-parser"]
 	path = thirdparty/csv-parser
 	url = https://github.com/vincentlaucsb/csv-parser
+[submodule "thirdparty/ionicons"]
+	path = thirdparty/ionicons
+	url = https://github.com/ionic-team/ionicons.git

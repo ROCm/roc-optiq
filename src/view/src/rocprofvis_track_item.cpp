@@ -1,4 +1,5 @@
 #include "rocprofvis_track_item.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_settings.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
@@ -161,11 +162,11 @@ TrackItem::RenderMetaArea()
     // Shrink the meta data content area by one unit in the vertical direction so that the
     // borders rendered by the parent are visible other wise the bg fill will cover them
     // up.
-    ImVec2 m_metadata_shrink_padding(0.0f, 1.0f);
+    ImVec2 metadata_shrink_padding(0.0f, 1.0f);
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
-    m_track_content_height      = m_track_height - m_metadata_shrink_padding.y * 2.0f;
+    m_track_content_height      = m_track_height - metadata_shrink_padding.y * 2.0f;
 
-    //Global padding is too large for metadata must compress. 
+    // Global padding is too large for metadata must compress.
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(1, 2));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, 2));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 2));
@@ -174,10 +175,10 @@ TrackItem::RenderMetaArea()
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
                                      : m_settings.GetColor(Colors::kMetaDataColor));
-    ImGui::SetCursorPos(m_metadata_shrink_padding);
+    ImGui::SetCursorPos(metadata_shrink_padding);
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
-                                                      m_metadata_shrink_padding.y * 2.0f),
+                                                      metadata_shrink_padding.y * 2.0f),
                          ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar))
     {
         ImVec2 content_size = ImGui::GetContentRegionAvail();
@@ -187,40 +188,22 @@ TrackItem::RenderMetaArea()
         ImVec2 container_size = ImGui::GetWindowSize();
 
         // Reordering grip decoration
-        ImDrawList* draw_list  = ImGui::GetWindowDrawList();
-        ImVec2      screen_pos = ImGui::GetCursorScreenPos();
-        ImU32 stroke_color = ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text));
-        draw_list->AddLine(
-            ImVec2(screen_pos.x + m_metadata_padding.x,
-                   screen_pos.y + container_size.y / 2 - m_metadata_padding.y),
-            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x,
-                   screen_pos.y + container_size.y / 2 - m_metadata_padding.y),
-            stroke_color);
-        draw_list->AddLine(
-            ImVec2(screen_pos.x + m_metadata_padding.x,
-                   screen_pos.y + container_size.y / 2),
-            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x,
-                   screen_pos.y + container_size.y / 2),
-            stroke_color);
-        draw_list->AddLine(
-            ImVec2(screen_pos.x + m_metadata_padding.x,
-                   screen_pos.y + container_size.y / 2 + m_metadata_padding.y),
-            ImVec2(screen_pos.x + m_reorder_grip_width - m_metadata_padding.x,
-                   screen_pos.y + container_size.y / 2 + m_metadata_padding.y),
-            stroke_color);
+        ImGui::SetCursorPos(
+            ImVec2((m_reorder_grip_width - ImGui::CalcTextSize(ICON_GRID).x) / 2,
+                   (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::TextUnformatted(ICON_GRID);
 
-        float menu_button_width = ImGui::CalcTextSize(":").x + 2 * m_metadata_padding.x;
+        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
+        ImGui::PopFont();
 
-        // Set padding for the child window (Note this done using SetCursorPos
-        // because ImGuiStyleVar_WindowPadding has no effect on child windows without
-        // borders)
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
         // Adjust content size to account for padding
         content_size.x -= m_metadata_padding.x * 2;
         content_size.y -= m_metadata_padding.x * 2;
 
         ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
-                               menu_button_width);
+                               (menu_button_width + 2 * m_metadata_padding.x));
         ImGui::Text(m_name.c_str());
         ImGui::PopTextWrapPos();
 
@@ -245,15 +228,17 @@ TrackItem::RenderMetaArea()
                                        anim_speed);
         }
 
-        ImGui::SetCursorPos(
-            ImVec2(m_metadata_padding.x, 0) +
-            ImVec2(content_size.x - m_meta_area_scale_width - menu_button_width, 0));
+        ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
+                                       m_meta_area_scale_width - menu_button_width,
+                                   0));
         ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
                               m_settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                               m_settings.GetColor(Colors::kTransparent));
-        ImGui::Button("O");
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::Button(ICON_GEAR);
+        ImGui::PopFont();
         ImGui::PopStyleColor(3);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
         if(ImGui::BeginItemTooltip())
@@ -261,9 +246,11 @@ TrackItem::RenderMetaArea()
             ImGui::TextUnformatted("Track Options");
             ImGui::EndTooltip();
         }
-        ImGui::SetNextWindowPos(
-            ImGui::GetCursorScreenPos() +
-            ImVec2(content_size.x - m_meta_area_scale_width - menu_button_width, 0));
+        ImGui::SetNextWindowPos(ImGui::GetCursorScreenPos() +
+                                ImVec2(content_size.x - m_meta_area_scale_width -
+                                           menu_button_width -
+                                           ImGui::GetStyle().FramePadding.x,
+                                       0));
         if(ImGui::BeginPopupContextItem("", ImGuiPopupFlags_MouseButtonLeft))
         {
             RenderMetaAreaOptions();

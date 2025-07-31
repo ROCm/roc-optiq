@@ -5,6 +5,7 @@
 #include "rocprofvis_settings.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_track_topology.h"
+#include "icons/rocprovfis_icon_defines.h"
 
 namespace RocProfVis
 {
@@ -31,6 +32,7 @@ SideBar::Render()
 {
     if(!m_track_topology->Dirty())
     {
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, DEFAULT_WINDOW_PADDING);
         ImGui::PushStyleColor(
             ImGuiCol_Header, m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
         ImGui::PushStyleColor(
@@ -172,6 +174,7 @@ SideBar::Render()
             ImGui::Unindent();
         }
         ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar();
     }
 }
 
@@ -183,6 +186,7 @@ void
 SideBar::RenderTrackItem(const int& index)
 {
     rocprofvis_graph_t& graph = (*m_graphs)[index];
+    
     ImGui::PushStyleColor(ImGuiCol_Button,
                           m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
@@ -190,10 +194,12 @@ SideBar::RenderTrackItem(const int& index)
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
     bool display = graph.display;
-    if(ImGui::Button(display ? "V" : "V"))
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
     {
         graph.display = !graph.display;
     }
+    ImGui::PopFont();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
     if(ImGui::BeginItemTooltip())
     {
@@ -201,12 +207,14 @@ SideBar::RenderTrackItem(const int& index)
         ImGui::EndTooltip();
     }
     ImGui::SameLine();
-    if(ImGui::Button("S"))
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    if(ImGui::Button(ICON_ARROWS_SHRINK))
     {
         EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
             static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
             graph.chart->GetID()));
     }
+    ImGui::PopFont();
     if(ImGui::BeginItemTooltip())
     {
         ImGui::TextUnformatted("Scroll To Track");

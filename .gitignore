@@ -5,6 +5,7 @@
 .vscode
 
 src/app/inc/rocprofvis_version.h
+src/view/src/icons/rocprofvis_icon_data.h
 
 .vs/rocprofiler-visualizer/v17
 sqlite3.c

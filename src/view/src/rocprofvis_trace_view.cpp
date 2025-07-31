@@ -6,6 +6,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_sidebar.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_view.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -19,6 +20,7 @@ TraceView::TraceView()
 , m_view_created(false)
 , m_open_loading_popup(false)
 , m_analysis(nullptr)
+, m_timeline_selection(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path) {
@@ -87,14 +89,19 @@ TraceView::Update()
     {
         m_analysis->Update();
     }
+    if(m_timeline_selection)
+    {
+        m_timeline_selection->Update();
+    }
 }
 
 void
 TraceView::CreateView()
 {
-    m_timeline_view = std::make_shared<TimelineView>(m_data_provider);
-    m_analysis      = std::make_shared<AnalysisView>(m_data_provider);
-    m_sidebar       = std::make_shared<SideBar>(m_data_provider, m_timeline_view->GetGraphs());
+    m_timeline_selection = std::make_shared<TimelineSelection>();
+    m_timeline_view  = std::make_shared<TimelineView>(m_data_provider, m_timeline_selection);
+    m_sidebar = std::make_shared<SideBar>(m_data_provider, m_timeline_view->GetGraphs());
+    m_analysis = std::make_shared<AnalysisView>(m_data_provider);
 
     LayoutItem left;
     left.m_item = m_sidebar;

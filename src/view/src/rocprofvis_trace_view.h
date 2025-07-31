@@ -14,6 +14,7 @@ namespace RocProfVis
 namespace View
 {
 
+class TimelineSelection;
 class TraceView : public RocWidget
 {
 public:
@@ -29,10 +30,11 @@ public:
     void DestroyView();
 
 private:
-    std::shared_ptr<TimelineView>    m_timeline_view;
-    std::shared_ptr<SideBar>         m_sidebar;
-    std::shared_ptr<HSplitContainer> m_container;
-    std::shared_ptr<AnalysisView>    m_analysis;
+    std::shared_ptr<TimelineView>      m_timeline_view;
+    std::shared_ptr<SideBar>           m_sidebar;
+    std::shared_ptr<HSplitContainer>   m_container;
+    std::shared_ptr<AnalysisView>      m_analysis;
+    std::shared_ptr<TimelineSelection> m_timeline_selection;
 
     DataProvider m_data_provider;
     bool         m_view_created;

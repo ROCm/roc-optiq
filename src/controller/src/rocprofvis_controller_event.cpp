@@ -150,7 +150,7 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                     }
                 }
                 rocprofvis_dm_delete_event_property_for(
-                    dm_trace_handle, kRPVDMEventStackTrace, dm_event_id);
+                    dm_trace_handle, kRPVDMEventFlowTrace, dm_event_id);
             }
             rocprofvis_db_future_free(object);
         }

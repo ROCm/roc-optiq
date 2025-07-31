@@ -28,6 +28,11 @@ public:
     void CreateView();
     void DestroyView();
 
+    bool HasTrimActiveTrimSelection() const;
+    bool IsTrimSaveAllowed() const;
+    
+    bool SaveSelection(const std::string& file_path);
+
 private:
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<SideBar>           m_sidebar;
@@ -40,7 +45,14 @@ private:
     bool         m_view_created;
     bool         m_open_loading_popup;
 
-    EventManager::SubscriptionToken m_tabselected_event_token;
+    typedef struct popup_info_t{
+        bool show_popup;
+        bool success;
+    } popup_info_t;
+    
+    popup_info_t m_save_trace_popup_info;
+
+    EventManager::SubscriptionToken       m_tabselected_event_token;
 };
 
 }  // namespace View

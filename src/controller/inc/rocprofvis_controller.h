@@ -376,6 +376,8 @@ rocprofvis_result_t rocprofvis_controller_set_object(rocprofvis_handle_t* object
 */
 rocprofvis_result_t rocprofvis_controller_set_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length);
 
+rocprofvis_result_t rocprofvis_controller_save_trimmed_trace(rocprofvis_handle_t* object, double start, double end, char const* path, rocprofvis_controller_future_t* future);
+
 /*
 * Frees the provided track
 * @param track The track

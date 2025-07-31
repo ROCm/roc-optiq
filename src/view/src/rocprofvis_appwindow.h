@@ -29,12 +29,16 @@ private:
     AppWindow();
     ~AppWindow();
 
+    void RenderFileDialogs();
     void RenderSettingsMenu();
     void RenderHelpMenu();
     
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
+    void HandleSaveSelection(const std::string& file_path_str);
 
     void RenderAboutDialog();
+
+    bool IsTrimSaveAllowed();
 
     static AppWindow* s_instance;
 
@@ -58,7 +62,6 @@ private:
     bool         m_show_provider_test_widow;
 #endif
     bool m_open_about_dialog;
-
 };
 
 }  // namespace View

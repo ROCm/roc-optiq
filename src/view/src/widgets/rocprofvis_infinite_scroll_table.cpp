@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_infinite_scroll_table.h"
+#include "rocprofvis_timeline_selection.h"
 
 #include "spdlog/spdlog.h"
 #include <sstream>
@@ -42,6 +43,14 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
             selection_changed_event->GetSelectedTracks();
         double start_ns = selection_changed_event->GetStartNs();
         double end_ns   = selection_changed_event->GetEndNs();
+
+        // If no valid time range is provided, use the full trace range
+        if(start_ns == TimelineSelection::INVALID_SELECTION_TIME ||
+           end_ns == TimelineSelection::INVALID_SELECTION_TIME)
+        {
+            start_ns = m_data_provider.GetStartTime();
+            end_ns   = m_data_provider.GetEndTime();
+        }
 
         // loop trough tracks and filter out ones that don't match the table type
         std::vector<uint64_t> filtered_tracks;

@@ -2698,6 +2698,47 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
     return result;
 }
 
+rocprofvis_result_t Trace::SaveTrimmedTrace(Future& future, double start, double end, char const* path)
+{
+    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    std::string path_str = path;
+    future.Set(JobSystem::Get().IssueJob([start, end, path_str, dm_handle]() -> rocprofvis_result_t {
+                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
+                              rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
+                              if (db)
+                              {
+                                  rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+                                  if (object2wait)
+                                  {
+                                    auto error = rocprofvis_db_trim_save_async(db, start, end, path_str.c_str(), object2wait);
+                                      result = (error == kRocProfVisDmResultSuccess)
+                                                   ? kRocProfVisResultSuccess
+                                                   : kRocProfVisResultUnknownError;
+
+                                    if (error == kRocProfVisDmResultSuccess)
+                                    {
+                                        error = rocprofvis_db_future_wait(object2wait,
+                                                                          UINT64_MAX);
+                                        result = (error == kRocProfVisDmResultSuccess)
+                                                     ? kRocProfVisResultSuccess
+                                                     : kRocProfVisResultUnknownError;
+                                    }
+
+                                    rocprofvis_db_future_free(object2wait);
+                                  }
+                              }
+                              return result;
+                          }));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
 
 rocprofvis_result_t Trace::AsyncFetch(Track& track, Future& future, Array& array,
                                 double start, double end)

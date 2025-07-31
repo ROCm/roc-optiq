@@ -34,7 +34,8 @@ enum class RequestType
     kClearTrackSampleTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
-    kFetchEventCallStack
+    kFetchEventCallStack,
+    kSaveTrimmedTrace
 };
 
 enum class TableType
@@ -259,6 +260,7 @@ typedef struct data_req_info_t
     RequestType                        request_type;        // type of request
     bool                               internal_request;    // true if request is handled by view (and not controller)
     std::shared_ptr<RequestParamsBase> custom_params;       // custom request parameters
+    uint64_t                           response_code;       // response code for the request
 } data_req_info_t;
 
 typedef struct table_info_t
@@ -273,15 +275,13 @@ typedef struct table_info_t
 class DataProvider
 {
 public:
-    static constexpr uint64_t EVENT_TABLE_REQUEST_ID  = static_cast<uint64_t>(-1);
-    static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID = static_cast<uint64_t>(-2);
-    static constexpr uint64_t EVENT_EXTENDED_DATA_REQUEST_ID  = static_cast<uint64_t>(-3);
+    static constexpr uint64_t EVENT_TABLE_REQUEST_ID         = static_cast<uint64_t>(-1);
+    static constexpr uint64_t SAMPLE_TABLE_REQUEST_ID        = static_cast<uint64_t>(-2);
+    static constexpr uint64_t EVENT_EXTENDED_DATA_REQUEST_ID = static_cast<uint64_t>(-3);
     static constexpr uint64_t EVENT_FLOW_DATA_REQUEST_ID     = static_cast<uint64_t>(-4);
     static constexpr uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID =
         static_cast<uint64_t>(-5);
-
-
-
+    static constexpr uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID = static_cast<uint64_t>(-6);
 
     DataProvider();
     ~DataProvider();
@@ -400,9 +400,9 @@ public:
 
     bool FetchMultiTrackTable(const TableRequestParams& table_params);
 
-    bool QueueClearTrackTableRequest(rocprofvis_controller_table_type_t table_type);
+    bool IsRequestPending(uint64_t request_id) const;
 
-    bool IsRequestPending(uint64_t request_id);
+    bool QueueClearTrackTableRequest(rocprofvis_controller_table_type_t table_type);
 
     /*
      * Release memory buffer holding raw data for selected track
@@ -474,6 +474,7 @@ public:
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&)>& callback);
     void SetTraceLoadedCallback(const std::function<void(const std::string&)>& callback);
+    void SetSaveTraceCallback(const std::function<void(bool)>& callback);
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -484,6 +485,8 @@ public:
      */
     bool SetGraphIndex(uint64_t track_id, uint64_t index);
 
+    bool SaveTrimmedTrace(const std::string &path, double start_ns, double end_ns);
+    
 private:
     void HandleLoadTrace();
     void HandleLoadSystemTopology();
@@ -497,6 +500,7 @@ private:
     void ProcessGraphRequest(data_req_info_t& req);
     void ProcessTrackRequest(data_req_info_t& req);
     void ProcessTableRequest(data_req_info_t& req);
+    void ProcessSaveTrimmedTraceRequest(data_req_info_t& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
@@ -548,6 +552,8 @@ private:
     std::function<void(uint64_t, const std::string&)> m_track_data_ready_callback;
     // Called when a new trace is loaded
     std::function<void(const std::string&)> m_trace_data_ready_callback;
+    // Callback when trace is saved
+    std::function<void(bool)> m_save_trace_callback;
 };
 
 }  // namespace View

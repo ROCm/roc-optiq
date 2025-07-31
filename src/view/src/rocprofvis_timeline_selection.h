@@ -16,12 +16,7 @@ class TimelineSelection
 public:
     TimelineSelection();
     ~TimelineSelection();
-    /*
-     * Sets the initial selection range.
-     * @param min_ts The min timestamp from the selectable range.
-     * @param max_ts The max timestamp from the selectable range.
-     */
-    void Init(double min_ts, double max_ts);
+
     /*
      * Notifies event manager if selections have changed.
      */
@@ -31,6 +26,11 @@ public:
     void UnselectTrack(rocprofvis_graph_t& graph);
     void ToggleSelectTrack(rocprofvis_graph_t& graph);
     void SelectTimeRange(double start_ts, double end_ts);
+    bool GetSelectedTimeRange(double& start_ts_out, double& end_ts_out) const;
+    void ClearTimeRange();
+    bool HasValidTimeRangeSelection() const;
+
+    static constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
 
 private:
     std::unordered_set<uint64_t> m_selected_track_ids;

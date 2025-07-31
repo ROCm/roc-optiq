@@ -8,7 +8,6 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings.h"
-#include "widgets/rocprofvis_debug_window.h"
 #include "rocprofvis_version.h"
 #include "widgets/rocprofvis_debug_window.h"
 
@@ -21,6 +20,7 @@ using namespace RocProfVis::View;
 
 constexpr ImVec2 FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
 constexpr char*  FILE_DIALOG_NAME       = "ChooseFileDlgKey";
+constexpr char*  FILE_SAVE_DIALOG_NAME  = "SaveFileDlgKey";
 constexpr char*  TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr char*  ABOUT_DIALOG_NAME      = "About##_dialog";
 
@@ -134,6 +134,26 @@ AppWindow::Update()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
+
+
+}
+
+bool AppWindow::IsTrimSaveAllowed() {
+
+    // Check if save is allowed
+    bool save_allowed  = false;
+    auto active_tab = m_tab_container->GetActiveTab();
+    if(active_tab)
+    {
+        // Check if the active tab is a TraceView
+        auto trace_view = std::dynamic_pointer_cast<TraceView>(active_tab->m_widget);
+        if(trace_view)
+        {
+            // Check if the trace view has a selection that can be saved
+            save_allowed = trace_view->IsTrimSaveAllowed();
+        }
+    }
+    return save_allowed;
 }
 
 void
@@ -180,7 +200,17 @@ AppWindow::Render()
                                                         supported_extensions.c_str(),
                                                         config);
             }
-
+            if(ImGui::MenuItem("Save Selection", nullptr, false, IsTrimSaveAllowed()))
+            {
+                // Save the currently selected tab's content
+                auto active_tab = m_tab_container->GetActiveTab();
+                if(active_tab)
+                {
+                    // Open the save dialog
+                    ImGuiFileDialog::Instance()->OpenDialog(FILE_SAVE_DIALOG_NAME,
+                                                            "Save Selection", ".db,.rpd");
+                }
+            }
             ImGui::EndMenu();
         }
 
@@ -203,13 +233,23 @@ AppWindow::Render()
         ImGui::OpenPopup(ABOUT_DIALOG_NAME);
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
-    RenderAboutDialog();
+    RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
 
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
+    RenderFileDialogs();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    RenderDebugOuput();
+
+#endif
+}
+
+void
+AppWindow::RenderFileDialogs()
+{
     // handle Dialog stuff
     ImGui::SetNextWindowPos(
         ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
@@ -261,14 +301,26 @@ AppWindow::Render()
                 }
             }
         }
-
         ImGuiFileDialog::Instance()->Close();
     }
 
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-    RenderDebugOuput();
+    // Handle file save dialog
+    ImGui::SetNextWindowPos(
+        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
+        ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
+    if(ImGuiFileDialog::Instance()->Display(FILE_SAVE_DIALOG_NAME))
+    {
+        if(ImGuiFileDialog::Instance()->IsOk())
+        {
+            std::filesystem::path file_path(
+                ImGuiFileDialog::Instance()->GetFilePathName());
 
-#endif
+            std::string file_path_str = file_path.string();
+            HandleSaveSelection(file_path_str);
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
 }
 
 void
@@ -317,6 +369,30 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 #ifdef COMPUTE_UI_SUPPORT
     NavigationManager::GetInstance()->RefreshNavigationTree();
 #endif
+}
+
+void
+AppWindow::HandleSaveSelection(const std::string& file_path_str)
+{
+    // Get the active tab
+    auto active_tab = m_tab_container->GetActiveTab();
+    if(active_tab)
+    {
+        // Check if active tab is a trace view
+        auto trace_view = std::dynamic_pointer_cast<TraceView>(active_tab->m_widget);
+        if(trace_view)
+        {
+            trace_view->SaveSelection(file_path_str);
+        }
+        else
+        {
+            spdlog::warn("Active tab is not a Trace View, cannot save selection.");
+        }
+    }
+    else
+    {
+        spdlog::warn("No active tab to save selection from.");
+    }
 }
 
 void

@@ -49,6 +49,7 @@ enum class Colors
     kTableBorderLight,
     kTableRowBg,
     kTableRowBgAlt,
+    kEventHighlight,
     kLineChartColor,
     kButton,
     kButtonHovered,

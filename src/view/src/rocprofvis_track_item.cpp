@@ -9,8 +9,8 @@ namespace RocProfVis
 namespace View
 {
 
-float TrackItem::s_metadata_width = 400.0f;
-constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
+float            TrackItem::s_metadata_width = 400.0f;
+constexpr ImVec2 DEFAULT_WINDOW_PADDING      = ImVec2(4.0f, 4.0f);
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                      double time_offset_ns, double& min_x, double& max_x, double scale_x)
@@ -165,6 +165,12 @@ TrackItem::RenderMetaArea()
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
     m_track_content_height      = m_track_height - m_metadata_shrink_padding.y * 2.0f;
 
+    //Global padding is too large for metadata must compress. 
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(1, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 4));
+
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
                                      : m_settings.GetColor(Colors::kMetaDataColor));
@@ -268,7 +274,7 @@ TrackItem::RenderMetaArea()
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();
-
+    ImGui::PopStyleVar(4);
     if(ImGui::IsItemClicked(ImGuiMouseButton_Left))
     {
         m_meta_area_clicked = true;
@@ -323,24 +329,25 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 void
 TrackItem::RequestData(double min, double max, float width)
 {
-    //create request chunks with ranges of 1 minute max
+    // create request chunks with ranges of 1 minute max
     double range = max - min;
 
     size_t chunk_count = static_cast<size_t>(std::ceil(range / TimeConstants::minute_ns));
     m_group_id_counter++;
     std::deque<TrackRequestParams> temp_request_queue;
 
-    for (size_t i = 0; i < chunk_count; ++i)
+    for(size_t i = 0; i < chunk_count; ++i)
     {
         double chunk_start = min + i * TimeConstants::minute_ns;
         double chunk_end   = std::min(chunk_start + TimeConstants::minute_ns, max);
 
         double chunk_range = chunk_end - chunk_start;
-        float percentage = static_cast<float>(chunk_range / range);
-        float chunk_width = width * percentage;
+        float  percentage  = static_cast<float>(chunk_range / range);
+        float  chunk_width = width * percentage;
 
         TrackRequestParams request_params(m_id, chunk_start, chunk_end,
-                                          static_cast<uint32_t>(chunk_width), m_group_id_counter);
+                                          static_cast<uint32_t>(chunk_width),
+                                          m_group_id_counter);
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
                       m_id, chunk_start, chunk_end, chunk_range, chunk_width);
@@ -388,9 +395,10 @@ TrackItem::FetchHelper()
         }
         else
         {
-            spdlog::debug("Fetching from {} to {} ( {} ) at zoom {} for track {} part of group {}",
-                          req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts,
-                          m_zoom, m_id, req.m_data_group_id);
+            spdlog::debug(
+                "Fetching from {} to {} ( {} ) at zoom {} for track {} part of group {}",
+                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_zoom, m_id,
+                req.m_data_group_id);
 
             m_request_state = TrackDataRequestState::kRequesting;
         }

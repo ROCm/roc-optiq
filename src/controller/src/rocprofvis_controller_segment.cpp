@@ -29,6 +29,7 @@ Segment::Segment(rocprofvis_controller_track_type_t type, Handle* ctx)
 
 Segment::~Segment()
 {
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
     Trace* trace = (Trace*) m_ctx->GetContext();
     if(trace->GetMemoryManager())
     {
@@ -38,6 +39,13 @@ Segment::~Segment()
             {
                 ((Trace*) m_ctx->GetContext())->GetMemoryManager()->Delete(pair.second);
             }
+        }
+    }
+    else
+    {
+        for(auto& level : m_entries)
+        {
+            level.second.clear();
         }
     }
 }
@@ -124,21 +132,33 @@ void Segment::SetMaxTimestamp(double value)
 
 void Segment::Insert(double timestamp, uint8_t level, Handle* event)
 {
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
+    event->IncreaseRetainCounter();
     m_entries[level].insert(std::make_pair(timestamp, event));
 }
 
 rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params)
 {
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     double last_timestamp = std::max(m_end_timestamp, m_max_timestamp);
     if(m_start_timestamp <= end && last_timestamp >= start)
     {
-        result = kRocProfVisResultSuccess;
-        for(auto & level : m_entries)
+        if(lru_params)
         {
-            auto& entries = level.second; 
-            rocprofvis_controller_properties_t property = (rocprofvis_controller_properties_t)((m_type == kRPVControllerTrackTypeEvents) ? kRPVControllerEventEndTimestamp : kRPVControllerSampleTimestamp);
-            
+            SetLRUIterator(lru_params->m_ctx->GetMemoryManager()->AddLRUReference(
+                lru_params->m_owner, this, lru_params->m_lod, &array));
+        }
+        result = kRocProfVisResultSuccess;
+        for(auto& level : m_entries)
+        {
+            auto&                              entries = level.second;
+            rocprofvis_controller_properties_t property =
+                (rocprofvis_controller_properties_t) ((m_type ==
+                                                        kRPVControllerTrackTypeEvents)
+                                                            ? kRPVControllerEventEndTimestamp
+                                                            : kRPVControllerSampleTimestamp);
+
             std::map<double, Handle*>::iterator lower = entries.end();
             for(auto it = entries.begin(); it != entries.end(); ++it)
             {
@@ -163,13 +183,12 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 }
             }
 
-
             while(lower != upper && lower != entries.end())
             {
                 double min_ts = lower->first;
                 double max_ts = lower->first;
                 lower->second->GetDouble(property, 0, &max_ts);
-                
+
                 if(event_id_set && m_type == kRPVControllerTrackTypeEvents)
                 {
                     uint64_t event_id;
@@ -177,7 +196,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                     auto it = event_id_set->find(event_id);
                     if(it != event_id_set->end())
                     {
-                        //spdlog::debug("Remove duplicate with id = {}", event_id);
+                        // spdlog::debug("Remove duplicate with id = {}", event_id);
                         ++lower;
                         continue;
                     }
@@ -194,10 +213,6 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                     array[index++] = Data((rocprofvis_handle_t*) lower->second);
                 }
                 ++lower;
-            }
-            if(lru_params)
-            {
-                SetLRUIterator(lru_params->m_ctx->GetMemoryManager()->AddLRUReference(lru_params->m_owner, this, lru_params->m_lod, &array));
             }
         }
     }
@@ -301,6 +316,7 @@ SegmentTimeline::~SegmentTimeline()
 SegmentTimeline::SegmentTimeline(SegmentTimeline&& other)
 : m_segments(std::move(other.m_segments))
 , m_valid_segments(std::move(other.m_valid_segments))
+, m_processed_segments(std::move(other.m_processed_segments))
 , m_segment_duration(other.m_segment_duration)
 , m_num_segments(other.m_num_segments)
 , m_segment_start_time(other.m_segment_start_time)
@@ -314,19 +330,18 @@ SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
     m_segment_duration = other.m_segment_duration;
     m_num_segments     = other.m_num_segments;
     m_valid_segments = std::move(other.m_valid_segments);
+    m_processed_segments     = std::move(other.m_processed_segments);
     m_segment_start_time = other.m_segment_start_time;
     return *this;
 }
 
 void SegmentTimeline::Init(double segment_start_time, double segment_duration, uint32_t num_segments)
 {
-    std::unique_lock<std::mutex> lock(
-        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
     m_segment_duration = segment_duration;
     m_num_segments = num_segments;
     m_segment_start_time = segment_start_time;
-    uint32_t num_bitsets = (num_segments / kSegmentBitSetSize) + 1;
-    m_valid_segments.resize(num_bitsets);
+    m_valid_segments.Init(num_segments);
+    m_processed_segments.Init(num_segments);
 }
 
 void SegmentTimeline::SetContext(Handle* ctx) {
@@ -335,10 +350,9 @@ void SegmentTimeline::SetContext(Handle* ctx) {
 
 rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func)
 {
-    std::unique_lock<std::mutex> lock(
-        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
-    std::map<double, std::shared_ptr<Segment>>::iterator lower = m_segments.end();
+    std::map<double, std::unique_ptr<Segment>>::iterator lower = m_segments.end();
     for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
     {
         double min_ts = it->first;
@@ -350,7 +364,7 @@ rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, voi
         }
     }
 
-    std::map<double, std::shared_ptr<Segment>>::iterator upper = m_segments.end();
+    std::map<double, std::unique_ptr<Segment>>::iterator upper = m_segments.end();
     for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
     {
         double min_ts = it->first;
@@ -385,8 +399,6 @@ rocprofvis_result_t
 SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment)
 {
     rocprofvis_result_t                 result = kRocProfVisResultMemoryAllocError;
-    std::unique_lock<std::mutex> lock(
-        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
     auto pair = m_segments.insert(std::make_pair(segment_start, std::move(segment)));
     if(pair.second)
     {
@@ -401,7 +413,7 @@ SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment
     return result;
 }
 
-std::map<double, std::shared_ptr<Segment>>& SegmentTimeline::GetSegments()
+std::map<double, std::unique_ptr<Segment>>& SegmentTimeline::GetSegments()
 {
     return m_segments;
 }
@@ -409,50 +421,53 @@ std::map<double, std::shared_ptr<Segment>>& SegmentTimeline::GetSegments()
 bool
 SegmentTimeline::IsValid(uint32_t segment_index) const
 {
-    std::unique_lock<std::mutex> lock(
-        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
     bool is_set = false;
     if(segment_index < m_num_segments)
     {
-        uint32_t array_index = segment_index / kSegmentBitSetSize;
-        uint32_t bit_index   = segment_index % kSegmentBitSetSize;
-        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
-        is_set = m_valid_segments[array_index].test(bit_index);
+        is_set = m_valid_segments.Test(segment_index);
     }
     return is_set;
 }
 
 void
-SegmentTimeline::SetValid(uint32_t segment_index)
+SegmentTimeline::SetValid(uint32_t segment_index, bool state)
 {
-    std::unique_lock<std::mutex> lock(
-        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
     if(segment_index < m_num_segments)
     {
-        uint32_t array_index = segment_index / kSegmentBitSetSize;
-        uint32_t bit_index   = segment_index % kSegmentBitSetSize;
-        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
-        m_valid_segments[array_index].set(bit_index);
+        if(state)
+        {
+            m_valid_segments.Set(segment_index);
+        }
+        else
+        {
+            m_valid_segments.Clear(segment_index);
+        }
     }
 }
 
-void
-SegmentTimeline::SetInvalid(uint32_t segment_index)
+
+bool SegmentTimeline::IsProcessed(uint32_t segment_index) const 
 {
-    std::unique_lock<std::mutex> lock(
-        ((Trace*) m_ctx)->GetMemoryManager()->GetMemoryManagerMutex());
-    SetInvalidImpl(segment_index);
+    bool is_set = false;
+    if(segment_index < m_num_segments)
+    {
+        is_set = m_processed_segments.Test(segment_index);
+    }
+    return is_set;
 }
 
-void
-SegmentTimeline::SetInvalidImpl(uint32_t segment_index)
+void SegmentTimeline::SetProcessed(uint32_t segment_index, bool state) 
 {
     if(segment_index < m_num_segments)
     {
-        uint32_t array_index = segment_index / kSegmentBitSetSize;
-        uint32_t bit_index   = segment_index % kSegmentBitSetSize;
-        ROCPROFVIS_ASSERT(array_index < m_valid_segments.size());
-        m_valid_segments[array_index].reset(bit_index);
+        if(state)
+        {
+            m_processed_segments.Set(segment_index);
+        }
+        else
+        {
+            m_processed_segments.Clear(segment_index);
+        }
     }
 }
 
@@ -461,15 +476,18 @@ double SegmentTimeline::GetSegmentDuration() const
     return m_segment_duration;
 }
 
+std::shared_mutex* SegmentTimeline::GetMutex() {
+    return &m_mutex;
+}
+
 rocprofvis_result_t SegmentTimeline::Remove(Segment* target)
 { 
-    std::shared_ptr<Segment>                    segment;    
+    // do not lock segment deletion. It's been locked by memory manager
+
     int segment_index =
         (target->GetStartTimestamp() - m_segment_start_time) / m_segment_duration;
-    SetInvalidImpl(segment_index);
-    segment = target->GetTimelineIterator()->second;
+    SetValid(segment_index, false);
     m_segments.erase(target->GetTimelineIterator());
-    segment.reset();
 
     return kRocProfVisResultSuccess;
 }

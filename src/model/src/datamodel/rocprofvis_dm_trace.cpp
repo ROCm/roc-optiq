@@ -58,6 +58,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncCheckEventPropertyExists = CheckEventPropertyExists;
     m_binding_info.FuncCheckSliceExists = CheckSliceExists;
     m_binding_info.FuncCheckTableExists = CheckTableExists;
+    m_binding_info.FuncCompleteSlice  = CompleteSlice;
     bind_data = &m_binding_info;
     m_db = db;
     return kRocProfVisDmResultSuccess;
@@ -438,6 +439,19 @@ rocprofvis_dm_result_t Trace::AddTableRowCell(const rocprofvis_dm_table_row_t ob
     return table_row->AddCellValue(cell_value);
 }
 
+rocprofvis_dm_result_t Trace::CompleteSlice(const rocprofvis_dm_slice_t object)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    TrackSlice*                                    slice = (TrackSlice*) object;
+    {
+        TimedLock<std::unique_lock<std::shared_mutex>> lock(*slice->Mutex(), __func__, slice);
+        slice->SetComplete();
+    }
+    return kRocProfVisDmResultSuccess;
+}      
+
+
 rocprofvis_dm_result_t Trace::CheckSliceExists(
                         const rocprofvis_dm_trace_t     object,
                         const rocprofvis_dm_timestamp_t start,
@@ -457,8 +471,10 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
             ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
                                          kRocProfVisDmResultUnknownError);
             TrackSlice* slice = (TrackSlice*) object;
+            lock.unlock();
             if(slice->EndTime() == end)
             {
+                slice->WaitComplete();
                 return kRocProfVisDmResultSuccess;
             }
         }

@@ -89,7 +89,7 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
 
         for(uint32_t i = start_index; i < end_index; i++)
         {
-            if(!m_segments.IsValid(i))
+            if(!m_segments.IsValid(i) && !m_segments.IsProcessed(i))
             {
                 if(fetch_ranges.size())
                 {
@@ -116,22 +116,33 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
             {
                 double fetch_start = m_start_timestamp + (range.first * kSegmentDuration);
                 double fetch_end   = m_start_timestamp + ((range.second + 1) * kSegmentDuration);
-                for(uint32_t i = range.first; i <= range.second; i++)
                 {
-                    m_segments.SetValid(i);
-                }
-                result = FetchFromDataModel(fetch_start, fetch_end);
-                if (result != kRocProfVisResultSuccess)
-                {
+                    std::unique_lock lock(m_mutex);
                     for(uint32_t i = range.first; i <= range.second; i++)
                     {
-                        m_segments.SetInvalid(i);
+                        m_segments.SetProcessed(i, true);
                     }
                 }
-                else
+                result = FetchFromDataModel(fetch_start, fetch_end);
                 {
-                    break;
+                    std::unique_lock lock(m_mutex);
+                    for(uint32_t i = range.first; i <= range.second; i++)
+                    {
+                        m_segments.SetProcessed(i, false);
+                    }
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        for(uint32_t i = range.first; i <= range.second; i++)
+                        {
+                            m_segments.SetValid(i,true);
+                        }
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
+                m_cv.notify_all();
             }
         }
         else
@@ -141,6 +152,19 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
 
         if(result == kRocProfVisResultSuccess)
         {
+            {
+                std::unique_lock lock(m_mutex);
+                m_cv.wait(lock, [&] {
+                    for(uint32_t i = start_index; i < end_index; i++)
+                    {
+                        if(m_segments.IsProcessed(i))
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+            }
             result = m_segments.FetchSegments(start, end, user_ptr, func);
         }
     }
@@ -741,7 +765,6 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
             {
                 // Start & end timestamps must be configured
                 ROCPROFVIS_ASSERT(m_start_timestamp >= 0.0 && m_start_timestamp < m_end_timestamp);
-
                 Handle* object = (Handle*)value;
                 auto object_type = object->GetType();
                 if (((m_type == kRPVControllerTrackTypeEvents) && (object_type == kRPVControllerObjectTypeEvent))
@@ -780,14 +803,15 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                         if(timestamp.start >= m_start_timestamp &&
                            timestamp.end <= m_end_timestamp)
                         {
-                            std::unique_lock lock(m_mutex);
                             timestamp_pair relative  = { timestamp.start - m_start_timestamp,
                                                     timestamp.end - m_start_timestamp };
                             timestamp_pair num_segments = {floor(relative.start / kSegmentDuration),
                                                     floor(relative.end / kSegmentDuration)};
                             
+                            std::unique_lock lock(*m_segments.GetMutex());
                             for (double current_segment = num_segments.start; current_segment <= num_segments.end; current_segment++)
                             {
+
                                 double segment_start =
                                     m_start_timestamp +
                                     (current_segment * kSegmentDuration);
@@ -802,7 +826,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                                                    segment_end);
                                     segment->SetMinTimestamp(timestamp.start);
                                     segment->SetMaxTimestamp(timestamp.end);                                 
-                                    result = m_segments.Insert(segment_start,
+                                    result = m_segments.Insert(segment_start, 
                                                                std::move(segment));
                                     if(result == kRocProfVisResultDuplicate) {
                                         spdlog::warn("Segment already exists at {}",
@@ -813,7 +837,8 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
 
                                 if(result == kRocProfVisResultSuccess)
                                 {
-                                    std::shared_ptr<Segment>& segment =
+
+                                    std::unique_ptr<Segment>& segment =
                                         m_segments.GetSegments()[segment_start];
                                     segment->SetMinTimestamp(
                                         std::min(segment->GetMinTimestamp(), timestamp.start));

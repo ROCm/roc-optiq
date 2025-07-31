@@ -494,6 +494,11 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
         ShowProgress(100, query.c_str(), kRPVDbBusy, future);
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery( 
                 future, query.c_str(), &slices , &CallbackAddAnyRecord)) break;
+        for(int i=0; i < num; i++)
+        {
+            BindObject()->FuncCompleteSlice(slices[tracks[i]]);
+        }
+
 #endif
         ShowProgress(100 - future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);
         return future->SetPromise(kRocProfVisDmResultSuccess);

@@ -41,7 +41,7 @@ MemoryManager::~MemoryManager()
     if(m_mem_mgmt_initialized)
     {
         {
-            std::unique_lock<std::mutex> lock(m_lru_mutex);
+            std::unique_lock<std::mutex> lock(m_lru_cond_mutex);
             m_lru_mgmt_shutdown = true;
             m_lru_cv.notify_one();
         }
@@ -129,7 +129,7 @@ MemoryManager::UpdateSizeLimit()
             ((instance->m_trace_weight * instance->m_trace_size) / total_weighted_size) *
                             s_physical_memory_avail;
         {
-            std::unique_lock<std::mutex> lock(instance->m_lru_mutex);
+            std::unique_lock<std::mutex> lock(instance->m_lru_cond_mutex);
             instance->m_lru_size_limit = size_limit;
             instance->m_lru_configured = true;
             instance->m_lru_cv.notify_one();
@@ -155,11 +155,6 @@ MemoryManager::Configure(double weight)
 }
 
 
-std::mutex& MemoryManager::GetMemoryManagerMutex()
-{
-    return m_lru_mutex;
-}
-
 std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
 MemoryManager::GetDefaultLRUIterator()
 {
@@ -175,7 +170,10 @@ MemoryManager::CancelArrayOwnersip(void* array_ptr)
     if(it != m_lru_inuse_lookup.end())
     {
         m_lru_inuse_lookup.erase(it);
-        m_lru_configured = true;
+        {
+            std::unique_lock lock(m_lru_cond_mutex);
+            m_lru_configured = true;
+        }
         m_lru_cv.notify_one();
         return kRocProfVisResultSuccess;
     }
@@ -200,6 +198,7 @@ MemoryManager::EnterArrayOwnersip(void* array_ptr)
 std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
 MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint32_t lod, void* array_ptr)
 {
+    std::unique_lock lock(m_lru_mutex);
     uint64_t         ts  = std::chrono::time_point_cast<std::chrono::nanoseconds>(
                       std::chrono::system_clock::now())
                       .time_since_epoch()
@@ -209,12 +208,12 @@ MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint3
     if(it != m_lru_array.end())
     {
         it->second->m_timestamp = ts;
-        it->second->m_array_ptr   = array_ptr;
+        it->second->m_array_ptr.insert(array_ptr);
     } else
     {
         auto pair = m_lru_array.insert(std::pair<Segment*, std::unique_ptr<LRUMember>>(
-            reference,
-            std::make_unique<LRUMember>(LRUMember{ ts, owner, reference, array_ptr, lod })));
+            reference, std::make_unique<LRUMember>(
+                           LRUMember{ ts, owner, reference, { array_ptr }, lod })));
         if(pair.second)
         {
             it = pair.first;
@@ -224,6 +223,36 @@ MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint3
     return it;
 }
 
+void
+MemoryManager::LockTimilines(std::vector<SegmentTimeline*>& locked, std::vector<SegmentTimeline*>& failed_to_lock)
+{
+    std::set<SegmentTimeline*> timelines;
+    for(auto& [segment_ptr, lru_member] : m_lru_array)
+    {
+        timelines.insert(lru_member->m_owner);
+    }
+
+    for(auto* timeline : timelines)
+    {
+        if(timeline->GetMutex()->try_lock())
+        {
+            locked.push_back(timeline);
+        } else
+        {
+            failed_to_lock.push_back(timeline);
+        }
+    }
+ 
+}
+
+void
+MemoryManager::UnlockTimilines(std::vector<SegmentTimeline*>& locked)
+{
+    for (auto timeline : locked)
+    {
+        timeline->GetMutex()->unlock();
+    }
+}
 
 void
 MemoryManager::ManageLRU()
@@ -231,62 +260,80 @@ MemoryManager::ManageLRU()
     bool thread_running = true;
     while(thread_running)
     {
-        std::unique_lock lock(m_lru_mutex);
-        m_lru_cv.wait(lock, [&] {
-            return (m_lru_configured &&
-                    m_lru_storage_memory_used > m_lru_size_limit) ||
-                   m_lru_mgmt_shutdown;
-        });
-        if (m_lru_mgmt_shutdown)
         {
-            CleanUp();
-            thread_running = false;
+            std::unique_lock lock(m_lru_cond_mutex);
+            m_lru_cv.wait(lock, [&] {
+                return (m_lru_configured &&
+                        m_lru_storage_memory_used > m_lru_size_limit) ||
+                       m_lru_mgmt_shutdown;
+            });
         }
-        else
         {
-            m_lru_configured = false;
-            std::vector<LRUMember*> sorted_lru_array;
-            sorted_lru_array.reserve(m_lru_array.size());
-            for(auto& [segment_ptr, lru_member] : m_lru_array)
+            std::vector<SegmentTimeline*> locked;
+            std::vector<SegmentTimeline*> couldnt_take_lock;
+            LockTimilines(locked, couldnt_take_lock);
+
+            if(m_lru_mgmt_shutdown)
             {
-                sorted_lru_array.push_back(lru_member.get());
+                CleanUp();
+                thread_running = false;
             }
-
-            std::sort(sorted_lru_array.begin(), sorted_lru_array.end(),
-                [](const LRUMember* a, const LRUMember* b) {
-                    if((a->m_lod == 0) != (b->m_lod == 0))
-                        return a->m_lod == 0;  
-
-                    return a->m_timestamp < b->m_timestamp;
-                });
-
-            int counter = 0;
-            for(auto* lru : sorted_lru_array)
-            {
+            else
+            {                
+                m_lru_configured = false;
+                std::vector<LRUMember*> sorted_lru_array;
+                sorted_lru_array.reserve(m_lru_array.size());
+                for(auto& [segment_ptr, lru_member] : m_lru_array)
                 {
-                    std::unique_lock lock(m_lru_inuse_mutex);
-                    auto inuse = m_lru_inuse_lookup.find(lru->m_array_ptr);
-                    if(inuse != m_lru_inuse_lookup.end())
+                    sorted_lru_array.push_back(lru_member.get());
+                }
+
+                std::sort(sorted_lru_array.begin(), sorted_lru_array.end(),
+                          [](const LRUMember* a, const LRUMember* b) {
+                              if((a->m_lod == 0) != (b->m_lod == 0)) return a->m_lod == 0;
+
+                              return a->m_timestamp < b->m_timestamp;
+                          });
+
+                int counter = 0;
+                for(auto* lru : sorted_lru_array)
+                {
+                    Segment*         reference = lru->m_reference;
+                    uint32_t         lod       = lru->m_lod;
+                    SegmentTimeline* owner     = lru->m_owner;
+                    if (std::find(couldnt_take_lock.begin(), couldnt_take_lock.end(), owner) != couldnt_take_lock.end())
                     {
                         continue;
                     }
-                }
+                    {
+                        std::unique_lock lock(m_lru_inuse_mutex);
+                        bool             is_in_use = false;
+                        for(auto ptr : lru->m_array_ptr)
+                        {
+                            auto inuse = m_lru_inuse_lookup.find(ptr);
+                            if(inuse != m_lru_inuse_lookup.end())
+                            {
+                                is_in_use = true;
+                            }
+                        }
+                        if (is_in_use)
+                        {
+                            continue;
+                        }
+                    }
 
-                Segment* reference    = lru->m_reference;
-                uint32_t lod          = lru->m_lod;
-                SegmentTimeline* owner        = lru->m_owner;
+                    m_lru_array.erase(reference);
 
-                m_lru_array.erase(reference);
+                    owner->Remove(reference);
 
-                owner->Remove(reference);
-
-                
-                if(m_lru_storage_memory_used <= m_lru_size_limit)
-                {
-                    break;
+                    if(m_lru_storage_memory_used <= m_lru_size_limit)
+                    {
+                        break;
+                    }
                 }
             }
-        }    
+            UnlockTimilines(locked);
+        }
     }
 }
 
@@ -294,7 +341,6 @@ MemoryManager::ManageLRU()
 void*
 MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type)
 {
-    std::lock_guard<std::mutex> lock(m_pool_mutex);
     MemoryPool* current_pool = nullptr;
     uint32_t first_zero_bit = 0;
     if(m_current_pool[type] != m_object_pools.end())
@@ -338,6 +384,7 @@ void MemoryManager::CleanUp() {
 Event*
 MemoryManager::NewEvent(uint64_t id, double start_ts, double end_ts)
 {
+    std::lock_guard<std::mutex> lock(m_pool_mutex);
     Event* event = nullptr;
     void*  ptr   = Allocate(sizeof(Event), kRocProfVisObjectTypeEvent);
     if(ptr)
@@ -351,6 +398,7 @@ Sample*
 MemoryManager::NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id,
                          double timestamp)
 {
+    std::lock_guard<std::mutex> lock(m_pool_mutex);
     Sample* sample = nullptr;
     void*   ptr    = Allocate(sizeof(Sample), kRocProfVisObjectTypeSample);
     if(ptr)
@@ -364,6 +412,7 @@ SampleLOD*
 MemoryManager::NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id,
                             double timestamp, std::vector<Sample*>& children)
 {
+    std::lock_guard<std::mutex> lock(m_pool_mutex);
     SampleLOD* sample = nullptr;
     void*      ptr    = Allocate(sizeof(SampleLOD), kRocProfVisObjectTypeSampleLOD);
     if(ptr)
@@ -377,30 +426,34 @@ MemoryManager::NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_
 void
 MemoryManager::Delete(Handle* handle)
 {
-    void* ptr = handle;
-    std::lock_guard<std::mutex> lock(m_pool_mutex);
-    auto  it = m_object_pools.upper_bound(ptr);
-    --it;
-    MemoryPool* pool = it->second;
-    char*       base      = (char*)pool->m_base;
-    size_t      size      = pool->m_size * pool->m_bitmask.Size();
-    char*       end       = base + size;
-    if(ptr >= base && ptr < end) 
+    if(handle->IsDeletable())
     {
-        handle->~Handle();
-        uint64_t index = ((char*)ptr - base) / pool->m_size;
-        pool->m_bitmask.Clear(index);
-        pool->m_pos = index;
-        
-        if(pool->m_bitmask.None())
+        void*                       ptr = handle;
+        std::lock_guard<std::mutex> lock(m_pool_mutex);
+        auto                        it = m_object_pools.upper_bound(ptr);
+        --it;
+        MemoryPool* pool = it->second;
+        char*       base = (char*) pool->m_base;
+        size_t      size = pool->m_size * pool->m_bitmask.Size();
+        char*       end  = base + size;
+        if(ptr >= base && ptr < end)
         {
-            m_lru_storage_memory_used -= size;
-            m_object_pools.erase(it);
-            delete pool;
+            handle->~Handle();
+            uint64_t index = ((char*) ptr - base) / pool->m_size;
+            pool->m_bitmask.Clear(index);
+            pool->m_pos = index;
+
+            if(pool->m_bitmask.None())
+            {
+                m_lru_storage_memory_used -= size;
+                m_object_pools.erase(it);
+                delete pool;
+            }
         }
-    } else
-    {
-        spdlog::debug("Memory manager error : memory address not found!");
+        else
+        {
+            spdlog::debug("Memory manager error : memory address not found!");
+        }
     }
     
 }
@@ -411,7 +464,10 @@ BitSet::Set(size_t pos)
 {
     size_t word = pos / WORD_SIZE;
     size_t bit  = pos % WORD_SIZE;
-    m_bits[word] |= (1ULL << bit);
+    if(word < m_bits.size())
+    {
+        m_bits[word] |= (1ULL << bit);
+    }
 }
 
 void
@@ -419,7 +475,10 @@ BitSet::Clear(size_t pos)
 {
     size_t word = pos / WORD_SIZE;
     size_t bit  = pos % WORD_SIZE;
-    m_bits[word] &= ~(1ULL << bit);
+    if(word < m_bits.size())
+    {
+        m_bits[word] &= ~(1ULL << bit);
+    }
 }
 
 bool
@@ -427,7 +486,14 @@ BitSet::Test(size_t pos) const
 {
     size_t word = pos / WORD_SIZE;
     size_t bit  = pos % WORD_SIZE;
-    return m_bits[word] & (1ULL << bit);
+    if(word < m_bits.size())
+    {
+        return m_bits[word] & (1ULL << bit);
+    }
+    else
+    {
+        return false;
+    }
 }
 
 bool

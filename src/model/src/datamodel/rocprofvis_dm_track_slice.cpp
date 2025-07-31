@@ -187,5 +187,12 @@ TrackSlice::Cleanup()
     }
 }
 
+void
+TrackSlice::WaitComplete()
+{
+    std::unique_lock<std::shared_mutex> lock(m_lock);
+    m_cv.wait(lock, [&] { return m_complete; });
+}
+
 }  // namespace DataModel
 }  // namespace RocProfVis

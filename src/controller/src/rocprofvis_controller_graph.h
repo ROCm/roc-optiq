@@ -50,7 +50,8 @@ private:
     Track* m_track;
     Trace* m_ctx;
     rocprofvis_controller_graph_type_t m_type;
-    std::mutex  m_mutex;
+    std::mutex m_mutex;
+    std::condition_variable  m_cv;
 };
 
 }

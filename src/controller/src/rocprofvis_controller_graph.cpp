@@ -47,7 +47,6 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
     if(result == kRocProfVisResultSuccess && timestamp >= start_timestamp &&
        timestamp <= end_timestamp)
     {
-        std::unique_lock lock(m_mutex);
         double scale = 1.0;
         for(uint32_t i = 0; i < lod; i++)
         {
@@ -59,6 +58,8 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
         double relative         = (timestamp - start_timestamp);
         double num_segments     = floor(relative / segment_duration);
         double segment_start    = start_timestamp + (num_segments * segment_duration);
+
+        std::unique_lock lock(*segments.GetMutex());
 
         if(segments.GetSegments().find(segment_start) == segments.GetSegments().end())
         {
@@ -90,7 +91,7 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
 
         if(result == kRocProfVisResultSuccess)
         {
-            std::shared_ptr<Segment>& segment = segments.GetSegments()[segment_start];
+            std::unique_ptr<Segment>& segment = segments.GetSegments()[segment_start];
             segment->SetMinTimestamp(std::min(segment->GetMinTimestamp(), timestamp));
             double max_timestamp = timestamp;
             if(object_type == kRPVControllerObjectTypeEvent)
@@ -450,7 +451,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                 uint32_t end_index = (uint32_t)ceil((end - min_ts) / segment_duration);
                 for (uint32_t i = start_index; i < end_index; i++)
                 {
-                    if (!it->second.IsValid(i))
+                    if(!it->second.IsValid(i) && !it->second.IsProcessed(i))
                     {
                         if (fetch_ranges.size())
                         {
@@ -478,6 +479,14 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                         double fetch_start = min_ts + (range.first * segment_duration);
                         double fetch_end   = min_ts + ((range.second + 1) * segment_duration);
 
+                        {
+                            std::unique_lock lock(m_mutex);
+                            for(uint32_t i = range.first; i <= range.second; i++)
+                            {
+                                it->second.SetProcessed(i, true);
+                            }
+                        }
+
                         FetchTrackSegmentArgs args;
                         args.m_index       = 0;
                     	args.m_lru_params.m_ctx      = (Trace*)m_track->GetContext();
@@ -493,7 +502,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                                 if(it != args->m_lru_params.m_ctx->GetMemoryManager()
                                              ->GetDefaultLRUIterator())
                                 {
-                                    it->second->m_array_ptr = &args->m_entries;
+                                    it->second->m_array_ptr.insert(&args->m_entries);
                                 }
                                 return result;
                             });
@@ -518,21 +527,43 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end)
                         if(result == kRocProfVisResultSuccess)
                         {
                             result = GenerateLOD(lod_to_generate, fetch_start, fetch_end,
-                                                 args.m_entries);
-                            if (result == kRocProfVisResultSuccess)
+                                                 args.m_entries);                            
+                        }
+                        {
+                            std::unique_lock lock(m_mutex);
+                            for(uint32_t i = range.first; i <= range.second; i++)
                             {
-                                for (uint32_t i = range.first; i <= range.second; i++)
+                                it->second.SetProcessed(i, false);
+                            }
+                            if(result == kRocProfVisResultSuccess)
+                            {
+                                for(uint32_t i = range.first; i <= range.second; i++)
                                 {
-                                    it->second.SetValid(i);
+                                    it->second.SetValid(i, true);
                                 }
                             }
                         }
+                        m_cv.notify_all();
                         ((Trace*)m_track->GetContext())->GetMemoryManager()->CancelArrayOwnersip(&args.m_entries);
                     }
                 }
                 else
                 {
                     result = kRocProfVisResultSuccess;
+                }
+
+                 {
+                    std::unique_lock lock(m_mutex);
+                    m_cv.wait(lock, [&] {
+                        for(uint32_t i = start_index; i < end_index; i++)
+                        {
+                            if(it->second.IsProcessed(i))
+                            {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
                 }
             }
         }
@@ -601,7 +632,7 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
                     if(it != args->m_lru_params.m_ctx->GetMemoryManager()
                                  ->GetDefaultLRUIterator())
                     {
-                        it->second->m_array_ptr = &args->m_array->GetVector();
+                        it->second->m_array_ptr.insert(&args->m_array->GetVector());
                     }
                     return result;
                 });

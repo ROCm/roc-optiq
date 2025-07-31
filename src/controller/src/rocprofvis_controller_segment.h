@@ -53,7 +53,7 @@ struct SegmentItemKey
 
 class Segment
 {
-    using rocprofvis_timeline_iterator_t = std::map<double, std::shared_ptr<Segment>>::iterator;
+    using rocprofvis_timeline_iterator_t = std::map<double, std::unique_ptr<Segment>>::iterator;
     using rocprofvis_lru_iterator_t = std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator;
 public:
     Segment() = delete;
@@ -95,6 +95,7 @@ private:
     rocprofvis_controller_track_type_t m_type;
     rocprofvis_timeline_iterator_t  m_timeline_iterator;
     rocprofvis_lru_iterator_t       m_lru_iterator;
+    std::shared_mutex               m_mutex;
 };
 
 typedef rocprofvis_result_t (*FetchSegmentsFunc)(double start, double end, Segment& segment, void* user_ptr, SegmentTimeline* owner); 
@@ -116,25 +117,24 @@ public:
     rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
     rocprofvis_result_t Remove(Segment* segment);
     rocprofvis_result_t Insert(double segment_start, std::unique_ptr<Segment>&& segment);
-    std::map<double, std::shared_ptr<Segment>>& GetSegments();
+    std::map<double, std::unique_ptr<Segment>>& GetSegments();
     bool IsValid(uint32_t segment_index) const;
-    void SetValid(uint32_t segment_index);
-    void SetInvalid(uint32_t segment_index);
-
-
+    void SetValid(uint32_t segment_index, bool state);
+    bool IsProcessed(uint32_t segment_index) const;
+    void SetProcessed(uint32_t segment_index, bool state);
+    std::shared_mutex* GetMutex();
     double GetSegmentDuration() const;
 
 private:
-    void SetInvalidImpl(uint32_t segment_index);
-
-private:
-    std::map<double, std::shared_ptr<Segment>> m_segments;
-    std::vector<std::bitset<kSegmentBitSetSize>> m_valid_segments;
+    std::map<double, std::unique_ptr<Segment>> m_segments;
+    BitSet                                     m_valid_segments;
+    BitSet                                     m_processed_segments;
     double                                     m_segment_start_time;
     double                                     m_segment_duration;
     uint32_t                                   m_num_segments;
-    mutable std::shared_mutex                  m_mutex;
     Handle*                                    m_ctx;
+    mutable std::shared_mutex                  m_mutex;
+
 };
 
 }

@@ -181,6 +181,7 @@ typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_slice_exists_t) (const rocp
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_event_property_exists_t) (const rocprofvis_dm_trace_t object, 
                                                                     rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_table_exists_t) (const rocprofvis_dm_trace_t object,  const rocprofvis_dm_table_id_t table_id);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_complete_slice_func_t) (const rocprofvis_dm_slice_t object);
 
 typedef struct 
 {
@@ -205,6 +206,7 @@ typedef struct
         rocprofvis_dm_check_slice_exists_t FuncCheckSliceExists;        // Called by database async interface before quering a slice with the same parameters
         rocprofvis_dm_check_event_property_exists_t FuncCheckEventPropertyExists;        // Called by database async interface before quering an event property with the same parameters
         rocprofvis_dm_check_table_exists_t FuncCheckTableExists;        // Called by database async interface before quering a table with the same parameters
+        rocprofvis_dm_complete_slice_func_t FuncCompleteSlice;        // Set complete state for slice
 } rocprofvis_dm_db_bind_struct;
 
 inline uint64_t hash_combine(uint64_t a, uint64_t b)

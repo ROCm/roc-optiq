@@ -540,10 +540,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_uint64(
                                         uint64_t* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase* object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if (object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsUint64(property, index, value);
     }
     return object->GetPropertyAsUint64(property, index, value);
 }                                      
@@ -566,10 +567,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_int64(
                                         int64_t* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if(object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsInt64(property, index, value);
     }
     return object->GetPropertyAsInt64(property, index, value);
 }                                      
@@ -592,10 +594,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_double(
                                         double* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if(object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsDouble(property, index, value);
     }
     return object->GetPropertyAsDouble(property, index, value);
 }                                       
@@ -618,10 +621,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_charptr(
                                         char** value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if(object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsCharPtr(property, index, value);
     }
     return object->GetPropertyAsCharPtr(property, index, value);
 }                                       
@@ -644,10 +648,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_handle(
                                         rocprofvis_dm_handle_t* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if(object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsHandle(property, index, value);
     }
     return object->GetPropertyAsHandle(property, index, value);
 }  

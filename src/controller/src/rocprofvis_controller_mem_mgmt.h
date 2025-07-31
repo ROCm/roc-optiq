@@ -51,10 +51,15 @@ namespace RocProfVis
             static constexpr size_t WORD_SIZE = 64;
 
         public:
-
+            BitSet() = default;
             BitSet(size_t total_bits)
             : m_bits((total_bits + WORD_SIZE - 1) / WORD_SIZE, 0) {}
 
+            void Init(size_t total_bits)
+            {
+                m_bits.resize((total_bits + WORD_SIZE - 1) / WORD_SIZE);
+                std::fill(m_bits.begin(), m_bits.end(), 0);
+            }
             size_t Size() const { return m_bits.size() * WORD_SIZE; }
             void Set(size_t pos);
             void Clear(size_t pos);
@@ -90,7 +95,7 @@ namespace RocProfVis
             uint64_t            m_timestamp;
             SegmentTimeline*    m_owner;
             Segment*            m_reference;
-            void*               m_array_ptr;
+            std::set<void*>     m_array_ptr;
             uint32_t            m_lod;
         };
 
@@ -104,7 +109,6 @@ namespace RocProfVis
 
             virtual ~MemoryManager();
 
-            std::mutex&         GetMemoryManagerMutex();
             std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
                                 GetDefaultLRUIterator();
             std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
@@ -130,6 +134,7 @@ namespace RocProfVis
             std::condition_variable                                     m_lru_cv;
             std::thread                                                 m_lru_thread;
             std::mutex                                                  m_lru_mutex;
+            std::mutex                                                  m_lru_cond_mutex;
             std::mutex                                                  m_lru_inuse_mutex;
             std::atomic<bool>                                           m_lru_mgmt_shutdown;
             bool                                                        m_lru_configured;
@@ -144,10 +149,12 @@ namespace RocProfVis
             std::map<void*, MemoryPool*>::iterator                      m_current_pool[kRocProfVisNumberOfObjectTypes];
             std::mutex                                                  m_pool_mutex;
 
-            void   ManageLRU();
-            void*  Allocate(size_t size, rocprofvis_object_type_t type);
-            void   CleanUp();
-            static void   UpdateSizeLimit();
+            void            ManageLRU();
+            void*           Allocate(size_t size, rocprofvis_object_type_t type);
+            void            CleanUp();
+            static void     UpdateSizeLimit();
+            void            LockTimilines(std::vector<SegmentTimeline*>& locked, std::vector<SegmentTimeline*>& failed_to_lock);
+            void            UnlockTimilines(std::vector<SegmentTimeline*>& locked);
 
             inline static size_t                                        s_physical_memory_avail=0;
             inline static std::vector<MemoryManager*>                   s_memory_manager_instances;

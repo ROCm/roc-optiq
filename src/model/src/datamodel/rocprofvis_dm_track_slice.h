@@ -67,7 +67,8 @@ class TrackSlice : public DmBase {
                             m_ctx(ctx), 
                             m_start_timestamp(start), 
                             m_end_timestamp(end), 
-                            m_current_pool(nullptr) {}; 
+                            m_current_pool(nullptr),
+                            m_complete(false){}; 
         // TrackSlice class destructor, required in order to free resources of derived classes
         virtual ~TrackSlice() { Cleanup(); }
         // Pure virtual method to add a record to a time slice
@@ -95,6 +96,9 @@ class TrackSlice : public DmBase {
         rocprofvis_dm_timestamp_t       EndTime() {return m_end_timestamp;}
         // Returns class mutex
         std::shared_mutex*              Mutex() override { return &m_lock; }
+
+        void SetComplete() { m_complete = true; }
+        void WaitComplete();
 
         // Pure virtual method to get event timestamp value by provided index of record
         // @param index - index of the record
@@ -202,6 +206,8 @@ class TrackSlice : public DmBase {
         mutable std::shared_mutex                   m_lock;
         std::map<void*, MemoryPool*>                m_object_pools;
         MemoryPool*                                 m_current_pool;
+        bool                                        m_complete;
+        std::condition_variable_any                 m_cv;
 
         void  Cleanup();
 

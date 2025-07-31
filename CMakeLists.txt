@@ -7,6 +7,9 @@ set(PROJECT_VERSION_MINOR 1)
 set(PROJECT_VERSION_PATCH 2)
 set(PROJECT_VERSION_BUILD 0)
 
+# Name and path of the icon font header
+set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
@@ -100,6 +103,8 @@ add_executable(rocprof-visualizer
     src/app/src/rocprofvis_imgui_vulkan.cpp 
     src/app/src/main.cpp
     ${VIEW_FILES})
+
+add_dependencies(rocprof-visualizer generate_icon_header)
 
 if(WIN32)
     set_target_properties(rocprof-visualizer PROPERTIES WIN32_EXECUTABLE TRUE)

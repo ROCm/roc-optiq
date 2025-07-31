@@ -3,6 +3,8 @@
 #include "rocprofvis_settings.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
+#include "icons/rocprofvis_icon_data.h"
+#include "icons/rocprovfis_icon_defines.h"
 
 #include "imgui.h"
 #include "implot.h"
@@ -50,6 +52,11 @@ FontManager::Init()
     }
 
     m_fonts.resize(static_cast<int>(FontType::__kLastFont));
+    m_icon_fonts.resize(static_cast<int>(FontType::__kLastFont));
+
+    ImFontConfig config;
+    config.FontDataOwnedByAtlas = false;
+
     for(int i = 0; i < static_cast<int>(FontType::__kLastFont); ++i)
     {
         ImFont* font = nullptr;
@@ -58,6 +65,10 @@ FontManager::Init()
             font = io.Fonts->AddFontDefault();  // Back to ImGUI font if good font cannot
                                                 // be found
         m_fonts[i] = font;
+
+        m_icon_fonts[i] = io.Fonts->AddFontFromMemoryCompressedTTF(
+            &icon_font_compressed_data, icon_font_compressed_size, font_sizes[i],
+            &config, icon_ranges);
     }
 
     io.FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
@@ -73,6 +84,17 @@ FontManager::GetFont(FontType font_type)
         return nullptr;  // Invalid font type
     }
     return m_fonts[static_cast<int>(font_type)];
+}
+
+ImFont*
+FontManager::GetIconFont(FontType font_type)
+{
+    if(static_cast<int>(font_type) < 0 ||
+       static_cast<int>(font_type) >= static_cast<int>(FontType::__kLastFont))
+    {
+        return nullptr;  // Invalid font type
+    }
+    return m_icon_fonts[static_cast<int>(font_type)];
 }
 
 const std::vector<ImU32> DARK_THEME_COLORS = []() {

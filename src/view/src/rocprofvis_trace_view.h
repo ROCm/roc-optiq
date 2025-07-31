@@ -43,8 +43,14 @@ private:
     DataProvider m_data_provider;
     bool         m_view_created;
     bool         m_open_loading_popup;
-    bool         m_open_save_popup;
+
+    typedef struct popup_info_t{
+        bool show_popup;
+        bool success;
+    } popup_info_t;
     
+    popup_info_t m_save_trace_popup_info;
+
     EventManager::SubscriptionToken       m_tabselected_event_token;
 };
 

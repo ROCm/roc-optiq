@@ -257,6 +257,7 @@ typedef struct data_req_info_t
     ProviderState                      loading_state;       // state of the request
     RequestType                        request_type;        // type of request
     std::shared_ptr<RequestParamsBase> custom_params;       // custom request parameters
+    uint64_t                           response_code;       // response code for the request
 } data_req_info_t;
 
 typedef struct table_info_t
@@ -469,7 +470,7 @@ public:
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&)>& callback);
     void SetTraceLoadedCallback(const std::function<void(const std::string&)>& callback);
-    void SetSaveTraceCallback(const std::function<void()>& callback);
+    void SetSaveTraceCallback(const std::function<void(bool)>& callback);
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -543,7 +544,7 @@ private:
     // Called when a new trace is loaded
     std::function<void(const std::string&)> m_trace_data_ready_callback;
     // Callback when trace is saved
-    std::function<void()> m_save_trace_callback;
+    std::function<void(bool)> m_save_trace_callback;
 };
 
 }  // namespace View

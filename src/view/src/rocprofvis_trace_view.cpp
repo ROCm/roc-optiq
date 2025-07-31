@@ -20,7 +20,7 @@ TraceView::TraceView()
 , m_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
-, m_open_save_popup(false)
+, m_save_trace_popup_info{false, false}
 , m_analysis(nullptr)
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
@@ -45,8 +45,9 @@ TraceView::TraceView()
     };
 
     m_data_provider.SetSaveTraceCallback(
-        [this]() {
-            m_open_save_popup = true;
+        [this](bool success) {
+            m_save_trace_popup_info.show_popup = true;
+            m_save_trace_popup_info.success = success;
         });
 
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
@@ -171,16 +172,24 @@ TraceView::Render()
                                                 // removed once font lib is in place.
         m_container->Render();
 
-        if(m_open_save_popup)
+        if(m_save_trace_popup_info.show_popup)
+
         {
             ImGui::OpenPopup("Saved Trimmed Trace");
-            m_open_save_popup = false;
+            m_save_trace_popup_info.show_popup = false;
         }
 
         if(ImGui::BeginPopupModal("Saved Trimmed Trace", nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::Text("Trace has been saved successfully.");
+            if(m_save_trace_popup_info.success)
+            {
+                ImGui::Text("Trace has been saved successfully.");
+            }
+            else
+            {
+                ImGui::Text("Failed to save the trace.");
+            }
             if(ImGui::Button("OK"))
             {
                 ImGui::CloseCurrentPopup();

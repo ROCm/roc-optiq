@@ -285,7 +285,7 @@ DataProvider::SetTraceLoadedCallback(
 
 void
 DataProvider::SetSaveTraceCallback(
-    const std::function<void()>& callback)
+    const std::function<void(bool)>& callback)
 {
     m_save_trace_callback = callback;
 }
@@ -1677,13 +1677,20 @@ DataProvider::HandleRequests()
                 rocprofvis_controller_future_wait(req.request_future, 0);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
                               result == kRocProfVisResultTimeout);
-
+                              
             // this graph is ready
             if(result == kRocProfVisResultSuccess)
             {
+                req.loading_state  = ProviderState::kReady;
+                req.response_code = kRocProfVisResultSuccess;
+                uint64_t future_result = 0;
+                result = rocprofvis_controller_get_uint64(req.request_future, kRPVControllerFutureResult,
+                                    0, &req.response_code);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                
                 rocprofvis_controller_future_free(req.request_future);
                 req.request_future = nullptr;
-                req.loading_state  = ProviderState::kReady;
+
                 ProcessRequest(req);
                 // remove request from processing container
                 it = m_requests.erase(it);
@@ -1910,11 +1917,10 @@ DataProvider::ProcessSaveTrimmedTraceRequest(data_req_info_t& req)
 {
     spdlog::debug("Save trimmed trace request complete");
 
-    rocprofvis_controller_future_free(req.request_future);
     // call the new data ready callback
     if(m_save_trace_callback)
     {
-        m_save_trace_callback();
+        m_save_trace_callback(req.response_code == kRocProfVisResultSuccess);
     }
 }
 

@@ -176,6 +176,9 @@ rocprofvis_dm_result_t Database::SaveTrimmedDataStatic(Database* db, rocprofvis_
         {
             spdlog::error("Failed to overwrite existing file: {}, code: {}", new_db_path,
                           remove_result);
+            
+            db->ShowProgress(0, "Failed to trim track! Could not overwrite existing file.", kRPVDbError, future);
+            future->SetPromise(kRocProfVisDmResultDbAccessFailed);
             return kRocProfVisDmResultDbAccessFailed;
         }
     }

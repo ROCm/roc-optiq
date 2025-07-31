@@ -125,9 +125,10 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
         if(m_selected_event_id == m_dp.GetSelectedEventId())
         {
             float highlight_thickness = 3.0f;
-            draw_list->AddRect(rectMin - ImVec2(2, 2), rectMax + ImVec2(2, 2),
+            draw_list->AddRect(
+                rectMin - ImVec2(2, 2), rectMax + ImVec2(2, 2),
                 m_settings.GetColor(static_cast<int>(Colors::kEventHighlight)),
-                               rounding + 2, 0, highlight_thickness + 2);
+                rounding + 2, 0, highlight_thickness + 2);
         }
     }
 

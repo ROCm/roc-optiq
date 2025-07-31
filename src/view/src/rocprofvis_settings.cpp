@@ -114,6 +114,7 @@ const std::vector<ImU32> DARK_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kTableRowBg)]          = IM_COL32(33, 33, 33, 255);
     colors[static_cast<int>(Colors::kTableRowBgAlt)]       = IM_COL32(38, 38, 38, 255);
     colors[static_cast<int>(Colors::kLineChartColor)]      = IM_COL32(250, 250, 250, 255);
+    colors[static_cast<int>(Colors::kEventHighlight)] = IM_COL32(0, 200, 255, 180);
     colors[static_cast<int>(Colors::kButton)] =
         IM_COL32(60, 60, 60, 255);  // Neutral dark gray
     colors[static_cast<int>(Colors::kButtonHovered)] =
@@ -164,6 +165,7 @@ const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kTableRowBg)]          = IM_COL32(255, 253, 250, 255);
     colors[static_cast<int>(Colors::kTableRowBgAlt)]       = IM_COL32(252, 250, 248, 255);
     colors[static_cast<int>(Colors::kLineChartColor)]      = IM_COL32(0, 0, 0, 255);
+    colors[static_cast<int>(Colors::kEventHighlight)]      = IM_COL32(0, 140, 200, 180);
     colors[static_cast<int>(Colors::kButton)] =
         IM_COL32(230, 230, 230, 255);  // Neutral light gray
     colors[static_cast<int>(Colors::kButtonHovered)] =

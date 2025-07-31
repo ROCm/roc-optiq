@@ -10,6 +10,7 @@
 #include "rocprofvis_settings.h"
 #include "rocprofvis_version.h"
 #include "widgets/rocprofvis_debug_window.h"
+#include "widgets/rocprofvis_confirmation_dialog.h"
 
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
@@ -63,6 +64,7 @@ AppWindow::AppWindow()
 , m_show_metrics(false)
 #endif
 , m_open_about_dialog(false)
+, m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
 {}
 
 AppWindow::~AppWindow()
@@ -134,8 +136,6 @@ AppWindow::Update()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
-
-
 }
 
 bool AppWindow::IsTrimSaveAllowed() {
@@ -234,6 +234,7 @@ AppWindow::Render()
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
+    m_confirmation_dialog->Render();
 
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
@@ -373,6 +374,25 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 
 void
 AppWindow::HandleSaveSelection(const std::string& file_path_str)
+{
+    // Check if file already exists
+    std::error_code ec;
+    if(std::filesystem::exists(file_path_str, ec))
+    {
+        // Show confirmation dialog
+        m_confirmation_dialog->Show(
+            "Confirm Save", "File already exists. Do you want to overwrite it?",
+            [this, file_path_str]() { SaveSelection(file_path_str); });
+        return;
+    }
+    else
+    {
+        SaveSelection(file_path_str);
+    }
+}
+
+void
+AppWindow::SaveSelection(const std::string& file_path_str)
 {
     // Get the active tab
     auto active_tab = m_tab_container->GetActiveTab();

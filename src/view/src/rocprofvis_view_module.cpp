@@ -2,8 +2,8 @@
 
 #include "rocprofvis_view_module.h"
 #include "rocprofvis_appwindow.h"
-#include "spdlog/spdlog.h"
 #include "rocprofvis_settings.h"
+#include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
 
@@ -31,6 +31,13 @@ rocprofvis_view_destroy()
 }
 
 void
-rocprofvis_view_set_dpi(float dpi) {
-    Settings::GetInstance().SetDPI(dpi);
+rocprofvis_view_set_dpi(float dpi)
+{
+    if(Settings::GetInstance().GetDPI() != dpi)
+    {
+        Settings::GetInstance().SetDPI(dpi);
+        int ideal_dpi_index =
+            Settings::GetInstance().GetFontManager().GetFontSizeIndexForDPI(dpi);
+        Settings::GetInstance().GetFontManager().SetFontSize(ideal_dpi_index);
+    }
 }

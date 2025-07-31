@@ -82,11 +82,15 @@ public:
      * created, but before the first frame.
      */
     bool Init();
+    void SetFontSize(  int size_index);
+    int  GetFontSizeIndexForDPI(float dpi);
 
     ImFont* GetFont(FontType font_type);
 
 private:
-    std::vector<ImFont*> m_fonts;
+    std::vector<ImFont*>              m_fonts;
+    std::vector<std::vector<ImFont*>> m_all_fonts;
+    std::vector<int>                  m_font_size_indices;
 };
 
 class Settings

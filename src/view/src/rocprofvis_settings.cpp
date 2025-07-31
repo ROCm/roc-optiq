@@ -18,13 +18,53 @@ namespace RocProfVis
 namespace View
 {
 
+int
+FontManager::GetFontSizeIndexForDPI(float dpi)
+{
+    // DPI returns the dots per inch of the display. Essentially, it is a scaling factor. 
+    constexpr float font_sizes[] = { 6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18,
+                                     19, 20, 22, 24, 26, 28, 32, 36, 40, 48, 56, 64 };
+    float           base_size    = 8.0f;
+    float           scaled_size  = base_size * dpi;
+
+    // Find the index of the font size closest to scaled_size
+    int best_index = 0;
+    for(int i = 1; i < static_cast<int>(std::size(font_sizes)); ++i)
+    {
+        if(std::abs(font_sizes[i] - scaled_size) <
+           std::abs(font_sizes[best_index] - scaled_size))
+            best_index = i;
+    }
+    return best_index;
+}
+
+void
+FontManager::SetFontSize(  int size_index)
+{
+    constexpr int num_types = static_cast<int>(FontType::__kLastFont);
+
+    // Check that the size_index is valid for all types
+    if(num_types == 0 || m_all_fonts.empty() || m_all_fonts[0].empty()) return;
+    if(size_index < 0 || size_index >= static_cast<int>(m_all_fonts[0].size())) return;
+
+    for(int i = 0; i < num_types; ++i)
+    {
+        m_font_size_indices[i] = size_index;
+        m_fonts[i]             = m_all_fonts[i][size_index];
+    }
+
+    ImGui::GetIO().FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
+}
 bool
 FontManager::Init()
 {
     ImGuiIO& io = ImGui::GetIO();
     m_fonts.clear();
 
-    constexpr float font_sizes[] = { 10.0f, 13.0f, 16.0f, 20.0f };
+    constexpr float font_sizes[] = { 6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18,
+                                     19, 20, 22, 24, 26, 28, 32, 36, 40, 48, 56, 64 };
+    constexpr int   num_sizes    = sizeof(font_sizes) / sizeof(font_sizes[0]);
+    constexpr int   num_types    = static_cast<int>(FontType::__kLastFont);
 
 #ifdef _WIN32
     const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
@@ -38,8 +78,6 @@ FontManager::Init()
 #endif
 
     const char* font_path = nullptr;
-
-    // Check if any of the font paths exist
     for(const char* path : font_paths)
     {
         if(std::filesystem::exists(path))
@@ -49,17 +87,33 @@ FontManager::Init()
         }
     }
 
-    m_fonts.resize(static_cast<int>(FontType::__kLastFont));
-    for(int i = 0; i < static_cast<int>(FontType::__kLastFont); ++i)
+    // Prepare storage
+    m_all_fonts.clear();
+    m_all_fonts.resize(num_types);
+    m_font_size_indices.resize(num_types, 6);
+    m_fonts.resize(num_types);
+
+    // Load all font sizes for each FontType
+    for(int type = 0; type < num_types; ++type)
     {
-        ImFont* font = nullptr;
-        if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, font_sizes[i]);
-        if(!font)
-            font = io.Fonts->AddFontDefault();  // Back to ImGUI font if good font cannot
-                                                // be found
-        m_fonts[i] = font;
+        m_all_fonts[type].resize(num_sizes, nullptr);
+        for(int sz = 0; sz < num_sizes; ++sz)
+        {
+            ImFont* font = nullptr;
+            if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, font_sizes[sz]);
+            if(!font) font = io.Fonts->AddFontDefault();
+            m_all_fonts[type][sz] = font;
+        }
     }
 
+    // Set m_fonts to currently selected size for each FontType
+    for(int type = 0; type < num_types; ++type)
+    {
+        int sz_idx    = m_font_size_indices[type];
+        m_fonts[type] = m_all_fonts[type][sz_idx];
+    }
+
+    // Set ImGui's default font
     io.FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
     return io.Fonts->Build();
 }
@@ -114,7 +168,7 @@ const std::vector<ImU32> DARK_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kTableRowBg)]          = IM_COL32(33, 33, 33, 255);
     colors[static_cast<int>(Colors::kTableRowBgAlt)]       = IM_COL32(38, 38, 38, 255);
     colors[static_cast<int>(Colors::kLineChartColor)]      = IM_COL32(250, 250, 250, 255);
-    colors[static_cast<int>(Colors::kEventHighlight)] = IM_COL32(0, 200, 255, 180);
+    colors[static_cast<int>(Colors::kEventHighlight)]      = IM_COL32(0, 200, 255, 180);
     colors[static_cast<int>(Colors::kButton)] =
         IM_COL32(60, 60, 60, 255);  // Neutral dark gray
     colors[static_cast<int>(Colors::kButtonHovered)] =

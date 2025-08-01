@@ -228,19 +228,18 @@ class SqliteDatabase : public Database
 
         sqlite3* GetServiceConnection();
 
+        // method to run SQL query
+        // @param db_conn - database connection 
+        // @param query - SQL query
+        // @param params - set of parameters to be passed to sqlite3_exec callback
+        rocprofvis_dm_result_t ExecuteSQLQuery(const char* query, rocprofvis_db_sqlite_callback_parameters * params);
+
     private:     
 
         std::set<sqlite3*> m_available_connections;
         std::set<sqlite3*> m_connections_inuse;
         std::mutex         m_mutex;
         std::condition_variable      m_inuse_cv;
-
-
-        // method to run SQL query
-        // @param db_conn - database connection 
-        // @param query - SQL query
-        // @param params - set of parameters to be passed to sqlite3_exec callback
-        rocprofvis_dm_result_t ExecuteSQLQuery(const char* query, rocprofvis_db_sqlite_callback_parameters * params);
 
         // method to mimic slite3_exec using sqlite3_prepare_v2
         // @param db - database connection

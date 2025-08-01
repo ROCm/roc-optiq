@@ -621,22 +621,25 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
     {
         std::lock_guard<std::mutex> lock(db->m_level_lock);
         auto                        it = db->m_event_levels_id_to_index[op].find(id);
+        int                         index = 0;
         if(it == db->m_event_levels_id_to_index[op].end())
         {
-            db->m_event_levels_id_to_index[op][id] = db->m_event_levels[op].size();
+            db->m_event_levels_id_to_index[op][id] = index = db->m_event_levels[op].size();
             db->m_event_levels[op].push_back({ id });
         }
         else
         {
-            if(params->track_category == kRocProfVisDmStreamTrack)
-            {
-                db->m_event_levels[op][it->second].level_for_stream = level;
-            }
-            else
-            {
-                db->m_event_levels[op][it->second].level_for_queue = level;
-            }
+            index = it->second;
         }
+        if(params->track_category == kRocProfVisDmStreamTrack)
+        {
+            db->m_event_levels[op][index].level_for_stream = level;
+        }
+        else
+        {
+            db->m_event_levels[op][index].level_for_queue = level;
+        }
+
     }
     return 0;
 }

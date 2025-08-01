@@ -240,7 +240,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     "select 1 as op, start, end, id, nid as nodeId, pid, tid, 0 as const from rocpd_region " , 
                     //Slice query by Queue
                     "select 1 as op, R.start, R.end, E.category_id, R.name_id, R.id, R.nid as nodeId, R.pid, R.tid "
-                    ",L.level as level from rocpd_region R INNER JOIN rocpd_event E ON E.id = R.event_id INNER JOIN event_levels_launch_v1 L ON R.id = L.eid " ,
+                    ",L.level as level from rocpd_region R INNER JOIN rocpd_event E ON E.id = R.event_id LEFT JOIN event_levels_launch_v1 L ON R.id = L.eid " ,
                     // Slice query by Stream
                     "",
                     //Table query
@@ -265,11 +265,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     // Slice query by queue
                     "select 2 as op, K.start, K.end, E.category_id, K.kernel_id, K.id, K.nid as nodeId, K.agent_id as agentId, K.queue_id as queueId "
                     ",L.level as level from rocpd_kernel_dispatch K INNER JOIN rocpd_event E ON E.id = K.event_id "
-                    "INNER JOIN event_levels_dispatch_v1 L ON K.id = L.eid ", 
+                    "LEFT JOIN event_levels_dispatch_v1 L ON K.id = L.eid ", 
                     // Slice query by stream
                     "select 2 as op, K.start, K.end, E.category_id, K.kernel_id, K.id, K.nid as nodeId, K.stream_id as streamId , -1 as const "
                     ",L.level_for_stream as level from rocpd_kernel_dispatch K INNER JOIN rocpd_event E ON E.id = K.event_id "
-                    "INNER JOIN event_levels_dispatch_v1 L ON K.id = L.eid ",
+                    "LEFT JOIN event_levels_dispatch_v1 L ON K.id = L.eid ",
                     // Table query
                     "SELECT K.id, ( SELECT string FROM `rocpd_string` RS WHERE RS.id = E.category_id AND RS.guid = E.guid) AS category, "
                     "R.string AS region, S.display_name AS name, K.nid as nodeId, K.tid as thread, Q.pid as process, "
@@ -297,13 +297,13 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     // Track query by stream
                     "select DISTINCT nid as nodeId, stream_id as streamId, -1 as const, 8 as category from rocpd_memory_allocate;", 
                     // Level query
-                    "select 3 as op, start, end, id, nid as nodeId, agent_id as agentId, queue_id as queueId, stream_id as streamId from rocpd_memory_allocate ",
+                    "select 3 as op, start, end, id, nid as nodeId, coalesce(agent_id,0) as agentId, queue_id as queueId, stream_id as streamId from rocpd_memory_allocate ",
                     // Slice query by queue
                     "select 3 as op, M.start, M.end, E.category_id, E.category_id, M.id, M.nid as nodeId, M.agent_id as agentId, M.queue_id as queueId "
-                    ",L.level as level from rocpd_memory_allocate M INNER JOIN rocpd_event E ON E.id = M.event_id INNER JOIN event_levels_mem_alloc_v1 L ON M.id = L.eid ",
+                    ",L.level as level from rocpd_memory_allocate M INNER JOIN rocpd_event E ON E.id = M.event_id LEFT JOIN event_levels_mem_alloc_v1 L ON M.id = L.eid ",
                     // Slice query by stream
                     "select 3 as op, M.start, M.end, E.category_id, E.category_id, M.id, M.nid as nodeId, M.stream_id as streamId, -1 as const  "
-                    ",L.level_for_stream as level from rocpd_memory_allocate M INNER JOIN rocpd_event E ON E.id = M.event_id INNER JOIN event_levels_mem_alloc_v1 L ON M.id = L.eid ",
+                    ",L.level_for_stream as level from rocpd_memory_allocate M INNER JOIN rocpd_event E ON E.id = M.event_id LEFT JOIN event_levels_mem_alloc_v1 L ON M.id = L.eid ",
                     // Table query
                     "SELECT M.id, ( SELECT string FROM `rocpd_string` RS WHERE RS.id = E.category_id AND RS.guid = E.guid) AS category, "
                     "M.nid as nodeId, M.pid as process, M.tid as thread, M.start, M.end, (M.end - M.start) AS duration, M.type, M.level, "
@@ -338,10 +338,10 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     "select 4 as op, start, end, id, nid as nodeId, dst_agent_id as agentId, queue_id as queueId, stream_id as streamId from rocpd_memory_copy ",
                     // Slice query by queue
                     "select 4 as op, M.start, M.end, E.category_id, M.name_id, M.id, M.nid as nodeId, M.dst_agent_id as agentId, M.queue_id as queueId "
-                    ",L.level as level from rocpd_memory_copy M INNER JOIN rocpd_event E ON E.id = M.event_id INNER JOIN event_levels_mem_copy_v1 L ON M.id = L.eid ",
+                    ",L.level as level from rocpd_memory_copy M INNER JOIN rocpd_event E ON E.id = M.event_id LEFT JOIN event_levels_mem_copy_v1 L ON M.id = L.eid ",
                     // Slice query by stream
                     "select 4 as op, M.start, M.end, E.category_id, M.name_id, M.id, M.nid as nodeId, M.stream_id as streamId, -1 as const "
-                    ",L.level_for_stream as level from rocpd_memory_copy M INNER JOIN rocpd_event E ON E.id = M.event_id INNER JOIN event_levels_mem_copy_v1 L ON M.id = L.eid ",
+                    ",L.level_for_stream as level from rocpd_memory_copy M INNER JOIN rocpd_event E ON E.id = M.event_id LEFT JOIN event_levels_mem_copy_v1 L ON M.id = L.eid ",
                     // Table query
                     "SELECT M.id, ( SELECT string FROM `rocpd_string` RS WHERE RS.id = E.category_id AND RS.guid = E.guid) AS category, "
                     "M.nid as nodeId, M.pid as process, M.tid as thread, M.start, M.end, (M.end - M.start) AS duration, S.string AS name, "

@@ -204,7 +204,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Level query
                         "select 1 as op, start, end, id, 0, pid, tid  from rocpd_api ",
                         // Slice query by queue
-                        "select 1 as op, start, end, args_id, apiName_id, id, 0, pid, tid ,L.level as level from rocpd_api INNER JOIN event_levels_api L ON id = L.eid ",
+                        "select 1 as op, start, end, args_id, apiName_id, id, 0, pid, tid ,L.level as level from rocpd_api LEFT JOIN event_levels_api L ON id = L.eid ",
                         // Slice query by stream
                         "",
                         // Table query
@@ -223,7 +223,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Level query
                         "select 2 as op, start, end, id, 0, gpuId, queueId from rocpd_op ",
                         // Slice query by queue
-                        "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId , L.level as level, 0 as const from rocpd_op INNER JOIN event_levels_op L ON id = L.eid ",
+                        "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId , L.level as level, 0 as const from rocpd_op LEFT JOIN event_levels_op L ON id = L.eid ",
                         // Slice query by stream
                         "",
                         // Table query

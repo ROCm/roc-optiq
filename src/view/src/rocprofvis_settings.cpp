@@ -219,7 +219,7 @@ Settings::HorizontalRender()
 }
 
 void
-Settings::Styling()
+Settings::ApplyColorStyling()
 {
     ImGuiStyle& style = ImGui::GetStyle();
 
@@ -276,16 +276,6 @@ Settings::Styling()
     style.Colors[ImGuiCol_TableBorderLight]  = tableBorderLight;
     style.Colors[ImGuiCol_TableRowBg]        = tableRowBg;
     style.Colors[ImGuiCol_TableRowBgAlt]     = tableRowBgAlt;
-
-    style.CellPadding       = ImVec2(10, 6);
-    style.FrameBorderSize   = 0.0f;
-    style.WindowBorderSize  = 1.0f;
-    style.TabBorderSize     = 0.0f;
-    style.FrameRounding     = 6.0f;
-    style.GrabRounding      = 6.0f;
-    style.TabRounding       = 6.0f;
-    style.WindowRounding    = 8.0f;
-    style.ScrollbarRounding = 8.0f;
 
     // Scrollbar
     style.Colors[ImGuiCol_ScrollbarBg]   = scrollBg;
@@ -346,16 +336,6 @@ Settings::Styling()
     // Modal window dim
     style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0, 0, 0, 0.7f);
 
-    // Rounding the windows to look modern
-    style.FrameRounding     = 8.0f;
-    style.GrabRounding      = 6.0f;
-    style.TabRounding       = 6.0f;
-    style.WindowRounding    = 8.0f;
-    style.ScrollbarRounding = 8.0f;
-    style.FramePadding      = ImVec2(10, 6);
-    style.ItemSpacing       = ImVec2(10, 8);
-    style.WindowPadding     = ImVec2(14, 10);
-
     return;
 }
 
@@ -365,7 +345,7 @@ Settings::DarkMode()
     m_color_store = DARK_THEME_COLORS;
     ImGui::StyleColorsDark();
     ImPlot::StyleColorsDark();
-    Styling();
+    ApplyColorStyling();
     m_use_dark_mode = true;
 }
 
@@ -375,7 +355,7 @@ Settings::LightMode()
     m_color_store = LIGHT_THEME_COLORS;
     ImGui::StyleColorsLight();
     ImPlot::StyleColorsLight();
-    Styling();
+    ApplyColorStyling();
     m_use_dark_mode = false;
 }
 
@@ -426,10 +406,39 @@ Settings::Settings()
       IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204) })
 , m_use_horizontal_rendering(true)
 {
+    InitStyling();
     LightMode();
 }
 
 Settings::~Settings() {}
+
+void
+Settings::InitStyling(){
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    m_default_style = style;  // Store the default style
+
+    // Set sizes and rounding
+    style.CellPadding       = ImVec2(10, 6);
+    style.FrameBorderSize   = 0.0f;
+    style.WindowBorderSize  = 1.0f;
+    style.TabBorderSize     = 0.0f;
+    style.FrameRounding     = 6.0f;
+    style.GrabRounding      = 6.0f;
+    style.TabRounding       = 6.0f;
+    style.WindowRounding    = 8.0f;
+    style.ScrollbarRounding = 8.0f;
+
+    // Rounding the windows to look modern
+    style.FrameRounding     = 8.0f;
+    style.GrabRounding      = 6.0f;
+    style.TabRounding       = 6.0f;
+    style.WindowRounding    = 8.0f;
+    style.ScrollbarRounding = 8.0f;
+    style.FramePadding      = ImVec2(10, 6);
+    style.ItemSpacing       = ImVec2(10, 8);
+    style.WindowPadding     = ImVec2(14, 10);
+}
 
 }  // namespace View
 }  // namespace RocProfVis

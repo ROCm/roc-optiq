@@ -109,19 +109,24 @@ public:
     bool IsDarkMode() const;
     bool HorizontalRender();
     bool IsHorizontalRender();
-    void Styling();
 
     FontManager& GetFontManager() { return m_font_manager; }
+    const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
 
 private:
     Settings();
     ~Settings();
+
+    void InitStyling();
+    void ApplyColorStyling();
+
     std::vector<ImU32> m_color_store;
     std::vector<ImU32> m_flame_color_wheel;
     float              m_DPI;
     bool               m_use_dark_mode;
     bool               m_use_horizontal_rendering;
     FontManager        m_font_manager;
+    ImGuiStyle         m_default_style;
 };
 
 }  // namespace View

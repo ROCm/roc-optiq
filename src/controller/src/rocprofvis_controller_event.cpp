@@ -394,6 +394,7 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
                         result = kRocProfVisResultOutOfRange;
                     }
                 }
+                break;
             }
             case kRPVControllerEventLevel:
             {

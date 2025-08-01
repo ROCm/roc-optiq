@@ -27,17 +27,18 @@ namespace RocProfVis
 namespace DataModel
 {
 
-typedef struct EventLevel
+typedef enum rocprofvis_db_async_tracks_flags_t
+{
+    kRocProfVisDmIncludePmcTracks = 1,
+    kRocProfVisDmIncludeStreamTracks = 2
+} rocprofvis_db_async_tracks_flags_t;
+
+typedef struct rocprofvis_db_event_level_t
 {
     uint64_t id;
-    uint8_t  level;
-} EventLevel;
-
-typedef struct rocprofvis_db_sqlite_trim_parameters
-{
-    // Table names as we can't issue recursively
-    std::map<std::string, std::string> tables;
-} rocprofvis_db_sqlite_trim_parameters;
+    uint8_t  level_for_queue;
+    uint8_t  level_for_stream;
+} rocprofvis_db_event_level_t;
 
 // class for methods and members common for all RocPd-based schemas
 class ProfileDatabase : public SqliteDatabase
@@ -143,7 +144,7 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_string_t& query) override;
 
         rocprofvis_dm_result_t ExecuteQueryForAllTracksAsync(
-                            bool including_pmc, 
+                            uint32_t flags, 
                             rocprofvis_dm_index_t query_type,
                             rocprofvis_dm_charptr_t prefix, 
                             rocprofvis_dm_charptr_t suffix,
@@ -189,13 +190,11 @@ class ProfileDatabase : public SqliteDatabase
        // @return SQLITE_OK if successful
         static int CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt* stmt,
                                                 char** azColName);
-
-        static int CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
-                                   char** azColName);
     protected:
     // offset of kernel symbols in string table
         uint32_t m_symbols_offset;
-        std::vector<EventLevel> m_event_levels[kRocProfVisDmNumOperation];
+        std::vector<rocprofvis_db_event_level_t> m_event_levels[kRocProfVisDmNumOperation];
+        std::unordered_map<uint64_t, size_t> m_event_levels_id_to_index[kRocProfVisDmNumOperation];
         std::mutex   m_level_lock;
 };
 

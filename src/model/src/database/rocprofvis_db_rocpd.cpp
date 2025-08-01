@@ -127,7 +127,10 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, ch
             if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Process", track_params.process_id[TRACK_ID_PID]) != kRocProfVisDmResultSuccess) return 1;
             if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Thread", track_params.process_id[TRACK_ID_TID]) != kRocProfVisDmResultSuccess) return 1;
         } else
-        if (track_params.track_category == kRocProfVisDmKernelTrack || track_params.track_category == kRocProfVisDmPmcTrack)
+        if (track_params.track_category == kRocProfVisDmKernelDispatchTrack || 
+            track_params.track_category == kRocProfVisDmMemoryAllocationTrack || 
+            track_params.track_category == kRocProfVisDmMemoryCopyTrack || 
+            track_params.track_category == kRocProfVisDmPmcTrack)
         {
             db->CachedTables()->AddTableCell("Agent", track_params.process_id[TRACK_ID_AGENT], azColName[TRACK_ID_AGENT], (char*)sqlite3_column_text(stmt, TRACK_ID_AGENT));
             db->CachedTables()->AddTableCell("Queue", track_params.process_id[TRACK_ID_QUEUE], azColName[TRACK_ID_QUEUE], (char*)sqlite3_column_text(stmt, TRACK_ID_QUEUE));
@@ -191,27 +194,59 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         ExecuteSQLQuery(future,"CREATE INDEX monitorTypeIdx on rocpd_monitor(monitorType);");
 
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
+        if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(
+            future,
+            { 
+                        // Track query by pid/tid
                         "select DISTINCT 0 as const, pid, tid, 2 as category from rocpd_api;", 
+                        // Track query by stream
+                        "",
+                        // Level query
                         "select 1 as op, start, end, id, 0, pid, tid  from rocpd_api ",
-                        "select 1 as op, start, end, args_id, apiName_id, id, 0, pid, tid ,L.level as level from rocpd_api INNER JOIN event_levels_api L ON id = L.eid ",
-                        "select id, apiName, args, start, end, pid, tid from api ",
+                        // Slice query by queue
+                        "select 1 as op, start, end, args_id, apiName_id, id, 0, pid, tid ,L.level as level from rocpd_api LEFT JOIN event_levels_api L ON id = L.eid ",
+                        // Slice query by stream
+                        "",
+                        // Table query
+                        "select id, apiName, args, start, end, pid, tid from api "
+            },
                         &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding GPU tracks", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(
+            future, 
+            {
+                        // Track query by agent/queue
                         "select DISTINCT 0 as const, gpuId, queueId, 3 as category from rocpd_op;",
+                        // Track query by stream
+                        "",
+                        // Level query
                         "select 2 as op, start, end, id, 0, gpuId, queueId from rocpd_op ",
-                        "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId , L.level as level from rocpd_op INNER JOIN event_levels_op L ON id = L.eid ",
-                        "select id, opType, description, start, end,  gpuId, queueId  from op ",
+                        // Slice query by queue
+                        "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId , L.level as level, 0 as const from rocpd_op LEFT JOIN event_levels_op L ON id = L.eid ",
+                        // Slice query by stream
+                        "",
+                        // Table query
+                        "select id, opType, description, start, end,  gpuId, queueId from op "
+            },
                         &CallBackAddTrack)) break;
 
         ShowProgress(5, "Adding PMC tracks", kRPVDbBusy, future );
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(
+            future, 
+            { 
+                        // Track query by agent/monitorType
                         "select DISTINCT 0 as const, deviceId, monitorType, 1 as category from rocpd_monitor where deviceId > 0;", 
+                        // Track query by stream
+                        "",
+                        // Level query
                         "select 0 as op, start, start as end, 0, 0, deviceId, monitorType from rocpd_monitor ",
+                        // Slice query by monitorType
                         "select 0 as op, start, value, start as end, 0, 0, 0, deviceId, monitorType , value as level from rocpd_monitor ",
-                        "select id, monitorType, CAST(value AS REAL) as value, start, start as end, deviceId  from rocpd_monitor ",
+                        // Slice query by stream
+                        "",
+                        "select id, monitorType, CAST(value AS REAL) as value, start, start as end, deviceId  from rocpd_monitor "
+            },
                         &CallBackAddTrack)) break;
 
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );
@@ -221,8 +256,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->events_count[kRocProfVisDmOperationLaunch]   = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
         if(kRocProfVisDmResultSuccess !=
-           ExecuteQueryForAllTracksAsync(
-               true, kRPVQueryLevel,
+           ExecuteQueryForAllTracksAsync(kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQueryLevel,
                "SELECT COUNT(*),  op, ",
                ";", &CallbackGetTrackRecordsCount,
                [](rocprofvis_dm_track_params_t* params) {}))
@@ -241,11 +275,11 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             ShowProgress(10, "Calculate event levels", kRPVDbBusy, future);
             if(kRocProfVisDmResultSuccess !=
                ExecuteQueryForAllTracksAsync(
-                   false,
+                   0,
                    kRPVQueryLevel,
                    "SELECT *, ", " ORDER BY start;", &CalculateEventLevels,
                    [](rocprofvis_dm_track_params_t* params) {
-                       params->m_event_timing_params.clear();
+                       params->m_active_events.clear();
                    }))
             {
                 break;
@@ -262,7 +296,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         stmt, 1, m_event_levels[kRocProfVisDmOperationLaunch][index].id);
                     sqlite3_bind_int(
                         stmt, 2,
-                        m_event_levels[kRocProfVisDmOperationLaunch][index].level);
+                        m_event_levels[kRocProfVisDmOperationLaunch][index].level_for_queue);
                 });
             CreateSQLTable(
                 "event_levels_op", params, 2,
@@ -273,7 +307,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         m_event_levels[kRocProfVisDmOperationDispatch][index].id);
                     sqlite3_bind_int(
                         stmt, 2,
-                        m_event_levels[kRocProfVisDmOperationDispatch][index].level);
+                        m_event_levels[kRocProfVisDmOperationDispatch][index].level_for_queue);
                 });
         }
       
@@ -282,8 +316,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->start_time                                   = UINT64_MAX;
         TraceProperties()->end_time                                     = 0;
         if(kRocProfVisDmResultSuccess !=
-           ExecuteQueryForAllTracksAsync(true,
-               kRPVQuerySlice,
+           ExecuteQueryForAllTracksAsync(kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks,
+               kRPVQuerySliceByTrackSliceQuery,
                "SELECT MIN(start), MAX(end), MIN(CAST(level as REAL)), MAX(CAST(level as REAL)), ", ";", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {
                }))

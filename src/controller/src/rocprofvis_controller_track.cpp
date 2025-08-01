@@ -240,7 +240,10 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end)
                     switch(dm_track_type)
                     {
                         case kRocProfVisDmRegionTrack:
-                        case kRocProfVisDmKernelTrack:
+                        case kRocProfVisDmKernelDispatchTrack:
+                        case kRocProfVisDmMemoryAllocationTrack:
+                        case kRocProfVisDmMemoryCopyTrack:
+                        case kRocProfVisDmStreamTrack:
                         {
                             uint64_t index = 0;
 

@@ -31,9 +31,12 @@ enum class RequestType
     kFetchGraph,
     kFetchTrackEventTable,
     kFetchTrackSampleTable,
+    kClearTrackEventTable,
+    kClearTrackSampleTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
-    kFetchEventCallStack
+    kFetchEventCallStack,
+    kSaveTrimmedTrace
 };
 
 enum class TableType
@@ -260,9 +263,10 @@ typedef struct data_req_info_t
     rocprofvis_controller_arguments_t* request_args;        // arguments for the request
     ProviderState                      loading_state;       // state of the request
     RequestType                        request_type;        // type of request
+    bool                               internal_request;    // true if request is handled by view (and not controller)
     std::shared_ptr<RequestParamsBase> custom_params;       // custom request parameters
-    
     std::chrono::steady_clock::time_point request_time;     // time when the request was made
+    uint64_t                           response_code;       // response code for the request
 } data_req_info_t;
 
 typedef struct table_info_t
@@ -298,7 +302,8 @@ public:
     static const uint64_t EVENT_EXTENDED_DATA_REQUEST_ID;
     static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
     static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
-
+    static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
+    
     DataProvider();
     ~DataProvider();
 
@@ -416,7 +421,9 @@ public:
 
     bool FetchMultiTrackTable(const TableRequestParams& table_params);
 
-    bool IsRequestPending(uint64_t request_id);
+    bool IsRequestPending(uint64_t request_id) const;
+
+    bool QueueClearTrackTableRequest(rocprofvis_controller_table_type_t table_type);
 
     /*
      * Release memory buffer holding raw data for selected track
@@ -486,11 +493,11 @@ public:
     const std::vector<std::vector<std::string>>& GetTableData(TableType type);
     std::shared_ptr<TableRequestParams>          GetTableParams(TableType type);
     uint64_t                                     GetTableTotalRowCount(TableType type);
-    void                                         ClearTable(TableType type);
 
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&)>& callback);
     void SetTraceLoadedCallback(const std::function<void(const std::string&)>& callback);
+    void SetSaveTraceCallback(const std::function<void(bool)>& callback);
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -501,6 +508,8 @@ public:
      */
     bool SetGraphIndex(uint64_t track_id, uint64_t index);
 
+    bool SaveTrimmedTrace(const std::string &path, double start_ns, double end_ns);
+    
 private:
     void HandleLoadTrace();
     void HandleLoadSystemTopology();
@@ -514,9 +523,15 @@ private:
     void ProcessGraphRequest(data_req_info_t& req);
     void ProcessTrackRequest(data_req_info_t& req);
     void ProcessTableRequest(data_req_info_t& req);
+    void ProcessSaveTrimmedTraceRequest(data_req_info_t& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
+    /*
+    Clears data for a given table type.
+    This should not be called directly, instead use QueueClearTrackTableRequest().
+    */
+    void ClearTable(TableType type);
 
     void CreateRawEventData(const TrackRequestParams&                    params,
                             rocprofvis_controller_array_t*               track_data,
@@ -563,6 +578,8 @@ private:
     std::function<void(uint64_t, const std::string&)> m_track_data_ready_callback;
     // Called when a new trace is loaded
     std::function<void(const std::string&)> m_trace_data_ready_callback;
+    // Callback when trace is saved
+    std::function<void(bool)> m_save_trace_callback;
 };
 
 }  // namespace View

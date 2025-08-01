@@ -27,8 +27,7 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_dp(dp)
 , m_show_boxplot(false)
 {
-    m_track_height          = 90.0f;
-    m_meta_area_scale_width = 70.0f;
+    m_track_height = 90.0f;
 }
 
 LineTrackItem::~LineTrackItem() {}
@@ -67,7 +66,7 @@ LineTrackItem::LineTrackRender(float graph_width)
     float tooltip_x     = 0;
     float tooltip_y     = 0;
     bool  show_tooltip  = false;
-    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kGridColor));
+    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kLineChartColor));
     ImU32 generic_red   = m_settings.GetColor(static_cast<int>(Colors::kGridRed));
 
     for(int i = 1; i < m_data.size(); i++)
@@ -201,7 +200,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
     float tooltip_x     = 0;
     float tooltip_y     = 0;
     bool  show_tooltip  = false;
-    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kGridColor));
+    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kLineChartColor));
     ImU32 generic_red   = m_settings.GetColor(static_cast<int>(Colors::kGridRed));
 
     for(int i = 1; i < m_data.size(); i++)
@@ -231,7 +230,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
         draw_list->AddRectFilled(
             point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
-            m_settings.GetColor(static_cast<int>(Colors::kGridColor)), 2.0f);
+            m_settings.GetColor(static_cast<int>(Colors::kLineChartColor)), 2.0f);
     }
     if(show_tooltip == true)
     {
@@ -250,6 +249,8 @@ LineTrackItem::ReleaseData()
     m_data  = {};
     m_min_y = 0;
     m_max_y = 0;
+    m_min_y_str.clear();
+    m_max_y_str.clear();
 }
 
 bool
@@ -275,6 +276,10 @@ LineTrackItem::HandleTrackDataChanged()
         {
             m_max_y = m_min_y + 1.0;
         }
+        std::string flt = std::to_string(m_min_y);
+        m_min_y_str     = flt.substr(0, flt.find('.') + 2);
+        flt             = std::to_string(m_max_y);
+        m_max_y_str     = flt.substr(0, flt.find('.') + 2);
     }
     return result;
 }
@@ -357,50 +362,34 @@ LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
 }
 
 void
-LineTrackItem::RenderMetaAreaScale(ImVec2& container_size)
+LineTrackItem::RenderMetaAreaScale()
 {
-    ImGui::BeginChild("MetaData Scale", ImVec2(m_meta_area_scale_width, container_size.y),
-                      ImGuiChildFlags_None);
+    ImVec2 max_size =
+        ImGui::CalcTextSize(m_max_y_str.c_str()) + ImGui::CalcTextSize("Max: ");
+    ImVec2 min_size         = ImGui::CalcTextSize(m_min_y_str.c_str());
+    m_meta_area_scale_width = max_size.x + 2 * m_metadata_padding.x;
+    ImVec2 content_region   = ImGui::GetContentRegionMax();
+    ImVec2 window_pos       = ImGui::GetWindowPos();
 
-    ImDrawList* draw_list         = ImGui::GetWindowDrawList();
-    ImVec2      child_window_size = ImGui::GetWindowSize();
+    ImGui::SetCursorPos(ImVec2(content_region.x - (max_size.x + m_metadata_padding.x),
+                               m_metadata_padding.y));
+    ImGui::TextUnformatted("Max: ");
+    ImGui::SameLine();
+    ImGui::TextUnformatted(m_max_y_str.c_str());
 
-    char text_buffer[32];
-    snprintf(text_buffer, 32, "%29.1f", m_max_y);
-    ImVec2 text_size = ImGui::CalcTextSize(text_buffer);
+    ImGui::SetCursorPos(ImVec2(content_region.x - (max_size.x + m_metadata_padding.x),
+                               content_region.y - min_size.y - m_metadata_padding.y));
+    ImGui::TextUnformatted("Min: ");
 
-    ImGui::SetCursorPos(ImVec2(child_window_size.x - (text_size.x + m_metadata_padding.x),
-                               ImGui::GetStyle().WindowPadding.y));
-    ImGui::Text("%s", text_buffer);
+    ImGui::SetCursorPos(ImVec2(content_region.x - (min_size.x + m_metadata_padding.x),
+                               content_region.y - min_size.y - m_metadata_padding.y));
+    ImGui::TextUnformatted(m_min_y_str.c_str());
 
-    if(ImGui::IsItemVisible())
-    {
-        m_is_in_view_vertical = true;
-    }
-    else
-    {
-        m_is_in_view_vertical = false;
-    }
-
-    snprintf(text_buffer, 32, "%29.1f", m_min_y);
-    text_size = ImGui::CalcTextSize(text_buffer);
-    
-    ImGui::SetCursorPos(
-        ImVec2(child_window_size.x - (text_size.x + m_metadata_padding.x),
-               child_window_size.y - text_size.y - ImGui::GetStyle().WindowPadding.y));
-    
-    ImGui::Text("%s", text_buffer);
-
-    ImGui::SetCursorPos(ImVec2(0, 0));
-    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-
-    draw_list->AddLine(
-        ImVec2(cursor_position.x + m_metadata_padding.x, cursor_position.y),
-        ImVec2(cursor_position.x + m_metadata_padding.x,
-               cursor_position.y + child_window_size.y),
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width, window_pos.y),
+        ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
+               window_pos.y + content_region.y),
         m_settings.GetColor(Colors::kMetaDataSeparator), 2.0f);
-
-    ImGui::EndChild();
 }
 
 void
@@ -413,6 +402,25 @@ LineTrackItem::RenderChart(float graph_width)
     else
     {
         LineTrackRender(graph_width);
+    }
+}
+
+void
+LineTrackItem::RenderMetaAreaOptions()
+{
+    ImGui::Checkbox("Show as Box Plot", &m_show_boxplot);
+    ImGui::Checkbox("Highlight Y Range", &m_is_color_value_existant);
+    if(m_is_color_value_existant)
+    {        
+        float width = ImGui::GetItemRectSize().x;
+        ImGui::TextUnformatted("Max");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
+        ImGui::SliderFloat("##max", &m_color_by_value_digits.interest_1_max, m_color_by_value_digits.interest_1_min, m_max_y, "%.1f");
+        ImGui::TextUnformatted("Min");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
+        ImGui::SliderFloat("##min", &m_color_by_value_digits.interest_1_min, m_min_y, m_color_by_value_digits.interest_1_max, "%.1f");
     }
 }
 

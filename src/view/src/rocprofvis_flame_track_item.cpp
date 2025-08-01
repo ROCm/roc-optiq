@@ -26,7 +26,9 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp, int id, std::string name, doubl
 , m_flame_height(40.0f)
 , m_selected_event_id(std::numeric_limits<uint64_t>::max())
 , m_dp(dp)
-{}
+{
+    m_meta_area_scale_width = 0.0f;
+}
 
 void
 FlameTrackItem::SetRandomColorFlag(bool set_color)
@@ -130,15 +132,18 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
         rectColor = m_settings.GetColor(static_cast<int>(Colors::kFlameChartColor));
     }
 
-    draw_list->AddRectFilled(rectMin, rectMax, rectColor);
+    float rounding = 2.0f;
+    draw_list->AddRectFilled(rectMin, rectMax, rectColor, rounding);
 
-    // Highlight with blue outline if selected
     if(flame.m_id == m_selected_event_id)
     {
         if(m_selected_event_id == m_dp.GetSelectedEventId())
         {
-            ImU32 blue = IM_COL32(0, 120, 255, 255);
-            draw_list->AddRect(rectMin, rectMax, blue, 0.0f, 0, 3.0f);
+            float highlight_thickness = 3.0f;
+            draw_list->AddRect(
+                rectMin - ImVec2(2, 2), rectMax + ImVec2(2, 2),
+                m_settings.GetColor(static_cast<int>(Colors::kEventHighlight)),
+                rounding + 2, 0, highlight_thickness + 2);
         }
     }
 
@@ -147,7 +152,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index,
         draw_list->PushClipRect(rectMin, rectMax, true);
         ImVec2 textPos =
             ImVec2(rectMin.x + m_text_padding.x, rectMin.y + m_text_padding.y);
-        draw_list->AddText(textPos, IM_COL32_BLACK, flame.m_name.c_str());
+        draw_list->AddText(textPos,
+                           m_settings.GetColor(static_cast<int>(Colors::kTextMain)),
+                           flame.m_name.c_str());
         draw_list->PopClipRect();
     }
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
@@ -214,10 +221,20 @@ FlameTrackItem::RenderChart(float graph_width)
 
         color_index = static_cast<long long>(flame.m_start_ts) % colorCount;
         DrawBox(start_position, color_index, flame, normalized_duration, draw_list,
-                flame.m_start_ts);
+                flame.m_start_ts + flame.m_duration);
     }
 
     ImGui::EndChild();
+}
+
+void
+FlameTrackItem::RenderMetaAreaScale()
+{}
+
+void
+FlameTrackItem::RenderMetaAreaOptions()
+{
+    ImGui::Checkbox("Color Events", &m_request_random_color);
 }
 
 }  // namespace View

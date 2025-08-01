@@ -33,6 +33,12 @@ typedef struct EventLevel
     uint8_t  level;
 } EventLevel;
 
+typedef struct rocprofvis_db_sqlite_trim_parameters
+{
+    // Table names as we can't issue recursively
+    std::map<std::string, std::string> tables;
+} rocprofvis_db_sqlite_trim_parameters;
+
 // class for methods and members common for all RocPd-based schemas
 class ProfileDatabase : public SqliteDatabase
 {
@@ -183,6 +189,9 @@ class ProfileDatabase : public SqliteDatabase
        // @return SQLITE_OK if successful
         static int CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt* stmt,
                                                 char** azColName);
+
+        static int CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
+                                   char** azColName);
     protected:
     // offset of kernel symbols in string table
         uint32_t m_symbols_offset;

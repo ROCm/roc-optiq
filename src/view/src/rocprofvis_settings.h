@@ -29,9 +29,31 @@ enum class Colors
     kScrollBarColor,
     kHighlightChart,
     kRulerBgColor,
+    kRulerTextColor,
+    kScrubberNumberColor,
     kArrowColor,
     kBorderColor,
     kSplitterColor,
+    kBgMain,
+    kBgPanel,
+    kAccentRed,
+    kAccentRedHover,
+    kAccentRedActive,
+    kBorderGray,
+    kTextMain,
+    kTextDim,
+    kScrollBg,
+    kScrollGrab,
+    kTableHeaderBg,
+    kTableBorderStrong,
+    kTableBorderLight,
+    kTableRowBg,
+    kTableRowBgAlt,
+    kEventHighlight,
+    kLineChartColor,
+    kButton,
+    kButtonHovered,
+    kButtonActive,
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -62,9 +84,11 @@ public:
     bool Init();
 
     ImFont* GetFont(FontType font_type);
+    ImFont* GetIconFont(FontType font_type);
 
 private:
     std::vector<ImFont*> m_fonts;
+    std::vector<ImFont*> m_icon_fonts;
 };
 
 class Settings
@@ -87,16 +111,22 @@ public:
     bool IsHorizontalRender();
 
     FontManager& GetFontManager() { return m_font_manager; }
+    const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
 
 private:
     Settings();
     ~Settings();
+
+    void InitStyling();
+    void ApplyColorStyling();
+
     std::vector<ImU32> m_color_store;
     std::vector<ImU32> m_flame_color_wheel;
     float              m_DPI;
     bool               m_use_dark_mode;
     bool               m_use_horizontal_rendering;
     FontManager        m_font_manager;
+    ImGuiStyle         m_default_style;
 };
 
 }  // namespace View

@@ -49,7 +49,8 @@ private:
     uint64_t m_last_total_row_count;
     int m_current_group_selection_idx;
 
-
+    // Track the selected row for context menu actions    
+    int m_selected_row = -1;
     ImVec2 m_last_table_size;
     std::shared_ptr<TrackSelectionChangedEvent> m_track_selection_event_to_handle;
     

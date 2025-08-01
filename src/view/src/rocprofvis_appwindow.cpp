@@ -251,7 +251,20 @@ AppWindow::Render()
 void
 AppWindow::RenderFileDialogs()
 {
-    // handle Dialog stuff
+    if(!ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME) &&
+       !ImGuiFileDialog::Instance()->IsOpened(FILE_SAVE_DIALOG_NAME))
+    {
+        return;  // No file dialog is opened, nothing to render
+    }
+
+    //Set Itemspacing to values from original default ImGui style
+    //custom values to break the 3rd party file dialog implementation
+    //especially the cell padding
+    auto defaultStyle = Settings::GetInstance().GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, defaultStyle.ItemSpacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, defaultStyle.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, defaultStyle.CellPadding);
+
     ImGui::SetNextWindowPos(
         ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
         ImGuiCond_Appearing);
@@ -322,6 +335,8 @@ AppWindow::RenderFileDialogs()
         }
         ImGuiFileDialog::Instance()->Close();
     }
+
+    ImGui::PopStyleVar(3);
 }
 
 void

@@ -27,6 +27,48 @@ namespace RocProfVis
 namespace DataModel
 {
 
+char* SqliteDatabase::Sqlite3ColumnText(sqlite3_stmt* stmt, int index) {
+    if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
+    {
+        return "0";
+    }
+    else
+    {
+        return (char*) sqlite3_column_text(stmt, index);
+    }
+}
+int SqliteDatabase::Sqlite3ColumnInt(sqlite3_stmt* stmt, int index) {
+
+    if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
+    {
+        return 0;
+    }
+    else
+    {
+        return sqlite3_column_int(stmt, index);
+    }
+}
+uint64_t SqliteDatabase::Sqlite3ColumnInt64(sqlite3_stmt* stmt, int index) {
+    if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
+    {
+        return 0;
+    }
+    else
+    {
+        return sqlite3_column_int64(stmt, index);
+    }
+}
+double SqliteDatabase::Sqlite3ColumnDouble(sqlite3_stmt* stmt, int index) {
+    if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
+    {
+        return 0;
+    }
+    else
+    {
+        return sqlite3_column_double(stmt, index);
+    }
+}
+
 int SqliteDatabase::CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, char** azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
@@ -67,7 +109,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
     for (int i=0; i < argc; i++)
     {
         if(db->isServiceColumn(azColName[i])) continue;
-        if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, (char*) sqlite3_column_text(stmt,i))) return 1;
+        if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, db->Sqlite3ColumnText(stmt,i))) return 1;
     }
     callback_params->future->CountThisRow();
     return 0;
@@ -372,22 +414,8 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
 
         while(sqlite3_step(stmt) == SQLITE_ROW)
         {
-            bool null_data_in_the_row = false;
-
-            for(int i = 0; i < cols; ++i)
-            {
-                if(sqlite3_column_type(stmt, i) == SQLITE_NULL)
-                {
-                    null_data_in_the_row = true;
-                    spdlog::debug("NULL data in column {}", col_names[i]);
-                    break;
-                }
-            }
-            if(null_data_in_the_row == false)
-            {
-                rc = callback(user_data, cols, stmt, col_names.data());
-                if(rc != 0) break;
-            }
+            rc = callback(user_data, cols, stmt, col_names.data());
+            if(rc != 0) break;
         }
 
         sqlite3_finalize(stmt);

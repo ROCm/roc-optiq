@@ -37,9 +37,9 @@ ProfileDatabase::CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt
         (rocprofvis_db_sqlite_callback_parameters*) data;
     ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
     if(callback_params->future->Interrupted()) return 1;
-    uint32_t index                             = sqlite3_column_int(stmt, 2);
-    db->TrackPropertiesAt(index)->record_count = sqlite3_column_int64(stmt, 0);
-    int op                                     = sqlite3_column_int(stmt, 1);
+    uint32_t index                             = db->Sqlite3ColumnInt(stmt, 2);
+    db->TrackPropertiesAt(index)->record_count = db->Sqlite3ColumnInt64(stmt, 0);
+    int op                                     = db->Sqlite3ColumnInt(stmt, 1);
     db->TraceProperties()->events_count[op] += db->TrackPropertiesAt(index)->record_count;
     callback_params->future->CountThisRow();
     return 0;
@@ -57,8 +57,8 @@ ProfileDatabase::CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt
     rocprofvis_db_ext_data_t record;
     if(callback_params->future->Interrupted()) return 1;
 
-    char* table_name = (char*) sqlite3_column_text(stmt, 0);
-    char* table_sql  = (char*) sqlite3_column_text(stmt, 1);
+    char* table_name = (char*)sqlite3_column_text(stmt, 0);
+    char* table_sql  = (char*)sqlite3_column_text(stmt, 1);
     params->tables.insert(std::make_pair(table_name, table_sql));
 
     callback_params->future->CountThisRow();
@@ -74,11 +74,11 @@ int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_st
         (rocprofvis_db_sqlite_callback_parameters*) data;
     ProfileDatabase*            db = (ProfileDatabase*) callback_params->db;
     if(callback_params->future->Interrupted()) return 1;
-    uint32_t index = sqlite3_column_int(stmt, 4);
-    db->TrackPropertiesAt(index)->min_ts       = sqlite3_column_int64(stmt, 0);
-    db->TrackPropertiesAt(index)->max_ts       = sqlite3_column_int64(stmt, 1);
-    db->TrackPropertiesAt(index)->min_value    = sqlite3_column_double(stmt, 2);
-    db->TrackPropertiesAt(index)->max_value    = sqlite3_column_double(stmt, 3);
+    uint32_t index = db->Sqlite3ColumnInt(stmt, 4);
+    db->TrackPropertiesAt(index)->min_ts       = db->Sqlite3ColumnInt64(stmt, 0);
+    db->TrackPropertiesAt(index)->max_ts       = db->Sqlite3ColumnInt64(stmt, 1);
+    db->TrackPropertiesAt(index)->min_value    = db->Sqlite3ColumnDouble(stmt, 2);
+    db->TrackPropertiesAt(index)->max_value    = db->Sqlite3ColumnDouble(stmt, 3);
 
     db->TraceProperties()->start_time = std::min(db->TraceProperties()->start_time,db->TrackPropertiesAt(index)->min_ts);
     db->TraceProperties()->end_time  = std::max(db->TraceProperties()->end_time,db->TrackPropertiesAt(index)->max_ts);
@@ -93,13 +93,13 @@ int ProfileDatabase::CallbackAddEventRecord(void *data, int argc, sqlite3_stmt* 
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     rocprofvis_db_record_data_t record;
     if (callback_params->future->Interrupted()) return 1;
-    record.event.id.bitfield.event_op = sqlite3_column_int(stmt, 0);
-    record.event.id.bitfield.event_id = sqlite3_column_int64(stmt, 5);
-    record.event.timestamp = sqlite3_column_int64(stmt, 1);
-    record.event.duration = sqlite3_column_int64(stmt, 2) - record.event.timestamp;
-    record.event.category = sqlite3_column_int(stmt, 3);
-    record.event.symbol = sqlite3_column_int(stmt, 4)+(record.event.id.bitfield.event_op==kRocProfVisDmOperationDispatch?db->m_symbols_offset:0);
-    record.event.level = sqlite3_column_int(stmt, 9);
+    record.event.id.bitfield.event_op = db->Sqlite3ColumnInt(stmt, 0);
+    record.event.id.bitfield.event_id = db->Sqlite3ColumnInt64(stmt, 5);
+    record.event.timestamp = db->Sqlite3ColumnInt64(stmt, 1);
+    record.event.duration = db->Sqlite3ColumnInt64(stmt, 2) - record.event.timestamp;
+    record.event.category = db->Sqlite3ColumnInt(stmt, 3);
+    record.event.symbol = db->Sqlite3ColumnInt(stmt, 4)+(record.event.id.bitfield.event_op==kRocProfVisDmOperationDispatch?db->m_symbols_offset:0);
+    record.event.level = db->Sqlite3ColumnInt(stmt, 9);
     
     if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;  
  
@@ -114,8 +114,8 @@ int ProfileDatabase::CallbackAddPmcRecord(void *data, int argc, sqlite3_stmt* st
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     rocprofvis_db_record_data_t record;
     if (callback_params->future->Interrupted()) return 1;
-    record.pmc.timestamp = sqlite3_column_int64(stmt, 1);
-    record.pmc.value = sqlite3_column_double(stmt,2 );
+    record.pmc.timestamp = db->Sqlite3ColumnInt64(stmt, 1);
+    record.pmc.value = db->Sqlite3ColumnDouble(stmt,2 );
     if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     callback_params->future->CountThisRow();
     return 0;
@@ -128,12 +128,12 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
     rocprofvis_db_record_data_t record;
-    record.event.id.bitfield.event_op = sqlite3_column_int(stmt, 0);
+    record.event.id.bitfield.event_op = db->Sqlite3ColumnInt(stmt, 0);
     if (callback_params->track_id == -1)
     {
-        if (db->FindTrackId((char*)sqlite3_column_text(stmt, 6),
-            (char*)sqlite3_column_text(stmt, 7),
-            (char*)sqlite3_column_text(stmt, 8), 
+        if (db->FindTrackId(db->Sqlite3ColumnText(stmt, 6),
+            db->Sqlite3ColumnText(stmt, 7),
+            db->Sqlite3ColumnText(stmt, 8), 
             record.event.id.bitfield.event_op,
             callback_params->track_id) != kRocProfVisDmResultSuccess)
         {
@@ -144,17 +144,17 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
     if(callback_params->track_id != -1)
     {
         if (record.event.id.bitfield.event_op > 0) {       
-            record.event.id.bitfield.event_id = sqlite3_column_int64(stmt, 5);
-            record.event.timestamp = sqlite3_column_int64(stmt, 1);
-            record.event.duration = sqlite3_column_int64(stmt, 2) - record.event.timestamp;
-            record.event.category = sqlite3_column_int64(stmt, 3);
-            record.event.symbol = sqlite3_column_int64(stmt, 4);
-            record.event.level   = sqlite3_column_int64(stmt, 9);
+            record.event.id.bitfield.event_id = db->Sqlite3ColumnInt64(stmt, 5);
+            record.event.timestamp = db->Sqlite3ColumnInt64(stmt, 1);
+            record.event.duration = db->Sqlite3ColumnInt64(stmt, 2) - record.event.timestamp;
+            record.event.category = db->Sqlite3ColumnInt64(stmt, 3);
+            record.event.symbol = db->Sqlite3ColumnInt64(stmt, 4);
+            record.event.level   = db->Sqlite3ColumnInt64(stmt, 9);
             if (kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
         }
         else {
-            record.pmc.timestamp = sqlite3_column_int64(stmt, 1);
-            record.pmc.value = sqlite3_column_int(stmt,2);
+            record.pmc.timestamp = db->Sqlite3ColumnInt64(stmt, 1);
+            record.pmc.value = db->Sqlite3ColumnInt(stmt,2);
         }
         if(db->BindObject()->FuncAddRecord(
                (*(slice_array_t*) callback_params->handle)[callback_params->track_id],
@@ -173,10 +173,10 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
     rocprofvis_db_flow_data_t record;
-    record.id.bitfield.event_op = sqlite3_column_int(stmt,1 );
-    if (db->FindTrackId((char*)sqlite3_column_text(stmt,3), (char*)sqlite3_column_text(stmt,4), (char*)sqlite3_column_text(stmt,5), record.id.bitfield.event_op, record.track_id) == kRocProfVisDmResultSuccess) {
-        record.id.bitfield.event_id = sqlite3_column_int64(stmt, 2 );
-        record.time = sqlite3_column_int64(stmt, 6 );
+    record.id.bitfield.event_op = db->Sqlite3ColumnInt(stmt,1 );
+    if (db->FindTrackId(db->Sqlite3ColumnText(stmt,3), db->Sqlite3ColumnText(stmt,4), db->Sqlite3ColumnText(stmt,5), record.id.bitfield.event_op, record.track_id) == kRocProfVisDmResultSuccess) {
+        record.id.bitfield.event_id = db->Sqlite3ColumnInt64(stmt, 2 );
+        record.time = db->Sqlite3ColumnInt64(stmt, 6 );
         if (db->BindObject()->FuncAddFlow(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     }
     callback_params->future->CountThisRow();
@@ -193,7 +193,7 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
     for (int i = 0; i < argc; i++)
     {
         record.name = azColName[i];
-        record.data = (char*)sqlite3_column_text(stmt,i);
+        record.data = db->Sqlite3ColumnText(stmt,i);
         if (record.data != nullptr) {
             if (db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) != kRocProfVisDmResultSuccess) return 1;
         }
@@ -588,15 +588,15 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
     {
         return 1;
     }
-    uint32_t op = sqlite3_column_int(stmt, 0);
+    uint32_t op = db->Sqlite3ColumnInt(stmt, 0);
     if (op == kRocProfVisDmOperationNoOp)
     {
         return 0;
     }
-    uint64_t start_time = sqlite3_column_int64(stmt, 1);
-    uint64_t end_time   = sqlite3_column_int64(stmt, 2);
-    uint64_t id = sqlite3_column_int64(stmt, 3);    
-    uint32_t track = sqlite3_column_int(stmt, 8);
+    uint64_t start_time = db->Sqlite3ColumnInt64(stmt, 1);
+    uint64_t end_time   = db->Sqlite3ColumnInt64(stmt, 2);
+    uint64_t id = db->Sqlite3ColumnInt64(stmt, 3);    
+    uint32_t track = db->Sqlite3ColumnInt(stmt, 8);
     uint8_t level=0;
     rocprofvis_dm_track_params_t* params     = db->TrackPropertiesAt(track);
     ROCPROFVIS_ASSERT_MSG_RETURN(params!=0, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL, 1);

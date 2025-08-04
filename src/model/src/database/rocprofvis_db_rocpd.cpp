@@ -90,14 +90,14 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, ch
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
     track_params.track_id = (rocprofvis_dm_track_id_t)db->NumTracks();
-    track_params.track_category = (rocprofvis_dm_track_category_t)sqlite3_column_int(stmt, TRACK_ID_CATEGORY);
+    track_params.track_category = (rocprofvis_dm_track_category_t)db->Sqlite3ColumnInt(stmt, TRACK_ID_CATEGORY);
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
         track_params.process_tag[i] = azColName[i];
-        char* arg = (char*) sqlite3_column_text(stmt, i);
+        char* arg = db->Sqlite3ColumnText(stmt, i);
         track_params.process_id_numeric[i] = Database::IsNumber(arg);
         if(track_params.process_id_numeric[i])
         {
-            track_params.process_id[i] = sqlite3_column_int(stmt, i);
+            track_params.process_id[i] = db->Sqlite3ColumnInt(stmt, i);
         }
         else
         {
@@ -108,22 +108,22 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, ch
     {
 
         track_params.process_name[TRACK_ID_PID_OR_AGENT] = ProcessNameSuffixFor(track_params.track_category);
-        track_params.process_name[TRACK_ID_PID_OR_AGENT] += (char*)sqlite3_column_text(stmt, TRACK_ID_PID_OR_AGENT);
+        track_params.process_name[TRACK_ID_PID_OR_AGENT] += db->Sqlite3ColumnText(stmt, TRACK_ID_PID_OR_AGENT);
 
         if (track_params.track_category != kRocProfVisDmPmcTrack){
             track_params.process_name[TRACK_ID_TID_OR_QUEUE] = SubProcessNameSuffixFor(track_params.track_category);
-            track_params.process_name[TRACK_ID_TID_OR_QUEUE] += (char*)sqlite3_column_text(stmt, TRACK_ID_TID_OR_QUEUE);
+            track_params.process_name[TRACK_ID_TID_OR_QUEUE] += db->Sqlite3ColumnText(stmt, TRACK_ID_TID_OR_QUEUE);
             db->find_track_map[track_params.process_id[TRACK_ID_PID_OR_AGENT]][track_params.process_id[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
         } else
         {
-            track_params.process_name[TRACK_ID_TID_OR_QUEUE] = (char*)sqlite3_column_text(stmt, TRACK_ID_TID_OR_QUEUE);
+            track_params.process_name[TRACK_ID_TID_OR_QUEUE] = db->Sqlite3ColumnText(stmt, TRACK_ID_TID_OR_QUEUE);
             db->find_track_pmc_map[track_params.process_id[TRACK_ID_PID_OR_AGENT]][track_params.process_name[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
         }
         if (kRocProfVisDmResultSuccess != db->AddTrackProperties(track_params)) return 1;
         if (db->BindObject()->FuncAddTrack(db->BindObject()->trace_object, db->TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1;  
         if (track_params.track_category == kRocProfVisDmRegionTrack) {
-            db->CachedTables()->AddTableCell("Process", track_params.process_id[TRACK_ID_PID], azColName[TRACK_ID_PID], (char*)sqlite3_column_text(stmt, TRACK_ID_PID));
-            db->CachedTables()->AddTableCell("Thread", track_params.process_id[TRACK_ID_TID], azColName[TRACK_ID_TID], (char*)sqlite3_column_text(stmt, TRACK_ID_TID));
+            db->CachedTables()->AddTableCell("Process", track_params.process_id[TRACK_ID_PID], azColName[TRACK_ID_PID], db->Sqlite3ColumnText(stmt, TRACK_ID_PID));
+            db->CachedTables()->AddTableCell("Thread", track_params.process_id[TRACK_ID_TID], azColName[TRACK_ID_TID], db->Sqlite3ColumnText(stmt, TRACK_ID_TID));
             if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Process", track_params.process_id[TRACK_ID_PID]) != kRocProfVisDmResultSuccess) return 1;
             if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Thread", track_params.process_id[TRACK_ID_TID]) != kRocProfVisDmResultSuccess) return 1;
         } else
@@ -132,8 +132,8 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, ch
             track_params.track_category == kRocProfVisDmMemoryCopyTrack || 
             track_params.track_category == kRocProfVisDmPmcTrack)
         {
-            db->CachedTables()->AddTableCell("Agent", track_params.process_id[TRACK_ID_AGENT], azColName[TRACK_ID_AGENT], (char*)sqlite3_column_text(stmt, TRACK_ID_AGENT));
-            db->CachedTables()->AddTableCell("Queue", track_params.process_id[TRACK_ID_QUEUE], azColName[TRACK_ID_QUEUE], (char*)sqlite3_column_text(stmt, TRACK_ID_QUEUE));
+            db->CachedTables()->AddTableCell("Agent", track_params.process_id[TRACK_ID_AGENT], azColName[TRACK_ID_AGENT], db->Sqlite3ColumnText(stmt, TRACK_ID_AGENT));
+            db->CachedTables()->AddTableCell("Queue", track_params.process_id[TRACK_ID_QUEUE], azColName[TRACK_ID_QUEUE], db->Sqlite3ColumnText(stmt, TRACK_ID_QUEUE));
             if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Agent", track_params.process_id[TRACK_ID_AGENT]) != kRocProfVisDmResultSuccess) return 1;
             if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Queue", track_params.process_id[TRACK_ID_QUEUE]) != kRocProfVisDmResultSuccess) return 1;
         }
@@ -148,8 +148,8 @@ int RocpdDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, c
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
     if (callback_params->future->Interrupted()) return 1;
-    std::stringstream ids((char*)sqlite3_column_text(stmt, 1));
-    uint32_t string_id = db->BindObject()->FuncAddString(db->BindObject()->trace_object, (char*)sqlite3_column_text(stmt, 0));
+    std::stringstream ids(db->Sqlite3ColumnText(stmt, 1));
+    uint32_t string_id = db->BindObject()->FuncAddString(db->BindObject()->trace_object, db->Sqlite3ColumnText(stmt, 0));
     if (string_id == INVALID_INDEX) return 1;
     
     for (uint64_t id; ids >> id;) {   
@@ -168,10 +168,10 @@ int RocpdDatabase::CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stm
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
     rocprofvis_db_stack_data_t record;
     if (callback_params->future->Interrupted()) return 1;
-    record.symbol = (char*)sqlite3_column_text(stmt, 0);
-    record.args = (char*)sqlite3_column_text(stmt, 1);
-    record.line = (char*)sqlite3_column_text(stmt, 2);
-    record.depth = sqlite3_column_int(stmt, 3);
+    record.symbol = db->Sqlite3ColumnText(stmt, 0);
+    record.args = db->Sqlite3ColumnText(stmt, 1);
+    record.line = db->Sqlite3ColumnText(stmt, 2);
+    record.depth = db->Sqlite3ColumnInt(stmt, 3);
     if (db->BindObject()->FuncAddStackFrame(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     callback_params->future->CountThisRow();
     return 0;

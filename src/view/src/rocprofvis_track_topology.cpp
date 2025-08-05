@@ -161,18 +161,25 @@ TrackTopology::UpdateTopology()
                                 m_data_provider.GetStreamInfo(stream_ids[k]);
                             if(stream_info)
                             {
+                                const device_info_t* device_info =
+                                    m_data_provider.GetDeviceInfo(stream_info->device_id);
                                 m_topology.nodes[i].processes[j].streams[k].info =
                                     stream_info;
-
-                                m_topology.nodes[i]
-                                    .processes[j]
-                                    .streams[k]
-                                    .info_table = InfoTable{
-                                    { { 
-                                            InfoTable::Cell{ stream_info->name,
-                                                            false } } }
-                                };
-
+                                if(device_info)
+                                {
+                                    m_topology.nodes[i]
+                                        .processes[j]
+                                        .streams[k]
+                                        .info_table = InfoTable{
+                                        { { InfoTable::Cell{
+                                                device_info->type + " " +
+                                                    std::to_string(
+                                                        device_info->type_index),
+                                                false },
+                                            InfoTable::Cell{ device_info->product_name,
+                                                             false } } }
+                                    };
+                                }
                             }
                         }
                         

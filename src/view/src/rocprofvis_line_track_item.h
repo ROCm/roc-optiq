@@ -19,13 +19,13 @@ namespace View
 class LineTrackItem : public TrackItem
 {
 public:
-    LineTrackItem(DataProvider& dp, int id, std::string name, float zoom, double time_offset_ns,
-                  double& min_x, double& max_x, double scale_x);
+    LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
+                  double time_offset_ns, double& min_x, double& max_x, double scale_x);
     ~LineTrackItem();
 
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
-    bool   HandleTrackDataChanged() override;
+    bool   HandleTrackDataChanged(uint64_t request_id, uint64_t response_code) override;
     bool   ExtractPointsFromData();
 
     std::tuple<double, double> FindMaxMin();
@@ -38,14 +38,17 @@ public:
     void  SetShowBoxplot(bool show_boxplot);
 
 protected:
-    virtual void RenderMetaAreaScale(ImVec2& container_size) override;
+    virtual void RenderMetaAreaScale() override;
     virtual void RenderChart(float graph_width) override;
+    virtual void RenderMetaAreaOptions() override;
 
 private:
     std::vector<rocprofvis_data_point_t> m_data;
     rocprofvis_color_by_value_t          m_color_by_value_digits;
     double                               m_min_y;
     double                               m_max_y;
+    std::string                          m_min_y_str;
+    std::string                          m_max_y_str;
     bool                                 m_is_color_value_existant;
     DataProvider&                        m_dp;
     bool                                 m_show_boxplot;

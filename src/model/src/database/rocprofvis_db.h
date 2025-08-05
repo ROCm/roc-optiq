@@ -155,6 +155,22 @@ class Database
                                                                 bool count_only, 
                                                                 rocprofvis_dm_string_t& query) = 0;
 
+       virtual rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t start,
+                                                      rocprofvis_dm_timestamp_t end,
+                                                      rocprofvis_dm_charptr_t new_db_path,
+                                                      Future* future) = 0;
+
+       rocprofvis_dm_result_t SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
+                                                   rocprofvis_dm_timestamp_t end,
+                                                   rocprofvis_dm_string_t new_db_path, 
+                                                   rocprofvis_db_future_t object);
+
+       static rocprofvis_dm_result_t SaveTrimmedDataStatic(Database* db, 
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t end, 
+                                                    rocprofvis_dm_string_t new_db_path,
+                                                    Future* object);
+
     private:
     /************************static methods to be used as a parameter to std::thread**********************/
 
@@ -294,7 +310,7 @@ class Database
         // binding structure contains methods to transfer data between database and trace objects 
         rocprofvis_dm_db_bind_struct *m_binding_info;
         // database file path
-        rocprofvis_db_filename_t m_path;
+        std::string m_path;
         // vector array of track parameters. Used as a reference for data model Track objects and for Database component to generate proper database queries 
         std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>> m_track_properties;
         // map array of cached tables, mostly with non-essential Track information
@@ -304,7 +320,7 @@ class Database
         // returns pointer to binding structure
         rocprofvis_dm_db_bind_struct *  BindObject() {return m_binding_info;}
         // returns pointer to database file path
-        rocprofvis_db_filename_t        Path() {return m_path;}
+        rocprofvis_db_filename_t        Path() {return m_path.c_str();}
         // return current number of tracks
         rocprofvis_dm_size_t            NumTracks() { return m_track_properties.size(); }
         // returns pointer to track properties structure. Takes index of track as a parameter 

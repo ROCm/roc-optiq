@@ -7,20 +7,23 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
-#include "widgets/rocprofvis_debug_window.h"
+#include "rocprofvis_settings.h"
 #include "rocprofvis_version.h"
+#include "widgets/rocprofvis_debug_window.h"
+#include "widgets/rocprofvis_confirmation_dialog.h"
 
 #ifdef COMPUTE_UI_SUPPORT
-#include "rocprofvis_navigation_manager.h"
+#    include "rocprofvis_navigation_manager.h"
 #endif
 #include <filesystem>
 
 using namespace RocProfVis::View;
 
-constexpr ImVec2 FILE_DIALOG_SIZE = ImVec2(480.0f, 360.0f);
-constexpr char* FILE_DIALOG_NAME = "ChooseFileDlgKey";
-constexpr char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
-constexpr char* ABOUT_DIALOG_NAME = "About##_dialog";
+constexpr ImVec2 FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
+constexpr char*  FILE_DIALOG_NAME       = "ChooseFileDlgKey";
+constexpr char*  FILE_SAVE_DIALOG_NAME  = "SaveFileDlgKey";
+constexpr char*  TAB_CONTAINER_SRC_NAME = "MainTabContainer";
+constexpr char*  ABOUT_DIALOG_NAME      = "About##_dialog";
 
 // For testing DataProvider
 void
@@ -61,6 +64,7 @@ AppWindow::AppWindow()
 , m_show_metrics(false)
 #endif
 , m_open_about_dialog(false)
+, m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
 {}
 
 AppWindow::~AppWindow()
@@ -111,6 +115,9 @@ AppWindow::Init()
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
 
+    // default dark mode
+    //Settings::GetInstance().DarkMode();
+
     return result;
 }
 
@@ -129,6 +136,24 @@ AppWindow::Update()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
+}
+
+bool AppWindow::IsTrimSaveAllowed() {
+
+    // Check if save is allowed
+    bool save_allowed  = false;
+    auto active_tab = m_tab_container->GetActiveTab();
+    if(active_tab)
+    {
+        // Check if the active tab is a TraceView
+        auto trace_view = std::dynamic_pointer_cast<TraceView>(active_tab->m_widget);
+        if(trace_view)
+        {
+            // Check if the trace view has a selection that can be saved
+            save_allowed = trace_view->IsTrimSaveAllowed();
+        }
+    }
+    return save_allowed;
 }
 
 void
@@ -175,7 +200,17 @@ AppWindow::Render()
                                                         supported_extensions.c_str(),
                                                         config);
             }
-
+            if(ImGui::MenuItem("Save Selection", nullptr, false, IsTrimSaveAllowed()))
+            {
+                // Save the currently selected tab's content
+                auto active_tab = m_tab_container->GetActiveTab();
+                if(active_tab)
+                {
+                    // Open the save dialog
+                    ImGuiFileDialog::Instance()->OpenDialog(FILE_SAVE_DIALOG_NAME,
+                                                            "Save Selection", ".db,.rpd");
+                }
+            }
             ImGui::EndMenu();
         }
 
@@ -193,18 +228,43 @@ AppWindow::Render()
         m_main_view->Render();
     }
 
-    if(m_open_about_dialog) {
+    if(m_open_about_dialog)
+    {
         ImGui::OpenPopup(ABOUT_DIALOG_NAME);
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
-    RenderAboutDialog();
+    RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
+    m_confirmation_dialog->Render();
 
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
-    // handle Dialog stuff
+    RenderFileDialogs();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    RenderDebugOuput();
+
+#endif
+}
+
+void
+AppWindow::RenderFileDialogs()
+{
+    if(!ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME) &&
+       !ImGuiFileDialog::Instance()->IsOpened(FILE_SAVE_DIALOG_NAME))
+    {
+        return;  // No file dialog is opened, nothing to render
+    }
+
+    //Set Itemspacing to values from original default ImGui style
+    //custom values to break the 3rd party file dialog implementation
+    //especially the cell padding
+    auto defaultStyle = Settings::GetInstance().GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, defaultStyle.ItemSpacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, defaultStyle.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, defaultStyle.CellPadding);
+
     ImGui::SetNextWindowPos(
         ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
         ImGuiCond_Appearing);
@@ -255,14 +315,28 @@ AppWindow::Render()
                 }
             }
         }
-
         ImGuiFileDialog::Instance()->Close();
     }
 
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-    RenderDebugOuput();
+    // Handle file save dialog
+    ImGui::SetNextWindowPos(
+        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
+        ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
+    if(ImGuiFileDialog::Instance()->Display(FILE_SAVE_DIALOG_NAME))
+    {
+        if(ImGuiFileDialog::Instance()->IsOk())
+        {
+            std::filesystem::path file_path(
+                ImGuiFileDialog::Instance()->GetFilePathName());
 
-#endif
+            std::string file_path_str = file_path.string();
+            HandleSaveSelection(file_path_str);
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    ImGui::PopStyleVar(3);
 }
 
 void
@@ -283,12 +357,14 @@ AppWindow::RenderSettingsMenu()
     }
 }
 
-void AppWindow::RenderHelpMenu() {
+void
+AppWindow::RenderHelpMenu()
+{
     if(ImGui::BeginMenu("Help"))
     {
         if(ImGui::MenuItem("About"))
         {
-           m_open_about_dialog = true;
+            m_open_about_dialog = true;
         }
         ImGui::EndMenu();
     }
@@ -311,16 +387,62 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 #endif
 }
 
-void AppWindow::RenderAboutDialog() 
+void
+AppWindow::HandleSaveSelection(const std::string& file_path_str)
+{
+    // Check if file already exists
+    std::error_code ec;
+    if(std::filesystem::exists(file_path_str, ec))
+    {
+        // Show confirmation dialog
+        m_confirmation_dialog->Show(
+            "Confirm Save", "File already exists. Do you want to overwrite it?",
+            [this, file_path_str]() { SaveSelection(file_path_str); });
+        return;
+    }
+    else
+    {
+        SaveSelection(file_path_str);
+    }
+}
+
+void
+AppWindow::SaveSelection(const std::string& file_path_str)
+{
+    // Get the active tab
+    auto active_tab = m_tab_container->GetActiveTab();
+    if(active_tab)
+    {
+        // Check if active tab is a trace view
+        auto trace_view = std::dynamic_pointer_cast<TraceView>(active_tab->m_widget);
+        if(trace_view)
+        {
+            trace_view->SaveSelection(file_path_str);
+        }
+        else
+        {
+            spdlog::warn("Active tab is not a Trace View, cannot save selection.");
+        }
+    }
+    else
+    {
+        spdlog::warn("No active tab to save selection from.");
+    }
+}
+
+void
+AppWindow::RenderAboutDialog()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
-    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::Text("RocProfiler Visualizer");
-        ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR, ROCPROFVIS_VERSION_MINOR,
-                    ROCPROFVIS_VERSION_PATCH);
-        ImGui::Text("Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
+        ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR,
+                    ROCPROFVIS_VERSION_MINOR, ROCPROFVIS_VERSION_PATCH);
+        ImGui::Text(
+            "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
 
         if(ImGui::Button("Close"))
         {
@@ -328,9 +450,8 @@ void AppWindow::RenderAboutDialog()
         }
         ImGui::EndPopup();
     }
-    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding   
+    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
 }
-
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void
@@ -363,9 +484,9 @@ AppWindow::RenderDeveloperMenu()
             IGFD::FileDialogConfig config;
             config.path                      = ".";
             std::string supported_extensions = ".db,.rpd";
-#ifdef JSON_SUPPORT
+#    ifdef JSON_SUPPORT
             supported_extensions += ",.json";
-#endif
+#    endif
             ImGuiFileDialog::Instance()->OpenDialog("DebugFile", "Choose File",
                                                     supported_extensions.c_str(), config);
         }
@@ -379,9 +500,9 @@ RenderProviderTest(DataProvider& provider)
 {
     ImGui::Begin("Data Provider Test Window", nullptr, ImGuiWindowFlags_None);
 
-    static char track_index_buffer[64]     = "0";
-    static char end_track_index_buffer[64] = "1";  // for setting table track range
-    static uint64_t group_id_counter = 0;
+    static char     track_index_buffer[64]     = "0";
+    static char     end_track_index_buffer[64] = "1";  // for setting table track range
+    static uint64_t group_id_counter           = 0;
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
@@ -420,7 +541,8 @@ RenderProviderTest(DataProvider& provider)
     if(ImGui::Button("Fetch Single Track Event Table"))
     {
         provider.FetchSingleTrackEventTable(index, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", "", "", start_row, row_count);
+                                            provider.GetEndTime(), "", "", "", start_row,
+                                            row_count);
     }
     if(ImGui::Button("Fetch Multi Track Event Table"))
     {
@@ -431,7 +553,8 @@ RenderProviderTest(DataProvider& provider)
             vect.push_back(i);
         }
         provider.FetchMultiTrackEventTable(vect, provider.GetStartTime(),
-                                           provider.GetEndTime(), "", "", "", start_row, row_count);
+                                           provider.GetEndTime(), "", "", "", start_row,
+                                           row_count);
     }
     if(ImGui::Button("Print Event Table"))
     {
@@ -441,7 +564,8 @@ RenderProviderTest(DataProvider& provider)
     if(ImGui::Button("Fetch Single Track Sample Table"))
     {
         provider.FetchSingleTrackSampleTable(index, provider.GetStartTime(),
-                                             provider.GetEndTime(), "", start_row, row_count);
+                                             provider.GetEndTime(), "", start_row,
+                                             row_count);
     }
     if(ImGui::Button("Fetch Multi Track Sample Table"))
     {
@@ -452,7 +576,8 @@ RenderProviderTest(DataProvider& provider)
             vect.push_back(i);
         }
         provider.FetchMultiTrackSampleTable(vect, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", start_row, row_count);
+                                            provider.GetEndTime(), "", start_row,
+                                            row_count);
     }
     if(ImGui::Button("Print Sample Table"))
     {
@@ -533,6 +658,6 @@ AppWindow::RenderDebugOuput()
     if(m_show_provider_test_widow)
     {
         RenderProviderTest(m_test_data_provider);
-    }    
+    }
 }
 #endif  // ROCPROFVIS_DEVELOPER_MODE

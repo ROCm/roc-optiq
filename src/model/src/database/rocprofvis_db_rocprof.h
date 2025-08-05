@@ -67,6 +67,12 @@ public:
                                         rocprofvis_dm_event_id_t event_id, 
                                         Future* object) override;
 
+    rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t start, 
+                                           rocprofvis_dm_timestamp_t end,
+                                           rocprofvis_dm_charptr_t new_db_path,
+                                           Future* future) override;
+
+
 
 private:
     // sqlite3_exec callback to process track information query and add track object to Trace container

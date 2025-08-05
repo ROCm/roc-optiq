@@ -45,6 +45,26 @@ ProfileDatabase::CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt
     return 0;
 }
 
+int
+ProfileDatabase::CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
+                                                char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    rocprofvis_db_sqlite_trim_parameters* params =
+        (rocprofvis_db_sqlite_trim_parameters*) callback_params->handle;
+    rocprofvis_db_ext_data_t record;
+    if(callback_params->future->Interrupted()) return 1;
+
+    char* table_name = (char*) sqlite3_column_text(stmt, 0);
+    char* table_sql  = (char*) sqlite3_column_text(stmt, 1);
+    params->tables.insert(std::make_pair(table_name, table_sql));
+
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
 int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_stmt* stmt,
                                             char** azColName)
 {

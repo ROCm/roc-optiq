@@ -24,9 +24,8 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr double INVALID_SELECTION_TIME = std::numeric_limits<double>::lowest();
-constexpr float  REORDER_AUTO_SCROLL_THRESHOLD =
-    0.2f;  // 20% top and bottom of the window size
+// 20% top and bottom of the window size
+constexpr float  REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 
 TimelineView::TimelineView(DataProvider&                      dp,
                            std::shared_ptr<TimelineSelection> timeline_selection)
@@ -53,7 +52,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_scroll_position_x(0)
 , m_scrollbar_location_as_percentage(0)
 , m_artifical_scrollbar_active(false)
-, m_highlighted_region({ INVALID_SELECTION_TIME, INVALID_SELECTION_TIME })
+, m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME, TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(static_cast<uint64_t>(-1))
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_settings(Settings::GetInstance())
@@ -235,7 +234,7 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
         const track_info_t* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
         if(!metadata)
         {
-            spdlog::warn(
+            spdlog::error(
                 "No metadata found for track id {}, cannot process new track data",
                 tde->GetTrackID());
             return;
@@ -246,7 +245,9 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
         {
             if(m_graphs[track_index].chart)
             {
-                m_graphs[track_index].chart->HandleTrackDataChanged();
+                m_graphs[track_index].chart->HandleTrackDataChanged(tde->GetRequestID(),
+                                                                    tde->GetResponseCode());
+                                                                    
             }
             else
             {
@@ -423,7 +424,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // Render range selction box
     ImVec2 cursor_position = screen_pos;
 
-    if(m_highlighted_region.first != INVALID_SELECTION_TIME)
+    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
         double normalized_start_box_highlighted =
             window_position.x +
@@ -434,7 +435,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                                   cursor_position.y + container_size.y - m_ruler_height),
                            m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
     }
-    if(m_highlighted_region.first != INVALID_SELECTION_TIME)
+    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
         double normalized_start_box_highlighted_end =
             window_position.x +
@@ -446,8 +447,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                    cursor_position.y + container_size.y - m_ruler_height),
             m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
     }
-    if(m_highlighted_region.first != INVALID_SELECTION_TIME &&
-       m_highlighted_region.second != INVALID_SELECTION_TIME)
+    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
+       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
     {
         double normalized_start_box_highlighted =
             window_position.x +
@@ -484,7 +485,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         ImVec2 text_pos  = ImVec2(rect_pos1.x + label_padding, rect_pos1.y);
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
-                                 m_settings.GetColor(Colors::kGridColor));
+                                 m_settings.GetColor(Colors::kScrubberNumberColor));
         draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), text);
         draw_list->AddLine(
             ImVec2(mouse_position.x, screen_pos.y),
@@ -494,12 +495,12 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         // Code below is for detecting range selection by double clicking
         if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
         {
-            if(m_highlighted_region.first == INVALID_SELECTION_TIME)
+            if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.first =
                     m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
             }
-            else if(m_highlighted_region.second == INVALID_SELECTION_TIME)
+            else if(m_highlighted_region.second == TimelineSelection::INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.second =
                     m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
@@ -511,9 +512,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             }
             else
             {
-                m_highlighted_region.first  = INVALID_SELECTION_TIME;
-                m_highlighted_region.second = INVALID_SELECTION_TIME;
-                m_selection->SelectTimeRange(m_min_x, m_max_x);
+                m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
+                m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
+                m_selection->ClearTimeRange();
             }
         }
     }
@@ -670,7 +671,7 @@ TimelineView::RenderGridAlt()
             ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
                                        cursor_position.y + content_size.y - label_size.y -
                                            m_ruler_padding.y);
-            draw_list->AddText(label_pos, m_settings.GetColor(Colors::kGridColor),
+            draw_list->AddText(label_pos, m_settings.GetColor(Colors::kRulerTextColor),
                                label.c_str());
         }
     }
@@ -909,6 +910,8 @@ TimelineView::RenderGraphView()
                                track_top <= m_scroll_position + m_graph_size.y) ||
                               is_reordering;
 
+            track_item.chart->SetInViewVertical(is_visible);
+
             if(is_visible)
             {
                 // Request data for the chart if it doesn't have data
@@ -923,18 +926,6 @@ TimelineView::RenderGraphView()
                         (m_view_time_offset_ns + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
                 }
-
-                if(track_item.color_by_value)
-                {
-                    track_item.chart->SetColorByValue(track_item.color_by_value_digits);
-                }
-
-                if(track_item.graph_type == rocprofvis_graph_t::TYPE_LINECHART)
-                {
-                    static_cast<LineTrackItem*>(track_item.chart)
-                        ->SetShowBoxplot(track_item.make_boxplot);
-                }
-
                 ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
                 if(track_item.selected)
                 {
@@ -1143,11 +1134,7 @@ TimelineView::MakeGraphView()
                 temp_flame.chart          = flame;
                 temp_flame.graph_type     = rocprofvis_graph_t::TYPE_FLAMECHART;
                 temp_flame.display        = true;
-                temp_flame.color_by_value = false;
                 temp_flame.selected       = false;
-                temp_flame.colorful_flamechart = true;
-                rocprofvis_color_by_value_t temp_color = {};
-                temp_flame.color_by_value_digits       = temp_color;
                 m_graphs[track_info->index]            = std::move(temp_flame);
                 m_track_height_total[track_info->index] =
                     track_height_total;  // Store the height of the flame chart
@@ -1176,14 +1163,9 @@ TimelineView::MakeGraphView()
 
                 rocprofvis_graph_t temp;
                 temp.chart          = line;
-                temp.make_boxplot   = false;
                 temp.graph_type     = rocprofvis_graph_t::TYPE_LINECHART;
                 temp.display        = true;
-                temp.color_by_value = false;
                 temp.selected       = false;
-                temp.colorful_flamechart = false;
-                rocprofvis_color_by_value_t temp_color_line = {};
-                temp.color_by_value_digits                  = temp_color_line;
                 m_graphs[track_info->index]                 = std::move(temp);
                 m_track_height_total[track_info->index] =
                     track_height_total;  // Store the height of the line chart
@@ -1196,7 +1178,6 @@ TimelineView::MakeGraphView()
             }
         }
     }
-    m_selection->Init(m_min_x, m_max_x);
     m_meta_map_made = true;
 }
 
@@ -1320,7 +1301,7 @@ TimelineView::HandleTopSurfaceTouch()
                                    container_pos.y + m_graph_size.y);
 
     bool is_mouse_in_sidebar = ImGui::IsMouseHoveringRect(sidebar_min, sidebar_max);
-    bool is_mouse_in_graph   = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
+    bool is_mouse_in_graph   = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max) && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
     ImGuiIO& io = ImGui::GetIO();
 

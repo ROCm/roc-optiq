@@ -17,8 +17,7 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
 {
     ImU32 color     = Settings::GetInstance().GetColor(Colors::kArrowColor);
     float thickness = 2.0f;
-    float head_size = 12.0f;
-
+    float head_size = 8.0f;  
     float scroll_y = ImGui::GetScrollY();
     for(const auto& arrow : m_arrows_to_render)
     {
@@ -33,9 +32,15 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
 
         if(p_start.x == p_end.x && p_start.y == p_end.y) continue;
 
-        draw_list->AddLine(p_start, p_end, color, thickness);
+        // Calculate control points for a smooth cubic Bezier curve
+        float  curve_offset = 0.25f * (p_end.x - p_start.x);
+        ImVec2 p_ctrl1      = ImVec2(p_start.x + curve_offset, p_start.y);
+        ImVec2 p_ctrl2      = ImVec2(p_end.x - curve_offset, p_end.y);
 
-        ImVec2 dir = ImVec2(p_end.x - p_start.x, p_end.y - p_start.y);
+        draw_list->AddBezierCubic(p_start, p_ctrl1, p_ctrl2, p_end, color, thickness, 32);
+
+        // Compute direction at the end of the curve (tangent)
+        ImVec2 dir = ImVec2(p_end.x - p_ctrl2.x, p_end.y - p_ctrl2.y);
         float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
         if(len > 0.0f)
         {
@@ -43,6 +48,8 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
             dir.y /= len;
         }
         ImVec2 ortho(-dir.y, dir.x);
+
+        // Arrowhead points
         ImVec2 p1 = p_end;
         ImVec2 p2 = ImVec2(p_end.x - dir.x * head_size - ortho.x * head_size * 0.5f,
                            p_end.y - dir.y * head_size - ortho.y * head_size * 0.5f);

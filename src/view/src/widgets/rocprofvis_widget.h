@@ -41,7 +41,8 @@ public:
     ImVec2 m_item_spacing;
     ImVec2 m_window_padding;
 
-    ImGuiChildFlags m_child_window_flags;
+    ImGuiChildFlags m_child_flags;
+    ImGuiWindowFlags m_window_flags;
 };
 
 class RocCustomWidget : public RocWidget
@@ -153,6 +154,8 @@ public:
 
     void SetActiveTab(int index);
     void SetActiveTab(const std::string& id);
+
+    const TabItem* GetActiveTab() const;
 
     void SetAllowToolTips(bool allow_tool_tips);
     bool GetAllowToolTips() const;

@@ -248,6 +248,24 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     return result;
 }
 
+rocprofvis_dm_result_t rocprofvis_db_trim_save_async(rocprofvis_dm_database_t database, rocprofvis_dm_timestamp_t start,
+                                            rocprofvis_dm_timestamp_t end,
+                                            rocprofvis_dm_charptr_t new_db_path, 
+                                            rocprofvis_db_future_t object)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+                                 RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(object,
+                                 RocProfVis::DataModel::ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(new_db_path, "Error! Database path cannot be null.",
+                                 kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    return db->SaveTrimmedDataAsync(start, end, new_db_path, object);
+}
+
 /****************************************************************************************************
  * @brief Asynchronous call to read event property of specific type
  *                                                     

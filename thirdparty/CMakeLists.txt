@@ -55,6 +55,22 @@ add_library(json STATIC
 target_link_libraries(json PRIVATE double-conversion)
 endif(JSON_SUPPORT) 
 
+add_executable(imgui_binary_to_compressed_c
+	imgui/misc/fonts/binary_to_compressed_c.cpp
+)
+set(ICON_FILE ${CMAKE_CURRENT_SOURCE_DIR}/ionicons/fonts/ionicons.ttf)
+add_custom_command(
+    OUTPUT ${ICON_HEADER}
+    COMMAND imgui_binary_to_compressed_c ${ICON_FILE} icon_font -u8 > ${ICON_HEADER}
+    DEPENDS ${ICON_FILE} imgui_binary_to_compressed_c
+    COMMENT "Building ${ICON_HEADER} from ${ICON_FILE}"
+    VERBATIM
+)
+
+add_custom_target(generate_icon_header
+    DEPENDS ${ICON_HEADER}
+)
+
 set(GLFW_DIR glfw/)
 option(GLFW_BUILD_EXAMPLES "Build the GLFW example programs" OFF)
 option(GLFW_BUILD_TESTS "Build the GLFW test programs" OFF)

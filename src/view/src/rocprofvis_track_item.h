@@ -5,6 +5,7 @@
 #include "rocprofvis_view_structs.h"
 
 #include <deque>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -48,7 +49,7 @@ public:
     float GetDistanceToView();
 
     virtual std::tuple<double, double> GetMinMax();
-    virtual bool                       HandleTrackDataChanged() = 0;
+    virtual bool                       HandleTrackDataChanged(uint64_t request_id, uint64_t response_code) = 0;
     
     bool        GetResizeStatus();
     static void SetSidebarSize(int sidebar_size);
@@ -66,7 +67,8 @@ public:
 
 protected:
     virtual void RenderMetaArea();
-    virtual void RenderMetaAreaScale(ImVec2& container_size);
+    virtual void RenderMetaAreaScale() = 0;
+    virtual void RenderMetaAreaOptions() = 0;
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
 
@@ -99,7 +101,7 @@ protected:
     uint64_t m_group_id_counter = 0;  // Counter for grouping requests
 
     std::deque<TrackRequestParams> m_request_queue;
-
+    std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;
     static float s_metadata_width;
 };
 

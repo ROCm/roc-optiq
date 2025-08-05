@@ -8,6 +8,7 @@
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_view.h"
+#include "rocprofvis_track_topology.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
@@ -19,13 +20,16 @@ TraceView::TraceView()
 , m_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
+, m_save_trace_popup_info{false, false}
 , m_analysis(nullptr)
 , m_timeline_selection(nullptr)
+, m_track_topology(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback(
-        [](uint64_t track_id, const std::string& trace_path) {
+        [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
             std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
-                static_cast<int>(RocEvents::kNewTrackData), track_id, trace_path);
+                static_cast<int>(RocEvents::kNewTrackData), track_id, trace_path,
+                req.request_id, req.response_code);
             EventManager::GetInstance()->AddEvent(e);
         });
 
@@ -40,6 +44,12 @@ TraceView::TraceView()
             }
         }
     };
+
+    m_data_provider.SetSaveTraceCallback(
+        [this](bool success) {
+            m_save_trace_popup_info.show_popup = true;
+            m_save_trace_popup_info.success = success;
+        });
 
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
@@ -81,9 +91,9 @@ TraceView::Update()
     {
         m_timeline_view->Update();
     }
-    if(m_sidebar)
+    if(m_track_topology)
     {
-        m_sidebar->Update();
+        m_track_topology->Update();
     }
     if(m_analysis)
     {
@@ -99,12 +109,14 @@ void
 TraceView::CreateView()
 {
     m_timeline_selection = std::make_shared<TimelineSelection>();
+	m_track_topology = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view  = std::make_shared<TimelineView>(m_data_provider, m_timeline_selection);
-    m_sidebar = std::make_shared<SideBar>(m_data_provider, m_timeline_view->GetGraphs());
-    m_analysis = std::make_shared<AnalysisView>(m_data_provider);
+    m_sidebar = std::make_shared<SideBar>(m_track_topology, m_timeline_selection, m_timeline_view->GetGraphs()); 	
+    m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology);
 
     LayoutItem left;
     left.m_item = m_sidebar;
+    left.m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
     LayoutItem top;
     top.m_item = m_timeline_view;
@@ -160,6 +172,34 @@ TraceView::Render()
                                          0.20;  // Scale font by DPI. -0.20 should be
                                                 // removed once font lib is in place.
         m_container->Render();
+
+        if(m_save_trace_popup_info.show_popup)
+
+        {
+            ImGui::OpenPopup("Trimmed Trace");
+            m_save_trace_popup_info.show_popup = false;
+        }
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));        
+        if(ImGui::BeginPopupModal("Trimmed Trace", nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            if(m_save_trace_popup_info.success)
+            {
+                ImGui::Text("Trimmed trace has been saved successfully.");
+            }
+            else
+            {
+                ImGui::Text("Failed to save the trimmed trace.");
+            }
+            if(ImGui::Button("OK"))
+            {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
         return;
     }
 
@@ -211,4 +251,46 @@ TraceView::Render()
     {
         ImGui::CloseCurrentPopup();
     }
+
+}
+
+bool TraceView::HasTrimActiveTrimSelection() const
+{
+    if(m_timeline_selection)
+    {
+        return m_timeline_selection->HasValidTimeRangeSelection();
+    }
+    return false;
+}
+
+bool TraceView::IsTrimSaveAllowed() const {
+    bool save_allowed = false;
+    if(m_timeline_selection)
+    {
+        save_allowed = m_timeline_selection->HasValidTimeRangeSelection();
+        save_allowed &= !m_data_provider.IsRequestPending(DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID);
+    }
+
+    return save_allowed;
+}
+
+bool TraceView::SaveSelection(const std::string& file_path) {
+    if(m_timeline_selection)
+    {
+        if(!m_timeline_selection->HasValidTimeRangeSelection()) {
+            spdlog::warn("No valid time range selection to save.");
+            return false;
+        }
+
+        double start_ns = 0.0;
+        double end_ns = 0.0;
+        m_timeline_selection->GetSelectedTimeRange(start_ns, end_ns);
+
+        m_data_provider.SaveTrimmedTrace(file_path, start_ns, end_ns);
+        return true;
+
+    } else {
+        spdlog::warn("Timeline selection is not initialized.");
+    }
+    return false;
 }

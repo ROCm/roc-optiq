@@ -8,10 +8,14 @@
 #include "rocprofvis_trace_view.h"
 #include "widgets/rocprofvis_widget.h"
 
+#include <memory>
+
 namespace RocProfVis
 {
 namespace View
 {
+
+class ConfirmationDialog;
 
 class AppWindow : public RocWidget
 {
@@ -29,12 +33,17 @@ private:
     AppWindow();
     ~AppWindow();
 
+    void RenderFileDialogs();
     void RenderSettingsMenu();
     void RenderHelpMenu();
     
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
+    void HandleSaveSelection(const std::string& file_path_str);
+    void SaveSelection(const std::string& file_path_str);
 
     void RenderAboutDialog();
+
+    bool IsTrimSaveAllowed();
 
     static AppWindow* s_instance;
 
@@ -59,6 +68,7 @@ private:
 #endif
     bool m_open_about_dialog;
 
+    std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
 };
 
 }  // namespace View

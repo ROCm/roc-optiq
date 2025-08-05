@@ -25,7 +25,7 @@ public:
 
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
-    bool   HandleTrackDataChanged() override;
+    bool   HandleTrackDataChanged(uint64_t request_id, uint64_t response_code) override;
     bool   ExtractPointsFromData();
 
     std::tuple<double, double> FindMaxMin();

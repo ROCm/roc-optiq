@@ -24,7 +24,7 @@ public:
                  rocprofvis_trace_event_t const& flame, double duration,
                  ImDrawList* draw_list, double raw_start_time);
 
-    bool                       HandleTrackDataChanged() override;
+    bool                       HandleTrackDataChanged(uint64_t request_id, uint64_t response_code) override;
     bool                       ExtractPointsFromData();
     std::tuple<double, double> FindMaxMinFlame();
 

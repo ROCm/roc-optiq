@@ -303,7 +303,7 @@ public:
     static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
     static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
-    
+
     DataProvider();
     ~DataProvider();
 
@@ -360,10 +360,10 @@ public:
      * @param horz_pixel_range: The horizontal pixel range of the view
      * @param group_id: The group id for the request, used for grouping requests
      */
-    bool FetchTrack(uint32_t track_id, double start_ts, double end_ts,
+    std::pair<bool, uint64_t> FetchTrack(uint32_t track_id, double start_ts, double end_ts,
                     uint32_t horz_pixel_range, uint8_t group_id, uint16_t chunk_index = 0, size_t chunk_count = 1);
 
-    bool FetchTrack(const TrackRequestParams& request_params);
+    std::pair<bool, uint64_t> FetchTrack(const TrackRequestParams& request_params);
 
     bool FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
                          uint32_t horz_pixel_range, uint8_t group_id, uint16_t chunk_index = 0, size_t chunk_count = 1);
@@ -433,6 +433,12 @@ public:
      */
     bool FreeTrack(uint64_t track_id, bool force = false);
 
+    /* Cancels a pending request.
+     * @param request_id: The id of the request to cancel.
+     * @return: True if the cancel operation was accepted.
+     */
+    bool CancelRequest(uint64_t request_id);
+
     /*
      * Output track list meta data.
      */
@@ -495,7 +501,7 @@ public:
     uint64_t                                     GetTableTotalRowCount(TableType type);
 
     void SetTrackDataReadyCallback(
-        const std::function<void(uint64_t, const std::string&)>& callback);
+        const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>& callback);
     void SetTraceLoadedCallback(const std::function<void(const std::string&)>& callback);
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
 
@@ -533,12 +539,8 @@ private:
     */
     void ClearTable(TableType type);
 
-    void CreateRawEventData(const TrackRequestParams&                    params,
-                            rocprofvis_controller_array_t*               track_data,
-                            const std::chrono::steady_clock::time_point& request_time);
-    void CreateRawSampleData(const TrackRequestParams&                    params,
-                             rocprofvis_controller_array_t*               track_data,
-                             const std::chrono::steady_clock::time_point& request_time);
+    void CreateRawEventData(const TrackRequestParams& params, const data_req_info_t& req);
+    void CreateRawSampleData(const TrackRequestParams& params, const data_req_info_t& req);
 
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                           uint64_t index);
@@ -575,7 +577,7 @@ private:
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 
     // Called when new track data is ready
-    std::function<void(uint64_t, const std::string&)> m_track_data_ready_callback;
+    std::function<void(uint64_t, const std::string&, const data_req_info_t&)> m_track_data_ready_callback;
     // Called when a new trace is loaded
     std::function<void(const std::string&)> m_trace_data_ready_callback;
     // Callback when trace is saved

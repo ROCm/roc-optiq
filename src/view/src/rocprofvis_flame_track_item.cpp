@@ -61,10 +61,17 @@ FlameTrackItem::ReleaseData()
 }
 
 bool
-FlameTrackItem::HandleTrackDataChanged()
+FlameTrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 {
-    bool result     = false;
-    result          = ExtractPointsFromData();
+    bool result = false;
+    if(!m_pending_requests.erase(request_id))
+    {
+        spdlog::warn("Failed to erase pending request {}", request_id);
+    } else {
+        //spdlog::debug("Successfully erased pending request {}", request_id);
+    }
+
+    result = ExtractPointsFromData();
     if(result)
     {
         FindMaxMinFlame();

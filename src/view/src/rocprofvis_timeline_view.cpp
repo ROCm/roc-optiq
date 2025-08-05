@@ -234,7 +234,7 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
         const track_info_t* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
         if(!metadata)
         {
-            spdlog::warn(
+            spdlog::error(
                 "No metadata found for track id {}, cannot process new track data",
                 tde->GetTrackID());
             return;
@@ -245,7 +245,9 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
         {
             if(m_graphs[track_index].chart)
             {
-                m_graphs[track_index].chart->HandleTrackDataChanged();
+                m_graphs[track_index].chart->HandleTrackDataChanged(tde->GetRequestID(),
+                                                                    tde->GetResponseCode());
+                                                                    
             }
             else
             {

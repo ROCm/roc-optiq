@@ -65,25 +65,41 @@ RocEvent::CanPropagate() const
 
 // TrackDataEvent Implementation
 TrackDataEvent::TrackDataEvent(int event_id, uint64_t track_id,
-                               const std::string& trace_path)
+                               const std::string& trace_path,
+                               uint64_t request_id, uint64_t response_code)
 : RocEvent(event_id)
 , m_track_id(track_id)
 , m_trace_path(trace_path)
+, m_request_id(request_id)
+, m_response_code(response_code)
 {
     m_event_type = RocEventType::kTrackDataEvent;
 }
 
 uint64_t
-TrackDataEvent::GetTrackID()
+TrackDataEvent::GetTrackID() const
 {
     return m_track_id;
 }
 
 const std::string&
-TrackDataEvent::GetTracePath()
+TrackDataEvent::GetTracePath() const
 {
     return m_trace_path;
 }
+
+uint64_t
+TrackDataEvent::GetRequestID() const
+{
+    return m_request_id;
+}
+
+uint64_t
+TrackDataEvent::GetResponseCode() const
+{
+    return m_response_code;
+}
+
 #ifdef COMPUTE_UI_SUPPORT
 ComputeTableSearchEvent::ComputeTableSearchEvent(int event_id, std::string& term)
 : RocEvent(event_id)

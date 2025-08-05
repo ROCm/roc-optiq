@@ -66,13 +66,18 @@ private:
 class TrackDataEvent : public RocEvent
 {
 public:
-    TrackDataEvent(int event_id, uint64_t track_id, const std::string& trace_path);
-    uint64_t           GetTrackID();
-    const std::string& GetTracePath();
+    TrackDataEvent(int event_id, uint64_t track_id, const std::string& trace_path,
+                   uint64_t request_id, uint64_t response_code);
+    uint64_t           GetTrackID() const;
+    const std::string& GetTracePath() const;
+    uint64_t           GetRequestID() const;
+    uint64_t           GetResponseCode() const;
 
 private:
     uint64_t    m_track_id;
     std::string m_trace_path;
+    uint64_t    m_request_id;
+    uint64_t    m_response_code;
 };
 
 class CreateArrowsViewEvent : public RocEvent

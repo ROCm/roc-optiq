@@ -278,7 +278,7 @@ DataProvider::ClearTable(TableType type)
 
 void
 DataProvider::SetTrackDataReadyCallback(
-    const std::function<void(uint64_t, const std::string&)>& callback)
+    const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>& callback)
 {
     m_track_data_ready_callback = callback;
 }
@@ -964,7 +964,7 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
     return false;
 }
 
-bool
+std::pair<bool, uint64_t>
 DataProvider::FetchTrack(uint32_t track_id, double start_ts, double end_ts,
                          uint32_t horz_pixel_range, uint8_t group_id,
                          uint16_t chunk_index, size_t chunk_count)
@@ -974,14 +974,14 @@ DataProvider::FetchTrack(uint32_t track_id, double start_ts, double end_ts,
     return FetchTrack(request_params);
 }
 
-bool
+std::pair<bool, uint64_t>
 DataProvider::FetchTrack(const TrackRequestParams& request_params)
 {
     if(m_state != ProviderState::kReady)
     {
         spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
                       static_cast<int>(m_state));
-        return false;
+        return {false,0};
     }
 
     uint64_t request_id =
@@ -1013,7 +1013,6 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
 
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             
-
                 data_req_info_t request_info;
                 request_info.request_array      = graph_array;
                 request_info.request_future     = graph_future;
@@ -1033,7 +1032,7 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
                 spdlog::debug("Fetching track data {} from controller {}",
                             request_params.m_track_id,
                             reinterpret_cast<unsigned long long>(m_trace_controller));
-                return true;
+                return {true, request_id};
             }
             else 
             {
@@ -1054,7 +1053,7 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
     {
         spdlog::debug("Cannot fetch Track id {} is invalid", request_params.m_track_id);
     }
-    return false;
+    return {false, 0};
 }
 
 bool
@@ -1603,6 +1602,31 @@ DataProvider::FreeTrack(uint64_t track_id, bool force /* = false */)
     else
     {
         spdlog::debug("Cannot delete track data, invalid id: {}", track_id);
+    }
+    return false;
+}
+
+bool 
+DataProvider::CancelRequest(uint64_t request_id) 
+{
+    auto it = m_requests.find(request_id);
+    if(it != m_requests.end())  
+    {
+        spdlog::debug("Cancelling request id: {}", request_id);
+        data_req_info_t& request_info = it->second;
+        rocprofvis_result_t result = rocprofvis_controller_future_cancel(request_info.request_future);
+        if(result == kRocProfVisResultSuccess)
+        {
+            return true;
+        }
+        else
+        {
+            spdlog::debug("Failed to cancel request id: {}", request_id);
+        }
+    }
+    else
+    {
+        spdlog::debug("Cannot cancel request, invalid id: {}", request_id);
     }
     return false;
 }
@@ -2234,12 +2258,12 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
     {
         case kRPVControllerTrackTypeEvents:
         {
-            CreateRawEventData(*track_params, req.request_array, req.request_time);
+            CreateRawEventData(*track_params, req);
             break;
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(*track_params, req.request_array, req.request_time);
+            CreateRawSampleData(*track_params, req);
             break;
         }
         default:
@@ -2259,7 +2283,7 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
     // call the new data ready callback
     if(m_track_data_ready_callback)
     {
-        m_track_data_ready_callback(track_params->m_track_id, m_trace_file_path);
+        m_track_data_ready_callback(track_params->m_track_id, m_trace_file_path, req);
     }
 }
 
@@ -2275,30 +2299,35 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
         return;
     }
 
-    uint64_t graph_type = 0;
-    auto     graph      = req.request_obj_handle;
+    if(req.response_code == kRocProfVisResultSuccess) {
+        uint64_t graph_type = 0;
+        auto     graph      = req.request_obj_handle;
 
-    rocprofvis_result_t result =
-        rocprofvis_controller_get_uint64(graph, kRPVControllerGraphType, 0, &graph_type);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        rocprofvis_result_t result =
+            rocprofvis_controller_get_uint64(graph, kRPVControllerGraphType, 0, &graph_type);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    double min_ts = 0;
-    result = rocprofvis_controller_get_double(graph, kRPVControllerGraphStartTimestamp, 0,
-                                              &min_ts);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        double min_ts = 0;
+        result = rocprofvis_controller_get_double(graph, kRPVControllerGraphStartTimestamp, 0,
+                                                &min_ts);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    double max_ts = 0;
-    result = rocprofvis_controller_get_double(graph, kRPVControllerGraphEndTimestamp, 0,
-                                              &max_ts);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        double max_ts = 0;
+        result = rocprofvis_controller_get_double(graph, kRPVControllerGraphEndTimestamp, 0,
+                                                &max_ts);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    uint64_t item_count = 0;
-    result = rocprofvis_controller_get_uint64(graph, kRPVControllerGraphNumEntries, 0,
-                                              &item_count);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        uint64_t item_count = 0;
+        result = rocprofvis_controller_get_uint64(graph, kRPVControllerGraphNumEntries, 0,
+                                                &item_count);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    spdlog::debug("{} Graph item count {} min ts {} max ts {}", track_params->m_track_id,
-                  item_count, min_ts, max_ts);
+        spdlog::debug("{} Graph item count {} min ts {} max ts {}", track_params->m_track_id,
+                    item_count, min_ts, max_ts);
+
+    } else {
+        spdlog::debug("Graph request failed with code {}", req.response_code);
+    }
 
     // use the track type to determine what type of data is present in the graph array
     const track_info_t* metadata = GetTrackInfo(track_params->m_track_id);
@@ -2308,12 +2337,12 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
     {
         case kRPVControllerTrackTypeEvents:
         {
-            CreateRawEventData(*track_params, req.request_array, req.request_time);
+            CreateRawEventData(*track_params, req);
             break;
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(*track_params, req.request_array, req.request_time);
+            CreateRawSampleData(*track_params, req);
             break;
         }
         default:
@@ -2332,15 +2361,16 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
     // call the new data ready callback
     if(m_track_data_ready_callback)
     {
-        m_track_data_ready_callback(track_params->m_track_id, m_trace_file_path);
+        m_track_data_ready_callback(track_params->m_track_id, m_trace_file_path, req);
     }
 }
 
 void
-DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
-                                  rocprofvis_controller_array_t* track_data,
-                                  const std::chrono::steady_clock::time_point& request_time)
+DataProvider::CreateRawSampleData(const TrackRequestParams& params, const data_req_info_t& req)
 {
+    rocprofvis_controller_array_t* track_data = req.request_array;
+    const std::chrono::steady_clock::time_point& request_time = req.request_time;
+
     uint64_t            count  = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
@@ -2426,14 +2456,24 @@ DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
 }
 
 void
-DataProvider::CreateRawEventData(const TrackRequestParams&      params,
-                                 rocprofvis_controller_array_t* track_data,
-                                 const std::chrono::steady_clock::time_point& request_time)
+DataProvider::CreateRawEventData(const TrackRequestParams& params,
+                                 const data_req_info_t& req)
 {
+    rocprofvis_controller_array_t* track_data = req.request_array;
+    const std::chrono::steady_clock::time_point& request_time = req.request_time;
+    bool response_valid = (req.response_code == kRocProfVisResultSuccess);
+
     uint64_t            count  = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-        track_data, kRPVControllerArrayNumEntries, 0, &count);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+    if(response_valid)
+    {
+        rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+            track_data, kRPVControllerArrayNumEntries, 0, &count);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    } else {
+        spdlog::warn("Event track data request failed with code {}", req.response_code);
+        count = 0;
+    }
 
     RawTrackEventData* raw_event_data = nullptr;
     const RawTrackData* existing_raw_data = GetRawTrackData(params.m_track_id);
@@ -2474,7 +2514,6 @@ DataProvider::CreateRawEventData(const TrackRequestParams&      params,
                       count);
         raw_event_data = new RawTrackEventData(params.m_track_id, params.m_start_ts,
                                                params.m_end_ts, params.m_data_group_id, params.m_chunk_count);
-        
     }
 
     std::vector<rocprofvis_trace_event_t> buffer;
@@ -2489,7 +2528,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams&      params,
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_event_t* event = nullptr;
-        result                               = rocprofvis_controller_get_object(
+        rocprofvis_result_t result           = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &event);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
 

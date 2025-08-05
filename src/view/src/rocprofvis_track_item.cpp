@@ -358,6 +358,11 @@ TrackItem::RequestData(double min, double max, float width)
     {
         spdlog::warn(
             "Fetch request deferred for track {}, requests are already pending...", m_id);
+
+        for(const auto& [request_id, req] : m_pending_requests) {
+            spdlog::debug("Pending request {} for track {}", request_id, m_id);
+            m_data_provider.CancelRequest(request_id);
+        }
     }
 }
 
@@ -379,8 +384,8 @@ TrackItem::FetchHelper()
     while(!m_request_queue.empty())
     {
         TrackRequestParams& req    = m_request_queue.front();
-        bool                result = m_data_provider.FetchTrack(req);
-        if(!result)
+        std::pair<bool, uint64_t> result = m_data_provider.FetchTrack(req);
+        if(!result.first)
         {
             spdlog::error("Request for track {} failed", m_id);
         }
@@ -392,6 +397,8 @@ TrackItem::FetchHelper()
                 req.m_data_group_id);
 
             m_request_state = TrackDataRequestState::kRequesting;
+            // Store the request with its ID
+            m_pending_requests.insert({result.second, req});
         }
         m_request_queue.pop_front();
     }

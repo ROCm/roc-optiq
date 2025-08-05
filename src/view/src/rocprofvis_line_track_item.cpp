@@ -254,11 +254,17 @@ LineTrackItem::ReleaseData()
 }
 
 bool
-LineTrackItem::HandleTrackDataChanged()
+LineTrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 {
-    m_request_state = TrackDataRequestState::kIdle;
-    bool result     = false;
-    result          = ExtractPointsFromData();
+    bool result = false;
+    if(!m_pending_requests.erase(request_id))
+    {
+        spdlog::warn("Failed to erase pending request {}", request_id);
+    } else {
+        //spdlog::debug("Successfully erased pending request {}", request_id);
+    }
+
+    result = ExtractPointsFromData();
     if(result)
     {
         const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
@@ -303,8 +309,14 @@ LineTrackItem::ExtractPointsFromData()
     if(!sample_track)
     {
         spdlog::debug("Invalid track data type for track {}", m_id);
+        m_request_state = TrackDataRequestState::kError;
         return false;
     }
+
+    if(sample_track->AllDataReady()) {
+        m_request_state = TrackDataRequestState::kIdle;
+    }
+
     if(sample_track->GetData().empty())
     {
         spdlog::debug("No data for track {}", m_id);

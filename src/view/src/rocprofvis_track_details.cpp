@@ -61,6 +61,13 @@ TrackDetails::Render()
                     ImGui::TextUnformatted(detail.counter->info->name.c_str());
                     RenderTable(detail.counter->info_table);
                 }
+                else if(detail.stream)
+                {
+                    ImGui::TextUnformatted("Stream: ");
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted(detail.stream->info->name.c_str());
+                    RenderTable(detail.stream->info_table);
+                }
             }
         }
         ImGui::EndChild();
@@ -97,7 +104,7 @@ TrackDetails::Update()
                                     m_track_details.push_back(
                                         std::move(Details{ metadata->name, node, process,
                                                            process.queue_lut.at(type_id),
-                                                           nullptr, nullptr }));
+                                                           nullptr, nullptr, nullptr }));
                                 }
                                 break;
                             }
@@ -107,7 +114,7 @@ TrackDetails::Update()
                                 {
                                     m_track_details.push_back(std::move(Details{
                                         metadata->name, node, process, nullptr,
-                                        process.thread_lut.at(type_id), nullptr }));
+                                        process.thread_lut.at(type_id), nullptr, nullptr }));
                                 }
                                 break;
                             }
@@ -117,7 +124,17 @@ TrackDetails::Update()
                                 {
                                     m_track_details.push_back(std::move(Details{
                                         metadata->name, node, process, nullptr, nullptr,
-                                        process.counter_lut.at(type_id) }));
+                                        process.counter_lut.at(type_id), nullptr }));
+                                }
+                                break;
+                            }
+                            case track_info_t::Topology::Stream:
+                            {
+                                if(process.stream_lut.count(type_id) > 0)
+                                {
+                                    m_track_details.push_back(std::move(Details{
+                                        metadata->name, node, process, nullptr, nullptr,
+                                        nullptr, process.stream_lut.at(type_id) }));
                                 }
                                 break;
                             }

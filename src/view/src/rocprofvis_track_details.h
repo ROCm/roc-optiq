@@ -16,6 +16,7 @@ class ProcessModel;
 class QueueModel;
 class ThreadModel;
 class CounterModel;
+class StreamModel;
 class TrackSelectionChangedEvent;
 struct InfoTable;
 
@@ -38,6 +39,7 @@ private:
         QueueModel*             queue;
         ThreadModel*            thread;
         CounterModel*           counter;
+        StreamModel*            stream;
     };
 
     void RenderTable(InfoTable& table);

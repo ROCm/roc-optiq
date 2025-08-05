@@ -93,6 +93,26 @@ SideBar::Render()
                                                 }
                                                 ImGui::Unindent();
                                             }
+                                            if(!process.streams.empty() &&
+                                               ImGui::CollapsingHeader(
+                                                   process.stream_header.c_str(),
+                                                   CATEGORY_HEADER_FLAGS))
+                                            {
+                                                ImGui::Indent();
+                                                for(const StreamModel& stream :
+                                                    process.streams)
+                                                {
+                                                    if(stream.info)
+                                                    {
+                                                        ImGui::PushID(
+                                                            stream.info->name.c_str());
+                                                        RenderTrackItem(
+                                                            stream.graph_index);
+                                                        ImGui::PopID();
+                                                    }
+                                                }
+                                                ImGui::Unindent();
+                                            }
                                             if(!process.threads.empty() &&
                                                ImGui::CollapsingHeader(
                                                    process.thread_header.c_str(),

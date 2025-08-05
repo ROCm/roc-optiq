@@ -66,6 +66,7 @@ typedef struct track_info_t
         {
             Unknown,
             Queue,
+            Stream,
             Thread,
             Counter
         }                              type;
@@ -153,6 +154,7 @@ typedef struct process_info_t
     std::string           environment;
     std::vector<uint64_t> thread_ids;   // IDs of this process' threads
     std::vector<uint64_t> queue_ids;    // IDs of this process' queues
+    std::vector<uint64_t> stream_ids;    // IDs of this process' streams
     std::vector<uint64_t> counter_ids;  // IDs of this process' counters
 } process_info_t;
 
@@ -170,6 +172,13 @@ typedef struct queue_info_t
     std::string name;
     uint64_t    device_id;  // ID of owning device.
 } queue_info_t;
+
+typedef struct stream_info_t
+{
+    uint64_t    id;
+    std::string name;
+    uint64_t    device_id;  // ID of owning device.
+} stream_info_t;
 
 typedef struct counter_info_t
 {
@@ -460,6 +469,7 @@ public:
     const process_info_t*           GetProcessInfo(uint64_t process_id) const;
     const thread_info_t*            GetThreadInfo(uint64_t thread_id) const;
     const queue_info_t*             GetQueueInfo(uint64_t queue_id) const;
+    const stream_info_t*            GetStreamInfo(uint64_t stream_id) const;
     const counter_info_t*           GetCounterInfo(uint64_t counter_id) const;
 
     const std::string& GetTraceFilePath();
@@ -541,6 +551,7 @@ private:
     std::unordered_map<uint64_t, process_info_t> m_process_infos;
     std::unordered_map<uint64_t, thread_info_t>  m_thread_infos;
     std::unordered_map<uint64_t, queue_info_t>   m_queue_infos;
+    std::unordered_map<uint64_t, stream_info_t>   m_stream_infos;
     std::unordered_map<uint64_t, counter_info_t> m_counter_infos;
 
     // Store table_info_t for each TableType in a vector

@@ -18,6 +18,7 @@ namespace Controller
 class Array;
 class Thread;
 class Queue;
+class Stream;
 class Trace;
 class Counter;
 
@@ -61,6 +62,7 @@ private:
     rocprofvis_dm_track_t m_dm_handle;
     Thread* m_thread;
     Queue* m_queue;
+    Stream* m_stream;
     Counter* m_counter;
     Trace* m_ctx;
 

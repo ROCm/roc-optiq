@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_queue.h"
+#include "rocprofvis_controller_stream.h"
 #include "rocprofvis_controller_thread.h"
 #include "rocprofvis_controller_counter.h"
 #include "rocprofvis_controller_reference.h"
@@ -24,6 +25,7 @@ namespace Controller
 
 typedef Reference<rocprofvis_controller_thread_t, Thread, kRPVControllerObjectTypeThread> ThreadRef;
 typedef Reference<rocprofvis_controller_queue_t, Queue, kRPVControllerObjectTypeQueue> QueueRef;
+typedef Reference<rocprofvis_controller_stream_t, Stream, kRPVControllerObjectTypeStream> StreamRef;
 typedef Reference<rocprofvis_controller_counter_t, Counter, kRPVControllerObjectTypeCounter> CounterRef;
 
 Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, Trace * ctx)
@@ -35,6 +37,7 @@ Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm
 , m_dm_handle(dm_handle)
 , m_thread(nullptr)
 , m_queue(nullptr)
+, m_stream(nullptr)
 , m_counter(nullptr)
 , m_ctx(ctx)
 { 
@@ -434,6 +437,7 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackThread:
             case kRPVControllerTrackQueue:
             case kRPVControllerTrackCounter:
+            case kRPVControllerTrackStream:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -491,6 +495,7 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackThread:
             case kRPVControllerTrackQueue:
             case kRPVControllerTrackCounter:
+            case kRPVControllerTrackStream:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -525,6 +530,12 @@ rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackQueue:
             {
                 *value = (rocprofvis_handle_t*)m_queue;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTrackStream:
+            {
+                *value = (rocprofvis_handle_t*) m_stream;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -601,6 +612,7 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackThread:
         case kRPVControllerTrackQueue:
         case kRPVControllerTrackCounter:
+        case kRPVControllerTrackStream:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -653,6 +665,7 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackThread:
         case kRPVControllerTrackQueue:
         case kRPVControllerTrackCounter:
+        case kRPVControllerTrackStream:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -706,6 +719,7 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackThread:
         case kRPVControllerTrackQueue:
         case kRPVControllerTrackCounter:
+        case kRPVControllerTrackStream:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -844,6 +858,16 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
+            case kRPVControllerTrackStream:
+            {
+                StreamRef ref(value);
+                if(ref.IsValid())
+                {
+                    m_stream = ref.Get();
+                    result  = kRocProfVisResultSuccess;
+                }
+                break;
+            }
             case kRPVControllerTrackCounter:
             {
                 CounterRef ref(value);
@@ -903,6 +927,7 @@ rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackThread:
             case kRPVControllerTrackQueue:
             case kRPVControllerTrackCounter:
+            case kRPVControllerTrackStream:
             {
                 result = kRocProfVisResultInvalidType;
                 break;

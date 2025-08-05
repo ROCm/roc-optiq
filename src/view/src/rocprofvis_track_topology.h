@@ -27,6 +27,12 @@ struct QueueModel
     InfoTable           info_table;
     uint64_t            graph_index;
 };
+struct StreamModel
+{
+    const stream_info_t* info;
+    InfoTable           info_table;
+    uint64_t            graph_index;
+};
 struct ThreadModel
 {
     const thread_info_t* info;
@@ -47,6 +53,9 @@ struct ProcessModel
     std::string                                 queue_header;
     std::vector<QueueModel>                     queues;
     std::unordered_map<uint64_t, QueueModel*>   queue_lut;
+    std::string                                 stream_header;
+    std::vector<StreamModel>                     streams;
+    std::unordered_map<uint64_t, StreamModel*>   stream_lut;
     std::string                                 thread_header;
     std::vector<ThreadModel>                    threads;
     std::unordered_map<uint64_t, ThreadModel*>  thread_lut;

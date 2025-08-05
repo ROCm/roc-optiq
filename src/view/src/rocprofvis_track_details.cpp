@@ -104,7 +104,7 @@ TrackDetails::Update()
                                     m_track_details.push_back(
                                         std::move(Details{ metadata->name, node, process,
                                                            process.queue_lut.at(type_id),
-                                                           nullptr, nullptr }));
+                                                           nullptr, nullptr, nullptr }));
                                 }
                                 break;
                             }

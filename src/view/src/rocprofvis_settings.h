@@ -86,9 +86,14 @@ public:
     ImFont* GetFont(FontType font_type);
     ImFont* GetIconFont(FontType font_type);
 
+    void SetFontSize(int size_index);
+    int  GetFontSizeIndexForDPI(float dpi);
+
 private:
-    std::vector<ImFont*> m_fonts;
-    std::vector<ImFont*> m_icon_fonts;
+    std::vector<ImFont*>              m_fonts;
+    std::vector<ImFont*>              m_icon_fonts;
+    std::vector<ImFont*> m_all_fonts;
+    std::vector<int>                  m_font_size_indices;
 };
 
 class Settings
@@ -110,7 +115,7 @@ public:
     bool HorizontalRender();
     bool IsHorizontalRender();
 
-    FontManager& GetFontManager() { return m_font_manager; }
+    FontManager&      GetFontManager() { return m_font_manager; }
     const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
 
 private:

@@ -27,49 +27,57 @@ TrackDetails::Render()
     if(!m_selection_dirty && !m_track_topology->Dirty())
     {
         ImGui::BeginChild("track_details", ImVec2(0, 0), ImGuiChildFlags_Borders);
-        for(Details& detail : m_track_details)
+        if(m_track_details.empty())
         {
-            if(ImGui::CollapsingHeader(detail.track_name.c_str(),
-                                       ImGuiTreeNodeFlags_DefaultOpen))
+            ImGui::TextUnformatted("No data available for the selected tracks.");
+        }
+        else
+        {
+            for(Details& detail : m_track_details)
             {
-                ImGui::TextUnformatted("Node: ");
-                ImGui::SameLine();
-                ImGui::TextUnformatted(detail.node.info->host_name.c_str());
-                RenderTable(detail.node.info_table);
-                ImGui::TextUnformatted("Process: ");
-                ImGui::SameLine();
-                ImGui::TextUnformatted(detail.process.header.c_str());
-                RenderTable(detail.process.info_table);
-                if(detail.queue)
+                if(ImGui::CollapsingHeader(detail.track_name.c_str(),
+                                        ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    ImGui::TextUnformatted("Queue: ");
+                    ImGui::TextUnformatted("Node: ");
                     ImGui::SameLine();
-                    ImGui::TextUnformatted(detail.queue->info->name.c_str());
-                    RenderTable(detail.queue->info_table);
-                }
-                else if(detail.thread)
-                {
-                    ImGui::TextUnformatted("Thread: ");
+                    ImGui::TextUnformatted(detail.node.info->host_name.c_str());
+                    RenderTable(detail.node.info_table);
+                    ImGui::TextUnformatted("Process: ");
                     ImGui::SameLine();
-                    ImGui::TextUnformatted(detail.thread->info->name.c_str());
-                    RenderTable(detail.thread->info_table);
-                }
-                else if(detail.counter)
-                {
-                    ImGui::TextUnformatted("Counter: ");
-                    ImGui::SameLine();
-                    ImGui::TextUnformatted(detail.counter->info->name.c_str());
-                    RenderTable(detail.counter->info_table);
-                }
-                else if(detail.stream)
-                {
-                    ImGui::TextUnformatted("Stream: ");
-                    ImGui::SameLine();
-                    ImGui::TextUnformatted(detail.stream->info->name.c_str());
-                    RenderTable(detail.stream->info_table);
+                    ImGui::TextUnformatted(detail.process.header.c_str());
+                    RenderTable(detail.process.info_table);
+                    if(detail.queue)
+                    {
+                        ImGui::TextUnformatted("Queue: ");
+                        ImGui::SameLine();
+                        ImGui::TextUnformatted(detail.queue->info->name.c_str());
+                        RenderTable(detail.queue->info_table);
+                    }
+                    else if(detail.thread)
+                    {
+                        ImGui::TextUnformatted("Thread: ");
+                        ImGui::SameLine();
+                        ImGui::TextUnformatted(detail.thread->info->name.c_str());
+                        RenderTable(detail.thread->info_table);
+                    }
+                    else if(detail.counter)
+                    {
+                        ImGui::TextUnformatted("Counter: ");
+                        ImGui::SameLine();
+                        ImGui::TextUnformatted(detail.counter->info->name.c_str());
+                        RenderTable(detail.counter->info_table);
+                    }
+                    else if(detail.stream)
+                    {
+                        ImGui::TextUnformatted("Stream: ");
+                        ImGui::SameLine();
+                        ImGui::TextUnformatted(detail.stream->info->name.c_str());
+                        RenderTable(detail.stream->info_table);
+                    }
                 }
             }
         }
+        
         ImGui::EndChild();
     }
 }

@@ -288,7 +288,7 @@ DataProvider::SetTrackDataReadyCallback(
 
 void
 DataProvider::SetTraceLoadedCallback(
-    const std::function<void(const std::string&)>& callback)
+    const std::function<void(const std::string&, uint64_t)>& callback)
 {
     m_trace_data_ready_callback = callback;
 }
@@ -412,9 +412,21 @@ DataProvider::HandleLoadTrace()
             uint64_t uint64_result = 0;
             result                 = rocprofvis_controller_get_uint64(
                 m_trace_future, kRPVControllerFutureResult, 0, &uint64_result);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                              uint64_result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+            if(uint64_result != kRocProfVisResultSuccess) 
+            {
+                spdlog::error("Failed to load trace file: {}, error code: {}",
+                              m_trace_file_path, uint64_result);
+                m_state = ProviderState::kError;
+                if(m_trace_data_ready_callback)
+                {
+                    m_trace_data_ready_callback(m_trace_file_path, uint64_result);
+                }
+                return;
+            }
+
+            // Load the system topology
             HandleLoadSystemTopology();
 
             result = rocprofvis_controller_get_object(
@@ -426,20 +438,32 @@ DataProvider::HandleLoadTrace()
                 m_num_graphs = 0;
                 result       = rocprofvis_controller_get_uint64(
                     m_trace_timeline, kRPVControllerTimelineNumGraphs, 0, &m_num_graphs);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
                 m_min_ts = 0;
                 result   = rocprofvis_controller_get_double(
                     m_trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &m_min_ts);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
                 m_max_ts = 0;
                 result   = rocprofvis_controller_get_double(
                     m_trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &m_max_ts);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
                 spdlog::debug("Timeline parameters: tracks {} min ts {} max ts {}",
                               m_num_graphs, m_min_ts, m_max_ts);
 
                 // get the per track meta data
                 HandleLoadTrackMetaData();
+            } else {
+                spdlog::error("Failed to get timeline object from controller");
+                m_state = ProviderState::kError;
+                if(m_trace_data_ready_callback)
+                {
+                    m_trace_data_ready_callback(m_trace_file_path, result == kRocProfVisResultSuccess
+                                                ? kRocProfVisResultUnknownError
+                                                : result);
+                }
             }
 
             // trace loaded successfully, free the future pointer
@@ -450,7 +474,7 @@ DataProvider::HandleLoadTrace()
             // fire callback
             if(m_trace_data_ready_callback)
             {
-                m_trace_data_ready_callback(m_trace_file_path);
+                m_trace_data_ready_callback(m_trace_file_path, kRocProfVisResultSuccess);
             }
         }
         else

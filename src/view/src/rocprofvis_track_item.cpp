@@ -435,16 +435,30 @@ TrackItem::ReleaseData()
     bool result = m_data_provider.FreeTrack(m_id, true);
     if(!result)
     {
-        spdlog::error("Failed to release data for track {}", m_id);
+        spdlog::warn("Failed to release data for track {}", m_id);
     }
 
     // Clear pending requests
     for(const auto& [request_id, req] : m_pending_requests) {
         spdlog::debug("ReleaseData: Found pending request {} for track {}", request_id, m_id);
-        m_data_provider.CancelRequest(request_id);
+        result = m_data_provider.CancelRequest(request_id);
+        if(!result)
+        {
+            //Todo
+        }
     }
 
+    // For now forcefully clear pending requests
+    // This is a temporary solution, ideally we should handle cancelling pending requests properly
+    m_pending_requests.clear();
+
     return result;
+}
+
+bool
+TrackItem::HasPendingRequests() const
+{
+    return !m_pending_requests.empty();
 }
 
 }  // namespace View

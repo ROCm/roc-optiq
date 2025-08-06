@@ -1014,7 +1014,7 @@ TimelineView::RenderGraphView()
                 // If the track is not visible past a certain distance, release its
                 // data to free up memory
                 if(track_item.chart->GetDistanceToView() > m_unload_track_distance &&
-                   track_item.chart->HasData())
+                   (track_item.chart->HasData() || track_item.chart->HasPendingRequests()))
                 {
                     track_item.chart->ReleaseData();
                 }

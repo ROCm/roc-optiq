@@ -57,7 +57,8 @@ public:
     virtual bool ReleaseData();
     virtual void RequestData(double min, double max, float width);
     virtual bool HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
-
+    virtual bool HasPendingRequests() const;
+    
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
     bool IsMetaAreaClicked() const { return m_meta_area_clicked; }

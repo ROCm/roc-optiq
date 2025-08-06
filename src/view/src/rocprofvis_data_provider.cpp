@@ -2370,15 +2370,24 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params, const data_r
 {
     rocprofvis_controller_array_t* track_data = req.request_array;
     const std::chrono::steady_clock::time_point& request_time = req.request_time;
+    bool response_valid = (req.response_code == kRocProfVisResultSuccess);
 
     uint64_t            count  = 0;
+
+    if(response_valid)
+    {    
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    } else {
+        spdlog::warn("Sample track data request failed with code {}", req.response_code);
+        count = 0;
+    }
 
     RawTrackSampleData* raw_sample_data = nullptr;
-
     const RawTrackData* existing_raw_data = GetRawTrackData(params.m_track_id);
+    
+    // If group id matches, reuse existing raw data
     if(existing_raw_data && existing_raw_data->GetDataGroupID() == params.m_data_group_id)
     {
         raw_sample_data =
@@ -2420,7 +2429,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params, const data_r
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_sample_t* sample = nullptr;
-        result                                 = rocprofvis_controller_get_object(
+        rocprofvis_result_t result             = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &sample);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
 
@@ -2593,9 +2602,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
     raw_event_data->AddChunk(params.m_chunk_index, std::move(buffer));
     delete[] str_buffer;
 
-    //raw_event_data->SetChunkSize(params.m_chunk_count, real_count);
     m_raw_trackdata[params.m_track_id] = raw_event_data;
-
 }
 
 bool

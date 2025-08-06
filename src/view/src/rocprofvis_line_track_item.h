@@ -25,7 +25,6 @@ public:
 
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
                    float scale_x, float scale_y);
-    bool   HandleTrackDataChanged(uint64_t request_id, uint64_t response_code) override;
     bool   ExtractPointsFromData();
 
     std::tuple<double, double> FindMaxMin();
@@ -33,14 +32,15 @@ public:
     float CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
     void  LineTrackRender(float graph_width);
     void  BoxPlotRender(float graph_width);
-    bool  HasData() override;
-    void  ReleaseData() override;
+    bool  ReleaseData() override;
     void  SetShowBoxplot(bool show_boxplot);
 
 protected:
     virtual void RenderMetaAreaScale() override;
     virtual void RenderChart(float graph_width) override;
     virtual void RenderMetaAreaOptions() override;
+    
+    void UpdateYScaleExtents();
 
 private:
     std::vector<rocprofvis_data_point_t> m_data;

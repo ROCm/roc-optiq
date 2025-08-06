@@ -36,6 +36,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_settings(Settings::GetInstance())
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
+, m_group_id_counter(0)
 , m_chunk_duration_ns(TimeConstants::nanoseconds_per_second *
                       30)  // Default chunk duration
 {}
@@ -360,7 +361,7 @@ TrackItem::RequestData(double min, double max, float width)
             "Fetch request deferred for track {}, requests are already pending...", m_id);
 
         for(const auto& [request_id, req] : m_pending_requests) {
-            spdlog::debug("Pending request {} for track {}", request_id, m_id);
+            spdlog::debug("RequestData: Found pending request {} for track {}", request_id, m_id);
             m_data_provider.CancelRequest(request_id);
         }
     }
@@ -403,6 +404,47 @@ TrackItem::FetchHelper()
         m_request_queue.pop_front();
     }
 
+}
+
+bool
+TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
+{
+    (void) response_code;  // Unused at the moment
+    bool result = false;
+    if(!m_pending_requests.erase(request_id))
+    {
+        spdlog::warn("Failed to erase pending request {}", request_id);
+    } else {
+        //spdlog::debug("Successfully erased pending request {}", request_id);
+    }
+
+    result = ExtractPointsFromData();
+
+    return result;
+}
+
+bool
+TrackItem::HasData()
+{
+    return m_data_provider.GetRawTrackData(m_id) != nullptr;
+}
+
+bool
+TrackItem::ReleaseData()
+{
+    bool result = m_data_provider.FreeTrack(m_id, true);
+    if(!result)
+    {
+        spdlog::error("Failed to release data for track {}", m_id);
+    }
+
+    // Clear pending requests
+    for(const auto& [request_id, req] : m_pending_requests) {
+        spdlog::debug("ReleaseData: Found pending request {} for track {}", request_id, m_id);
+        m_data_provider.CancelRequest(request_id);
+    }
+
+    return result;
 }
 
 }  // namespace View

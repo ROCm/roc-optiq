@@ -49,34 +49,14 @@ FlameTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digit
 }
 
 bool
-FlameTrackItem::HasData()
-{
-    return m_data_provider.GetRawTrackData(m_id) != nullptr;
-}
-
-void
 FlameTrackItem::ReleaseData()
 {
-    m_flames.clear();
-}
-
-bool
-FlameTrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
-{
-    bool result = false;
-    if(!m_pending_requests.erase(request_id))
+    if(TrackItem::ReleaseData())
     {
-        spdlog::warn("Failed to erase pending request {}", request_id);
-    } else {
-        //spdlog::debug("Successfully erased pending request {}", request_id);
+        m_flames.clear();
+        return true;
     }
-
-    result = ExtractPointsFromData();
-    if(result)
-    {
-        FindMaxMinFlame();
-    }
-    return result;
+    return false;
 }
 
 bool

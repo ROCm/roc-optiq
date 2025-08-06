@@ -1016,9 +1016,7 @@ TimelineView::RenderGraphView()
                 if(track_item.chart->GetDistanceToView() > m_unload_track_distance &&
                    track_item.chart->HasData())
                 {
-                    if(m_data_provider.FreeTrack(track_item.chart->GetID())) {
-                        track_item.chart->ReleaseData();
-                    }
+                    track_item.chart->ReleaseData();
                 }
 
                 // Render dummy to maintain layout

@@ -24,14 +24,11 @@ public:
                  rocprofvis_trace_event_t const& flame, double duration,
                  ImDrawList* draw_list, double raw_start_time);
 
-    bool                       HandleTrackDataChanged(uint64_t request_id, uint64_t response_code) override;
     bool                       ExtractPointsFromData();
     std::tuple<double, double> FindMaxMinFlame();
 
     void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
-
-    bool HasData() override;
-    void ReleaseData() override;
+    bool ReleaseData() override;
 
 protected:
     void RenderChart(float graph_width) override;

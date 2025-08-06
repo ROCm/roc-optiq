@@ -1584,8 +1584,8 @@ DataProvider::FreeTrack(uint64_t track_id, bool force /* = false */)
         if(m_raw_trackdata[track_id])
         {
             if(!m_raw_trackdata[track_id]->AllDataReady() && !force) {
-                // spdlog::debug("Cannot delete track data, not all data is ready for id: {}",
-                //               track_id);
+                spdlog::debug("Cannot delete track data, not all data is ready for id: {}",
+                              track_id);
                 return false;
             }
 

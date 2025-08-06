@@ -49,14 +49,14 @@ public:
     float GetDistanceToView();
 
     virtual std::tuple<double, double> GetMinMax();
-    virtual bool                       HandleTrackDataChanged(uint64_t request_id, uint64_t response_code) = 0;
     
     bool        GetResizeStatus();
     static void SetSidebarSize(int sidebar_size);
 
-    virtual bool HasData()     = 0;
-    virtual void ReleaseData() = 0;
+    virtual bool HasData();
+    virtual bool ReleaseData();
     virtual void RequestData(double min, double max, float width);
+    virtual bool HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
 
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
@@ -71,6 +71,7 @@ protected:
     virtual void RenderMetaAreaOptions() = 0;
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
+    virtual bool ExtractPointsFromData() = 0;
 
     void FetchHelper();
 
@@ -96,13 +97,13 @@ protected:
     float                 m_meta_area_scale_width;
     bool                  m_selected;
     float                 m_reorder_grip_width;
-    
-    uint64_t m_chunk_duration_ns = 0;  // Duration of each chunk in nanoseconds
-    uint64_t m_group_id_counter = 0;  // Counter for grouping requests
 
-    std::deque<TrackRequestParams> m_request_queue;
+    uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
+    uint64_t m_group_id_counter;   // Counter for grouping requests
+
+    std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;
-    static float s_metadata_width;
+    static float                                     s_metadata_width;
 };
 
 }  // namespace View

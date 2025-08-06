@@ -28,21 +28,39 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_show_boxplot(false)
 {
     m_track_height = 90.0f;
+
+    UpdateYScaleExtents();
 }
 
 LineTrackItem::~LineTrackItem() {}
+
+void LineTrackItem::UpdateYScaleExtents() {
+    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+    if(track_info)
+    {
+        m_min_y = track_info->min_value;
+        m_max_y = track_info->max_value;
+    }
+    else
+    {
+        spdlog::warn("Track info not found for track ID: {}", m_id);
+    }
+    // Ensure that min and max are not equal to allow rendering
+    if(m_max_y == m_min_y)
+    {
+        m_max_y = m_min_y + 1.0;
+    }
+    std::string flt = std::to_string(m_min_y);
+    m_min_y_str     = flt.substr(0, flt.find('.') + 2);
+    flt             = std::to_string(m_max_y);
+    m_max_y_str     = flt.substr(0, flt.find('.') + 2);
+}
 
 void
 LineTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
 {
     m_color_by_value_digits   = color_by_value_digits;
     m_is_color_value_existant = true;
-}
-
-bool
-LineTrackItem::HasData()
-{
-    return m_data_provider.GetRawTrackData(m_id) != nullptr;
 }
 
 void
@@ -242,52 +260,18 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImGui::EndChild();
 }
 
-void
+bool
 LineTrackItem::ReleaseData()
 {
-    m_data.clear();
-    m_data  = {};
-    m_min_y = 0;
-    m_max_y = 0;
-    m_min_y_str.clear();
-    m_max_y_str.clear();
-}
+    if(TrackItem::ReleaseData())
+    {       
+        m_data.clear();
+        m_data  = {};
 
-bool
-LineTrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
-{
-    bool result = false;
-    if(!m_pending_requests.erase(request_id))
-    {
-        spdlog::warn("Failed to erase pending request {}", request_id);
-    } else {
-        //spdlog::debug("Successfully erased pending request {}", request_id);
+        return true;
     }
 
-    result = ExtractPointsFromData();
-    if(result)
-    {
-        const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
-        if(track_info)
-        {
-            m_min_y = track_info->min_value;
-            m_max_y = track_info->max_value;
-        }
-        else
-        {
-            spdlog::warn("Track info not found for track ID: {}", m_id);
-        }
-        // Ensure that min and max are not equal to allow rendering
-        if(m_max_y == m_min_y)
-        {
-            m_max_y = m_min_y + 1.0;
-        }
-        std::string flt = std::to_string(m_min_y);
-        m_min_y_str     = flt.substr(0, flt.find('.') + 2);
-        flt             = std::to_string(m_max_y);
-        m_max_y_str     = flt.substr(0, flt.find('.') + 2);
-    }
-    return result;
+    return false;
 }
 
 bool

@@ -1,4 +1,5 @@
-#include "windows.h"
+#include <windows.h>
+#include <winver.h>
 
 #define FILEVERSION_MAJOR        @PROJECT_VERSION_MAJOR@
 #define FILEVERSION_MINOR        @PROJECT_VERSION_MINOR@
@@ -8,10 +9,15 @@
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-1 ICON "@CMAKE_CURRENT_SOURCE_DIR@/resources/rocprof_vis.ico"
-101 VERSIONINFO
+IDI_MYICON ICON "@CMAKE_CURRENT_SOURCE_DIR@/resources/rocprof_vis.ico"
+
+VS_VERSION_INFO VERSIONINFO
+
 FILEVERSION FILEVERSION_MAJOR, FILEVERSION_MINOR, FILEVERSION_PATCH, FILEVERSION_BUILD
 PRODUCTVERSION FILEVERSION_MAJOR, FILEVERSION_MINOR, FILEVERSION_PATCH, FILEVERSION_BUILD
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILEFLAGS 0
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
@@ -22,7 +28,8 @@ BEGIN
             VALUE "FileVersion", STR(FILEVERSION_MAJOR) "." STR(FILEVERSION_MINOR) "." STR(FILEVERSION_PATCH) "." STR(FILEVERSION_BUILD) "\0"
             VALUE "ProductVersion", STR(FILEVERSION_MAJOR) "." STR(FILEVERSION_MINOR) "." STR(FILEVERSION_PATCH) "." STR(FILEVERSION_BUILD) "\0"
             VALUE "InternalName", "Rocprof Visualizer\0"
-            VALUE "ProductName","Rocprof Visualizer\0"
+            VALUE "ProductName", "Rocprof Visualizer\0"
+            VALUE "LegalCopyright", "Copyright (C) 2025 AMD\0"
         END
     END
     BLOCK "VarFileInfo"

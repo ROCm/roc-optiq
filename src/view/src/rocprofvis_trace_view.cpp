@@ -1,4 +1,3 @@
-#pragma once
 #include "rocprofvis_trace_view.h"
 #include "imgui.h"
 #include "rocprofvis_analysis_view.h"

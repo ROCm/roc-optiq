@@ -2,6 +2,7 @@
 
 #pragma once
 #include <cstdint>
+#include <limits>
 #include <unordered_set>
 
 namespace RocProfVis

@@ -106,7 +106,7 @@ class SqliteDatabase : public Database
         // Method to delete SQL table
         // @param table_name - table name 
         // @return status of operation
-        rocprofvis_dm_result_t SqliteDatabase::DropSQLTable(const char* table_name);
+        rocprofvis_dm_result_t DropSQLTable(const char* table_name);
         // Method for SQL query execution without any callback
         // @param future - future object for asynchronous execution status
         // @param query - SQL query

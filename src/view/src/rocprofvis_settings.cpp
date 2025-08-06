@@ -24,8 +24,8 @@ int
 FontManager::GetFontSizeIndexForDPI(float dpi)
 {
     // DPI returns the dots per inch of the display. Essentially, it is a scaling factor.
-    constexpr float font_sizes[] = { 5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17,
-                                     18, 19, 21, 23, 25, 27, 31, 35, 39, 47, 55, 63 };
+    constexpr float font_sizes[] = { 7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                                     20, 21, 23, 25, 27, 29, 33, 37, 41, 49, 57, 65 };
 
     float base_size = 13.0f;
     float scaled_size =
@@ -66,8 +66,8 @@ FontManager::Init()
     ImGuiIO& io = ImGui::GetIO();
     m_fonts.clear();
 
-    constexpr float font_sizes[] = { 5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17,
-                                     18, 19, 21, 23, 25, 27, 31, 35, 39, 47, 55, 63 };
+    constexpr float font_sizes[] = { 7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                                     20, 21, 23, 25, 27, 29, 33, 37, 41, 49, 57, 65 };
 
     constexpr int num_sizes = sizeof(font_sizes) / sizeof(font_sizes[0]);
     constexpr int num_types = static_cast<int>(FontType::__kLastFont);

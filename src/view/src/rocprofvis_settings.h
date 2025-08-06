@@ -92,7 +92,7 @@ public:
 private:
     std::vector<ImFont*>              m_fonts;
     std::vector<ImFont*>              m_icon_fonts;
-    std::vector<std::vector<ImFont*>> m_all_fonts;
+    std::vector<ImFont*> m_all_fonts;
     std::vector<int>                  m_font_size_indices;
 };
 

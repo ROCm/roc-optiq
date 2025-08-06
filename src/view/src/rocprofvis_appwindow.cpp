@@ -10,7 +10,7 @@
 #include "rocprofvis_settings.h"
 #include "rocprofvis_version.h"
 #include "widgets/rocprofvis_debug_window.h"
-#include "widgets/rocprofvis_confirmation_dialog.h"
+#include "widgets/rocprofvis_dialog.h"
 
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"

@@ -483,7 +483,7 @@ public:
 
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&)>& callback);
-    void SetTraceLoadedCallback(const std::function<void(const std::string&)>& callback);
+    void SetTraceLoadedCallback(const std::function<void(const std::string&, uint64_t)>& callback);
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
 
     /*
@@ -562,7 +562,7 @@ private:
     // Called when new track data is ready
     std::function<void(uint64_t, const std::string&)> m_track_data_ready_callback;
     // Called when a new trace is loaded
-    std::function<void(const std::string&)> m_trace_data_ready_callback;
+    std::function<void(const std::string&, uint64_t)> m_trace_data_ready_callback;
     // Callback when trace is saved
     std::function<void(bool)> m_save_trace_callback;
 };

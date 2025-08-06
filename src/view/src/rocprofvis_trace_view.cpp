@@ -10,6 +10,7 @@
 #include "rocprofvis_track_topology.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_dialog.h"
 
 using namespace RocProfVis::View;
 
@@ -19,10 +20,11 @@ TraceView::TraceView()
 , m_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
-, m_save_trace_popup_info{false, false}
 , m_analysis(nullptr)
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
+, m_popup_info({false, "", ""})
+, m_message_dialog(std::make_unique<MessageDialog>())
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path) {
@@ -43,10 +45,32 @@ TraceView::TraceView()
         }
     };
 
+    m_data_provider.SetTraceLoadedCallback([this](const std::string& trace_path,
+                                                  uint64_t response_code) {
+        if(response_code != kRocProfVisResultSuccess)
+        {
+            spdlog::error("Failed to load trace: {}", response_code);
+            if(m_message_dialog)
+            {
+                m_popup_info.show_popup = true;
+                m_popup_info.title = "Error";
+                m_popup_info.message = "Failed to load trace: " + trace_path;
+            }
+        }
+    });
+
     m_data_provider.SetSaveTraceCallback(
-        [this](bool success) {
-            m_save_trace_popup_info.show_popup = true;
-            m_save_trace_popup_info.success = success;
+        [this](bool success) {        
+            m_popup_info.show_popup = true;
+            m_popup_info.title = "Save Trimmed Trace";
+            if(success)
+            {
+                m_popup_info.message = "Trimmed trace has been saved successfully.";
+            }
+            else
+            {
+                m_popup_info.message = "Failed to save the trimmed trace.";
+            }
         });
 
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
@@ -167,45 +191,30 @@ TraceView::Render()
     {
  
         m_container->Render();
-
-        if(m_save_trace_popup_info.show_popup)
-
-        {
-            ImGui::OpenPopup("Trimmed Trace");
-            m_save_trace_popup_info.show_popup = false;
-        }
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));        
-        if(ImGui::BeginPopupModal("Trimmed Trace", nullptr,
-                                  ImGuiWindowFlags_AlwaysAutoResize))
-        {
-            if(m_save_trace_popup_info.success)
-            {
-                ImGui::Text("Trimmed trace has been saved successfully.");
-            }
-            else
-            {
-                ImGui::Text("Failed to save the trimmed trace.");
-            }
-            if(ImGui::Button("OK"))
-            {
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::EndPopup();
-        }
-        ImGui::PopStyleVar(2);
-        return;
     }
 
-    if(m_open_loading_popup)
+    if(m_popup_info.show_popup)
     {
-        ImGui::OpenPopup("Loading");
-        m_open_loading_popup = false;
+        m_popup_info.show_popup = false;
+        if(m_message_dialog)
+        {
+            m_message_dialog->Show(m_popup_info.title, m_popup_info.message);
+        }
+    }
+
+    if(m_message_dialog)
+    {
+        m_message_dialog->Render();
     }
 
     if(m_data_provider.GetState() == ProviderState::kLoading)
     {
+        if(m_open_loading_popup)
+        {
+            ImGui::OpenPopup("Loading");
+            m_open_loading_popup = false;
+        }
+
         ImGui::SetNextWindowSize(ImVec2(300, 200));
         if(ImGui::BeginPopupModal("Loading"))
         {
@@ -242,11 +251,6 @@ TraceView::Render()
             ImGui::EndPopup();
         }
     }
-    else
-    {
-        ImGui::CloseCurrentPopup();
-    }
-
 }
 
 bool TraceView::HasTrimActiveTrimSelection() const

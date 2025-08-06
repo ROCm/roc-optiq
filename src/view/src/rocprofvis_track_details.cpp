@@ -11,8 +11,6 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float FRAME_PADDING_X = 0;
-
 TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology)
 : m_data_provider(dp)
 , m_track_topology(topology)
@@ -76,8 +74,7 @@ TrackDetails::Render()
                     }
                 }
             }
-        }
-        
+        }     
         ImGui::EndChild();
     }
 }
@@ -164,7 +161,7 @@ TrackDetails::RenderTable(InfoTable& table)
         const int& cols = table.cells[0].size();
 
         float table_x_min = ImGui::GetCursorScreenPos().x;
-        float table_width = ImGui::GetContentRegionAvail().x - FRAME_PADDING_X;
+        float table_width = ImGui::GetContentRegionAvail().x;
         float table_x_max = table_x_min + table_width;
         if(ImGui::BeginTable("", cols,
                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |

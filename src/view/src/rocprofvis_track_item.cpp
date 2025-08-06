@@ -207,6 +207,17 @@ TrackItem::RenderMetaArea()
         content_size.x -= m_metadata_padding.x * 2;
         content_size.y -= m_metadata_padding.x * 2;
 
+        if(HasPendingRequests())
+        {
+            if(ImGui::Button("Cancel Request"))
+            {
+                for(const auto& [request_id, req] : m_pending_requests)
+                {
+                    m_data_provider.CancelRequest(request_id);
+                }
+            }
+        }
+
         ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
                                (menu_button_width + 2 * m_metadata_padding.x));
         ImGui::Text(m_name.c_str());

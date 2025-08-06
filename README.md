@@ -31,6 +31,7 @@ Supported formats are *.db* and *.rpd* trace files.
     - Dragging the mouse on the *Graph* area of the track will also scroll and pan the view.
     - When hovering over the *Graph* area the scroll wheel will zoom the view.
     - When hovering over the *Description* area of the track the scroll wheel will scroll the track list.
+    - Display options for each track can be accessed by clicking the gear icon in track's *Description* area.
     - Clicking the *Description* area will select or deselect the track.  When selected, the track details will be displayed in the *Event Details* or *Sample Details* tabs in the *Advanced Details Area", depending on the track type.
     - Clicking on an *Event* in the *Graph* area will select or deselect an event. When selected details for the event can be seen in the *Events View* tab of the *Advanced Details Area*.
     - Double clicking on the *Graph* will start a *Time Range Filter* selection.  Double click again to finish the selection.  Double click again to clear the selection.

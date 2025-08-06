@@ -446,6 +446,13 @@ MemoryManager::Delete(Handle* handle)
             if(pool->m_bitmask.None())
             {
                 m_lru_storage_memory_used -= size;
+                for(int i = 0; i < kRocProfVisNumberOfObjectTypes; i++)
+                {
+                    if (it == m_current_pool[i])
+                    {
+                        m_current_pool[i] = m_object_pools.end();
+                    }
+                }
                 m_object_pools.erase(it);
                 delete pool;
             }

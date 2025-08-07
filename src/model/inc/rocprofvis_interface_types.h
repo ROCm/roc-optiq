@@ -317,6 +317,8 @@ typedef enum rocprofvis_dm_event_property_type_t {
     kRPVDMEventStackTrace,
     // Extended data
     kRPVDMEventExtData,
+    // Number of event property types
+    kRPVDMNumEventPropertyTypes,
 } rocprofvis_dm_event_property_type_t;
 
 // Type for sort order

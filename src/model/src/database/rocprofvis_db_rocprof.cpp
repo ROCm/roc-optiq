@@ -278,7 +278,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     "K.grid_size_x AS grid_x, K.grid_size_y AS grid_y, K.grid_size_z AS grid_z, "
                     "K.workgroup_size_x AS workgroup_x, K.workgroup_size_y AS workgroup_y, K.workgroup_size_z AS workgroup_z, "
                     "K.group_segment_size AS lds_size, K.private_segment_size AS scratch_size, S.group_segment_size AS static_lds_size, "
-                    "S.private_segment_size AS static_scratch_size, K.agent_id as agentId, K.queue_id as queueId, MC.stream_id as streamId FROM rocpd_kernel_dispatch K "
+                    "S.private_segment_size AS static_scratch_size, K.agent_id as agentId, K.queue_id as queueId, K.stream_id as streamId FROM rocpd_kernel_dispatch K "
                     "INNER JOIN rocpd_info_agent A ON A.id = K.agent_id AND A.guid = K.guid "
                     "INNER JOIN rocpd_event E ON E.id = K.event_id AND E.guid = K.guid "
                     "INNER JOIN rocpd_string R ON R.id = K.region_name_id AND R.guid = K.guid "

@@ -90,7 +90,7 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
             // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
             std::shared_ptr<FlowTrace> item;
             {
-                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type),__func__, this);
                 auto it = std::find_if(
                     m_flow_traces.begin(), m_flow_traces.end(),
                                        [&event_id](std::shared_ptr<FlowTrace>& x) {
@@ -112,7 +112,7 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
             // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
             std::shared_ptr<StackTrace> item;
             {
-                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type), __func__, this);
                 auto             it =
                     std::find_if(m_stack_traces.begin(), m_stack_traces.end(),
                                  [&event_id](std::shared_ptr<StackTrace>& x) {
@@ -134,7 +134,7 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
             // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
             std::shared_ptr<ExtData> item;
             {
-                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type), __func__, this);
                 auto             it =
                     std::find_if(m_ext_data.begin(), m_ext_data.end(),
                                  [&event_id](std::shared_ptr<ExtData>& x) {
@@ -163,7 +163,7 @@ rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_p
             // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
             std::vector<std::shared_ptr<FlowTrace>> flow_traces;
             {
-                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type), __func__, this);
                 flow_traces.swap(m_flow_traces);
             }
             return kRocProfVisDmResultSuccess;
@@ -175,7 +175,7 @@ rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_p
             // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
             std::vector<std::shared_ptr<StackTrace>> stack_traces;
             {
-                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__,this);
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type), __func__,this);
                 stack_traces.swap(m_stack_traces);
             }
             return kRocProfVisDmResultSuccess;
@@ -187,7 +187,7 @@ rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_p
             // The elements of local array are protected by their own mutexes and will be deleted outside the scope when mutexes are unlocked 
             std::vector<std::shared_ptr<ExtData>> ext_data;
             {
-                TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+                TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type), __func__, this);
                 ext_data.swap(m_ext_data);
             }
             return kRocProfVisDmResultSuccess;
@@ -322,7 +322,7 @@ rocprofvis_dm_result_t Trace::AddFlow(const rocprofvis_dm_flowtrace_t object, ro
 rocprofvis_dm_flowtrace_t Trace::AddFlowTrace(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->EventPropertyMutex(kRPVDMEventFlowTrace), __func__, trace);
     try{
         trace->m_flow_traces.push_back(std::make_shared<FlowTrace>(trace, event_id));
     }
@@ -343,7 +343,7 @@ rocprofvis_dm_result_t Trace::AddStackFrame(const rocprofvis_dm_stacktrace_t obj
 rocprofvis_dm_stacktrace_t Trace::AddStackTrace(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->EventPropertyMutex(kRPVDMEventStackTrace), __func__, trace);
     try{
         trace->m_stack_traces.push_back(std::make_shared<StackTrace>(trace, event_id));
     }
@@ -357,7 +357,7 @@ rocprofvis_dm_stacktrace_t Trace::AddStackTrace(const rocprofvis_dm_trace_t obje
 rocprofvis_dm_extdata_t  Trace::AddExtData(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
-    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->EventPropertyMutex(kRPVDMEventExtData), __func__, trace);
     try{
         trace->m_ext_data.push_back(std::make_shared<ExtData>(trace,event_id));
     }
@@ -467,7 +467,7 @@ rocprofvis_dm_result_t Trace::CheckEventPropertyExists(
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     Trace* trace = (Trace*) object;
-    TimedLock<std::shared_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*trace->EventPropertyMutex(type), __func__, trace);
     switch(type)
     {
         case kRPVDMEventFlowTrace:
@@ -621,7 +621,8 @@ const char*  Trace::GetPropertySymbol(rocprofvis_dm_property_t property) {
 
 
 rocprofvis_dm_result_t Trace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_extdata_t & extinfo){
-    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+    
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*EventPropertyMutex(kRPVDMEventExtData), __func__, this);
     auto it =
         find_if(m_ext_data.begin(), m_ext_data.end(), 
                         [&](std::shared_ptr<ExtData>& x) {
@@ -636,7 +637,7 @@ rocprofvis_dm_result_t Trace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id
 }
 
 rocprofvis_dm_result_t Trace::GetFlowTraceHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_flowtrace_t & flowtrace){
-    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*EventPropertyMutex(kRPVDMEventFlowTrace), __func__, this);
     auto it = find_if(m_flow_traces.begin(), m_flow_traces.end(),
                       [&](std::shared_ptr<FlowTrace>& x) {
         return x.get()->EventId().value == event_id.value;
@@ -650,7 +651,7 @@ rocprofvis_dm_result_t Trace::GetFlowTraceHandle(rocprofvis_dm_event_id_t event_
 }
 
 rocprofvis_dm_result_t Trace::GetStackTraceHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_stacktrace_t & stacktrace){
-    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*EventPropertyMutex(kRPVDMEventStackTrace), __func__, this);
     auto it = find_if(m_stack_traces.begin(), m_stack_traces.end(),
                       [&](std::shared_ptr<StackTrace>& x) {
         return x.get()->EventId().value == event_id.value;

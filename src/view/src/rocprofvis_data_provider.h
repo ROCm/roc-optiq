@@ -54,14 +54,14 @@ typedef struct track_info_t
     double                             min_ts;       // starting time stamp of track
     double                             max_ts;       // ending time stamp of track
     uint64_t                           num_entries;  // number of entries in the track
-    double                             min_value;  // minimum value in the track (for samples) or level (for events) 
-    double                             max_value;  // maximum value in the track (for samples) or level (for events)
-    rocprofvis_handle_t*               graph_handle;  // handle to the graph object owned by the track
+    double min_value;  // minimum value in the track (for samples) or level (for events)
+    double max_value;  // maximum value in the track (for samples) or level (for events)
+    rocprofvis_handle_t* graph_handle;  // handle to the graph object owned by the track
     struct Topology
     {
-        uint64_t                       node_id;       // ID of track's parent node
-        uint64_t                       process_id;    // ID of track's parent process
-        uint64_t                       device_id;     // ID of track's parent device
+        uint64_t node_id;     // ID of track's parent node
+        uint64_t process_id;  // ID of track's parent process
+        uint64_t device_id;   // ID of track's parent device
         enum
         {
             Unknown,
@@ -69,9 +69,9 @@ typedef struct track_info_t
             Stream,
             Thread,
             Counter
-        }                              type;
-        uint64_t                       id;            // ID of queue/thread/counter
-    }                                  topology;
+        } type;
+        uint64_t id;  // ID of queue/stream/thread/counter
+    } topology;
 } track_info_t;
 
 typedef struct event_ext_data_t
@@ -81,32 +81,13 @@ typedef struct event_ext_data_t
     std::string value;
 } event_ext_data_t;
 
-typedef struct selected_event_t
-{
-    uint64_t event_id;     // id of the selected event
-    double   position_ns;  // position of the event in the timeline
-    uint64_t track_id;     // id of the track where the event is located
-} selected_event_t;
-
-typedef struct event_info_t
-{
-    uint64_t event_id;  // id of the event for which the extended info is stored
-    std::vector<event_ext_data_t> ext_data;
-} event_info_t;
-
 typedef struct event_flow_data_t
 {
     uint64_t id;
     uint64_t timestamp;
-    uint32_t track_id;
-    uint32_t direction;
+    uint64_t track_id;
+    uint64_t direction;
 } event_flow_data_t;
-
-typedef struct flow_info_t
-{
-    uint64_t event_id;  // id of the event for which the flow info is stored
-    std::vector<event_flow_data_t> flow_data;
-} flow_info_t;
 
 typedef struct call_stack_data_t
 {
@@ -120,11 +101,14 @@ typedef struct call_stack_data_t
     std::string isa_line;      // ISA/ASM line number
 } call_stack_data_t;
 
-typedef struct call_stack_info_t
+typedef struct event_info_t
 {
-    uint64_t event_id;  // id of the event for which the call stack data is stored
-    std::vector<call_stack_data_t> call_stack_data;  // vector of call stack entries
-} call_stack_info_t;
+    uint64_t                       track_id;  // ID of owning track.
+    rocprofvis_trace_event_t       basic_info;
+    std::vector<event_ext_data_t>  ext_info;
+    std::vector<event_flow_data_t> flow_info;
+    std::vector<call_stack_data_t> call_stack_info;
+} event_info_t;
 
 typedef struct node_info_t
 {
@@ -141,8 +125,8 @@ typedef struct device_info_t
 {
     uint64_t    id;
     std::string product_name;
-    std::string type;           // GPU/CPU
-    uint64_t    type_index;     // GPU0, GPU1...etc
+    std::string type;        // GPU/CPU
+    uint64_t    type_index;  // GPU0, GPU1...etc
 } device_info_t;
 
 typedef struct process_info_t
@@ -154,7 +138,7 @@ typedef struct process_info_t
     std::string           environment;
     std::vector<uint64_t> thread_ids;   // IDs of this process' threads
     std::vector<uint64_t> queue_ids;    // IDs of this process' queues
-    std::vector<uint64_t> stream_ids;    // IDs of this process' streams
+    std::vector<uint64_t> stream_ids;   // IDs of this process' streams
     std::vector<uint64_t> counter_ids;  // IDs of this process' counters
 } process_info_t;
 
@@ -231,17 +215,18 @@ public:
     uint64_t m_req_row_count;      // number of rows requested
     uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
-    std::string           m_filter;
-    std::string           m_group;
-    std::string           m_group_columns;
+    std::string                        m_filter;
+    std::string                        m_group;
+    std::string                        m_group_columns;
 
     TableRequestParams(const TableRequestParams& table_params)            = default;
     TableRequestParams& operator=(const TableRequestParams& table_params) = default;
 
     TableRequestParams(
         rocprofvis_controller_table_type_t table_type,
-        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts, char const* filter,
-        char const* group, char const* group_cols, uint64_t start_row = -1, uint64_t req_row_count = -1,
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
+        char const* filter, char const* group, char const* group_cols,
+        uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending)
     : m_table_type(table_type)
@@ -258,6 +243,20 @@ public:
     {}
 };
 
+// Event request parameters
+class EventRequestParams : public RequestParamsBase
+{
+public:
+    uint64_t m_event_id;
+
+    EventRequestParams(const EventRequestParams& table_params)            = default;
+    EventRequestParams& operator=(const EventRequestParams& table_params) = default;
+
+    EventRequestParams(uint64_t event_id)
+    : m_event_id(event_id)
+    {}
+};
+
 typedef struct data_req_info_t
 {
     uint64_t                           request_id;      // unique id of the request
@@ -267,9 +266,9 @@ typedef struct data_req_info_t
     rocprofvis_controller_arguments_t* request_args;        // arguments for the request
     ProviderState                      loading_state;       // state of the request
     RequestType                        request_type;        // type of request
-    bool                               internal_request;    // true if request is handled by view (and not controller)
-    std::shared_ptr<RequestParamsBase> custom_params;       // custom request parameters
-    uint64_t                           response_code;       // response code for the request
+    bool internal_request;  // true if request is handled by view (and not controller)
+    std::shared_ptr<RequestParamsBase> custom_params;  // custom request parameters
+    uint64_t                           response_code;  // response code for the request
 } data_req_info_t;
 
 typedef struct table_info_t
@@ -295,22 +294,17 @@ public:
     DataProvider();
     ~DataProvider();
 
-    const event_info_t&      GetEventInfoStruct() const;
-    const flow_info_t&       GetFlowInfo() const;
-    const call_stack_info_t& GetCallStackInfo() const;
+    const event_info_t* GetEventInfo(uint64_t event_id) const;
 
+    /*
+     * Fetches an event of a track from the controller. Stores the data in m_event_data.
+     * @param track_id: ID of the track that owns the event to fetch.
+     * @param event_id: ID of event to fetch
+     */
+    bool FetchEvent(uint64_t track_id, uint64_t event_id);
     bool FetchEventExtData(uint64_t event_id);
     bool FetchEventFlowDetails(uint64_t event_id);
     bool FetchEventCallStackData(uint64_t event_id);
-
-    // Get user selected event.
-    uint64_t GetSelectedEventId();
-
-    // Set user selected event.
-    void SetSelectedEvent(selected_event_t event);
-
-    // Get user selected event.
-    selected_event_t GetSelectedEvent();
 
     /*
      *   Close the controller.
@@ -388,7 +382,8 @@ public:
      */
     bool FetchSingleTrackSampleTable(
         uint64_t track_id, double start_ts, double end_ts, char const* filter,
-        uint64_t start_row = -1, uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
+        uint64_t start_row = -1, uint64_t req_row_count = -1,
+        uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
     /*
@@ -397,13 +392,16 @@ public:
      */
     bool FetchSingleTrackTable(const TableRequestParams& table_params);
 
-    bool FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_ids, double start_ts, double end_ts, char const* filter,
-        uint64_t start_row = -1, uint64_t req_row_count = -1,
+    bool FetchMultiTrackSampleTable(
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
+        char const* filter, uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    bool FetchMultiTrackEventTable(const std::vector<uint64_t>& track_ids, double start_ts, double end_ts, char const* filter,
-        char const* group, char const* group_cols, uint64_t start_row = -1, uint64_t req_row_count = -1,
+    bool FetchMultiTrackEventTable(
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
+        char const* filter, char const* group, char const* group_cols,
+        uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
@@ -418,6 +416,12 @@ public:
      * @param id: The id of the track to select
      */
     bool FreeTrack(uint64_t track_id);
+
+    /*
+     * Erases an event's data from m_event_data.
+     * @param id: ID of the event to erase
+     */
+    bool FreeEvent(uint64_t event_id);
 
     /*
      * Output track list meta data.
@@ -462,8 +466,8 @@ public:
 
     const track_info_t*              GetTrackInfo(uint64_t track_id);
     std::vector<const track_info_t*> GetTrackInfoList();
-    uint64_t GetTrackCount();
-   
+    uint64_t                         GetTrackCount();
+
     std::vector<const node_info_t*> GetNodeInfoList() const;
     const device_info_t*            GetDeviceInfo(uint64_t device_id) const;
     const process_info_t*           GetProcessInfo(uint64_t process_id) const;
@@ -483,7 +487,8 @@ public:
 
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&)>& callback);
-    void SetTraceLoadedCallback(const std::function<void(const std::string&, uint64_t)>& callback);
+    void SetTraceLoadedCallback(
+        const std::function<void(const std::string&, uint64_t)>& callback);
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
 
     /*
@@ -495,8 +500,8 @@ public:
      */
     bool SetGraphIndex(uint64_t track_id, uint64_t index);
 
-    bool SaveTrimmedTrace(const std::string &path, double start_ns, double end_ns);
-    
+    bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
+
 private:
     void HandleLoadTrace();
     void HandleLoadSystemTopology();
@@ -520,9 +525,10 @@ private:
     */
     void ClearTable(TableType type);
 
-
-    void CreateRawEventData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);                           
-    void CreateRawSampleData(const TrackRequestParams &params, rocprofvis_controller_array_t* track_data);
+    void CreateRawEventData(const TrackRequestParams&      params,
+                            rocprofvis_controller_array_t* track_data);
+    void CreateRawSampleData(const TrackRequestParams&      params,
+                             rocprofvis_controller_array_t* track_data);
 
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                           uint64_t index);
@@ -538,20 +544,16 @@ private:
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
 
-    selected_event_t  m_selected_event;   // Store selected event info
-    event_info_t      m_event_info;       // Store event info for selected event
-    flow_info_t       m_flow_info;        // Store flow info for selected event
-    call_stack_info_t m_call_stack_info;  // Store call stack info for selected event
-
     std::unordered_map<uint64_t, track_info_t>  m_track_metadata;
     std::unordered_map<uint64_t, RawTrackData*> m_raw_trackdata;
+    std::unordered_map<uint64_t, event_info_t>  m_event_data;
 
     std::unordered_map<uint64_t, node_info_t>    m_node_infos;
     std::unordered_map<uint64_t, device_info_t>  m_device_infos;
     std::unordered_map<uint64_t, process_info_t> m_process_infos;
     std::unordered_map<uint64_t, thread_info_t>  m_thread_infos;
     std::unordered_map<uint64_t, queue_info_t>   m_queue_infos;
-    std::unordered_map<uint64_t, stream_info_t>   m_stream_infos;
+    std::unordered_map<uint64_t, stream_info_t>  m_stream_infos;
     std::unordered_map<uint64_t, counter_info_t> m_counter_infos;
 
     // Store table_info_t for each TableType in a vector

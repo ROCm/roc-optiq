@@ -1,9 +1,9 @@
 #include "rocprofvis_track_item.h"
-#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_settings.h"
-#include "spdlog/spdlog.h"
-#include "widgets/rocprofvis_debug_window.h"
+#include "rocprofvis_utils.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -311,6 +311,12 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     }
     ImGui::EndChild();  // end resize handle
     ImGui::PopStyleColor();
+}
+
+bool
+TrackItem::HasData()
+{
+    return m_data_provider.GetRawTrackData(m_id) != nullptr;
 }
 
 void

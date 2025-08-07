@@ -25,6 +25,8 @@ TraceView::TraceView()
 , m_track_topology(nullptr)
 , m_popup_info({false, "", ""})
 , m_message_dialog(std::make_unique<MessageDialog>())
+, m_tabselected_event_token(-1)
+, m_event_selection_changed_event_token(-1)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path) {
@@ -73,9 +75,30 @@ TraceView::TraceView()
             }
         });
 
+    auto event_selection_handler = [this](std::shared_ptr<RocEvent> e) {
+        std::shared_ptr<EventSelectionChangedEvent> event =
+            std::dynamic_pointer_cast<EventSelectionChangedEvent>(e);
+        if(event)
+        {
+            if(event->EventSelected())
+            {
+                m_data_provider.FetchEvent(event->GetEventTrackID(),
+                                               event->GetEventID());
+            }
+            else
+            {
+                m_data_provider.FreeEvent(event->GetEventID());
+            }
+        }
+    };
+
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
-        
+
+    m_event_selection_changed_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
+        event_selection_handler);
+
     m_widget_name = GenUniqueName("TraceView");
 }
 
@@ -84,6 +107,9 @@ TraceView::~TraceView()
     m_data_provider.SetTrackDataReadyCallback(nullptr);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
+        m_event_selection_changed_event_token);
 }
 
 void
@@ -134,7 +160,8 @@ TraceView::CreateView()
 	m_track_topology = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view  = std::make_shared<TimelineView>(m_data_provider, m_timeline_selection);
     m_sidebar = std::make_shared<SideBar>(m_track_topology, m_timeline_selection, m_timeline_view->GetGraphs()); 	
-    m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology);
+    m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+                                                m_timeline_selection);
 
     LayoutItem left;
     left.m_item = m_sidebar;

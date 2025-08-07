@@ -70,8 +70,8 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_last_graph_size(0.0f, 0.0f)
 , m_reorder_request({ true, 0, 0 })
 , m_track_height_total({})
-, m_arrow_layer(m_data_provider)
-, m_selection(timeline_selection)
+, m_arrow_layer(m_data_provider, timeline_selection)
+, m_timeline_selection(timeline_selection)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -501,7 +501,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             {
                 m_highlighted_region.second =
                     m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
-                m_selection->SelectTimeRange(
+                m_timeline_selection->SelectTimeRange(
                     std::min(m_highlighted_region.first, m_highlighted_region.second) +
                         m_min_x,
                     std::max(m_highlighted_region.first, m_highlighted_region.second) +
@@ -511,7 +511,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             {
                 m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
                 m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
-                m_selection->ClearTimeRange();
+                m_timeline_selection->ClearTimeRange();
             }
         }
     }
@@ -991,7 +991,7 @@ TimelineView::RenderGraphView()
                     // check for mouse click
                     if(track_item.chart->IsMetaAreaClicked())
                     {
-                        m_selection->ToggleSelectTrack(track_item);
+                        m_timeline_selection->ToggleSelectTrack(track_item);
                     }
                 }
                 ImGui::EndChild();
@@ -1119,8 +1119,8 @@ TimelineView::MakeGraphView()
             {
                 // Create FlameChart
                 FlameTrackItem* flame = new FlameTrackItem(
-                    m_data_provider, track_info->id, track_info->name, m_zoom,
-                    m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
+                    m_data_provider, m_timeline_selection, track_info->id, track_info->name,
+                    m_zoom, m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),

@@ -120,10 +120,10 @@ TabEvent::GetTabSource() const
 }
 
 TrackSelectionChangedEvent::TrackSelectionChangedEvent(
-    int event_id, std::vector<uint64_t> selected_tracks, double start_ns, double end_ns)
+    std::vector<uint64_t> selected_tracks, double start_ns, double end_ns)
+: RocEvent(static_cast<int>(RocEvents::kTimelineTrackSelectionChanged))
 {
-    m_event_id        = event_id;
-    m_event_type      = RocEventType::kTimelineSelectionChangedEvent;
+    m_event_type      = RocEventType::kTimelineTrackSelectionChangedEvent;
     m_selected_tracks = std::move(selected_tracks);
     m_start_ns        = start_ns;
     m_end_ns          = end_ns;
@@ -158,4 +158,32 @@ const uint64_t
 ScrollToTrackEvent::GetTrackID() const
 {
     return m_track_id;
+}
+
+EventSelectionChangedEvent::EventSelectionChangedEvent(uint64_t event_id,
+                                                       uint64_t track_id, bool selected)
+: RocEvent(static_cast<int>(RocEvents::kTimelineEventSelectionChanged))
+, m_event_id(event_id)
+, m_event_track_id(track_id)
+, m_selected(selected)
+{
+    m_event_type = RocEventType::kTimelineEventSelectionChangedEvent;
+}
+
+uint64_t
+EventSelectionChangedEvent::GetEventID() const
+{
+    return m_event_id;
+}
+
+uint64_t
+EventSelectionChangedEvent::GetEventTrackID() const
+{
+    return m_event_track_id;
+}
+
+bool
+EventSelectionChangedEvent::EventSelected() const
+{
+    return m_selected;
 }

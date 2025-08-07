@@ -1,7 +1,5 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_raw_track_data.h"
-#include "rocprofvis_settings.h"
 #include "rocprofvis_view_structs.h"
 
 #include <deque>
@@ -10,6 +8,8 @@ namespace RocProfVis
 {
 namespace View
 {
+
+class Settings;
 
 enum class TrackDataRequestState
 {
@@ -30,14 +30,13 @@ public:
     uint64_t           GetID();
     virtual float      GetTrackHeight();
     virtual void       Render(float width);
-    void               Update();
+    virtual void       Update();
     const std::string& GetName();
 
     virtual void UpdateMovement(float zoom, double time_offset_ns, double& min_x, double& max_x,
                                 double scale_x,
                                 float m_scroll_position);
 
-    virtual void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) = 0;
     bool         IsInViewVertical();
     void         SetInViewVertical(bool in_view);
 
@@ -53,7 +52,7 @@ public:
     bool        GetResizeStatus();
     static void SetSidebarSize(int sidebar_size);
 
-    virtual bool HasData()     = 0;
+    virtual bool HasData();
     virtual void ReleaseData() = 0;
     virtual void RequestData(double min, double max, float width);
 

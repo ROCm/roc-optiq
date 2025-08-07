@@ -54,9 +54,10 @@ private:
     
     popup_info_t m_popup_info;
 
-    EventManager::SubscriptionToken  m_tabselected_event_token;
-
     std::unique_ptr<MessageDialog> m_message_dialog;
+
+    EventManager::SubscriptionToken       m_tabselected_event_token;
+    EventManager::SubscriptionToken       m_event_selection_changed_event_token;
 };
 
 }  // namespace View

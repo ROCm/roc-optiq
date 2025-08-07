@@ -4,6 +4,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
+#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -13,8 +14,12 @@ namespace View
 TimelineSelection::TimelineSelection()
 : m_selected_range_start(INVALID_SELECTION_TIME)
 , m_selected_range_end(INVALID_SELECTION_TIME)
+, m_last_event_id(0)
+, m_last_event_track_id(0)
+, m_last_event_selected(true)
 , m_tracks_changed(false)
 , m_range_changed(false)
+, m_events_changed(false)
 {}
 
 TimelineSelection::~TimelineSelection() {}
@@ -26,11 +31,17 @@ TimelineSelection::Update()
     {
         EventManager::GetInstance()->AddEvent(
             std::make_shared<TrackSelectionChangedEvent>(
-                static_cast<int>(RocEvents::kTimelineSelectionChanged),
                 std::vector(m_selected_track_ids.begin(), m_selected_track_ids.end()),
                 m_selected_range_start, m_selected_range_end));
         m_tracks_changed = false;
         m_range_changed  = false;
+    }
+    if(m_events_changed)
+    {
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<EventSelectionChangedEvent>(
+                m_last_event_id, m_last_event_track_id, m_last_event_selected));
+        m_events_changed = false;
     }
 }
 
@@ -84,15 +95,16 @@ TimelineSelection::SelectTimeRange(double start_ts, double end_ts)
     }
 }
 
-bool TimelineSelection::GetSelectedTimeRange(double& start_ts_out, double& end_ts_out) const
+bool
+TimelineSelection::GetSelectedTimeRange(double& start_ts_out, double& end_ts_out) const
 {
     if(!HasValidTimeRangeSelection())
     {
         return false;  // No valid selection
     }
-    
+
     start_ts_out = m_selected_range_start;
-    end_ts_out = m_selected_range_end;
+    end_ts_out   = m_selected_range_end;
     return true;
 }
 
@@ -104,10 +116,56 @@ TimelineSelection::ClearTimeRange()
     m_range_changed        = true;
 }
 
-bool TimelineSelection::HasValidTimeRangeSelection() const
+bool
+TimelineSelection::HasValidTimeRangeSelection() const
 {
     return m_selected_range_start != TimelineSelection::INVALID_SELECTION_TIME ||
-           m_selected_range_end != TimelineSelection::INVALID_SELECTION_TIME; 
+           m_selected_range_end != TimelineSelection::INVALID_SELECTION_TIME;
+}
+
+void
+TimelineSelection::SelectTrackEvent(uint64_t track_id, uint64_t event_id)
+{
+    if(m_selected_event_ids.count(event_id) == 0)
+    {
+        m_selected_event_ids.insert(event_id);
+        m_last_event_selected = true;
+        m_last_event_id       = event_id;
+        m_last_event_track_id = track_id;
+        m_events_changed      = true;
+    }
+}
+
+void
+TimelineSelection::UnselectTrackEvent(uint64_t track_id, uint64_t event_id)
+{
+    if(m_selected_event_ids.count(event_id) > 0)
+    {
+        m_selected_event_ids.erase(event_id);
+        m_last_event_selected = false;
+        m_last_event_id       = event_id;
+        m_last_event_track_id = track_id;
+        m_events_changed      = true;
+    }
+}
+
+bool
+TimelineSelection::GetSelectedEvents(std::vector<uint64_t>& event_ids)
+{
+    if(m_selected_event_ids.empty())
+    {
+        return false;
+    }
+
+    event_ids.insert(event_ids.end(), m_selected_event_ids.begin(),
+                     m_selected_event_ids.end());
+    return true;
+}
+
+bool
+TimelineSelection::EventSelected(uint64_t event_id)
+{
+    return m_selected_event_ids.count(event_id) > 0;
 }
 
 }  // namespace View

@@ -202,7 +202,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Track query by stream
                         "",
                         // Level query
-                        "select 1 as op, start, end, id, 0, pid, tid  from rocpd_api ",
+                        "select 1 as op, start, end, id, 0, pid, tid, 0 as const  from rocpd_api ",
                         // Slice query by queue
                         "select 1 as op, start, end, args_id, apiName_id, id, 0, pid, tid ,L.level as level from rocpd_api LEFT JOIN event_levels_api L ON id = L.eid ",
                         // Slice query by stream
@@ -221,7 +221,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Track query by stream
                         "",
                         // Level query
-                        "select 2 as op, start, end, id, 0, gpuId, queueId from rocpd_op ",
+                        "select 2 as op, start, end, id, 0, gpuId, queueId, 0 as const from rocpd_op ",
                         // Slice query by queue
                         "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId , L.level as level, 0 as const from rocpd_op LEFT JOIN event_levels_op L ON id = L.eid ",
                         // Slice query by stream
@@ -240,7 +240,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Track query by stream
                         "",
                         // Level query
-                        "select 0 as op, start, start as end, 0, 0, deviceId, monitorType from rocpd_monitor ",
+                        "select 0 as op, start, start as end, 0, 0, deviceId, monitorType, 0 as const from rocpd_monitor ",
                         // Slice query by monitorType
                         "select 0 as op, start, value, start as end, 0, 0, 0, deviceId, monitorType , value as level from rocpd_monitor ",
                         // Slice query by stream

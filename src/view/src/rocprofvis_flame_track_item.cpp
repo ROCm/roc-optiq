@@ -2,9 +2,9 @@
 
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_timeline_selection.h"
-#include "rocprofvis_event_manager.h"
 #include "spdlog/spdlog.h"
 #include <limits>
 #include <string>
@@ -31,7 +31,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_selection_changed(false)
 {
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        this->HandleTimelineSelectionChanged();
+        this->HandleTimelineSelectionChanged(e);
     };
     // Subscribe to timeline selection changed event
     m_timeline_event_selection_changed_token = EventManager::GetInstance()->Subscribe(
@@ -90,12 +90,18 @@ FlameTrackItem::ExtractPointsFromData()
 }
 
 void
-FlameTrackItem::HandleTimelineSelectionChanged()
+FlameTrackItem::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
 {
-    // Update selection state cache.
-    for(ChartItem& item : m_chart_items)
+    std::shared_ptr<EventSelectionChangedEvent> selection_changed_event =
+        std::static_pointer_cast<EventSelectionChangedEvent>(e);
+    if(selection_changed_event &&
+       selection_changed_event->GetTracePath() == m_data_provider.GetTraceFilePath())
     {
-        item.selected = m_timeline_selection->EventSelected(item.event.m_id);
+        // Update selection state cache.
+        for(ChartItem& item : m_chart_items)
+        {
+            item.selected = m_timeline_selection->EventSelected(item.event.m_id);
+        }
     }
 }
 

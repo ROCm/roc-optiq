@@ -101,7 +101,8 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
         {
             std::shared_ptr<TrackSelectionChangedEvent> selection_changed_event =
                 std::static_pointer_cast<TrackSelectionChangedEvent>(e);
-            if(selection_changed_event)
+            if(selection_changed_event && selection_changed_event->GetTracePath() ==
+                                              m_data_provider.GetTraceFilePath())
             {
                 if(m_event_table)
                 {
@@ -119,9 +120,15 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
         }
         else if(event_type == RocEventType::kTimelineEventSelectionChangedEvent)
         {
-            if(m_events_view)
+            std::shared_ptr<EventSelectionChangedEvent> selection_changed_event =
+                std::static_pointer_cast<EventSelectionChangedEvent>(e);
+            if(selection_changed_event && selection_changed_event->GetTracePath() ==
+                                              m_data_provider.GetTraceFilePath())
             {
-                m_events_view->HandleEventSelectionChanged();
+                if(m_events_view)
+                {
+                    m_events_view->HandleEventSelectionChanged();
+                }
             }
         }
     }

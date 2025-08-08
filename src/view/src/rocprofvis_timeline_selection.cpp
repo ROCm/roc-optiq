@@ -11,7 +11,7 @@ namespace RocProfVis
 namespace View
 {
 
-TimelineSelection::TimelineSelection()
+TimelineSelection::TimelineSelection(DataProvider& dp)
 : m_selected_range_start(INVALID_SELECTION_TIME)
 , m_selected_range_end(INVALID_SELECTION_TIME)
 , m_last_event_id(0)
@@ -20,6 +20,7 @@ TimelineSelection::TimelineSelection()
 , m_tracks_changed(false)
 , m_range_changed(false)
 , m_events_changed(false)
+, m_data_provider(dp)
 {}
 
 TimelineSelection::~TimelineSelection() {}
@@ -32,7 +33,8 @@ TimelineSelection::Update()
         EventManager::GetInstance()->AddEvent(
             std::make_shared<TrackSelectionChangedEvent>(
                 std::vector(m_selected_track_ids.begin(), m_selected_track_ids.end()),
-                m_selected_range_start, m_selected_range_end));
+                m_selected_range_start, m_selected_range_end,
+                m_data_provider.GetTraceFilePath()));
         m_tracks_changed = false;
         m_range_changed  = false;
     }
@@ -40,7 +42,8 @@ TimelineSelection::Update()
     {
         EventManager::GetInstance()->AddEvent(
             std::make_shared<EventSelectionChangedEvent>(
-                m_last_event_id, m_last_event_track_id, m_last_event_selected));
+                m_last_event_id, m_last_event_track_id, m_last_event_selected,
+                m_data_provider.GetTraceFilePath()));
         m_events_changed = false;
     }
 }
@@ -163,7 +166,7 @@ TimelineSelection::GetSelectedEvents(std::vector<uint64_t>& event_ids)
 }
 
 bool
-TimelineSelection::EventSelected(uint64_t event_id)
+TimelineSelection::EventSelected(uint64_t event_id) const
 {
     return m_selected_event_ids.count(event_id) > 0;
 }

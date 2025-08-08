@@ -10,12 +10,13 @@ namespace RocProfVis
 namespace View
 {
 
+class DataProvider;
 struct rocprofvis_graph_t;
 
 class TimelineSelection
 {
 public:
-    TimelineSelection();
+    TimelineSelection(DataProvider& dp);
     ~TimelineSelection();
 
     /*
@@ -40,6 +41,8 @@ public:
     bool EventSelected(uint64_t event_id);
 
 private:
+    DataProvider& m_data_provider;
+
     std::unordered_set<uint64_t> m_selected_track_ids;
     double                       m_selected_range_start;
     double                       m_selected_range_end;

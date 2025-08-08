@@ -40,7 +40,7 @@ private:
         bool                     selected;
     };
 
-    void HandleTimelineSelectionChanged();
+    void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
 
     void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
                  double duration, ImDrawList* draw_list);

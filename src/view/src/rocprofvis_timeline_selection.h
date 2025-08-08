@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <unordered_set>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -38,7 +39,7 @@ public:
     void SelectTrackEvent(uint64_t track_id, uint64_t event_id);
     void UnselectTrackEvent(uint64_t track_id, uint64_t event_id);
     bool GetSelectedEvents(std::vector<uint64_t>& event_ids);
-    bool EventSelected(uint64_t event_id);
+    bool EventSelected(uint64_t event_id) const;
 
 private:
     DataProvider& m_data_provider;

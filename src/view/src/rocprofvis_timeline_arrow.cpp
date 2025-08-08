@@ -2,9 +2,10 @@
 #pragma once
 
 #include "rocprofvis_timeline_arrow.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings.h"
+#include "rocprofvis_timeline_selection.h"
 #include "spdlog/spdlog.h"
-#include <iostream>
 
 namespace RocProfVis
 {
@@ -13,104 +14,109 @@ namespace View
 
 void
 TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
-                      ImVec2 window, std::map<uint64_t, float> track_height_total)
+                      ImVec2 window, std::map<uint64_t, float>& track_height_total)
 {
     ImU32 color     = Settings::GetInstance().GetColor(Colors::kArrowColor);
     float thickness = 2.0f;
-    float head_size = 8.0f;  
-    float scroll_y = ImGui::GetScrollY();
-    for(const auto& arrow : m_arrows_to_render)
+    float head_size = 8.0f;
+    float scroll_y  = ImGui::GetScrollY();
+    for(const event_info_t* event : m_selected_event_data)
     {
-        float start_x_ns = (arrow.start_time_ns - v_min_x) * pixels_per_ns;
-        float end_x_ns   = (arrow.end_time_ns - v_min_x) * pixels_per_ns;
-
-        float start_y_px = track_height_total[arrow.start_track_px];
-        float end_y_px   = track_height_total[arrow.end_track_px];
-
-        ImVec2 p_start = ImVec2(window.x + start_x_ns, window.y + start_y_px - scroll_y);
-        ImVec2 p_end   = ImVec2(window.x + end_x_ns, window.y + end_y_px - scroll_y);
-
-        if(p_start.x == p_end.x && p_start.y == p_end.y) continue;
-
-        // Calculate control points for a smooth cubic Bezier curve
-        float  curve_offset = 0.25f * (p_end.x - p_start.x);
-        ImVec2 p_ctrl1      = ImVec2(p_start.x + curve_offset, p_start.y);
-        ImVec2 p_ctrl2      = ImVec2(p_end.x - curve_offset, p_end.y);
-
-        draw_list->AddBezierCubic(p_start, p_ctrl1, p_ctrl2, p_end, color, thickness, 32);
-
-        // Compute direction at the end of the curve (tangent)
-        ImVec2 dir = ImVec2(p_end.x - p_ctrl2.x, p_end.y - p_ctrl2.y);
-        float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
-        if(len > 0.0f)
+        if(event)
         {
-            dir.x /= len;
-            dir.y /= len;
-        }
-        ImVec2 ortho(-dir.y, dir.x);
+            for(const event_flow_data_t& flow : event->flow_info)
+            {
+                double start_time_ns =
+                    event->basic_info.m_start_ts + event->basic_info.m_duration;
+                const uint64_t& end_time_ns    = flow.timestamp;
+                const uint64_t& start_track_id = event->track_id;
+                const uint64_t& end_track_id   = flow.track_id;
 
-        // Arrowhead points
-        ImVec2 p1 = p_end;
-        ImVec2 p2 = ImVec2(p_end.x - dir.x * head_size - ortho.x * head_size * 0.5f,
+                float start_x_ns = (start_time_ns - v_min_x) * pixels_per_ns;
+                float end_x_ns   = (end_time_ns - v_min_x) * pixels_per_ns;
+
+                float start_y_px = track_height_total[start_track_id];
+                float end_y_px   = track_height_total[end_track_id];
+
+                ImVec2 p_start =
+                    ImVec2(window.x + start_x_ns, window.y + start_y_px - scroll_y);
+                ImVec2 p_end =
+                    ImVec2(window.x + end_x_ns, window.y + end_y_px - scroll_y);
+
+                if(p_start.x == p_end.x && p_start.y == p_end.y) continue;
+
+                // Calculate control points for a smooth cubic Bezier curve
+                float  curve_offset = 0.25f * (p_end.x - p_start.x);
+                ImVec2 p_ctrl1      = ImVec2(p_start.x + curve_offset, p_start.y);
+                ImVec2 p_ctrl2      = ImVec2(p_end.x - curve_offset, p_end.y);
+
+                draw_list->AddBezierCubic(p_start, p_ctrl1, p_ctrl2, p_end, color,
+                                          thickness, 32);
+
+                // Compute direction at the end of the curve (tangent)
+                ImVec2 dir = ImVec2(p_end.x - p_ctrl2.x, p_end.y - p_ctrl2.y);
+                float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
+                if(len > 0.0f)
+                {
+                    dir.x /= len;
+                    dir.y /= len;
+                }
+                ImVec2 ortho(-dir.y, dir.x);
+
+                // Arrowhead points
+                ImVec2 p1 = p_end;
+                ImVec2 p2 =
+                    ImVec2(p_end.x - dir.x * head_size - ortho.x * head_size * 0.5f,
                            p_end.y - dir.y * head_size - ortho.y * head_size * 0.5f);
-        ImVec2 p3 = ImVec2(p_end.x - dir.x * head_size + ortho.x * head_size * 0.5f,
+                ImVec2 p3 =
+                    ImVec2(p_end.x - dir.x * head_size + ortho.x * head_size * 0.5f,
                            p_end.y - dir.y * head_size + ortho.y * head_size * 0.5f);
-        draw_list->AddTriangleFilled(p1, p2, p3, color);
+                draw_list->AddTriangleFilled(p1, p2, p3, color);
+            }
+        }
     }
 }
 
-TimelineArrow::TimelineArrow(DataProvider& data_provider)
+TimelineArrow::TimelineArrow(DataProvider&                      data_provider,
+                             std::shared_ptr<TimelineSelection> selection)
 : m_data_provider(data_provider)
-, m_arrows_to_render({})
-, m_add_arrow_token(-1)
+, m_timeline_selection(selection)
+, m_selection_changed_token(-1)
 {
     auto scroll_to_arrow_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto evt = std::dynamic_pointer_cast<CreateArrowsViewEvent>(e);
-        if(evt)
-        {
-            this->AddArrows();
-        }
+        this->HandleEventSelectionChanged(e);
     };
-    m_add_arrow_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kHandleUserArrowCreationEvent),
+
+    m_selection_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         scroll_to_arrow_handler);
-}
-
-void
-TimelineArrow::SetArrows(const std::vector<TimelineArrowData>& arrows)
-{
-    m_arrows_to_render = arrows;
-}
-
-void
-TimelineArrow::AddArrow(const TimelineArrowData& arrow)
-{
-    m_arrows_to_render.push_back(arrow);
-}
-
-void
-TimelineArrow::AddArrows()
-{
-    m_arrows_to_render          = {};
-    const flow_info_t& flowInfo = m_data_provider.GetFlowInfo();
-    if(!flowInfo.flow_data.empty())
-    {
-        double source_time  = m_data_provider.GetSelectedEvent().position_ns;
-        int    source_track = m_data_provider.GetSelectedEvent().track_id;
-
-        for(const auto& item : flowInfo.flow_data)
-        {
-            m_arrows_to_render.push_back({ source_time, source_track,
-                                           static_cast<double>(item.timestamp),
-                                           static_cast<int>(item.track_id) });
-        }
-    }
 }
 
 TimelineArrow::~TimelineArrow()
 {
     EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kHandleUserArrowCreationEvent), m_add_arrow_token);
+        static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
+        m_selection_changed_token);
+}
+
+void
+TimelineArrow::HandleEventSelectionChanged(std::shared_ptr<RocEvent> e)
+{
+    std::shared_ptr<EventSelectionChangedEvent> selection_changed_event =
+        std::static_pointer_cast<EventSelectionChangedEvent>(e);
+    if(selection_changed_event &&
+       selection_changed_event->GetTracePath() == m_data_provider.GetTraceFilePath())
+    {
+        m_selected_event_data.clear();
+        std::vector<uint64_t> selected_event_ids;
+        m_timeline_selection->GetSelectedEvents(selected_event_ids);
+        m_selected_event_data.resize(selected_event_ids.size());
+        for(int i = 0; i < selected_event_ids.size(); i++)
+        {
+            m_selected_event_data[i] =
+                m_data_provider.GetEventInfo(selected_event_ids[i]);
+        }
+    }
 }
 
 }  // namespace View

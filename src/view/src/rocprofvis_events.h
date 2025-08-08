@@ -16,9 +16,9 @@ enum class RocEvents
     kNewTrackData,
     kTabClosed,
     kTabSelected,
-    kTimelineSelectionChanged,
+    kTimelineTrackSelectionChanged,
+    kTimelineEventSelectionChanged,
     kHandleUserGraphNavigationEvent,
-    kHandleUserArrowCreationEvent,
     kTrackMetadataChanged,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeDataDirty,
@@ -32,9 +32,9 @@ enum class RocEventType
     kRocEvent,
     kTrackDataEvent,
     kTabEvent,
-    kTimelineSelectionChangedEvent,
+    kTimelineTrackSelectionChangedEvent,
+    kTimelineEventSelectionChangedEvent,
     kScrollToTrackEvent,
-    kCreateArrowsViewEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
 #endif
@@ -75,19 +75,6 @@ private:
     std::string m_trace_path;
 };
 
-class CreateArrowsViewEvent : public RocEvent
-{
-public:
-    CreateArrowsViewEvent(int event_id)
-    : RocEvent(event_id)
-    {
-        m_event_type = RocEventType::kCreateArrowsViewEvent;
-    }
-
-private:
-    std::string m_track_id;
-};
-
 class ScrollToTrackEvent : public RocEvent
 {
 public:
@@ -125,16 +112,35 @@ private:
 class TrackSelectionChangedEvent : public RocEvent
 {
 public:
-    TrackSelectionChangedEvent(int event_id, std::vector<uint64_t> selected_tracks,
-                               double start_ns, double end_ns);
+    TrackSelectionChangedEvent(std::vector<uint64_t> selected_tracks, double start_ns,
+                               double end_ns, const std::string& trace_path);
     const std::vector<uint64_t>& GetSelectedTracks() const;
     double                       GetStartNs() const;
     double                       GetEndNs() const;
+    const std::string&           GetTracePath();
 
 private:
-    std::vector<uint64_t> m_selected_tracks;  // indices of selected tracks
+    std::vector<uint64_t> m_selected_tracks;  // IDs of selected tracks
     double                m_start_ns;         // start time in nanoseconds
     double                m_end_ns;           // end time in nanoseconds
+    std::string           m_trace_path;
+};
+
+class EventSelectionChangedEvent : public RocEvent
+{
+public:
+    EventSelectionChangedEvent(uint64_t event_id, uint64_t track_id, bool selected,
+                               const std::string& trace_path);
+    uint64_t           GetEventID() const;
+    uint64_t           GetEventTrackID() const;
+    bool               EventSelected() const;
+    const std::string& GetTracePath();
+
+private:
+    uint64_t    m_event_id;
+    uint16_t    m_event_track_id;
+    bool        m_selected;
+    std::string m_trace_path;
 };
 
 }  // namespace View

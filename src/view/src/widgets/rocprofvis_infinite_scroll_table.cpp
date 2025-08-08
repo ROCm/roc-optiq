@@ -6,8 +6,8 @@
 #include "spdlog/spdlog.h"
 #include <sstream>
 
-#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_debug_window.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 using namespace RocProfVis::View;
 
@@ -37,7 +37,8 @@ void
 InfiniteScrollTable::HandleTrackSelectionChanged(
     std::shared_ptr<TrackSelectionChangedEvent> selection_changed_event)
 {
-    if(selection_changed_event)
+    if(selection_changed_event &&
+       selection_changed_event->GetTracePath() == m_data_provider.GetTraceFilePath())
     {
         const std::vector<uint64_t>& tracks =
             selection_changed_event->GetSelectedTracks();
@@ -78,11 +79,12 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
         else
         {
             // Fetch table data for the selected tracks
-            TableRequestParams event_table_params(m_req_table_type, filtered_tracks,
-                                                  start_ns, end_ns, m_filter.size() ? m_filter.data() : "",
-                                                  m_group.size() ? m_group.data() : "",
-                                                  m_group_columns.size() ? m_group_columns.data() : "",
-                                                  0, m_fetch_chunk_size);
+            TableRequestParams event_table_params(
+                m_req_table_type, filtered_tracks, start_ns, end_ns,
+                m_filter.size() ? m_filter.data() : "",
+                m_group.size() ? m_group.data() : "",
+                m_group_columns.size() ? m_group_columns.data() : "", 0,
+                m_fetch_chunk_size);
 
             result = m_data_provider.FetchMultiTrackTable(event_table_params);
         }
@@ -90,7 +92,7 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
         if(!result)
         {
             spdlog::error("Failed to queue table request for tracks: {}",
-                            filtered_tracks.size());
+                          filtered_tracks.size());
             // save this selection event to reprocess it later (it's ok to replace the
             // previous one as the new one reflects the current selection)
             m_track_selection_event_to_handle = selection_changed_event;
@@ -175,8 +177,8 @@ InfiniteScrollTable::Render()
     float start_row_position = start_row * row_height;
     float end_row_position   = end_row * row_height;
 
-    bool                               sort_requested = false;
-    bool                               filter_changed = false;
+    bool                               sort_requested    = false;
+    bool                               filter_changed    = false;
     uint64_t                           sort_colunn_index = 0;
     rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending;
 
@@ -191,13 +193,15 @@ InfiniteScrollTable::Render()
     {
         // If the request is not pending, we can allow sorting
         table_flags |= ImGuiTableFlags_Sortable;
-    } else {
+    }
+    else
+    {
         show_loading_indicator = true;
     }
 
     {
-        ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks", start_row, end_row,
-                    total_row_count, selected_track_count);
+        ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks", start_row,
+                    end_row, total_row_count, selected_track_count);
 
         if(m_table_type == TableType::kEventTable)
         {
@@ -237,13 +241,18 @@ InfiniteScrollTable::Render()
                 ImGui::SameLine();
                 ImGui::Text("Group by");
             }
-        
-            if(m_group_columns.size() == 0 || strlen(m_group_columns.data()) == m_group_columns.size())
+
+            if(m_group_columns.size() == 0 ||
+               strlen(m_group_columns.data()) == m_group_columns.size())
             {
-                m_group_columns.resize(m_group_columns.size()+256);
+                m_group_columns.resize(m_group_columns.size() + 256);
             }
 
-            if(ImGui::InputTextWithHint("Group columns", "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, MIN(duration) as min_duration, MAX(duration) as max_duration", m_group_columns.data(), m_group_columns.size()))
+            if(ImGui::InputTextWithHint(
+                   "Group columns",
+                   "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+                   "MIN(duration) as min_duration, MAX(duration) as max_duration",
+                   m_group_columns.data(), m_group_columns.size()))
             {
                 filter_changed = true;
             }
@@ -257,10 +266,11 @@ InfiniteScrollTable::Render()
 
         if(m_filter.size() == 0 || strlen(m_filter.data()) == m_filter.size())
         {
-            m_filter.resize(m_filter.size()+256);
+            m_filter.resize(m_filter.size() + 256);
         }
 
-        if(ImGui::InputTextWithHint("Filter", "SQL WHERE comparisons", m_filter.data(), m_filter.size()))
+        if(ImGui::InputTextWithHint("Filter", "SQL WHERE comparisons", m_filter.data(),
+                                    m_filter.size()))
         {
             filter_changed = true;
         }
@@ -287,8 +297,9 @@ InfiniteScrollTable::Render()
                           outer_size.y);
         }
 
-        if(column_names.size() && ImGui::BeginTable("Event Data Table", column_names.size(),
-                                                 table_flags, outer_size))
+        if(column_names.size() &&
+           ImGui::BeginTable("Event Data Table", column_names.size(), table_flags,
+                             outer_size))
         {
             if(m_skip_data_fetch && ImGui::GetScrollY() > 0.0f)
             {
@@ -363,11 +374,13 @@ InfiniteScrollTable::Render()
                                 // For now, just log the row and column clicked
                                 spdlog::info("Row clicked: {} {}", col, row_n);
                             }
-                            if(ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                            if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+                            {
                                 ImGui::OpenPopup(ROWCONTEXTMENU_POPUP_NAME);
                                 m_selected_row = row_n;
-                                spdlog::info("Row right-clicked: {} {} {}", col, row_n, m_selected_row);
-                            }                            
+                                spdlog::info("Row right-clicked: {} {} {}", col, row_n,
+                                             m_selected_row);
+                            }
                         }
                         else
                         {
@@ -421,12 +434,11 @@ InfiniteScrollTable::Render()
 
                         m_data_provider.FetchMultiTrackTable(TableRequestParams(
                             m_req_table_type, event_table_params->m_track_ids,
-                            event_table_params->m_start_ts, event_table_params->m_end_ts, 
+                            event_table_params->m_start_ts, event_table_params->m_end_ts,
                             event_table_params->m_filter.c_str(),
                             event_table_params->m_group.c_str(),
-                            event_table_params->m_group_columns.c_str(),
-                            new_start_pos, m_fetch_chunk_size,
-                            event_table_params->m_sort_column_index,
+                            event_table_params->m_group_columns.c_str(), new_start_pos,
+                            m_fetch_chunk_size, event_table_params->m_sort_column_index,
                             event_table_params->m_sort_order));
                     }
                     else if((scroll_y + ImGui::GetWindowHeight() >
@@ -455,12 +467,11 @@ InfiniteScrollTable::Render()
 
                         m_data_provider.FetchMultiTrackTable(TableRequestParams(
                             m_req_table_type, event_table_params->m_track_ids,
-                            event_table_params->m_start_ts, event_table_params->m_end_ts, 
+                            event_table_params->m_start_ts, event_table_params->m_end_ts,
                             event_table_params->m_filter.c_str(),
                             event_table_params->m_group.c_str(),
-                            event_table_params->m_group_columns.c_str(),
-                            new_start_pos, m_fetch_chunk_size,
-                            event_table_params->m_sort_column_index,
+                            event_table_params->m_group_columns.c_str(), new_start_pos,
+                            m_fetch_chunk_size, event_table_params->m_sort_column_index,
                             event_table_params->m_sort_order));
                     }
                 }
@@ -495,11 +506,12 @@ InfiniteScrollTable::Render()
                 }
                 ImGui::EndPopup();
             }
-            ImGui::PopStyleVar(2);  // Pop the style vars for window padding and item spacing
+            ImGui::PopStyleVar(
+                2);  // Pop the style vars for window padding and item spacing
 
             ImGui::EndTable();
         }  // End BeginTable
-        else 
+        else
         {
             ImGui::Separator();
             ImGui::Text("No data available for the selected tracks or filters.");
@@ -523,15 +535,16 @@ InfiniteScrollTable::Render()
             event_table_params->m_sort_order        = sort_order;
             event_table_params->m_filter            = m_filter.data();
             event_table_params->m_group             = m_group;
-            event_table_params->m_group_columns     = m_group_columns.size() ? m_group_columns.data() : "";
+            event_table_params->m_group_columns =
+                m_group_columns.size() ? m_group_columns.data() : "";
 
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
             // Fetch the event table with the updated params
             m_data_provider.FetchMultiTrackTable(TableRequestParams(
                 m_req_table_type, event_table_params->m_track_ids,
-                event_table_params->m_start_ts, event_table_params->m_end_ts, 
-                event_table_params->m_filter.c_str(), event_table_params->m_group.c_str(), 
+                event_table_params->m_start_ts, event_table_params->m_end_ts,
+                event_table_params->m_filter.c_str(), event_table_params->m_group.c_str(),
                 event_table_params->m_group_columns.c_str(),
                 event_table_params->m_start_row, event_table_params->m_req_row_count,
                 event_table_params->m_sort_column_index,
@@ -567,7 +580,7 @@ InfiniteScrollTable::RenderLoadingIndicator()
 
     RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
                                m_settings.GetColor(Colors::kScrollBarColor), anim_speed);
-                            
-    // Reset cursor position after rendering spinner                               
+
+    // Reset cursor position after rendering spinner
     ImGui::SetCursorPos(pos);
 }

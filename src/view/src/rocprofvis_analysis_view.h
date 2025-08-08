@@ -14,11 +14,13 @@ class EventsView;
 class InfiniteScrollTable;
 class TrackTopology;
 class TrackDetails;
+class TimelineSelection;
 
 class AnalysisView : public RocWidget
 {
 public:
-    AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology);
+    AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
+                 std::shared_ptr<TimelineSelection> selection);
     ~AnalysisView();
     void Render() override;
     void Update() override;
@@ -31,10 +33,12 @@ private:
     std::shared_ptr<InfiniteScrollTable> m_event_table;
     std::shared_ptr<InfiniteScrollTable> m_sample_table;
 
-    std::shared_ptr<TabContainer>   m_tab_container;
-    EventManager::SubscriptionToken m_time_line_selection_changed_token;
-    std::shared_ptr<EventsView>     m_events_view;
-    std::shared_ptr<TrackDetails>   m_track_details;
+    std::shared_ptr<TabContainer> m_tab_container;
+    std::shared_ptr<EventsView>   m_events_view;
+    std::shared_ptr<TrackDetails> m_track_details;
+
+    EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
+    EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
 };
 
 }  // namespace View

@@ -2,10 +2,9 @@
 
 #pragma once
 #include "imgui.h"
-#include "rocprofvis_controller_types.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
-#include "rocprofvis_view_structs.h"
 #include <string>
 #include <vector>
 
@@ -14,23 +13,17 @@ namespace RocProfVis
 namespace View
 {
 
+class TimelineSelection;
+
 class FlameTrackItem : public TrackItem
 {
 public:
-    FlameTrackItem(DataProvider& dp, int chart_id, std::string name, double zoom,
-                   double movement, double min_x, double max_x, double scale_x);
-    void SetRandomColorFlag(bool set_color);
-    void DrawBox(ImVec2 start_position, int boxplot_box_id,
-                 rocprofvis_trace_event_t const& flame, double duration,
-                 ImDrawList* draw_list, double raw_start_time);
+    FlameTrackItem(DataProvider&                      dp,
+                   std::shared_ptr<TimelineSelection> timeline_selection, int chart_id,
+                   std::string name, double zoom, double movement, double min_x,
+                   double max_x, double scale_x);
 
-    bool                       HandleTrackDataChanged() override;
-    bool                       ExtractPointsFromData();
-    std::tuple<double, double> FindMaxMinFlame();
-
-    void SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits) override;
-
-    bool HasData() override;
+    bool HandleTrackDataChanged() override;
     void ReleaseData() override;
 
 protected:
@@ -38,14 +31,31 @@ protected:
     void RenderMetaAreaScale() override;
     void RenderMetaAreaOptions() override;
 
-
 private:
-    std::vector<rocprofvis_trace_event_t> m_flames;
-    bool                                  m_request_random_color;
-    ImVec2                                m_text_padding;
-    float                                 m_flame_height;
-    uint64_t                              m_selected_event_id;
-    DataProvider&                         m_dp;
+    // Local cache of selection state packed with event data for each event.
+    struct ChartItem
+    {
+        rocprofvis_trace_event_t event;
+        bool                     selected;
+    };
+
+    void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
+
+    void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
+                 double duration, ImDrawList* draw_list);
+    bool ExtractPointsFromData();
+
+    std::vector<ChartItem>             m_chart_items;
+    bool                               m_request_random_color;
+    ImVec2                             m_text_padding;
+    float                              m_level_height;
+    std::vector<uint64_t>              m_selected_event_id;
+    std::shared_ptr<TimelineSelection> m_timeline_selection;
+
+    // Used to enforce one selection change per render cycle.
+    bool m_selection_changed;
+
+    EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
 };
 
 }  // namespace View

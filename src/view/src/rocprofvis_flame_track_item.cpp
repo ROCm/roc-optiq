@@ -45,10 +45,6 @@ FlameTrackItem::ReleaseData()
     m_chart_items.clear();
 }
 
-void
-FlameTrackItem::Update()
-{}
-
 bool
 FlameTrackItem::HandleTrackDataChanged()
 {

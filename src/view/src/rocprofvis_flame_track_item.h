@@ -25,7 +25,6 @@ public:
 
     bool HandleTrackDataChanged() override;
     void ReleaseData() override;
-    void Update() override;
 
 protected:
     void RenderChart(float graph_width) override;

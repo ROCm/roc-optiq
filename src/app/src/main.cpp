@@ -5,12 +5,14 @@
 #include "rocprofvis_core.h"
 #include "rocprofvis_imgui_backend.h"
 #define GLFW_INCLUDE_NONE
+#include "../resources/AMD_LOGO.h"
+#include "rocprofvis_view_module.h"
 #include <GLFW/glfw3.h>
-
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "rocprofvis_view_module.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb-image/stb_image.h"
 
 static void
 glfw_error_callback(int error, const char* description)
@@ -25,13 +27,27 @@ main(int, char**)
 
     rocprofvis_core_enable_log();
 
+    // Load image from memory.
     glfwSetErrorCallback(glfw_error_callback);
+    int            width, height, channels;
+    unsigned char* pixels = stbi_load_from_memory(AMD_LOGO_png, AMD_LOGO_png_len, &width,
+                                                  &height, &channels, STBI_rgb_alpha);
+    // Prepare GLFW Image structure
+    GLFWimage image;
+    image.width  = width;
+    image.height = height;
+    image.pixels = pixels;
+
+    if(!pixels)
+    {
+        std::cout << "error" << stbi_failure_reason() << std::endl;
+    }
 
     if(glfwInit())
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         GLFWwindow* window =
-            glfwCreateWindow(1280, 720, "rocprof-visualizer", nullptr, nullptr);
+            glfwCreateWindow(1280, 720, "ROCm Visualizer", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
         if(window && rocprofvis_imgui_backend_setup(&backend, window))
@@ -61,6 +77,10 @@ main(int, char**)
                     rocprofvis_view_set_dpi(xscale);
 
                     glfwPollEvents();
+
+                    // Set the window icon
+                    GLFWimage images[1] = { image };
+                    glfwSetWindowIcon(window, 1, images);
 
                     // Handle changes in the frame buffer size
                     int fb_width, fb_height;
@@ -120,6 +140,9 @@ main(int, char**)
             }
 
             glfwDestroyWindow(window);
+
+            // Free the GLFW image pixels
+            stbi_image_free(pixels);
         }
         else
         {

@@ -14,7 +14,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
 #include <utility>
-#include "widgets/rocprofvis_debug_window.h"
+#include "spdlog/spdlog.h"
 
 std::pair<GLFWimage, unsigned char*>
 glfw_create_icon()

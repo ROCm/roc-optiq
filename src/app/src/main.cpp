@@ -5,12 +5,39 @@
 #include "rocprofvis_core.h"
 #include "rocprofvis_imgui_backend.h"
 #define GLFW_INCLUDE_NONE
+#include "../resources/AMD_LOGO.h"
+#include "rocprofvis_view_module.h"
 #include <GLFW/glfw3.h>
-
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb-image/stb_image.h"
+#include <utility>
+#include "spdlog/spdlog.h"
 
-#include "rocprofvis_view_module.h"
+std::pair<GLFWimage, unsigned char*>
+glfw_create_icon()
+{
+    int            width, height, channels;
+    unsigned char* pixels = stbi_load_from_memory(AMD_LOGO_png, AMD_LOGO_png_len, &width,
+                                                  &height, &channels, STBI_rgb_alpha);
+
+    GLFWimage image;
+    if(!pixels)
+    {
+        spdlog::error("Failed to load icon image: {}", stbi_failure_reason());
+        image = { 0, 0, nullptr };
+        return { image, nullptr };
+    }
+    else
+    {
+        image.width  = width;
+        image.height = height;
+        image.pixels = pixels;
+        return { image, pixels };
+    }
+}
 
 static void
 glfw_error_callback(int error, const char* description)
@@ -25,13 +52,14 @@ main(int, char**)
 
     rocprofvis_core_enable_log();
 
+    // Load image from memory.
     glfwSetErrorCallback(glfw_error_callback);
 
     if(glfwInit())
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         GLFWwindow* window =
-            glfwCreateWindow(1280, 720, "rocprof-visualizer", nullptr, nullptr);
+            glfwCreateWindow(1280, 720, "ROCm Visualizer", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
         if(window && rocprofvis_imgui_backend_setup(&backend, window))
@@ -52,6 +80,17 @@ main(int, char**)
                 backend.m_config(&backend, window);
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+                auto [image, pixels] = glfw_create_icon();
+                if(image.pixels != nullptr)
+                {
+                    // Set the window icon
+                    GLFWimage images[1] = { image };
+                    glfwSetWindowIcon(window, 1, images);
+
+                    // Free the image pixels after setting the icon
+                    stbi_image_free(pixels);
+                }
 
                 while(!glfwWindowShouldClose(window))
                 {
@@ -120,6 +159,8 @@ main(int, char**)
             }
 
             glfwDestroyWindow(window);
+
+            // Free the GLFW image pixels
         }
         else
         {

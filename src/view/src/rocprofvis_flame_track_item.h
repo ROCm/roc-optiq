@@ -22,6 +22,7 @@ public:
                    std::shared_ptr<TimelineSelection> timeline_selection, int chart_id,
                    std::string name, double zoom, double movement, double min_x,
                    double max_x, double scale_x);
+    ~FlameTrackItem();
 
     bool HandleTrackDataChanged() override;
     void ReleaseData() override;

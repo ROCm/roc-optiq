@@ -14,6 +14,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
 #include <utility>
+#include "widgets/rocprofvis_debug_window.h"
 
 std::pair<GLFWimage, unsigned char*>
 glfw_create_icon()
@@ -25,7 +26,7 @@ glfw_create_icon()
     GLFWimage image;
     if(!pixels)
     {
-        std::cout << "error: " << stbi_failure_reason() << std::endl;
+        spdlog::error("Failed to load icon image: {}", stbi_failure_reason());
         image = { 0, 0, nullptr };
         return { image, nullptr };
     }

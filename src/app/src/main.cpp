@@ -13,6 +13,30 @@
 #include <stdlib.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
+#include <utility>
+
+std::pair<GLFWimage, unsigned char*>
+glfw_create_icon()
+{
+    int            width, height, channels;
+    unsigned char* pixels = stbi_load_from_memory(AMD_LOGO_png, AMD_LOGO_png_len, &width,
+                                                  &height, &channels, STBI_rgb_alpha);
+
+    GLFWimage image;
+    if(!pixels)
+    {
+        std::cout << "error: " << stbi_failure_reason() << std::endl;
+        image = { 0, 0, nullptr };
+        return { image, nullptr };
+    }
+    else
+    {
+        image.width  = width;
+        image.height = height;
+        image.pixels = pixels;
+        return { image, pixels };
+    }
+}
 
 static void
 glfw_error_callback(int error, const char* description)
@@ -29,19 +53,6 @@ main(int, char**)
 
     // Load image from memory.
     glfwSetErrorCallback(glfw_error_callback);
-    int            width, height, channels;
-    unsigned char* pixels = stbi_load_from_memory(AMD_LOGO_png, AMD_LOGO_png_len, &width,
-                                                  &height, &channels, STBI_rgb_alpha);
-    // Prepare GLFW Image structure
-    GLFWimage image;
-    image.width  = width;
-    image.height = height;
-    image.pixels = pixels;
-
-    if(!pixels)
-    {
-        std::cout << "error" << stbi_failure_reason() << std::endl;
-    }
 
     if(glfwInit())
     {
@@ -69,6 +80,17 @@ main(int, char**)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
+                auto [image, pixels] = glfw_create_icon();
+                if(image.pixels != nullptr)
+                {
+                    // Set the window icon
+                    GLFWimage images[1] = { image };
+                    glfwSetWindowIcon(window, 1, images);
+
+                    // Free the image pixels after setting the icon
+                    stbi_image_free(pixels);
+                }
+
                 while(!glfwWindowShouldClose(window))
                 {
                     float xscale, yscale;
@@ -77,10 +99,6 @@ main(int, char**)
                     rocprofvis_view_set_dpi(xscale);
 
                     glfwPollEvents();
-
-                    // Set the window icon
-                    GLFWimage images[1] = { image };
-                    glfwSetWindowIcon(window, 1, images);
 
                     // Handle changes in the frame buffer size
                     int fb_width, fb_height;
@@ -142,7 +160,6 @@ main(int, char**)
             glfwDestroyWindow(window);
 
             // Free the GLFW image pixels
-            stbi_image_free(pixels);
         }
         else
         {

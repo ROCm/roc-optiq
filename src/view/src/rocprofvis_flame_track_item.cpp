@@ -39,6 +39,13 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
         time_line_selection_changed_handler);
 }
 
+FlameTrackItem::~FlameTrackItem()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
+        m_timeline_event_selection_changed_token);
+}
+
 void
 FlameTrackItem::ReleaseData()
 {

@@ -11,6 +11,7 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 using namespace RocProfVis::View;
 
@@ -27,6 +28,7 @@ TraceView::TraceView()
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tabselected_event_token(-1)
 , m_event_selection_changed_event_token(-1)
+, m_save_notification_id("")
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path) {
@@ -72,6 +74,9 @@ TraceView::TraceView()
         {
             m_popup_info.message = "Failed to save the trimmed trace.";
         }
+        //clear the save notification
+        NotificationManager::GetInstance().Hide(m_save_notification_id);
+        m_save_notification_id = "";
     });
 
     auto event_selection_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -320,6 +325,13 @@ TraceView::SaveSelection(const std::string& file_path)
         m_timeline_selection->GetSelectedTimeRange(start_ns, end_ns);
 
         m_data_provider.SaveTrimmedTrace(file_path, start_ns, end_ns);
+
+        //create notification
+        m_save_notification_id = "save_trace_" + std::to_string(std::hash<std::string>()(file_path));
+        NotificationManager::GetInstance().ShowPersistent(m_save_notification_id,
+            "Saving Trace: " + file_path,
+            NotificationLevel::Info);
+
         return true;
     }
     else

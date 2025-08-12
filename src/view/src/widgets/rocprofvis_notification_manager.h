@@ -1,8 +1,15 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #pragma once
 
 #include "imgui.h"
 #include <deque>
 #include <string>
+
+namespace RocProfVis
+{
+namespace View
+{
 
 // Enum indicating notification type
 enum class NotificationLevel
@@ -50,6 +57,7 @@ public:
 
     void Show(const std::string& message,
               NotificationLevel  level = NotificationLevel::Info);
+    void Show(const std::string& message, NotificationLevel level, double duration);
     void ShowPersistent(const std::string& id, const std::string& message,
                         NotificationLevel level = NotificationLevel::Info);
     void Hide(const std::string& id);
@@ -68,3 +76,6 @@ private:
 
     float m_notification_spacing;
 };
+
+}  // namespace View
+}  // namespace RocProfVis

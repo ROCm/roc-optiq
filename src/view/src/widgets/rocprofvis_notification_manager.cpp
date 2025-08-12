@@ -1,9 +1,13 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_notification_manager.h"
 #include "imgui.h"
-#include <algorithm>  // For std::find_if, std::remove_if
-#include <vector>     // Included for completeness, though not directly used in this file
+#include <algorithm>
 
-// --- Notification Method Implementations ---
+namespace RocProfVis
+{
+namespace View
+{
 
 float
 Notification::GetOpacity(double current_time) const
@@ -63,9 +67,16 @@ NotificationManager::NotificationManager()
 void
 NotificationManager::Show(const std::string& message, NotificationLevel level)
 {
+    Show(message, level, m_default_duration);
+}
+
+void
+NotificationManager::Show(const std::string& message, NotificationLevel level,
+                          double duration)
+{
     m_notifications.push_back({ "",  // No ID needed for timed notifications
-                                message, level, ImGui::GetTime(), m_default_duration,
-                                m_default_fade_duration,
+                                message, level, ImGui::GetTime(),
+                                static_cast<float>(duration), m_default_fade_duration,
                                 false,  // is_persistent
                                 false,  // is_hiding
                                 0.0 });
@@ -202,3 +213,6 @@ NotificationManager::GetFgColorForLevel(NotificationLevel level)
         case NotificationLevel::Error: return { 1.0f, 1.0f, 1.0f, 1.0f };    // White
     }
 }
+
+}  // namespace View
+}  // namespace RocProfVis

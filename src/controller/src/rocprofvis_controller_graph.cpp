@@ -59,7 +59,9 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
         double num_segments     = floor(relative / segment_duration);
         double segment_start    = start_timestamp + (num_segments * segment_duration);
 
-        if(segments.GetSegments().find(segment_start) == segments.GetSegments().end())
+        UniqueSegmentLock lock(segments.GetUniqueSegments());
+        auto&             locked_segments = lock.GetObject();
+        if(locked_segments.find(segment_start) == locked_segments.end())
         {
             uint64_t track_type = 0;
             result = m_track->GetUInt64(kRPVControllerTrackType, 0, &track_type);
@@ -81,15 +83,14 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
                 segment->SetMaxTimestamp(timestamp);
             }
             segments.Insert(segment_start, std::move(segment));
-            result = (segments.GetSegments().find(segment_start) !=
-                      segments.GetSegments().end())
+            result = (locked_segments.find(segment_start) != locked_segments.end())
                          ? kRocProfVisResultSuccess
                          : kRocProfVisResultMemoryAllocError;
         }
 
         if(result == kRocProfVisResultSuccess)
         {
-            std::shared_ptr<Segment>& segment = segments.GetSegments()[segment_start];
+            std::shared_ptr<Segment>& segment = locked_segments[segment_start];
             segment->SetMinTimestamp(std::min(segment->GetMinTimestamp(), timestamp));
             double max_timestamp = timestamp;
             if(object_type == kRPVControllerObjectTypeEvent)
@@ -642,11 +643,11 @@ Graph::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value
                 *value = 0;
                 for(auto it_lods = m_lods.begin(); it_lods != m_lods.end(); ++it_lods)
                 {
-                    for(auto it = it_lods->second.GetSegments().begin();
-                        it != it_lods->second.GetSegments().end(); ++it)
+                    SharedSegmentLock locked_segments(it_lods->second.GetSharedSegments());
+                    for(auto& pair : locked_segments.GetObject())
                     {
                         uint64_t mem_usage;
-                        it->second.get()->GetMemoryUsage(
+                        pair.second.get()->GetMemoryUsage(
                             &mem_usage, kRPVControllerCommonMemoryUsageInclusive);
                         *value += mem_usage;
                     }

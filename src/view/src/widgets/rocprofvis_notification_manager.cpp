@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_notification_manager.h"
+#include "rocprofvis_settings.h"
 #include "imgui.h"
 #include <algorithm>
 
@@ -194,10 +195,13 @@ NotificationManager::GetBgColorForLevel(NotificationLevel level)
     switch(level)
     {
         default:
-        case NotificationLevel::Info: return { 1.0f, 1.0f, 1.0f, 1.0f };     // White
-        case NotificationLevel::Success: return { 1.0f, 1.0f, 1.0f, 1.0f };  // White
-        case NotificationLevel::Warning: return { 1.0f, 1.0f, 0.2f, 1.0f };  // Yellow
-        case NotificationLevel::Error: return { 1.0f, 0.2f, 0.2f, 1.0f };    // Red
+        case NotificationLevel::Info:
+        case NotificationLevel::Success: 
+            return ImGui::ColorConvertU32ToFloat4(Settings::GetInstance().GetColor(Colors::kBgPanel));
+        case NotificationLevel::Warning: 
+            return ImGui::ColorConvertU32ToFloat4(Settings::GetInstance().GetColor(Colors::kBgWarning));
+        case NotificationLevel::Error: 
+            return ImGui::ColorConvertU32ToFloat4(Settings::GetInstance().GetColor(Colors::kBgError));
     }
 }
 
@@ -207,10 +211,11 @@ NotificationManager::GetFgColorForLevel(NotificationLevel level)
     switch(level)
     {
         default:
-        case NotificationLevel::Info: return { 0.0f, 0.0f, 0.0f, 1.0f };     // Black
-        case NotificationLevel::Success: return { 0.0f, 0.0f, 0.0f, 1.0f };  // Black
-        case NotificationLevel::Warning: return { 0.0f, 0.0f, 0.0f, 1.0f };  // Black
-        case NotificationLevel::Error: return { 1.0f, 1.0f, 1.0f, 1.0f };    // White
+        case NotificationLevel::Info:
+        case NotificationLevel::Success:
+        case NotificationLevel::Warning:
+        case NotificationLevel::Error: 
+            return ImGui::ColorConvertU32ToFloat4(Settings::GetInstance().GetColor(Colors::kTextMain));
     }
 }
 

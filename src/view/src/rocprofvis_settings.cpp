@@ -196,7 +196,8 @@ const std::vector<ImU32> DARK_THEME_COLORS = []() {
         IM_COL32(90, 90, 90, 255);  // Lighter gray on hover
     colors[static_cast<int>(Colors::kButtonActive)] =
         IM_COL32(120, 120, 120, 255);  // Even lighter when active
-
+    colors[static_cast<int>(Colors::kBgWarning)] = IM_COL32(100, 100, 10, 255);
+    colors[static_cast<int>(Colors::kBgError)]   = IM_COL32(100, 10, 10, 255);
     return colors;
 }();
 
@@ -247,6 +248,8 @@ const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
         IM_COL32(210, 210, 210, 255);  // Slightly darker on hover
     colors[static_cast<int>(Colors::kButtonActive)] =
         IM_COL32(180, 180, 180, 255);  // Even darker when active
+    colors[static_cast<int>(Colors::kBgWarning)] = IM_COL32(250, 250, 100, 255);
+    colors[static_cast<int>(Colors::kBgError)]   = IM_COL32(250, 100, 100, 255);
     return colors;
 }();
 

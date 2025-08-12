@@ -8,6 +8,7 @@
 
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 using namespace RocProfVis::View;
 
@@ -502,15 +503,17 @@ InfiniteScrollTable::Render()
 
                         // Copy the row data to the clipboard
                         ImGui::SetClipboardText(row_data.c_str());
+                        // Show notification that data was copied
+                        NotificationManager::GetInstance().Show(
+                            "Row data copied to clipboard", NotificationLevel::Info, 1.0);
                     }
                 }
                 ImGui::EndPopup();
             }
-            ImGui::PopStyleVar(
-                2);  // Pop the style vars for window padding and item spacing
-
-            ImGui::EndTable();
-        }  // End BeginTable
+            // Pop the style vars for window padding and item spacing
+            ImGui::PopStyleVar(2);  
+            ImGui::EndTable();  // End BeginTable
+        }  
         else
         {
             ImGui::Separator();

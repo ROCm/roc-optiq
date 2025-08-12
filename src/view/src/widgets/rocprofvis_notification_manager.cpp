@@ -1,0 +1,204 @@
+#include "rocprofvis_notification_manager.h"
+#include "imgui.h"
+#include <algorithm>  // For std::find_if, std::remove_if
+#include <vector>     // Included for completeness, though not directly used in this file
+
+// --- Notification Method Implementations ---
+
+float
+Notification::GetOpacity(double current_time) const
+{
+    double elapsed_time;
+
+    if(is_hiding)
+    {
+        // Fading out because Hide() was called
+        elapsed_time        = current_time - hide_time;
+        float fade_progress = 1.0f - static_cast<float>(elapsed_time / fade_duration);
+        return std::max(0.0f, fade_progress);
+    }
+
+    elapsed_time = current_time - start_time;
+
+    // Fading In
+    if(elapsed_time < fade_duration)
+    {
+        return static_cast<float>(elapsed_time / fade_duration);
+    }
+
+    // Fully Visible
+    if(is_persistent || elapsed_time < fade_duration + duration)
+    {
+        return 1.0f;
+    }
+
+    // Fading Out (for timed notifications)
+    elapsed_time -= (fade_duration + duration);
+    float fade_progress = 1.0f - static_cast<float>(elapsed_time / fade_duration);
+    return std::max(0.0f, fade_progress);
+}
+
+bool
+Notification::IsExpired(double current_time) const
+{
+    if(is_hiding)
+    {
+        return current_time > hide_time + fade_duration;
+    }
+    if(is_persistent)
+    {
+        return false;  // Persistent notifications only expire when explicitly hidden
+    }
+    return current_time > start_time + duration + fade_duration;
+}
+
+// --- NotificationManager Method Implementations ---
+
+NotificationManager::NotificationManager()
+: m_default_duration(3.0f)
+, m_default_fade_duration(0.5f)
+, m_notification_spacing(5.0f)
+{}
+
+void
+NotificationManager::Show(const std::string& message, NotificationLevel level)
+{
+    m_notifications.push_back({ "",  // No ID needed for timed notifications
+                                message, level, ImGui::GetTime(), m_default_duration,
+                                m_default_fade_duration,
+                                false,  // is_persistent
+                                false,  // is_hiding
+                                0.0 });
+}
+
+void
+NotificationManager::ShowPersistent(const std::string& id, const std::string& message,
+                                    NotificationLevel level)
+{
+    auto it = std::find_if(m_notifications.begin(), m_notifications.end(),
+                           [&](const Notification& n) { return n.id == id; });
+
+    if(it != m_notifications.end())
+    {
+        // Update existing notification
+        it->message    = message;
+        it->level      = level;
+        it->start_time = ImGui::GetTime();  // Reset start time to fade in again
+        it->is_hiding  = false;             // If it was hiding, show it again
+    }
+    else
+    {
+        // Add a new persistent notification
+        m_notifications.push_back({ id, message, level, ImGui::GetTime(),
+                                    0.0f,  // duration is irrelevant for persistent
+                                    m_default_fade_duration,
+                                    true,   // is_persistent
+                                    false,  // is_hiding
+                                    0.0 });
+    }
+}
+
+void
+NotificationManager::Hide(const std::string& id)
+{
+    auto it =
+        std::find_if(m_notifications.begin(), m_notifications.end(),
+                     [&](const Notification& n) { return n.id == id && !n.is_hiding; });
+
+    if(it != m_notifications.end())
+    {
+        it->is_hiding = true;
+        it->hide_time = ImGui::GetTime();
+    }
+}
+
+void
+NotificationManager::ClearAll()
+{
+    m_notifications.clear();
+}
+
+void
+NotificationManager::Render()
+{
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2               base_pos = viewport->WorkPos;
+    float                y_offset = 0.0f;
+    const float          padding  = 10.0f;
+
+    for(auto it = m_notifications.rbegin(); it != m_notifications.rend(); ++it)
+    {
+        const auto& notification = *it;
+        double      current_time = ImGui::GetTime();
+        float       opacity      = notification.GetOpacity(current_time);
+
+        if(opacity <= 0.0f)
+        {
+            continue;  // Skip rendering if fully transparent
+        }
+
+        ImVec2 window_pos(base_pos.x + viewport->WorkSize.x - padding,
+                          base_pos.y + viewport->WorkSize.y - padding - y_offset);
+        ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always,
+                                ImVec2(1.0f, 1.0f));  // Pivot at bottom-right
+
+        ImGui::SetNextWindowBgAlpha(opacity);
+        ImVec4 bg_color = GetBgColorForLevel(notification.level);
+
+        ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                              ImVec4(bg_color.x, bg_color.y, bg_color.z, opacity));
+        ImGuiWindowFlags flags =
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+            ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
+
+        ImGui::PushID(&notification);  // Use the notification's address as a unique ID
+        ImGui::Begin("Notification", NULL, flags);
+
+        ImVec4 text_color = GetFgColorForLevel(notification.level);
+        text_color.w      = opacity;
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+        ImGui::TextUnformatted(notification.message.c_str());
+        ImGui::PopStyleColor();
+
+        y_offset += ImGui::GetWindowSize().y + m_notification_spacing;
+
+        ImGui::End();
+        ImGui::PopStyleColor();
+        ImGui::PopID();
+    }
+
+    // Clean up expired notifications
+    double current_time = ImGui::GetTime();
+    m_notifications.erase(std::remove_if(m_notifications.begin(), m_notifications.end(),
+                                         [current_time](const Notification& n) {
+                                             return n.IsExpired(current_time);
+                                         }),
+                          m_notifications.end());
+}
+
+ImVec4
+NotificationManager::GetBgColorForLevel(NotificationLevel level)
+{
+    switch(level)
+    {
+        default:
+        case NotificationLevel::Info: return { 1.0f, 1.0f, 1.0f, 1.0f };     // White
+        case NotificationLevel::Success: return { 1.0f, 1.0f, 1.0f, 1.0f };  // White
+        case NotificationLevel::Warning: return { 1.0f, 1.0f, 0.2f, 1.0f };  // Yellow
+        case NotificationLevel::Error: return { 1.0f, 0.2f, 0.2f, 1.0f };    // Red
+    }
+}
+
+ImVec4
+NotificationManager::GetFgColorForLevel(NotificationLevel level)
+{
+    switch(level)
+    {
+        default:
+        case NotificationLevel::Info: return { 0.0f, 0.0f, 0.0f, 1.0f };     // Black
+        case NotificationLevel::Success: return { 0.0f, 0.0f, 0.0f, 1.0f };  // Black
+        case NotificationLevel::Warning: return { 0.0f, 0.0f, 0.0f, 1.0f };  // Black
+        case NotificationLevel::Error: return { 1.0f, 1.0f, 1.0f, 1.0f };    // White
+    }
+}

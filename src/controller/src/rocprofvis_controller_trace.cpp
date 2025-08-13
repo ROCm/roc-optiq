@@ -182,7 +182,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                         {
                                             Event* new_event = GetMemoryManager()->NewEvent(
                                                 event_id++, event.m_start_ts,
-                                                event.m_start_ts + event.m_duration);
+                                                event.m_start_ts + event.m_duration, track->GetSegments());
                                             if(new_event)
                                             {
                                                 result = new_event->SetString(
@@ -275,7 +275,7 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
                                             Sample* new_sample =
                                                 GetMemoryManager()->NewSample(
                                                 kRPVControllerPrimitiveTypeDouble,
-                                                sample_id++, sample.m_start_ts);
+                                                sample_id++, sample.m_start_ts, track->GetSegments());
                                             if(new_sample)
                                             {
                                                 new_sample->SetObject(
@@ -2661,7 +2661,7 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
         
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     std::string filepath = filename;
-    future.Set(JobSystem::Get().IssueJob([this, filepath]() -> rocprofvis_result_t
+    future.Set(JobSystem::Get().IssueJob([this, filepath](Future* future) -> rocprofvis_result_t
         {
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos || 
@@ -2688,7 +2688,7 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
                 result = kRocProfVisResultInvalidArgument;
             }
         return result;
-        }));
+        },&future));
 
     if(future.IsValid())
     {
@@ -2704,7 +2704,7 @@ rocprofvis_result_t Trace::SaveTrimmedTrace(Future& future, double start, double
 
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
     std::string path_str = path;
-    future.Set(JobSystem::Get().IssueJob([start, end, path_str, dm_handle]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([start, end, path_str, dm_handle](Future* future) -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
                               if (db)
@@ -2730,7 +2730,7 @@ rocprofvis_result_t Trace::SaveTrimmedTrace(Future& future, double start, double
                                   }
                               }
                               return result;
-                          }));
+                          }, &future));
 
     if(future.IsValid())
     {
@@ -2768,11 +2768,11 @@ Trace::AsyncFetch(Event& event, Future& future, Array& array,
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
-    future.Set(JobSystem::Get().IssueJob([&event, &array, property, dm_handle]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&event, &array, property, dm_handle](Future* future) -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               result = event.Fetch(property, array, dm_handle);
                               return result;
-                          }));
+                          },&future));
 
     if(future.IsValid())
     {
@@ -2790,7 +2790,7 @@ Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
     future.Set(JobSystem::Get().IssueJob(
-        [this, property, &array, index]() -> rocprofvis_result_t {
+        [this, property, &array, index](Future* future) -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
 
             switch(property)
@@ -2832,7 +2832,7 @@ Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
             }
 
             return result;
-        }));
+        }, &future));
 
     if(future.IsValid())
     {
@@ -2849,11 +2849,11 @@ Trace::AsyncFetch(Table& table, Future& future, Array& array,
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(JobSystem::Get().IssueJob([&table, &array, index, count, dm_handle]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&table, &array, index, count, dm_handle](Future* future) -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               result = table.Fetch(dm_handle, index, count, array);
                               return result;
-                          }));
+                          },&future));
 
     if(future.IsValid())
     {
@@ -2869,7 +2869,7 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
     rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             result = table.Setup(dm_handle, args);
             if (result == kRocProfVisResultSuccess)
@@ -2889,7 +2889,7 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
                 result = table.Fetch(dm_handle, start_index, start_count, array);
             }
             return result;
-        }));
+        }, &future));
 
     if(future.IsValid())
     {

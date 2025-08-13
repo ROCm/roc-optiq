@@ -6,6 +6,7 @@
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_job_system.h"
+#include "rocprofvis_c_interface.h"
 
 namespace RocProfVis
 {
@@ -26,6 +27,8 @@ public:
 
     rocprofvis_result_t Wait(float timeout);
     rocprofvis_result_t Cancel();
+    bool                IsCancelled();
+    rocprofvis_result_t AddDependentFuture(rocprofvis_db_future_t db_future);
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -41,6 +44,9 @@ public:
 private:
     Job* m_job;
     Data m_object;
+    std::vector<rocprofvis_db_future_t> m_db_futures;
+    std::atomic<bool>                   m_cancelled;
+
 };
 
 }

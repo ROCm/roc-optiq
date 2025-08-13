@@ -233,6 +233,7 @@ class Trace : public DmBase{
         static rocprofvis_dm_result_t                   CheckEventPropertyExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
         static rocprofvis_dm_result_t                   CheckTableExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_table_id_t table_id);
         static rocprofvis_dm_result_t                   CompleteSlice(const rocprofvis_dm_slice_t object);
+        static rocprofvis_dm_result_t                   RemoveSlice(const rocprofvis_dm_trace_t trace, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_slice_t object);
 
         // trace parameters structure
         rocprofvis_dm_trace_params_t                    m_parameters;

@@ -64,7 +64,7 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
     rocprofvis_dm_track_params_t track_params = {0};
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     track_params.track_id = (rocprofvis_dm_track_id_t)db->NumTracks();
     track_params.track_category = (rocprofvis_dm_track_category_t)sqlite3_column_int(stmt,TRACK_ID_CATEGORY);
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
@@ -137,7 +137,7 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt,
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     uint32_t stringId = db->BindObject()->FuncAddString(db->BindObject()->trace_object, (char*) sqlite3_column_text(stmt,0));
     callback_params->future->CountThisRow();
     return 0;
@@ -437,7 +437,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
     }
     ShowProgress(0, "Trace metadata not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
 
@@ -524,7 +524,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
     ShowProgress(0, "Flow trace not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
 rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t start,
@@ -807,7 +807,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
     ShowProgress(0, "Extended data  not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);    
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);    
 }
 
 }  // namespace DataModel

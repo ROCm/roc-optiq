@@ -20,6 +20,7 @@ class Thread;
 class Queue;
 class Trace;
 class Counter;
+class Future;
 
 class Track : public Handle
 {
@@ -28,13 +29,13 @@ public:
 
     virtual ~Track();
 
-    rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
-    rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index);
-    void LockSegments(double start, double end, void* user_ptr, FetchSegmentsFunc func);
+    rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func);
+    rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index, Future* future);
 
     rocprofvis_controller_object_type_t GetType(void) final;
     rocprofvis_dm_track_t GetDmHandle(void);
     Handle* GetContext(void) override;
+    SegmentTimeline* GetSegments();
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -63,12 +64,11 @@ private:
     Queue* m_queue;
     Counter* m_counter;
     Trace* m_ctx;
-    std::condition_variable  m_cv;
-    std::mutex m_mutex;
+    std::condition_variable_any  m_cv;
 
 
 private:
-    rocprofvis_result_t FetchFromDataModel(double start, double end);
+    rocprofvis_result_t FetchFromDataModel(double start, double end, Future* future);
 
     inline static std::atomic<uint32_t> s_data_model_load;
 };

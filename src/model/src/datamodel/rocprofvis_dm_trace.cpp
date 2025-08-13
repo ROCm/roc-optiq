@@ -43,6 +43,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddTrack = AddTrack;
     m_binding_info.FuncAddRecord = AddRecord;
     m_binding_info.FuncAddSlice = AddSlice;
+    m_binding_info.FuncRemoveSlice = RemoveSlice;
     m_binding_info.FuncAddString = AddString;
     m_binding_info.FuncAddFlowTrace = AddFlowTrace;
     m_binding_info.FuncAddFlow = AddFlow;
@@ -74,9 +75,8 @@ rocprofvis_dm_result_t Trace::DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t s
 
 rocprofvis_dm_result_t
 Trace::DeleteSliceByHandle(rocprofvis_dm_track_id_t track, rocprofvis_dm_handle_t slice)
-{
-    m_tracks[track].get()->DeleteSliceByHandle(slice);
-    return kRocProfVisDmResultNotLoaded;
+{  
+    return m_tracks[track].get()->DeleteSliceByHandle(slice);
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllSlices(){
@@ -451,6 +451,16 @@ rocprofvis_dm_result_t Trace::CompleteSlice(const rocprofvis_dm_slice_t object)
     return kRocProfVisDmResultSuccess;
 }      
 
+rocprofvis_dm_result_t
+Trace::RemoveSlice(const rocprofvis_dm_trace_t    trace_object,
+                   const rocprofvis_dm_track_id_t track_id,
+                   const rocprofvis_dm_slice_t    object)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(trace_object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
+    Trace*                 trace  = (Trace*) trace_object; 
+    return trace->DeleteSliceByHandle(track_id, object);
+}      
+
 
 rocprofvis_dm_result_t Trace::CheckSliceExists(
                         const rocprofvis_dm_trace_t     object,
@@ -465,18 +475,18 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
     for(int i = 0; i < trace->m_tracks.size(); i++)
     {
         rocprofvis_dm_slice_t  object = nullptr;
-        rocprofvis_dm_result_t result = trace->m_tracks[i].get()->GetSliceAtTime(start, object);
+        rocprofvis_dm_result_t result =
+            trace->m_tracks[i].get()->GetSliceAtTime(hash_combine(start,end), object);
         if(result == kRocProfVisDmResultSuccess)
         {
             ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
                                          kRocProfVisDmResultUnknownError);
             TrackSlice* slice = (TrackSlice*) object;
             lock.unlock();
-            if(slice->EndTime() == end)
-            {
-                slice->WaitComplete();
-                return kRocProfVisDmResultSuccess;
-            }
+
+            slice->WaitComplete();
+            return kRocProfVisDmResultSuccess;
+
         }
     }
     return kRocProfVisDmResultNotLoaded;

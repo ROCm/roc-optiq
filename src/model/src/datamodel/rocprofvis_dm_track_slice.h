@@ -97,7 +97,7 @@ class TrackSlice : public DmBase {
         // Returns class mutex
         std::shared_mutex*              Mutex() override { return &m_lock; }
 
-        void SetComplete() { m_complete = true; }
+        void SetComplete();
         void WaitComplete();
 
         // Pure virtual method to get event timestamp value by provided index of record

@@ -172,6 +172,21 @@ void rocprofvis_db_future_free(
 }
 
 /****************************************************************************************************
+ * @brief Cancel future job
+ *
+ * @param object future handle allocated by rocprofvis_db_future_alloc
+ *
+ ***************************************************************************************************/
+void
+rocprofvis_db_future_cancel(rocprofvis_db_future_t object)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(object,
+                                 RocProfVis::DataModel::ERROR_FUTURE_CANNOT_BE_NULL, );
+    ((RocProfVis::DataModel::Future*) object)->SetInterrupted();
+}
+
+/****************************************************************************************************
  * @brief Asynchronous call to read data model metadata 
  *              (static objects residing in trace class memory until trace is deleted)
  * 

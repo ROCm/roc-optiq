@@ -89,11 +89,13 @@ rocprofvis_dm_result_t
 Track::DeleteSliceByHandle(rocprofvis_dm_slice_t slice)
 {
     TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+    std::shared_ptr<TrackSlice>                    item;
     auto                                           it = std::find_if(
         m_slices.begin(), m_slices.end(),
         [slice](const std::shared_ptr<TrackSlice>& ptr) { return ptr.get() == slice; });
     if(it != m_slices.end())
     {
+        item = *it;
         m_slices.erase(it);
         return kRocProfVisDmResultSuccess;
     }
@@ -121,17 +123,22 @@ rocprofvis_dm_result_t Track::GetSliceAtIndex(rocprofvis_dm_property_index_t ind
 
 rocprofvis_dm_result_t Track::GetSliceAtTime(rocprofvis_dm_timestamp_t time,  rocprofvis_dm_slice_t & slice)
 {
+    rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     for (int i = 0; i < m_slices.size(); i++)
     {
         uint64_t hash_time =
             hash_combine(m_slices[i]->StartTime(), m_slices[i]->EndTime()); 
         if(time == hash_time)
         {
+            if (result == kRocProfVisDmResultSuccess)
+            {
+                return result;
+            }
             slice = m_slices[i].get();
-            return kRocProfVisDmResultSuccess;
+            result = kRocProfVisDmResultSuccess;
         }
     }
-    return kRocProfVisDmResultNotLoaded;
+    return result;
 }
 
 rocprofvis_dm_result_t Track::GetSliceIndexAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 

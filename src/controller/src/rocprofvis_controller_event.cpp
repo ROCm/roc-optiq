@@ -561,7 +561,7 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerEventChildIndexed:
         {
-            if(!m_children)
+            if(m_children)
             {
                 result = m_children->SetUInt64(kRPVControllerArrayEntryIndexed, index, value);
             }

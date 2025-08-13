@@ -14,11 +14,12 @@ namespace Controller
 class Array;
 class Track;
 class Trace;
+class Future;
 
 class Graph : public Handle
 {
-    rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts, std::vector<Data>& entries);
-    rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start, double end);
+    rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts, std::vector<Data>& entries, Future* future);
+    rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* future);
     void Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object);
 
 public:
@@ -28,10 +29,13 @@ public:
 
     virtual ~Graph();
 
-    rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index);
+    rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index, Future* future);
 
     rocprofvis_controller_object_type_t GetType(void) final;
     rocprofvis_result_t                 CombineEventNames(std::vector<Event*>& events, std::string& combined_name);
+    rocprofvis_result_t                 GenerateLODEvent(std::vector<Event*>& events,
+                                                         uint32_t lod_to_generate, uint32_t level,
+                                                         uint64_t event_min, uint64_t event_max);
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -50,8 +54,7 @@ private:
     Track* m_track;
     Trace* m_ctx;
     rocprofvis_controller_graph_type_t m_type;
-    std::mutex m_mutex;
-    std::condition_variable  m_cv;
+    std::condition_variable_any  m_cv;
 };
 
 }

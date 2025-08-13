@@ -341,8 +341,8 @@ void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
         if(array.Get()->GetContext() &&
            ((RocProfVis::Controller::Trace*) array.Get()->GetContext())->GetMemoryManager())
         {
-            ((RocProfVis::Controller::Trace*)array.Get()->GetContext())->GetMemoryManager()->CancelArrayOwnersip(
-                &array.Get()->GetVector());
+            ((RocProfVis::Controller::Trace*)array.Get()->GetContext())->GetMemoryManager()->CancelArrayOwnersip(&array.Get()->GetVector(),
+                                      RocProfVis::Controller::kRocProfVisOwnerTypeGraph);
         }
         delete array.Get();
     }

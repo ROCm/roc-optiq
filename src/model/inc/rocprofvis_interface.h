@@ -84,6 +84,14 @@ rocprofvis_dm_result_t rocprofvis_db_future_wait(
 void rocprofvis_db_future_free(rocprofvis_db_future_t);
 
 /****************************************************************************************************
+ * @brief Cancel future job
+ *
+ * @param object future handle allocated by rocprofvis_db_future_alloc
+ *
+ ***************************************************************************************************/
+void rocprofvis_db_future_cancel(rocprofvis_db_future_t);
+
+/****************************************************************************************************
  * @brief Asynchronous call to read data model metadata 
  *              (static objects residing in trace class memory until trace is deleted)
  * 

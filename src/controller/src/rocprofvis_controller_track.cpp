@@ -63,17 +63,6 @@ Track::GetSegments()
     return &m_segments;
 }
 
-
-//void
-//Track::LockSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc lock_func)
-//{
-//    if(m_start_timestamp <= end && m_end_timestamp >= start)
-//    {
-//        m_segments.SetContext(this);
-//        m_segments.FetchSegments(start, end, user_ptr, future, lock_func);
-//    }
-//}
-
 rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
@@ -96,9 +85,19 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
 
         {
             std::unique_lock lock(*m_segments.GetMutex());
+            m_cv.wait(lock, [&] {
+                for(uint32_t i = start_index; i < end_index; i++)
+                {
+                    if(m_segments.IsProcessed(i))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            });
             for(uint32_t i = start_index; i < end_index; i++)
             {
-                if(!m_segments.IsValid(i) && !m_segments.IsProcessed(i))
+                if(!m_segments.IsValid(i))
                 {
                     m_segments.SetProcessed(i, true);
                     if(fetch_ranges.size())

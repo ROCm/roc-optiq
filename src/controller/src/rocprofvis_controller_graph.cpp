@@ -436,9 +436,19 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                 uint32_t end_index = (uint32_t)ceil((end - min_ts) / segment_duration);
                 {
                     std::unique_lock lock(*it->second.GetMutex());
+                    m_cv.wait(lock, [&] {
+                        for(uint32_t i = start_index; i < end_index; i++)
+                        {
+                            if(it->second.IsProcessed(i))
+                            {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
                     for(uint32_t i = start_index; i < end_index; i++)
                     {
-                        if(!it->second.IsValid(i) && !it->second.IsProcessed(i))
+                        if(!it->second.IsValid(i))
                         {
                             it->second.SetProcessed(i, true);
                             if(fetch_ranges.size())

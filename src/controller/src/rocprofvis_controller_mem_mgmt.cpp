@@ -409,20 +409,22 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
     MemoryPool* current_pool = nullptr;
     uint32_t first_zero_bit = 0;
 
+    uint64_t pool_idetifier = uint64_t(owner);
+
     if (m_short_tracks.find(owner) != m_short_tracks.end())
     {
-        owner = *m_short_tracks.begin();
+        pool_idetifier = kShortTracksMemoryPoolIdentifier;
     }
     else
     {
         if (owner->GetMaxNumItems() < m_mem_block_size / 32)
         {
             m_short_tracks.insert(owner);
-            owner = *m_short_tracks.begin();
+            pool_idetifier = kShortTracksMemoryPoolIdentifier;
         }
     }
 
-    auto it = m_current_pool[type].find(owner); 
+    auto it = m_current_pool[type].find(pool_idetifier); 
     if(it != m_current_pool[type].end())
     {
         current_pool = it->second;
@@ -436,11 +438,11 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
     if(current_pool == nullptr)
     {
         current_pool = new MemoryPool(size, type, m_mem_block_size);
-        auto& inner_map = m_object_pools[owner];
+        auto& inner_map = m_object_pools[pool_idetifier];
         auto [inner_it, inserted] = inner_map.emplace(current_pool->m_base, current_pool);
         if(inserted)
         {
-            m_current_pool[type][owner] =  current_pool;
+            m_current_pool[type][pool_idetifier] = current_pool;
             m_lru_storage_memory_used += size * current_pool->m_bitmask.Size();
             first_zero_bit = current_pool->m_pos++;
         }
@@ -518,22 +520,24 @@ MemoryManager::Delete(Handle* handle, SegmentTimeline* owner)
 {
     if(!handle->IsDeletable()) return;
 
+    uint64_t pool_idetifier = uint64_t(owner);
+
     if(m_short_tracks.find(owner) != m_short_tracks.end())
     {
-        owner = *m_short_tracks.begin();
+        pool_idetifier = kShortTracksMemoryPoolIdentifier;
     }
     else
     {
         if(owner->GetMaxNumItems() < m_mem_block_size / 32)
         {
             m_short_tracks.insert(owner);
-            owner = *m_short_tracks.begin();
+            pool_idetifier = kShortTracksMemoryPoolIdentifier;
         }
     }
 
     void* ptr = handle;
 
-    auto owner_it = m_object_pools.find(owner);
+    auto owner_it = m_object_pools.find(pool_idetifier);
     if(owner_it == m_object_pools.end())
     {
         spdlog::debug("Memory manager error: no pools for owner {}!", (void*) owner);
@@ -574,10 +578,11 @@ MemoryManager::Delete(Handle* handle, SegmentTimeline* owner)
 
     if(pool->m_bitmask.None())
     {
+
         m_lru_storage_memory_used -= total_size;
 
         pool_map.erase(it);                         
-        m_current_pool[pool->m_type].erase(owner);  
+        m_current_pool[pool->m_type].erase(pool_idetifier);  
 
         delete pool;
     }

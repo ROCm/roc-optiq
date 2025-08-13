@@ -35,6 +35,7 @@ namespace RocProfVis
         class ComputeTrace;
 
         constexpr uint32_t kUseVailMemoryPercent = 30;
+        constexpr uint64_t kShortTracksMemoryPoolIdentifier = 1;
 
         typedef enum rocprofvis_object_type_t
         {
@@ -115,7 +116,7 @@ namespace RocProfVis
         class MemoryManager
         {
             using MemoryPoolMap= std::map<void*, MemoryPool*>;
-            using MemPoolsMap  = std::map<SegmentTimeline*, MemoryPoolMap>;
+            using MemPoolsMap  = std::map<uint64_t, MemoryPoolMap>;
 
         public:
             MemoryManager(uint64_t id);
@@ -159,7 +160,7 @@ namespace RocProfVis
             double                                                      m_trace_weight;
 
             MemPoolsMap                                                 m_object_pools;
-            std::map<SegmentTimeline*, MemoryPool*>                     m_current_pool[kRocProfVisNumberOfObjectTypes];
+            std::map<uint64_t, MemoryPool*>                             m_current_pool[kRocProfVisNumberOfObjectTypes];
             std::set<SegmentTimeline*>                                  m_short_tracks;
             std::mutex                                                  m_pool_mutex;
 

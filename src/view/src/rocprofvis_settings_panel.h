@@ -13,10 +13,14 @@ public:
     SettingsPanel();
     ~SettingsPanel();
 
-    void Render();  // Call this to draw the settings panel
+    void Render();
+
+    // Getter and setter for open state
+    bool IsOpen();
+    void SetOpen(bool);
 
 private:
-    // Add private members for settings state here
+    bool m_is_open = false;
 };
 
 }  // namespace View

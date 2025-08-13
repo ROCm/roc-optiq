@@ -7,6 +7,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_trace_view.h"
 #include "widgets/rocprofvis_widget.h"
+#include "rocprofvis_settings_panel.h"
 
 #include <memory>
 
@@ -69,6 +70,8 @@ private:
     bool m_open_about_dialog;
 
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
+    std::unique_ptr<SettingsPanel>      m_settings_panel;
+
 };
 
 }  // namespace View

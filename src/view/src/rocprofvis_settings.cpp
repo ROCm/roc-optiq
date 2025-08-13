@@ -20,12 +20,30 @@ namespace RocProfVis
 {
 namespace View
 {
+FontManager::FontManager()
+: m_font_sizes({ 7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 23, 25, 27, 29, 33, 37, 41, 49, 57, 65 })
+{}
+
+FontManager::~FontManager() {}
+
+std::vector<float>
+FontManager::GetFontSizes()
+{
+    // Return a vector of font sizes
+    return m_font_sizes;
+}
+int
+FontManager::GetCurrentFontSizeIndex()
+{
+    // Return the font size index for the default font type
+    return m_font_size_indices[static_cast<int>(FontType::kDefault)];
+}
+
 int
 FontManager::GetFontSizeIndexForDPI(float dpi)
 {
     // DPI returns the dots per inch of the display. Essentially, it is a scaling factor.
-    constexpr float font_sizes[] = { 7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-                                     20, 21, 23, 25, 27, 29, 33, 37, 41, 49, 57, 65 };
 
     float base_size = 13.0f;
     float scaled_size =
@@ -35,10 +53,10 @@ FontManager::GetFontSizeIndexForDPI(float dpi)
 
     // Find the index of the font size closest to scaled_size
     int best_index = 0;
-    for(int i = 1; i < static_cast<int>(std::size(font_sizes)); ++i)
+    for(int i = 1; i < static_cast<int>(std::size(m_font_sizes)); ++i)
     {
-        if(std::abs(font_sizes[i] - scaled_size) <
-           std::abs(font_sizes[best_index] - scaled_size))
+        if(std::abs(m_font_sizes[i] - scaled_size) <
+           std::abs(m_font_sizes[best_index] - scaled_size))
             best_index = i;
     }
     return best_index;
@@ -66,10 +84,7 @@ FontManager::Init()
     ImGuiIO& io = ImGui::GetIO();
     m_fonts.clear();
 
-    constexpr float font_sizes[] = { 7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-                                     20, 21, 23, 25, 27, 29, 33, 37, 41, 49, 57, 65 };
-
-    constexpr int num_sizes = sizeof(font_sizes) / sizeof(font_sizes[0]);
+    const int     num_sizes = static_cast<int>(m_font_sizes.size());
     constexpr int num_types = static_cast<int>(FontType::__kLastFont);
 
 #ifdef _WIN32
@@ -107,7 +122,7 @@ FontManager::Init()
     for(int sz = 0; sz < num_sizes; ++sz)
     {
         ImFont* font = nullptr;
-        if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, font_sizes[sz]);
+        if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, m_font_sizes[sz]);
         if(!font) font = io.Fonts->AddFontDefault();
         m_all_fonts[sz] = font;
     }
@@ -120,7 +135,7 @@ FontManager::Init()
 
         // Load icon font for each type at the selected size
         m_icon_fonts[type] = io.Fonts->AddFontFromMemoryCompressedTTF(
-            &icon_font_compressed_data, icon_font_compressed_size, font_sizes[sz_idx],
+            &icon_font_compressed_data, icon_font_compressed_size, m_font_sizes[sz_idx],
             &config, icon_ranges);
     }
 

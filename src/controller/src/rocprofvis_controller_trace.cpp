@@ -2906,7 +2906,7 @@ Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(JobSystem::Get().IssueJob([&plot, dm_handle, &args, &array]() -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob([&plot, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             result = plot.Setup(dm_handle, args);
             if (result == kRocProfVisResultSuccess)
@@ -2914,7 +2914,7 @@ Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
                 result = plot.Fetch(dm_handle, 0, 0, array);
             }
             return result;
-        }));
+        }, &future));
 
     if(future.IsValid())
     {

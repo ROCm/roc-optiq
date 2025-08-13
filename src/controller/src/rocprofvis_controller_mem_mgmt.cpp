@@ -162,7 +162,7 @@ MemoryManager::Configure(double weight)
 //}
 
 rocprofvis_result_t
-MemoryManager::CancelArrayOwnersip(void* array_ptr, rocprofvis_owner_type_t type)
+MemoryManager::CancelArrayOwnership(void* array_ptr, rocprofvis_owner_type_t type)
 {
 
     std::unique_lock lock(m_lru_inuse_mutex[type]);
@@ -182,7 +182,7 @@ MemoryManager::CancelArrayOwnersip(void* array_ptr, rocprofvis_owner_type_t type
 }
 
 rocprofvis_result_t
-MemoryManager::EnterArrayOwnersip(void* array_ptr, rocprofvis_owner_type_t type)
+MemoryManager::EnterArrayOwnership(void* array_ptr, rocprofvis_owner_type_t type)
 {
     std::unique_lock lock(m_lru_inuse_mutex[type]);
     auto             it = m_lru_inuse_lookup[type].find(array_ptr);
@@ -283,7 +283,7 @@ MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint3
 }
 
 void
-MemoryManager::LockTimilines(std::vector<SegmentTimeline*>& locked, std::vector<SegmentTimeline*>& failed_to_lock)
+MemoryManager::LockTimelines(std::vector<SegmentTimeline*>& locked, std::vector<SegmentTimeline*>& failed_to_lock)
 {
     std::set<SegmentTimeline*> timelines;
     for(auto& pair : m_lru_array)
@@ -305,7 +305,7 @@ MemoryManager::LockTimilines(std::vector<SegmentTimeline*>& locked, std::vector<
 }
 
 void
-MemoryManager::UnlockTimilines(std::vector<SegmentTimeline*>& locked)
+MemoryManager::UnlockTimelines(std::vector<SegmentTimeline*>& locked)
 {
     for (auto timeline : locked)
     {
@@ -330,7 +330,7 @@ MemoryManager::ManageLRU()
         {
             std::vector<SegmentTimeline*> locked;
             std::vector<SegmentTimeline*> couldnt_take_lock;
-            LockTimilines(locked, couldnt_take_lock);
+            LockTimelines(locked, couldnt_take_lock);
 
             if(m_lru_mgmt_shutdown)
             {
@@ -397,7 +397,7 @@ MemoryManager::ManageLRU()
                 }
 
             }
-            UnlockTimilines(locked);
+            UnlockTimelines(locked);
         }
     }
 }

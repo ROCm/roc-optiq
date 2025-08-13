@@ -481,7 +481,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                         args.m_index       = 0;
                     	args.m_lru_params.m_ctx      = (Trace*)m_track->GetContext();
                     	args.m_lru_params.m_lod      = 0;
-                        m_ctx->GetMemoryManager()->EnterArrayOwnersip(&args.m_entries, kRocProfVisOwnerTypeTrack);
+                        m_ctx->GetMemoryManager()->EnterArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
 
                         result = m_track->FetchSegments(
                             fetch_start, fetch_end, &args, future,
@@ -515,7 +515,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                             
                         }
                         m_cv.notify_all();
-                        ((Trace*)m_track->GetContext())->GetMemoryManager()->CancelArrayOwnersip(&args.m_entries, kRocProfVisOwnerTypeTrack);
+                        ((Trace*)m_track->GetContext())->GetMemoryManager()->CancelArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
                     }
                 }
                 else
@@ -590,7 +590,7 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
             args.m_index = &index;
             args.m_lru_params.m_ctx = m_ctx;
             args.m_lru_params.m_lod   = lod;
-            m_ctx->GetMemoryManager()->EnterArrayOwnersip(&args.m_array->GetVector(), kRocProfVisOwnerTypeGraph);
+            m_ctx->GetMemoryManager()->EnterArrayOwnership(&args.m_array->GetVector(), kRocProfVisOwnerTypeGraph);
             array.SetContext(m_ctx);
 
             result = it->second.FetchSegments(

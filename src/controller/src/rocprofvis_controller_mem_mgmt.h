@@ -127,9 +127,9 @@ namespace RocProfVis
             void AddLRUReference(SegmentTimeline* owner,
                                                     Segment* reference, uint32_t lod,
                                                     void* array_ptr);
-            rocprofvis_result_t EnterArrayOwnersip(void* array_ptr,
+            rocprofvis_result_t EnterArrayOwnership(void* array_ptr,
                                                    rocprofvis_owner_type_t type);
-            rocprofvis_result_t CancelArrayOwnersip(void* array_ptr,
+            rocprofvis_result_t CancelArrayOwnership(void* array_ptr,
                                                     rocprofvis_owner_type_t type);
             void                Configure(double weight);
 
@@ -168,8 +168,8 @@ namespace RocProfVis
             void*           Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimeline *owner);
             void            CleanUp();
             static void     UpdateSizeLimit();
-            void            LockTimilines(std::vector<SegmentTimeline*>& locked, std::vector<SegmentTimeline*>& failed_to_lock);
-            void            UnlockTimilines(std::vector<SegmentTimeline*>& locked);
+            void            LockTimelines(std::vector<SegmentTimeline*>& locked, std::vector<SegmentTimeline*>& failed_to_lock);
+            void            UnlockTimelines(std::vector<SegmentTimeline*>& locked);
             bool            CheckInUse(LRUMember* lru);
 
             inline static size_t                                        s_physical_memory_avail=0;

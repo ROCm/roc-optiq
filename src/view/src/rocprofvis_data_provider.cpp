@@ -895,7 +895,7 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
     }
 
     uint64_t request_id =
-        MakeTrackDataRequestId(track_id, group_id, chunk_index, RequestType::kFetchTrack);
+        MakeTrackDataRequestId(track_id, chunk_index, group_id, RequestType::kFetchTrack);
 
     const track_info_t* metadata = GetTrackInfo(track_id);
     if(metadata)
@@ -985,13 +985,13 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
     }
 
     uint64_t request_id =
-        MakeTrackDataRequestId(request_params.m_track_id, request_params.m_data_group_id,
-                           request_params.m_chunk_index, RequestType::kFetchGraph);
+        MakeTrackDataRequestId(request_params.m_track_id, request_params.m_chunk_index,
+                               request_params.m_data_group_id, RequestType::kFetchGraph);
 
     if(GetTrackInfo(request_params.m_track_id))
     {
-        auto it = m_requests.find(request_id);//request_params.m_track_id);
-        // only allow load if a request for this id (track) is not pending
+        auto it = m_requests.find(request_id);
+        // only allow load if a request for this id (track chunk) is not pending
         if(it == m_requests.end())
         {
             rocprofvis_handle_t* graph_future = rocprofvis_controller_future_alloc();
@@ -1018,7 +1018,7 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
                 request_info.request_future     = graph_future;
                 request_info.request_obj_handle = graph_obj;
                 request_info.request_args       = nullptr;
-                request_info.request_id         = request_id; //request_params.m_track_id;
+                request_info.request_id         = request_id;
                 request_info.loading_state      = ProviderState::kLoading;
                 request_info.request_type       = RequestType::kFetchGraph;
                 request_info.internal_request   = false;

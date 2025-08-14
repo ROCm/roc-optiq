@@ -188,13 +188,8 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     rocprofvis_db_ext_data_t record;
-<<<<<<< HEAD
-    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
-    record.category = callback_params->query[kRPVSqliteCacheTableName];
-=======
-    if (callback_params->future->Interrupted()) return 1;
+    if (callback_params->future->Interrupted()) return SQLITE_ABORT;
     record.category = callback_params->query[kRPVCacheTableName];
->>>>>>> main
     for (int i = 0; i < argc; i++)
     {
         record.name = azColName[i];

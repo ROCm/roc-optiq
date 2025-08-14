@@ -331,12 +331,6 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     ImGui::PopStyleColor();
 }
 
-bool
-TrackItem::HasData()
-{
-    return m_data_provider.GetRawTrackData(m_id) != nullptr;
-}
-
 void
 TrackItem::RequestData(double min, double max, float width)
 {

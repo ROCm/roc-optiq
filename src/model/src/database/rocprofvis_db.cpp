@@ -259,10 +259,14 @@ rocprofvis_dm_result_t   Database::ExecuteQueryStatic(
 const char* Database::ProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
     switch(category){
         case kRocProfVisDmPmcTrack:
-        case kRocProfVisDmKernelTrack:
+        case kRocProfVisDmKernelDispatchTrack:
+        case kRocProfVisDmMemoryAllocationTrack:
+        case kRocProfVisDmMemoryCopyTrack:
             return "GPU:";
         case kRocProfVisDmRegionTrack:
             return "PID:";
+        case kRocProfVisDmStreamTrack: 
+            return "STREAM:";
     }
     return "";
 }
@@ -270,7 +274,9 @@ const char* Database::ProcessNameSuffixFor(rocprofvis_dm_track_category_t catego
 const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
     switch(category){
         case kRocProfVisDmPmcTrack:
-        case kRocProfVisDmKernelTrack:
+        case kRocProfVisDmKernelDispatchTrack:
+        case kRocProfVisDmMemoryAllocationTrack:
+        case kRocProfVisDmMemoryCopyTrack:
             return "Queue:";
         case kRocProfVisDmRegionTrack:
             return "TID:";
@@ -363,39 +369,48 @@ Database::TrackExist(rocprofvis_dm_track_params_t& newprops,
                 }
                 return false;
         });
+    int slice_query_category        = newprops.track_category == kRocProfVisDmStreamTrack
+                                          ? kRPVQuerySliceByStream
+                                          : kRPVQuerySliceByQueue;
+    int slice_source_query_category = newprops.track_category == kRocProfVisDmStreamTrack
+                                          ? kRPVSourceQuerySliceByStream
+                                          : kRPVSourceQuerySliceByQueue;
     if (it != TrackPropertiesEnd()) {
             std::vector<rocprofvis_dm_string_t>::iterator s = 
-            std::find_if(   it->get()->query[kRPVQuerySlice].begin(), 
-                            it->get()->query[kRPVQuerySlice].end(), [newqueries] (rocprofvis_dm_string_t & str) {
-                             return str == newqueries[kRPVSqliteQuerySlice];
+            std::find_if(it->get()->query[slice_query_category].begin(), 
+                            it->get()->query[slice_query_category].end(),
+                [newqueries, slice_source_query_category](rocprofvis_dm_string_t& str) {
+                                 return str == newqueries[slice_source_query_category];
                          });
-            if (s == it->get()->query[kRPVQuerySlice].end()) {
-                it->get()->query[kRPVQuerySlice].push_back(newqueries[kRPVSqliteQuerySlice]);
+            if(s == it->get()->query[slice_query_category].end())
+            {
+                it->get()->query[slice_query_category].push_back(
+                    newqueries[slice_source_query_category]);
             }
             
             s = std::find_if(it->get()->query[kRPVQueryTable].begin(),
                              it->get()->query[kRPVQueryTable].end(),
                              [newqueries](rocprofvis_dm_string_t& str) {
-                                 return str == newqueries[kRPVSqliteQueryTable];
+                                 return str == newqueries[kRPVSourceQueryTable];
                              });
             if(s == it->get()->query[kRPVQueryTable].end())
             {
-                it->get()->query[kRPVQueryTable].push_back(newqueries[kRPVSqliteQueryTable]);
+                it->get()->query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
             }
             s = std::find_if(it->get()->query[kRPVQueryLevel].begin(),
                              it->get()->query[kRPVQueryLevel].end(),
                              [newqueries](rocprofvis_dm_string_t& str) {
-                                 return str == newqueries[kRPVSqliteQueryLevel];
+                                 return str == newqueries[kRPVSourceQueryLevel];
                              });
             if(s == it->get()->query[kRPVQueryLevel].end())
             {
-                it->get()->query[kRPVQueryLevel].push_back(newqueries[kRPVSqliteQueryLevel]);
+                it->get()->query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]);
             }
         return true;
     } 
-    newprops.query[kRPVQuerySlice].push_back(newqueries[kRPVSqliteQuerySlice]);
-    newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSqliteQueryTable]);
-    newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSqliteQueryLevel]);
+    newprops.query[slice_query_category].push_back(newqueries[slice_source_query_category]);
+    newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
+    newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]);
     return false;    
 }
 

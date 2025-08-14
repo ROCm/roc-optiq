@@ -32,46 +32,18 @@ DataProvider::DataProvider()
 , m_max_ts(0)
 , m_trace_file_path("")
 , m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
-, m_selected_event({})
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
 
-void
-DataProvider::SetSelectedEvent(selected_event_t event)
+const event_info_t*
+DataProvider::GetEventInfo(uint64_t event_id) const
 {
-    m_selected_event = event;
-   FetchEventFlowDetails(event.event_id); //Trigger arrow render if applicable on UI if applicable 
-}
-
-selected_event_t
-DataProvider::GetSelectedEvent()
-{
-    return m_selected_event;
-}
-
-const event_info_t&
-DataProvider::GetEventInfoStruct() const
-{
-    return m_event_info;
-}
-
-const flow_info_t&
-DataProvider::GetFlowInfo() const
-{
-    return m_flow_info;
-}
-
-const call_stack_info_t&
-DataProvider::GetCallStackInfo() const
-{
-    return m_call_stack_info;
-}
-
-uint64_t
-DataProvider::GetSelectedEventId()
-{
-    return m_selected_event.event_id;
+    if(m_event_data.count(event_id) > 0)
+    {
+        return &m_event_data.at(event_id);
+    }
+    return nullptr;
 }
 
 void
@@ -221,6 +193,16 @@ DataProvider::GetQueueInfo(uint64_t queue_id) const
     return nullptr;
 }
 
+const stream_info_t*
+DataProvider::GetStreamInfo(uint64_t stream_id) const
+{
+    if(m_stream_infos.count(stream_id) > 0)
+    {
+        return &m_stream_infos.at(stream_id);
+    }
+    return nullptr;
+}
+
 const counter_info_t*
 DataProvider::GetCounterInfo(uint64_t counter_id) const
 {
@@ -285,7 +267,7 @@ DataProvider::SetTrackDataReadyCallback(
 
 void
 DataProvider::SetTraceLoadedCallback(
-    const std::function<void(const std::string&)>& callback)
+    const std::function<void(const std::string&, uint64_t)>& callback)
 {
     m_trace_data_ready_callback = callback;
 }
@@ -409,9 +391,21 @@ DataProvider::HandleLoadTrace()
             uint64_t uint64_result = 0;
             result                 = rocprofvis_controller_get_uint64(
                 m_trace_future, kRPVControllerFutureResult, 0, &uint64_result);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                              uint64_result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+            if(uint64_result != kRocProfVisResultSuccess) 
+            {
+                spdlog::error("Failed to load trace file: {}, error code: {}",
+                              m_trace_file_path, uint64_result);
+                m_state = ProviderState::kError;
+                if(m_trace_data_ready_callback)
+                {
+                    m_trace_data_ready_callback(m_trace_file_path, uint64_result);
+                }
+                return;
+            }
+
+            // Load the system topology
             HandleLoadSystemTopology();
 
             result = rocprofvis_controller_get_object(
@@ -423,20 +417,32 @@ DataProvider::HandleLoadTrace()
                 m_num_graphs = 0;
                 result       = rocprofvis_controller_get_uint64(
                     m_trace_timeline, kRPVControllerTimelineNumGraphs, 0, &m_num_graphs);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
                 m_min_ts = 0;
                 result   = rocprofvis_controller_get_double(
                     m_trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &m_min_ts);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
                 m_max_ts = 0;
                 result   = rocprofvis_controller_get_double(
                     m_trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &m_max_ts);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
                 spdlog::debug("Timeline parameters: tracks {} min ts {} max ts {}",
                               m_num_graphs, m_min_ts, m_max_ts);
 
                 // get the per track meta data
                 HandleLoadTrackMetaData();
+            } else {
+                spdlog::error("Failed to get timeline object from controller");
+                m_state = ProviderState::kError;
+                if(m_trace_data_ready_callback)
+                {
+                    m_trace_data_ready_callback(m_trace_file_path, result == kRocProfVisResultSuccess
+                                                ? kRocProfVisResultUnknownError
+                                                : result);
+                }
             }
 
             // trace loaded successfully, free the future pointer
@@ -447,7 +453,7 @@ DataProvider::HandleLoadTrace()
             // fire callback
             if(m_trace_data_ready_callback)
             {
-                m_trace_data_ready_callback(m_trace_file_path);
+                m_trace_data_ready_callback(m_trace_file_path, kRocProfVisResultSuccess);
             }
         }
         else
@@ -592,6 +598,37 @@ DataProvider::HandleLoadSystemTopology()
                 m_queue_infos[queue_info.id] = std::move(queue_info);
                 process_info.queue_ids[k]    = queue_info.id;
             }
+            uint64_t num_streams;
+            result = rocprofvis_controller_get_uint64(
+                process_handle, kRPVControllerProcessNumStreams, 0, &num_streams);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            process_info.stream_ids.resize(num_streams);
+            // Query streams...
+            for(int k = 0; k < num_streams; k++)
+            {
+                rocprofvis_handle_t* stream_handle;
+                result = rocprofvis_controller_get_object(
+                    process_handle, kRPVControllerProcessStreamIndexed, k, &stream_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && stream_handle);
+                stream_info_t stream_info;
+                result = rocprofvis_controller_get_uint64(
+                    stream_handle, kRPVControllerStreamId, 0, &stream_info.id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                stream_info.name = GetString(stream_handle, kRPVControllerStreamName, 0);
+                rocprofvis_handle_t* processor_handle;
+                result = rocprofvis_controller_get_object(
+                    stream_handle, kRPVControllerStreamProcessor, 0, &processor_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                if(processor_handle)
+                {
+                    result = rocprofvis_controller_get_uint64(processor_handle,
+                                                              kRPVControllerProcessorId,
+                                                              0, &stream_info.device_id);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                }
+                m_stream_infos[stream_info.id] = std::move(stream_info);
+                process_info.stream_ids[k]    = stream_info.id;
+            }
             uint64_t num_counters;
             result = rocprofvis_controller_get_uint64(
                 process_handle, kRPVControllerProcessNumCounters, 0, &num_counters);
@@ -730,6 +767,10 @@ DataProvider::HandleLoadTrackMetaData()
             result = rocprofvis_controller_get_object(track, kRPVControllerTrackQueue, 0,
                                                       &queue);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            rocprofvis_handle_t* stream = nullptr;
+            result = rocprofvis_controller_get_object(track, kRPVControllerTrackStream, 0,
+                                                      &stream);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             rocprofvis_handle_t* thread = nullptr;
             result = rocprofvis_controller_get_object(track, kRPVControllerTrackThread, 0,
                                                       &thread);
@@ -756,6 +797,22 @@ DataProvider::HandleLoadTrackMetaData()
                     queue, kRPVControllerQueueProcessor, 0, &processor);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 track_info.topology.type = track_info_t::Topology::Queue;
+            }
+            else if(stream)
+            {
+                result = rocprofvis_controller_get_uint64(stream, kRPVControllerStreamId, 0,
+                                                          &track_info.topology.id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    stream, kRPVControllerStreamProcess, 0, &process);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(stream, kRPVControllerStreamNode,
+                                                          0, &node);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_object(
+                    stream, kRPVControllerStreamProcessor, 0, &processor);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                track_info.topology.type = track_info_t::Topology::Stream;
             }
             else if(thread)
             {
@@ -1627,6 +1684,22 @@ DataProvider::CancelRequest(uint64_t request_id)
     return false;
 }
 
+bool
+DataProvider::FreeEvent(uint64_t event_id)
+{
+    if(m_event_data.count(event_id) > 0)
+    {
+        m_event_data.erase(event_id);
+        spdlog::debug("Deleted event id: {}", event_id);
+        return true;
+    }
+    else
+    {
+        spdlog::debug("Cannot delete event, invalid id: {}", event_id);
+    }
+    return false;
+}
+
 void
 DataProvider::DumpMetaData()
 {
@@ -1838,28 +1911,38 @@ DataProvider::ProcessEventCallStackRequest(data_req_info_t& req)
     }
 
     spdlog::debug("Event {} has {} call stack properties", req.request_id, prop_count);
-    m_call_stack_info.call_stack_data.clear();
-    m_call_stack_info.call_stack_data.resize(prop_count);
 
-    for(uint64_t i = 0; i < prop_count; i++)
+    std::shared_ptr<EventRequestParams> event_params =
+        std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
+    if(event_params && m_event_data.count(event_params->m_event_id) > 0)
     {
-        rocprofvis_handle_t* callstack_handle = nullptr;
-        result                                = rocprofvis_controller_get_object(
-            req.request_array, kRPVControllerArrayEntryIndexed, i, &callstack_handle);
-        if(result != kRocProfVisResultSuccess || !callstack_handle)
+        event_info_t& event_info = m_event_data[event_params->m_event_id];
+        event_info.call_stack_info.clear();
+        event_info.call_stack_info.resize(prop_count);
+
+        for(uint64_t i = 0; i < prop_count; i++)
         {
-            spdlog::warn("Failed to get call stack handle for entry {}", i);
-            continue;
+            rocprofvis_handle_t* callstack_handle = nullptr;
+            result                                = rocprofvis_controller_get_object(
+                req.request_array, kRPVControllerArrayEntryIndexed, i, &callstack_handle);
+            if(result != kRocProfVisResultSuccess || !callstack_handle)
+            {
+                spdlog::warn("Failed to get call stack handle for entry {}", i);
+                continue;
+            }
+
+            event_info.call_stack_info[i].function =
+                GetString(callstack_handle, kRPVControllerCallstackFunction, i);
+            event_info.call_stack_info[i].arguments =
+                GetString(callstack_handle, kRPVControllerCallstackArguments, i);
+            event_info.call_stack_info[i].line =
+                GetString(callstack_handle, kRPVControllerCallstackLine, i);
+
+            spdlog::debug("Call stack entry {}: function: {}, line: {}, arguments: {}", i,
+                          event_info.call_stack_info[i].function,
+                          event_info.call_stack_info[i].line,
+                          event_info.call_stack_info[i].arguments);
         }
-
-        auto& entry    = m_call_stack_info.call_stack_data[i];
-        entry.function = GetString(callstack_handle, kRPVControllerCallstackFunction, i);
-        entry.arguments =
-            GetString(callstack_handle, kRPVControllerCallstackArguments, i);
-        entry.line = GetString(callstack_handle, kRPVControllerCallstackLine, i);
-
-        spdlog::debug("Call stack entry {}: function: {}, line: {}, arguments: {}", i,
-                      entry.function, entry.line, entry.arguments);
     }
 
     rocprofvis_controller_array_free(req.request_array);
@@ -1886,26 +1969,32 @@ DataProvider::ProcessEventExtendedRequest(data_req_info_t& req)
         return;
     }
 
-    m_event_info.ext_data.clear();
-    m_event_info.ext_data.resize(prop_count);
-
-    for(uint64_t j = 0; j < prop_count; j++)
+    std::shared_ptr<EventRequestParams> event_params =
+        std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
+    if(event_params && m_event_data.count(event_params->m_event_id) > 0)
     {
-        rocprofvis_handle_t* ext_data_handle = nullptr;
-        result                               = rocprofvis_controller_get_object(
-            req.request_array, kRPVControllerArrayEntryIndexed, j, &ext_data_handle);
-        if(result != kRocProfVisResultSuccess || !ext_data_handle)
-        {
-            spdlog::warn("Failed to get extended data handle for entry {}", j);
-            continue;
-        }
+        event_info_t& event_info = m_event_data[event_params->m_event_id];
+        event_info.ext_info.clear();
+        event_info.ext_info.resize(prop_count);
 
-        m_event_info.ext_data[j].category =
-            GetString(ext_data_handle, kRPVControllerExtDataCategory, 0);
-        m_event_info.ext_data[j].name =
-            GetString(ext_data_handle, kRPVControllerExtDataName, 0);
-        m_event_info.ext_data[j].value =
-            GetString(ext_data_handle, kRPVControllerExtDataValue, 0);
+        for(uint64_t j = 0; j < prop_count; j++)
+        {
+            rocprofvis_handle_t* ext_data_handle = nullptr;
+            result                               = rocprofvis_controller_get_object(
+                req.request_array, kRPVControllerArrayEntryIndexed, j, &ext_data_handle);
+            if(result != kRocProfVisResultSuccess || !ext_data_handle)
+            {
+                spdlog::warn("Failed to get extended data handle for entry {}", j);
+                continue;
+            }
+
+            event_info.ext_info[j].category =
+                GetString(ext_data_handle, kRPVControllerExtDataCategory, 0);
+            event_info.ext_info[j].name =
+                GetString(ext_data_handle, kRPVControllerExtDataName, 0);
+            event_info.ext_info[j].value =
+                GetString(ext_data_handle, kRPVControllerExtDataValue, 0);
+        }
     }
 
     rocprofvis_controller_array_free(req.request_array);
@@ -1931,57 +2020,59 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
         return;
     }
 
-    m_flow_info.flow_data.clear();
-    m_flow_info.flow_data.resize(prop_count);
-
-    for(uint64_t j = 0; j < prop_count; j++)
+    std::shared_ptr<EventRequestParams> event_params =
+        std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
+    if(event_params && m_event_data.count(event_params->m_event_id) > 0)
     {
-        rocprofvis_handle_t* flow_control_handle = nullptr;
-        result                                   = rocprofvis_controller_get_object(
-            req.request_array, kRPVControllerArrayEntryIndexed, j, &flow_control_handle);
-        if(result != kRocProfVisResultSuccess || !flow_control_handle)
-        {
-            spdlog::warn("Failed to get flow control handle for entry {}", j);
-            continue;
-        }
+        event_info_t& event_info = m_event_data[event_params->m_event_id];
+        event_info.flow_info.clear();
+        event_info.flow_info.resize(prop_count);
 
-        uint64_t data = 0;
-        result        = rocprofvis_controller_get_uint64(flow_control_handle,
-                                                         kRPVControllerFlowControltId, 0, &data);
-        if(result == kRocProfVisResultSuccess)
+        for(uint64_t j = 0; j < prop_count; j++)
         {
-            m_flow_info.flow_data[j].id = data;
-        }
+            rocprofvis_handle_t* flow_control_handle = nullptr;
+            result = rocprofvis_controller_get_object(req.request_array,
+                                                      kRPVControllerArrayEntryIndexed, j,
+                                                      &flow_control_handle);
+            if(result != kRocProfVisResultSuccess || !flow_control_handle)
+            {
+                spdlog::warn("Failed to get flow control handle for entry {}", j);
+                continue;
+            }
 
-        data   = 0;
-        result = rocprofvis_controller_get_uint64(
-            flow_control_handle, kRPVControllerFlowControlTimestamp, 0, &data);
-        if(result == kRocProfVisResultSuccess)
-        {
-            m_flow_info.flow_data[j].timestamp = data;
-        }
+            uint64_t data = 0;
+            result        = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControltId, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].id  = data;
+            }
 
-        data   = 0;
-        result = rocprofvis_controller_get_uint64(
-            flow_control_handle, kRPVControllerFlowControlTrackId, 0, &data);
-        if(result == kRocProfVisResultSuccess)
-        {
-            m_flow_info.flow_data[j].track_id = static_cast<uint32_t>(data);
-        }
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlTimestamp, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].timestamp  = data;
+            }
 
-        data   = 0;
-        result = rocprofvis_controller_get_uint64(
-            flow_control_handle, kRPVControllerFlowControlDirection, 0, &data);
-        if(result == kRocProfVisResultSuccess)
-        {
-            m_flow_info.flow_data[j].direction = static_cast<uint32_t>(data);
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlTrackId, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].track_id  = data;
+            }
+
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlDirection, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].direction  = data;
+            }
         }
     }
-
-    // Trigger UI to create arrows for flow control events.
-    auto evt = std::make_shared<CreateArrowsViewEvent>(
-        static_cast<int>(RocEvents::kHandleUserArrowCreationEvent));
-    EventManager::GetInstance()->AddEvent(evt);
 
     rocprofvis_controller_array_free(req.request_array);
     req.request_array = nullptr;
@@ -2601,6 +2692,27 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
 }
 
 bool
+DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
+{
+    m_event_data[event_id].track_id   = track_id;
+    const RawTrackEventData* event_track =
+        dynamic_cast<const RawTrackEventData*>(GetRawTrackData(track_id));
+    if(event_track)
+    {
+        for(const rocprofvis_trace_event_t& event : event_track->GetData())
+        {
+            if(event.m_id == event_id)
+            {
+                m_event_data[event_id].basic_info = event;
+                break;
+            }
+        }
+    }
+    return FetchEventExtData(event_id) && FetchEventFlowDetails(event_id) &&
+                       FetchEventCallStackData(event_id);;
+}
+
+bool
 DataProvider::FetchEventExtData(uint64_t event_id)
 {
     if(m_state != ProviderState::kReady)
@@ -2609,9 +2721,6 @@ DataProvider::FetchEventExtData(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
-
-    m_event_info          = {};
-    m_event_info.event_id = event_id;
 
     auto future   = rocprofvis_controller_future_alloc();
     auto outArray = rocprofvis_controller_array_alloc(0);
@@ -2632,6 +2741,7 @@ DataProvider::FetchEventExtData(uint64_t event_id)
         request_info.request_id         = EVENT_EXTENDED_DATA_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventExtendedData;
+        request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
         request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
@@ -2657,9 +2767,6 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
         return false;
     }
 
-    m_flow_info          = {};
-    m_flow_info.event_id = event_id;
-
     auto future   = rocprofvis_controller_future_alloc();
     auto outArray = rocprofvis_controller_array_alloc(0);
     ROCPROFVIS_ASSERT(future != nullptr);
@@ -2679,6 +2786,7 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
         request_info.request_id         = EVENT_FLOW_DATA_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventFlowDetails;
+        request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
         request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
@@ -2704,9 +2812,6 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         return false;
     }
 
-    m_call_stack_info          = {};
-    m_call_stack_info.event_id = event_id;
-
     auto future   = rocprofvis_controller_future_alloc();
     auto outArray = rocprofvis_controller_array_alloc(0);
     ROCPROFVIS_ASSERT(future != nullptr);
@@ -2726,6 +2831,7 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         request_info.request_id         = EVENT_CALL_STACK_DATA_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventCallStack;
+        request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
         request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);

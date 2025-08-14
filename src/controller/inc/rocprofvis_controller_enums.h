@@ -448,6 +448,8 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackQueue = 0x30000011,
     // The HW counter that the track represents - can be NULL
     kRPVControllerTrackCounter = 0x30000012,
+    // The CPU stream that the track represents - can be NULL
+    kRPVControllerTrackStream   = 0x30000013,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {

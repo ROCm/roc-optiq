@@ -21,7 +21,7 @@ SideBar::SideBar(std::shared_ptr<TrackTopology>     topology,
                  std::vector<rocprofvis_graph_t>*   graphs)
 : m_settings(Settings::GetInstance())
 , m_track_topology(topology)
-, m_selection(timeline_selection)
+, m_timeline_selection(timeline_selection)
 , m_graphs(graphs)
 {}
 
@@ -88,6 +88,26 @@ SideBar::Render()
                                                             queue.info->name.c_str());
                                                         RenderTrackItem(
                                                             queue.graph_index);
+                                                        ImGui::PopID();
+                                                    }
+                                                }
+                                                ImGui::Unindent();
+                                            }
+                                            if(!process.streams.empty() &&
+                                               ImGui::CollapsingHeader(
+                                                   process.stream_header.c_str(),
+                                                   CATEGORY_HEADER_FLAGS))
+                                            {
+                                                ImGui::Indent();
+                                                for(const StreamModel& stream :
+                                                    process.streams)
+                                                {
+                                                    if(stream.info)
+                                                    {
+                                                        ImGui::PushID(
+                                                            stream.info->name.c_str());
+                                                        RenderTrackItem(
+                                                            stream.graph_index);
                                                         ImGui::PopID();
                                                     }
                                                 }
@@ -241,7 +261,7 @@ SideBar::RenderTrackItem(const int& index)
     }
     if(ImGui::Button(graph.chart->GetName().c_str()))
     {
-        m_selection->ToggleSelectTrack(graph);
+        m_timeline_selection->ToggleSelectTrack(graph);
     }
     if(!display)
     {

@@ -63,6 +63,8 @@ class Trace : public DmBase{
         // Returns class mutex
         std::shared_mutex*                              Mutex() override { return &m_lock; }
 
+        std::shared_mutex*                              EventPropertyMutex(rocprofvis_dm_event_property_type_t type){ return &m_event_property_lock[type];}
+
         // Method to bind database object
         // @param db - pointer to database
         // @param bind_data - reference to pointer to bind data structure
@@ -257,6 +259,8 @@ class Trace : public DmBase{
         event_level_map_t                               m_event_level_map;
         // object mutex, for shared access
         mutable std::shared_mutex                       m_lock;
+        // object mutex, for shared access
+        mutable std::shared_mutex                       m_event_property_lock[kRPVDMNumEventPropertyTypes];
 
 };
 

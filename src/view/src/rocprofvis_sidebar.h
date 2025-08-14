@@ -29,7 +29,7 @@ private:
 
     Settings&                          m_settings;
     std::shared_ptr<TrackTopology>     m_track_topology;
-    std::shared_ptr<TimelineSelection> m_selection;
+    std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::vector<rocprofvis_graph_t>*   m_graphs;
 };
 

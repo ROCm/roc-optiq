@@ -22,6 +22,16 @@ private:
     bool m_should_open = false;
 };
 
+class MessageDialog {
+public:
+    void Show(const std::string& title, const std::string& message);
+    void Render();
+private:
+    std::string m_title;
+    std::string m_message;
+    bool m_should_open = false;
+};
+
 }  // namespace View
 }  // namespace RocProfVis
 

@@ -1,15 +1,9 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_line_track_item.h"
-#include "imgui.h"
-#include "rocprofvis_controller.h"
-#include "rocprofvis_core_assert.h"
+#include "rocprofvis_settings.h"
 #include "spdlog/spdlog.h"
-#include <algorithm>
-#include <iostream>
-#include <string>
-#include <utility>
-#include <vector>
+#include "imgui.h"
 
 namespace RocProfVis
 {
@@ -54,19 +48,6 @@ void LineTrackItem::UpdateYScaleExtents() {
     m_min_y_str     = flt.substr(0, flt.find('.') + 2);
     flt             = std::to_string(m_max_y);
     m_max_y_str     = flt.substr(0, flt.find('.') + 2);
-}
-
-void
-LineTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
-{
-    m_color_by_value_digits   = color_by_value_digits;
-    m_is_color_value_existant = true;
-}
-
-void
-LineTrackItem::SetShowBoxplot(bool show_boxplot)
-{
-    m_show_boxplot = show_boxplot;
 }
 
 void
@@ -316,29 +297,6 @@ LineTrackItem::ExtractPointsFromData()
         m_data.emplace_back(rocprofvis_data_point_t{track_data[i].m_start_ts, track_data[i].m_value});
     }
     return true;
-}
-
-std::tuple<double, double>
-LineTrackItem::FindMaxMin()
-{
-    if(m_data.size() > 0)
-    {
-        m_min_y = m_data[0].y_value;
-        m_max_y = m_data[0].y_value;
-
-        for(const auto& point : m_data)
-        {
-            if(point.y_value < m_min_y)
-            {
-                m_min_y = point.y_value;
-            }
-            if(point.y_value > m_max_y)
-            {
-                m_max_y = point.y_value;
-            }
-        }
-    }
-    return std::make_tuple(m_min_x, m_max_x);
 }
 
 float

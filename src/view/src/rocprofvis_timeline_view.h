@@ -104,7 +104,7 @@ private:
     std::map<uint64_t, float>             m_track_height_total;  // Track index to height
     TimelineArrow                         m_arrow_layer;
     float                                 m_last_zoom;
-    std::shared_ptr<TimelineSelection>    m_selection;
+    std::shared_ptr<TimelineSelection>    m_timeline_selection;
     struct {
         bool handled;
         uint64_t track_id;

@@ -148,6 +148,41 @@ TrackTopology::UpdateTopology()
                                 }
                             }
                         }
+                        
+                        const std::vector<uint64_t>& stream_ids = process_info->stream_ids;
+                        m_topology.nodes[i].processes[j].streams.resize(stream_ids.size());
+                        m_topology.nodes[i].processes[j].stream_header =
+                            "Streams (" + std::to_string(stream_ids.size()) + ")";
+                        for(int k = 0; k < stream_ids.size(); k++)
+                        {
+                            m_topology.nodes[i].processes[j].stream_lut[stream_ids[k]] =
+                                &m_topology.nodes[i].processes[j].streams[k];
+                            const stream_info_t* stream_info =
+                                m_data_provider.GetStreamInfo(stream_ids[k]);
+                            if(stream_info)
+                            {
+                                const device_info_t* device_info =
+                                    m_data_provider.GetDeviceInfo(stream_info->device_id);
+                                m_topology.nodes[i].processes[j].streams[k].info =
+                                    stream_info;
+                                if(device_info)
+                                {
+                                    m_topology.nodes[i]
+                                        .processes[j]
+                                        .streams[k]
+                                        .info_table = InfoTable{
+                                        { { InfoTable::Cell{
+                                                device_info->type + " " +
+                                                    std::to_string(
+                                                        device_info->type_index),
+                                                false },
+                                            InfoTable::Cell{ device_info->product_name,
+                                                             false } } }
+                                    };
+                                }
+                            }
+                        }
+                        
                         const std::vector<uint64_t>& thread_ids =
                             process_info->thread_ids;
                         m_topology.nodes[i].processes[j].threads.resize(
@@ -253,6 +288,14 @@ TrackTopology::UpdateGraphs()
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
                             ->queue_lut[id]
+                            ->graph_index = index;
+                        break;
+                    }
+                    case track_info_t::Topology::Stream:
+                    {
+                        m_topology.node_lut[node_id]
+                            ->process_lut[process_id]
+                            ->stream_lut[id]
                             ->graph_index = index;
                         break;
                     }

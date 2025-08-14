@@ -43,12 +43,15 @@ typedef struct SQLInsertParams
 
 typedef enum rocprofvis_db_sqlite_query_type_t
 {
-    kRPVSqliteQueryTrack,
-    kRPVSqliteQuerySlice,
-    kRPVSqliteQueryTable,
-    kRPVSqliteQueryLevel,
-    kRPVSqliteCacheTableName,
-    kRPVNumSqliteQueryTypes
+    kRPVSourceQueryGeneric = 0,
+    kRPVSourceQueryTrackByQueue = 0,
+    kRPVSourceQueryTrackByStream = 1,
+    kRPVCacheTableName = 1,
+    kRPVSourceQueryLevel = 2,
+    kRPVSourceQuerySliceByQueue = 3,
+    kRPVSourceQuerySliceByStream = 4,
+    kRPVSourceQueryTable = 5,
+    kRPVNumSourceQueryTypes = 6
 } rocprofvis_db_sqlite_query_type_t;
 
 // structure to pass parameters to sqlite3_exec callbacks
@@ -62,7 +65,7 @@ typedef struct{
     // callback method pointer
     RpvSqliteExecuteQueryCallback callback;
     // pointer to query string, convenient for multiuse callback debugging
-    rocprofvis_dm_charptr_t query[kRPVNumSqliteQueryTypes];
+    const char*              query[kRPVNumSourceQueryTypes];
     rocprofvis_dm_track_id_t track_id;
 } rocprofvis_db_sqlite_callback_parameters;
 
@@ -89,8 +92,9 @@ class SqliteDatabase : public Database
 
     protected:
         // Method to create SQL table
-        // @param create_query - table creation query 
-        // @param insert_query - data insertion query 
+        // @param table_name - table name 
+        // @param parameters - column insert parameters 
+        // @param num_cols - number of columns
         // @param num_row - number of rows
         // @param insert_func - lambda method for data insertion
         // @return status of operation
@@ -99,6 +103,10 @@ class SqliteDatabase : public Database
                                               uint8_t num_cols,
                                               size_t num_row,
                                               std::function<void(sqlite3_stmt* stmt, int index)> insert_func);
+        // Method to delete SQL table
+        // @param table_name - table name 
+        // @return status of operation
+        rocprofvis_dm_result_t DropSQLTable(const char* table_name);
         // Method for SQL query execution without any callback
         // @param future - future object for asynchronous execution status
         // @param query - SQL query
@@ -111,7 +119,7 @@ class SqliteDatabase : public Database
         // @param callback - sqlite3_exec callback method for data processing
         // @return status of operation
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
-                                                const char* query, 
+                                                std::vector<const char*> query, 
                                                 RpvSqliteExecuteQueryCallback callback);
         // Method for single row and column SQL query execution returning result of the query as string 
         // @param future - future object for asynchronous execution status
@@ -163,7 +171,6 @@ class SqliteDatabase : public Database
         // @return status of operation
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
                                                 const char* query, 
-                                                const char* subquery,
                                                 RpvSqliteExecuteQueryCallback callback);
         // Method for SQL query execution with multi-use subquery and handle parameter. 
         // Used for callbacks storing data into container with rocprofvis_dm_handle_t handle
@@ -188,10 +195,8 @@ class SqliteDatabase : public Database
         // @param handle - handle of a container processed rows to be stored
         // @param callback - sqlite3_exec callback method for data processing
         // @return status of operation
-        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query,
-                                               const char* level_subquery,
-                                               const char* timeline_subquery,
-                                               const char* table_subquery,
+        rocprofvis_dm_result_t ExecuteSQLQuery(
+            Future* future, rocprofvis_dm_charptr_t query[kRPVNumSourceQueryTypes],
                                                RpvSqliteExecuteQueryCallback callback);
 
         // Method to check if table exists in database
@@ -223,7 +228,6 @@ class SqliteDatabase : public Database
 
         sqlite3* GetServiceConnection();
 
-
         // method to run SQL query
         // @param db_conn - database connection 
         // @param query - SQL query
@@ -248,6 +252,7 @@ class SqliteDatabase : public Database
         sqlite3* GetConnection(); 
         
         void ReleaseConnection(sqlite3* conn);
+        bool isServiceColumn(char* name);
 
 };
 

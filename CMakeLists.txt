@@ -67,8 +67,9 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_debug_window.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
-    src/view/src/widgets/rocprofvis_confirmation_dialog.cpp
-)
+    src/view/src/widgets/rocprofvis_dialog.cpp
+    src/view/src/widgets/rocprofvis_notification_manager.cpp
+    )
 
 if(COMPUTE_UI_SUPPORT) 
 list(APPEND VIEW_FILES

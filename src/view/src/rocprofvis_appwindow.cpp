@@ -10,7 +10,8 @@
 #include "rocprofvis_settings.h"
 #include "rocprofvis_version.h"
 #include "widgets/rocprofvis_debug_window.h"
-#include "widgets/rocprofvis_confirmation_dialog.h"
+#include "widgets/rocprofvis_dialog.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
@@ -244,8 +245,10 @@ AppWindow::Render()
     RenderFileDialogs();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
-
 #endif
+
+    //render notifications last
+    NotificationManager::GetInstance().Render();
 }
 
 void

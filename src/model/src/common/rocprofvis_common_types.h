@@ -68,6 +68,7 @@ typedef union{
 #define NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS 3
 #define TRACK_ID_NODE 0
 #define TRACK_ID_PID 1
+#define TRACK_ID_STREAM 1
 #define TRACK_ID_AGENT 1
 #define TRACK_ID_PID_OR_AGENT 1
 #define TRACK_ID_TID 2
@@ -76,8 +77,10 @@ typedef union{
 #define TRACK_ID_COUNTER 3
 #define TRACK_ID_CATEGORY 3
 
+
 typedef struct
 {
+    uint64_t id;
     uint64_t start_time;
     uint64_t end_time;
     uint32_t level;
@@ -85,10 +88,12 @@ typedef struct
 
 typedef enum rocprofvis_db_query_type_t
 {
-    kRPVQuerySlice,
+    kRPVQuerySliceByQueue,
+    kRPVQuerySliceByStream,
     kRPVQueryTable,
     kRPVQueryLevel,
-    kRPVNumQueryTypes
+    kRPVNumQueryTypes,
+    kRPVQuerySliceByTrackSliceQuery,
 } rocprofvis_db_query_type_t;
 
 typedef struct {
@@ -115,7 +120,7 @@ typedef struct {
     // maximum timestamp
     rocprofvis_dm_timestamp_t max_ts;
     // list array to keep current events stack
-    std::list<rocprofvis_event_timing_params_t> m_event_timing_params;
+    std::list<rocprofvis_event_timing_params_t> m_active_events;
     // track query builing string, keep here for debugging purposes
     std::string async_query;
     // minimum level or value

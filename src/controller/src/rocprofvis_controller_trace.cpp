@@ -388,6 +388,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                 if(nullptr != object2wait)
                 {
                     std::map<uint64_t, Track*> queue_to_track;
+                    std::map<uint64_t, Track*> stream_to_track;
                     std::map<uint64_t, Track*> thread_to_track;
                     std::map<uint64_t, Track*> counter_to_track;
                     
@@ -422,7 +423,10 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                         dm_track_handle, kRPVDMTrackCategoryEnumUInt64,
                                         0);
                                 if(dm_track_type == kRocProfVisDmRegionTrack ||
-                                   dm_track_type == kRocProfVisDmKernelTrack ||
+                                   dm_track_type == kRocProfVisDmKernelDispatchTrack ||
+                                   dm_track_type == kRocProfVisDmMemoryAllocationTrack ||
+                                   dm_track_type == kRocProfVisDmMemoryCopyTrack ||
+                                   dm_track_type == kRocProfVisDmStreamTrack ||
                                    dm_track_type == kRocProfVisDmPmcTrack)
                                 {
                                     auto   type = (dm_track_type == kRocProfVisDmPmcTrack)
@@ -536,6 +540,13 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 uint64_t val = std::strtoull(
                                                     value.c_str(), &end, 10);
                                                 queue_to_track[val] = track;
+                                            }
+                                            else if(category == "Stream" && name == "id")
+                                            {
+                                                char*    end = nullptr;
+                                                uint64_t val = std::strtoull(
+                                                    value.c_str(), &end, 10);
+                                                stream_to_track[val] = track;
                                             }
                                             else if(category == "Thread" && name == "id")
                                             {
@@ -2256,6 +2267,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                    kRPVControllerStreamId)
                                                                 {
                                                                     auto it = processors.find(stream_to_device[val]);
+
                                                                     if(it !=
                                                                        processors.end())
                                                                     {
@@ -2302,6 +2314,19 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                             num_queues,
                                                                             (rocprofvis_handle_t*)
                                                                                 q);
+                                                                    }
+                                                                    auto it_q = stream_to_track.find(val);
+                                                                    if(it_q != stream_to_track.end() && it_q->second != nullptr)
+                                                                    {
+                                                                        Track* t = it_q->second;
+                                                                        t->SetObject(kRPVControllerTrackStream,
+                                                                            0, (rocprofvis_handle_t*)stream);
+                                                                        stream->SetObject(kRPVControllerStreamTrack,
+                                                                            0, (rocprofvis_handle_t*)t);
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        spdlog::warn("Queue ID {} not found in queue_to_track map", val);
                                                                     }
                                                                 }
                                                             }

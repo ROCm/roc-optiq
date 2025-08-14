@@ -13,6 +13,7 @@ class SideBar;
 class AnalysisView;
 class TimelineSelection;
 class TrackTopology;
+class MessageDialog;
 
 class TraceView : public RocWidget
 {
@@ -47,12 +48,18 @@ private:
 
     typedef struct popup_info_t{
         bool show_popup;
-        bool success;
+        std::string title;
+        std::string message;
     } popup_info_t;
     
-    popup_info_t m_save_trace_popup_info;
+    popup_info_t m_popup_info;
+
+    std::unique_ptr<MessageDialog> m_message_dialog;
 
     EventManager::SubscriptionToken       m_tabselected_event_token;
+    EventManager::SubscriptionToken       m_event_selection_changed_event_token;
+
+    std::string m_save_notification_id;
 };
 
 }  // namespace View

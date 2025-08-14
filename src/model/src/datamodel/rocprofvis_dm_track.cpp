@@ -45,7 +45,6 @@ std::shared_mutex* Track::Mutex()
 rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, nullptr);
-    if (nullptr == m_track_params) return nullptr;
     if (m_track_params->track_category == kRocProfVisDmPmcTrack)
     {
         try{
@@ -170,9 +169,12 @@ rocprofvis_dm_charptr_t  Track::CategoryString(){
     switch (m_track_params->track_category){
         case kRocProfVisDmPmcTrack: return "Counter";
         case kRocProfVisDmRegionTrack: return "CPU Thread";
-        case kRocProfVisDmKernelTrack: return "GPU Queue";
+        case kRocProfVisDmKernelDispatchTrack: return "GPU Queue";
+        case kRocProfVisDmMemoryAllocationTrack: return "Memory allocation";
+        case kRocProfVisDmMemoryCopyTrack: return "Memory copy";
         case kRocProfVisDmSQTTTrack: return "Shader Execution";
         case kRocProfVisDmNICTrack: return "Network Activity";
+        case kRocProfVisDmStreamTrack: return "GPU Stream";
     }
     return "Invalid track";
 }

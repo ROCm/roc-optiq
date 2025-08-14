@@ -284,7 +284,10 @@ int main(int argc, char** argv)
                                                 for (int j = first_record; (j < num_records) && (j < first_record+ LIST_SIZE_LIMIT); j++)
                                                 {
                                                     uint64_t timestamp = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTimestampUInt64Indexed, j);
-                                                    if (track_category == rocprofvis_dm_track_category_t::kRocProfVisDmRegionTrack || track_category == rocprofvis_dm_track_category_t::kRocProfVisDmKernelTrack)
+                                                if(track_category == rocprofvis_dm_track_category_t::kRocProfVisDmRegionTrack ||
+                                                   track_category == rocprofvis_dm_track_category_t::kRocProfVisDmKernelDispatchTrack ||
+                                                   track_category == rocprofvis_dm_track_category_t::kRocProfVisDmMemoryAllocationTrack ||
+                                                    track_category == rocprofvis_dm_track_category_t::kRocProfVisDmMemoryCopyTrack)
                                                     {
                                                         int64_t duration = rocprofvis_dm_get_property_as_int64(slice, kRPVDMEventDurationInt64Indexed, j);
                                                         if (duration < 0)

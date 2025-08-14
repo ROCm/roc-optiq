@@ -97,11 +97,17 @@ typedef enum rocprofvis_dm_track_category_t {
     // Object is region track (HIP calls)
     kRocProfVisDmRegionTrack = 2,
     // Object is kernel track (kernel execution)
-    kRocProfVisDmKernelTrack = 3,
+    kRocProfVisDmKernelDispatchTrack = 3,
     // Object is SQTT track
     kRocProfVisDmSQTTTrack = 4,
     // Object is NIC track
-    kRocProfVisDmNICTrack = 5
+    kRocProfVisDmNICTrack = 5,
+    // Object is memory allocation track
+    kRocProfVisDmMemoryAllocationTrack = 6,
+    // Object is memory copy track
+    kRocProfVisDmMemoryCopyTrack = 7,
+    // Object is stream track
+    kRocProfVisDmStreamTrack = 8,
 } rocprofvis_dm_track_category_t;
 
 //Event operation
@@ -313,6 +319,8 @@ typedef enum rocprofvis_dm_event_property_type_t {
     kRPVDMEventStackTrace,
     // Extended data
     kRPVDMEventExtData,
+    // Number of event property types
+    kRPVDMNumEventPropertyTypes,
 } rocprofvis_dm_event_property_type_t;
 
 // Type for sort order

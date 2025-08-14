@@ -2,12 +2,72 @@
 
 #include "rocprofvis_settings_panel.h"
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <rocprofvis_settings.h>
 
 namespace RocProfVis
 {
 namespace View
 {
+bool
+SettingsPanel::CustomRadioButtonHollow(const char* label, bool active)
+{
+    auto& settings     = Settings::GetInstance();
+    auto& font_manager = settings.GetFontManager();
+    float font_size    = font_manager.GetCurrentFontSizeIndex();
+    float radius       = font_size  ;   //Radio Size
+
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    if(window->SkipItems) return false;
+
+    ImGuiContext&     g     = *ImGui::GetCurrentContext();
+    const ImGuiStyle& style = g.Style;
+    const ImGuiID     id    = window->GetID(label);
+
+    ImVec2 label_size = ImGui::CalcTextSize(label, NULL, true);
+
+    float button_height = radius * 2;
+    float center_y =
+        window->DC.CursorPos.y + (ImGui::GetFrameHeight() - button_height) * 0.5f;
+
+    ImVec2 pos = ImVec2(window->DC.CursorPos.x, center_y);
+    ImRect total_bb(
+        pos,
+        ImVec2(pos.x + radius * 2 + style.ItemInnerSpacing.x + label_size.x,
+               pos.y + (label_size.y > button_height ? label_size.y : button_height)));
+    ImGui::ItemSize(total_bb, style.FramePadding.y);
+    if(!ImGui::ItemAdd(total_bb, id)) return false;
+
+    bool hovered, held;
+    bool pressed = ImGui::ButtonBehavior(total_bb, id, &hovered, &held);
+
+    ImU32 col_bg     = settings.GetColor(RocProfVis::View::Colors::kButton);
+    ImU32 col_border = settings.GetColor(RocProfVis::View::Colors::kAccentRedHover);
+    ImU32 col_cutout = settings.GetColor(RocProfVis::View::Colors::kBgPanel);
+
+    if(held && hovered)
+        col_bg = settings.GetColor(RocProfVis::View::Colors::kButtonActive);
+    else if(hovered)
+        col_bg = settings.GetColor(RocProfVis::View::Colors::kButtonHovered);
+
+    ImVec2 center(pos.x + radius, pos.y + radius);
+    window->DrawList->AddCircleFilled(center, radius, col_bg, 16);
+    window->DrawList->AddCircle(center, radius, col_border, 16, 1.5f);
+
+    if(active)
+    {
+        float cutout_radius = radius * 0.5f;
+        window->DrawList->AddCircleFilled(center, cutout_radius, col_cutout, 16);
+        window->DrawList->AddCircle(center, cutout_radius, col_border, 16, 1.0f);
+    }
+
+    float text_y = pos.y + (button_height - label_size.y) * 0.5f;
+    ImGui::RenderText(ImVec2(pos.x + radius * 2 + style.ItemInnerSpacing.x, text_y),
+                      label);
+
+    return pressed;
+}
+
 bool
 SettingsPanel::IsOpen()
 {
@@ -66,13 +126,19 @@ SettingsPanel::Render()
         ImGui::Spacing();
         ImGui::Separator();
 
-        // Theme selection
+        // Theme selection (custom hollow radio buttons)
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
         ImGui::TextUnformatted("Theme");
         ImGui::SameLine(120);
-        ImGui::RadioButton("Dark", &theme, 0);
+
+        bool dark_selected  = (theme == 0);
+        bool light_selected = (theme == 1);
+
+        if(CustomRadioButtonHollow("Dark", dark_selected)) theme = 0;
         ImGui::SameLine();
-        ImGui::RadioButton("Light", &theme, 1);
+        if(CustomRadioButtonHollow("Light", light_selected)) theme = 1;
+        ImGui::Dummy(ImVec2(0, 20));  // Add spacing after radio buttons
+
         if(ImGui::IsItemHovered())
             ImGui::SetTooltip("Switch between dark and light UI themes.");
         ImGui::PopStyleVar();
@@ -89,15 +155,27 @@ SettingsPanel::Render()
         ImGui::Separator();
 
         // DPI-based scaling toggle
-        bool dpi_scaling = settings.IsDPIBasedScaling();
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-        ImGui::Checkbox("DPI-based Font Scaling", &dpi_scaling);
+        bool dpi_scaling = settings.IsDPIBasedScaling();
+        ImGui::Dummy(ImVec2(0, 6)); 
+        ImGui::Dummy(ImVec2(4, 0));
+        ImGui::SameLine();
+        if(ImGui::Checkbox("DPI-based Font Scaling", &dpi_scaling))
+            settings.SetDPIBasedScaling(dpi_scaling);
+
+        // Draw a border around the checkbox square only
+        ImVec2 box_min = ImGui::GetItemRectMin();
+        float  box_sz  = ImGui::GetFrameHeight();
+        ImVec2 box_max = ImVec2(box_min.x + box_sz, box_min.y + box_sz);
+
+        ImU32 border_col = settings.GetColor(RocProfVis::View::Colors::kAccentRedHover);
+        ImGui::GetWindowDrawList()->AddRect(box_min, box_max, border_col, 6.0f, 0, 2.0f);
+
         if(ImGui::IsItemHovered())
             ImGui::SetTooltip("Automatically scale font size based on display DPI. "
                               "Unchecked if you adjust font size manually.");
-        settings.SetDPIBasedScaling(dpi_scaling);
         ImGui::PopStyleVar();
-
+        ImGui::Dummy(ImVec2(0, 6)); 
         ImGui::Spacing();
         ImGui::Separator();
 
@@ -184,7 +262,7 @@ SettingsPanel::Render()
             settings.SetDPIBasedScaling(true);
             settings.LightMode();
 
-            //Set font based on DPI again
+            // Set font based on DPI again
             settings.GetFontManager().SetFontSize(
                 settings.GetFontManager().GetFontSizeIndexForDPI(settings.GetDPI()));
             m_preview_font_size = -1;

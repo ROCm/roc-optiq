@@ -60,7 +60,6 @@ rocprofvis_result_t Future::Cancel()
             {
                 rocprofvis_db_future_cancel(future);
             }
-            result = kRocProfVisResultSuccess;
         }
     }
     return result;

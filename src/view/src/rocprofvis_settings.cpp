@@ -464,6 +464,7 @@ Settings::SetDPI(float DPI)
 {
     m_DPI = DPI;
 }
+ 
 
 float
 Settings ::GetDPI()

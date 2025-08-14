@@ -107,6 +107,8 @@ SettingsPanel::Render()
         ImGui::TextUnformatted("Font Size");
         ImGui::SameLine(120);
 
+        ImGui::BeginDisabled(dpi_scaling);  // Disable font controls if DPI scaling is on
+
         // font buttons
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 4));
@@ -139,6 +141,8 @@ SettingsPanel::Render()
             settings.SetDPIBasedScaling(false);
         }
         ImGui::PopStyleVar(2);
+
+        ImGui::EndDisabled();  // End disabling font controls
 
         if(ImGui::IsItemHovered())
             ImGui::SetTooltip("Increase or decrease the font size for the UI.");
@@ -176,7 +180,13 @@ SettingsPanel::Render()
                                   RocProfVis::View::Colors::kButtonActive)));
         if(ImGui::Button("Restore to Default Settings", ImVec2(-1, 0)))
         {
-            m_is_open           = false;
+            m_is_open = false;
+            settings.SetDPIBasedScaling(true);
+            settings.LightMode();
+
+            //Set font based on DPI again
+            settings.GetFontManager().SetFontSize(
+                settings.GetFontManager().GetFontSizeIndexForDPI(settings.GetDPI()));
             m_preview_font_size = -1;
         }
         ImGui::PopStyleColor(3);

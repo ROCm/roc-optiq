@@ -25,7 +25,7 @@ namespace View
 {
 
 // 20% top and bottom of the window size
-constexpr float  REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
+constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 
 TimelineView::TimelineView(DataProvider&                      dp,
                            std::shared_ptr<TimelineSelection> timeline_selection)
@@ -52,7 +52,8 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_scroll_position_x(0)
 , m_scrollbar_location_as_percentage(0)
 , m_artifical_scrollbar_active(false)
-, m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME, TimelineSelection::INVALID_SELECTION_TIME })
+, m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
+                         TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(static_cast<uint64_t>(-1))
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_settings(Settings::GetInstance())
@@ -121,9 +122,7 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
     ImVec2      clip_min        = window_position;
-    ImVec2      clip_max =
-        ImVec2(m_graph_size.x + window_position.x,
-               m_graph_size.y );
+    ImVec2      clip_max = ImVec2(m_graph_size.x + window_position.x, m_graph_size.y);
 
     draw_list->PushClipRect(clip_min, clip_max, true);
 
@@ -140,8 +139,9 @@ TimelineView::ScrollToTrack(const uint64_t& track_id)
 {
     if(m_track_height_total.count(track_id) > 0)
     {
-        m_scroll_position = std::min(m_content_max_y_scroll, static_cast<double>(m_track_height_total[track_id]));
-        ImGui::SetScrollY(m_scroll_position); 
+        m_scroll_position = std::min(m_content_max_y_scroll,
+                                     static_cast<double>(m_track_height_total[track_id]));
+        ImGui::SetScrollY(m_scroll_position);
     }
 }
 void
@@ -497,7 +497,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                 m_highlighted_region.first =
                     m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
             }
-            else if(m_highlighted_region.second == TimelineSelection::INVALID_SELECTION_TIME)
+            else if(m_highlighted_region.second ==
+                    TimelineSelection::INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.second =
                     m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
@@ -1127,11 +1128,11 @@ TimelineView::MakeGraphView()
                                              static_cast<float>(track_info->max_ts));
 
                 rocprofvis_graph_t temp_flame;
-                temp_flame.chart          = flame;
-                temp_flame.graph_type     = rocprofvis_graph_t::TYPE_FLAMECHART;
-                temp_flame.display        = true;
-                temp_flame.selected       = false;
-                m_graphs[track_info->index]            = std::move(temp_flame);
+                temp_flame.chart            = flame;
+                temp_flame.graph_type       = rocprofvis_graph_t::TYPE_FLAMECHART;
+                temp_flame.display          = true;
+                temp_flame.selected         = false;
+                m_graphs[track_info->index] = std::move(temp_flame);
                 m_track_height_total[track_info->index] =
                     track_height_total;  // Store the height of the flame chart
                 track_height_total += flame->GetTrackHeight();
@@ -1158,11 +1159,11 @@ TimelineView::MakeGraphView()
                 }
 
                 rocprofvis_graph_t temp;
-                temp.chart          = line;
-                temp.graph_type     = rocprofvis_graph_t::TYPE_LINECHART;
-                temp.display        = true;
-                temp.selected       = false;
-                m_graphs[track_info->index]                 = std::move(temp);
+                temp.chart                  = line;
+                temp.graph_type             = rocprofvis_graph_t::TYPE_LINECHART;
+                temp.display                = true;
+                temp.selected               = false;
+                m_graphs[track_info->index] = std::move(temp);
                 m_track_height_total[track_info->index] =
                     track_height_total;  // Store the height of the line chart
                 track_height_total += line->GetTrackHeight();
@@ -1297,7 +1298,8 @@ TimelineView::HandleTopSurfaceTouch()
                                    container_pos.y + m_graph_size.y);
 
     bool is_mouse_in_sidebar = ImGui::IsMouseHoveringRect(sidebar_min, sidebar_max);
-    bool is_mouse_in_graph   = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max) && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
+    bool is_mouse_in_graph = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max) &&
+                             !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
     ImGuiIO& io = ImGui::GetIO();
 

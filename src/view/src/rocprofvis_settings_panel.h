@@ -20,7 +20,8 @@ public:
     void SetOpen(bool);
 
 private:
-    bool m_is_open = false;
+    bool m_is_open           = false;
+    int  m_preview_font_size = -1;
 };
 
 }  // namespace View

@@ -21,8 +21,8 @@ namespace RocProfVis
 namespace View
 {
 FontManager::FontManager()
-: m_font_sizes({ 7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-                20, 21, 23, 25, 27, 29, 33, 37, 41, 49, 57, 65 })
+: m_font_sizes(
+      { 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 20, 21, 23, 25, 27, 29, 33 })
 {}
 
 FontManager::~FontManager() {}
@@ -33,11 +33,24 @@ FontManager::GetFontSizes()
     // Return a vector of font sizes
     return m_font_sizes;
 }
+ImFont*
+FontManager::GetIconFontByIndex(int idx)
+{
+    if(idx < 0 || idx >= static_cast<int>(m_all_icon_fonts.size())) return nullptr;
+    return m_all_icon_fonts[idx];
+}
+
 int
 FontManager::GetCurrentFontSizeIndex()
 {
     // Return the font size index for the default font type
     return m_font_size_indices[static_cast<int>(FontType::kDefault)];
+}
+ImFont*
+FontManager::GetFontByIndex(int idx)
+{
+    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return nullptr;
+    return m_all_fonts[idx];
 }
 
 int
@@ -74,6 +87,7 @@ FontManager::SetFontSize(int size_index)
     {
         m_font_size_indices[i] = size_index;
         m_fonts[i]             = m_all_fonts[size_index];
+        m_icon_fonts[i]        = m_all_icon_fonts[size_index];
     }
 
     ImGui::GetIO().FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
@@ -125,6 +139,18 @@ FontManager::Init()
         if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, m_font_sizes[sz]);
         if(!font) font = io.Fonts->AddFontDefault();
         m_all_fonts[sz] = font;
+    }
+
+    // Load all icon fonts
+    m_all_icon_fonts.clear();
+    m_all_icon_fonts.resize(num_sizes, nullptr);
+
+    for(int sz = 0; sz < num_sizes; ++sz)
+    {
+        ImFont* icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
+            &icon_font_compressed_data, icon_font_compressed_size, m_font_sizes[sz],
+            &config, icon_ranges);
+        m_all_icon_fonts[sz] = icon_font;
     }
 
     // Set m_fonts to currently selected size for each FontType
@@ -462,10 +488,21 @@ Settings::GetColorWheel()
 {
     return m_flame_color_wheel;
 }
+bool
+Settings::IsDPIBasedScaling() const
+{
+    return m_dpi_based_scaling;
+}
 
+void
+Settings::SetDPIBasedScaling(bool enabled)
+{
+    m_dpi_based_scaling = enabled;
+}
 Settings::Settings()
 : m_color_store(static_cast<int>(Colors::__kLastColor))
 , m_DPI(1)
+, m_dpi_based_scaling(true)
 , m_flame_color_wheel({
 
       IM_COL32(0, 114, 188, 204), IM_COL32(0, 158, 115, 204), IM_COL32(240, 228, 66, 204),

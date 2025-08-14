@@ -13,8 +13,8 @@
 #include <stdlib.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
-#include <utility>
 #include "widgets/rocprofvis_debug_window.h"
+#include <utility>
 
 std::pair<GLFWimage, unsigned char*>
 glfw_create_icon()
@@ -114,10 +114,9 @@ main(int, char**)
 
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
-              
+
                     rocprofvis_view_render();
 
-                     
                     ImGui::Render();
                     ImDrawData* draw_data    = ImGui::GetDrawData();
                     const bool  is_minimized = (draw_data->DisplaySize.x <= 0.0f ||

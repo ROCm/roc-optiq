@@ -572,14 +572,14 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                         "SELECT E.id as id, 4, E.correlation_id, MC.nid, MC.dst_agent_id, coalesce(MC.queue_id,0), MC.start "
                         "FROM rocpd_region R "
                         "INNER JOIN rocpd_event E ON R.event_id = E.id "
-                        "INNER JOIN _rocpd_memory_copy MC ON MC.id = E.correlation_id "
+                        "INNER JOIN rocpd_memory_copy MC ON MC.id = E.correlation_id "
                         "WHERE R.id == ";
             query << event_id.bitfield.event_id;
                         " UNION "
                         "SELECT E.id as id, 3, E.correlation_id, MA.nid, MA.agent_id, coalesce(MA.queue_id,0), MA.start "
                         "FROM rocpd_region R "
                         "INNER JOIN rocpd_event E ON R.event_id = E.id "
-                        "INNER JOIN _rocpd_memory_copy MA ON MA.id = E.correlation_id "
+                        "INNER JOIN rocpd_memory_copy MA ON MA.id = E.correlation_id "
                         "WHERE R.id == ";
             query << event_id.bitfield.event_id;
                         query << ");";
@@ -600,7 +600,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryCopy)
         {
             query <<    "SELECT E.id as id, 1, E.correlation_id, R.nid, R.pid, R.tid, R.end "
-                        "FROM _rocpd_memory_copy MC "
+                        "FROM rocpd_memory_copy MC "
                         "INNER JOIN rocpd_event E ON MC.event_id = E.id "
                         "INNER JOIN rocpd_region R ON R.id = E.correlation_id "
                         "WHERE MC.id == ";

@@ -207,16 +207,18 @@ TrackItem::RenderMetaArea()
         content_size.x -= m_metadata_padding.x * 2;
         content_size.y -= m_metadata_padding.x * 2;
 
-        if(HasPendingRequests())
-        {
-            if(ImGui::Button("Cancel Request"))
-            {
-                for(const auto& [request_id, req] : m_pending_requests)
-                {
-                    m_data_provider.CancelRequest(request_id);
-                }
-            }
-        }
+        // TODO: For testing and debugging request cancellation on the backend
+        // Remove once this feature is stable
+        // if(HasPendingRequests())
+        // {
+        //     if(ImGui::Button("Cancel Request"))
+        //     {
+        //         for(const auto& [request_id, req] : m_pending_requests)
+        //         {
+        //             m_data_provider.CancelRequest(request_id);
+        //         }
+        //     }
+        // }
 
         ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
                                (menu_button_width + 2 * m_metadata_padding.x));
@@ -425,12 +427,10 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
     if(!m_pending_requests.erase(request_id))
     {
         spdlog::warn("Failed to erase pending request {}", request_id);
-    } else {
-        //spdlog::debug("Successfully erased pending request {}", request_id);
     }
 
     result = ExtractPointsFromData();
-
+    
     return result;
 }
 
@@ -450,18 +450,20 @@ TrackItem::ReleaseData()
     }
 
     // Clear pending requests
-    for(const auto& [request_id, req] : m_pending_requests) {
-        spdlog::debug("ReleaseData: Found pending request {} for track {}", request_id, m_id);
-        result = m_data_provider.CancelRequest(request_id);
-        if(!result)
+    for(auto it = m_pending_requests.begin(); it != m_pending_requests.end();)
+    {
+        const auto request_id = it->first;
+        if(m_data_provider.CancelRequest(request_id))
         {
-            //Todo
+            it = m_pending_requests.erase(it);
+        }
+        else
+        {
+            spdlog::warn("Failed to cancel pending request {} for track {}", request_id,
+                          m_id);
+            ++it;
         }
     }
-
-    // For now forcefully clear pending requests
-    // This is a temporary solution, ideally we should handle cancelling pending requests properly
-    m_pending_requests.clear();
 
     return result;
 }

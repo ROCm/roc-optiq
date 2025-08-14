@@ -698,7 +698,6 @@ DataProvider::HandleLoadTrackMetaData()
                 delete[] str_buffer;
                 str_buffer_length = length + 1;
                 str_buffer        = new char[str_buffer_length];
-                spdlog::debug("Resizing str buffer to {}", str_buffer_length);
             }
             length += 1;
             result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
@@ -1029,9 +1028,6 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
                 request_info.request_time = std::chrono::steady_clock::now();
                 m_requests.emplace(request_info.request_id, request_info);
 
-                spdlog::debug("Fetching track data {} from controller {}",
-                            request_params.m_track_id,
-                            reinterpret_cast<unsigned long long>(m_trace_controller));
                 return {true, request_id};
             }
             else 
@@ -1621,7 +1617,7 @@ DataProvider::CancelRequest(uint64_t request_id)
         }
         else
         {
-            spdlog::debug("Failed to cancel request id: {}", request_id);
+            spdlog::debug("Failed to cancel request id: {}, result: {}", request_id, static_cast<int>(result));
         }
     }
     else
@@ -2587,7 +2583,6 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
             delete[] str_buffer;
             str_buffer_length = length + 1;
             str_buffer        = new char[str_buffer_length];
-            spdlog::debug("Resizing str buffer to {}", str_buffer_length);
         }
         length += 1;
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,

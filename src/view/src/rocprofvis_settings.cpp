@@ -20,6 +20,7 @@ namespace RocProfVis
 {
 namespace View
 {
+
 FontManager::FontManager()
 : m_font_sizes(
       { 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 20, 21, 23, 25, 27, 29, 33 })
@@ -72,6 +73,7 @@ FontManager::GetFontSizeIndexForDPI(float dpi)
            std::abs(m_font_sizes[best_index] - scaled_size))
             best_index = i;
     }
+
     return best_index;
 }
 
@@ -464,7 +466,6 @@ Settings::SetDPI(float DPI)
 {
     m_DPI = DPI;
 }
- 
 
 float
 Settings ::GetDPI()
@@ -511,13 +512,59 @@ Settings::Settings()
       IM_COL32(213, 94, 0, 204), IM_COL32(0, 204, 102, 204), IM_COL32(230, 159, 0, 204),
       IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204) })
 , m_use_horizontal_rendering(true)
+, m_display_settings_current(DisplaySettings())
 {
     InitStyling();
     LightMode();
+
+    m_display_settings_initial                   = DisplaySettings();
+    m_display_settings_initial.dpi               = m_DPI;
+    m_display_settings_initial.use_dark_mode     = false;
+    m_display_settings_initial.dpi_based_scaling = true;
+    m_display_settings_initial.font_size_index   = 6;  // Default to 12pt font size
 }
 
 Settings::~Settings() {}
+void
+Settings::UpdateCurrentDisplaySettings()
+{
+    m_display_settings_current.dpi               = m_DPI;
+    m_display_settings_current.use_dark_mode     = m_use_dark_mode;
+    m_display_settings_current.dpi_based_scaling = m_dpi_based_scaling;
+    m_display_settings_current.font_size_index = m_font_manager.GetCurrentFontSizeIndex();
+}
 
+DisplaySettings&
+Settings::GetCurrentDisplaySettings()
+{
+    return m_display_settings_current;
+}
+void
+Settings::RestoreCurrentDisplaySettings()
+{
+    SetDPI(m_display_settings_current.dpi);
+    SetDPIBasedScaling(m_display_settings_current.dpi_based_scaling);
+
+    if(m_display_settings_current.use_dark_mode)
+        DarkMode();
+    else
+        LightMode();
+
+    m_font_manager.SetFontSize(m_display_settings_current.font_size_index);
+}
+void
+Settings::RestoreInitialDisplaySettings()
+{
+    SetDPI(m_display_settings_initial.dpi);
+    SetDPIBasedScaling(m_display_settings_initial.dpi_based_scaling);
+
+    if(m_display_settings_initial.use_dark_mode)
+        DarkMode();
+    else
+        LightMode();
+
+    m_font_manager.SetFontSize(m_display_settings_initial.font_size_index);
+}
 void
 Settings::InitStyling()
 {

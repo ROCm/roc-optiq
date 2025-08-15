@@ -11,6 +11,14 @@ namespace RocProfVis
 namespace View
 {
 
+typedef struct DisplaySettings
+{
+    float dpi;
+    bool  use_dark_mode;
+    bool  dpi_based_scaling;
+    int   font_size_index;
+} DisplaySettings;
+
 enum class Colors
 {
     kMetaDataColor,
@@ -125,6 +133,10 @@ public:
     const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
     bool              IsDPIBasedScaling() const;
     void              SetDPIBasedScaling(bool enabled);
+    void              UpdateCurrentDisplaySettings();
+    DisplaySettings&  GetCurrentDisplaySettings();
+    void              RestoreCurrentDisplaySettings();
+    void              RestoreInitialDisplaySettings();
 
 private:
     Settings();
@@ -141,6 +153,8 @@ private:
     FontManager        m_font_manager;
     ImGuiStyle         m_default_style;
     bool               m_dpi_based_scaling;  // Whether to scale UI elements based on DPI
+    DisplaySettings    m_display_settings_initial;
+    DisplaySettings    m_display_settings_current;
 };
 
 }  // namespace View

@@ -15,7 +15,7 @@ SettingsPanel::CustomRadioButtonHollow(const char* label, bool active)
     auto& settings     = Settings::GetInstance();
     auto& font_manager = settings.GetFontManager();
     float font_size    = font_manager.GetCurrentFontSizeIndex();
-    float radius       = font_size  ;   //Radio Size
+    float radius       = font_size;  // Radio Size
 
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if(window->SkipItems) return false;
@@ -77,6 +77,11 @@ void
 SettingsPanel::SetOpen(bool open)
 {
     m_is_open = open;
+    if(open)
+    {
+        // If open save current display settings
+        Settings::GetInstance().UpdateCurrentDisplaySettings();
+    }
 }
 SettingsPanel::SettingsPanel()
 : m_is_open(false)
@@ -157,7 +162,7 @@ SettingsPanel::Render()
         // DPI-based scaling toggle
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
         bool dpi_scaling = settings.IsDPIBasedScaling();
-        ImGui::Dummy(ImVec2(0, 6)); 
+        ImGui::Dummy(ImVec2(0, 6));
         ImGui::Dummy(ImVec2(4, 0));
         ImGui::SameLine();
         if(ImGui::Checkbox("DPI-based Font Scaling", &dpi_scaling))
@@ -175,7 +180,7 @@ SettingsPanel::Render()
             ImGui::SetTooltip("Automatically scale font size based on display DPI. "
                               "Unchecked if you adjust font size manually.");
         ImGui::PopStyleVar();
-        ImGui::Dummy(ImVec2(0, 6)); 
+        ImGui::Dummy(ImVec2(0, 6));
         ImGui::Spacing();
         ImGui::Separator();
 
@@ -259,12 +264,7 @@ SettingsPanel::Render()
         if(ImGui::Button("Restore to Default Settings", ImVec2(-1, 0)))
         {
             m_is_open = false;
-            settings.SetDPIBasedScaling(true);
-            settings.LightMode();
-
-            // Set font based on DPI again
-            settings.GetFontManager().SetFontSize(
-                settings.GetFontManager().GetFontSizeIndexForDPI(settings.GetDPI()));
+            Settings::GetInstance().RestoreInitialDisplaySettings();
             m_preview_font_size = -1;
         }
         ImGui::PopStyleColor(3);
@@ -306,6 +306,7 @@ SettingsPanel::Render()
             m_is_open           = false;
             m_preview_font_size = -1;
             ImGui::CloseCurrentPopup();
+            settings.RestoreCurrentDisplaySettings();
         }
         ImGui::SameLine(0, spacing);
         if(ImGui::Button("Save", ImVec2(button_width, 0)))

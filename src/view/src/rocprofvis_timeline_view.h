@@ -69,17 +69,13 @@ private:
     float                                 m_zoom;
     int                                   m_sidebar_size;
     double                                m_view_time_offset_ns;
-    double                                m_scrubber_position;
     double                                m_v_width;
     double                                m_pixels_per_ns;
     double                                m_scroll_position;
     double                                m_content_max_y_scroll;
     bool                                  m_can_drag_to_pan;
     double                                m_previous_scroll_position;
-    bool                                  m_user_adjusting_graph_height;
     bool                                  m_meta_map_made;
-    bool                                  m_has_zoom_happened;
-    bool                                  m_show_graph_customization_window;
     bool                                  m_resize_activity;
     double                                m_scroll_position_x;
     EventManager::SubscriptionToken       m_scroll_to_track_token;
@@ -87,7 +83,6 @@ private:
     double                                m_scrollbar_location_as_percentage;
     bool                                  m_artifical_scrollbar_active;
     float                                 m_unload_track_distance;
-    float                                 m_universal_content_size;
     double                                m_range_x;
     DataProvider&                         m_data_provider;
     std::pair<double, double>             m_highlighted_region;

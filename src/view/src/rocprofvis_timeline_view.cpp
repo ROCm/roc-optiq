@@ -38,7 +38,6 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_max_y(std::numeric_limits<double>::lowest())
 , m_scroll_position(0.0f)
 , m_content_max_y_scroll(0.0f)
-, m_scrubber_position(0.0f)
 , m_v_min_x(0.0f)
 , m_v_max_x(0.0f)
 , m_pixels_per_ns(0.0f)
@@ -198,7 +197,6 @@ TimelineView::ResetView()
     m_min_y               = std::numeric_limits<double>::max();
     m_max_y               = std::numeric_limits<double>::lowest();
     m_scroll_position     = 0.0f;
-    m_scrubber_position   = 0.0f;
     m_v_min_x             = 0.0f;
     m_v_max_x             = 0.0f;
     m_pixels_per_ns       = 0.0f;

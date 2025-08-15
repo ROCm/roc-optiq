@@ -22,12 +22,13 @@ SettingsPanel::SetOpen(bool open)
     if(open)
     {
         // If open save current display settings
-        Settings::GetInstance().UpdateCurrentDisplaySettings();
+        m_display_settings_initial = Settings::GetInstance().GetCurrentDisplaySettings();
     }
 }
 SettingsPanel::SettingsPanel()
 : m_is_open(false)
 , m_preview_font_size(-1)
+, m_display_settings_initial()
 {}
 
 SettingsPanel::~SettingsPanel() {}
@@ -85,14 +86,14 @@ SettingsPanel::Render()
 
         ImGui::Dummy(ImVec2(0, 10));
 
-         // Theme selection  
+        // Theme selection
         ImGui::TextUnformatted("Theme");
         ImGui::SameLine(kThemeRadioSpacing);
 
-          // Push a light grey color for the radio button circle
+        // Push a light grey color for the radio button circle
         ImGui::PushStyleColor(ImGuiCol_FrameBg,
-                              ImGui::ColorConvertU32ToFloat4(settings.GetColor(
-                                  RocProfVis::View::Colors::kButton)));
+                              ImGui::ColorConvertU32ToFloat4(
+                                  settings.GetColor(RocProfVis::View::Colors::kButton)));
 
         int theme_radio = theme;
         if(ImGui::RadioButton("Dark", theme_radio == 0)) theme_radio = 0;
@@ -203,7 +204,7 @@ SettingsPanel::Render()
         ImGui::Spacing();
         ImGui::Separator();
 
-        // Actions Section (compact, inline small button)
+        // Actions Section
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(
                                settings.GetColor(RocProfVis::View::Colors::kTextMain)),
                            "Actions");
@@ -221,7 +222,8 @@ SettingsPanel::Render()
         if(ImGui::SmallButton("Restore Defaults"))
         {
             m_is_open = false;
-            Settings::GetInstance().RestoreInitialDisplaySettings();
+            settings.RestoreDisplaySettings(settings.GetInitialDisplaySettings());
+
             m_preview_font_size = -1;
         }
         if(ImGui::IsItemHovered())
@@ -264,7 +266,8 @@ SettingsPanel::Render()
             m_is_open           = false;
             m_preview_font_size = -1;
             ImGui::CloseCurrentPopup();
-            settings.RestoreCurrentDisplaySettings();
+
+            settings.RestoreDisplaySettings(m_display_settings_initial);
         }
         ImGui::SameLine(0, kButtonSpacing);
         if(ImGui::Button("Save", ImVec2(kButtonWidth, 0)))

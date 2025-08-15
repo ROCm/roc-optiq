@@ -126,17 +126,14 @@ public:
     void DarkMode();
     void LightMode();
     bool IsDarkMode() const;
-    bool HorizontalRender();
-    bool IsHorizontalRender();
 
     FontManager&      GetFontManager() { return m_font_manager; }
     const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
     bool              IsDPIBasedScaling() const;
     void              SetDPIBasedScaling(bool enabled);
-    void              UpdateCurrentDisplaySettings();
     DisplaySettings&  GetCurrentDisplaySettings();
-    void              RestoreCurrentDisplaySettings();
-    void              RestoreInitialDisplaySettings();
+    void              RestoreDisplaySettings(const DisplaySettings& settings);
+    DisplaySettings&  GetInitialDisplaySettings();
 
 private:
     Settings();
@@ -147,14 +144,13 @@ private:
 
     std::vector<ImU32> m_color_store;
     std::vector<ImU32> m_flame_color_wheel;
-    float              m_DPI;
-    bool               m_use_dark_mode;
-    bool               m_use_horizontal_rendering;
-    FontManager        m_font_manager;
-    ImGuiStyle         m_default_style;
-    bool               m_dpi_based_scaling;  // Whether to scale UI elements based on DPI
-    DisplaySettings    m_display_settings_initial;
-    DisplaySettings    m_display_settings_current;
+
+    FontManager m_font_manager;
+    ImGuiStyle  m_default_style;
+    DisplaySettings
+        m_display_settings_initial;  // Needed if you want to truly go back to factory
+                                     // settings after changing settings and saving.
+    DisplaySettings m_display_settings_current;
 };
 
 }  // namespace View

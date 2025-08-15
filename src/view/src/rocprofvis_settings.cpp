@@ -300,20 +300,6 @@ Settings::GetInstance()
     return instance;
 }
 
-bool
-Settings::IsHorizontalRender()
-{
-    return m_use_horizontal_rendering;
-}
-
-bool
-Settings::HorizontalRender()
-{
-    m_use_horizontal_rendering = !m_use_horizontal_rendering;
-    spdlog::info("Enable Dynamic Loading: {0}", (uint32_t) m_use_horizontal_rendering);
-    return m_use_horizontal_rendering;
-}
-
 void
 Settings::ApplyColorStyling()
 {
@@ -442,7 +428,7 @@ Settings::DarkMode()
     ImGui::StyleColorsDark();
     ImPlot::StyleColorsDark();
     ApplyColorStyling();
-    m_use_dark_mode = true;
+    m_display_settings_current.use_dark_mode = true;
 }
 
 void
@@ -452,25 +438,25 @@ Settings::LightMode()
     ImGui::StyleColorsLight();
     ImPlot::StyleColorsLight();
     ApplyColorStyling();
-    m_use_dark_mode = false;
+    m_display_settings_current.use_dark_mode = false;
 }
 
 bool
 Settings::IsDarkMode() const
 {
-    return m_use_dark_mode;
+    return m_display_settings_current.use_dark_mode;
 }
 
 void
 Settings::SetDPI(float DPI)
 {
-    m_DPI = DPI;
+    m_display_settings_current.dpi = DPI;
 }
 
 float
 Settings ::GetDPI()
 {
-    return m_DPI;
+    return m_display_settings_current.dpi;
 }
 
 ImU32
@@ -493,78 +479,73 @@ Settings::GetColorWheel()
 bool
 Settings::IsDPIBasedScaling() const
 {
-    return m_dpi_based_scaling;
+    return m_display_settings_current.dpi_based_scaling;
 }
 
 void
 Settings::SetDPIBasedScaling(bool enabled)
 {
-    m_dpi_based_scaling = enabled;
+    m_display_settings_current.dpi_based_scaling = enabled;
 }
 Settings::Settings()
 : m_color_store(static_cast<int>(Colors::__kLastColor))
-, m_DPI(1)
-, m_dpi_based_scaling(true)
 , m_flame_color_wheel({
 
       IM_COL32(0, 114, 188, 204), IM_COL32(0, 158, 115, 204), IM_COL32(240, 228, 66, 204),
       IM_COL32(204, 121, 167, 204), IM_COL32(86, 180, 233, 204),
       IM_COL32(213, 94, 0, 204), IM_COL32(0, 204, 102, 204), IM_COL32(230, 159, 0, 204),
       IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204) })
-, m_use_horizontal_rendering(true)
 , m_display_settings_current(DisplaySettings())
 {
     InitStyling();
     LightMode();
 
-    m_display_settings_initial                   = DisplaySettings();
-    m_display_settings_initial.dpi               = m_DPI;
-    m_display_settings_initial.use_dark_mode     = false;
+    m_display_settings_initial               = DisplaySettings();
+    m_display_settings_initial.dpi           = 1.5;  // Will be set to the current DPI.
+    m_display_settings_initial.use_dark_mode = false;
     m_display_settings_initial.dpi_based_scaling = true;
     m_display_settings_initial.font_size_index   = 6;  // Default to 12pt font size
+    m_display_settings_current =
+        m_display_settings_initial;  // Once file saving is enabled this will point to
+                                     // file contents.
 }
 
 Settings::~Settings() {}
-void
-Settings::UpdateCurrentDisplaySettings()
-{
-    m_display_settings_current.dpi               = m_DPI;
-    m_display_settings_current.use_dark_mode     = m_use_dark_mode;
-    m_display_settings_current.dpi_based_scaling = m_dpi_based_scaling;
-    m_display_settings_current.font_size_index = m_font_manager.GetCurrentFontSizeIndex();
-}
 
 DisplaySettings&
 Settings::GetCurrentDisplaySettings()
 {
     return m_display_settings_current;
 }
-void
-Settings::RestoreCurrentDisplaySettings()
+DisplaySettings&
+Settings::GetInitialDisplaySettings()
 {
-    SetDPI(m_display_settings_current.dpi);
-    SetDPIBasedScaling(m_display_settings_current.dpi_based_scaling);
+    return m_display_settings_initial;
+}
+void
+Settings::RestoreDisplaySettings(const DisplaySettings& settings)
+{
+    SetDPI(settings.dpi);
+    SetDPIBasedScaling(settings.dpi_based_scaling);
 
-    if(m_display_settings_current.use_dark_mode)
+    if(settings.use_dark_mode)
         DarkMode();
     else
         LightMode();
 
-    m_font_manager.SetFontSize(m_display_settings_current.font_size_index);
-}
-void
-Settings::RestoreInitialDisplaySettings()
-{
-    SetDPI(m_display_settings_initial.dpi);
-    SetDPIBasedScaling(m_display_settings_initial.dpi_based_scaling);
-
-    if(m_display_settings_initial.use_dark_mode)
-        DarkMode();
+    if(settings.dpi_based_scaling)
+    {
+        int dpi_index = m_font_manager.GetFontSizeIndexForDPI(settings.dpi);
+        m_font_manager.SetFontSize(dpi_index);
+        m_display_settings_current.font_size_index = dpi_index;
+    }
     else
-        LightMode();
-
-    m_font_manager.SetFontSize(m_display_settings_initial.font_size_index);
+    {
+        m_font_manager.SetFontSize(settings.font_size_index);
+        m_display_settings_current.font_size_index = settings.font_size_index;
+    }
 }
+
 void
 Settings::InitStyling()
 {

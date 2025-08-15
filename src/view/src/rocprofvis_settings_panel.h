@@ -1,6 +1,8 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #pragma once
 
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+#include <rocprofvis_settings.h>
 
 namespace RocProfVis
 {
@@ -20,8 +22,9 @@ public:
     void SetOpen(bool);
 
 private:
-    bool m_is_open           = false;
-    int  m_preview_font_size = -1;
+    bool            m_is_open           = false;
+    int             m_preview_font_size = -1;
+    DisplaySettings m_display_settings_initial;
 };
 
 }  // namespace View

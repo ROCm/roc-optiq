@@ -31,9 +31,10 @@ TraceView::TraceView()
 , m_save_notification_id("")
 {
     m_data_provider.SetTrackDataReadyCallback(
-        [](uint64_t track_id, const std::string& trace_path) {
+        [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
             std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
-                static_cast<int>(RocEvents::kNewTrackData), track_id, trace_path);
+                static_cast<int>(RocEvents::kNewTrackData), track_id, trace_path,
+                req.request_id, req.response_code);
             EventManager::GetInstance()->AddEvent(e);
         });
 

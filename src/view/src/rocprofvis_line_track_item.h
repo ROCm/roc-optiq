@@ -22,13 +22,14 @@ public:
                   double time_offset_ns, double& min_x, double& max_x, double scale_x);
     ~LineTrackItem();
 
-    bool HandleTrackDataChanged() override;
-    void ReleaseData() override;
+    bool  ReleaseData() override;
 
 protected:
     virtual void RenderMetaAreaScale() override;
     virtual void RenderChart(float graph_width) override;
     virtual void RenderMetaAreaOptions() override;
+    
+    void UpdateYScaleExtents();
 
 private:
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,

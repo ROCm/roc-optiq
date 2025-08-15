@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_job_system.h"
+#include "rocprofvis_controller_future.h"
 #include "rocprofvis_core_assert.h"
 #include <cfloat>
 
@@ -9,9 +10,10 @@ namespace RocProfVis
 namespace Controller
 {
 
-Job::Job(JobFunction function)
+Job::Job(JobFunction function, Future* future)
 : m_function(function)
 , m_result(kRocProfVisResultPending)
+, m_future(future)
 {
 
 }
@@ -23,7 +25,7 @@ Job::~Job()
 
 void Job::Execute()
 {
-    m_result = m_function();
+    m_result = m_function(m_future);
     m_condition_variable.notify_all();
 }
 
@@ -134,12 +136,12 @@ JobSystem& JobSystem::Get()
     return s_self;
 }
 
-Job* JobSystem::IssueJob(JobFunction function)
+Job* JobSystem::IssueJob(JobFunction function, Future* future)
 {
     Job* job = nullptr;
     try
     {
-        job = new Job(function);
+        job = new Job(function, future);
         if(EnqueueJob(job) != kRocProfVisResultSuccess)
         {
             spdlog::error("Failed to enqueue job");

@@ -43,6 +43,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddTrack = AddTrack;
     m_binding_info.FuncAddRecord = AddRecord;
     m_binding_info.FuncAddSlice = AddSlice;
+    m_binding_info.FuncRemoveSlice = RemoveSlice;
     m_binding_info.FuncAddString = AddString;
     m_binding_info.FuncAddFlowTrace = AddFlowTrace;
     m_binding_info.FuncAddFlow = AddFlow;
@@ -58,6 +59,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncCheckEventPropertyExists = CheckEventPropertyExists;
     m_binding_info.FuncCheckSliceExists = CheckSliceExists;
     m_binding_info.FuncCheckTableExists = CheckTableExists;
+    m_binding_info.FuncCompleteSlice  = CompleteSlice;
     bind_data = &m_binding_info;
     m_db = db;
     return kRocProfVisDmResultSuccess;
@@ -69,6 +71,12 @@ rocprofvis_dm_result_t Trace::DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t s
         m_tracks[i].get()->DeleteSliceAtTime(start, end);
     }
     return kRocProfVisDmResultNotLoaded;
+}
+
+rocprofvis_dm_result_t
+Trace::DeleteSliceByHandle(rocprofvis_dm_track_id_t track, rocprofvis_dm_handle_t slice)
+{  
+    return m_tracks[track].get()->DeleteSliceByHandle(slice);
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllSlices(){
@@ -431,6 +439,29 @@ rocprofvis_dm_result_t Trace::AddTableRowCell(const rocprofvis_dm_table_row_t ob
     return table_row->AddCellValue(cell_value);
 }
 
+rocprofvis_dm_result_t Trace::CompleteSlice(const rocprofvis_dm_slice_t object)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    TrackSlice*                                    slice = (TrackSlice*) object;
+    {
+        TimedLock<std::unique_lock<std::shared_mutex>> lock(*slice->Mutex(), __func__, slice);
+        slice->SetComplete();
+    }
+    return kRocProfVisDmResultSuccess;
+}      
+
+rocprofvis_dm_result_t
+Trace::RemoveSlice(const rocprofvis_dm_trace_t    trace_object,
+                   const rocprofvis_dm_track_id_t track_id,
+                   const rocprofvis_dm_slice_t    object)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(trace_object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
+    Trace*                 trace  = (Trace*) trace_object; 
+    return trace->DeleteSliceByHandle(track_id, object);
+}      
+
+
 rocprofvis_dm_result_t Trace::CheckSliceExists(
                         const rocprofvis_dm_trace_t     object,
                         const rocprofvis_dm_timestamp_t start,
@@ -444,16 +475,18 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
     for(int i = 0; i < trace->m_tracks.size(); i++)
     {
         rocprofvis_dm_slice_t  object = nullptr;
-        rocprofvis_dm_result_t result = trace->m_tracks[i].get()->GetSliceAtTime(start, object);
+        rocprofvis_dm_result_t result =
+            trace->m_tracks[i].get()->GetSliceAtTime(hash_combine(start,end), object);
         if(result == kRocProfVisDmResultSuccess)
         {
             ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
                                          kRocProfVisDmResultUnknownError);
             TrackSlice* slice = (TrackSlice*) object;
-            if(slice->EndTime() == end)
-            {
-                return kRocProfVisDmResultSuccess;
-            }
+            lock.unlock();
+
+            slice->WaitComplete();
+            return kRocProfVisDmResultSuccess;
+
         }
     }
     return kRocProfVisDmResultNotLoaded;

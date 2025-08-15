@@ -46,31 +46,43 @@ FlameTrackItem::~FlameTrackItem()
         m_timeline_event_selection_changed_token);
 }
 
-void
+bool
 FlameTrackItem::ReleaseData()
 {
-    m_chart_items.clear();
-}
-
-bool
-FlameTrackItem::HandleTrackDataChanged()
-{
-    m_request_state = TrackDataRequestState::kIdle;
-    bool result     = false;
-    result          = ExtractPointsFromData();
-    return result;
+    if(TrackItem::ReleaseData())
+    {
+        m_chart_items.clear();
+        return true;
+    }
+    return false;
 }
 
 bool
 FlameTrackItem::ExtractPointsFromData()
 {
-    const RawTrackData*      rtd         = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackData* rtd = m_data_provider.GetRawTrackData(m_id);
+
+    // If no raw track data is found, this means the track was unloaded before the
+    // response was processed
+    if(!rtd)
+    {
+        spdlog::error("No raw track data found for track {}", m_id);
+        // Reset the request state to idle
+        m_request_state = TrackDataRequestState::kIdle;
+        return false;
+    }
+
     const RawTrackEventData* event_track = dynamic_cast<const RawTrackEventData*>(rtd);
 
     if(!event_track)
     {
         spdlog::debug("Invalid track data type for track {}", m_id);
+        m_request_state = TrackDataRequestState::kError;
         return false;
+    }
+
+    if(event_track->AllDataReady()) {
+        m_request_state = TrackDataRequestState::kIdle;
     }
 
     if(event_track->GetData().empty())

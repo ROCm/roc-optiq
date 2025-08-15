@@ -22,9 +22,33 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_show_boxplot(false)
 {
     m_track_height = 90.0f;
+
+    UpdateYScaleExtents();
 }
 
 LineTrackItem::~LineTrackItem() {}
+
+void LineTrackItem::UpdateYScaleExtents() {
+    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+    if(track_info)
+    {
+        m_min_y = track_info->min_value;
+        m_max_y = track_info->max_value;
+    }
+    else
+    {
+        spdlog::warn("Track info not found for track ID: {}", m_id);
+    }
+    // Ensure that min and max are not equal to allow rendering
+    if(m_max_y == m_min_y)
+    {
+        m_max_y = m_min_y + 1.0;
+    }
+    std::string flt = std::to_string(m_min_y);
+    m_min_y_str     = flt.substr(0, flt.find('.') + 2);
+    flt             = std::to_string(m_max_y);
+    m_max_y_str     = flt.substr(0, flt.find('.') + 2);
+}
 
 void
 LineTrackItem::LineTrackRender(float graph_width)
@@ -217,58 +241,47 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImGui::EndChild();
 }
 
-void
+bool
 LineTrackItem::ReleaseData()
 {
-    m_data.clear();
-    m_data  = {};
-    m_min_y = 0;
-    m_max_y = 0;
-    m_min_y_str.clear();
-    m_max_y_str.clear();
-}
+    if(TrackItem::ReleaseData())
+    {       
+        m_data.clear();
+        m_data  = {};
 
-bool
-LineTrackItem::HandleTrackDataChanged()
-{
-    m_request_state = TrackDataRequestState::kIdle;
-    bool result     = false;
-    result          = ExtractPointsFromData();
-    if(result)
-    {
-        const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
-        if(track_info)
-        {
-            m_min_y = track_info->min_value;
-            m_max_y = track_info->max_value;
-        }
-        else
-        {
-            spdlog::warn("Track info not found for track ID: {}", m_id);
-        }
-        // Ensure that min and max are not equal to allow rendering
-        if(m_max_y == m_min_y)
-        {
-            m_max_y = m_min_y + 1.0;
-        }
-        std::string flt = std::to_string(m_min_y);
-        m_min_y_str     = flt.substr(0, flt.find('.') + 2);
-        flt             = std::to_string(m_max_y);
-        m_max_y_str     = flt.substr(0, flt.find('.') + 2);
+        return true;
     }
-    return result;
+
+    return false;
 }
 
 bool
 LineTrackItem::ExtractPointsFromData()
 {
-    const RawTrackData*       rtd          = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackData* rtd = m_data_provider.GetRawTrackData(m_id);
+
+    // If no raw track data is found, this means the track was unloaded before the
+    // response was processed
+    if(!rtd)
+    {
+        spdlog::error("No raw track data found for track {}", m_id);
+        // Reset the request state to idle
+        m_request_state = TrackDataRequestState::kIdle;
+        return false;
+    }
+
     const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
     if(!sample_track)
     {
         spdlog::debug("Invalid track data type for track {}", m_id);
+        m_request_state = TrackDataRequestState::kError;
         return false;
     }
+
+    if(sample_track->AllDataReady()) {
+        m_request_state = TrackDataRequestState::kIdle;
+    }
+
     if(sample_track->GetData().empty())
     {
         spdlog::debug("No data for track {}", m_id);

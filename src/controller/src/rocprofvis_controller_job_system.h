@@ -16,12 +16,14 @@ namespace RocProfVis
 namespace Controller
 {
 
-typedef std::function<rocprofvis_result_t()> JobFunction;
+class Future;
+
+typedef std::function<rocprofvis_result_t(Future*)> JobFunction;
 
 class Job
 {
 public:
-    Job(JobFunction function);
+    Job(JobFunction function, Future* future);
     ~Job();
 
     void Execute();
@@ -34,6 +36,7 @@ private:
     std::mutex m_mutex;
     std::condition_variable m_condition_variable;
     rocprofvis_result_t m_result;
+    Future* m_future;
 };
 
 class JobSystem
@@ -44,7 +47,7 @@ public:
 
     static JobSystem& Get();
 
-    Job* IssueJob(JobFunction function);
+    Job* IssueJob(JobFunction function, Future* future);
     rocprofvis_result_t CancelJob(Job* job);
 
 private:

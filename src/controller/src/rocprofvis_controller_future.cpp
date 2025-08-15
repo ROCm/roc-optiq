@@ -12,6 +12,7 @@ namespace Controller
 
 Future::Future()
 : m_job(nullptr)
+, m_cancelled(false)
 {
 }
 
@@ -52,8 +53,27 @@ rocprofvis_result_t Future::Cancel()
     if(m_job)
     {
         result = JobSystem::Get().CancelJob(m_job);
+        m_cancelled = true;
+        if(m_db_futures.size() > 0)
+        {       
+            for(auto future : m_db_futures)
+            {
+                rocprofvis_db_future_cancel(future);
+            }
+        }
     }
     return result;
+}
+
+bool Future::IsCancelled() {
+    return m_cancelled;
+}
+
+rocprofvis_result_t
+Future::AddDependentFuture(rocprofvis_db_future_t db_future)
+{
+    m_db_futures.push_back(db_future);
+    return kRocProfVisResultSuccess;
 }
 
 rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 

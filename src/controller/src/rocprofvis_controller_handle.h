@@ -31,6 +31,8 @@ public:
     virtual rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) = 0;
 
     virtual Handle* GetContext() { return nullptr; }
+    virtual bool    IsDeletable() { return true; }
+    virtual void    IncreaseRetainCounter() {};
 
 protected:
     rocprofvis_result_t GetStringImpl(char* value, uint32_t* length, char const* data, uint32_t data_len);

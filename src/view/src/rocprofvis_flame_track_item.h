@@ -24,8 +24,7 @@ public:
                    double max_x, double scale_x);
     ~FlameTrackItem();
 
-    bool HandleTrackDataChanged() override;
-    void ReleaseData() override;
+    bool ReleaseData() override;
 
 protected:
     void RenderChart(float graph_width) override;

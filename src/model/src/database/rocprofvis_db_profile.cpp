@@ -36,7 +36,7 @@ ProfileDatabase::CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt
     rocprofvis_db_sqlite_callback_parameters* callback_params =
         (rocprofvis_db_sqlite_callback_parameters*) data;
     ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
-    if(callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     uint32_t index                             = sqlite3_column_int(stmt, 2);
     db->TrackPropertiesAt(index)->record_count = sqlite3_column_int64(stmt, 0);
     int op                                     = sqlite3_column_int(stmt, 1);
@@ -55,7 +55,7 @@ ProfileDatabase::CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt
     rocprofvis_db_sqlite_trim_parameters* params =
         (rocprofvis_db_sqlite_trim_parameters*) callback_params->handle;
     rocprofvis_db_ext_data_t record;
-    if(callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
 
     char* table_name = (char*) sqlite3_column_text(stmt, 0);
     char* table_sql  = (char*) sqlite3_column_text(stmt, 1);
@@ -73,7 +73,7 @@ int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_st
     rocprofvis_db_sqlite_callback_parameters* callback_params =
         (rocprofvis_db_sqlite_callback_parameters*) data;
     ProfileDatabase*            db = (ProfileDatabase*) callback_params->db;
-    if(callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     uint32_t index = sqlite3_column_int(stmt, 4);
     db->TrackPropertiesAt(index)->min_ts       = sqlite3_column_int64(stmt, 0);
     db->TrackPropertiesAt(index)->max_ts       = sqlite3_column_int64(stmt, 1);
@@ -92,7 +92,7 @@ int ProfileDatabase::CallbackAddEventRecord(void *data, int argc, sqlite3_stmt* 
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     rocprofvis_db_record_data_t record;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     record.event.id.bitfield.event_op = sqlite3_column_int(stmt, 0);
     record.event.id.bitfield.event_id = sqlite3_column_int64(stmt, 5);
     record.event.timestamp = sqlite3_column_int64(stmt, 1);
@@ -113,7 +113,7 @@ int ProfileDatabase::CallbackAddPmcRecord(void *data, int argc, sqlite3_stmt* st
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     rocprofvis_db_record_data_t record;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     record.pmc.timestamp = sqlite3_column_int64(stmt, 1);
     record.pmc.value = sqlite3_column_double(stmt,2 );
     if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
@@ -126,7 +126,7 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     rocprofvis_db_record_data_t record;
     record.event.id.bitfield.event_op = sqlite3_column_int(stmt, 0);
     if (callback_params->track_id == -1)
@@ -171,7 +171,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==7, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     rocprofvis_db_flow_data_t record;
     record.id.bitfield.event_op = sqlite3_column_int(stmt,1 );
     if (db->FindTrackId((char*)sqlite3_column_text(stmt,3), (char*)sqlite3_column_text(stmt,4), (char*)sqlite3_column_text(stmt,5), record.id.bitfield.event_op, record.track_id) == kRocProfVisDmResultSuccess) {
@@ -188,7 +188,7 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     rocprofvis_db_ext_data_t record;
-    if (callback_params->future->Interrupted()) return 1;
+    if (callback_params->future->Interrupted()) return SQLITE_ABORT;
     record.category = callback_params->query[kRPVCacheTableName];
     for (int i = 0; i < argc; i++)
     {
@@ -365,7 +365,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
             query += std::to_string(start);
         }
     }
-    query += ") ORDER BY start;";
+    query += ") ORDER BY level, start;";
     return kRocProfVisDmResultSuccess;
 
 }
@@ -525,15 +525,30 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
         slice_array_t slices;
         if (BuildSliceQuery(start, end, num, tracks, query, slices) != kRocProfVisDmResultSuccess) break;
         ShowProgress(100, query.c_str(), kRPVDbBusy, future);
-        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery( 
-                future, query.c_str(), &slices , &CallbackAddAnyRecord)) break;
+        rocprofvis_dm_result_t result =
+            ExecuteSQLQuery(future, query.c_str(), &slices, &CallbackAddAnyRecord);
+        for(int i = 0; i < num; i++)
+        {
+            BindObject()->FuncCompleteSlice(slices[tracks[i]]);
+        }
+        if(kRocProfVisDmResultSuccess != result)
+        {
+            for(int i = 0; i < num; i++)
+            {
+                BindObject()->FuncRemoveSlice(BindObject()->trace_object, (rocprofvis_dm_track_id_t)tracks[i], slices[tracks[i]]);
+            }
+            break;
+        }
+
+
 #endif
         ShowProgress(100 - future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);
         return future->SetPromise(kRocProfVisDmResultSuccess);
 
     }
+
     ShowProgress(0, "Not all tracks are loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
 rocprofvis_dm_result_t  ProfileDatabase::ExecuteQuery(
@@ -553,7 +568,7 @@ rocprofvis_dm_result_t  ProfileDatabase::ExecuteQuery(
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
     ShowProgress(0, "Query could not be executed!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed); 
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed); 
 }
 
 

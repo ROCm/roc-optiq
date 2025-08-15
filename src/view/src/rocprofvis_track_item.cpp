@@ -36,6 +36,9 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_settings(Settings::GetInstance())
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
+, m_group_id_counter(0)
+, m_chunk_duration_ns(TimeConstants::nanoseconds_per_second *
+                      30)  // Default chunk duration
 {}
 
 bool
@@ -174,7 +177,9 @@ TrackItem::RenderMetaArea()
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
-                                     : m_settings.GetColor(Colors::kMetaDataColor));
+                                     : (m_request_state == TrackDataRequestState::kError ?
+                                        m_settings.GetColor(Colors::kGridRed) :
+                                        m_settings.GetColor(Colors::kMetaDataColor)));
     ImGui::SetCursorPos(metadata_shrink_padding);
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
@@ -201,6 +206,19 @@ TrackItem::RenderMetaArea()
         // Adjust content size to account for padding
         content_size.x -= m_metadata_padding.x * 2;
         content_size.y -= m_metadata_padding.x * 2;
+
+        // TODO: For testing and debugging request cancellation on the backend
+        // Remove once this feature is stable
+        // if(HasPendingRequests())
+        // {
+        //     if(ImGui::Button("Cancel Request"))
+        //     {
+        //         for(const auto& [request_id, req] : m_pending_requests)
+        //         {
+        //             m_data_provider.CancelRequest(request_id);
+        //         }
+        //     }
+        // }
 
         ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
                                (menu_button_width + 2 * m_metadata_padding.x));
@@ -313,19 +331,12 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     ImGui::PopStyleColor();
 }
 
-bool
-TrackItem::HasData()
-{
-    return m_data_provider.GetRawTrackData(m_id) != nullptr;
-}
-
 void
 TrackItem::RequestData(double min, double max, float width)
 {
-    // create request chunks with ranges of 1 minute max
+    //create request chunks with ranges of m_chunk_duration_ns  max
     double range = max - min;
-
-    size_t chunk_count = static_cast<size_t>(std::ceil(range / TimeConstants::minute_ns));
+    size_t chunk_count = static_cast<size_t>(std::ceil(range / m_chunk_duration_ns));
     m_group_id_counter++;
     std::deque<TrackRequestParams> temp_request_queue;
 
@@ -339,8 +350,8 @@ TrackItem::RequestData(double min, double max, float width)
         float  chunk_width = width * percentage;
 
         TrackRequestParams request_params(m_id, chunk_start, chunk_end,
-                                          static_cast<uint32_t>(chunk_width),
-                                          m_group_id_counter);
+                                          static_cast<uint32_t>(chunk_width), m_group_id_counter, i, chunk_count);
+        
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
                       m_id, chunk_start, chunk_end, chunk_range, chunk_width);
@@ -359,7 +370,13 @@ TrackItem::RequestData(double min, double max, float width)
     }
     else
     {
-        spdlog::warn("Fetch request rejected for track {}, already pending...", m_id);
+        spdlog::warn(
+            "Fetch request deferred for track {}, requests are already pending...", m_id);
+
+        for(const auto& [request_id, req] : m_pending_requests) {
+            spdlog::debug("RequestData: Found pending request {} for track {}", request_id, m_id);
+            m_data_provider.CancelRequest(request_id);
+        }
     }
 }
 
@@ -368,7 +385,7 @@ TrackItem::Update()
 {
     if(m_request_state == TrackDataRequestState::kIdle)
     {
-        if(!m_request_queue.empty() && !m_data_provider.IsRequestPending(m_id))
+        if(!m_request_queue.empty())
         {
             FetchHelper();
         }
@@ -378,11 +395,11 @@ TrackItem::Update()
 void
 TrackItem::FetchHelper()
 {
-    if(!m_request_queue.empty())
+    while(!m_request_queue.empty())
     {
         TrackRequestParams& req    = m_request_queue.front();
-        bool                result = m_data_provider.FetchTrack(req);
-        if(!result)
+        std::pair<bool, uint64_t> result = m_data_provider.FetchTrack(req);
+        if(!result.first)
         {
             spdlog::error("Request for track {} failed", m_id);
         }
@@ -394,13 +411,67 @@ TrackItem::FetchHelper()
                 req.m_data_group_id);
 
             m_request_state = TrackDataRequestState::kRequesting;
+            // Store the request with its ID
+            m_pending_requests.insert({result.second, req});
         }
         m_request_queue.pop_front();
     }
-    else
+
+}
+
+bool
+TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
+{
+    (void) response_code;  // Unused at the moment
+    bool result = false;
+    if(!m_pending_requests.erase(request_id))
     {
-        spdlog::warn("No requests in queue for track {}", m_id);
+        spdlog::warn("Failed to erase pending request {}", request_id);
     }
+
+    result = ExtractPointsFromData();
+    
+    return result;
+}
+
+bool
+TrackItem::HasData()
+{
+    return m_data_provider.GetRawTrackData(m_id) != nullptr;
+}
+
+bool
+TrackItem::ReleaseData()
+{
+    bool result = m_data_provider.FreeTrack(m_id, true);
+    if(!result)
+    {
+        spdlog::warn("Failed to release data for track {}", m_id);
+    }
+
+    // Clear pending requests
+    for(auto it = m_pending_requests.begin(); it != m_pending_requests.end();)
+    {
+        const auto request_id = it->first;
+        if(m_data_provider.CancelRequest(request_id))
+        {
+            it = m_pending_requests.erase(it);
+        }
+        else
+        {
+            spdlog::warn("Failed to cancel pending request {} for track {}", request_id,
+                          m_id);
+            ++it;
+        }
+    }
+
+    return result;
+}
+
+bool
+TrackItem::HasPendingRequests() const
+{
+    return !m_pending_requests.empty();
 }
 
 }  // namespace View

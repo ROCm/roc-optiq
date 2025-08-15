@@ -25,6 +25,7 @@ Event::Event(uint64_t id, double start_ts, double end_ts)
 , m_name(UINT64_MAX)
 , m_category(UINT64_MAX)
 , m_level(0)
+, m_retain_counter(0)
 {
 }
 
@@ -46,6 +47,18 @@ Event::~Event()
     {
         delete m_children;
     }
+}
+
+bool
+Event::IsDeletable()
+{
+    return --m_retain_counter <= 0;
+}
+
+void
+Event::IncreaseRetainCounter()
+{
+    m_retain_counter++;
 }
 
 rocprofvis_controller_object_type_t Event::GetType(void) 
@@ -549,7 +562,7 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerEventChildIndexed:
         {
-            if(!m_children)
+            if(m_children)
             {
                 result = m_children->SetUInt64(kRPVControllerArrayEntryIndexed, index, value);
             }

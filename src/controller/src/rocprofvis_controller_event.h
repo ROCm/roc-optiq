@@ -42,6 +42,8 @@ public:
     rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) override;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) override;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) override;
+    bool                IsDeletable() override;
+    void                IncreaseRetainCounter()  override;
 
 private:
     Array* m_children;
@@ -51,6 +53,7 @@ private:
     size_t m_name;
     size_t m_category;
     uint8_t m_level;
+    uint8_t m_retain_counter;
 
 public:
     static rocprofvis_result_t FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array, rocprofvis_dm_trace_t dm_trace_handle);

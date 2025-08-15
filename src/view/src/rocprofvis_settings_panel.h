@@ -18,7 +18,6 @@ public:
     // Getter and setter for open state
     bool IsOpen();
     void SetOpen(bool);
-    bool CustomRadioButtonHollow(const char* label, bool active);
 
 private:
     bool m_is_open           = false;

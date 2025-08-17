@@ -349,7 +349,7 @@ AppWindow::RenderSettingsMenu()
 {
     if(ImGui::BeginMenu("Settings"))
     {
-        if(ImGui::MenuItem("Application Settings"))
+        if(ImGui::MenuItem("Display Settings"))
         {
             m_settings_panel->SetOpen(true);
         }
@@ -459,11 +459,6 @@ AppWindow::RenderDeveloperMenu()
 {
     if(ImGui::BeginMenu("Developer Options"))
     {
-        if(ImGui::MenuItem("Horizontal Render", nullptr,
-                           Settings::GetInstance().IsHorizontalRender()))
-        {
-            Settings::GetInstance().HorizontalRender();
-        }
         // Toggele ImGui's built-in metrics window
         if(ImGui::MenuItem("Show Metrics", nullptr, m_show_metrics))
         {

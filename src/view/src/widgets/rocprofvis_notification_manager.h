@@ -36,6 +36,8 @@ struct Notification
     bool   is_hiding;
     double hide_time;  // Time when Hide() was called
 
+    std::string uid;  // Unique identifier for ImGui rendering
+
     // Calculate current opacity based on the notification's state and time
     float GetOpacity(double current_time) const;
 
@@ -73,8 +75,8 @@ private:
     std::deque<Notification> m_notifications;
     float                    m_default_duration;
     float                    m_default_fade_duration;
-
-    float m_notification_spacing;
+    float                    m_notification_spacing;
+    uint64_t                 m_next_uid;
 };
 
 }  // namespace View

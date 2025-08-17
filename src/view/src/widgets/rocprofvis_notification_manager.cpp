@@ -5,6 +5,8 @@
 #include "imgui.h"
 #include <algorithm>
 
+#include "spdlog/spdlog.h"
+
 namespace RocProfVis
 {
 namespace View
@@ -60,9 +62,10 @@ Notification::IsExpired(double current_time) const
 // --- NotificationManager Method Implementations ---
 
 NotificationManager::NotificationManager()
-: m_default_duration(3.0f)
-, m_default_fade_duration(0.5f)
+: m_default_duration(1.5f)
+, m_default_fade_duration(0.25f)
 , m_notification_spacing(5.0f)
+, m_next_uid(0)
 {}
 
 void
@@ -81,6 +84,8 @@ NotificationManager::Show(const std::string& message, NotificationLevel level,
                                 false,  // is_persistent
                                 false,  // is_hiding
                                 0.0 });
+    auto& n = m_notifications.back();
+    n.uid = "##note_" + std::to_string(++m_next_uid);
 }
 
 void
@@ -107,6 +112,9 @@ NotificationManager::ShowPersistent(const std::string& id, const std::string& me
                                     true,   // is_persistent
                                     false,  // is_hiding
                                     0.0 });
+        auto& n = m_notifications.back();
+        n.uid = "##note_" + std::to_string(++m_next_uid);
+
     }
 }
 
@@ -138,10 +146,14 @@ NotificationManager::Render()
     float                y_offset = 0.0f;
     const float          padding  = 10.0f;
 
+    // Use fixed height for notifications
+    float notification_height = ImGui::GetTextLineHeight() + ImGui::GetStyle().WindowPadding.y * 2.0f;
+
+    double current_time = ImGui::GetTime();
+
     for(auto it = m_notifications.rbegin(); it != m_notifications.rend(); ++it)
     {
-        const auto& notification = *it;
-        double      current_time = ImGui::GetTime();
+        auto& notification = *it;
         float       opacity      = notification.GetOpacity(current_time);
 
         if(opacity <= 0.0f)
@@ -153,19 +165,18 @@ NotificationManager::Render()
                           base_pos.y + viewport->WorkSize.y - padding - y_offset);
         ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always,
                                 ImVec2(1.0f, 1.0f));  // Pivot at bottom-right
-
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, notification_height), ImVec2(FLT_MAX, notification_height));
         ImGui::SetNextWindowBgAlpha(opacity);
         ImVec4 bg_color = GetBgColorForLevel(notification.level);
 
-        ImGui::PushStyleColor(ImGuiCol_WindowBg,
-                              ImVec4(bg_color.x, bg_color.y, bg_color.z, opacity));
         ImGuiWindowFlags flags =
             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
             ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
 
-        ImGui::PushID(&notification);  // Use the notification's address as a unique ID
-        ImGui::Begin("Notification", NULL, flags);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                              ImVec4(bg_color.x, bg_color.y, bg_color.z, opacity));
+        ImGui::Begin(notification.uid.c_str(), NULL, flags);
 
         ImVec4 text_color = GetFgColorForLevel(notification.level);
         text_color.w      = opacity;
@@ -173,20 +184,27 @@ NotificationManager::Render()
         ImGui::TextUnformatted(notification.message.c_str());
         ImGui::PopStyleColor();
 
-        y_offset += ImGui::GetWindowSize().y + m_notification_spacing;
+        y_offset += notification_height + m_notification_spacing;
 
         ImGui::End();
         ImGui::PopStyleColor();
-        ImGui::PopID();
+
+        // Check if we need to hide (start fading) the notification
+        if(!notification.is_persistent && !notification.is_hiding &&
+           current_time > notification.start_time + notification.duration)
+        {
+            notification.is_hiding = true;
+            notification.hide_time = current_time;
+        }
     }
 
     // Clean up expired notifications
-    double current_time = ImGui::GetTime();
     m_notifications.erase(std::remove_if(m_notifications.begin(), m_notifications.end(),
                                          [current_time](const Notification& n) {
                                              return n.IsExpired(current_time);
                                          }),
                           m_notifications.end());
+
 }
 
 ImVec4

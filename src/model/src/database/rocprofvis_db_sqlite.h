@@ -25,6 +25,7 @@
 #include <set>
 #include <mutex>
 #include <condition_variable>
+#include "rocprofvis_db_query_builder.h"
 
 namespace RocProfVis
 {
@@ -119,7 +120,7 @@ class SqliteDatabase : public Database
         // @param callback - sqlite3_exec callback method for data processing
         // @return status of operation
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
-                                                std::vector<const char*> query, 
+                                                std::vector<std::string> query, 
                                                 RpvSqliteExecuteQueryCallback callback);
         // Method for single row and column SQL query execution returning result of the query as string 
         // @param future - future object for asynchronous execution status
@@ -253,6 +254,9 @@ class SqliteDatabase : public Database
         
         void ReleaseConnection(sqlite3* conn);
         bool isServiceColumn(char* name);
+        static void CollectTrackServiceData(
+            sqlite3_stmt* stmt, int column_index, std::string& column_name,
+            rocprofvis_db_sqlite_track_service_data_t& service_data);
 
 };
 

@@ -218,7 +218,7 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
     ss << ") where ";
     int count = 0;
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
-        if(TrackPropertiesAt(index)->process_tag[i] == "const")
+        if(TrackPropertiesAt(index)->process.tag[i] == "const")
         {
             continue;
         }
@@ -226,14 +226,14 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
         {
             ss << " and ";
         }
-        ss << TrackPropertiesAt(index)->process_tag[i] << "=="; 
-        if(TrackPropertiesAt(index)->process_id_numeric[i])
+        ss << TrackPropertiesAt(index)->process.tag[i] << "=="; 
+        if(TrackPropertiesAt(index)->process.is_numeric[i])
         {
-            ss << TrackPropertiesAt(index)->process_id[i];
+            ss << TrackPropertiesAt(index)->process.id[i];
         }
         else
         {
-            ss << "'" << TrackPropertiesAt(index)->process_name[i] << "'";
+            ss << "'" << TrackPropertiesAt(index)->process.name[i] << "'";
         }
         count++;
     }
@@ -257,18 +257,18 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
     futures.resize(NumTracks());
     for(int i = 0; i < NumTracks(); i++)
     {
-        if(TrackPropertiesAt(i)->track_category == kRocProfVisDmPmcTrack && (flags & kRocProfVisDmIncludePmcTracks) == 0)
+        if(TrackPropertiesAt(i)->process.category == kRocProfVisDmPmcTrack && (flags & kRocProfVisDmIncludePmcTracks) == 0)
         {
             continue;
         }
-        if(TrackPropertiesAt(i)->track_category == kRocProfVisDmStreamTrack && (flags & kRocProfVisDmIncludeStreamTracks) == 0)
+        if(TrackPropertiesAt(i)->process.category == kRocProfVisDmStreamTrack && (flags & kRocProfVisDmIncludeStreamTracks) == 0)
         {
             continue;
         }
         if (kRPVQuerySliceByTrackSliceQuery == query_type)
         {
             qtype = kRPVQuerySliceByQueue;
-            if (TrackPropertiesAt(i)->track_category == kRocProfVisDmStreamTrack)
+            if(TrackPropertiesAt(i)->process.category == kRocProfVisDmStreamTrack)
             {
                 qtype = kRPVQuerySliceByStream; 
             }
@@ -317,15 +317,15 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
     for (int i = 0; i < num; i++){
         slices[tracks[i]]=BindObject()->FuncAddSlice(BindObject()->trace_object, tracks[i], start, end);
         rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
-        int slice_query_category = props->track_category ==  kRocProfVisDmStreamTrack? kRPVQuerySliceByStream : kRPVQuerySliceByQueue;
+        int slice_query_category = props->process.category ==  kRocProfVisDmStreamTrack? kRPVQuerySliceByStream : kRPVQuerySliceByQueue;
         for (int j = 0; j < props->query[slice_query_category].size(); j++) {
             std::string q = props->query[slice_query_category][j]; 
 
             std::string tuple = "(";
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process_tag[k] != "const") {
+                if (props->process.tag[k] != "const") {
                     if (tuple.length() > 1) tuple += ",";
-                    tuple += props->process_tag[k];
+                    tuple += props->process.tag[k];
                 }
             }
             tuple += ")";
@@ -334,9 +334,9 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
             q += " IN (";
             tuple = "(";
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process_tag[k] != "const") {
+                if (props->process.tag[k] != "const") {
                     if (tuple.length() > 1) tuple += ",";
-                    std::string id = props->process_id_numeric[k] ? std::to_string(props->process_id[k]) : std::string("'") + props->process_name[k] + "'";
+                    std::string id = props->process.is_numeric[k] ? std::to_string(props->process.id[k]) : std::string("'") + props->process.name[k] + "'";
                     tuple += id;
                       
                 }
@@ -386,11 +386,11 @@ ProfileDatabase::BuildTableQuery(
             std::string q     = props->query[kRPVQueryTable][j]; 
             std::string tuple = "(";
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process_tag[k] != "const") {
+                if (props->process.tag[k] != "const") {
                     if (tuple.length() > 1) tuple += ",";
-                    if(props->process_id_numeric[k]) tuple += "coalesce(";
-                    tuple += props->process_tag[k];
-                    if(props->process_id_numeric[k]) tuple += ",0)";
+                    if(props->process.is_numeric[k]) tuple += "coalesce(";
+                    tuple += props->process.tag[k];
+                    if(props->process.is_numeric[k]) tuple += ",0)";
                 }
             }
             tuple += ")";
@@ -399,9 +399,9 @@ ProfileDatabase::BuildTableQuery(
             q += " IN (";
             tuple = "(";
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process_tag[k] != "const") {
+                if (props->process.tag[k] != "const") {
                     if (tuple.length() > 1) tuple += ",";
-                    std::string id = props->process_id_numeric[k] ? std::to_string(props->process_id[k]) : std::string("'") + props->process_name[k] + "'";
+                    std::string id = props->process.is_numeric[k] ? std::to_string(props->process.id[k]) : std::string("'") + props->process.name[k] + "'";
                     tuple += id;
                       
                 }
@@ -646,7 +646,7 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
         {
             index = it->second;
         }
-        if(params->track_category == kRocProfVisDmStreamTrack)
+        if(params->process.category == kRocProfVisDmStreamTrack)
         {
             db->m_event_levels[op][index].level_for_stream = level;
         }

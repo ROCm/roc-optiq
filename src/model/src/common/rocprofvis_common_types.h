@@ -74,7 +74,7 @@ typedef union{
 #define TRACK_ID_TID 2
 #define TRACK_ID_QUEUE 2
 #define TRACK_ID_TID_OR_QUEUE 2
-#define TRACK_ID_COUNTER 3
+#define TRACK_ID_COUNTER 2
 #define TRACK_ID_CATEGORY 3
 
 
@@ -96,21 +96,26 @@ typedef enum rocprofvis_db_query_type_t
     kRPVQuerySliceByTrackSliceQuery,
 } rocprofvis_db_query_type_t;
 
+typedef struct rocprofvis_dm_process_identifiers_t
+{
+    // track category enumeration (PMC, Region, Kernel, SQQT, NIC, etc)  
+    rocprofvis_dm_track_category_t category;
+    // 32-bit process IDs
+    rocprofvis_dm_process_id_t id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+    // database column name for process id
+    rocprofvis_dm_string_t tag[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+    // process name string
+    rocprofvis_dm_string_t name[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+    // is identifier numeric or string
+    bool is_numeric[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+} rocprofvis_dm_process_identifiers_t;
+
 typedef struct {
     // 32-bit track id
     rocprofvis_dm_track_id_t track_id;   
-    // 32-bit process IDs
-    rocprofvis_dm_process_id_t process_id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];  
-    // database column name for process id
-    rocprofvis_dm_string_t process_tag[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS]; 
-    // process name string
-    rocprofvis_dm_string_t process_name[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
-    // is identifier numeric or string
-    bool process_id_numeric[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
+    rocprofvis_dm_process_identifiers_t process;
     // SQL query to get data for this track, may have multiple sub-queries
-    std::vector<rocprofvis_dm_string_t> query[kRPVNumQueryTypes];  
-    // track category enumeration (PMC, Region, Kernel, SQQT, NIC, etc)
-    rocprofvis_dm_track_category_t track_category;   
+    std::vector<rocprofvis_dm_string_t> query[kRPVNumQueryTypes];   
     // handle of extended data object  
     rocprofvis_dm_extdata_t extdata;  
     // total number of records in track

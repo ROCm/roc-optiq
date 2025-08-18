@@ -344,35 +344,43 @@ rocprofvis_dm_size_t Database::GetMemoryFootprint()
 }
 
 
-bool
-Database::TrackExist(rocprofvis_dm_track_params_t& newprops,
-                     rocprofvis_dm_charptr_t*      newqueries)
+rocprofvis_dm_track_params_it
+Database::FindTrack(rocprofvis_dm_process_identifiers_t& process)
 {
-    std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator it = 
-        std::find_if(TrackPropertiesBegin(), TrackPropertiesEnd(), [newprops] (std::unique_ptr<rocprofvis_dm_track_params_t> & params) {
-                if(params.get()->track_category == newprops.track_category)
+        return std::find_if(
+            TrackPropertiesBegin(), TrackPropertiesEnd(),
+            [process](std::unique_ptr<rocprofvis_dm_track_params_t>& params) {
+                if(params.get()->process.category == process.category)
                 {
                     for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++)
                     {
-                        if(newprops.process_id_numeric[i])
+                        if(process.is_numeric[i])
                         {
-                            if(params.get()->process_id[i] != newprops.process_id[i])
+                            if(params.get()->process.id[i] != process.id[i])
                                 return false;
                         }
                         else
                         {
-                            if(params.get()->process_name[i] != newprops.process_name[i])
+                            if(params.get()->process.name[i] != process.name[i])
                                 return false;
                         }
                     }
                     return true;
                 }
                 return false;
-        });
-    int slice_query_category        = newprops.track_category == kRocProfVisDmStreamTrack
+            });
+}
+
+void
+Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it, 
+                                rocprofvis_dm_track_params_t& newprops,
+                                rocprofvis_dm_charptr_t*      newqueries)
+{
+
+    int slice_query_category        = newprops.process.category == kRocProfVisDmStreamTrack
                                           ? kRPVQuerySliceByStream
                                           : kRPVQuerySliceByQueue;
-    int slice_source_query_category = newprops.track_category == kRocProfVisDmStreamTrack
+    int slice_source_query_category = newprops.process.category == kRocProfVisDmStreamTrack
                                           ? kRPVSourceQuerySliceByStream
                                           : kRPVSourceQuerySliceByQueue;
     if (it != TrackPropertiesEnd()) {
@@ -406,12 +414,11 @@ Database::TrackExist(rocprofvis_dm_track_params_t& newprops,
             {
                 it->get()->query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]);
             }
-        return true;
+        return;
     } 
     newprops.query[slice_query_category].push_back(newqueries[slice_source_query_category]);
     newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
-    newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]);
-    return false;    
+    newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]); 
 }
 
 }  // namespace DataModel

@@ -33,12 +33,9 @@ typedef struct rocprofvis_db_sqlite_track_service_data_t
     rocprofvis_dm_track_category_t  category;
     uint64_t                        id;
     uint64_t                        nid;
-    uint32_t                        agent_id;
-    uint32_t                        queue_id;
     uint32_t                        stream_id;
-    uint32_t                        counter_id;
-    uint32_t                        pid;
-    uint32_t                        tid;
+    uint32_t                        process;
+    uint32_t                        thread;
     std::string                     monitor_type;
 } rocprofvis_db_sqlite_track_service_data_t;
 

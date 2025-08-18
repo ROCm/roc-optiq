@@ -92,11 +92,11 @@ SqliteDatabase::CollectTrackServiceData(
     }
     else if(column_name == Builder::AGENT_ID_SERVICE_NAME)
     {
-        service_data.agent_id         = sqlite3_column_int(stmt, column_index);
+        service_data.process         = sqlite3_column_int(stmt, column_index);
     }
     else if(column_name == Builder::QUEUE_ID_SERVICE_NAME)
     {
-        service_data.queue_id      = sqlite3_column_int(stmt, column_index);
+        service_data.thread      = sqlite3_column_int(stmt, column_index);
     }
     else if(column_name == Builder::STREAM_ID_SERVICE_NAME)
     {
@@ -104,15 +104,15 @@ SqliteDatabase::CollectTrackServiceData(
     }
     else if(column_name == Builder::PROCESS_ID_SERVICE_NAME)
     {
-        service_data.pid           = sqlite3_column_int(stmt, column_index);
+        service_data.process           = sqlite3_column_int(stmt, column_index);
     }
     else if(column_name == Builder::THREAD_ID_SERVICE_NAME)
     {
-        service_data.tid         = sqlite3_column_int(stmt, column_index);
+        service_data.thread         = sqlite3_column_int(stmt, column_index);
     }
     else if(column_name == Builder::COUNTER_ID_SERVICE_NAME)
     {
-        service_data.counter_id  = sqlite3_column_int(stmt, column_index);
+        service_data.thread  = sqlite3_column_int(stmt, column_index);
     }
     else if(column_name == Builder::COUNTER_NAME_SERVICE_NAME)
     {
@@ -206,8 +206,8 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
         if(service_data.category == kRocProfVisDmRegionTrack)
         {
             process.id[TRACK_ID_NODE]        = service_data.nid;
-            process.id[TRACK_ID_PID]         = service_data.pid;
-            process.id[TRACK_ID_TID]         = service_data.tid;
+            process.id[TRACK_ID_PID]         = service_data.process;
+            process.id[TRACK_ID_TID]         = service_data.thread;
             rocprofvis_dm_track_params_it it = db->FindTrack(process);
             if(it != db->TrackPropertiesEnd())
             {
@@ -219,8 +219,8 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
                 service_data.category == kRocProfVisDmMemoryCopyTrack)
         {
             process.id[TRACK_ID_NODE]        = service_data.nid;
-            process.id[TRACK_ID_AGENT]       = service_data.agent_id;
-            process.id[TRACK_ID_QUEUE]       = service_data.queue_id;
+            process.id[TRACK_ID_AGENT]       = service_data.process;
+            process.id[TRACK_ID_QUEUE]       = service_data.thread;
             rocprofvis_dm_track_params_it it = db->FindTrack(process);
             if(it != db->TrackPropertiesEnd())
             {
@@ -238,8 +238,8 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
         else if(service_data.category == kRocProfVisDmPmcTrack)
         {
             process.id[TRACK_ID_NODE]    = service_data.nid;
-            process.id[TRACK_ID_AGENT]   = service_data.agent_id;
-            process.id[TRACK_ID_COUNTER] = service_data.counter_id;
+            process.id[TRACK_ID_AGENT]   = service_data.process;
+            process.id[TRACK_ID_COUNTER] = service_data.thread;
             if(service_data.monitor_type.length() > 0)
             {
                 process.is_numeric[TRACK_ID_COUNTER] = false;

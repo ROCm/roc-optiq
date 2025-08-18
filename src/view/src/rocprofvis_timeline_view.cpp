@@ -932,7 +932,7 @@ TimelineView::RenderGraphView()
 
             if(is_visible)
             {
-                // Request data for the chart if it doesn't have data
+                // Request data for the chart if it doesn't have data.
                 if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
                                                         TrackDataRequestState::kIdle) ||
                    request_data)

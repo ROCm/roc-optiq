@@ -938,7 +938,7 @@ TimelineView::RenderGraphView()
                    request_data)
 
                 {
-                    // Request one viewport worth of data on each side of the current view
+                    // Request one viewport worth of data on each side of the current view.
                     double buffer_distance = m_v_width;
                     track_item.chart->RequestData(
                         (m_view_time_offset_ns - buffer_distance) + m_min_x,

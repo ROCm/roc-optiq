@@ -274,7 +274,7 @@ SettingsPanel::Render()
                               ImGui::ColorConvertU32ToFloat4(settings.GetColor(
                                   RocProfVis::View::Colors::kButtonActive)));
 
-        if(ImGui::Button("Close", ImVec2(kButtonWidth, 0)))
+        if(ImGui::Button("Cancel", ImVec2(kButtonWidth, 0)))
         {
             m_is_open           = false;
             m_preview_font_size = -1;
@@ -283,7 +283,7 @@ SettingsPanel::Render()
             settings.RestoreDisplaySettings(m_display_settings_initial);
         }
         ImGui::SameLine(0, kButtonSpacing);
-        if(ImGui::Button("Save", ImVec2(kButtonWidth, 0)))
+        if(ImGui::Button("Ok", ImVec2(kButtonWidth, 0)))
         {
             m_is_open = false;
             settings.SetDisplaySettings(m_display_settings_modified);

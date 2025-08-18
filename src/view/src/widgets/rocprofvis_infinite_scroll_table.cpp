@@ -184,9 +184,9 @@ InfiniteScrollTable::Render()
     rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending;
 
     ImGuiTableFlags table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                                  ImGuiTableFlags_BordersOuter |
+                                  ImGuiTableFlags_BordersOuter | ImGuiTableFlags_ScrollX |
                                   ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_Reorderable;
+                                  ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable;
 
     if(!m_data_provider.IsRequestPending(m_table_type == TableType::kEventTable
                                              ? DataProvider::EVENT_TABLE_REQUEST_ID

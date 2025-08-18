@@ -138,10 +138,9 @@ TimelineView::ScrollToTrack(const uint64_t& track_id)
 {
     if(m_track_height_total.count(track_id) > 0)
     {
- 
-        m_scroll_position_y = std::min(m_content_max_y_scroll, m_track_height_total[track_id]);
-        ImGui::SetScrollY(m_scroll_position_y); 
- 
+        m_scroll_position_y =
+            std::min(m_content_max_y_scroll, m_track_height_total[track_id]);
+        ImGui::SetScrollY(m_scroll_position_y);
     }
 }
 void
@@ -220,9 +219,9 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     }
     else
     {
-        const std::string& trace_path  = tde->GetTracePath();
-        //check if event trace path matches the current our data provider's trace path
-        //since events are global for all views
+        const std::string& trace_path = tde->GetTracePath();
+        // check if event trace path matches the current our data provider's trace path
+        // since events are global for all views
         if(m_data_provider.GetTraceFilePath() != trace_path)
         {
             spdlog::debug("Trace path {} does not match current trace path {}",
@@ -244,9 +243,8 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
         {
             if(m_graphs[track_index].chart)
             {
-                m_graphs[track_index].chart->HandleTrackDataChanged(tde->GetRequestID(),
-                                                                    tde->GetResponseCode());
-                                                                    
+                m_graphs[track_index].chart->HandleTrackDataChanged(
+                    tde->GetRequestID(), tde->GetResponseCode());
             }
             else
             {
@@ -847,14 +845,14 @@ TimelineView::RenderGraphView()
     if(m_previous_scroll_position != temp_scroll_position)
     {
         m_previous_scroll_position = temp_scroll_position;
-        m_scroll_position_y          = temp_scroll_position;
+        m_scroll_position_y        = temp_scroll_position;
     }
     else if(m_scroll_position_y != temp_scroll_position)
     {
         ImGui::SetScrollY(m_scroll_position_y);
     }
 
-    ImVec2 window_size             = m_graph_size;
+    ImVec2 window_size  = m_graph_size;
     bool   request_data = false;
 
     // for zooming out
@@ -865,7 +863,7 @@ TimelineView::RenderGraphView()
                       m_last_data_req_v_width, m_v_width,
                       m_last_data_req_view_time_offset_ns);
 
-        m_last_data_req_v_width                      = m_v_width;
+        m_last_data_req_v_width             = m_v_width;
         m_last_data_req_view_time_offset_ns = m_view_time_offset_ns;
         request_data                        = true;
     }
@@ -877,7 +875,7 @@ TimelineView::RenderGraphView()
                       m_last_data_req_v_width, m_v_width,
                       m_last_data_req_view_time_offset_ns);
 
-        m_last_data_req_v_width                      = m_v_width;
+        m_last_data_req_v_width             = m_v_width;
         m_last_data_req_view_time_offset_ns = m_view_time_offset_ns;
         request_data                        = true;
     }
@@ -934,14 +932,13 @@ TimelineView::RenderGraphView()
 
             if(is_visible)
             {
-                // Request data for the chart if it doesn't have data
+                // Request data for the chart if it doesn't have data.
                 if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
-                                                        TrackDataRequestState::kIdle) ||
- 
-                   request_horizontal_data)
- 
+                                                        TrackDataRequestState::kIdle) || request_data)
+
                 {
-                    // Request one viewport worth of data on each side of the current view
+                    // Request one viewport worth of data on each side of the current
+                    // view.
                     double buffer_distance = m_v_width;
                     track_item.chart->RequestData(
                         (m_view_time_offset_ns - buffer_distance) + m_min_x,
@@ -1036,7 +1033,8 @@ TimelineView::RenderGraphView()
                 // If the track is not visible past a certain distance, release its
                 // data to free up memory
                 if(track_item.chart->GetDistanceToView() > m_unload_track_distance &&
-                   (track_item.chart->HasData() || track_item.chart->HasPendingRequests()))
+                   (track_item.chart->HasData() ||
+                    track_item.chart->HasPendingRequests()))
                 {
                     track_item.chart->ReleaseData();
                 }
@@ -1117,7 +1115,7 @@ TimelineView::MakeGraphView()
     m_max_x   = m_data_provider.GetEndTime();
     m_range_x = m_max_x - m_min_x;
 
-    m_v_width      = (m_range_x) / m_zoom;
+    m_v_width               = (m_range_x) / m_zoom;
     m_last_data_req_v_width = m_v_width;
 
     /*This section makes the charts both line and flamechart are constructed here*/
@@ -1142,9 +1140,10 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                FlameTrackItem* flame = new FlameTrackItem(
-                    m_data_provider, m_timeline_selection, track_info->id, track_info->name,
-                    m_zoom, m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
+                FlameTrackItem* flame =
+                    new FlameTrackItem(m_data_provider, m_timeline_selection,
+                                       track_info->id, track_info->name, m_zoom,
+                                       m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
 
                 std::tuple<float, float> temp_min_max_flame =
                     std::tuple<float, float>(static_cast<float>(track_info->min_ts),
@@ -1333,7 +1332,7 @@ TimelineView::HandleTopSurfaceTouch()
         if(scroll_wheel != 0.0f)
         {
             // Adjust scroll speed as needed (here, 40.0f per scroll step)
-            float scroll_speed = 100.0f;
+            float scroll_speed  = 100.0f;
             m_scroll_position_y = clamp(m_scroll_position_y - scroll_wheel * scroll_speed,
                                         0.0f, m_content_max_y_scroll);
         }
@@ -1423,11 +1422,11 @@ TimelineView::HandleTopSurfaceTouch()
     if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
        is_mouse_in_graph)
     {
-        float drag_y      = io.MouseDelta.y;
+        float drag_y = io.MouseDelta.y;
         m_scroll_position_y =
             clamp(m_scroll_position_y - drag_y, 0.0f, m_content_max_y_scroll);
-        float drag         = io.MouseDelta.x;
-        double view_width  = (m_range_x) / m_zoom;
+        float  drag       = io.MouseDelta.x;
+        double view_width = (m_range_x) / m_zoom;
 
         float user_requested_move = (drag / m_graph_size.x) * view_width;
 

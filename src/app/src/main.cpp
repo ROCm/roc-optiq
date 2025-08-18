@@ -13,8 +13,10 @@
 #include <stdlib.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
+ 
 #include "widgets/rocprofvis_debug_window.h"
 #include <utility>
+ 
 
 std::pair<GLFWimage, unsigned char*>
 glfw_create_icon()

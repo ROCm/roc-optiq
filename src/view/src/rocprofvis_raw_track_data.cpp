@@ -6,15 +6,26 @@ using namespace RocProfVis::View;
 
 RawTrackData::RawTrackData(rocprofvis_controller_track_type_t track_type,
                            uint64_t track_id, double start_ts, double end_ts,
-                           uint64_t data_group_id)
+                           uint64_t data_group_id, size_t chunk_count)
 : m_track_type(track_type)
 , m_track_id(track_id)
 , m_start_ts(start_ts)
 , m_end_ts(end_ts)
 , m_data_group_id(data_group_id)
+, m_expected_chunk_count(chunk_count)
 {}
 
-RawTrackData::~RawTrackData() {}
+void
+RawTrackData::SetDataRequestTimePoint(
+    const std::chrono::steady_clock::time_point& request_time)
+{
+    m_request_time = request_time;
+}
+
+const std::chrono::steady_clock::time_point& RawTrackData::GetDataRequestTimePoint() const
+{
+    return m_request_time;
+}
 
 rocprofvis_controller_track_type_t
 RawTrackData::GetType() const
@@ -43,64 +54,82 @@ RawTrackData::GetDataGroupID() const
     return m_data_group_id;
 }
 
-RawTrackSampleData::RawTrackSampleData(uint64_t track_id, double start_ts, double end_ts,
-                                       uint64_t data_group_id)
-: RawTrackData(kRPVControllerTrackTypeSamples, track_id, start_ts, end_ts, data_group_id)
+size_t
+RawTrackData::GetChunkCount() const
+{
+    return m_chunk_info.size();
+}
+
+bool
+RawTrackData::AllDataReady() const
+{
+    // Check if the number of chunks received matches the expected count
+    return m_chunk_info.size() == m_expected_chunk_count;
+}
+
+// Explicit template instantiation
+template class RocProfVis::View::TemplatedRawTrackData<rocprofvis_trace_counter_t>;
+template class RocProfVis::View::TemplatedRawTrackData<rocprofvis_trace_event_t>;
+
+template <typename T>
+TemplatedRawTrackData<T>::TemplatedRawTrackData(uint64_t track_id, double start_ts, double end_ts,
+                                                 uint64_t data_group_id, size_t chunk_count)
+: RawTrackData(data_traits<T>::track_type, track_id, start_ts, end_ts, data_group_id, chunk_count)
 {}
 
-RawTrackSampleData::~RawTrackSampleData() { m_data.clear(); }
+template <typename T>
+TemplatedRawTrackData<T>::~TemplatedRawTrackData() { m_data.clear(); }
 
-const std::vector<rocprofvis_trace_counter_t>&
-RawTrackSampleData::GetData() const
+template <typename T>
+const std::vector<T>&
+TemplatedRawTrackData<T>::GetData() const
 {
     return m_data;
 }
 
+template <typename T>
 void
-RawTrackSampleData::SetData(std::vector<rocprofvis_trace_counter_t>&& data)
+TemplatedRawTrackData<T>::SetData(std::vector<T>&& data)
 {
     m_data = std::move(data);
 }
 
-std::vector<rocprofvis_trace_counter_t>&
-RawTrackSampleData::GetWritableData()
+template <typename T>
+std::unordered_set<typename TemplatedRawTrackData<T>::id_type>&
+TemplatedRawTrackData<T>::GetWritableIdSet()
 {
-    return m_data;
+    return m_ids;
 }
 
-std::unordered_set<double>&
-RawTrackSampleData::GetWritableTimepoints()
-{
-    return m_timepoints;
-}
+template <typename T>
+bool TemplatedRawTrackData<T>::AddChunk(size_t chunk_index, const std::vector<T> &&chunk_data) {
+        // Prevent adding same chunk index
+        if (m_chunk_info.count(chunk_index)) {
+            return false;
+        }
 
-RawTrackEventData::RawTrackEventData(uint64_t track_id, double start_ts, double end_ts,
-                                     uint64_t data_group_id)
-: RawTrackData(kRPVControllerTrackTypeEvents, track_id, start_ts, end_ts, data_group_id)
-{}
+        // Calculate the insertion position (offset)
+        size_t insertion_offset = 0;
+        for (const auto& pair : m_chunk_info) {
+            if (pair.first < chunk_index) {
+                // pair.second is the chunk size
+                insertion_offset += pair.second; 
+            } else {
+                break;
+            }
+        }
 
-RawTrackEventData::~RawTrackEventData() { m_data.clear(); }
+        // Insert the new chunk's data
+        if (!chunk_data.empty()) {
+            m_data.insert(
+                m_data.begin() + insertion_offset,
+                std::make_move_iterator(chunk_data.begin()),
+                std::make_move_iterator(chunk_data.end())
+            );
+        }
 
-const std::vector<rocprofvis_trace_event_t>&
-RawTrackEventData::GetData() const
-{
-    return m_data;
-}
+        // Record the new chunk's size
+        m_chunk_info[chunk_index] = chunk_data.size();
 
-void
-RawTrackEventData::SetData(std::vector<rocprofvis_trace_event_t>&& data)
-{
-    m_data = std::move(data);
-}
-
-std::vector<rocprofvis_trace_event_t>&
-RawTrackEventData::GetWritableData()
-{
-    return m_data;
-}
-
-std::unordered_set<uint64_t>&
-RawTrackEventData::GetWritableEventSet()
-{
-    return m_event_ids;
-}
+        return true;
+    }

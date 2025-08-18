@@ -172,6 +172,21 @@ void rocprofvis_db_future_free(
 }
 
 /****************************************************************************************************
+ * @brief Cancel future job
+ *
+ * @param object future handle allocated by rocprofvis_db_future_alloc
+ *
+ ***************************************************************************************************/
+void
+rocprofvis_db_future_cancel(rocprofvis_db_future_t object)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(object,
+                                 RocProfVis::DataModel::ERROR_FUTURE_CANNOT_BE_NULL, );
+    ((RocProfVis::DataModel::Future*) object)->SetInterrupted();
+}
+
+/****************************************************************************************************
  * @brief Asynchronous call to read data model metadata 
  *              (static objects residing in trace class memory until trace is deleted)
  * 
@@ -411,7 +426,28 @@ rocprofvis_dm_result_t rocprofvis_dm_delete_time_slice(
     ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     return ((RocProfVis::DataModel::Trace*)trace)->DeleteSliceAtTimeRange(start, end);
-}   
+}  
+
+/****************************************************************************************************
+ * @brief Delete time slice with specified handle
+ *
+ * @param trace trace object handle created with rocprofvis_dm_create_trace()
+ * @param track_id track id
+ * @param slice hadle
+ *
+ * @return status of operation
+ *
+ ***************************************************************************************************/
+rocprofvis_dm_result_t
+rocprofvis_dm_delete_time_slice_handle(   rocprofvis_dm_trace_t    trace,
+                                          rocprofvis_dm_track_id_t track,
+                                          rocprofvis_dm_slice_t    handle)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    return ((RocProfVis::DataModel::Trace*) trace)->DeleteSliceByHandle(track, handle);
+}
 
 /****************************************************************************************************
  * @brief Delete all time slices 
@@ -537,10 +573,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_uint64(
                                         uint64_t* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase* object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if (object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsUint64(property, index, value);
     }
     return object->GetPropertyAsUint64(property, index, value);
 }                                      
@@ -563,10 +600,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_int64(
                                         int64_t* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if(object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsInt64(property, index, value);
     }
     return object->GetPropertyAsInt64(property, index, value);
 }                                      
@@ -589,10 +627,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_double(
                                         double* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if(object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsDouble(property, index, value);
     }
     return object->GetPropertyAsDouble(property, index, value);
 }                                       
@@ -615,10 +654,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_charptr(
                                         char** value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if(object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsCharPtr(property, index, value);
     }
     return object->GetPropertyAsCharPtr(property, index, value);
 }                                       
@@ -641,10 +681,11 @@ rocprofvis_dm_result_t  rocprofvis_dm_get_property_as_handle(
                                         rocprofvis_dm_handle_t* value){
     PROFILE_PROP_ACCESS(ROCPROFVIS_DM_PROPSYMBOL(handle, property), index);
     RocProfVis::DataModel::DmBase*      object = (RocProfVis::DataModel::DmBase*) handle;
-    std::shared_lock<std::shared_mutex> lock;
     if(object->Mutex() != nullptr)
     {
-        lock = std::shared_lock<std::shared_mutex>(*object->Mutex());
+        std::shared_lock<std::shared_mutex> lock =
+            std::shared_lock<std::shared_mutex>(*object->Mutex());
+        return object->GetPropertyAsHandle(property, index, value);
     }
     return object->GetPropertyAsHandle(property, index, value);
 }  

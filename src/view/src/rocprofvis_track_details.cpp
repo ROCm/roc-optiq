@@ -34,7 +34,7 @@ TrackDetails::Render()
             for(Details& detail : m_track_details)
             {
                 if(ImGui::CollapsingHeader(detail.track_name.c_str(),
-                                        ImGuiTreeNodeFlags_DefaultOpen))
+                                           ImGuiTreeNodeFlags_DefaultOpen))
                 {
                     ImGui::TextUnformatted("Node: ");
                     ImGui::SameLine();
@@ -74,7 +74,7 @@ TrackDetails::Render()
                     }
                 }
             }
-        }     
+        }
         ImGui::EndChild();
     }
 }
@@ -117,9 +117,10 @@ TrackDetails::Update()
                             {
                                 if(process.thread_lut.count(type_id) > 0)
                                 {
-                                    m_track_details.push_back(std::move(Details{
-                                        metadata->name, node, process, nullptr,
-                                        process.thread_lut.at(type_id), nullptr, nullptr }));
+                                    m_track_details.push_back(std::move(
+                                        Details{ metadata->name, node, process, nullptr,
+                                                 process.thread_lut.at(type_id), nullptr,
+                                                 nullptr }));
                                 }
                                 break;
                             }
@@ -242,7 +243,7 @@ void
 TrackDetails::HandleTrackSelectionChanged(
     std::shared_ptr<TrackSelectionChangedEvent> event)
 {
-    if(event)
+    if(event && event->GetTracePath() == m_data_provider.GetTraceFilePath())
     {
         m_selected_track_ids = event->GetSelectedTracks();
         m_selection_dirty    = true;

@@ -63,6 +63,8 @@ class Trace : public DmBase{
         // Returns class mutex
         std::shared_mutex*                              Mutex() override { return &m_lock; }
 
+        std::shared_mutex*                              EventPropertyMutex(rocprofvis_dm_event_property_type_t type){ return &m_event_property_lock[type];}
+
         // Method to bind database object
         // @param db - pointer to database
         // @param bind_data - reference to pointer to bind data structure
@@ -73,6 +75,11 @@ class Trace : public DmBase{
         // @param stop - time slice stop timestamp
         // @return status of operation 
         rocprofvis_dm_result_t                          DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
+        // Method to delete a time slice with provided handle
+        // param track - track id to delete slice from
+        // @param slice - handle
+        // @return status of operation
+        rocprofvis_dm_result_t DeleteSliceByHandle(rocprofvis_dm_track_id_t track, rocprofvis_dm_handle_t   slice);
         // Method to delete all time slices
         // @return status of operation 
         rocprofvis_dm_result_t                          DeleteAllSlices();
@@ -227,6 +234,8 @@ class Trace : public DmBase{
         static rocprofvis_dm_result_t                   CheckSliceExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
         static rocprofvis_dm_result_t                   CheckEventPropertyExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
         static rocprofvis_dm_result_t                   CheckTableExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_table_id_t table_id);
+        static rocprofvis_dm_result_t                   CompleteSlice(const rocprofvis_dm_slice_t object);
+        static rocprofvis_dm_result_t                   RemoveSlice(const rocprofvis_dm_trace_t trace, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_slice_t object);
 
         // trace parameters structure
         rocprofvis_dm_trace_params_t                    m_parameters;
@@ -250,6 +259,8 @@ class Trace : public DmBase{
         event_level_map_t                               m_event_level_map;
         // object mutex, for shared access
         mutable std::shared_mutex                       m_lock;
+        // object mutex, for shared access
+        mutable std::shared_mutex                       m_event_property_lock[kRPVDMNumEventPropertyTypes];
 
 };
 

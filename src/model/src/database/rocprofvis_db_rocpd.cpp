@@ -88,7 +88,7 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, ch
     rocprofvis_dm_track_params_t track_params = {0};
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     track_params.track_id = (rocprofvis_dm_track_id_t)db->NumTracks();
     track_params.track_category = (rocprofvis_dm_track_category_t)sqlite3_column_int(stmt, TRACK_ID_CATEGORY);
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
@@ -147,7 +147,7 @@ int RocpdDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, c
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     std::stringstream ids((char*)sqlite3_column_text(stmt, 1));
     uint32_t string_id = db->BindObject()->FuncAddString(db->BindObject()->trace_object, (char*)sqlite3_column_text(stmt, 0));
     if (string_id == INVALID_INDEX) return 1;
@@ -167,7 +167,7 @@ int RocpdDatabase::CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stm
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
     rocprofvis_db_stack_data_t record;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     record.symbol = (char*)sqlite3_column_text(stmt, 0);
     record.args = (char*)sqlite3_column_text(stmt, 1);
     record.line = (char*)sqlite3_column_text(stmt, 2);
@@ -202,7 +202,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Track query by stream
                         "",
                         // Level query
-                        "select 1 as op, start, end, id, 0, pid, tid  from rocpd_api ",
+                        "select 1 as op, start, end, id, 0, pid, tid, 0 as const  from rocpd_api ",
                         // Slice query by queue
                         "select 1 as op, start, end, args_id, apiName_id, id, 0, pid, tid ,L.level as level from rocpd_api LEFT JOIN event_levels_api L ON id = L.eid ",
                         // Slice query by stream
@@ -221,9 +221,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Track query by stream
                         "",
                         // Level query
-                        "select 2 as op, start, end, id, 0, gpuId, queueId from rocpd_op ",
+                        "select 2 as op, start, end, id, 0, gpuId, queueId, 0 as const from rocpd_op ",
                         // Slice query by queue
-                        "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId , L.level as level, 0 as const from rocpd_op LEFT JOIN event_levels_op L ON id = L.eid ",
+                        "select 2 as op, start, end, opType_id, description_id, id, 0, gpuId, queueId , L.level as level from rocpd_op LEFT JOIN event_levels_op L ON id = L.eid ",
                         // Slice query by stream
                         "",
                         // Table query
@@ -240,7 +240,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Track query by stream
                         "",
                         // Level query
-                        "select 0 as op, start, start as end, 0, 0, deviceId, monitorType from rocpd_monitor ",
+                        "select 0 as op, start, start as end, 0, 0, deviceId, monitorType, 0 as const from rocpd_monitor ",
                         // Slice query by monitorType
                         "select 0 as op, start, value, start as end, 0, 0, 0, deviceId, monitorType , value as level from rocpd_monitor ",
                         // Slice query by stream
@@ -331,7 +331,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 
     }
     ShowProgress(0, "Trace metadata not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
 rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t start,
@@ -558,7 +558,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
     ShowProgress(0, "Flow trace not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
 rocprofvis_dm_result_t  RocpdDatabase::ReadStackTraceInfo(
@@ -590,7 +590,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadStackTraceInfo(
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
     ShowProgress(0, "Stack trace not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
 

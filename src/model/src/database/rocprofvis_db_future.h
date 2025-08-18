@@ -59,6 +59,8 @@ class Future
         // reports if thread was interrupted by timeout logic
         // @return True if thread has been timeouted
         bool                                Interrupted() {return m_interrupt_status;};
+        // sets interrupted flag
+        void                                SetInterrupted() { m_interrupt_status = true; };
         // calls progress callback, if provided
         // @param db_name - path to database file
         // @param step - progress percentage of single database operation

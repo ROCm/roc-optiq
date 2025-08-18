@@ -83,7 +83,9 @@ typedef enum rocprofvis_dm_result_t
     // Operation failed due to unsupported property 
     kRocProfVisDmResultNotSupported = 8,
     // Operation failed due to busy status of resource 
-    kRocProfVisDmResultResourceBusy = 8,
+    kRocProfVisDmResultResourceBusy = 9,
+    // Operation failed due to busy status of resource
+    kRocProfVisDmResultDbAbort = 10,
 } rocprofvis_dm_result_t;
 
 // Track category
@@ -317,6 +319,8 @@ typedef enum rocprofvis_dm_event_property_type_t {
     kRPVDMEventStackTrace,
     // Extended data
     kRPVDMEventExtData,
+    // Number of event property types
+    kRPVDMNumEventPropertyTypes,
 } rocprofvis_dm_event_property_type_t;
 
 // Type for sort order

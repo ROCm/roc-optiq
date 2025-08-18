@@ -4,7 +4,7 @@ project(rocprof-visualizer)
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 1)
-set(PROJECT_VERSION_PATCH 2)
+set(PROJECT_VERSION_PATCH 3)
 set(PROJECT_VERSION_BUILD 0)
 
 # Name and path of the icon font header
@@ -69,7 +69,8 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
     src/view/src/widgets/rocprofvis_dialog.cpp
-)
+    src/view/src/widgets/rocprofvis_notification_manager.cpp
+    )
 
 if(COMPUTE_UI_SUPPORT) 
 list(APPEND VIEW_FILES

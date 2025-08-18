@@ -1,15 +1,9 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_line_track_item.h"
-#include "imgui.h"
-#include "rocprofvis_controller.h"
-#include "rocprofvis_core_assert.h"
+#include "rocprofvis_settings.h"
 #include "spdlog/spdlog.h"
-#include <algorithm>
-#include <iostream>
-#include <string>
-#include <utility>
-#include <vector>
+#include "imgui.h"
 
 namespace RocProfVis
 {
@@ -28,27 +22,32 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_show_boxplot(false)
 {
     m_track_height = 90.0f;
+
+    UpdateYScaleExtents();
 }
 
 LineTrackItem::~LineTrackItem() {}
 
-void
-LineTrackItem::SetColorByValue(rocprofvis_color_by_value_t color_by_value_digits)
-{
-    m_color_by_value_digits   = color_by_value_digits;
-    m_is_color_value_existant = true;
-}
-
-bool
-LineTrackItem::HasData()
-{
-    return m_data_provider.GetRawTrackData(m_id) != nullptr;
-}
-
-void
-LineTrackItem::SetShowBoxplot(bool show_boxplot)
-{
-    m_show_boxplot = show_boxplot;
+void LineTrackItem::UpdateYScaleExtents() {
+    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+    if(track_info)
+    {
+        m_min_y = track_info->min_value;
+        m_max_y = track_info->max_value;
+    }
+    else
+    {
+        spdlog::warn("Track info not found for track ID: {}", m_id);
+    }
+    // Ensure that min and max are not equal to allow rendering
+    if(m_max_y == m_min_y)
+    {
+        m_max_y = m_min_y + 1.0;
+    }
+    std::string flt = std::to_string(m_min_y);
+    m_min_y_str     = flt.substr(0, flt.find('.') + 2);
+    flt             = std::to_string(m_max_y);
+    m_max_y_str     = flt.substr(0, flt.find('.') + 2);
 }
 
 void
@@ -242,58 +241,47 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImGui::EndChild();
 }
 
-void
+bool
 LineTrackItem::ReleaseData()
 {
-    m_data.clear();
-    m_data  = {};
-    m_min_y = 0;
-    m_max_y = 0;
-    m_min_y_str.clear();
-    m_max_y_str.clear();
-}
+    if(TrackItem::ReleaseData())
+    {       
+        m_data.clear();
+        m_data  = {};
 
-bool
-LineTrackItem::HandleTrackDataChanged()
-{
-    m_request_state = TrackDataRequestState::kIdle;
-    bool result     = false;
-    result          = ExtractPointsFromData();
-    if(result)
-    {
-        const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
-        if(track_info)
-        {
-            m_min_y = track_info->min_value;
-            m_max_y = track_info->max_value;
-        }
-        else
-        {
-            spdlog::warn("Track info not found for track ID: {}", m_id);
-        }
-        // Ensure that min and max are not equal to allow rendering
-        if(m_max_y == m_min_y)
-        {
-            m_max_y = m_min_y + 1.0;
-        }
-        std::string flt = std::to_string(m_min_y);
-        m_min_y_str     = flt.substr(0, flt.find('.') + 2);
-        flt             = std::to_string(m_max_y);
-        m_max_y_str     = flt.substr(0, flt.find('.') + 2);
+        return true;
     }
-    return result;
+
+    return false;
 }
 
 bool
 LineTrackItem::ExtractPointsFromData()
 {
-    const RawTrackData*       rtd          = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackData* rtd = m_data_provider.GetRawTrackData(m_id);
+
+    // If no raw track data is found, this means the track was unloaded before the
+    // response was processed
+    if(!rtd)
+    {
+        spdlog::error("No raw track data found for track {}", m_id);
+        // Reset the request state to idle
+        m_request_state = TrackDataRequestState::kIdle;
+        return false;
+    }
+
     const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
     if(!sample_track)
     {
         spdlog::debug("Invalid track data type for track {}", m_id);
+        m_request_state = TrackDataRequestState::kError;
         return false;
     }
+
+    if(sample_track->AllDataReady()) {
+        m_request_state = TrackDataRequestState::kIdle;
+    }
+
     if(sample_track->GetData().empty())
     {
         spdlog::debug("No data for track {}", m_id);
@@ -309,29 +297,6 @@ LineTrackItem::ExtractPointsFromData()
         m_data.emplace_back(rocprofvis_data_point_t{track_data[i].m_start_ts, track_data[i].m_value});
     }
     return true;
-}
-
-std::tuple<double, double>
-LineTrackItem::FindMaxMin()
-{
-    if(m_data.size() > 0)
-    {
-        m_min_y = m_data[0].y_value;
-        m_max_y = m_data[0].y_value;
-
-        for(const auto& point : m_data)
-        {
-            if(point.y_value < m_min_y)
-            {
-                m_min_y = point.y_value;
-            }
-            if(point.y_value > m_max_y)
-            {
-                m_max_y = point.y_value;
-            }
-        }
-    }
-    return std::make_tuple(m_min_x, m_max_x);
 }
 
 float

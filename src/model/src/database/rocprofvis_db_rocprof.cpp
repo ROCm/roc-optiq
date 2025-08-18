@@ -64,7 +64,7 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
     rocprofvis_dm_track_params_t track_params = {0};
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     track_params.track_id = (rocprofvis_dm_track_id_t)db->NumTracks();
     track_params.track_category = (rocprofvis_dm_track_category_t)sqlite3_column_int(stmt,TRACK_ID_CATEGORY);
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
@@ -154,7 +154,7 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt,
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
-    if (callback_params->future->Interrupted()) return 1;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     uint32_t stringId = db->BindObject()->FuncAddString(db->BindObject()->trace_object, (char*) sqlite3_column_text(stmt,0));
     callback_params->future->CountThisRow();
     return 0;
@@ -278,7 +278,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     "K.grid_size_x AS grid_x, K.grid_size_y AS grid_y, K.grid_size_z AS grid_z, "
                     "K.workgroup_size_x AS workgroup_x, K.workgroup_size_y AS workgroup_y, K.workgroup_size_z AS workgroup_z, "
                     "K.group_segment_size AS lds_size, K.private_segment_size AS scratch_size, S.group_segment_size AS static_lds_size, "
-                    "S.private_segment_size AS static_scratch_size, K.agent_id as agentId, K.queue_id as queueId, MC.stream_id as streamId FROM rocpd_kernel_dispatch K "
+                    "S.private_segment_size AS static_scratch_size, K.agent_id as agentId, K.queue_id as queueId, K.stream_id as streamId FROM rocpd_kernel_dispatch K "
                     "INNER JOIN rocpd_info_agent A ON A.id = K.agent_id AND A.guid = K.guid "
                     "INNER JOIN rocpd_event E ON E.id = K.event_id AND E.guid = K.guid "
                     "INNER JOIN rocpd_string R ON R.id = K.region_name_id AND R.guid = K.guid "
@@ -542,7 +542,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
     }
     ShowProgress(0, "Trace metadata not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
 
@@ -572,14 +572,14 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                         "SELECT E.id as id, 4, E.correlation_id, MC.nid, MC.dst_agent_id, coalesce(MC.queue_id,0), MC.start "
                         "FROM rocpd_region R "
                         "INNER JOIN rocpd_event E ON R.event_id = E.id "
-                        "INNER JOIN _rocpd_memory_copy MC ON MC.id = E.correlation_id "
+                        "INNER JOIN rocpd_memory_copy MC ON MC.id = E.correlation_id "
                         "WHERE R.id == ";
             query << event_id.bitfield.event_id;
                         " UNION "
                         "SELECT E.id as id, 3, E.correlation_id, MA.nid, MA.agent_id, coalesce(MA.queue_id,0), MA.start "
                         "FROM rocpd_region R "
                         "INNER JOIN rocpd_event E ON R.event_id = E.id "
-                        "INNER JOIN _rocpd_memory_copy MA ON MA.id = E.correlation_id "
+                        "INNER JOIN rocpd_memory_copy MA ON MA.id = E.correlation_id "
                         "WHERE R.id == ";
             query << event_id.bitfield.event_id;
                         query << ");";
@@ -600,7 +600,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryCopy)
         {
             query <<    "SELECT E.id as id, 1, E.correlation_id, R.nid, R.pid, R.tid, R.end "
-                        "FROM _rocpd_memory_copy MC "
+                        "FROM rocpd_memory_copy MC "
                         "INNER JOIN rocpd_event E ON MC.event_id = E.id "
                         "INNER JOIN rocpd_region R ON R.id = E.correlation_id "
                         "WHERE MC.id == ";
@@ -629,7 +629,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
     ShowProgress(0, "Flow trace not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
 rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t start,
@@ -912,7 +912,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
     ShowProgress(0, "Extended data  not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultTimeout : kRocProfVisDmResultDbAccessFailed);    
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);    
 }
 
 }  // namespace DataModel

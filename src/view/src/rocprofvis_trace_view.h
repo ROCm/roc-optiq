@@ -2,6 +2,9 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
+#include "rocprofvis_timeline_view.h"
+
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -35,6 +38,8 @@ public:
     bool SaveSelection(const std::string& file_path);
 
 private:
+    void HandleHotKeys();
+
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<SideBar>           m_sidebar;
     std::shared_ptr<HSplitContainer>   m_container;
@@ -54,9 +59,14 @@ private:
     
     popup_info_t m_popup_info;
 
-    EventManager::SubscriptionToken  m_tabselected_event_token;
-
     std::unique_ptr<MessageDialog> m_message_dialog;
+
+    std::unordered_map<int,ViewCoords> m_bookmarks;
+
+    EventManager::SubscriptionToken       m_tabselected_event_token;
+    EventManager::SubscriptionToken       m_event_selection_changed_event_token;
+
+    std::string m_save_notification_id;
 };
 
 }  // namespace View

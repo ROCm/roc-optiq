@@ -12,6 +12,13 @@
 
 using namespace RocProfVis::View;
 
+const uint64_t DataProvider::EVENT_TABLE_REQUEST_ID  = MakeRequestId(RequestType::kFetchTrackEventTable);
+const uint64_t DataProvider::SAMPLE_TABLE_REQUEST_ID = MakeRequestId(RequestType::kFetchTrackSampleTable);
+const uint64_t DataProvider::EVENT_EXTENDED_DATA_REQUEST_ID = MakeRequestId(RequestType::kFetchEventExtendedData);
+const uint64_t DataProvider::EVENT_FLOW_DATA_REQUEST_ID     = MakeRequestId(RequestType::kFetchEventFlowDetails);
+const uint64_t DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID = MakeRequestId(RequestType::kFetchEventCallStack);
+const uint64_t DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID = MakeRequestId(RequestType::kSaveTrimmedTrace);
+
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
 , m_trace_future(nullptr)
@@ -25,46 +32,18 @@ DataProvider::DataProvider()
 , m_max_ts(0)
 , m_trace_file_path("")
 , m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
-, m_selected_event({})
 {}
 
 DataProvider::~DataProvider() { CloseController(); }
 
-void
-DataProvider::SetSelectedEvent(selected_event_t event)
+const event_info_t*
+DataProvider::GetEventInfo(uint64_t event_id) const
 {
-    m_selected_event = event;
-   FetchEventFlowDetails(event.event_id); //Trigger arrow render if applicable on UI if applicable 
-}
-
-selected_event_t
-DataProvider::GetSelectedEvent()
-{
-    return m_selected_event;
-}
-
-const event_info_t&
-DataProvider::GetEventInfoStruct() const
-{
-    return m_event_info;
-}
-
-const flow_info_t&
-DataProvider::GetFlowInfo() const
-{
-    return m_flow_info;
-}
-
-const call_stack_info_t&
-DataProvider::GetCallStackInfo() const
-{
-    return m_call_stack_info;
-}
-
-uint64_t
-DataProvider::GetSelectedEventId()
-{
-    return m_selected_event.event_id;
+    if(m_event_data.count(event_id) > 0)
+    {
+        return &m_event_data.at(event_id);
+    }
+    return nullptr;
 }
 
 void
@@ -281,7 +260,7 @@ DataProvider::ClearTable(TableType type)
 
 void
 DataProvider::SetTrackDataReadyCallback(
-    const std::function<void(uint64_t, const std::string&)>& callback)
+    const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>& callback)
 {
     m_track_data_ready_callback = callback;
 }
@@ -756,7 +735,6 @@ DataProvider::HandleLoadTrackMetaData()
                 delete[] str_buffer;
                 str_buffer_length = length + 1;
                 str_buffer        = new char[str_buffer_length];
-                spdlog::debug("Resizing str buffer to {}", str_buffer_length);
             }
             length += 1;
             result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
@@ -961,8 +939,9 @@ DataProvider::SaveTrimmedTrace(const std::string& path, double start_ns, double 
 }
 
 bool
-DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
-                              uint32_t horz_pixel_range, uint64_t group_id)
+DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
+                              uint32_t horz_pixel_range, uint8_t group_id,
+                              uint16_t chunk_index, size_t chunk_count)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -971,10 +950,14 @@ DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
         return false;
     }
 
+    uint64_t request_id =
+        MakeTrackDataRequestId(track_id, chunk_index, group_id, RequestType::kFetchTrack);
+
     const track_info_t* metadata = GetTrackInfo(track_id);
     if(metadata)
     {
-        auto it = m_requests.find(track_id);
+
+        auto it = m_requests.find(request_id);
         // only allow load if a request for this id (track) is not pending
         if(it == m_requests.end())
         {
@@ -999,15 +982,17 @@ DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
                 request_info.request_future     = track_future;
                 request_info.request_obj_handle = track_handle;
                 request_info.request_args       = nullptr;
-                request_info.request_id         = track_id;
+                request_info.request_id         = request_id; //track_id;
                 request_info.loading_state      = ProviderState::kLoading;
                 request_info.request_type       = RequestType::kFetchTrack;
                 request_info.internal_request   = false;
 
-                auto params = std::make_shared<TrackRequestParams>(
-                    track_id, start_ts, end_ts, horz_pixel_range, group_id);
+                auto params = std::make_shared<TrackRequestParams>(track_id, start_ts, end_ts,
+                                                                horz_pixel_range, group_id,
+                                                                chunk_index, chunk_count);
                 request_info.custom_params = params;
 
+                request_info.request_time = std::chrono::steady_clock::now();
                 m_requests.emplace(request_info.request_id, request_info);
 
                 spdlog::debug("Fetching track graph data {}", track_id);
@@ -1035,29 +1020,34 @@ DataProvider::FetchWholeTrack(uint64_t track_id, double start_ts, double end_ts,
     return false;
 }
 
-bool
-DataProvider::FetchTrack(uint64_t track_id, double start_ts, double end_ts,
-                         uint32_t horz_pixel_range, uint64_t group_id)
+std::pair<bool, uint64_t>
+DataProvider::FetchTrack(uint32_t track_id, double start_ts, double end_ts,
+                         uint32_t horz_pixel_range, uint8_t group_id,
+                         uint16_t chunk_index, size_t chunk_count)
 {
     TrackRequestParams request_params(track_id, start_ts, end_ts, horz_pixel_range,
-                                      group_id);
+                                      group_id, chunk_index, chunk_count);
     return FetchTrack(request_params);
 }
 
-bool
+std::pair<bool, uint64_t>
 DataProvider::FetchTrack(const TrackRequestParams& request_params)
 {
     if(m_state != ProviderState::kReady)
     {
         spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
                       static_cast<int>(m_state));
-        return false;
+        return {false,0};
     }
+
+    uint64_t request_id =
+        MakeTrackDataRequestId(request_params.m_track_id, request_params.m_chunk_index,
+                               request_params.m_data_group_id, RequestType::kFetchGraph);
 
     if(GetTrackInfo(request_params.m_track_id))
     {
-        auto it = m_requests.find(request_params.m_track_id);
-        // only allow load if a request for this id (track) is not pending
+        auto it = m_requests.find(request_id);
+        // only allow load if a request for this id (track chunk) is not pending
         if(it == m_requests.end())
         {
             rocprofvis_handle_t* graph_future = rocprofvis_controller_future_alloc();
@@ -1079,13 +1069,12 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
 
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             
-
                 data_req_info_t request_info;
                 request_info.request_array      = graph_array;
                 request_info.request_future     = graph_future;
                 request_info.request_obj_handle = graph_obj;
                 request_info.request_args       = nullptr;
-                request_info.request_id         = request_params.m_track_id;
+                request_info.request_id         = request_id;
                 request_info.loading_state      = ProviderState::kLoading;
                 request_info.request_type       = RequestType::kFetchGraph;
                 request_info.internal_request   = false;
@@ -1093,12 +1082,10 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
                 auto params = std::make_shared<TrackRequestParams>(request_params);
                 request_info.custom_params = params;
 
+                request_info.request_time = std::chrono::steady_clock::now();
                 m_requests.emplace(request_info.request_id, request_info);
 
-                spdlog::debug("Fetching track data {} from controller {}",
-                            request_params.m_track_id,
-                            reinterpret_cast<unsigned long long>(m_trace_controller));
-                return true;
+                return {true, request_id};
             }
             else 
             {
@@ -1119,7 +1106,7 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
     {
         spdlog::debug("Cannot fetch Track id {} is invalid", request_params.m_track_id);
     }
-    return false;
+    return {false, 0};
 }
 
 bool
@@ -1643,12 +1630,18 @@ RocProfVis::View::DataProvider::GetTrackInfoList()
 }
 
 bool
-DataProvider::FreeTrack(uint64_t track_id)
+DataProvider::FreeTrack(uint64_t track_id, bool force /* = false */)
 {
     if(m_raw_trackdata.count(track_id) > 0)
     {
         if(m_raw_trackdata[track_id])
         {
+            if(!m_raw_trackdata[track_id]->AllDataReady() && !force) {
+                spdlog::debug("Cannot delete track data, not all data is ready for id: {}",
+                              track_id);
+                return false;
+            }
+
             delete m_raw_trackdata[track_id];
             m_raw_trackdata[track_id] = nullptr;
             spdlog::debug("Deleted track id: {}", track_id);
@@ -1662,6 +1655,47 @@ DataProvider::FreeTrack(uint64_t track_id)
     else
     {
         spdlog::debug("Cannot delete track data, invalid id: {}", track_id);
+    }
+    return false;
+}
+
+bool 
+DataProvider::CancelRequest(uint64_t request_id) 
+{
+    auto it = m_requests.find(request_id);
+    if(it != m_requests.end())  
+    {
+        spdlog::debug("Cancelling request id: {}", request_id);
+        data_req_info_t& request_info = it->second;
+        rocprofvis_result_t result = rocprofvis_controller_future_cancel(request_info.request_future);
+        if(result == kRocProfVisResultSuccess)
+        {
+            return true;
+        }
+        else
+        {
+            spdlog::debug("Failed to cancel request id: {}, result: {}", request_id, static_cast<int>(result));
+        }
+    }
+    else
+    {
+        spdlog::debug("Cannot cancel request, invalid id: {}", request_id);
+    }
+    return false;
+}
+
+bool
+DataProvider::FreeEvent(uint64_t event_id)
+{
+    if(m_event_data.count(event_id) > 0)
+    {
+        m_event_data.erase(event_id);
+        spdlog::debug("Deleted event id: {}", event_id);
+        return true;
+    }
+    else
+    {
+        spdlog::debug("Cannot delete event, invalid id: {}", event_id);
     }
     return false;
 }
@@ -1877,28 +1911,38 @@ DataProvider::ProcessEventCallStackRequest(data_req_info_t& req)
     }
 
     spdlog::debug("Event {} has {} call stack properties", req.request_id, prop_count);
-    m_call_stack_info.call_stack_data.clear();
-    m_call_stack_info.call_stack_data.resize(prop_count);
 
-    for(uint64_t i = 0; i < prop_count; i++)
+    std::shared_ptr<EventRequestParams> event_params =
+        std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
+    if(event_params && m_event_data.count(event_params->m_event_id) > 0)
     {
-        rocprofvis_handle_t* callstack_handle = nullptr;
-        result                                = rocprofvis_controller_get_object(
-            req.request_array, kRPVControllerArrayEntryIndexed, i, &callstack_handle);
-        if(result != kRocProfVisResultSuccess || !callstack_handle)
+        event_info_t& event_info = m_event_data[event_params->m_event_id];
+        event_info.call_stack_info.clear();
+        event_info.call_stack_info.resize(prop_count);
+
+        for(uint64_t i = 0; i < prop_count; i++)
         {
-            spdlog::warn("Failed to get call stack handle for entry {}", i);
-            continue;
+            rocprofvis_handle_t* callstack_handle = nullptr;
+            result                                = rocprofvis_controller_get_object(
+                req.request_array, kRPVControllerArrayEntryIndexed, i, &callstack_handle);
+            if(result != kRocProfVisResultSuccess || !callstack_handle)
+            {
+                spdlog::warn("Failed to get call stack handle for entry {}", i);
+                continue;
+            }
+
+            event_info.call_stack_info[i].function =
+                GetString(callstack_handle, kRPVControllerCallstackFunction, i);
+            event_info.call_stack_info[i].arguments =
+                GetString(callstack_handle, kRPVControllerCallstackArguments, i);
+            event_info.call_stack_info[i].line =
+                GetString(callstack_handle, kRPVControllerCallstackLine, i);
+
+            spdlog::debug("Call stack entry {}: function: {}, line: {}, arguments: {}", i,
+                          event_info.call_stack_info[i].function,
+                          event_info.call_stack_info[i].line,
+                          event_info.call_stack_info[i].arguments);
         }
-
-        auto& entry    = m_call_stack_info.call_stack_data[i];
-        entry.function = GetString(callstack_handle, kRPVControllerCallstackFunction, i);
-        entry.arguments =
-            GetString(callstack_handle, kRPVControllerCallstackArguments, i);
-        entry.line = GetString(callstack_handle, kRPVControllerCallstackLine, i);
-
-        spdlog::debug("Call stack entry {}: function: {}, line: {}, arguments: {}", i,
-                      entry.function, entry.line, entry.arguments);
     }
 
     rocprofvis_controller_array_free(req.request_array);
@@ -1925,26 +1969,32 @@ DataProvider::ProcessEventExtendedRequest(data_req_info_t& req)
         return;
     }
 
-    m_event_info.ext_data.clear();
-    m_event_info.ext_data.resize(prop_count);
-
-    for(uint64_t j = 0; j < prop_count; j++)
+    std::shared_ptr<EventRequestParams> event_params =
+        std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
+    if(event_params && m_event_data.count(event_params->m_event_id) > 0)
     {
-        rocprofvis_handle_t* ext_data_handle = nullptr;
-        result                               = rocprofvis_controller_get_object(
-            req.request_array, kRPVControllerArrayEntryIndexed, j, &ext_data_handle);
-        if(result != kRocProfVisResultSuccess || !ext_data_handle)
-        {
-            spdlog::warn("Failed to get extended data handle for entry {}", j);
-            continue;
-        }
+        event_info_t& event_info = m_event_data[event_params->m_event_id];
+        event_info.ext_info.clear();
+        event_info.ext_info.resize(prop_count);
 
-        m_event_info.ext_data[j].category =
-            GetString(ext_data_handle, kRPVControllerExtDataCategory, 0);
-        m_event_info.ext_data[j].name =
-            GetString(ext_data_handle, kRPVControllerExtDataName, 0);
-        m_event_info.ext_data[j].value =
-            GetString(ext_data_handle, kRPVControllerExtDataValue, 0);
+        for(uint64_t j = 0; j < prop_count; j++)
+        {
+            rocprofvis_handle_t* ext_data_handle = nullptr;
+            result                               = rocprofvis_controller_get_object(
+                req.request_array, kRPVControllerArrayEntryIndexed, j, &ext_data_handle);
+            if(result != kRocProfVisResultSuccess || !ext_data_handle)
+            {
+                spdlog::warn("Failed to get extended data handle for entry {}", j);
+                continue;
+            }
+
+            event_info.ext_info[j].category =
+                GetString(ext_data_handle, kRPVControllerExtDataCategory, 0);
+            event_info.ext_info[j].name =
+                GetString(ext_data_handle, kRPVControllerExtDataName, 0);
+            event_info.ext_info[j].value =
+                GetString(ext_data_handle, kRPVControllerExtDataValue, 0);
+        }
     }
 
     rocprofvis_controller_array_free(req.request_array);
@@ -1970,57 +2020,59 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
         return;
     }
 
-    m_flow_info.flow_data.clear();
-    m_flow_info.flow_data.resize(prop_count);
-
-    for(uint64_t j = 0; j < prop_count; j++)
+    std::shared_ptr<EventRequestParams> event_params =
+        std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
+    if(event_params && m_event_data.count(event_params->m_event_id) > 0)
     {
-        rocprofvis_handle_t* flow_control_handle = nullptr;
-        result                                   = rocprofvis_controller_get_object(
-            req.request_array, kRPVControllerArrayEntryIndexed, j, &flow_control_handle);
-        if(result != kRocProfVisResultSuccess || !flow_control_handle)
-        {
-            spdlog::warn("Failed to get flow control handle for entry {}", j);
-            continue;
-        }
+        event_info_t& event_info = m_event_data[event_params->m_event_id];
+        event_info.flow_info.clear();
+        event_info.flow_info.resize(prop_count);
 
-        uint64_t data = 0;
-        result        = rocprofvis_controller_get_uint64(flow_control_handle,
-                                                         kRPVControllerFlowControltId, 0, &data);
-        if(result == kRocProfVisResultSuccess)
+        for(uint64_t j = 0; j < prop_count; j++)
         {
-            m_flow_info.flow_data[j].id = data;
-        }
+            rocprofvis_handle_t* flow_control_handle = nullptr;
+            result = rocprofvis_controller_get_object(req.request_array,
+                                                      kRPVControllerArrayEntryIndexed, j,
+                                                      &flow_control_handle);
+            if(result != kRocProfVisResultSuccess || !flow_control_handle)
+            {
+                spdlog::warn("Failed to get flow control handle for entry {}", j);
+                continue;
+            }
 
-        data   = 0;
-        result = rocprofvis_controller_get_uint64(
-            flow_control_handle, kRPVControllerFlowControlTimestamp, 0, &data);
-        if(result == kRocProfVisResultSuccess)
-        {
-            m_flow_info.flow_data[j].timestamp = data;
-        }
+            uint64_t data = 0;
+            result        = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControltId, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].id  = data;
+            }
 
-        data   = 0;
-        result = rocprofvis_controller_get_uint64(
-            flow_control_handle, kRPVControllerFlowControlTrackId, 0, &data);
-        if(result == kRocProfVisResultSuccess)
-        {
-            m_flow_info.flow_data[j].track_id = static_cast<uint32_t>(data);
-        }
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlTimestamp, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].timestamp  = data;
+            }
 
-        data   = 0;
-        result = rocprofvis_controller_get_uint64(
-            flow_control_handle, kRPVControllerFlowControlDirection, 0, &data);
-        if(result == kRocProfVisResultSuccess)
-        {
-            m_flow_info.flow_data[j].direction = static_cast<uint32_t>(data);
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlTrackId, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].track_id  = data;
+            }
+
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlDirection, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].direction  = data;
+            }
         }
     }
-
-    // Trigger UI to create arrows for flow control events.
-    auto evt = std::make_shared<CreateArrowsViewEvent>(
-        static_cast<int>(RocEvents::kHandleUserArrowCreationEvent));
-    EventManager::GetInstance()->AddEvent(evt);
 
     rocprofvis_controller_array_free(req.request_array);
     req.request_array = nullptr;
@@ -2293,16 +2345,17 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
     {
         case kRPVControllerTrackTypeEvents:
         {
-            CreateRawEventData(*track_params, req.request_array);
+            CreateRawEventData(*track_params, req);
             break;
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(*track_params, req.request_array);
+            CreateRawSampleData(*track_params, req);
             break;
         }
         default:
         {
+            spdlog::debug("Unknown track type for track id {}, skipping", track_params->m_track_id);
             break;
         }
     }
@@ -2317,7 +2370,7 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
     // call the new data ready callback
     if(m_track_data_ready_callback)
     {
-        m_track_data_ready_callback(track_params->m_track_id, m_trace_file_path);
+        m_track_data_ready_callback(track_params->m_track_id, m_trace_file_path, req);
     }
 }
 
@@ -2333,44 +2386,50 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
         return;
     }
 
-    uint64_t graph_type = 0;
-    auto     graph      = req.request_obj_handle;
+    if(req.response_code == kRocProfVisResultSuccess) {
+        uint64_t graph_type = 0;
+        auto     graph      = req.request_obj_handle;
 
-    rocprofvis_result_t result =
-        rocprofvis_controller_get_uint64(graph, kRPVControllerGraphType, 0, &graph_type);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        rocprofvis_result_t result =
+            rocprofvis_controller_get_uint64(graph, kRPVControllerGraphType, 0, &graph_type);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    double min_ts = 0;
-    result = rocprofvis_controller_get_double(graph, kRPVControllerGraphStartTimestamp, 0,
-                                              &min_ts);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        double min_ts = 0;
+        result = rocprofvis_controller_get_double(graph, kRPVControllerGraphStartTimestamp, 0,
+                                                &min_ts);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    double max_ts = 0;
-    result = rocprofvis_controller_get_double(graph, kRPVControllerGraphEndTimestamp, 0,
-                                              &max_ts);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        double max_ts = 0;
+        result = rocprofvis_controller_get_double(graph, kRPVControllerGraphEndTimestamp, 0,
+                                                &max_ts);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    uint64_t item_count = 0;
-    result = rocprofvis_controller_get_uint64(graph, kRPVControllerGraphNumEntries, 0,
-                                              &item_count);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        uint64_t item_count = 0;
+        result = rocprofvis_controller_get_uint64(graph, kRPVControllerGraphNumEntries, 0,
+                                                &item_count);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    spdlog::debug("{} Graph item count {} min ts {} max ts {}", track_params->m_track_id,
-                  item_count, min_ts, max_ts);
+        spdlog::debug("{} Graph item count {} min ts {} max ts {}", track_params->m_track_id,
+                    item_count, min_ts, max_ts);
+
+    } else {
+        spdlog::debug("Graph request failed with code {}", req.response_code);
+    }
 
     // use the track type to determine what type of data is present in the graph array
     const track_info_t* metadata = GetTrackInfo(track_params->m_track_id);
     ROCPROFVIS_ASSERT(metadata);
+    
     switch(metadata->track_type)
     {
         case kRPVControllerTrackTypeEvents:
         {
-            CreateRawEventData(*track_params, req.request_array);
+            CreateRawEventData(*track_params, req);
             break;
         }
         case kRPVControllerTrackTypeSamples:
         {
-            CreateRawSampleData(*track_params, req.request_array);
+            CreateRawSampleData(*track_params, req);
             break;
         }
         default:
@@ -2389,29 +2448,53 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
     // call the new data ready callback
     if(m_track_data_ready_callback)
     {
-        m_track_data_ready_callback(track_params->m_track_id, m_trace_file_path);
+        m_track_data_ready_callback(track_params->m_track_id, m_trace_file_path, req);
     }
 }
 
 void
-DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
-                                  rocprofvis_controller_array_t* track_data)
+DataProvider::CreateRawSampleData(const TrackRequestParams& params, const data_req_info_t& req)
 {
+    rocprofvis_controller_array_t* track_data = req.request_array;
+    const std::chrono::steady_clock::time_point& request_time = req.request_time;
+    bool response_valid = (req.response_code == kRocProfVisResultSuccess);
+
     uint64_t            count  = 0;
+
+    if(response_valid)
+    {    
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         track_data, kRPVControllerArrayNumEntries, 0, &count);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    } else {
+        spdlog::warn("Sample track data request failed with code {}", req.response_code);
+        count = 0;
+    }
 
     RawTrackSampleData* raw_sample_data = nullptr;
-
     const RawTrackData* existing_raw_data = GetRawTrackData(params.m_track_id);
+    
+    // If group id matches, reuse existing raw data
     if(existing_raw_data && existing_raw_data->GetDataGroupID() == params.m_data_group_id)
     {
         raw_sample_data =
             dynamic_cast<RawTrackSampleData*>(m_raw_trackdata[params.m_track_id]);
     }
+    // If group id does not match ...
     else if(existing_raw_data)
     {
+        auto existing_timepoint =
+            m_raw_trackdata[params.m_track_id]->GetDataRequestTimePoint();
+
+        // check if the existing data is newer than the request time of this response
+        if(existing_timepoint > request_time)
+        {
+            spdlog::debug("Skipping track data with id {} for group {}, existing data is "
+                          "part of newer group ({})",
+                          params.m_track_id, params.m_data_group_id,
+                          existing_raw_data->GetDataGroupID());
+            return;
+        }
         delete m_raw_trackdata[params.m_track_id];
         m_raw_trackdata[params.m_track_id] = nullptr;
         spdlog::debug("Replacing existing track data with id {}", params.m_track_id);
@@ -2422,19 +2505,18 @@ DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
         spdlog::debug("Create sample track {} data with {} entries", params.m_track_id,
                       count);
         raw_sample_data = new RawTrackSampleData(params.m_track_id, params.m_start_ts,
-                                                 params.m_end_ts, params.m_data_group_id);
+                                                 params.m_end_ts, params.m_data_group_id, params.m_chunk_count);
     }
 
-    std::vector<rocprofvis_trace_counter_t>& buffer = raw_sample_data->GetWritableData();
-    uint64_t                                 current_size = buffer.size();
-    buffer.reserve(count + current_size);
+    std::vector<rocprofvis_trace_counter_t> buffer;
+    buffer.reserve(count);
 
-    std::unordered_set timepoint_set = raw_sample_data->GetWritableTimepoints();
+    std::unordered_set timepoint_set = raw_sample_data->GetWritableIdSet();
 
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_sample_t* sample = nullptr;
-        result                                 = rocprofvis_controller_get_object(
+        rocprofvis_result_t result             = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &sample);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
 
@@ -2464,31 +2546,62 @@ DataProvider::CreateRawSampleData(const TrackRequestParams&      params,
         trace_counter.m_value    = value;
     }
 
+    raw_sample_data->AddChunk(params.m_chunk_index, std::move(buffer));
+
     m_raw_trackdata[params.m_track_id] = raw_sample_data;
 }
 
 void
-DataProvider::CreateRawEventData(const TrackRequestParams&      params,
-                                 rocprofvis_controller_array_t* track_data)
+DataProvider::CreateRawEventData(const TrackRequestParams& params,
+                                 const data_req_info_t& req)
 {
+    rocprofvis_controller_array_t* track_data = req.request_array;
+    const std::chrono::steady_clock::time_point& request_time = req.request_time;
+    bool response_valid = (req.response_code == kRocProfVisResultSuccess);
+
     uint64_t            count  = 0;
-    rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-        track_data, kRPVControllerArrayNumEntries, 0, &count);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+    if(response_valid)
+    {
+        rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+            track_data, kRPVControllerArrayNumEntries, 0, &count);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    } else {
+        spdlog::warn("Event track data request failed with code {}", req.response_code);
+        count = 0;
+    }
 
     RawTrackEventData* raw_event_data = nullptr;
-
     const RawTrackData* existing_raw_data = GetRawTrackData(params.m_track_id);
+
+    // If group id matches, reuse existing raw data
     if(existing_raw_data && existing_raw_data->GetDataGroupID() == params.m_data_group_id)
     {
         raw_event_data =
             dynamic_cast<RawTrackEventData*>(m_raw_trackdata[params.m_track_id]);
     }
+    // If group id does not match ...
     else if(existing_raw_data)
     {
+        auto existing_timepoint =
+            m_raw_trackdata[params.m_track_id]->GetDataRequestTimePoint();
+
+        // check if the existing data is newer than the request time of this response
+        if(existing_timepoint > request_time)
+        {
+            spdlog::debug("Skipping track data with id {} for group {}, existing data is "
+                          "part of newer group ({})",
+                          params.m_track_id, params.m_data_group_id,
+                          existing_raw_data->GetDataGroupID());
+            return;
+        }
+
         delete m_raw_trackdata[params.m_track_id];
         m_raw_trackdata[params.m_track_id] = nullptr;
-        spdlog::debug("Replacing existing track data with id {}", params.m_track_id);
+        spdlog::debug(
+            "Replacing existing track data from group {} with group {} for id {}",
+            existing_raw_data->GetDataGroupID(), params.m_data_group_id,
+            params.m_track_id);
     }
 
     if(!raw_event_data)
@@ -2496,22 +2609,22 @@ DataProvider::CreateRawEventData(const TrackRequestParams&      params,
         spdlog::debug("Creating event track {} data with {} entries", params.m_track_id,
                       count);
         raw_event_data = new RawTrackEventData(params.m_track_id, params.m_start_ts,
-                                               params.m_end_ts, params.m_data_group_id);
+                                               params.m_end_ts, params.m_data_group_id, params.m_chunk_count);
     }
 
-    std::vector<rocprofvis_trace_event_t>& buffer = raw_event_data->GetWritableData();
-    uint64_t                               current_size = buffer.size();
-    buffer.reserve(count + current_size);
+    std::vector<rocprofvis_trace_event_t> buffer;
+    buffer.reserve(count);
 
     size_t str_buffer_length = 128;
     char*  str_buffer        = new char[str_buffer_length];
 
-    std::unordered_set event_set = raw_event_data->GetWritableEventSet();
+    std::unordered_set event_set = raw_event_data->GetWritableIdSet();
 
+    size_t real_count = 0;
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_event_t* event = nullptr;
-        result                               = rocprofvis_controller_get_object(
+        rocprofvis_result_t result           = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &event);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
 
@@ -2561,18 +2674,42 @@ DataProvider::CreateRawEventData(const TrackRequestParams&      params,
             delete[] str_buffer;
             str_buffer_length = length + 1;
             str_buffer        = new char[str_buffer_length];
-            spdlog::debug("Resizing str buffer to {}", str_buffer_length);
         }
         length += 1;
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   str_buffer, &length);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_name.assign(str_buffer);
+        real_count++;
     }
 
+    // Add the buffer to the raw event data
+    spdlog::debug("Adding {} event entries to track id {}", real_count, params.m_track_id);
+    raw_event_data->AddChunk(params.m_chunk_index, std::move(buffer));
     delete[] str_buffer;
 
     m_raw_trackdata[params.m_track_id] = raw_event_data;
+}
+
+bool
+DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
+{
+    m_event_data[event_id].track_id   = track_id;
+    const RawTrackEventData* event_track =
+        dynamic_cast<const RawTrackEventData*>(GetRawTrackData(track_id));
+    if(event_track)
+    {
+        for(const rocprofvis_trace_event_t& event : event_track->GetData())
+        {
+            if(event.m_id == event_id)
+            {
+                m_event_data[event_id].basic_info = event;
+                break;
+            }
+        }
+    }
+    return FetchEventExtData(event_id) && FetchEventFlowDetails(event_id) &&
+                       FetchEventCallStackData(event_id);;
 }
 
 bool
@@ -2584,9 +2721,6 @@ DataProvider::FetchEventExtData(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
-
-    m_event_info          = {};
-    m_event_info.event_id = event_id;
 
     auto future   = rocprofvis_controller_future_alloc();
     auto outArray = rocprofvis_controller_array_alloc(0);
@@ -2607,6 +2741,7 @@ DataProvider::FetchEventExtData(uint64_t event_id)
         request_info.request_id         = EVENT_EXTENDED_DATA_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventExtendedData;
+        request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
         request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
@@ -2632,9 +2767,6 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
         return false;
     }
 
-    m_flow_info          = {};
-    m_flow_info.event_id = event_id;
-
     auto future   = rocprofvis_controller_future_alloc();
     auto outArray = rocprofvis_controller_array_alloc(0);
     ROCPROFVIS_ASSERT(future != nullptr);
@@ -2654,6 +2786,7 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
         request_info.request_id         = EVENT_FLOW_DATA_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventFlowDetails;
+        request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
         request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
@@ -2679,9 +2812,6 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         return false;
     }
 
-    m_call_stack_info          = {};
-    m_call_stack_info.event_id = event_id;
-
     auto future   = rocprofvis_controller_future_alloc();
     auto outArray = rocprofvis_controller_array_alloc(0);
     ROCPROFVIS_ASSERT(future != nullptr);
@@ -2701,6 +2831,7 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         request_info.request_id         = EVENT_CALL_STACK_DATA_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventCallStack;
+        request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
         request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);

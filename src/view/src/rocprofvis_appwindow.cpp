@@ -8,6 +8,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings.h"
+#include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
@@ -55,16 +56,17 @@ AppWindow::DestroyInstance()
 
 AppWindow::AppWindow()
 : m_main_view(nullptr)
+, m_settings_panel(std::make_unique<SettingsPanel>())
 , m_tab_container(nullptr)
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
+, m_open_about_dialog(false)
 , m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 , m_show_debug_window(false)
 , m_show_provider_test_widow(false)
 , m_show_metrics(false)
 #endif
-, m_open_about_dialog(false)
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
 {}
 
@@ -116,9 +118,6 @@ AppWindow::Init()
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
 
-    // default dark mode
-    //Settings::GetInstance().DarkMode();
-
     return result;
 }
 
@@ -139,11 +138,12 @@ AppWindow::Update()
 #endif
 }
 
-bool AppWindow::IsTrimSaveAllowed() {
-
+bool
+AppWindow::IsTrimSaveAllowed()
+{
     // Check if save is allowed
-    bool save_allowed  = false;
-    auto active_tab = m_tab_container->GetActiveTab();
+    bool save_allowed = false;
+    auto active_tab   = m_tab_container->GetActiveTab();
     if(active_tab)
     {
         // Check if the active tab is a TraceView
@@ -237,6 +237,11 @@ AppWindow::Render()
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
     m_confirmation_dialog->Render();
 
+    if(m_settings_panel->IsOpen())
+    {
+        m_settings_panel->Render();
+    }
+
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
     // ImGuiStyleVar_WindowRounding
@@ -260,9 +265,9 @@ AppWindow::RenderFileDialogs()
         return;  // No file dialog is opened, nothing to render
     }
 
-    //Set Itemspacing to values from original default ImGui style
-    //custom values to break the 3rd party file dialog implementation
-    //especially the cell padding
+    // Set Itemspacing to values from original default ImGui style
+    // custom values to break the 3rd party file dialog implementation
+    // especially the cell padding
     auto defaultStyle = Settings::GetInstance().GetDefaultStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, defaultStyle.ItemSpacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, defaultStyle.WindowPadding);
@@ -347,15 +352,10 @@ AppWindow::RenderSettingsMenu()
 {
     if(ImGui::BeginMenu("Settings"))
     {
-        if(ImGui::MenuItem("Light Theme", nullptr, !Settings::GetInstance().IsDarkMode()))
+        if(ImGui::MenuItem("Display Settings"))
         {
-            Settings::GetInstance().LightMode();
+            m_settings_panel->SetOpen(true);
         }
-        if(ImGui::MenuItem("Dark Theme", nullptr, Settings::GetInstance().IsDarkMode()))
-        {
-            Settings::GetInstance().DarkMode();
-        }
-
         ImGui::EndMenu();
     }
 }
@@ -462,11 +462,6 @@ AppWindow::RenderDeveloperMenu()
 {
     if(ImGui::BeginMenu("Developer Options"))
     {
-        if(ImGui::MenuItem("Horizontal Render", nullptr,
-                           Settings::GetInstance().IsHorizontalRender()))
-        {
-            Settings::GetInstance().HorizontalRender();
-        }
         // Toggele ImGui's built-in metrics window
         if(ImGui::MenuItem("Show Metrics", nullptr, m_show_metrics))
         {

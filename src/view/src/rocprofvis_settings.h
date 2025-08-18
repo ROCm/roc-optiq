@@ -11,6 +11,14 @@ namespace RocProfVis
 namespace View
 {
 
+typedef struct DisplaySettings
+{
+    float dpi;
+    bool  use_dark_mode;
+    bool  dpi_based_scaling;
+    int   font_size_index;
+} DisplaySettings;
+
 enum class Colors
 {
     kMetaDataColor,
@@ -74,10 +82,12 @@ enum class FontType
 class FontManager
 {
 public:
-    FontManager()                              = default;
-    ~FontManager()                             = default;
-    FontManager(const FontManager&)            = delete;
-    FontManager& operator=(const FontManager&) = delete;
+    FontManager();
+    ~FontManager();
+    FontManager(const FontManager&)                  = delete;
+    FontManager&       operator=(const FontManager&) = delete;
+    std::vector<float> GetFontSizes();
+    ImFont*            GetIconFontByIndex(int idx);
 
     /*
      * Called to initialize the font manager. Should be once called after ImGui context is
@@ -88,14 +98,18 @@ public:
     ImFont* GetFont(FontType font_type);
     ImFont* GetIconFont(FontType font_type);
 
-    void SetFontSize(int size_index);
-    int  GetFontSizeIndexForDPI(float dpi);
+    void    SetFontSize(int size_index);
+    int     GetCurrentFontSizeIndex();
+    ImFont* GetFontByIndex(int idx);
+    int     GetFontSizeIndexForDPI(float dpi);
 
 private:
-    std::vector<ImFont*>              m_fonts;
-    std::vector<ImFont*>              m_icon_fonts;
+    std::vector<ImFont*> m_fonts;
+    std::vector<float>   m_font_sizes;
+    std::vector<ImFont*> m_icon_fonts;
     std::vector<ImFont*> m_all_fonts;
-    std::vector<int>                  m_font_size_indices;
+    std::vector<int>     m_font_size_indices;
+    std::vector<ImFont*> m_all_icon_fonts;
 };
 
 class Settings
@@ -114,11 +128,15 @@ public:
     void DarkMode();
     void LightMode();
     bool IsDarkMode() const;
-    bool HorizontalRender();
-    bool IsHorizontalRender();
 
     FontManager&      GetFontManager() { return m_font_manager; }
     const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
+    bool              IsDPIBasedScaling() const;
+    void              SetDPIBasedScaling(bool enabled);
+    DisplaySettings&  GetCurrentDisplaySettings();
+    void              RestoreDisplaySettings(const DisplaySettings& settings);
+    DisplaySettings&  GetInitialDisplaySettings();
+    void              SetDisplaySettings(const DisplaySettings& settings);
 
 private:
     Settings();
@@ -129,11 +147,13 @@ private:
 
     std::vector<ImU32> m_color_store;
     std::vector<ImU32> m_flame_color_wheel;
-    float              m_DPI;
-    bool               m_use_dark_mode;
-    bool               m_use_horizontal_rendering;
-    FontManager        m_font_manager;
-    ImGuiStyle         m_default_style;
+
+    FontManager m_font_manager;
+    ImGuiStyle  m_default_style;
+    DisplaySettings
+        m_display_settings_initial;  // Needed if you want to truly go back to factory
+                                     // settings after changing settings and saving.
+    DisplaySettings m_display_settings_current;
 };
 
 }  // namespace View

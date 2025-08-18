@@ -13,8 +13,10 @@
 #include <stdlib.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
+ 
+#include "widgets/rocprofvis_debug_window.h"
 #include <utility>
-#include "spdlog/spdlog.h"
+ 
 
 std::pair<GLFWimage, unsigned char*>
 glfw_create_icon()
@@ -114,30 +116,9 @@ main(int, char**)
 
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
-                    /*
-                                        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
 
-                                        ImGui::SetNextWindowPos(ImVec2(displaySize.x, 0),
-                       ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-
-                                        ImGui::SetNextWindowSize(
-                                            ImVec2(displaySize.x * 0.8f, displaySize.y *
-                       0.8f), ImGuiCond_Always);
-
-                                        ImGuiWindowFlags windowFlags =
-                                            ImGuiWindowFlags_NoMove |
-                       ImGuiWindowFlags_NoResize;
-
-                                        // Open ImGui window
-                                        ImGui::Begin("Line Chart Window", nullptr,
-                       windowFlags);
-                    */
                     rocprofvis_view_render();
 
-                    // Close ImGui window
-                    //                  ImGui::End();
-
-                    // Rendering
                     ImGui::Render();
                     ImDrawData* draw_data    = ImGui::GetDrawData();
                     const bool  is_minimized = (draw_data->DisplaySize.x <= 0.0f ||

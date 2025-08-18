@@ -20,12 +20,44 @@ namespace RocProfVis
 {
 namespace View
 {
+
+FontManager::FontManager()
+: m_font_sizes(
+      { 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 20, 21, 23, 25, 27, 29, 33 })
+{}
+
+FontManager::~FontManager() {}
+
+std::vector<float>
+FontManager::GetFontSizes()
+{
+    // Return a vector of font sizes
+    return m_font_sizes;
+}
+ImFont*
+FontManager::GetIconFontByIndex(int idx)
+{
+    if(idx < 0 || idx >= static_cast<int>(m_all_icon_fonts.size())) return nullptr;
+    return m_all_icon_fonts[idx];
+}
+
+int
+FontManager::GetCurrentFontSizeIndex()
+{
+    // Return the font size index for the default font type
+    return m_font_size_indices[static_cast<int>(FontType::kDefault)];
+}
+ImFont*
+FontManager::GetFontByIndex(int idx)
+{
+    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return nullptr;
+    return m_all_fonts[idx];
+}
+
 int
 FontManager::GetFontSizeIndexForDPI(float dpi)
 {
     // DPI returns the dots per inch of the display. Essentially, it is a scaling factor.
-    constexpr float font_sizes[] = { 7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-                                     20, 21, 23, 25, 27, 29, 33, 37, 41, 49, 57, 65 };
 
     float base_size = 13.0f;
     float scaled_size =
@@ -35,12 +67,13 @@ FontManager::GetFontSizeIndexForDPI(float dpi)
 
     // Find the index of the font size closest to scaled_size
     int best_index = 0;
-    for(int i = 1; i < static_cast<int>(std::size(font_sizes)); ++i)
+    for(int i = 1; i < static_cast<int>(std::size(m_font_sizes)); ++i)
     {
-        if(std::abs(font_sizes[i] - scaled_size) <
-           std::abs(font_sizes[best_index] - scaled_size))
+        if(std::abs(m_font_sizes[i] - scaled_size) <
+           std::abs(m_font_sizes[best_index] - scaled_size))
             best_index = i;
     }
+
     return best_index;
 }
 
@@ -56,6 +89,7 @@ FontManager::SetFontSize(int size_index)
     {
         m_font_size_indices[i] = size_index;
         m_fonts[i]             = m_all_fonts[size_index];
+        m_icon_fonts[i]        = m_all_icon_fonts[size_index];
     }
 
     ImGui::GetIO().FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
@@ -66,10 +100,7 @@ FontManager::Init()
     ImGuiIO& io = ImGui::GetIO();
     m_fonts.clear();
 
-    constexpr float font_sizes[] = { 7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-                                     20, 21, 23, 25, 27, 29, 33, 37, 41, 49, 57, 65 };
-
-    constexpr int num_sizes = sizeof(font_sizes) / sizeof(font_sizes[0]);
+    const int     num_sizes = static_cast<int>(m_font_sizes.size());
     constexpr int num_types = static_cast<int>(FontType::__kLastFont);
 
 #ifdef _WIN32
@@ -107,9 +138,21 @@ FontManager::Init()
     for(int sz = 0; sz < num_sizes; ++sz)
     {
         ImFont* font = nullptr;
-        if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, font_sizes[sz]);
+        if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, m_font_sizes[sz]);
         if(!font) font = io.Fonts->AddFontDefault();
         m_all_fonts[sz] = font;
+    }
+
+    // Load all icon fonts
+    m_all_icon_fonts.clear();
+    m_all_icon_fonts.resize(num_sizes, nullptr);
+
+    for(int sz = 0; sz < num_sizes; ++sz)
+    {
+        ImFont* icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
+            &icon_font_compressed_data, icon_font_compressed_size, m_font_sizes[sz],
+            &config, icon_ranges);
+        m_all_icon_fonts[sz] = icon_font;
     }
 
     // Set m_fonts to currently selected size for each FontType
@@ -120,7 +163,7 @@ FontManager::Init()
 
         // Load icon font for each type at the selected size
         m_icon_fonts[type] = io.Fonts->AddFontFromMemoryCompressedTTF(
-            &icon_font_compressed_data, icon_font_compressed_size, font_sizes[sz_idx],
+            &icon_font_compressed_data, icon_font_compressed_size, m_font_sizes[sz_idx],
             &config, icon_ranges);
     }
 
@@ -260,20 +303,6 @@ Settings::GetInstance()
     return instance;
 }
 
-bool
-Settings::IsHorizontalRender()
-{
-    return m_use_horizontal_rendering;
-}
-
-bool
-Settings::HorizontalRender()
-{
-    m_use_horizontal_rendering = !m_use_horizontal_rendering;
-    spdlog::info("Enable Dynamic Loading: {0}", (uint32_t) m_use_horizontal_rendering);
-    return m_use_horizontal_rendering;
-}
-
 void
 Settings::ApplyColorStyling()
 {
@@ -402,7 +431,7 @@ Settings::DarkMode()
     ImGui::StyleColorsDark();
     ImPlot::StyleColorsDark();
     ApplyColorStyling();
-    m_use_dark_mode = true;
+    m_display_settings_current.use_dark_mode = true;
 }
 
 void
@@ -412,25 +441,39 @@ Settings::LightMode()
     ImGui::StyleColorsLight();
     ImPlot::StyleColorsLight();
     ApplyColorStyling();
-    m_use_dark_mode = false;
+    m_display_settings_current.use_dark_mode = false;
 }
 
 bool
 Settings::IsDarkMode() const
 {
-    return m_use_dark_mode;
+    return m_display_settings_current.use_dark_mode;
 }
 
 void
 Settings::SetDPI(float DPI)
 {
-    m_DPI = DPI;
+    m_display_settings_current.dpi = DPI;
 }
 
 float
 Settings ::GetDPI()
 {
-    return m_DPI;
+    return m_display_settings_current.dpi;
+}
+void
+Settings::SetDisplaySettings(const DisplaySettings& settings)
+{
+    bool font_changed =
+        (m_display_settings_current.font_size_index != settings.font_size_index) ||
+        (m_display_settings_current.dpi_based_scaling != settings.dpi_based_scaling);
+
+    m_display_settings_current = settings;
+
+    if(font_changed)
+    {
+        GetFontManager().SetFontSize(m_display_settings_current.font_size_index);
+    }
 }
 
 ImU32
@@ -450,23 +493,75 @@ Settings::GetColorWheel()
 {
     return m_flame_color_wheel;
 }
+bool
+Settings::IsDPIBasedScaling() const
+{
+    return m_display_settings_current.dpi_based_scaling;
+}
 
+void
+Settings::SetDPIBasedScaling(bool enabled)
+{
+    m_display_settings_current.dpi_based_scaling = enabled;
+}
 Settings::Settings()
 : m_color_store(static_cast<int>(Colors::__kLastColor))
-, m_DPI(1)
 , m_flame_color_wheel({
 
       IM_COL32(0, 114, 188, 204), IM_COL32(0, 158, 115, 204), IM_COL32(240, 228, 66, 204),
       IM_COL32(204, 121, 167, 204), IM_COL32(86, 180, 233, 204),
       IM_COL32(213, 94, 0, 204), IM_COL32(0, 204, 102, 204), IM_COL32(230, 159, 0, 204),
       IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204) })
-, m_use_horizontal_rendering(true)
+, m_display_settings_current(DisplaySettings())
 {
     InitStyling();
     LightMode();
+
+    m_display_settings_initial               = DisplaySettings();
+    m_display_settings_initial.dpi           = 1.5;  // Will be set to the current DPI.
+    m_display_settings_initial.use_dark_mode = false;
+    m_display_settings_initial.dpi_based_scaling = true;
+    m_display_settings_initial.font_size_index   = 6;  // Default to 12pt font size
+    m_display_settings_current =
+        m_display_settings_initial;  // Once file saving is enabled this will point to
+                                     // file contents.
 }
 
 Settings::~Settings() {}
+
+DisplaySettings&
+Settings::GetCurrentDisplaySettings()
+{
+    return m_display_settings_current;
+}
+DisplaySettings&
+Settings::GetInitialDisplaySettings()
+{
+    return m_display_settings_initial;
+}
+void
+Settings::RestoreDisplaySettings(const DisplaySettings& settings)
+{
+    SetDPI(settings.dpi);
+    SetDPIBasedScaling(settings.dpi_based_scaling);
+
+    if(settings.use_dark_mode)
+        DarkMode();
+    else
+        LightMode();
+
+    if(settings.dpi_based_scaling)
+    {
+        int dpi_index = m_font_manager.GetFontSizeIndexForDPI(settings.dpi);
+        m_font_manager.SetFontSize(dpi_index);
+        m_display_settings_current.font_size_index = dpi_index;
+    }
+    else
+    {
+        m_font_manager.SetFontSize(settings.font_size_index);
+        m_display_settings_current.font_size_index = settings.font_size_index;
+    }
+}
 
 void
 Settings::InitStyling()

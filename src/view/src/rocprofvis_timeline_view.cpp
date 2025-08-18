@@ -36,9 +36,8 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_max_x(std::numeric_limits<double>::lowest())
 , m_min_y(std::numeric_limits<double>::max())
 , m_max_y(std::numeric_limits<double>::lowest())
-, m_scroll_position(0.0f)
+, m_scroll_position_y(0.0f)
 , m_content_max_y_scroll(0.0f)
-, m_scrubber_position(0.0f)
 , m_v_min_x(0.0f)
 , m_v_max_x(0.0f)
 , m_pixels_per_ns(0.0f)
@@ -56,9 +55,9 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_new_track_token(static_cast<uint64_t>(-1))
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_settings(Settings::GetInstance())
-, m_v_past_width(0)
+, m_last_data_req_v_width(0)
 , m_v_width(0)
-, m_viewport_past_position(0)
+, m_last_data_req_view_time_offset_ns(0)
 , m_graph_size()
 , m_range_x(0.0f)
 , m_can_drag_to_pan(false)
@@ -113,7 +112,7 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImGui::BeginChild("Arrows Overlay", ImVec2(m_graph_size.x, m_graph_size.y), false,
                       window_flags);
 
-    ImGui::SetScrollY(static_cast<float>(m_scroll_position));
+    ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
     ImGui::BeginChild("Arrows Overlay Content", ImVec2(m_graph_size.x, total_height),
                       false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -140,8 +139,8 @@ TimelineView::ScrollToTrack(const uint64_t& track_id)
 {
     if(m_track_height_total.count(track_id) > 0)
     {
-        m_scroll_position = std::min(m_content_max_y_scroll, static_cast<double>(m_track_height_total[track_id]));
-        ImGui::SetScrollY(m_scroll_position); 
+        m_scroll_position_y = std::min(m_content_max_y_scroll, m_track_height_total[track_id]);
+        ImGui::SetScrollY(m_scroll_position_y); 
     }
 }
 void
@@ -197,8 +196,7 @@ TimelineView::ResetView()
     m_max_x               = std::numeric_limits<double>::lowest();
     m_min_y               = std::numeric_limits<double>::max();
     m_max_y               = std::numeric_limits<double>::lowest();
-    m_scroll_position     = 0.0f;
-    m_scrubber_position   = 0.0f;
+    m_scroll_position_y   = 0.0f;
     m_v_min_x             = 0.0f;
     m_v_max_x             = 0.0f;
     m_pixels_per_ns       = 0.0f;
@@ -847,31 +845,51 @@ TimelineView::RenderGraphView()
     if(m_previous_scroll_position != temp_scroll_position)
     {
         m_previous_scroll_position = temp_scroll_position;
-        m_scroll_position          = temp_scroll_position;
+        m_scroll_position_y          = temp_scroll_position;
     }
-    else if(m_scroll_position != temp_scroll_position)
+    else if(m_scroll_position_y != temp_scroll_position)
     {
-        ImGui::SetScrollY(m_scroll_position);
+        ImGui::SetScrollY(m_scroll_position_y);
     }
 
     ImVec2 window_size             = m_graph_size;
-    bool   request_horizontal_data = false;
+    bool   request_data = false;
 
-    if(std::abs(m_view_time_offset_ns - m_viewport_past_position) > m_v_width)
-    {
-        m_viewport_past_position = m_view_time_offset_ns;
-        request_horizontal_data  = true;
-    }
     // for zooming out
-    if(m_v_width - m_v_past_width > m_v_past_width)
+    if(m_v_width - m_last_data_req_v_width > m_last_data_req_v_width)
     {
-        request_horizontal_data = true;
-        m_v_past_width          = m_v_width;
+        spdlog::debug("Zooming out: m_last_data_req_v_width: {}, m_v_width: {}, "
+                      "m_last_data_req_view_time_offset_ns: {}",
+                      m_last_data_req_v_width, m_v_width,
+                      m_last_data_req_view_time_offset_ns);
+
+        m_last_data_req_v_width                      = m_v_width;
+        m_last_data_req_view_time_offset_ns = m_view_time_offset_ns;
+        request_data                        = true;
     }
     // zooming in
-    else if(m_v_past_width - m_v_width > 0)
+    else if(m_last_data_req_v_width > m_v_width * 2.0f)
     {
-        m_v_past_width = m_v_width;
+        spdlog::debug("Zooming in: m_last_data_req_v_width: {}, m_v_width: {}, "
+                      "m_last_data_req_view_time_offset_ns: {}",
+                      m_last_data_req_v_width, m_v_width,
+                      m_last_data_req_view_time_offset_ns);
+
+        m_last_data_req_v_width                      = m_v_width;
+        m_last_data_req_view_time_offset_ns = m_view_time_offset_ns;
+        request_data                        = true;
+    }
+    // for panning
+    else if(std::abs(m_view_time_offset_ns - m_last_data_req_view_time_offset_ns) >
+            m_v_width)
+    {
+        spdlog::debug("Panning: m_last_data_req_v_width: {}, m_v_width: {}, "
+                      "m_last_data_req_view_time_offset_ns: {}",
+                      m_last_data_req_v_width, m_v_width,
+                      m_last_data_req_view_time_offset_ns);
+
+        m_last_data_req_view_time_offset_ns = m_view_time_offset_ns;
+        request_data                        = true;
     }
 
     for(int i = 0; i < m_graphs.size(); i++)
@@ -890,10 +908,10 @@ TimelineView::RenderGraphView()
             float track_bottom = track_top + track_height;
 
             // Calculate deltas for out-of-view tracks
-            float delta_top = m_scroll_position -
+            float delta_top = m_scroll_position_y -
                               track_bottom;  // Positive if the track is above the view
             float delta_bottom =
-                track_top - (m_scroll_position +
+                track_top - (m_scroll_position_y +
                              m_graph_size.y);  // Positive if the track is below the view
 
             // Save distance for book keeping
@@ -906,8 +924,8 @@ TimelineView::RenderGraphView()
                                  m_reorder_request.track_id == track_item.chart->GetID();
 
             // Check if the track is visible
-            bool is_visible = (track_bottom >= m_scroll_position &&
-                               track_top <= m_scroll_position + m_graph_size.y) ||
+            bool is_visible = (track_bottom >= m_scroll_position_y &&
+                               track_top <= m_scroll_position_y + m_graph_size.y) ||
                               is_reordering;
 
             track_item.chart->SetInViewVertical(is_visible);
@@ -917,7 +935,7 @@ TimelineView::RenderGraphView()
                 // Request data for the chart if it doesn't have data
                 if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
                                                         TrackDataRequestState::kIdle) ||
-                   request_horizontal_data && m_settings.IsHorizontalRender())
+                   request_data && m_settings.IsHorizontalRender())
                 {
                     // Request one viewport worth of data on each side of the current view
                     double buffer_distance = m_v_width;
@@ -943,7 +961,7 @@ TimelineView::RenderGraphView()
 
                     track_item.chart->UpdateMovement(m_zoom, m_view_time_offset_ns,
                                                      m_min_x, m_max_x, m_pixels_per_ns,
-                                                     m_scroll_position);
+                                                     m_scroll_position_y);
 
                     m_resize_activity |= track_item.chart->GetResizeStatus();
 
@@ -1042,7 +1060,7 @@ TimelineView::RenderGraphView()
                    container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)
                 {
                     ImGui::SetScrollY(
-                        m_scroll_position -
+                        m_scroll_position_y -
                         ImGui::GetFrameHeight() *
                             std::min(
                                 1.0f,
@@ -1054,7 +1072,7 @@ TimelineView::RenderGraphView()
                         container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD))
                 {
                     ImGui::SetScrollY(
-                        m_scroll_position +
+                        m_scroll_position_y +
                         ImGui::GetFrameHeight() *
                             std::min(
                                 1.0f,
@@ -1062,7 +1080,7 @@ TimelineView::RenderGraphView()
                                  container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD)) /
                                     (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
                 }
-                m_scroll_position = ImGui::GetScrollY();
+                m_scroll_position_y = ImGui::GetScrollY();
             }
         }
     }
@@ -1096,7 +1114,7 @@ TimelineView::MakeGraphView()
     m_range_x = m_max_x - m_min_x;
 
     m_v_width      = (m_range_x) / m_zoom;
-    m_v_past_width = m_v_width;
+    m_last_data_req_v_width = m_v_width;
 
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs         = m_data_provider.GetTrackCount();
@@ -1311,9 +1329,8 @@ TimelineView::HandleTopSurfaceTouch()
         {
             // Adjust scroll speed as needed (here, 40.0f per scroll step)
             float scroll_speed = 100.0f;
-            m_scroll_position =
-                clamp(static_cast<float>(m_scroll_position - scroll_wheel * scroll_speed),
-                      0.0f, static_cast<float>(m_content_max_y_scroll));
+            m_scroll_position_y = clamp(m_scroll_position_y - scroll_wheel * scroll_speed,
+                                        0.0f, m_content_max_y_scroll);
         }
     }
 
@@ -1369,7 +1386,7 @@ TimelineView::HandleTopSurfaceTouch()
             new_zoom = std::max(new_zoom, 0.9f);
 
             // 4. Calculate new view width
-            float new_v_width = m_range_x / new_zoom;
+            double new_v_width = m_range_x / new_zoom;
 
             // 5. Adjust m_movement so the world_x_under_cursor stays under the cursor
             m_view_time_offset_ns =
@@ -1402,10 +1419,10 @@ TimelineView::HandleTopSurfaceTouch()
        is_mouse_in_graph)
     {
         float drag_y      = io.MouseDelta.y;
-        m_scroll_position = clamp(static_cast<float>(m_scroll_position - drag_y), 0.0f,
-                                  static_cast<float>(m_content_max_y_scroll));
-        float drag        = io.MouseDelta.x;
-        float view_width  = (m_range_x) / m_zoom;
+        m_scroll_position_y =
+            clamp(m_scroll_position_y - drag_y, 0.0f, m_content_max_y_scroll);
+        float drag         = io.MouseDelta.x;
+        double view_width  = (m_range_x) / m_zoom;
 
         float user_requested_move = (drag / m_graph_size.x) * view_width;
 
@@ -1424,6 +1441,20 @@ TimelineView::HandleTopSurfaceTouch()
             }
         }
     }
+}
+
+ViewCoords
+TimelineView::GetViewCoords() const
+{
+    return { m_view_time_offset_ns, m_scroll_position_y, m_zoom };
+}
+
+void
+TimelineView::SetViewCoords(const ViewCoords& coords)
+{
+    m_view_time_offset_ns = coords.time_offset_ns;
+    m_scroll_position_y   = coords.y_scroll_position;
+    m_zoom                = coords.zoom;
 }
 
 }  // namespace View

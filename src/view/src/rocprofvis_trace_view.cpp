@@ -224,6 +224,8 @@ TraceView::Render()
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
         m_container->Render();
+
+        HandleHotKeys();
     }
 
     if(m_popup_info.show_popup)
@@ -282,6 +284,60 @@ TraceView::Render()
             RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
                                        IM_COL32(85, 85, 85, 255), anim_speed);
             ImGui::EndPopup();
+        }
+    }
+}
+
+void
+TraceView::HandleHotKeys()
+{
+    //TODO: handling hot keys here for now.. this should be reworked to use a hotkey manager in the future
+    const ImGuiIO& io = ImGui::GetIO();
+
+    // Don’t process global hotkeys if ImGui wants the keyboard (e.g., typing in InputText)
+    if(io.WantTextInput || ImGui::IsAnyItemActive())
+    {
+        return;
+    }
+    
+    // handle numeric hotkeys 0-9
+    // Press Ctrl + [0-9] to save a bookmark, press [0-9] to recall it
+    for(int i = 0; i <= 9; ++i)
+    {
+        ImGuiKey key = static_cast<ImGuiKey>(ImGuiKey_0 + i);
+        if(ImGui::IsKeyPressed(key, false))
+        {
+            if(io.KeyCtrl)
+            {
+                if(m_timeline_view) {
+                    auto coords    = m_timeline_view->GetViewCoords();
+                    m_bookmarks[i] = coords;
+                    spdlog::info(
+                        "Bookmark {} saved at time offset: {}, scroll position: {}, zoom: {}",
+                        i, coords.time_offset_ns, coords.y_scroll_position, coords.zoom);
+                    NotificationManager::GetInstance().Show(
+                        "Bookmark " + std::to_string(i) + " saved.", NotificationLevel::Info);
+                }
+            }
+            else
+            {
+                auto it = m_bookmarks.find(i);
+                if(it != m_bookmarks.end())
+                {
+                    if(m_timeline_view) {
+                        m_timeline_view->SetViewCoords(it->second);
+                        NotificationManager::GetInstance().Show(
+                            "Bookmark " + std::to_string(i) + " restored.",
+                            NotificationLevel::Info);
+                    }
+                }
+                else
+                {
+                    NotificationManager::GetInstance().Show(
+                        "Bookmark slot " + std::to_string(i) + " not assigned",
+                        NotificationLevel::Warning);
+                }
+            }
         }
     }
 }

@@ -31,6 +31,13 @@ enum class TimeFormat
     kNanoseconds,
 };
 
+typedef struct ViewCoords
+{
+    double time_offset_ns;
+    double y_scroll_position;
+    float zoom;
+} ViewCoords;
+
 class TimelineView : public RocWidget
 {
 public:
@@ -55,6 +62,8 @@ public:
     void                             CalibratePosition();
     void                             HandleNewTrackData(std::shared_ptr<RocEvent> e);
     void                             CalculateGridInterval();
+    ViewCoords                       GetViewCoords() const;
+    void                             SetViewCoords(const ViewCoords& coords);
 
 private:
     std::vector<rocprofvis_graph_t>       m_graphs;
@@ -69,31 +78,26 @@ private:
     float                                 m_zoom;
     int                                   m_sidebar_size;
     double                                m_view_time_offset_ns;
-    double                                m_scrubber_position;
     double                                m_v_width;
     double                                m_pixels_per_ns;
-    double                                m_scroll_position;
-    double                                m_content_max_y_scroll;
+    float                                 m_scroll_position_y;
+    float                                 m_content_max_y_scroll;
     bool                                  m_can_drag_to_pan;
     double                                m_previous_scroll_position;
-    bool                                  m_user_adjusting_graph_height;
     bool                                  m_meta_map_made;
-    bool                                  m_has_zoom_happened;
-    bool                                  m_show_graph_customization_window;
     bool                                  m_resize_activity;
     double                                m_scroll_position_x;
     EventManager::SubscriptionToken       m_scroll_to_track_token;
-    double                                m_v_past_width;
+    double                                m_last_data_req_v_width;
     double                                m_scrollbar_location_as_percentage;
     bool                                  m_artifical_scrollbar_active;
     float                                 m_unload_track_distance;
-    float                                 m_universal_content_size;
     double                                m_range_x;
     DataProvider&                         m_data_provider;
     std::pair<double, double>             m_highlighted_region;
     Settings&                             m_settings;
     EventManager::SubscriptionToken       m_new_track_token;
-    double                                m_viewport_past_position;
+    double                                m_last_data_req_view_time_offset_ns;
     int                                   m_artificial_scrollbar_height;
     ImVec2                                m_graph_size;
     TimeFormat                            m_display_time_format;

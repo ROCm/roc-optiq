@@ -54,7 +54,7 @@ private:
 
     // Used to enforce one selection change per render cycle.
     bool m_selection_changed;
-
+    bool m_has_drawn_tool_tip;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
 };
 

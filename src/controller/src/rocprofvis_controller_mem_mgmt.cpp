@@ -463,6 +463,15 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
 
 void MemoryManager::CleanUp() {
     std::lock_guard<std::mutex> lock(m_pool_mutex);
+
+    for(auto& [owner, member_ptr] : m_lru_array)
+    {
+        for(auto& [segment, lru] : member_ptr.get()->m_lru_segment_array)
+        {
+            owner->Remove(segment);
+        }
+    }
+    
     for(auto it = m_object_pools.begin(); it != m_object_pools.end(); ++it)
     {
         for(auto it1 : it->second)

@@ -134,6 +134,7 @@ public:
     DisplaySettings&  GetCurrentDisplaySettings();
     void              RestoreDisplaySettings(const DisplaySettings& settings);
     DisplaySettings&  GetInitialDisplaySettings();
+    void              SetDisplaySettings(const DisplaySettings& settings);
 
 private:
     Settings();

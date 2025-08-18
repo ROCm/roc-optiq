@@ -29,6 +29,7 @@ SettingsPanel::SettingsPanel()
 : m_is_open(false)
 , m_preview_font_size(-1)
 , m_display_settings_initial()
+, m_display_settings_modified()
 {}
 
 SettingsPanel::~SettingsPanel() {}
@@ -110,9 +111,15 @@ SettingsPanel::Render()
         if(theme_radio != theme)
         {
             if(theme_radio == 0)
+            {
                 settings.DarkMode();
+                m_display_settings_modified.use_dark_mode = true;
+            }
             else
+            {
                 settings.LightMode();
+                m_display_settings_modified.use_dark_mode = false;
+            }
         }
 
         ImGui::Spacing();
@@ -125,7 +132,10 @@ SettingsPanel::Render()
         ImGui::Dummy(ImVec2(4, 0));
         ImGui::SameLine();
         if(ImGui::Checkbox("DPI-based Font Scaling", &dpi_scaling))
+        {
+            m_display_settings_modified.dpi_based_scaling = dpi_scaling;
             settings.SetDPIBasedScaling(dpi_scaling);
+        }
 
         // Draw a border around the checkbox square only
         ImVec2 box_min = ImGui::GetItemRectMin();
@@ -157,6 +167,7 @@ SettingsPanel::Render()
         if(ImGui::Button("-", ImVec2(kFontButtonWidth, 0)) && m_preview_font_size > 0)
         {
             m_preview_font_size--;
+            m_display_settings_modified.font_size_index = m_preview_font_size;
             settings.SetDPIBasedScaling(false);
         }
         ImGui::PopStyleVar(2);
@@ -169,6 +180,7 @@ SettingsPanel::Render()
         if(ImGui::SliderInt("##FontSizeSlider", &m_preview_font_size, slider_min,
                             slider_max, "%d"))
         {
+            m_display_settings_modified.font_size_index = m_preview_font_size;
             settings.SetDPIBasedScaling(false);
         }
 
@@ -180,6 +192,7 @@ SettingsPanel::Render()
            m_preview_font_size < num_sizes - 1)
         {
             m_preview_font_size++;
+            m_display_settings_modified.font_size_index = m_preview_font_size;
             settings.SetDPIBasedScaling(false);
         }
         ImGui::PopStyleVar(2);
@@ -273,7 +286,7 @@ SettingsPanel::Render()
         if(ImGui::Button("Save", ImVec2(kButtonWidth, 0)))
         {
             m_is_open = false;
-            font_manager.SetFontSize(m_preview_font_size);
+            settings.SetDisplaySettings(m_display_settings_modified);
             m_preview_font_size = -1;
             ImGui::CloseCurrentPopup();
         }

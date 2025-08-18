@@ -458,6 +458,21 @@ Settings ::GetDPI()
 {
     return m_display_settings_current.dpi;
 }
+void
+Settings::SetDisplaySettings(const DisplaySettings& settings)
+{
+    bool font_changed =
+        (m_display_settings_current.font_size_index != settings.font_size_index) ||
+        (m_display_settings_current.dpi_based_scaling != settings.dpi_based_scaling);
+
+    m_display_settings_current = settings;
+
+    if(font_changed)
+    {
+        // Call font manager to update font index
+        GetFontManager().SetFontSize(m_display_settings_current.font_size_index);
+    }
+}
 
 ImU32
 Settings::GetColor(int value) const

@@ -25,6 +25,7 @@ private:
     bool            m_is_open           = false;
     int             m_preview_font_size = -1;
     DisplaySettings m_display_settings_initial;
+    DisplaySettings m_display_settings_modified;
 };
 
 }  // namespace View

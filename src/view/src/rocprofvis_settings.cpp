@@ -469,7 +469,6 @@ Settings::SetDisplaySettings(const DisplaySettings& settings)
 
     if(font_changed)
     {
-        // Call font manager to update font index
         GetFontManager().SetFontSize(m_display_settings_current.font_size_index);
     }
 }

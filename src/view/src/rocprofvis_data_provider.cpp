@@ -9,6 +9,7 @@
 #include <cfloat>
 #include <iostream>
 #include <sstream>
+#include <future>
 
 using namespace RocProfVis::View;
 
@@ -87,24 +88,65 @@ DataProvider::SetSelectedState(const std::string& id)
 void
 DataProvider::FreeRequests()
 {
+    // std::vector<std::future<void>> jobs;
+    // jobs.reserve(m_requests.size());
+
     for(auto item : m_requests)
     {
         data_req_info_t& req = item.second;
-        if(req.request_array)
-        {
-            rocprofvis_controller_array_free(req.request_array);
-            req.request_array = nullptr;
-        }
-        if(req.request_future)
-        {
-            rocprofvis_controller_future_free(req.request_future);
-            req.request_future = nullptr;
-        }
-        if(req.request_obj_handle)
-        {
-            req.request_obj_handle = nullptr;
-        }
+
+       // jobs.emplace_back(std::async(std::launch::async, [&req]() {
+            if(req.request_future) {
+                spdlog::debug("FreeRequests: cancelling request {} of type {}", req.request_id,
+                    static_cast<int>(req.request_type));
+
+                rocprofvis_result_t result =
+                    rocprofvis_controller_future_cancel(req.request_future);
+                if(result != kRocProfVisResultSuccess)
+                {
+                    spdlog::warn("Failed to cancel request {}: {}", req.request_id,
+                                static_cast<int>(result));
+                }
+
+                result = rocprofvis_controller_future_wait(req.request_future, FLT_MAX);
+                if(result != kRocProfVisResultSuccess)
+                {
+                    spdlog::warn("Failed to wait for request {}: {}", req.request_id,
+                                static_cast<int>(result));
+                }
+                
+                rocprofvis_controller_future_free(req.request_future);
+                req.request_future = nullptr;
+            }
+            // Free the request resources
+            if(req.request_array)
+            {
+                rocprofvis_controller_array_free(req.request_array);
+                req.request_array = nullptr;
+            }
+            if(req.request_args)
+            {
+                rocprofvis_controller_arguments_free(req.request_args);
+                req.request_args = nullptr;
+            }
+            if(req.request_obj_handle)
+            {
+                req.request_obj_handle = nullptr;
+            }
+       // }));
     }
+
+    // //  wait for all workers
+    // for(auto& f : jobs)
+    // {
+    //     try
+    //     {
+    //         f.get();
+    //     } catch(const std::exception& e)
+    //     {
+    //         spdlog::error("Exception in FreeRequests worker: {}", e.what());
+    //     }
+    // }
 
     m_requests.clear();
 }

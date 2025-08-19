@@ -129,10 +129,13 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
     rocprofvis_db_sqlite_track_service_data_t service_data{};
     std::string column = azColName[0];
     bool is_query_for_table_view = column == Builder::OPERATION_SERVICE_NAME;
+    uint64_t blanks_mask = is_query_for_table_view ? db->GetBlanksMaskForQuery(callback_params->query[0]) : 0;
     if(0 == callback_params->future->GetProcessedRowsCount())
     {
         for (int i=0; i < argc; i++)
         {
+            if((blanks_mask & (uint64_t) 1 << i) != 0) 
+                continue;
             std::string column = azColName[i];
             CollectTrackServiceData(stmt, i, column, service_data);
             if(db->isServiceColumn(azColName[i]))
@@ -168,12 +171,15 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
     service_data.op       = kRocProfVisDmOperationNoOp;
     for (int i=0; i < argc; i++)
     {
+        if((blanks_mask & (uint64_t) 1 << i) != 0) 
+            continue;
         std::string       column_text;
         std::string column = azColName[i];        
         if(is_query_for_table_view)
         {
             CollectTrackServiceData(stmt, i, column, service_data);
-            if(db->isServiceColumn(azColName[i])) continue;
+            if(db->isServiceColumn(azColName[i])) 
+                continue;
             if(column == "id")
             {
                 uint64_t id = sqlite3_column_int64(stmt, i);
@@ -730,6 +736,29 @@ SqliteDatabase::CreateSQLTable(
     ReleaseConnection(conn);
     return kRocProfVisDmResultSuccess;
 }
+
+uint64_t SqliteDatabase::GetBlanksMaskForQuery(std::string query)
+{
+    uint64_t mask = 0;
+    for(auto it = m_blank_mask.begin(); it != m_blank_mask.end(); ++it)
+    {
+        if(query.find(it->first) != std::string::npos)
+        {
+            if(mask == 0)
+                mask = it->second;
+            else
+                mask &= it->second;
+        }
+    }
+    return mask;
+}
+
+void
+SqliteDatabase::SetBlankMask(std::string op, uint64_t mask)
+{
+    m_blank_mask[op] |= mask;
+}
+
 
 }  // namespace DataModel
 }  // namespace RocProfVis

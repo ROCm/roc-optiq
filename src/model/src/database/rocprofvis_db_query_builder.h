@@ -27,6 +27,8 @@ namespace RocProfVis
 namespace DataModel
 {
 
+class SqliteDatabase;
+
 typedef struct rocprofvis_db_sqlite_track_service_data_t
 {
     rocprofvis_dm_event_operation_t op;
@@ -62,7 +64,8 @@ typedef struct rocprofvis_db_sqlite_slice_query_format
 
 typedef struct rocprofvis_db_sqlite_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 24;
+    static constexpr const int NUM_PARAMS = 35;
+    SqliteDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_table_query_format;
@@ -101,121 +104,37 @@ class Builder
         static constexpr const char* STREAM_TRACK_ID_PUBLIC_NAME = "streamTrackId";
         static constexpr const char* SPACESAVER_SERVICE_NAME     = "const";
         static constexpr const char* COUNTER_NAME_SERVICE_NAME   = "monitorType";
-    public:
-        static std::string Select(rocprofvis_db_sqlite_track_query_format params)
-        {
-            return BuildQuery("SELECT DISTINCT",params.NUM_PARAMS,params.parameters,params.from,";");
-        }
-        static std::string Select(rocprofvis_db_sqlite_level_query_format params)
-        {
-            return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from, "");
-        }
-        static std::string Select(rocprofvis_db_sqlite_slice_query_format params)
-        {
-            return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from, "");
-        }
-        static std::string Select(rocprofvis_db_sqlite_table_query_format params)
-        {
-            return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from, "");
-        }
-        static std::string Select(rocprofvis_db_sqlite_sample_table_query_format params)
-        {
-            return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from, "");
-        }
-        static std::string Select(rocprofvis_db_sqlite_rocpd_table_query_format params)
-        {
-            return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from, "");
-        }
-        static std::string SelectAll(std::string query)
-        {
-            return "SELECT * FROM("+query+")";
-        }
+        static constexpr const char* BLANK_COLUMN_STR            = "' '";
 
-        static std::string QParam(std::string name, std::string public_name) 
-        {
-            return name + " as " + public_name;
-        };
-        static std::string QParam(std::string name)
-        {
-            return name;
-        };
-        static std::string QParamOperation(const rocprofvis_dm_event_operation_t op) 
-        {
-            return std::to_string((uint32_t)op) + " as " + OPERATION_SERVICE_NAME;
-        }
-        static std::string QParamCategory(const rocprofvis_dm_track_category_t category)
-        {
-            return std::to_string((uint32_t) category) + " as " + OPERATION_SERVICE_NAME;
-        }
-        static std::string From(std::string table)
-        {
-            return std::string(" FROM ") + table;
-        }
-        static std::string From(std::string table, std::string nick_name)
-        {
-            return std::string(" FROM ") + table + " " + nick_name;
-        }
-        static std::string InnerJoin(std::string table, std::string nick_name, std::string on)
-        {
-            return std::string(" INNER JOIN ") + table + " " + nick_name + " ON " + on;
-        }
-        static std::string LeftJoin(std::string table, std::string nick_name, std::string on)
-        {
-            return std::string(" LEFT JOIN ") + table + " " + nick_name + " ON " + on;
-        }
-        static std::string RightJoin(std::string table, std::string nick_name, std::string on)
-        {
-            return std::string(" RIGHT JOIN ") + table + " " + nick_name + " ON " + on;
-        }
-        static std::string SpaceSaver(int val)
-        {
-            return std::to_string(val) + " as const";
-        }
-        static std::string THeader(std::string header)
-        {
-            return std::string("'") + header + " '";
-        };
-        static std::string TVar(std::string tag, std::string var) 
-        {
-            return std::string("'") + tag + ":'," + var;
-        };
-        static std::string TVar(std::string tag, std::string var1, std::string var2)
-        {
-            return std::string("'") + tag + ":'," + var1 + "," + var2;
-        };
-        static std::string Concat(std::vector<std::string> strings)
-        {
-            std::string result;
-            for(const auto& s : strings)
-            {
-                if (result.size() > 0)
-                {
-                    result += ",";
-                }
-                result += s;
-                result += ",' '";
-            }
-            return std::string("concat(") + result + ")";
-        }
+    public:
+        static std::string Select(rocprofvis_db_sqlite_track_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_level_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_slice_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_table_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_sample_table_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_rocpd_table_query_format params);
+        static std::string SelectAll(std::string query);
+        static std::string QParam(std::string name, std::string public_name);
+        static std::string QParamBlank(std::string public_name);
+        static std::string QParam(std::string name);
+        static std::string QParamOperation(const rocprofvis_dm_event_operation_t op);
+        static std::string QParamCategory(const rocprofvis_dm_track_category_t category);
+        static std::string From(std::string table);
+        static std::string From(std::string table, std::string nick_name);
+        static std::string InnerJoin(std::string table, std::string nick_name, std::string on);
+        static std::string LeftJoin(std::string table, std::string nick_name, std::string on);
+        static std::string RightJoin(std::string table, std::string nick_name, std::string on);
+        static std::string SpaceSaver(int val);
+        static std::string THeader(std::string header);
+        static std::string TVar(std::string tag, std::string var);
+        static std::string TVar(std::string tag, std::string var1, std::string var2);
+        static std::string Concat(std::vector<std::string> strings);
     private:
-        static std::string BuildQuery(std::string select, int num_params, std::string* params, std::vector<std::string> from, std::string finalize_with)
-        { 
-            std::string query = select + " ";
-            for(int i = 0; i < num_params; i++)
-            {
-                if(i > 0)
-                {
-                    query += ", ";
-                }
-                query += params[i];
-            }
-            for (int i = 0; i < from.size(); i++)
-            {
-                query += from[i];
-                query += " ";
-            }
-            return query;
-        }       
+        static void        BuildBlanksMask(SqliteDatabase* owner, int num_params, std::string* params);
+        static std::string BuildQuery(std::string select, int num_params,
+                                      std::string* params, std::vector<std::string> from,
+                                      std::string finalize_with);
+       
 };
 
 }  // namespace DataModel

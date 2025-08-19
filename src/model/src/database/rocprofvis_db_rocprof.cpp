@@ -277,30 +277,47 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Table query
                  Builder::SelectAll(
                  Builder::Select(rocprofvis_db_sqlite_table_query_format(
-                     { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                     { this,
+                         { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                          Builder::QParam("R.id"),
                          Builder::QParam("( SELECT string FROM `rocpd_string` RS WHERE "
                                          "RS.id = E.category_id AND RS.guid = E.guid)",
                                          "category"),
                          Builder::QParam("S.string", "name"),
-                         Builder::QParam("' '", "stream"),
-                         Builder::QParam("' '", "queue"),
+                         Builder::QParamBlank("stream"),
+                         Builder::QParamBlank("queue"),
                          Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
                          Builder::QParam("P.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                          Builder::QParam("T.tid", Builder::THREAD_ID_PUBLIC_NAME),
-                         Builder::QParam("' '", "device_index"),
-                         Builder::QParam("' '", "device"),
-                         Builder::QParam("' '", "device_name"),
+                         Builder::QParamBlank("device_index"),
+                         Builder::QParamBlank("device"),
+                         Builder::QParamBlank("device_name"),
                          Builder::QParam("R.start"),
                          Builder::QParam("R.end"),
                          Builder::QParam("(R.end-R.start)", "duration"),
 
-                         Builder::QParam("' '","A"),
-                         Builder::QParam("' '","B"),
-                         Builder::QParam("' '","C"),
-                         Builder::QParam("' '","D"),
-                         Builder::QParam("' '", "E"),
-                         Builder::QParam("' '", "F"),
+                         Builder::QParamBlank("GridSizeX"),
+                         Builder::QParamBlank("GridSizeY"),
+                         Builder::QParamBlank("GridSizeZ"),
+
+                         Builder::QParamBlank("WGSizeX"),
+                         Builder::QParamBlank("WGSizeY"),
+                         Builder::QParamBlank("WGSizeZ"),
+
+                         Builder::QParamBlank("LDSSize"),
+                         Builder::QParamBlank("ScratchSize"),
+
+                         Builder::QParamBlank("StaticLDSSize"),
+                         Builder::QParamBlank("StaticScratchSize"),
+
+                         Builder::QParamBlank("size"),
+                         Builder::QParamBlank("address"),
+                         Builder::QParamBlank("level"),
+
+                         Builder::QParamBlank("SrcIndex"),
+                         Builder::QParamBlank("SrcDevice"),
+                         Builder::QParamBlank("SrcName"),
+                         Builder::QParamBlank("SrcAddr"),
 
                          Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
                          Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
@@ -373,7 +390,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::LeftJoin("event_levels_dispatch_v1", "L", "K.id = L.eid") } })),
                  // Table query
                  Builder::Select(rocprofvis_db_sqlite_table_query_format(
-                     { { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
+                     { this,
+                         { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                          Builder::QParam("K.id"),
                          Builder::QParam("( SELECT string FROM `rocpd_string` RS WHERE "
                                          "RS.id = E.category_id AND RS.guid = E.guid)",
@@ -391,34 +409,28 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("K.end"),
                          Builder::QParam("(K.end-K.start)", "duration"),
 
-                         Builder::QParam(Builder::Concat({
-                         Builder::THeader("GRID"),
-                         Builder::TVar("X","K.grid_size_x"),
-                         Builder::TVar("Y","K.grid_size_y"),
-                         Builder::TVar("Z","K.grid_size_z")}), 
-                         "A"),
+                         Builder::QParam("K.grid_size_x", "GridSizeX"),
+                         Builder::QParam("K.grid_size_y", "GridSizeY"),
+                         Builder::QParam("K.grid_size_z", "GridSizeZ"),
 
-                         Builder::QParam(Builder::Concat({
-                         Builder::THeader("WG"),
-                         Builder::TVar("X","K.workgroup_size_x"),
-                         Builder::TVar("Y","K.workgroup_size_y"),
-                         Builder::TVar("Z","K.workgroup_size_z")}), 
-                         "B"),
+                         Builder::QParam("K.workgroup_size_x", "WGSizeX"),
+                         Builder::QParam("K.workgroup_size_y", "WGSizeY"),
+                         Builder::QParam("K.workgroup_size_z", "WGSizeZ"),
 
-                         Builder::QParam(Builder::Concat({
-                         Builder::THeader("Size"),
-                         Builder::TVar("LDS","K.group_segment_size"),
-                         Builder::TVar("Scratch","K.private_segment_size")}), 
-                         "C"),
+                         Builder::QParam("K.group_segment_size", "LDSSize"),
+                         Builder::QParam("K.private_segment_size", "ScratchSize"),
 
-                         Builder::QParam(Builder::Concat({
-                         Builder::THeader("Static size"),
-                         Builder::TVar("LDS","S.group_segment_size"),
-                         Builder::TVar("Scratch","S.private_segment_size")}), 
-                         "D"),
+                         Builder::QParam("S.group_segment_size", "StaticLDSSize"),
+                         Builder::QParam("S.private_segment_size", "StaticScratchSize"),
 
-                         Builder::QParam("' '", "E"),
-                         Builder::QParam("' '", "F"),
+                         Builder::QParamBlank("size"),
+                         Builder::QParamBlank("address"),
+                         Builder::QParamBlank("level"),
+
+                         Builder::QParamBlank("SrcIndex"),
+                         Builder::QParamBlank("SrcDevice"),
+                         Builder::QParamBlank("SrcName"),
+                         Builder::QParamBlank("SrcAddr"),
 
                          Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                          Builder::QParam("K.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
@@ -493,7 +505,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::LeftJoin("event_levels_mem_alloc_v1", "L", "M.id = L.eid") } })),
                  // Table query
                  Builder::Select(rocprofvis_db_sqlite_table_query_format(
-                     { { Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
+                     { this,
+                         { Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                          Builder::QParam("M.id"),
                          Builder::QParam("( SELECT string FROM `rocpd_string` RS WHERE "
                                          "RS.id = E.category_id AND RS.guid = E.guid)",
@@ -511,12 +524,28 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("M.end"),
                          Builder::QParam("(M.end-M.start)", "duration"),
 
-                         Builder::QParam(Builder::Concat({Builder::TVar("Size","M.size")}), "A"),
-                         Builder::QParam(Builder::Concat({Builder::TVar("Addr","M.address")}), "B"),
-                         Builder::QParam(Builder::Concat({Builder::TVar("Level","M.level")}), "C"),
-                         Builder::QParam("' '","D"),
-                         Builder::QParam("' '", "E"),
-                         Builder::QParam("' '", "F"),
+                         Builder::QParamBlank("GridSizeX"),
+                         Builder::QParamBlank("GridSizeY"),
+                         Builder::QParamBlank("GridSizeZ"),
+
+                         Builder::QParamBlank("WGSizeX"),
+                         Builder::QParamBlank("WGSizeY"),
+                         Builder::QParamBlank("WGSizeZ"),
+
+                         Builder::QParamBlank("LDSSize"),
+                         Builder::QParamBlank("ScratchSize"),
+
+                         Builder::QParamBlank("StaticLDSSize"),
+                         Builder::QParamBlank("StaticScratchSize"),
+
+                         Builder::QParam("M.size", "size"),
+                         Builder::QParam("M.address", "address"),
+                         Builder::QParam("M.level", "level"),
+
+                         Builder::QParamBlank("SrcIndex"),
+                         Builder::QParamBlank("SrcDevice"),
+                         Builder::QParamBlank("SrcName"),
+                         Builder::QParamBlank("SrcAddr"),
 
                          Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                          Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
@@ -600,7 +629,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                              Builder::LeftJoin("event_levels_mem_copy_v1", "L", "M.id = L.eid") } })),
                     // Table query
                      Builder::Select(rocprofvis_db_sqlite_table_query_format(
-                         { { Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
+                         { this,
+                             { Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
                              Builder::QParam("M.id"), 
                              Builder::QParam("( SELECT string FROM `rocpd_string` RS WHERE RS.id = E.category_id AND RS.guid = E.guid)", "category"),
                              Builder::QParam("S.string", "name"),
@@ -616,12 +646,28 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                              Builder::QParam("M.end"),
                              Builder::QParam("(M.end-M.start)", "duration"),
 
-                             Builder::QParam(Builder::Concat({Builder::TVar("Size", "M.size")}), "A"),
-                             Builder::QParam(Builder::Concat({Builder::TVar("Addr", "M.dst_address")}), "B"),
-                             Builder::QParam(Builder::Concat({Builder::TVar("SrcIdx","SRCAG.absolute_index")}), "C"),
-                             Builder::QParam(Builder::Concat({Builder::TVar("SrcDev","SRCAG.type","SRCAG.type_index")}), "D"),
-                             Builder::QParam(Builder::Concat({Builder::TVar("SrcName","SRCAG.name")}), "E"),
-                             Builder::QParam(Builder::Concat({Builder::TVar("SrcAddr","M.src_address")}), "F"),
+                             Builder::QParamBlank("GridSizeX"),
+                             Builder::QParamBlank("GridSizeY"),
+                             Builder::QParamBlank("GridSizeZ"),
+
+                             Builder::QParamBlank("WGSizeX"),
+                             Builder::QParamBlank("WGSizeY"),
+                             Builder::QParamBlank("WGSizeZ"),
+
+                             Builder::QParamBlank("LDSSize"),
+                             Builder::QParamBlank("ScratchSize"),
+
+                             Builder::QParamBlank("StaticLDSSize"),
+                             Builder::QParamBlank("StaticScratchSize"),
+
+                             Builder::QParam("M.size", "size"),
+                             Builder::QParam("M.dst_address", "address"),
+                             Builder::QParamBlank("level"),
+
+                             Builder::QParam("SRCAG.absolute_index", "SrcIndex"),
+                             Builder::QParam(Builder::Concat({"SRCAG.type","SRCAG.type_index"}), "SrcDevice"),
+                             Builder::QParam("SRCAG.name", "SrcName"),
+                             Builder::QParam("M.src_address", "SrcAddr"),
 
                              Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                              Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),

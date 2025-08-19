@@ -231,7 +231,7 @@ class Trace : public DmBase{
         // @return status of operation
         static rocprofvis_dm_result_t                   AddEventLevel(const rocprofvis_dm_trace_t object,  const rocprofvis_dm_event_id_t event_id, rocprofvis_dm_event_level_t level);
 
-        static rocprofvis_dm_result_t                   CheckSliceExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
+        static rocprofvis_dm_result_t                   CheckSliceExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_db_num_of_tracks_t num, const rocprofvis_db_track_selection_t tracks);
         static rocprofvis_dm_result_t                   CheckEventPropertyExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
         static rocprofvis_dm_result_t                   CheckTableExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_table_id_t table_id);
         static rocprofvis_dm_result_t                   CompleteSlice(const rocprofvis_dm_slice_t object);

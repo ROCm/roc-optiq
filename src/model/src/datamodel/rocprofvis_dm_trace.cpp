@@ -465,28 +465,37 @@ Trace::RemoveSlice(const rocprofvis_dm_trace_t    trace_object,
 rocprofvis_dm_result_t Trace::CheckSliceExists(
                         const rocprofvis_dm_trace_t     object,
                         const rocprofvis_dm_timestamp_t start,
-                        const rocprofvis_dm_timestamp_t end)
+                        const rocprofvis_dm_timestamp_t end,
+                        const rocprofvis_db_num_of_tracks_t num,
+                        const rocprofvis_db_track_selection_t tracks)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     Trace* trace = (Trace*) object;
     TimedLock<std::shared_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
-    bool found = false;
-    for(int i = 0; i < trace->m_tracks.size(); i++)
+    // TODO: Change the interface to only accept a single track ID instead of array of track IDs.
+    // For now do a search for each of the passed in track IDs.
+    for(int n = 0; n < num; n++)
     {
-        rocprofvis_dm_slice_t  object = nullptr;
-        rocprofvis_dm_result_t result =
-            trace->m_tracks[i].get()->GetSliceAtTime(hash_combine(start,end), object);
-        if(result == kRocProfVisDmResultSuccess)
+        for(int i = 0; i < trace->m_tracks.size(); i++)
         {
-            ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
-                                         kRocProfVisDmResultUnknownError);
-            TrackSlice* slice = (TrackSlice*) object;
-            lock.unlock();
+            if(trace->m_tracks[i]->TrackId() == tracks[n])
+            {
+                rocprofvis_dm_slice_t  object = nullptr;
+                rocprofvis_dm_result_t result =
+                    trace->m_tracks[i].get()->GetSliceAtTime(hash_combine(start,end), object);
+                if(result == kRocProfVisDmResultSuccess)
+                {
+                    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
+                                                    kRocProfVisDmResultUnknownError);
+                    TrackSlice* slice = (TrackSlice*) object;
+                    lock.unlock();
 
-            slice->WaitComplete();
-            return kRocProfVisDmResultSuccess;
+                    slice->WaitComplete();
+                    return kRocProfVisDmResultSuccess;
 
+                }
+            }
         }
     }
     return kRocProfVisDmResultNotLoaded;

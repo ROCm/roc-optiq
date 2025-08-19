@@ -45,7 +45,6 @@ public:
 
 private:
     std::vector<uint32_t> m_tracks;
-    std::deque<uint64_t> m_lru;
     double m_start_ts;
     double m_end_ts;
 };

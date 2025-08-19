@@ -1,0 +1,143 @@
+// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+#pragma once
+
+#include "rocprofvis_db.h"
+
+namespace RocProfVis
+{
+namespace DataModel
+{
+
+class SqliteDatabase;
+
+typedef struct rocprofvis_db_sqlite_track_service_data_t
+{
+    rocprofvis_dm_event_operation_t op;
+    rocprofvis_dm_track_category_t  category;
+    uint64_t                        id;
+    uint64_t                        nid;
+    uint32_t                        stream_id;
+    uint32_t                        process;
+    uint32_t                        thread;
+    std::string                     monitor_type;
+} rocprofvis_db_sqlite_track_service_data_t;
+
+typedef struct rocprofvis_db_sqlite_track_query_format
+{
+    static constexpr const int NUM_PARAMS = 4; 
+    std::string                 parameters[NUM_PARAMS];
+    std::vector<std::string>    from;
+} rocprofvis_db_sqlite_track_query_format;
+
+typedef struct rocprofvis_db_sqlite_level_query_format
+{
+    static constexpr const int NUM_PARAMS = 8;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_sqlite_level_query_format;
+
+typedef struct rocprofvis_db_sqlite_slice_query_format
+{
+    static constexpr const int NUM_PARAMS = 10;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_sqlite_slice_query_format;
+
+typedef struct rocprofvis_db_sqlite_table_query_format
+{
+    static constexpr const int NUM_PARAMS = 35;
+    SqliteDatabase*            owner;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_sqlite_table_query_format;
+
+typedef struct rocprofvis_db_sqlite_rocpd_table_query_format
+{
+    static constexpr const int NUM_PARAMS = 8;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_sqlite_rocpd_table_query_format;
+
+typedef struct rocprofvis_db_sqlite_sample_table_query_format
+{
+    static constexpr const int NUM_PARAMS = 7;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_sqlite_sample_table_query_format;
+
+class Builder
+{
+    public:
+        static constexpr const char* AGENT_ID_SERVICE_NAME = "agentId";
+        static constexpr const char* QUEUE_ID_SERVICE_NAME = "queueId";
+        static constexpr const char* STREAM_ID_SERVICE_NAME = "streamId";
+        static constexpr const char* NODE_ID_SERVICE_NAME = "nodeId";
+        static constexpr const char* NODE_ID_PUBLIC_NAME = "nodeId";
+        static constexpr const char* OPERATION_SERVICE_NAME = "op";
+        static constexpr const char* CATEGORY_PUBLIC_NAME = "category";
+        static constexpr const char* PROCESS_ID_PUBLIC_NAME = "PID";
+        static constexpr const char* THREAD_ID_PUBLIC_NAME = "TID";
+        static constexpr const char* PROCESS_ID_SERVICE_NAME = "processId";
+        static constexpr const char* THREAD_ID_SERVICE_NAME  = "threadId";
+        static constexpr const char* COUNTER_ID_SERVICE_NAME  = "counterId";
+        static constexpr const char* COUNTER_VALUE_SERVICE_NAME = "counterValue";
+        static constexpr const char* TRACK_ID_PUBLIC_NAME = "__trackId";
+        static constexpr const char* STREAM_TRACK_ID_PUBLIC_NAME = "__streamTrackId";
+        static constexpr const char* SPACESAVER_SERVICE_NAME     = "const";
+        static constexpr const char* COUNTER_NAME_SERVICE_NAME   = "monitorType";
+        static constexpr const char* BLANK_COLUMN_STR            = "' '";
+        static constexpr const char* START_SERVICE_NAME     = "startTs";
+        static constexpr const char* END_SERVICE_NAME       = "endTs";
+
+    public:
+        static std::string Select(rocprofvis_db_sqlite_track_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_level_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_slice_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_table_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_sample_table_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_rocpd_table_query_format params);
+        static std::string SelectAll(std::string query);
+        static std::string QParam(std::string name, std::string public_name);
+        static std::string QParamBlank(std::string public_name);
+        static std::string QParam(std::string name);
+        static std::string QParamOperation(const rocprofvis_dm_event_operation_t op);
+        static std::string QParamCategory(const rocprofvis_dm_track_category_t category);
+        static std::string From(std::string table);
+        static std::string From(std::string table, std::string nick_name);
+        static std::string InnerJoin(std::string table, std::string nick_name, std::string on);
+        static std::string LeftJoin(std::string table, std::string nick_name, std::string on);
+        static std::string RightJoin(std::string table, std::string nick_name, std::string on);
+        static std::string SpaceSaver(int val);
+        static std::string THeader(std::string header);
+        static std::string TVar(std::string tag, std::string var);
+        static std::string TVar(std::string tag, std::string var1, std::string var2);
+        static std::string Concat(std::vector<std::string> strings);
+    private:
+        static void        BuildBlanksMask(SqliteDatabase* owner, int num_params, std::string* params);
+        static std::string BuildQuery(std::string select, int num_params,
+                                      std::string* params, std::vector<std::string> from,
+                                      std::string finalize_with);
+       
+};
+
+}  // namespace DataModel
+}  // namespace RocProfVis

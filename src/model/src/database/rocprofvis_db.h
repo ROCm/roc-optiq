@@ -340,15 +340,18 @@ class Database
         // @return status of operation
         rocprofvis_dm_result_t          AddTrackProperties(
                                                                 rocprofvis_dm_track_params_t& props);
-        // check if track with specified properties exists. If exists adds a new query to the track queries collection 
+        // finds and return iterator to track properties array
+        // @process track process identifiers structure
+        rocprofvis_dm_track_params_it   FindTrack( rocprofvis_dm_process_identifiers_t& process);
+        // adds a new query to the track queries collection 
         // multiple queries for single track are required to support data from multiple database tables on single track,
         // like Kernel Dispatch, Memory Copy and Memory Allocation
+        // @param it - track properties array iterator
         // @param newprops - new track properties structure
         // @param newquery - new track records query. One track can have multiple queries.
-        // @return True if exists
-        bool                            TrackExist(
-                                                                rocprofvis_dm_track_params_t & newprops, 
-                                                                rocprofvis_dm_charptr_t* newqueries);
+        void                            UpdateQueryForTrack(rocprofvis_dm_track_params_it it, 
+                                                            rocprofvis_dm_track_params_t& newprops,
+                                                            rocprofvis_dm_charptr_t*      newqueries);
         // calls Future object callback method, if provided. The callback method is optionally provided by caller in order to display or save current database progress.
         // @param step - approximate percentage of single database operation
         // @param action - database operation description

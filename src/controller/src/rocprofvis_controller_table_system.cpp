@@ -324,7 +324,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
     {
         if(m_tracks.size() == tracks.size() && m_start_ts == start_ts &&
            m_end_ts == end_ts && m_filter == filter && m_group == group &&
-           m_group_cols == group_cols)
+           m_group_cols == group_cols && sort_column == m_sort_column && sort_order == m_sort_order)
         {
             bool tracks_all_same = true;
             for (int i = 0; i < tracks.size(); i++)

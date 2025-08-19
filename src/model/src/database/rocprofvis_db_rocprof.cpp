@@ -211,6 +211,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
         std::string value;
 
+        ShowProgress(2, "Create CPU tracks indexes", kRPVDbBusy, future);
+        ExecuteSQLQuery(future, "CREATE INDEX nid_pid_tid_idx ON rocpd_region(nid,pid,tid);");
+
         ShowProgress(2, "Load Nodes information", kRPVDbBusy, future);
         ExecuteSQLQuery(future,"SELECT * from rocpd_info_node;", "Node", (rocprofvis_dm_handle_t)CachedTables(), &CallbackCacheTable);
         
@@ -249,8 +252,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Level query
                  Builder::Select(rocprofvis_db_sqlite_level_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
-                         Builder::QParam("start"), 
-                         Builder::QParam("end"),
+                         Builder::QParam("start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("end", Builder::END_SERVICE_NAME),
                          Builder::QParam("id"),
                          Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                          Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
@@ -260,8 +263,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Slice query by queue
                  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
-                         Builder::QParam("R.start"), 
-                         Builder::QParam("R.end"),
+                         Builder::QParam("R.start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("R.end", Builder::END_SERVICE_NAME),
                          Builder::QParam("E.category_id"),
                          Builder::QParam("R.name_id"), 
                          Builder::QParam("R.id"),
@@ -275,7 +278,6 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Slice query by Stream
                  "",
                  // Table query
-                 Builder::SelectAll(
                  Builder::Select(rocprofvis_db_sqlite_table_query_format(
                      { this,
                          { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
@@ -292,8 +294,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParamBlank("device_index"),
                          Builder::QParamBlank("device"),
                          Builder::QParamBlank("device_name"),
-                         Builder::QParam("R.start"),
-                         Builder::QParam("R.end"),
+                         Builder::QParam("R.start", Builder::START_SERVICE_NAME),
+                         Builder::QParam("R.end", Builder::END_SERVICE_NAME),
                          Builder::QParam("(R.end-R.start)", "duration"),
 
                          Builder::QParamBlank("GridSizeX"),
@@ -326,7 +328,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::InnerJoin("rocpd_string", "S", "S.id = R.name_id AND S.guid = R.guid"),
                          Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id AND E.guid = R.guid"),
                          Builder::InnerJoin("rocpd_info_process", "P", "P.id = R.pid AND P.guid = R.guid"),
-                         Builder::InnerJoin("rocpd_info_thread", "T", "T.id = R.tid AND T.guid = R.guid") } }))),
+                         Builder::InnerJoin("rocpd_info_thread", "T", "T.id = R.tid AND T.guid = R.guid") } })),
             },
                     &CallBackAddTrack)) break;
 
@@ -350,8 +352,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Level query
                  Builder::Select(rocprofvis_db_sqlite_level_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
-                         Builder::QParam("start"), 
-                         Builder::QParam("end"),
+                         Builder::QParam("start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("end", Builder::END_SERVICE_NAME),
                          Builder::QParam("id"),
                          Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                          Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
@@ -361,8 +363,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Slice query by queue
                  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
-                         Builder::QParam("K.start"), 
-                         Builder::QParam("K.end"),
+                         Builder::QParam("K.start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("K.end", Builder::END_SERVICE_NAME),
                          Builder::QParam("E.category_id"), 
                          Builder::QParam("K.kernel_id"),
                          Builder::QParam("K.id"),
@@ -376,8 +378,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Slice query by stream
                  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
-                         Builder::QParam("K.start"), 
-                         Builder::QParam("K.end"),
+                         Builder::QParam("K.start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("K.end", Builder::END_SERVICE_NAME),
                          Builder::QParam("E.category_id"), 
                          Builder::QParam("K.kernel_id"),
                          Builder::QParam("K.id"),
@@ -405,8 +407,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("AG.absolute_index", "device_index"),
                          Builder::QParam(Builder::Concat({"AG.type","AG.type_index"}), "device"),
                          Builder::QParam("AG.name", "device_name"),
-                         Builder::QParam("K.start"),
-                         Builder::QParam("K.end"),
+                         Builder::QParam("K.start", Builder::START_SERVICE_NAME),
+                         Builder::QParam("K.end", Builder::END_SERVICE_NAME),
                          Builder::QParam("(K.end-K.start)", "duration"),
 
                          Builder::QParam("K.grid_size_x", "GridSizeX"),
@@ -465,8 +467,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Level query
                  Builder::Select(rocprofvis_db_sqlite_level_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
-                         Builder::QParam("start"), 
-                         Builder::QParam("end"),
+                         Builder::QParam("start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("end", Builder::END_SERVICE_NAME),
                          Builder::QParam("id"),
                          Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                          Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
@@ -476,8 +478,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Slice query by queue
                  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
-                         Builder::QParam("M.start"), 
-                         Builder::QParam("M.end"),
+                         Builder::QParam("M.start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("M.end", Builder::END_SERVICE_NAME),
                          Builder::QParam("E.category_id"), 
                          Builder::QParam("E.category_id"),
                          Builder::QParam("M.id"),
@@ -491,8 +493,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                  // Slice query by stream
                  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                        { { Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
-                         Builder::QParam("M.start"), 
-                         Builder::QParam("M.end"),
+                         Builder::QParam("M.start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("M.end", Builder::END_SERVICE_NAME),
                          Builder::QParam("E.category_id"), 
                          Builder::QParam("E.category_id"),
                          Builder::QParam("M.id"),
@@ -520,8 +522,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("AG.absolute_index", "device_index"),
                          Builder::QParam(Builder::Concat({"AG.type","AG.type_index"}), "device"),
                          Builder::QParam("AG.name", "device_name"),
-                         Builder::QParam("M.start"),
-                         Builder::QParam("M.end"),
+                         Builder::QParam("M.start", Builder::START_SERVICE_NAME),
+                         Builder::QParam("M.end", Builder::END_SERVICE_NAME),
                          Builder::QParam("(M.end-M.start)", "duration"),
 
                          Builder::QParamBlank("GridSizeX"),
@@ -588,8 +590,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     // Level query
                     Builder::Select(rocprofvis_db_sqlite_level_query_format(
                      { {    Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
-                            Builder::QParam("start"), 
-                            Builder::QParam("end"), 
+                            Builder::QParam("start", Builder::START_SERVICE_NAME), 
+                            Builder::QParam("end", Builder::END_SERVICE_NAME), 
                             Builder::QParam("id"),
                             Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
@@ -599,8 +601,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                      // Slice query by queue
                      Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                          { { Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
-                             Builder::QParam("M.start"), 
-                             Builder::QParam("M.end"),
+                             Builder::QParam("M.start", Builder::START_SERVICE_NAME), 
+                             Builder::QParam("M.end", Builder::END_SERVICE_NAME),
                              Builder::QParam("E.category_id"), 
                              Builder::QParam("M.name_id"),
                              Builder::QParam("M.id"),
@@ -615,8 +617,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                      // Slice query by stream
                      Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                          { { Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
-                             Builder::QParam("M.start"), 
-                             Builder::QParam("M.end"),
+                             Builder::QParam("M.start", Builder::START_SERVICE_NAME), 
+                             Builder::QParam("M.end", Builder::END_SERVICE_NAME),
                              Builder::QParam("E.category_id"), 
                              Builder::QParam("M.name_id"),
                              Builder::QParam("M.id"),
@@ -642,8 +644,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                              Builder::QParam("DSTAG.absolute_index", "device_index"),
                              Builder::QParam(Builder::Concat({"DSTAG.type","DSTAG.type_index"}), "device"),
                              Builder::QParam("DSTAG.name", "device_name"),
-                             Builder::QParam("M.start"), 
-                             Builder::QParam("M.end"),
+                             Builder::QParam("M.start", Builder::START_SERVICE_NAME), 
+                             Builder::QParam("M.end", Builder::END_SERVICE_NAME),
                              Builder::QParam("(M.end-M.start)", "duration"),
 
                              Builder::QParamBlank("GridSizeX"),
@@ -703,8 +705,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     // Level query, for COUNT only
                     Builder::Select(rocprofvis_db_sqlite_level_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
-                         Builder::QParam("K.start"), 
-                         Builder::QParam("K.end"),
+                         Builder::QParam("K.start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("K.end", Builder::END_SERVICE_NAME),
                          Builder::SpaceSaver(0), 
                          Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
                          Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
@@ -718,9 +720,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     // Slice query by queue
                     Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
-                         Builder::QParam("K.start"), 
+                         Builder::QParam("K.start", Builder::START_SERVICE_NAME), 
                          Builder::QParam("PMC_E.value", Builder::COUNTER_VALUE_SERVICE_NAME),
-                         Builder::QParam("K.end"),
+                         Builder::QParam("K.end", Builder::END_SERVICE_NAME),
                          Builder::SpaceSaver(0),
                          Builder::SpaceSaver(0),
                          Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
@@ -736,8 +738,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     // Table query
                     Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
-                         Builder::QParam("K.start"), 
-                         Builder::QParam("K.end"),
+                         Builder::QParam("K.start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("K.end", Builder::END_SERVICE_NAME),
                          Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
                          Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                          Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
@@ -885,7 +887,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if(kRocProfVisDmResultSuccess !=
            ExecuteQueryForAllTracksAsync(
                kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
-               "SELECT MIN(start), MAX(end), MIN(CAST(level as REAL)), MAX(CAST(level as REAL)), ",
+               "SELECT MIN(startTs), MAX(endTs), MIN(CAST(level as REAL)), MAX(CAST(level as REAL)), ",
                "", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {}))
         {

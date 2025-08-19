@@ -127,14 +127,24 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
 
     if (callback_params->future->Interrupted()) return 1;
     rocprofvis_db_sqlite_track_service_data_t service_data{};
-    std::string column = azColName[0];
-    bool is_query_for_table_view = column == Builder::OPERATION_SERVICE_NAME;
+    bool  is_query_for_table_view = false;
+    uint32_t                                  op_pos                  = 0;
+    for(int i = 0; i < argc; i++)
+    {
+        std::string column = azColName[i];
+        if(column == Builder::OPERATION_SERVICE_NAME)
+        {
+            op_pos                  = i;
+            is_query_for_table_view = true;
+            break;
+        }
+    }
     uint64_t blanks_mask = is_query_for_table_view ? db->GetBlanksMaskForQuery(callback_params->query[0]) : 0;
     if(0 == callback_params->future->GetProcessedRowsCount())
     {
         for (int i=0; i < argc; i++)
         {
-            if((blanks_mask & (uint64_t) 1 << i) != 0) 
+            if((blanks_mask & (uint64_t) 1 << (i-op_pos)) != 0) 
                 continue;
             std::string column = azColName[i];
             CollectTrackServiceData(stmt, i, column, service_data);
@@ -171,7 +181,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
     service_data.op       = kRocProfVisDmOperationNoOp;
     for (int i=0; i < argc; i++)
     {
-        if((blanks_mask & (uint64_t) 1 << i) != 0) 
+        if((blanks_mask & (uint64_t) 1 << i-(op_pos)) != 0) 
             continue;
         std::string       column_text;
         std::string column = azColName[i];        

@@ -105,6 +105,8 @@ class Builder
         static constexpr const char* SPACESAVER_SERVICE_NAME     = "const";
         static constexpr const char* COUNTER_NAME_SERVICE_NAME   = "monitorType";
         static constexpr const char* BLANK_COLUMN_STR            = "' '";
+        static constexpr const char* START_SERVICE_NAME     = "startTs";
+        static constexpr const char* END_SERVICE_NAME       = "endTs";
 
     public:
         static std::string Select(rocprofvis_db_sqlite_track_query_format params);

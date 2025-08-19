@@ -359,13 +359,19 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
         query += ")";
         if(timed_query)
         {
-            query += " and start < ";
+            query += " and ";
+            query += Builder::START_SERVICE_NAME;
+            query += " < ";
             query += std::to_string(end);
-            query += " and end > ";
+            query += " and ";
+            query += Builder::END_SERVICE_NAME;
+            query += " > ";
             query += std::to_string(start);
         }
     }
-    query += ") ORDER BY level, start;";
+    query += ") ORDER BY level, ";
+    query += Builder::START_SERVICE_NAME;
+    query += ";";
     return kRocProfVisDmResultSuccess;
 
 }
@@ -413,7 +419,7 @@ ProfileDatabase::BuildTableQuery(
     }
     if(count_only)
     {
-        query = "SELECT COUNT(*) AS [NumRecords] FROM ( ";
+        query = "SELECT COUNT(id) AS [NumRecords], * FROM ( ";
     }
     else
     { 
@@ -438,9 +444,13 @@ ProfileDatabase::BuildTableQuery(
         if (it_query!=slice_query_map.begin()) query += " UNION ";
         query += it_query->first;
         query += it_query->second;
-        query += ") and start >= ";
+        query += ") and ";
+        query += Builder::START_SERVICE_NAME;
+        query += " >= ";
         query += std::to_string(start);
-        query += " and end < ";
+        query += " and ";
+        query += Builder::END_SERVICE_NAME;
+        query += " < ";
         query += std::to_string(end);
     }
     if(group && strlen(group))
@@ -481,6 +491,10 @@ ProfileDatabase::BuildTableQuery(
             query += " OFFSET ";
             query += std::to_string(offset);
         }
+    }
+    else
+    {
+        query += " LIMIT 1";
     }
     query += ";";
     return kRocProfVisDmResultSuccess;

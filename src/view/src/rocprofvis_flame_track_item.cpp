@@ -29,6 +29,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_level_height(40.0f)
 , m_timeline_selection(timeline_selection)
 , m_selection_changed(false)
+, m_has_drawn_tool_tip(false)
 {
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
@@ -172,15 +173,18 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id);
             m_selection_changed = true;
         }
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
-        ImGui::BeginTooltip();
-        ImGui::Text("%s", chart_item.event.m_name.c_str());
-        ImGui::Text("Start: %.2f", chart_item.event.m_start_ts - m_min_x);
-        ImGui::Text("Duration: %.2f", chart_item.event.m_duration);
-        ImGui::Text("Id: %llu", chart_item.event.m_id);
-        ImGui::EndTooltip();
-        ImGui::PopStyleVar();
+    
+        if(!m_has_drawn_tool_tip) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
+            ImGui::BeginTooltip();
+            ImGui::Text("%s", chart_item.event.m_name.c_str());
+            ImGui::Text("Start: %.2f", chart_item.event.m_start_ts - m_min_x);
+            ImGui::Text("Duration: %.2f", chart_item.event.m_duration);
+            ImGui::Text("Id: %llu", chart_item.event.m_id);
+            ImGui::EndTooltip();
+            ImGui::PopStyleVar();
+            m_has_drawn_tool_tip = true;
+        }
     }
 }
 
@@ -194,6 +198,7 @@ FlameTrackItem::RenderChart(float graph_width)
     ROCPROFVIS_ASSERT(colorCount > 0);
 
     int color_index = 0;
+    m_has_drawn_tool_tip = false;
     for(ChartItem& item : m_chart_items)
     {
         ImVec2 container_pos = ImGui::GetWindowPos();

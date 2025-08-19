@@ -3,7 +3,7 @@
 #pragma once
 
 #include <rocprofvis_settings.h>
-
+#include <string>
 namespace RocProfVis
 {
 namespace View
@@ -16,7 +16,8 @@ public:
     ~SettingsPanel();
 
     void Render();
-
+    void SaveModifiedSettingsToJson(const std::string& filename);
+    void LoadModifiedSettingsFromJson(const std::string& filename);
     // Getter and setter for open state
     bool IsOpen();
     void SetOpen(bool);

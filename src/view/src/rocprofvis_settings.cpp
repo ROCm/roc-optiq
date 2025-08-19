@@ -468,6 +468,14 @@ Settings::SetDisplaySettings(const DisplaySettings& settings)
         (m_display_settings_current.font_size_index != settings.font_size_index) ||
         (m_display_settings_current.dpi_based_scaling != settings.dpi_based_scaling);
 
+    if(m_display_settings_current.use_dark_mode != settings.use_dark_mode)
+    {
+        if(settings.use_dark_mode)
+            DarkMode();
+        else
+            LightMode();
+    }
+
     m_display_settings_current = settings;
 
     if(font_changed)

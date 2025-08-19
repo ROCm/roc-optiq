@@ -92,6 +92,10 @@ AppWindow::Init()
     {
         spdlog::warn("Failed to initialize fonts");
     }
+    else
+    {
+        m_settings_panel->LoadModifiedSettingsFromJson("settings_application.json");
+    }
 
     LayoutItem status_bar_item(-1, 30.0f);
     status_bar_item.m_item = std::make_shared<RocWidget>();
@@ -252,7 +256,7 @@ AppWindow::Render()
     RenderDebugOuput();
 #endif
 
-    //render notifications last
+    // render notifications last
     NotificationManager::GetInstance().Render();
 }
 

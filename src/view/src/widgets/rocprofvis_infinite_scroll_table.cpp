@@ -184,9 +184,9 @@ InfiniteScrollTable::Render()
     rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending;
 
     ImGuiTableFlags table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                                  ImGuiTableFlags_BordersOuter |
+                                  ImGuiTableFlags_BordersOuter | ImGuiTableFlags_ScrollX |
                                   ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_Reorderable;
+                                  ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable;
 
     if(!m_data_provider.IsRequestPending(m_table_type == TableType::kEventTable
                                              ? DataProvider::EVENT_TABLE_REQUEST_ID
@@ -314,7 +314,12 @@ InfiniteScrollTable::Render()
             ImGui::TableSetupScrollFreeze(0, 1);  // Freeze header row
             for(const auto& col : column_names)
             {
-                ImGui::TableSetupColumn(col.c_str());
+                ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_None;
+                if(!col.empty() && col[0] == '_')
+                {
+                    col_flags = ImGuiTableColumnFlags_DefaultHide | ImGuiTableColumnFlags_Disabled;
+                }
+                ImGui::TableSetupColumn(col.c_str(), col_flags);
             }
 
             // Get sort specs

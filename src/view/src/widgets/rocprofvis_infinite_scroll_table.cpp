@@ -180,7 +180,7 @@ InfiniteScrollTable::Render()
 
     bool                               sort_requested    = false;
     bool                               filter_changed    = false;
-    uint64_t                           sort_colunn_index = 0;
+    uint64_t                           sort_column_index = 0;
     rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending;
 
     ImGuiTableFlags table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
@@ -314,6 +314,7 @@ InfiniteScrollTable::Render()
             ImGui::TableSetupScrollFreeze(0, 1);  // Freeze header row
             for(const auto& col : column_names)
             {
+                //TODO: hide columns that should be hidden, use ImGuiTableColumnFlags_DefaultHide
                 ImGui::TableSetupColumn(col.c_str());
             }
 
@@ -322,7 +323,7 @@ InfiniteScrollTable::Render()
             if(sort_specs && sort_specs->SpecsDirty)
             {
                 sort_requested    = true;
-                sort_colunn_index = sort_specs->Specs->ColumnIndex;
+                sort_column_index = sort_specs->Specs->ColumnIndex;
                 sort_order =
                     (sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending)
                         ? kRPVControllerSortOrderAscending
@@ -524,7 +525,14 @@ InfiniteScrollTable::Render()
     if(show_loading_indicator)
     {
         // Show a loading indicator if the data is being fetched
+        // Create an overlay child window to display the loading indicator
+        ImGui::SetCursorPos(ImVec2(0,0));
+        // set transparent background for the overlay window
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+        ImGui::BeginChild(m_widget_name.c_str(), ImGui::GetWindowSize(), ImGuiChildFlags_None);
         RenderLoadingIndicator();
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
     }
 
     ImGui::EndChild();
@@ -533,25 +541,31 @@ InfiniteScrollTable::Render()
     {
         if(event_table_params)
         {
-            // Update the event table params with the new sort request
-            event_table_params->m_sort_column_index = sort_colunn_index;
-            event_table_params->m_sort_order        = sort_order;
-            event_table_params->m_filter            = m_filter.data();
-            event_table_params->m_group             = m_group;
-            event_table_params->m_group_columns =
-                m_group_columns.size() ? m_group_columns.data() : "";
+            // check that sort order and column index actually are different from the
+            // current values before fetching
+            if(filter_changed || sort_order != event_table_params->m_sort_order ||
+               sort_column_index != event_table_params->m_sort_column_index)
+            {               
+                // Update the event table params with the new sort request
+                event_table_params->m_sort_column_index = sort_column_index;
+                event_table_params->m_sort_order        = sort_order;
+                event_table_params->m_filter            = m_filter.data();
+                event_table_params->m_group             = m_group;
+                event_table_params->m_group_columns =
+                    m_group_columns.size() ? m_group_columns.data() : "";
 
-            spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
+                spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
-            // Fetch the event table with the updated params
-            m_data_provider.FetchMultiTrackTable(TableRequestParams(
-                m_req_table_type, event_table_params->m_track_ids,
-                event_table_params->m_start_ts, event_table_params->m_end_ts,
-                event_table_params->m_filter.c_str(), event_table_params->m_group.c_str(),
-                event_table_params->m_group_columns.c_str(),
-                event_table_params->m_start_row, event_table_params->m_req_row_count,
-                event_table_params->m_sort_column_index,
-                event_table_params->m_sort_order));
+                // Fetch the event table with the updated params
+                m_data_provider.FetchMultiTrackTable(TableRequestParams(
+                    m_req_table_type, event_table_params->m_track_ids,
+                    event_table_params->m_start_ts, event_table_params->m_end_ts,
+                    event_table_params->m_filter.c_str(), event_table_params->m_group.c_str(),
+                    event_table_params->m_group_columns.c_str(),
+                    event_table_params->m_start_row, event_table_params->m_req_row_count,
+                    event_table_params->m_sort_column_index,
+                    event_table_params->m_sort_order));
+            }
         }
         else
         {
@@ -582,7 +596,7 @@ InfiniteScrollTable::RenderLoadingIndicator()
     ImGui::SetCursorScreenPos(center_pos);
 
     RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                               m_settings.GetColor(Colors::kScrollBarColor), anim_speed);
+                               m_settings.GetColor(Colors::kTextMain), anim_speed);
 
     // Reset cursor position after rendering spinner
     ImGui::SetCursorPos(pos);

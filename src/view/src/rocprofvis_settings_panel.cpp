@@ -18,64 +18,6 @@ SettingsPanel::IsOpen()
 {
     return m_is_open;
 }
-void
-SettingsPanel::LoadModifiedSettingsFromJson(const std::string& filename)
-{
-    std::filesystem::path in_path = std::filesystem::current_path() / filename;
-    std::ifstream         in_file(in_path);
-    if(!in_file.is_open())
-    {
-        return;
-    }
-
-    std::string json_str((std::istreambuf_iterator<char>(in_file)),
-                         std::istreambuf_iterator<char>());
-    in_file.close();
-
-    auto result = jt::Json::parse(json_str);
-    if(result.first != jt::Json::success || !result.second.isObject())
-    {
-        return;
-    }
-
-    jt::Json& j = result.second;
-
-    try
-    {
-        if(j.contains("dpi")) m_display_settings_modified.dpi = 2;
-        if(j.contains("use_dark_mode"))
-            m_display_settings_modified.use_dark_mode = j["use_dark_mode"].getBool();
-        if(j.contains("dpi_based_scaling"))
-            m_display_settings_modified.dpi_based_scaling =
-                j["dpi_based_scaling"].getBool();
-        if(j.contains("font_size_index"))
-            m_display_settings_modified.font_size_index =
-                static_cast<int>(j["font_size_index"].getLong());
-        Settings::GetInstance().SetDisplaySettings(m_display_settings_modified);
-    } catch(...)
-    {
-        return;
-    }
-}
-void
-SettingsPanel::SaveModifiedSettingsToJson(const std::string& filename)
-{
-    jt::Json j;
-    j.setObject();
-    j["dpi"]               = m_display_settings_modified.dpi;
-    j["use_dark_mode"]     = m_display_settings_modified.use_dark_mode;
-    j["dpi_based_scaling"] = m_display_settings_modified.dpi_based_scaling;
-    j["font_size_index"]   = m_display_settings_modified.font_size_index;
-
-    std::filesystem::path out_path = std::filesystem::current_path() / filename;
-
-    std::ofstream out_file(out_path);
-    if(out_file.is_open())
-    {
-        out_file << j.toStringPretty();
-        out_file.close();
-    }
-}
 
 void
 SettingsPanel::SetOpen(bool open)
@@ -286,7 +228,8 @@ SettingsPanel::Render()
             m_display_settings_modified.font_size_index = m_preview_font_size;
             settings.SetDisplaySettings(m_display_settings_modified);
             m_preview_font_size = -1;
-            SaveModifiedSettingsToJson("settings_application.json");
+            settings.SaveSettings("settings_application.json",
+                                  m_display_settings_modified);
             ImGui::CloseCurrentPopup();
         }
 

@@ -3,14 +3,15 @@
 #include "rocprofvis_settings.h"
 #include "icons/rocprofvis_icon_data.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_core.h"
-#include "rocprofvis_core_assert.h"
-#include <cmath>
-
 #include "imgui.h"
 #include "implot.h"
+#include "rocprofvis_core.h"
+#include "rocprofvis_core_assert.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
+#include <fstream>
+#include <imgui_internal.h>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -448,6 +449,92 @@ bool
 Settings::IsDarkMode() const
 {
     return m_display_settings_current.use_dark_mode;
+}
+void
+Settings::SerializeDisplaySettings(jt::Json& parent, const DisplaySettings& settings)
+{
+    jt::Json display_settings;
+    display_settings.setObject();
+    display_settings["dpi"]               = settings.dpi;
+    display_settings["use_dark_mode"]     = settings.use_dark_mode;
+    display_settings["dpi_based_scaling"] = settings.dpi_based_scaling;
+    display_settings["font_size_index"]   = settings.font_size_index;
+    parent["display_settings"]            = display_settings;
+}
+
+bool
+Settings::DeserializeDisplaySettings(jt::Json&        saved_results,
+                                     DisplaySettings& saved_settings)
+{
+    if(saved_results.contains("display_settings") &&
+       saved_results["display_settings"].isObject())
+    {
+        jt::Json& ds = saved_results["display_settings"];
+
+        if(ds.contains("dpi"))
+        {
+            if(ds["dpi"].isDouble())
+                saved_settings.dpi = static_cast<float>(ds["dpi"].getDouble());
+            else if(ds["dpi"].isLong())
+                saved_settings.dpi = static_cast<float>(ds["dpi"].getLong());
+            else
+                saved_settings.dpi = 1.0f;
+        }
+
+        if(ds.contains("use_dark_mode") && ds["use_dark_mode"].isBool())
+            saved_settings.use_dark_mode = ds["use_dark_mode"].getBool();
+        else
+            saved_settings.use_dark_mode = false;
+
+        if(ds.contains("dpi_based_scaling") && ds["dpi_based_scaling"].isBool())
+            saved_settings.dpi_based_scaling = ds["dpi_based_scaling"].getBool();
+        else
+            saved_settings.dpi_based_scaling = true;
+
+        if(ds.contains("font_size_index") && ds["font_size_index"].isLong())
+            saved_settings.font_size_index =
+                static_cast<int>(ds["font_size_index"].getLong());
+        else
+            saved_settings.font_size_index = 6;  // Default to 12pt font size
+
+        return true;
+    }
+    return false;
+}
+
+void
+Settings::SaveSettings(const std::string& filename, const DisplaySettings& settings)
+{
+    jt::Json parent;
+    parent.setObject();
+    SerializeDisplaySettings(parent, settings);
+
+    std::filesystem::path out_path = std::filesystem::current_path() / filename;
+    std::ofstream         out_file(out_path);
+    if(out_file.is_open())
+    {
+        out_file << parent.toStringPretty();
+        out_file.close();
+    }
+}
+
+void
+Settings::LoadSettings(const std::string& filename)
+{
+    std::filesystem::path in_path = std::filesystem::current_path() / filename;
+    std::ifstream         in_file(in_path);
+    if(!in_file.is_open()) return;
+
+    std::string json_str((std::istreambuf_iterator<char>(in_file)),
+                         std::istreambuf_iterator<char>());
+    in_file.close();
+
+    auto result = jt::Json::parse(json_str);
+    if(result.first != jt::Json::success || !result.second.isObject()) return;
+
+    DisplaySettings loaded_settings = m_display_settings_current;
+    if(DeserializeDisplaySettings(result.second, loaded_settings))
+        SetDisplaySettings(loaded_settings);
 }
 
 void

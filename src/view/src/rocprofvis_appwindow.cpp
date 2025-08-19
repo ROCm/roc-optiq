@@ -94,7 +94,7 @@ AppWindow::Init()
     }
     else
     {
-        m_settings_panel->LoadModifiedSettingsFromJson("settings_application.json");
+        Settings::GetInstance().LoadSettings("settings_application.json");
     }
 
     LayoutItem status_bar_item(-1, 30.0f);

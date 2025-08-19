@@ -3,9 +3,11 @@
 #pragma once
 
 #include "imgui.h"
-
+#include "json.h"
+#include <string>
 #include <utility>
 #include <vector>
+
 namespace RocProfVis
 {
 namespace View
@@ -124,7 +126,11 @@ public:
     ImU32     GetColor(Colors color) const;
 
     const std::vector<ImU32>& GetColorWheel();
-
+    void                      LoadSettings(const std::string& filename);
+    void SaveSettings(const std::string& filename, const DisplaySettings& settings);
+    void SerializeDisplaySettings(jt::Json& parent, const DisplaySettings& settings);
+    bool DeserializeDisplaySettings(jt::Json&        saved_results,
+                                    DisplaySettings& saved_settings);
     void DarkMode();
     void LightMode();
     bool IsDarkMode() const;
@@ -137,7 +143,8 @@ public:
     void              RestoreDisplaySettings(const DisplaySettings& settings);
     DisplaySettings&  GetInitialDisplaySettings();
     void              SetDisplaySettings(const DisplaySettings& settings);
-
+  
+ 
 private:
     Settings();
     ~Settings();

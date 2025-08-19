@@ -934,7 +934,8 @@ TimelineView::RenderGraphView()
             {
                 // Request data for the chart if it doesn't have data.
                 if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
-                                                        TrackDataRequestState::kIdle) || request_data)
+                                                        TrackDataRequestState::kIdle) ||
+                   request_data)
 
                 {
                     // Request one viewport worth of data on each side of the current

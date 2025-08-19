@@ -100,8 +100,8 @@ class Builder
         static constexpr const char* THREAD_ID_SERVICE_NAME  = "threadId";
         static constexpr const char* COUNTER_ID_SERVICE_NAME  = "counterId";
         static constexpr const char* COUNTER_VALUE_SERVICE_NAME = "counterValue";
-        static constexpr const char* TRACK_ID_PUBLIC_NAME = "trackId";
-        static constexpr const char* STREAM_TRACK_ID_PUBLIC_NAME = "streamTrackId";
+        static constexpr const char* TRACK_ID_PUBLIC_NAME = "__trackId";
+        static constexpr const char* STREAM_TRACK_ID_PUBLIC_NAME = "__streamTrackId";
         static constexpr const char* SPACESAVER_SERVICE_NAME     = "const";
         static constexpr const char* COUNTER_NAME_SERVICE_NAME   = "monitorType";
         static constexpr const char* BLANK_COLUMN_STR            = "' '";

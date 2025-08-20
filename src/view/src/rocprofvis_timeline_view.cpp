@@ -1061,11 +1061,24 @@ TimelineView::RenderGraphView()
                 ImVec2 graph_view_pos     = ImGui::GetWindowPos();
                 ImVec2 mouse_pos          = ImGui::GetMousePos();
                 ImVec2 mouse_relative_pos = mouse_pos - graph_view_pos;
+
                 ImGui::SetNextWindowPos(
-                    ImVec2(graph_view_pos.x, mouse_pos.y - ImGui::GetFrameHeight() / 2));
-                ImGui::BeginTooltip();
-                track_item.chart->Render(m_graph_size.x);
-                ImGui::EndTooltip();
+                    ImVec2(graph_view_pos.x, mouse_pos.y - ImGui::GetFrameHeight() / 2),
+                    ImGuiCond_Always);
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0, 0));  
+                if(ImGui::Begin("##ReorderPreview", nullptr,
+                                ImGuiWindowFlags_Tooltip | ImGuiWindowFlags_NoInputs |
+                                    ImGuiWindowFlags_NoNav |
+                                    ImGuiWindowFlags_NoDecoration |
+                                    ImGuiWindowFlags_AlwaysAutoResize |
+                                    ImGuiWindowFlags_NoSavedSettings |
+                                    ImGuiWindowFlags_NoFocusOnAppearing |
+                                    ImGuiWindowFlags_NoBringToFrontOnFocus))
+                {
+                    track_item.chart->Render(m_graph_size.x);
+                }
+                ImGui::End();
+                ImGui::PopStyleVar();
 
                 // Scroll the view if the mouse is near the top or bottom of the window.
                 // Speed is proportional to frame height and depth of mouse inside

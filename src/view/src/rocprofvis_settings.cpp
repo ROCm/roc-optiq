@@ -496,7 +496,7 @@ Settings::DeserializeDisplaySettings(jt::Json&        saved_results,
             saved_settings.font_size_index =
                 static_cast<int>(ds["font_size_index"].getLong());
         else
-            saved_settings.font_size_index = 6;  // Default to 12pt font size
+            saved_settings.font_size_index = 6;  // Default to 12pt font size.
 
         return true;
     }

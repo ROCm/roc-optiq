@@ -127,28 +127,45 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
 
     m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
                          m_track_height_total);
-    // Place this in your main ImGui window code, after RenderArrows
-    if(ImGui::IsKeyPressed(ImGuiKey_F3))  // Use IsKeyPressed for one-time popup
+
+
+    //The following popup only exists due to a lack of a navbar.
+    if(ImGui::IsKeyPressed(ImGuiKey_F3))
     {
         ImGui::OpenPopup("FlowDisplayPopup");
     }
 
-    if(ImGui::BeginPopupModal("FlowDisplayPopup", NULL,
+    if(ImGui::BeginPopupModal("FlowDisplayPopup", nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize))
     {
         FlowDisplayMode current_mode = m_arrow_layer.GetFlowDisplayMode();
 
-        if(ImGui::Selectable("Show Flow", current_mode == FlowDisplayMode::ShowAll))
-            m_arrow_layer.SetFlowDisplayMode(FlowDisplayMode::ShowAll);
+        ImGui::Text("Flow Display Options");
+        ImGui::Separator();
+        ImGui::Spacing();
 
-        if(ImGui::Selectable("Show First & Last",
-                             current_mode == FlowDisplayMode::ShowFirstAndLast))
-            m_arrow_layer.SetFlowDisplayMode(FlowDisplayMode::ShowFirstAndLast);
+        int mode = static_cast<int>(current_mode);
+        if(ImGui::RadioButton("Show Flow",
+                              mode == static_cast<int>(FlowDisplayMode::ShowAll)))
+            mode = static_cast<int>(FlowDisplayMode::ShowAll);
+        ImGui::SameLine();
+        if(ImGui::RadioButton("Show First & Last",
+                              mode ==
+                                  static_cast<int>(FlowDisplayMode::ShowFirstAndLast)))
+            mode = static_cast<int>(FlowDisplayMode::ShowFirstAndLast);
+        ImGui::SameLine();
+        if(ImGui::RadioButton("Hide Flow",
+                              mode == static_cast<int>(FlowDisplayMode::Hide)))
+            mode = static_cast<int>(FlowDisplayMode::Hide);
 
-        if(ImGui::Selectable("Hide Flow", current_mode == FlowDisplayMode::Hide))
-            m_arrow_layer.SetFlowDisplayMode(FlowDisplayMode::Hide);
+        ImGui::SameLine();
+        ImGui::Dummy(ImVec2(10, 0));
+        // Update the mode if changed
+        if(mode != static_cast<int>(current_mode))
+            m_arrow_layer.SetFlowDisplayMode(static_cast<FlowDisplayMode>(mode));
 
-        if(ImGui::Button("Close")) ImGui::CloseCurrentPopup();
+        ImGui::Spacing();
+        if(ImGui::Button("Close", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
 
         ImGui::EndPopup();
     }

@@ -25,6 +25,7 @@
 #include <set>
 #include <mutex>
 #include <condition_variable>
+#include "rocprofvis_db_query_builder.h"
 
 namespace RocProfVis
 {
@@ -90,6 +91,8 @@ class SqliteDatabase : public Database
         // @return status of operation
         rocprofvis_dm_result_t Close() override;
 
+        void SetBlankMask(std::string op, uint64_t mask);
+
     protected:
         // Method to create SQL table
         // @param table_name - table name 
@@ -119,7 +122,7 @@ class SqliteDatabase : public Database
         // @param callback - sqlite3_exec callback method for data processing
         // @return status of operation
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
-                                                std::vector<const char*> query, 
+                                                std::vector<std::string> query, 
                                                 RpvSqliteExecuteQueryCallback callback);
         // Method for single row and column SQL query execution returning result of the query as string 
         // @param future - future object for asynchronous execution status
@@ -240,6 +243,7 @@ class SqliteDatabase : public Database
         std::set<sqlite3*> m_connections_inuse;
         std::mutex         m_mutex;
         std::condition_variable      m_inuse_cv;
+        std::map<std::string, uint64_t> m_blank_mask;
 
         // method to mimic slite3_exec using sqlite3_prepare_v2
         // @param db - database connection
@@ -253,6 +257,10 @@ class SqliteDatabase : public Database
         
         void ReleaseConnection(sqlite3* conn);
         bool isServiceColumn(char* name);
+        static void CollectTrackServiceData(
+            sqlite3_stmt* stmt, int column_index, std::string& column_name,
+            rocprofvis_db_sqlite_track_service_data_t& service_data);
+        uint64_t GetBlanksMaskForQuery(std::string query);
 
 };
 

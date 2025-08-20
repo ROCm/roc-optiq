@@ -49,15 +49,15 @@ public:
     // Returns class mutex
     std::shared_mutex*                                  Mutex() override;
     // Returns track category enumeration value
-    rocprofvis_dm_track_category_t                      Category() { return m_track_params->track_category; }
+    rocprofvis_dm_track_category_t                      Category() { return m_track_params->process.category; }
     // Returns track ID. Track id is currently equal to track index in array of tracks
     rocprofvis_dm_track_id_t                            TrackId() { return m_track_params->track_id; }
     // Returns node id
-    rocprofvis_dm_node_id_t                             NodeId() { return m_track_params->process_id[TRACK_ID_NODE]; }
+    rocprofvis_dm_node_id_t                             NodeId() { return m_track_params->process.id[TRACK_ID_NODE]; }
     // Returns pointer to process string
-    rocprofvis_dm_charptr_t                             Process() { return m_track_params->process_name[TRACK_ID_PID_OR_AGENT].c_str(); }
+    rocprofvis_dm_charptr_t                             Process() { return m_track_params->process.name[TRACK_ID_PID_OR_AGENT].c_str(); }
     // Returns pointer to subprocess string
-    rocprofvis_dm_charptr_t                             SubProcess() { return m_track_params->process_name[TRACK_ID_TID_OR_QUEUE].c_str(); }
+    rocprofvis_dm_charptr_t                             SubProcess() { return m_track_params->process.name[TRACK_ID_TID_OR_QUEUE].c_str(); }
     // Return total number of records                   
     rocprofvis_dm_size_t                                NumRecords() { return m_track_params->record_count; }
     // Return track minimum timestamp

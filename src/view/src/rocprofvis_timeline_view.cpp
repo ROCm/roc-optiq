@@ -996,6 +996,19 @@ TimelineView::RenderGraphView()
                            ImVec2(track_item.chart->GetReorderGripWidth(), 0), false,
                            window_flags | ImGuiWindowFlags_NoScrollbar))
                     {
+
+                        // Check if the resize grip area is hovered to change the cursor
+                        ImVec2 cursor_pos = ImGui::GetCursorPos();
+                        ImVec2 invisible_hotspot_size = ImGui::GetContentRegionAvail();
+                        ImVec2 invisible_hotspot_pos = cursor_pos;
+                        ImGui::SetCursorPos(invisible_hotspot_pos);
+                        ImGui::InvisibleButton("##InvisibleHotspot", invisible_hotspot_size, ImGuiButtonFlags_None);
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+                        }
+                        ImGui::SetCursorPos(cursor_pos); // Reset cursor position
+
                         if(ImGui::BeginDragDropSource(
                                ImGuiDragDropFlags_SourceNoPreviewTooltip))
                         {
@@ -1007,7 +1020,6 @@ TimelineView::RenderGraphView()
                         }
                     }
                     ImGui::EndChild();
-
                     ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
 
                     // check for mouse click
@@ -1050,7 +1062,7 @@ TimelineView::RenderGraphView()
                 ImVec2 mouse_pos          = ImGui::GetMousePos();
                 ImVec2 mouse_relative_pos = mouse_pos - graph_view_pos;
                 ImGui::SetNextWindowPos(
-                    ImVec2(graph_view_pos.x, mouse_pos.y + ImGui::GetFrameHeight()));
+                    ImVec2(graph_view_pos.x, mouse_pos.y - ImGui::GetFrameHeight() / 2));
                 ImGui::BeginTooltip();
                 track_item.chart->Render(m_graph_size.x);
                 ImGui::EndTooltip();

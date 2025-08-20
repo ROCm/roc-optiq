@@ -314,8 +314,12 @@ InfiniteScrollTable::Render()
             ImGui::TableSetupScrollFreeze(0, 1);  // Freeze header row
             for(const auto& col : column_names)
             {
-                //TODO: hide columns that should be hidden, use ImGuiTableColumnFlags_DefaultHide
-                ImGui::TableSetupColumn(col.c_str());
+                ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_None;
+                if(!col.empty() && col[0] == '_')
+                {
+                    col_flags = ImGuiTableColumnFlags_DefaultHide | ImGuiTableColumnFlags_Disabled;
+                }
+                ImGui::TableSetupColumn(col.c_str(), col_flags);
             }
 
             // Get sort specs

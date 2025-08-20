@@ -417,43 +417,104 @@ ProfileDatabase::BuildTableQuery(
             slice_query_map[q] += tuple ;
         }
     }
+
+    const bool do_group = (group && strlen(group));
+
     if(count_only)
     {
-        query = "SELECT COUNT(id) AS [NumRecords], * FROM ( ";
-    }
-    else
-    { 
-        query = "SELECT * FROM ( "; 
-    } 
-    if (group && strlen(group))
-    {
-        query += "SELECT ";
-
-        if (group_cols && strlen(group_cols))
+        if(do_group)
         {
-            query += group_cols;
+            query = "SELECT COUNT(*) AS [NumRecords], * FROM ( ";
         }
         else
         {
-            query += "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, MIN(duration) as min_duration, MAX(duration) as max_duration";
+            query = "SELECT COUNT(id) AS [NumRecords], * FROM ( ";
         }
+    }
+    else
+    {
+        query = "SELECT * FROM ( ";
+    }
 
-        query += " FROM ( "; 
+    if(do_group)
+    {
+        // Outer aggregated projection (what the caller wants to see)
+        query += "SELECT ";
+        if(group_cols && strlen(group_cols))
+        {
+            query += group_cols;  // caller provided projection/aggregates
+        }
+        else
+        {
+            // Default aggregates: expects `name` and `duration` columns to exist
+            query += "name, COUNT(*) AS num_invocations, "
+                     "AVG(duration) AS avg_duration, "
+                     "MIN(duration) AS min_duration, "
+                     "MAX(duration) AS max_duration";
+        }
+        query += " FROM ( ";
     }
-    for (std::map<std::string, std::string>::iterator it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
-        if (it_query!=slice_query_map.begin()) query += " UNION ";
-        query += it_query->first;
-        query += it_query->second;
-        query += ") and ";
-        query += Builder::START_SERVICE_NAME;
-        query += " >= ";
-        query += std::to_string(start);
-        query += " and ";
-        query += Builder::END_SERVICE_NAME;
-        query += " < ";
-        query += std::to_string(end);
+
+    // Emit UNION branches
+    for(auto it = slice_query_map.begin(); it != slice_query_map.end(); ++it)
+    {
+        if(it != slice_query_map.begin()) query += " UNION ";
+
+        // Base WHERE (…tags…) IN ((…tuples…)) + time window
+        std::string branch = it->first;  // "... WHERE (tags) IN ("
+        branch += it->second;            // "(v1,...), (v2,...)"
+        branch += ")";                   // close IN (...)
+        branch += " AND ";
+        branch += Builder::START_SERVICE_NAME;
+        branch += " >= " + std::to_string(start);
+        branch += " AND ";
+        branch += Builder::END_SERVICE_NAME;
+        branch += " < " + std::to_string(end);
+
+        if(do_group)
+        {
+            // Compute duration and alias the grouping key so the outer GROUP BY works.
+            // If your base branch already exposes `name`, you can pass it through for the
+            // default projection. If `group` is already an aliased expression (contains "
+            // AS "), don’t re-alias it.
+            std::string duration_expr = "(" + std::string(Builder::END_SERVICE_NAME) +
+                                        "-" + std::string(Builder::START_SERVICE_NAME) +
+                                        ")";
+            bool group_has_alias =
+                (strstr(group, " AS ") != nullptr) || (strstr(group, " as ") != nullptr);
+
+            std::string wrapped = "SELECT ";
+            if(group_has_alias)
+            {
+                wrapped += std::string(group);  // use verbatim (expr AS alias)
+            }
+            else
+            {
+                // Use the same identifier text for the alias to keep GROUP BY <group>
+                // valid
+                wrapped += std::string(group) + " AS " + std::string(group);
+            }
+
+            // Duration is required by the default aggregates
+            wrapped += ", " + duration_expr + " AS duration";
+
+            // If default projection (no group_cols provided) expects `name`, pass it
+            // through
+            if(!(group_cols && strlen(group_cols)))
+            {
+                wrapped += ", name";
+            }
+
+            wrapped += " FROM ( " + branch + " )";
+            query += wrapped;
+        }
+        else
+        {
+            query += branch;
+        }
     }
-    if(group && strlen(group))
+
+    if(do_group)
     {
         query += ") GROUP BY ";
         query += group;
@@ -497,6 +558,7 @@ ProfileDatabase::BuildTableQuery(
         query += " LIMIT 1";
     }
     query += ";";
+
     return kRocProfVisDmResultSuccess;
 }
 

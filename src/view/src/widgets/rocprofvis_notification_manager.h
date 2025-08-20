@@ -3,6 +3,7 @@
 #pragma once
 
 #include "imgui.h"
+#include <cstdint>
 #include <deque>
 #include <string>
 

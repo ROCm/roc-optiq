@@ -48,6 +48,7 @@ enum class Colors
     kSplitterColor,
     kBgMain,
     kBgPanel,
+    kBgFrame,
     kAccentRed,
     kAccentRedHover,
     kAccentRedActive,

@@ -220,6 +220,7 @@ const std::vector<ImU32> DARK_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kArrowColor)]          = IM_COL32(220, 38, 38, 180);
     colors[static_cast<int>(Colors::kBgMain)]              = IM_COL32(18, 18, 18, 255);
     colors[static_cast<int>(Colors::kBgPanel)]             = IM_COL32(28, 28, 28, 255);
+    colors[static_cast<int>(Colors::kBgFrame)]             = IM_COL32(38, 38, 38, 255);
     colors[static_cast<int>(Colors::kAccentRed)]           = IM_COL32(219, 38, 38, 255);
     colors[static_cast<int>(Colors::kAccentRedHover)]      = IM_COL32(255, 71, 87, 255);
     colors[static_cast<int>(Colors::kAccentRedActive)]     = IM_COL32(181, 30, 30, 255);
@@ -272,6 +273,7 @@ const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kScrubberNumberColor)] = IM_COL32(30, 30, 30, 255);
     colors[static_cast<int>(Colors::kBgMain)]              = IM_COL32(255, 253, 250, 255);
     colors[static_cast<int>(Colors::kBgPanel)]             = IM_COL32(250, 245, 240, 255);
+    colors[static_cast<int>(Colors::kBgFrame)]             = IM_COL32(240, 238, 232, 255);
     colors[static_cast<int>(Colors::kAccentRed)]           = IM_COL32(242, 90, 70, 255);
     colors[static_cast<int>(Colors::kAccentRedHover)]      = IM_COL32(255, 140, 120, 255);
     colors[static_cast<int>(Colors::kAccentRedActive)]     = IM_COL32(255, 110, 90, 255);
@@ -312,6 +314,7 @@ Settings::ApplyColorStyling()
 
     ImVec4 bgMain    = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgMain));
     ImVec4 bgPanel   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgPanel));
+    ImVec4 bgFrame   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgFrame));
     ImVec4 accentRed = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRed));
     ImVec4 accentRedHover =
         ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedHover));
@@ -335,7 +338,7 @@ Settings::ApplyColorStyling()
     style.Colors[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);
 
     // Frame
-    style.Colors[ImGuiCol_FrameBg]        = bgPanel;
+    style.Colors[ImGuiCol_FrameBg]        = bgFrame;
     style.Colors[ImGuiCol_FrameBgHovered] = accentRedHover;
     style.Colors[ImGuiCol_FrameBgActive]  = accentRedActive;
 
@@ -508,7 +511,13 @@ Settings::SaveSettings(const std::string& filename, const DisplaySettings& setti
 {
     jt::Json parent;
     parent.setObject();
-    SerializeDisplaySettings(parent, settings);
+
+    jt::Json settings_json;
+    settings_json.setObject();
+    settings_json["version"] = "1.0";
+    SerializeDisplaySettings(settings_json, settings);
+
+    parent["settings"] = settings_json;
 
     std::filesystem::path out_path = GetStandardConfigPath(filename);
     std::ofstream         out_file(out_path);
@@ -534,9 +543,20 @@ Settings::LoadSettings(const std::string& filename)
     if(result.first != jt::Json::success || !result.second.isObject()) return;
 
     DisplaySettings loaded_settings = m_display_settings_current;
-    if(DeserializeDisplaySettings(result.second, loaded_settings))
-        SetDisplaySettings(loaded_settings);
+
+    if(result.second.contains("settings") && result.second["settings"].isObject())
+    {
+        jt::Json& settings_json = result.second["settings"];
+
+        if(DeserializeDisplaySettings(settings_json, loaded_settings))
+            SetDisplaySettings(loaded_settings);
+    } 
+    else 
+    {
+        spdlog::warn("Settings file failed to load");
+    }
 }
+
 std::filesystem::path
 Settings::GetStandardConfigPath(const std::string& filename)
 {

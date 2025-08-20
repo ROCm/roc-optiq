@@ -3,9 +3,13 @@
 #pragma once
 
 #include "imgui.h"
-
+#include "json.h"
+#include <cstdlib>
+#include <filesystem>
+#include <string>
 #include <utility>
 #include <vector>
+
 namespace RocProfVis
 {
 namespace View
@@ -44,6 +48,7 @@ enum class Colors
     kSplitterColor,
     kBgMain,
     kBgPanel,
+    kBgFrame,
     kAccentRed,
     kAccentRedHover,
     kAccentRedActive,
@@ -124,19 +129,24 @@ public:
     ImU32     GetColor(Colors color) const;
 
     const std::vector<ImU32>& GetColorWheel();
-
+    void                      LoadSettings(const std::string& filename);
+    void SaveSettings(const std::string& filename, const DisplaySettings& settings);
+    void SerializeDisplaySettings(jt::Json& parent, const DisplaySettings& settings);
+    bool DeserializeDisplaySettings(jt::Json&        saved_results,
+                                    DisplaySettings& saved_settings);
     void DarkMode();
     void LightMode();
     bool IsDarkMode() const;
 
-    FontManager&      GetFontManager() { return m_font_manager; }
-    const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
-    bool              IsDPIBasedScaling() const;
-    void              SetDPIBasedScaling(bool enabled);
-    DisplaySettings&  GetCurrentDisplaySettings();
-    void              RestoreDisplaySettings(const DisplaySettings& settings);
-    DisplaySettings&  GetInitialDisplaySettings();
-    void              SetDisplaySettings(const DisplaySettings& settings);
+    FontManager&          GetFontManager() { return m_font_manager; }
+    const ImGuiStyle&     GetDefaultStyle() const { return m_default_style; }
+    bool                  IsDPIBasedScaling() const;
+    void                  SetDPIBasedScaling(bool enabled);
+    DisplaySettings&      GetCurrentDisplaySettings();
+    void                  RestoreDisplaySettings(const DisplaySettings& settings);
+    DisplaySettings&      GetInitialDisplaySettings();
+    void                  SetDisplaySettings(const DisplaySettings& settings);
+    std::filesystem::path GetStandardConfigPath(const std::string& filename);
 
 private:
     Settings();

@@ -3,14 +3,16 @@
 #include "rocprofvis_settings.h"
 #include "icons/rocprofvis_icon_data.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_core.h"
-#include "rocprofvis_core_assert.h"
-#include <cmath>
-
 #include "imgui.h"
 #include "implot.h"
+#include "rocprofvis_core.h"
+#include "rocprofvis_core_assert.h"
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <imgui_internal.h>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -218,6 +220,7 @@ const std::vector<ImU32> DARK_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kArrowColor)]          = IM_COL32(220, 38, 38, 180);
     colors[static_cast<int>(Colors::kBgMain)]              = IM_COL32(18, 18, 18, 255);
     colors[static_cast<int>(Colors::kBgPanel)]             = IM_COL32(28, 28, 28, 255);
+    colors[static_cast<int>(Colors::kBgFrame)]             = IM_COL32(38, 38, 38, 255);
     colors[static_cast<int>(Colors::kAccentRed)]           = IM_COL32(219, 38, 38, 255);
     colors[static_cast<int>(Colors::kAccentRedHover)]      = IM_COL32(255, 71, 87, 255);
     colors[static_cast<int>(Colors::kAccentRedActive)]     = IM_COL32(181, 30, 30, 255);
@@ -270,6 +273,7 @@ const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
     colors[static_cast<int>(Colors::kScrubberNumberColor)] = IM_COL32(30, 30, 30, 255);
     colors[static_cast<int>(Colors::kBgMain)]              = IM_COL32(255, 253, 250, 255);
     colors[static_cast<int>(Colors::kBgPanel)]             = IM_COL32(250, 245, 240, 255);
+    colors[static_cast<int>(Colors::kBgFrame)]             = IM_COL32(240, 238, 232, 255);
     colors[static_cast<int>(Colors::kAccentRed)]           = IM_COL32(242, 90, 70, 255);
     colors[static_cast<int>(Colors::kAccentRedHover)]      = IM_COL32(255, 140, 120, 255);
     colors[static_cast<int>(Colors::kAccentRedActive)]     = IM_COL32(255, 110, 90, 255);
@@ -310,6 +314,7 @@ Settings::ApplyColorStyling()
 
     ImVec4 bgMain    = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgMain));
     ImVec4 bgPanel   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgPanel));
+    ImVec4 bgFrame   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgFrame));
     ImVec4 accentRed = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRed));
     ImVec4 accentRedHover =
         ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedHover));
@@ -333,7 +338,7 @@ Settings::ApplyColorStyling()
     style.Colors[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);
 
     // Frame
-    style.Colors[ImGuiCol_FrameBg]        = bgPanel;
+    style.Colors[ImGuiCol_FrameBg]        = bgFrame;
     style.Colors[ImGuiCol_FrameBgHovered] = accentRedHover;
     style.Colors[ImGuiCol_FrameBgActive]  = accentRedActive;
 
@@ -449,6 +454,127 @@ Settings::IsDarkMode() const
 {
     return m_display_settings_current.use_dark_mode;
 }
+void
+Settings::SerializeDisplaySettings(jt::Json& parent, const DisplaySettings& settings)
+{
+    jt::Json display_settings;
+    display_settings.setObject();
+    display_settings["dpi"]               = settings.dpi;
+    display_settings["use_dark_mode"]     = settings.use_dark_mode;
+    display_settings["dpi_based_scaling"] = settings.dpi_based_scaling;
+    display_settings["font_size_index"]   = settings.font_size_index;
+    parent["display_settings"]            = display_settings;
+}
+
+bool
+Settings::DeserializeDisplaySettings(jt::Json&        saved_results,
+                                     DisplaySettings& saved_settings)
+{
+    if(saved_results.contains("display_settings") &&
+       saved_results["display_settings"].isObject())
+    {
+        jt::Json& ds = saved_results["display_settings"];
+
+        if(ds.contains("dpi"))
+        {
+            if(ds["dpi"].isDouble())
+                saved_settings.dpi = static_cast<float>(ds["dpi"].getDouble());
+            else if(ds["dpi"].isLong())
+                saved_settings.dpi = static_cast<float>(ds["dpi"].getLong());
+            else
+                saved_settings.dpi = 1.0f;
+        }
+
+        if(ds.contains("use_dark_mode") && ds["use_dark_mode"].isBool())
+            saved_settings.use_dark_mode = ds["use_dark_mode"].getBool();
+        else
+            saved_settings.use_dark_mode = false;
+
+        if(ds.contains("dpi_based_scaling") && ds["dpi_based_scaling"].isBool())
+            saved_settings.dpi_based_scaling = ds["dpi_based_scaling"].getBool();
+        else
+            saved_settings.dpi_based_scaling = true;
+
+        if(ds.contains("font_size_index") && ds["font_size_index"].isLong())
+            saved_settings.font_size_index =
+                static_cast<int>(ds["font_size_index"].getLong());
+        else
+            saved_settings.font_size_index = 6;  // Default to 12pt font size.
+
+        return true;
+    }
+    return false;
+}
+
+void
+Settings::SaveSettings(const std::string& filename, const DisplaySettings& settings)
+{
+    jt::Json parent;
+    parent.setObject();
+
+    jt::Json settings_json;
+    settings_json.setObject();
+    settings_json["version"] = "1.0";
+    SerializeDisplaySettings(settings_json, settings);
+
+    parent["settings"] = settings_json;
+
+    std::filesystem::path out_path = GetStandardConfigPath(filename);
+    std::ofstream         out_file(out_path);
+    if(out_file.is_open())
+    {
+        out_file << parent.toStringPretty();
+        out_file.close();
+    }
+}
+
+void
+Settings::LoadSettings(const std::string& filename)
+{
+    std::filesystem::path in_path = GetStandardConfigPath(filename);
+    std::ifstream         in_file(in_path);
+    if(!in_file.is_open()) return;
+
+    std::string json_str((std::istreambuf_iterator<char>(in_file)),
+                         std::istreambuf_iterator<char>());
+    in_file.close();
+
+    auto result = jt::Json::parse(json_str);
+    if(result.first != jt::Json::success || !result.second.isObject()) return;
+
+    DisplaySettings loaded_settings = m_display_settings_current;
+
+    if(result.second.contains("settings") && result.second["settings"].isObject())
+    {
+        jt::Json& settings_json = result.second["settings"];
+
+        if(DeserializeDisplaySettings(settings_json, loaded_settings))
+            SetDisplaySettings(loaded_settings);
+    } 
+    else 
+    {
+        spdlog::warn("Settings file failed to load");
+    }
+}
+
+std::filesystem::path
+Settings::GetStandardConfigPath(const std::string& filename)
+{
+#ifdef _WIN32
+    const char*           appdata = std::getenv("APPDATA");
+    std::filesystem::path config_dir =
+        appdata ? appdata : std::filesystem::current_path();
+    config_dir /= "rocprofvis";
+#else
+    const char*           xdg_config = std::getenv("XDG_CONFIG_HOME");
+    std::filesystem::path config_dir =
+        xdg_config ? xdg_config
+                   : (std::filesystem::path(std::getenv("HOME")) / ".config");
+    config_dir /= "rocprofvis";
+#endif
+    std::filesystem::create_directories(config_dir);
+    return config_dir / filename;
+}
 
 void
 Settings::SetDPI(float DPI)
@@ -468,11 +594,24 @@ Settings::SetDisplaySettings(const DisplaySettings& settings)
         (m_display_settings_current.font_size_index != settings.font_size_index) ||
         (m_display_settings_current.dpi_based_scaling != settings.dpi_based_scaling);
 
+    if(m_display_settings_current.use_dark_mode != settings.use_dark_mode)
+    {
+        if(settings.use_dark_mode)
+            DarkMode();
+        else
+            LightMode();
+    }
+
     m_display_settings_current = settings;
 
     if(font_changed)
     {
-        GetFontManager().SetFontSize(m_display_settings_current.font_size_index);
+        if(m_display_settings_current.dpi_based_scaling) {
+            int ideal_dpi_index = GetFontManager().GetFontSizeIndexForDPI(m_display_settings_current.dpi);
+            GetFontManager().SetFontSize(ideal_dpi_index);
+        } else {
+            GetFontManager().SetFontSize(m_display_settings_current.font_size_index);
+        }
     }
 }
 

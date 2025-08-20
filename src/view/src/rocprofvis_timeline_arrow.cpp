@@ -13,6 +13,18 @@ namespace View
 {
 
 void
+TimelineArrow::SetFlowDisplayMode(FlowDisplayMode mode)
+{
+    m_flow_display_mode = mode;
+}
+
+FlowDisplayMode
+TimelineArrow::GetFlowDisplayMode() const
+{
+    return m_flow_display_mode;
+}
+
+void
 TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
                       ImVec2 window, std::map<uint64_t, float>& track_height_total)
 {
@@ -22,59 +34,75 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
     float scroll_y  = ImGui::GetScrollY();
     for(const event_info_t* event : m_selected_event_data)
     {
-        if(event)
+        if(!event) continue;
+
+        const auto& flows = event->flow_info;
+        if(m_flow_display_mode == FlowDisplayMode::Hide) continue;
+
+        std::vector<size_t> flow_indices;
+        if(m_flow_display_mode == FlowDisplayMode::ShowAll)
         {
-            for(const event_flow_data_t& flow : event->flow_info)
+            for(size_t i = 0; i < flows.size(); ++i)
+                flow_indices.push_back(i);
+        }
+        else if(m_flow_display_mode == FlowDisplayMode::ShowFirstAndLast)
+        {
+            if(!flows.empty())
             {
-                double start_time_ns =
-                    event->basic_info.m_start_ts + event->basic_info.m_duration;
-                const uint64_t& end_time_ns    = flow.timestamp;
-                const uint64_t& start_track_id = event->track_id;
-                const uint64_t& end_track_id   = flow.track_id;
-
-                float start_x_ns = (start_time_ns - v_min_x) * pixels_per_ns;
-                float end_x_ns   = (end_time_ns - v_min_x) * pixels_per_ns;
-
-                float start_y_px = track_height_total[start_track_id];
-                float end_y_px   = track_height_total[end_track_id];
-
-                ImVec2 p_start =
-                    ImVec2(window.x + start_x_ns, window.y + start_y_px - scroll_y);
-                ImVec2 p_end =
-                    ImVec2(window.x + end_x_ns, window.y + end_y_px - scroll_y);
-
-                if(p_start.x == p_end.x && p_start.y == p_end.y) continue;
-
-                // Calculate control points for a smooth cubic Bezier curve
-                float  curve_offset = 0.25f * (p_end.x - p_start.x);
-                ImVec2 p_ctrl1      = ImVec2(p_start.x + curve_offset, p_start.y);
-                ImVec2 p_ctrl2      = ImVec2(p_end.x - curve_offset, p_end.y);
-
-                draw_list->AddBezierCubic(p_start, p_ctrl1, p_ctrl2, p_end, color,
-                                          thickness, 32);
-
-                // Compute direction at the end of the curve (tangent)
-                ImVec2 dir = ImVec2(p_end.x - p_ctrl2.x, p_end.y - p_ctrl2.y);
-                float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
-                if(len > 0.0f)
-                {
-                    dir.x /= len;
-                    dir.y /= len;
-                }
-                ImVec2 ortho(-dir.y, dir.x);
-
-                // Arrowhead points
-                ImVec2 p1 = p_end;
-                ImVec2 p2 =
-                    ImVec2(p_end.x - dir.x * head_size - ortho.x * head_size * 0.5f,
-                           p_end.y - dir.y * head_size - ortho.y * head_size * 0.5f);
-                ImVec2 p3 =
-                    ImVec2(p_end.x - dir.x * head_size + ortho.x * head_size * 0.5f,
-                           p_end.y - dir.y * head_size + ortho.y * head_size * 0.5f);
-                draw_list->AddTriangleFilled(p1, p2, p3, color);
+                flow_indices.push_back(0);
+                if(flows.size() > 1) flow_indices.push_back(flows.size() - 1);
             }
         }
+
+        for(size_t idx : flow_indices)
+        {
+            const event_flow_data_t& flow = flows[idx];
+            double                   start_time_ns =
+                event->basic_info.m_start_ts + event->basic_info.m_duration;
+            const uint64_t& end_time_ns    = flow.timestamp;
+            const uint64_t& start_track_id = event->track_id;
+            const uint64_t& end_track_id   = flow.track_id;
+
+            float start_x_ns = (start_time_ns - v_min_x) * pixels_per_ns;
+            float end_x_ns   = (end_time_ns - v_min_x) * pixels_per_ns;
+
+            float start_y_px = track_height_total[start_track_id];
+            float end_y_px   = track_height_total[end_track_id];
+
+            ImVec2 p_start =
+                ImVec2(window.x + start_x_ns, window.y + start_y_px - scroll_y);
+            ImVec2 p_end = ImVec2(window.x + end_x_ns, window.y + end_y_px - scroll_y);
+
+            if(p_start.x == p_end.x && p_start.y == p_end.y) continue;
+
+            // Calculate control points for a smooth cubic Bezier curve
+            float  curve_offset = 0.25f * (p_end.x - p_start.x);
+            ImVec2 p_ctrl1      = ImVec2(p_start.x + curve_offset, p_start.y);
+            ImVec2 p_ctrl2      = ImVec2(p_end.x - curve_offset, p_end.y);
+
+            draw_list->AddBezierCubic(p_start, p_ctrl1, p_ctrl2, p_end, color, thickness,
+                                      32);
+
+            // Compute direction at the end of the curve (tangent)
+            ImVec2 dir = ImVec2(p_end.x - p_ctrl2.x, p_end.y - p_ctrl2.y);
+            float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
+            if(len > 0.0f)
+            {
+                dir.x /= len;
+                dir.y /= len;
+            }
+            ImVec2 ortho(-dir.y, dir.x);
+
+            // Arrowhead points
+            ImVec2 p1 = p_end;
+            ImVec2 p2 = ImVec2(p_end.x - dir.x * head_size - ortho.x * head_size * 0.5f,
+                               p_end.y - dir.y * head_size - ortho.y * head_size * 0.5f);
+            ImVec2 p3 = ImVec2(p_end.x - dir.x * head_size + ortho.x * head_size * 0.5f,
+                               p_end.y - dir.y * head_size + ortho.y * head_size * 0.5f);
+            draw_list->AddTriangleFilled(p1, p2, p3, color);
+        }
     }
+   
 }
 
 TimelineArrow::TimelineArrow(DataProvider&                      data_provider,

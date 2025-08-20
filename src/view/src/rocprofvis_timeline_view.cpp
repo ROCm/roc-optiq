@@ -127,6 +127,31 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
 
     m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
                          m_track_height_total);
+    // Place this in your main ImGui window code, after RenderArrows
+    if(ImGui::IsKeyPressed(ImGuiKey_F3))  // Use IsKeyPressed for one-time popup
+    {
+        ImGui::OpenPopup("FlowDisplayPopup");
+    }
+
+    if(ImGui::BeginPopupModal("FlowDisplayPopup", NULL,
+                              ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        FlowDisplayMode current_mode = m_arrow_layer.GetFlowDisplayMode();
+
+        if(ImGui::Selectable("Show Flow", current_mode == FlowDisplayMode::ShowAll))
+            m_arrow_layer.SetFlowDisplayMode(FlowDisplayMode::ShowAll);
+
+        if(ImGui::Selectable("Show First & Last",
+                             current_mode == FlowDisplayMode::ShowFirstAndLast))
+            m_arrow_layer.SetFlowDisplayMode(FlowDisplayMode::ShowFirstAndLast);
+
+        if(ImGui::Selectable("Hide Flow", current_mode == FlowDisplayMode::Hide))
+            m_arrow_layer.SetFlowDisplayMode(FlowDisplayMode::Hide);
+
+        if(ImGui::Button("Close")) ImGui::CloseCurrentPopup();
+
+        ImGui::EndPopup();
+    }
 
     ImGui::EndChild();
     ImGui::PopStyleColor();

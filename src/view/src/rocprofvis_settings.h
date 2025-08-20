@@ -4,6 +4,8 @@
 
 #include "imgui.h"
 #include "json.h"
+#include <cstdlib>
+#include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
@@ -135,16 +137,16 @@ public:
     void LightMode();
     bool IsDarkMode() const;
 
-    FontManager&      GetFontManager() { return m_font_manager; }
-    const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
-    bool              IsDPIBasedScaling() const;
-    void              SetDPIBasedScaling(bool enabled);
-    DisplaySettings&  GetCurrentDisplaySettings();
-    void              RestoreDisplaySettings(const DisplaySettings& settings);
-    DisplaySettings&  GetInitialDisplaySettings();
-    void              SetDisplaySettings(const DisplaySettings& settings);
-  
- 
+    FontManager&          GetFontManager() { return m_font_manager; }
+    const ImGuiStyle&     GetDefaultStyle() const { return m_default_style; }
+    bool                  IsDPIBasedScaling() const;
+    void                  SetDPIBasedScaling(bool enabled);
+    DisplaySettings&      GetCurrentDisplaySettings();
+    void                  RestoreDisplaySettings(const DisplaySettings& settings);
+    DisplaySettings&      GetInitialDisplaySettings();
+    void                  SetDisplaySettings(const DisplaySettings& settings);
+    std::filesystem::path GetStandardConfigPath(const std::string& filename);
+
 private:
     Settings();
     ~Settings();

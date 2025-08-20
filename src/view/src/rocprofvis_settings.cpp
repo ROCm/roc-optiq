@@ -9,6 +9,7 @@
 #include "rocprofvis_core_assert.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <imgui_internal.h>
@@ -509,7 +510,7 @@ Settings::SaveSettings(const std::string& filename, const DisplaySettings& setti
     parent.setObject();
     SerializeDisplaySettings(parent, settings);
 
-    std::filesystem::path out_path = std::filesystem::current_path() / filename;
+    std::filesystem::path out_path = GetStandardConfigPath(filename);
     std::ofstream         out_file(out_path);
     if(out_file.is_open())
     {
@@ -521,7 +522,7 @@ Settings::SaveSettings(const std::string& filename, const DisplaySettings& setti
 void
 Settings::LoadSettings(const std::string& filename)
 {
-    std::filesystem::path in_path = std::filesystem::current_path() / filename;
+    std::filesystem::path in_path = GetStandardConfigPath(filename);
     std::ifstream         in_file(in_path);
     if(!in_file.is_open()) return;
 
@@ -535,6 +536,24 @@ Settings::LoadSettings(const std::string& filename)
     DisplaySettings loaded_settings = m_display_settings_current;
     if(DeserializeDisplaySettings(result.second, loaded_settings))
         SetDisplaySettings(loaded_settings);
+}
+std::filesystem::path
+Settings::GetStandardConfigPath(const std::string& filename)
+{
+#ifdef _WIN32
+    const char*           appdata = std::getenv("APPDATA");
+    std::filesystem::path config_dir =
+        appdata ? appdata : std::filesystem::current_path();
+    config_dir /= "rocprofvis";
+#else
+    const char*           xdg_config = std::getenv("XDG_CONFIG_HOME");
+    std::filesystem::path config_dir =
+        xdg_config ? xdg_config
+                   : (std::filesystem::path(std::getenv("HOME")) / ".config");
+    config_dir /= "rocprofvis";
+#endif
+    std::filesystem::create_directories(config_dir);
+    return config_dir / filename;
 }
 
 void

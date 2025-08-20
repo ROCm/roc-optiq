@@ -322,9 +322,11 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
 
     if (result == kRocProfVisResultSuccess)
     {
+        m_sort_column = sort_column;
+        m_sort_order  = (rocprofvis_controller_sort_order_t) sort_order;
         if(m_tracks.size() == tracks.size() && m_start_ts == start_ts &&
            m_end_ts == end_ts && m_filter == filter && m_group == group &&
-           m_group_cols == group_cols && sort_column == m_sort_column && sort_order == m_sort_order)
+           m_group_cols == group_cols)
         {
             bool tracks_all_same = true;
             for (int i = 0; i < tracks.size(); i++)
@@ -343,9 +345,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
         }
         Reset();
 
-        m_tracks      = tracks;
-        m_sort_column = sort_column;
-        m_sort_order  = (rocprofvis_controller_sort_order_t) sort_order;
+        m_tracks      = tracks;       
         m_start_ts    = start_ts;
         m_end_ts      = end_ts;
         m_track_type  = track_type;

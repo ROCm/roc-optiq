@@ -419,7 +419,7 @@ ProfileDatabase::BuildTableQuery(
     }
     if(count_only)
     {
-        query = "SELECT COUNT(id) AS [NumRecords], * FROM ( ";
+        query = "SELECT COUNT(*) AS [NumRecords], * FROM ( ";
     }
     else
     { 

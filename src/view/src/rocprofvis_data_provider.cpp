@@ -9,6 +9,7 @@
 #include <cfloat>
 #include <iostream>
 #include <sstream>
+#include <future>
 
 using namespace RocProfVis::View;
 
@@ -90,15 +91,39 @@ DataProvider::FreeRequests()
     for(auto item : m_requests)
     {
         data_req_info_t& req = item.second;
+
+        if(req.request_future) {
+            spdlog::debug("FreeRequests: cancelling request {} of type {}", req.request_id,
+                static_cast<int>(req.request_type));
+
+            rocprofvis_result_t result =
+                rocprofvis_controller_future_cancel(req.request_future);
+            if(result != kRocProfVisResultSuccess)
+            {
+                spdlog::warn("Failed to cancel request {}: {}", req.request_id,
+                            static_cast<int>(result));
+            }
+
+            result = rocprofvis_controller_future_wait(req.request_future, FLT_MAX);
+            if(result != kRocProfVisResultSuccess)
+            {
+                spdlog::warn("Failed to wait for request {}: {}", req.request_id,
+                            static_cast<int>(result));
+            }
+            
+            rocprofvis_controller_future_free(req.request_future);
+            req.request_future = nullptr;
+        }
+        // Free the request resources
         if(req.request_array)
         {
             rocprofvis_controller_array_free(req.request_array);
             req.request_array = nullptr;
         }
-        if(req.request_future)
+        if(req.request_args)
         {
-            rocprofvis_controller_future_free(req.request_future);
-            req.request_future = nullptr;
+            rocprofvis_controller_arguments_free(req.request_args);
+            req.request_args = nullptr;
         }
         if(req.request_obj_handle)
         {

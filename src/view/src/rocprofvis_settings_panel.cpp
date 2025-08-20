@@ -59,7 +59,6 @@ SettingsPanel::Render()
     auto& settings     = Settings::GetInstance();
     auto& font_manager = settings.GetFontManager();
     int   theme        = settings.IsDarkMode() ? 0 : 1;
-    int   font_size    = font_manager.GetCurrentFontSizeIndex();
     int   num_sizes    = static_cast<int>(font_manager.GetFontSizes().size());
 
     if(ImGui::BeginPopupModal("Settings", nullptr,
@@ -99,14 +98,13 @@ SettingsPanel::Render()
         {
             if(theme_radio == 0)
             {
-                settings.DarkMode();
                 m_display_settings_modified.use_dark_mode = true;
             }
             else
             {
-                settings.LightMode();
                 m_display_settings_modified.use_dark_mode = false;
             }
+            settings.SetDisplaySettings(m_display_settings_modified);
         }
 
         ImGui::Spacing();
@@ -120,7 +118,7 @@ SettingsPanel::Render()
         if(ImGui::Checkbox("DPI-based Font Scaling", &dpi_scaling))
         {
             m_display_settings_modified.dpi_based_scaling = dpi_scaling;
-            settings.SetDPIBasedScaling(dpi_scaling);
+            settings.SetDisplaySettings(m_display_settings_modified);
         }
 
         if(ImGui::IsItemHovered())
@@ -140,8 +138,6 @@ SettingsPanel::Render()
         if(ImGui::Button("-", ImVec2(kFontButtonWidth, 0)) && m_preview_font_size > 0)
         {
             m_preview_font_size--;
-            m_display_settings_modified.font_size_index = m_preview_font_size;
-            settings.SetDPIBasedScaling(false);
         }
 
         ImGui::SameLine();
@@ -152,8 +148,6 @@ SettingsPanel::Render()
         if(ImGui::SliderInt("##FontSizeSlider", &m_preview_font_size, slider_min,
                             slider_max, "%d"))
         {
-            m_display_settings_modified.font_size_index = m_preview_font_size;
-            settings.SetDPIBasedScaling(false);
         }
 
         ImGui::SameLine();
@@ -162,8 +156,6 @@ SettingsPanel::Render()
            m_preview_font_size < num_sizes - 1)
         {
             m_preview_font_size++;
-            m_display_settings_modified.font_size_index = m_preview_font_size;
-            settings.SetDPIBasedScaling(false);
         }
 
         ImGui::EndDisabled();
@@ -190,9 +182,10 @@ SettingsPanel::Render()
 
         if(ImGui::SmallButton("Restore Defaults"))
         {
-            m_is_open = false;
-            settings.RestoreDisplaySettings(settings.GetInitialDisplaySettings());
-            m_preview_font_size = -1;
+            m_display_settings_modified = settings.GetInitialDisplaySettings();
+            settings.SetDisplaySettings(m_display_settings_modified);
+
+            m_preview_font_size = m_display_settings_modified.font_size_index;
         }
         if(ImGui::IsItemHovered())
             ImGui::SetTooltip("Restore all settings to their default values.");
@@ -225,7 +218,9 @@ SettingsPanel::Render()
         {
             m_is_open = false;
             // Always use a valid font size index
-            m_display_settings_modified.font_size_index = m_preview_font_size;
+            if(!m_display_settings_modified.dpi_based_scaling) {
+                m_display_settings_modified.font_size_index = m_preview_font_size;
+            }
             settings.SetDisplaySettings(m_display_settings_modified);
             m_preview_font_size = -1;
             settings.SaveSettings("settings_application.json",

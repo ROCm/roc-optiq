@@ -586,7 +586,12 @@ Settings::SetDisplaySettings(const DisplaySettings& settings)
 
     if(font_changed)
     {
-        GetFontManager().SetFontSize(m_display_settings_current.font_size_index);
+        if(m_display_settings_current.dpi_based_scaling) {
+            int ideal_dpi_index = GetFontManager().GetFontSizeIndexForDPI(m_display_settings_current.dpi);
+            GetFontManager().SetFontSize(ideal_dpi_index);
+        } else {
+            GetFontManager().SetFontSize(m_display_settings_current.font_size_index);
+        }
     }
 }
 

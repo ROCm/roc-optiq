@@ -38,11 +38,13 @@ Supported formats are *.db* and *.rpd* trace files.
     - Tracks can be resized by hovering over and dragging the separator lines between tracks.
     - Tracks can be reordered by clicking and dragging the grip on left side of the *Description* area.
     - When there is an active *Time Range Filter* the trace can be trimmed using the `File->Save Selection` menu option.  This will create a new trace file containing only the events in the selection zone.
+    - The current view (scroll and zoom position) can be saved to a bookmark for quick navigation.  Use `ctrl` + keys `0`- `9` to create a view bookmark and keys `0` - `9` to restore the view to a stored bookmark. 
 
 3. Advanced Details Area
     - Use the tabs to see different detailed information events and tracks
-    - The *Event Details* and *Sample Details* tabs provide a list (table) of the events or samples contained the selected track or tracks. 
-    - In the *Event Details* tab there is a drop down box that allows the events grouped by a column to display additional metrics
+    - The *Event Details* and *Sample Details* tabs provide a list (table) of the events or samples contained the selected track or tracks.
+    - Right click on the column headers to show / hide columns.
+    - In the *Event Details* tab there is a drop down box that allows the events grouped by a column to display aggregated metrics.
     - Both the *Event Details* and *Sample Details* provide a text input box that can be used to filter the data.  Ex: `min_duration > 2000` will filter all events shorter than 2000 ns.
     - Setting a *Time Range Filter* using the timeline view will filter the rows displayed in the table to be contained within the selected time range.
     - The *Events View* tab shows detailed information about currently selected event in the timeline view.

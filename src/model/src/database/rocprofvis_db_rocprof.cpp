@@ -211,9 +211,6 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
         std::string value;
 
-        ShowProgress(2, "Create CPU tracks indexes", kRPVDbBusy, future);
-        ExecuteSQLQuery(future, "CREATE INDEX nid_pid_tid_idx ON rocpd_region(nid,pid,tid);");
-
         ShowProgress(2, "Load Nodes information", kRPVDbBusy, future);
         ExecuteSQLQuery(future,"SELECT * from rocpd_info_node;", "Node", (rocprofvis_dm_handle_t)CachedTables(), &CallbackCacheTable);
         
@@ -801,7 +798,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             if(kRocProfVisDmResultSuccess !=
                ExecuteQueryForAllTracksAsync(
                    kRocProfVisDmIncludeStreamTracks, 
-                   kRPVQueryLevel, "SELECT *, ", " ORDER BY start", &CalculateEventLevels,
+                   kRPVQueryLevel, "SELECT *, ", (std::string(" ORDER BY ")+Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
                    [](rocprofvis_dm_track_params_t* params) {
                        params->m_active_events.clear();
                    }))

@@ -385,7 +385,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                ExecuteQueryForAllTracksAsync(
                    0,
                    kRPVQueryLevel,
-                   "SELECT *, ", " ORDER BY start;", &CalculateEventLevels,
+                   "SELECT *, ", (std::string(" ORDER BY ")+Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
                    [](rocprofvis_dm_track_params_t* params) {
                        params->m_active_events.clear();
                    }))

@@ -555,6 +555,17 @@ TabContainer::SetActiveTab(const std::string& id)
     }
 }
 
+void
+TabContainer::SetTabLabel(const std::string& label, const std::string& id)
+{
+    auto it = std::find_if(m_tabs.begin(), m_tabs.end(),
+                           [&id](const TabItem& tab) { return tab.m_id == id; });
+    if(it != m_tabs.end())
+    {
+        it->m_label = label;
+    }
+}
+
 const TabItem* TabContainer::GetActiveTab() const
 {
     if(m_active_tab_index >= 0 && m_active_tab_index < static_cast<int>(m_tabs.size()))

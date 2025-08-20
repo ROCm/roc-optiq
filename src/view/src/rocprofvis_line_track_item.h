@@ -6,8 +6,8 @@
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
+#include "rocprofvis_project.h"
 #include <string>
-#include <tuple>
 #include <vector>
 
 namespace RocProfVis
@@ -15,8 +15,28 @@ namespace RocProfVis
 namespace View
 {
 
+class LineTrackItem;
+
+class LineTrackProjectSettings : public ProjectSetting
+{
+public:
+    LineTrackProjectSettings(const std::string& project_id, LineTrackItem& track_item);
+    ~LineTrackProjectSettings() override;
+    void ToJson() override;
+    bool Valid() const override;
+
+    bool                        BoxPlot() const;
+    bool                        Highlight() const;
+    rocprofvis_color_by_value_t HighlightRange() const;
+
+private:
+    LineTrackItem& m_track_item;
+};
+
 class LineTrackItem : public TrackItem
 {
+    friend LineTrackProjectSettings;
+
 public:
     LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
                   double time_offset_ns, double& min_x, double& max_x, double scale_x);
@@ -29,6 +49,7 @@ protected:
     virtual void RenderChart(float graph_width) override;
     virtual void RenderMetaAreaOptions() override;
     
+
     void UpdateYScaleExtents();
 
 private:
@@ -48,6 +69,7 @@ private:
     bool                                 m_is_color_value_existant;
     DataProvider&                        m_dp;
     bool                                 m_show_boxplot;
+    LineTrackProjectSettings             m_project_settings;
 };
 
 }  // namespace View

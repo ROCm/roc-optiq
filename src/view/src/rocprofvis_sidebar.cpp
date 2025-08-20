@@ -42,7 +42,7 @@ SideBar::Render()
                                                          Colors::kTransparent)));
 
         const TopologyModel& topology = m_track_topology->GetTopology();
-        if(ImGui::CollapsingHeader("Project 1", CATEGORY_HEADER_FLAGS))
+        if(ImGui::CollapsingHeader("Project", CATEGORY_HEADER_FLAGS))
         {
             ImGui::Indent();
             if(!topology.nodes.empty() &&

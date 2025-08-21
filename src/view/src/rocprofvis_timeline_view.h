@@ -64,8 +64,7 @@ public:
     void                             CalculateGridInterval();
     ViewCoords                       GetViewCoords() const;
     void                             SetViewCoords(const ViewCoords& coords);
-
-private:
+    void                            RenderArrowOptionsMenu();
     std::vector<rocprofvis_graph_t>       m_graphs;
     int                                   m_ruler_height;
     ImVec2                                m_ruler_padding;

@@ -93,43 +93,9 @@ TimelineView::TimelineView(DataProvider&                      dp,
 }
 
 void
-TimelineView::RenderArrows(ImVec2 screen_pos)
+TimelineView::RenderArrowOptionsMenu()
 {
-    float total_height = m_graph_size.y;
-    if(!m_track_height_total.empty())
-        total_height = std::prev(m_track_height_total.end())->second;
-
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                    ImGuiWindowFlags_NoScrollWithMouse |
-                                    ImGuiWindowFlags_NoInputs;
-
-    ImGui::SetNextWindowSize(ImVec2(m_graph_size.x, m_graph_size.y - m_ruler_height -
-                                                        m_artificial_scrollbar_height),
-                             ImGuiCond_Always);
-    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    //  ImGui::SetCursorPos(
-    // ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
-    ImGui::BeginChild("Arrows Overlay", ImVec2(m_graph_size.x, m_graph_size.y), false,
-                      window_flags);
-
-    ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
-    ImGui::BeginChild("Arrows Overlay Content", ImVec2(m_graph_size.x, total_height),
-                      false,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-    ImDrawList* draw_list       = ImGui::GetWindowDrawList();
-    ImVec2      window_position = ImGui::GetWindowPos();
-    ImVec2      clip_min        = window_position;
-    ImVec2      clip_max = ImVec2(m_graph_size.x + window_position.x, m_graph_size.y);
-
-    draw_list->PushClipRect(clip_min, clip_max, true);
-
-    m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
-                         m_track_height_total);
-
-
-    //The following popup only exists due to a lack of a navbar.
+    // The following popup only exists due to a lack of a navbar.
     if(ImGui::IsKeyPressed(ImGuiKey_F3))
     {
         ImGui::OpenPopup("FlowDisplayPopup");
@@ -169,6 +135,44 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
 
         ImGui::EndPopup();
     }
+}
+void
+TimelineView::RenderArrows(ImVec2 screen_pos)
+{
+    float total_height = m_graph_size.y;
+    if(!m_track_height_total.empty())
+        total_height = std::prev(m_track_height_total.end())->second;
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                    ImGuiWindowFlags_NoScrollWithMouse |
+                                    ImGuiWindowFlags_NoInputs;
+
+    ImGui::SetNextWindowSize(ImVec2(m_graph_size.x, m_graph_size.y - m_ruler_height -
+                                                        m_artificial_scrollbar_height),
+                             ImGuiCond_Always);
+    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
+    //  ImGui::SetCursorPos(
+    // ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
+    ImGui::BeginChild("Arrows Overlay", ImVec2(m_graph_size.x, m_graph_size.y), false,
+                      window_flags);
+
+    ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
+    ImGui::BeginChild("Arrows Overlay Content", ImVec2(m_graph_size.x, total_height),
+                      false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    ImDrawList* draw_list       = ImGui::GetWindowDrawList();
+    ImVec2      window_position = ImGui::GetWindowPos();
+    ImVec2      clip_min        = window_position;
+    ImVec2      clip_max = ImVec2(m_graph_size.x + window_position.x, m_graph_size.y);
+
+    draw_list->PushClipRect(clip_min, clip_max, true);
+
+    m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
+                         m_track_height_total);
+
+    RenderArrowOptionsMenu();
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
@@ -980,7 +984,8 @@ TimelineView::RenderGraphView()
                    request_data)
 
                 {
-                    // Request one viewport worth of data on each side of the current view.
+                    // Request one viewport worth of data on each side of the current
+                    // view.
                     double buffer_distance = m_v_width;
                     track_item.chart->RequestData(
                         (m_view_time_offset_ns - buffer_distance) + m_min_x,

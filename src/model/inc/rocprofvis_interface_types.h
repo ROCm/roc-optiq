@@ -255,6 +255,10 @@ typedef enum rocprofvis_dm_flowtrace_property_t {
 	kRPVDMEndpointIDUInt64Indexed,
     // flow endpoint timestamp
 	kRPVDMEndpointTimestampUInt64Indexed,
+    // flow endpoint category
+    kRPVDMEndpointCategoryCharPtrIndexed,
+    // flow endpoint symbol
+    kRPVDMEndpointSymbolCharPtrIndexed
 } rocprofvis_dm_flowtrace_property_t;
 
 //Stack trace properties

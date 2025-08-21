@@ -114,14 +114,29 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
 
                 // Arrowhead points
 
-                ImVec2 p1 = p_end;
-                ImVec2 p2 =
-                    ImVec2(p_end.x - dir.x * head_size - ortho.x * head_size * 0.5f,
-                           p_end.y - dir.y * head_size - ortho.y * head_size * 0.5f);
-                ImVec2 p3 =
-                    ImVec2(p_end.x - dir.x * head_size + ortho.x * head_size * 0.5f,
-                           p_end.y - dir.y * head_size + ortho.y * head_size * 0.5f);
-                draw_list->AddTriangleFilled(p1, p2, p3, color);
+                // Arrowhead points
+                if(direction == 0)
+                {
+                    ImVec2 p1 = p_end;
+                    ImVec2 p2 =
+                        ImVec2(p_end.x - dir.x * head_size - ortho.x * head_size * 0.5f,
+                               p_end.y - dir.y * head_size - ortho.y * head_size * 0.5f);
+                    ImVec2 p3 =
+                        ImVec2(p_end.x - dir.x * head_size + ortho.x * head_size * 0.5f,
+                               p_end.y - dir.y * head_size + ortho.y * head_size * 0.5f);
+                    draw_list->AddTriangleFilled(p1, p2, p3, color);
+                }
+                else
+                {
+                    ImVec2 p1 = p_start;
+                    ImVec2 p2 = ImVec2(
+                        p_start.x - dir.x * head_size - ortho.x * head_size * 0.5f,
+                        p_start.y - dir.y * head_size - ortho.y * head_size * 0.5f);
+                    ImVec2 p3 = ImVec2(
+                        p_start.x - dir.x * head_size + ortho.x * head_size * 0.5f,
+                        p_start.y - dir.y * head_size + ortho.y * head_size * 0.5f);
+                    draw_list->AddTriangleFilled(p1, p2, p3, color);
+                }
             }
         }
     }

@@ -235,48 +235,8 @@ AppWindow::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
     if(ImGui::BeginMenuBar())
     {
-        if(ImGui::BeginMenu("File"))
-        {
-            if(ImGui::MenuItem("Open", nullptr))
-            {
-                IGFD::FileDialogConfig config;
-                config.path                      = ".";
-                std::string supported_extensions = ".rpv,.db,.rpd,";
-#ifdef JSON_SUPPORT
-                supported_extensions += ",.json";
-#endif
-#ifdef COMPUTE_UI_SUPPORT
-                supported_extensions += ",.csv";
-#endif
-                ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, "Choose File",
-                                                        supported_extensions.c_str(),
-                                                        config);
-            }
-            Project* project = GetCurrentProject();
-            if(ImGui::MenuItem("Save", nullptr, false, project && project->IsProject()))
-            {
-                project->Save();
-            }
-            if(ImGui::MenuItem("Save As", nullptr, false, project))
-            {
-                ImGuiFileDialog::Instance()->OpenDialog(PROJECT_SAVE_DIALOG_NAME,
-                                                        "Save as Project", ".rpv");
-            }
-            if(ImGui::MenuItem("Save Selection", nullptr, false, IsTrimSaveAllowed()))
-            {
-                // Save the currently selected tab's content
-                auto active_tab = m_tab_container->GetActiveTab();
-                if(active_tab)
-                {
-                    // Open the save dialog
-                    ImGuiFileDialog::Instance()->OpenDialog(FILE_SAVE_DIALOG_NAME,
-                                                            "Save Selection", ".db,.rpd");
-                }
-            }
-            ImGui::EndMenu();
-        }
-
-        RenderSettingsMenu();
+        RenderFileMenu();
+        RenderEditMenu();
         RenderHelpMenu();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         RenderDeveloperMenu();
@@ -406,11 +366,56 @@ AppWindow::RenderFileDialogs()
 }
 
 void
-AppWindow::RenderSettingsMenu()
+AppWindow::RenderFileMenu()
 {
-    if(ImGui::BeginMenu("Settings"))
+    if(ImGui::BeginMenu("File"))
     {
-        if(ImGui::MenuItem("Display Settings"))
+        if(ImGui::MenuItem("Open", nullptr))
+        {
+            IGFD::FileDialogConfig config;
+            config.path                      = ".";
+            std::string supported_extensions = ".rpv,.db,.rpd,";
+#ifdef JSON_SUPPORT
+            supported_extensions += ",.json";
+#endif
+#ifdef COMPUTE_UI_SUPPORT
+            supported_extensions += ",.csv";
+#endif
+            ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, "Choose File",
+                                                    supported_extensions.c_str(), config);
+        }
+        Project* project = GetCurrentProject();
+        if(ImGui::MenuItem("Save", nullptr, false, project && project->IsProject()))
+        {
+            project->Save();
+        }
+        if(ImGui::MenuItem("Save As", nullptr, false, project))
+        {
+            ImGuiFileDialog::Instance()->OpenDialog(PROJECT_SAVE_DIALOG_NAME,
+                                                    "Save as Project", ".rpv");
+        }
+        ImGui::EndMenu();
+    }
+}
+
+void
+AppWindow::RenderEditMenu()
+{
+    if(ImGui::BeginMenu("Edit"))
+    {
+        if(ImGui::MenuItem("Save Trace Selection", nullptr, false, IsTrimSaveAllowed()))
+        {
+            // Save the currently selected tab's content
+            auto active_tab = m_tab_container->GetActiveTab();
+            if(active_tab)
+            {
+                // Open the save dialog
+                ImGuiFileDialog::Instance()->OpenDialog(FILE_SAVE_DIALOG_NAME,
+                                                        "Save Selection", ".db,.rpd");
+            }
+        }
+        ImGui::Separator();
+        if(ImGui::MenuItem("Preferences"))
         {
             m_settings_panel->SetOpen(true);
         }

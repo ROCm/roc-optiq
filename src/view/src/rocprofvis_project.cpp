@@ -126,7 +126,7 @@ Project::OpenProject(std::string& file_path)
         }
         std::pair<jt::Json::Status, jt::Json> json_parsed = jt::Json::parse(json_string);
         if(json_parsed.first == jt::Json::success &&
-           GeneralJsonSettingsValid(json_parsed.second))
+           JsonValidForLoad(json_parsed.second))
         {
             m_project_file_path = file_path;
             m_settings_json     = json_parsed.second;
@@ -205,7 +205,7 @@ Project::OpenTrace(std::string& file_path)
 }
 
 bool
-Project::GeneralJsonSettingsValid(jt::Json& json)
+Project::JsonValidForLoad(jt::Json& json)
 {
     return json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_TRACE_PATH].isString();
 }

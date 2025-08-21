@@ -42,9 +42,11 @@ private:
     AppWindow();
     ~AppWindow();
 
-    void RenderFileDialogs();
-    void RenderSettingsMenu();
+    void RenderFileMenu();
+    void RenderEditMenu();
     void RenderHelpMenu();
+
+    void RenderFileDialogs();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleSaveSelection(const std::string& file_path_str);

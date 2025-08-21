@@ -681,8 +681,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadStackTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)
 {
-    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Stack trace is not supported in old rocpd schema",
-                                        kRocProfVisDmResultNotSupported);
+
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {
@@ -690,6 +689,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadStackTraceInfo(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_stacktrace_t stacktrace = BindObject()->FuncAddStackTrace(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(stacktrace, ERROR_STACK_TRACE_CANNOT_BE_NULL);
+#ifdef SUPPORT_OLD_SCHEMA_STACK_TRACE 
         std::stringstream query;
         if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch || event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
         {
@@ -704,11 +704,16 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadStackTraceInfo(
             ShowProgress(0, "Stack trace is not available for specified operation type!", kRPVDbError, future );
             return future->SetPromise(kRocProfVisDmResultInvalidParameter);
         }
-        ShowProgress(100, "Stack trace successfully loaded!",kRPVDbSuccess, future);
+        ShowProgress(100, "Stack trace successfully loaded!", kRPVDbSuccess, future);
+#else
+        ShowProgress(100, "Stack trace is not supported for old schema database!", kRPVDbSuccess, future);
+#endif
+
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
-    ShowProgress(0, "Stack trace not loaded!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
+    ShowProgress(0, "Stack trace not loaded!", kRPVDbError, future);
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort
+                                                    : kRocProfVisDmResultDbAccessFailed);
 }
 
 

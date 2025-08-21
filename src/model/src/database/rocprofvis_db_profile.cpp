@@ -511,30 +511,7 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
     {
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
-#if defined(SLICE_OPT) && (SLICE_OPT == 2)
-        double step = 100.0/num;
-        int i=0;
-        for (; i < num; i++)
-        {
-            ROCPROFVIS_ASSERT_MSG_BREAK(tracks[i] < NumTracks(), ERROR_INDEX_OUT_OF_RANGE);
-            rocprofvis_dm_slice_t slice = BindObject()->FuncAddSlice(BindObject()->trace_object,tracks[i],start,end);
-            ROCPROFVIS_ASSERT_MSG_BREAK(slice, ERROR_SLICE_CANNOT_BE_NULL);
-            std::stringstream query;
-            std::string subquery = "SELECT *";
-            if(BuildTrackQuery(tracks[i], subquery,true) !=
-               kRocProfVisDmResultSuccess)
-                break;
-            query << subquery
-                << " start < " << end
-                << " and end > " << start
-                << " ORDER BY start;";
-            ShowProgress(step, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(TrackPropertiesAt(tracks[i])->db_connection,
-                    future, query.str().c_str(), slice, TrackPropertiesAt(i)->track_category == kRocProfVisDmPmcTrack ? &CallbackAddPmcRecord : &CallbackAddEventRecord)) break;
-        }
 
-        if (i < num) break;
-#else
         std::string query;
         slice_array_t slices;
         if (BuildSliceQuery(start, end, num, tracks, query, slices) != kRocProfVisDmResultSuccess) break;
@@ -553,9 +530,6 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
             }
             break;
         }
-
-
-#endif
         ShowProgress(100 - future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);
         return future->SetPromise(kRocProfVisDmResultSuccess);
 

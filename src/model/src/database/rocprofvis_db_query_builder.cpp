@@ -58,6 +58,11 @@ namespace DataModel
         return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
+    std::string Builder::Select(rocprofvis_db_sqlite_dataflow_query_format params)
+    {
+        return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
+                          params.where, "");
+    }
     std::string Builder::SelectAll(std::string query)
     {
         return "SELECT * FROM(" + query + ")";
@@ -109,6 +114,14 @@ namespace DataModel
     {
         return std::string("'") + tag + ":'," + var1 + "," + var2;
     };
+    std::string Builder::Where(std::string name, std::string condition, std::string value)
+    {
+        return std::string(" WHERE ") + name + condition + value;
+    };
+    std::string Builder::Union()
+    {
+        return std::string(" UNION ");
+    }
     std::string Builder::Concat(std::vector<std::string> strings)
     {
         std::string result;
@@ -152,7 +165,33 @@ namespace DataModel
             query += from[i];
             query += " ";
         }
-        return query;
+        return query + finalize_with;
+    }
+
+    std::string
+    Builder::BuildQuery(std::string select, int num_params, std::string* params,
+                        std::vector<std::string> from, std::vector<std::string> where, std::string finalize_with)
+    {
+        std::string query = select + " ";
+        for(int i = 0; i < num_params; i++)
+        {
+            if(i > 0)
+            {
+                query += ", ";
+            }
+            query += params[i];
+        }
+        for(int i = 0; i < from.size(); i++)
+        {
+            query += from[i];
+            query += " ";
+        }
+        for(int i = 0; i < where.size(); i++)
+        {
+            query += where[i];
+            query += " ";
+        }
+        return query + finalize_with;
     }
 
 }  // namespace DataModel

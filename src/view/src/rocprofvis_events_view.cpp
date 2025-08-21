@@ -129,9 +129,10 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
     }
     else
     {
-        if(ImGui::BeginTable("FlowInfoTable", 4, TABLE_FLAGS))
+        if(ImGui::BeginTable("FlowInfoTable", 5, TABLE_FLAGS))
         {
             ImGui::TableSetupColumn("ID");
+            ImGui::TableSetupColumn("Name");
             ImGui::TableSetupColumn("Timestamp");
             ImGui::TableSetupColumn("Track ID");
             ImGui::TableSetupColumn("Direction");
@@ -148,12 +149,14 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                     ImGui::TextUnformatted(
                         std::to_string(event_data->flow_info[i].id).c_str());
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::TextUnformatted(
-                        std::to_string(event_data->flow_info[i].timestamp).c_str());
+                    ImGui::TextUnformatted(event_data->flow_info[i].name.c_str());
                     ImGui::TableSetColumnIndex(2);
                     ImGui::TextUnformatted(
-                        std::to_string(event_data->flow_info[i].track_id).c_str());
+                        std::to_string(event_data->flow_info[i].timestamp).c_str());
                     ImGui::TableSetColumnIndex(3);
+                    ImGui::TextUnformatted(
+                        std::to_string(event_data->flow_info[i].track_id).c_str());
+                    ImGui::TableSetColumnIndex(4);
                     ImGui::TextUnformatted(
                         std::to_string(event_data->flow_info[i].direction).c_str());
                 }

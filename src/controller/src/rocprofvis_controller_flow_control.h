@@ -4,6 +4,7 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller_handle.h"
+#include "rocprofvis_controller_data.h"
 
 namespace RocProfVis
 {
@@ -14,7 +15,7 @@ namespace Controller
 class FlowControl : public Handle
 {
 public:
-    FlowControl(uint64_t id, uint64_t timestamp, uint32_t track_id, uint32_t direction);
+    FlowControl(uint64_t id, uint64_t timestamp, uint32_t track_id, uint32_t direction, const char* category, const char* symbol);
 
     virtual ~FlowControl();
 
@@ -44,6 +45,8 @@ private:
     uint64_t m_timestamp;
     uint32_t m_track_id; 
     uint32_t m_direction;
+    Data     m_symbol;
+    Data     m_category;
 };
 
 }

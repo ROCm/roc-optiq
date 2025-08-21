@@ -28,18 +28,19 @@ namespace DataModel
 {
 
 rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
-                                                    const char* node,
-                                                    const char* process,
-                                                    const char* subprocess,
+                                                    uint64_t node,
+                                                    uint32_t process,
+                                                    uint32_t subprocess,
+                                                    char* proc_name,
                                                     rocprofvis_dm_op_t operation,
                                                     rocprofvis_dm_track_id_t& track_id) {
     
 
-    auto it_node = find_track_map.find(std::stoll(node));
+    auto it_node = find_track_map.find(node);
     if (it_node!=find_track_map.end()){
-        auto it_process = it_node->second.find(std::stol(process));
+        auto it_process = it_node->second.find(process);
         if (it_process!=it_node->second.end()){
-            auto it_subprocess = it_process->second.find(std::stol(subprocess));
+            auto it_subprocess = it_process->second.find(subprocess);
             if (it_subprocess!=it_process->second.end()){
                 track_id = it_subprocess->second;
                 return kRocProfVisDmResultSuccess;
@@ -54,6 +55,13 @@ rocprofvis_dm_result_t RocprofDatabase::RemapStringIds(rocprofvis_db_record_data
 {
     if(record.event.id.bitfield.event_op==kRocProfVisDmOperationDispatch)
         record.event.symbol+=m_symbols_offset;
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t RocprofDatabase::RemapStringIds(rocprofvis_db_flow_data_t& record)
+{
+    if(record.id.bitfield.event_op == kRocProfVisDmOperationDispatch)
+        record.symbol_id += m_symbols_offset;
     return kRocProfVisDmResultSuccess;
 }
 
@@ -913,67 +921,155 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_flowtrace_t flowtrace = BindObject()->FuncAddFlowTrace(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(flowtrace, ERROR_FLOW_TRACE_CANNOT_BE_NULL);
-        std::stringstream query;
+        std::string query;
         if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {
-            query << "SELECT * FROM ("
-                        "SELECT E.id as id, 2, E.correlation_id, KD.nid, KD.agent_id, KD.queue_id, KD.start "
-                        "FROM rocpd_region R "
-                        "INNER JOIN rocpd_event E ON R.event_id = E.id "
-                        "INNER JOIN rocpd_kernel_dispatch KD ON KD.id = E.correlation_id "
-                        "WHERE R.id == ";
-            query << event_id.bitfield.event_id;
-            query << " UNION "
-                        "SELECT E.id as id, 4, E.correlation_id, MC.nid, MC.dst_agent_id, coalesce(MC.queue_id,0), MC.start "
-                        "FROM rocpd_region R "
-                        "INNER JOIN rocpd_event E ON R.event_id = E.id "
-                        "INNER JOIN rocpd_memory_copy MC ON MC.id = E.correlation_id "
-                        "WHERE R.id == ";
-            query << event_id.bitfield.event_id;
-                        " UNION "
-                        "SELECT E.id as id, 3, E.correlation_id, MA.nid, MA.agent_id, coalesce(MA.queue_id,0), MA.start "
-                        "FROM rocpd_region R "
-                        "INNER JOIN rocpd_event E ON R.event_id = E.id "
-                        "INNER JOIN rocpd_memory_copy MA ON MA.id = E.correlation_id "
-                        "WHERE R.id == ";
-            query << event_id.bitfield.event_id;
-                        query << ");";
-            ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), flowtrace, &CallbackAddFlowTrace)) break;
+            query = Builder::SelectAll(
+            Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
+                { {
+                      Builder::QParamOperation(kRocProfVisDmOperationDispatch),
+                      Builder::QParam("E.id", "id"),
+                      Builder::QParam("E.correlation_id"),
+                      Builder::QParam("K.nid", Builder::AGENT_ID_SERVICE_NAME),
+                      Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                      Builder::QParam("K.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                      Builder::QParam("K.start"),
+                      Builder::QParam("E.category_id"),
+                      Builder::QParam("K.kernel_id"),
+                  },
+                  { Builder::From("rocpd_region", "R"),
+                    Builder::InnerJoin("rocpd_event", "E",
+                                       "R.event_id = E.id AND R.guid = E.guid"),
+                    Builder::InnerJoin("rocpd_kernel_dispatch", "K",
+                                       "K.id = E.correlation_id AND K.guid = E.guid") },
+                  { Builder::Where(
+                      "R.id", "==", std::to_string(event_id.bitfield.event_id)) } })) + 
+            Builder::Union() +
+            Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
+                { {
+                      Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
+                      Builder::QParam("E.id", "id"),
+                      Builder::QParam("E.correlation_id"),
+                      Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
+                      Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                      Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                      Builder::QParam("M.start"),
+                      Builder::QParam("E.category_id"),
+                      Builder::QParam("M.name_id"),
+                  },
+                  { Builder::From("rocpd_region", "R"),
+                    Builder::InnerJoin("rocpd_event", "E",
+                                       "R.event_id = E.id AND R.guid = E.guid"),
+                    Builder::InnerJoin("rocpd_memory_copy", "M",
+                                       "M.id = E.correlation_id AND M.guid = E.guid") },
+                  { Builder::Where(
+                      "R.id", "==", std::to_string(event_id.bitfield.event_id)) } })) +
+            Builder::Union() +
+            Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
+                { {
+                      Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
+                      Builder::QParam("E.id", "id"),
+                      Builder::QParam("E.correlation_id"),
+                      Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
+                      Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                      Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                      Builder::QParam("M.start"),
+                      Builder::QParam("E.category_id"),
+                      Builder::QParam("E.category_id"),
+                  },
+                  { Builder::From("rocpd_region", "R"),
+                    Builder::InnerJoin("rocpd_event", "E",
+                                       "R.event_id = E.id AND R.guid = E.guid"),
+                    Builder::InnerJoin("rocpd_memory_allocate", "M",
+                                       "M.id = E.correlation_id AND M.guid = E.guid")},
+                  { Builder::Where(
+                      "R.id", "==", std::to_string(event_id.bitfield.event_id)) } }))
+                   );
+            ShowProgress(0, query.c_str(),kRPVDbBusy, future);
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
-            query <<    "SELECT E.id as id, 1, E.correlation_id, R.nid, R.pid, R.tid, R.end "
-                        "FROM rocpd_kernel_dispatch KD "
-                        "INNER JOIN rocpd_event E ON KD.event_id = E.id "
-                        "INNER JOIN rocpd_region R ON R.id = E.correlation_id "
-                        "WHERE KD.id == ";
-            query << event_id.bitfield.event_id << ";";  
-            ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), flowtrace, &CallbackAddFlowTrace)) break;
+            query = Builder::SelectAll(
+            Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
+                { {
+                      Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                      Builder::QParam("E.id", "id"),
+                      Builder::QParam("E.correlation_id"),
+                      Builder::QParam("R.nid", Builder::AGENT_ID_SERVICE_NAME),
+                      Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                      Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
+                      Builder::QParam("R.start"),
+                      Builder::QParam("E.category_id"),
+                      Builder::QParam("R.name_id"),
+                  },
+                  { Builder::From("rocpd_kernel_dispatch", "K"),
+                    Builder::InnerJoin("rocpd_event", "E",
+                                       "K.event_id = E.id AND K.guid = E.guid"),
+                    Builder::InnerJoin("rocpd_region", "R",
+                                       "R.id = E.correlation_id AND R.guid = E.guid") },
+                  { Builder::Where(
+                      "K.id", "==", std::to_string(event_id.bitfield.event_id)) } })));
+            ShowProgress(0, query.c_str(),kRPVDbBusy, future);
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryCopy)
         {
-            query <<    "SELECT E.id as id, 1, E.correlation_id, R.nid, R.pid, R.tid, R.end "
-                        "FROM rocpd_memory_copy MC "
-                        "INNER JOIN rocpd_event E ON MC.event_id = E.id "
-                        "INNER JOIN rocpd_region R ON R.id = E.correlation_id "
-                        "WHERE MC.id == ";
-            query << event_id.bitfield.event_id << ";";
-            ShowProgress(0, query.str().c_str(), kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), flowtrace, &CallbackAddFlowTrace)) break;
+            query = Builder::SelectAll(
+                Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
+                    { {
+                          Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                          Builder::QParam("E.id", "id"),
+                          Builder::QParam("E.correlation_id"),
+                          Builder::QParam("R.nid", Builder::AGENT_ID_SERVICE_NAME),
+                          Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                          Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
+                          Builder::QParam("R.start"),
+                          Builder::QParam("E.category_id"),
+                          Builder::QParam("R.name_id"),
+                      },
+                      { Builder::From("rocpd_memory_copy", "M"),
+                        Builder::InnerJoin("rocpd_event", "E",
+                                           "M.event_id = E.id AND M.guid = E.guid"),
+                        Builder::InnerJoin("rocpd_region", "R",
+                                           "R.id = E.correlation_id AND R.guid = E.guid") },
+                      { Builder::Where("M.id", "==",
+                                       std::to_string(event_id.bitfield.event_id)) } })));
+            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
         }
         else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
         {
-            query <<    "SELECT E.id as id, 1, E.correlation_id, R.nid, R.pid, R.tid, R.end "
-                        "FROM _rocpd_memory_allocate MA "
-                        "INNER JOIN rocpd_event E ON MA.event_id = E.id "
-                        "INNER JOIN rocpd_region R ON R.id = E.correlation_id "
-                        "WHERE MA.id == ";
-            query << event_id.bitfield.event_id << ";";
-            ShowProgress(0, query.str().c_str(), kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), flowtrace, &CallbackAddFlowTrace)) break;
+            query = Builder::SelectAll(
+                Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
+                    { {
+                          Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                          Builder::QParam("E.id", "id"),
+                          Builder::QParam("E.correlation_id"),
+                          Builder::QParam("R.nid", Builder::AGENT_ID_SERVICE_NAME),
+                          Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                          Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
+                          Builder::QParam("R.start"),
+                          Builder::QParam("E.category_id"),
+                          Builder::QParam("R.name_id"),
+                      },
+                      { Builder::From("rocpd_memory_allocate", "M"),
+                        Builder::InnerJoin("rocpd_event", "E",
+                                           "M.event_id = E.id AND M.guid = E.guid"),
+                        Builder::InnerJoin("rocpd_region", "R",
+                                           "R.id = E.correlation_id AND R.guid = E.guid")},
+                      { Builder::Where("M.id", "==",
+                                       std::to_string(event_id.bitfield.event_id)) } })));
+            //query <<    "SELECT E.id as id, 1, E.correlation_id, R.nid, R.pid, R.tid, R.end "
+            //            "FROM _rocpd_memory_allocate MA "
+            //            "INNER JOIN rocpd_event E ON MA.event_id = E.id "
+            //            "INNER JOIN rocpd_region R ON R.id = E.correlation_id "
+            //            "WHERE MA.id == ";
+            //query << event_id.bitfield.event_id << ";";
+
+            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
         }
         else
         {

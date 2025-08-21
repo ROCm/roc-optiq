@@ -108,6 +108,8 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                     uint64_t id   = 0;
                                     uint64_t timestamp = 0;
                                     uint64_t track_id  = 0;
+                                    char* category  = "";
+                                    char* symbol    = "";
                                     if(kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_uint64(
                                                dm_flowtrace,
@@ -123,12 +125,24 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                            rocprofvis_dm_get_property_as_uint64(
                                                dm_flowtrace,
                                                kRPVDMEndpointTrackIDUInt64Indexed, index,
-                                               &track_id))
+                                               &track_id) &&
+                                       kRocProfVisDmResultSuccess ==
+                                           rocprofvis_dm_get_property_as_charptr(
+                                               dm_flowtrace,
+                                               kRPVDMEndpointCategoryCharPtrIndexed,
+                                               index, &category) &&
+                                       kRocProfVisDmResultSuccess ==
+                                           rocprofvis_dm_get_property_as_charptr(
+                                               dm_flowtrace,
+                                               kRPVDMEndpointSymbolCharPtrIndexed,
+                                               index, &symbol)
+                                        )
                                     {
                                         FlowControl* flow_control = new FlowControl(
                                             id, timestamp, track_id,
                                             dm_event_id.bitfield.event_op ==
-                                                kRocProfVisDmOperationLaunch ? 0 : 1);
+                                                kRocProfVisDmOperationLaunch ? 0 : 1,
+                                                category, symbol);
                                         if(result == kRocProfVisResultSuccess)
                                         {
                                             result = array.SetObject(

@@ -85,20 +85,6 @@ class ProfileDatabase : public SqliteDatabase
 
     private:
 
-    // sqlite3_exec callback to add event record to time slice container. Used in per-track time slice query
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names  
-    // @return SQLITE_OK if successful
-        static int CallbackAddEventRecord(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
-    // sqlite3_exec callback to add PMC record to time slice container. Used in per-track time slice query
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names 
-    // @return SQLITE_OK if successful 
-        static int CallbackAddPmcRecord(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to add any record (Event or PMC) to time slice container. Used in all-selected-tracks time slice query
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query

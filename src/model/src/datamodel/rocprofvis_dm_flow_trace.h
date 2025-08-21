@@ -73,6 +73,15 @@ class FlowTrace : public DmBase {
         rocprofvis_dm_result_t          GetPropertyAsUint64(rocprofvis_dm_property_t property, 
                                                             rocprofvis_dm_property_index_t index, 
                                                             uint64_t* value) override;
+        // Method to read FlowTrace object property as char*
+        // @param property - property enumeration rocprofvis_dm_flowtrace_property_t
+        // @param index - index of any indexed property
+        // @param value - pointer reference to uint64_t return value
+        // @return status of operation           
+        rocprofvis_dm_result_t          GetPropertyAsCharPtr(
+                                                            rocprofvis_dm_property_t property, 
+                                                            rocprofvis_dm_property_index_t index,
+                                                            char** value) override;
 #ifdef TEST
         // Method to get property symbol for testing/debugging
         // @param property - property enumeration rocprofvis_dm_flowtrace_property_t
@@ -103,9 +112,19 @@ class FlowTrace : public DmBase {
         rocprofvis_dm_result_t          GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_id_t & id);
         // Method to get flow trace record track id at provided record index
         // @param index - record index
-        // @category  - reference to track id
+        // @track_id  - reference to track id
         // @return status of operation
         rocprofvis_dm_result_t          GetRecordTrackIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_track_id_t & track_id);
+        // Method to get flow trace record category string at provided record index
+        // @param index - record index
+        // @category_charptr  - reference category string
+        // @return status of operation
+        rocprofvis_dm_result_t          GetRecordCategoryStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & category_charptr);
+        // Method to get flow trace record symbol string at provided record index
+        // @param index - record index
+        // @symbol_charptr  - reference to symbol string
+        // @return status of operation
+        rocprofvis_dm_result_t          GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & symbol_charptr);
 };
 
 }  // namespace DataModel

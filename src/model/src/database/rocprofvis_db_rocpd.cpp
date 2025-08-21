@@ -28,16 +28,17 @@ namespace DataModel
 {
 
 rocprofvis_dm_result_t RocpdDatabase::FindTrackId(
-                                                    const char* node,
-                                                    const char* process,
-                                                    const char* subprocess,
+                                                    uint64_t node,
+                                                    uint32_t process,
+                                                    uint32_t subprocess,
+                                                    char* proc_name,
                                                     rocprofvis_dm_op_t operation,    
                                                     rocprofvis_dm_track_id_t& track_id) {
     if (operation > 0)
     {
-        auto it1 = find_track_map.find(std::stol(process));
+        auto it1 = find_track_map.find(process);
         if (it1!=find_track_map.end()){
-            auto it2 = it1->second.find(std::stol(subprocess));
+            auto it2 = it1->second.find(subprocess);
             if (it2!=it1->second.end()){
                 track_id = it2->second;
                 return kRocProfVisDmResultSuccess;
@@ -46,9 +47,9 @@ rocprofvis_dm_result_t RocpdDatabase::FindTrackId(
         return kRocProfVisDmResultNotLoaded;
     } else
     {
-        auto it1 = find_track_pmc_map.find(std::stol(process));
+        auto it1 = find_track_pmc_map.find(process);
         if (it1!=find_track_pmc_map.end()){
-            auto it2 = it1->second.find(subprocess);
+            auto it2 = it1->second.find(proc_name);
             if (it2!=it1->second.end()){
                 track_id = it2->second;
                 return kRocProfVisDmResultSuccess;
@@ -62,6 +63,13 @@ rocprofvis_dm_result_t RocpdDatabase::RemapStringIds(rocprofvis_db_record_data_t
 {
     if (!RemapStringId(record.event.category)) return kRocProfVisDmResultNotLoaded;
     if (!RemapStringId(record.event.symbol)) return kRocProfVisDmResultNotLoaded;
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t RocpdDatabase::RemapStringIds(rocprofvis_db_flow_data_t & record)
+{
+    if (!RemapStringId(record.category_id)) return kRocProfVisDmResultNotLoaded;
+    if (!RemapStringId(record.symbol_id)) return kRocProfVisDmResultNotLoaded;
     return kRocProfVisDmResultSuccess;
 }
 
@@ -642,7 +650,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(
         std::stringstream query;
         if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {
-            query << "select rocpd_api_ops.api_id, 2, rocpd_api_ops.op_id, 0, gpuId, queueId, rocpd_op.start from rocpd_api_ops "
+            query << "select 2, rocpd_api_ops.api_id, rocpd_api_ops.op_id, 0, gpuId, queueId, rocpd_op.start, rocpd_op.opType_id, rocpd_op.description_id from rocpd_api_ops "
                 "INNER JOIN rocpd_api on rocpd_api_ops.api_id = rocpd_api.id "
                 "INNER JOIN rocpd_op on rocpd_api_ops.op_id = rocpd_op.id where rocpd_api_ops.api_id = ";
             query << event_id.bitfield.event_id;  
@@ -651,7 +659,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
-            query << "select rocpd_api_ops.op_id, 1, rocpd_api_ops.api_id, 0, pid, tid, rocpd_api.end from rocpd_api_ops "
+            query << "select 1, rocpd_api_ops.op_id, rocpd_api_ops.api_id, 0, pid, tid, rocpd_api.end, rocpd_api.apiName_id, rocpd_api.args_id from rocpd_api_ops "
                 "INNER JOIN rocpd_api on rocpd_api_ops.api_id = rocpd_api.id "
                 "INNER JOIN rocpd_op on rocpd_api_ops.op_id = rocpd_op.id where rocpd_api_ops.op_id = ";
             query << event_id.bitfield.event_id << ";";  
@@ -673,6 +681,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadStackTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)
 {
+    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Stack trace is not supported in old rocpd schema",
+                                        kRocProfVisDmResultNotSupported);
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {

@@ -86,43 +86,10 @@ int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_st
     return 0;
 }
 
-int ProfileDatabase::CallbackAddEventRecord(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc==10, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
-    rocprofvis_db_record_data_t record;
-    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
-    record.event.id.bitfield.event_op = sqlite3_column_int(stmt, 0);
-    record.event.id.bitfield.event_id = sqlite3_column_int64(stmt, 5);
-    record.event.timestamp = sqlite3_column_int64(stmt, 1);
-    record.event.duration = sqlite3_column_int64(stmt, 2) - record.event.timestamp;
-    record.event.category = sqlite3_column_int(stmt, 3);
-    record.event.symbol = sqlite3_column_int(stmt, 4)+(record.event.id.bitfield.event_op==kRocProfVisDmOperationDispatch?db->m_symbols_offset:0);
-    record.event.level = sqlite3_column_int(stmt, 9);
-    
-    if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;  
- 
-    callback_params->future->CountThisRow();
-    return 0;
-}
-
-int ProfileDatabase::CallbackAddPmcRecord(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
-    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc==2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
-    rocprofvis_db_record_data_t record;
-    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
-    record.pmc.timestamp = sqlite3_column_int64(stmt, 1);
-    record.pmc.value = sqlite3_column_double(stmt,2 );
-    if (db->BindObject()->FuncAddRecord(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
-    callback_params->future->CountThisRow();
-    return 0;
-}
 
 int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 10, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == rocprofvis_db_sqlite_slice_query_format::NUM_PARAMS,
+                                 ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
@@ -131,9 +98,10 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
     record.event.id.bitfield.event_op = sqlite3_column_int(stmt, 0);
     if (callback_params->track_id == -1)
     {
-        if (db->FindTrackId((char*)sqlite3_column_text(stmt, 6),
-            (char*)sqlite3_column_text(stmt, 7),
-            (char*)sqlite3_column_text(stmt, 8), 
+        if (db->FindTrackId((uint64_t)sqlite3_column_int64(stmt, 6),
+            sqlite3_column_int(stmt, 7),
+            (record.event.id.bitfield.event_op != kRocProfVisDmOperationNoOp ? sqlite3_column_int(stmt, 8) : 0), 
+            (record.event.id.bitfield.event_op == kRocProfVisDmOperationNoOp ? (char*)sqlite3_column_text(stmt, 8) : ""),
             record.event.id.bitfield.event_op,
             callback_params->track_id) != kRocProfVisDmResultSuccess)
         {
@@ -168,15 +136,24 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
 
 int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc==7, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == rocprofvis_db_sqlite_dataflow_query_format::NUM_PARAMS,
+                                 ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     rocprofvis_db_flow_data_t record;
-    record.id.bitfield.event_op = sqlite3_column_int(stmt,1 );
-    if (db->FindTrackId((char*)sqlite3_column_text(stmt,3), (char*)sqlite3_column_text(stmt,4), (char*)sqlite3_column_text(stmt,5), record.id.bitfield.event_op, record.track_id) == kRocProfVisDmResultSuccess) {
+
+    record.id.bitfield.event_op = sqlite3_column_int(stmt,0 );
+    if (db->FindTrackId((uint64_t)sqlite3_column_int64(stmt,3), 
+                        (uint32_t)sqlite3_column_int(stmt,4), 
+                        (uint32_t)sqlite3_column_int(stmt,5),
+                        "",
+                        record.id.bitfield.event_op, record.track_id) == kRocProfVisDmResultSuccess) {
         record.id.bitfield.event_id = sqlite3_column_int64(stmt, 2 );
         record.time = sqlite3_column_int64(stmt, 6 );
+        record.category_id = sqlite3_column_int64(stmt, 7);
+        record.symbol_id = sqlite3_column_int64(stmt, 8);
+        if(kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
         if (db->BindObject()->FuncAddFlow(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     }
     callback_params->future->CountThisRow();

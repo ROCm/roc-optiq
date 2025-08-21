@@ -116,6 +116,7 @@ private:
     // @param record - event record structure
     // @return status of operation
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_record_data_t & record) override;
+    rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_flow_data_t& record) override;
 
     // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
     // @param node_id - node id
@@ -124,9 +125,10 @@ private:
     // @param operation - operation of event that requesting track id
     // @return status of operation
     rocprofvis_dm_result_t          FindTrackId(
-                                                        const char* node,
-                                                        const char* process,
-                                                        const char* subprocess,
+                                                        uint64_t node,
+                                                        uint32_t process,
+                                                        uint32_t subprocess,
+                                                        char* proc_name,
                                                         rocprofvis_dm_op_t operation,
                                                         rocprofvis_dm_track_id_t& track_id) override;
 

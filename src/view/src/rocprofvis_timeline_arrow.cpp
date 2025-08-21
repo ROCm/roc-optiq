@@ -13,6 +13,18 @@ namespace View
 {
 
 void
+TimelineArrow::SetFlowDisplayMode(FlowDisplayMode mode)
+{
+    m_flow_display_mode = mode;
+}
+
+FlowDisplayMode
+TimelineArrow::GetFlowDisplayMode() const
+{
+    return m_flow_display_mode;
+}
+
+void
 TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
                       ImVec2 window, std::map<uint64_t, float>& track_height_total)
 {
@@ -24,9 +36,37 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
     {
         if(event)
         {
-            for(const event_flow_data_t& flow : event->flow_info)
+            int stride  = 1;
+            int starter = 0;
+
+            if(m_flow_display_mode == FlowDisplayMode::Hide)
             {
-                double start_time_ns =
+                starter = event->flow_info.size();
+            }
+
+            if(m_flow_display_mode == FlowDisplayMode::ShowAll)
+            {
+                stride  = 1;  // Show all flows
+                starter = 0;  // Start from the first flow
+            }
+            else if(m_flow_display_mode == FlowDisplayMode::ShowFirstAndLast)
+            {
+                if(event->flow_info.size() > 1)
+                {
+                    stride  = event->flow_info.size() - 1;  // Jump from first to last
+                    starter = 0;
+                }
+                else
+                {
+                    stride  = 1;  // Only one element, just draw it once
+                    starter = 0;
+                }
+            }
+
+            for(int i = starter; i < event->flow_info.size(); i += stride)
+            {
+                const event_flow_data_t& flow = event->flow_info[i];
+                double                   start_time_ns =
                     event->basic_info.m_start_ts + event->basic_info.m_duration;
                 const uint64_t& end_time_ns    = flow.timestamp;
                 const uint64_t& start_track_id = event->track_id;

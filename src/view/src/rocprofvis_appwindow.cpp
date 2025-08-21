@@ -10,7 +10,6 @@
 #include "rocprofvis_project.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_settings_panel.h"
-#include "rocprofvis_trace_view.h"
 #include "rocprofvis_version.h"
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
@@ -189,25 +188,6 @@ AppWindow::Update()
 #endif
 }
 
-bool
-AppWindow::IsTrimSaveAllowed()
-{
-    // Check if save is allowed
-    bool save_allowed = false;
-    auto active_tab   = m_tab_container->GetActiveTab();
-    if(active_tab)
-    {
-        // Check if the active tab is a TraceView
-        auto trace_view = std::dynamic_pointer_cast<TraceView>(active_tab->m_widget);
-        if(trace_view)
-        {
-            // Check if the trace view has a selection that can be saved
-            save_allowed = trace_view->IsTrimSaveAllowed();
-        }
-    }
-    return save_allowed;
-}
-
 void
 AppWindow::Render()
 {
@@ -235,8 +215,9 @@ AppWindow::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
     if(ImGui::BeginMenuBar())
     {
-        RenderFileMenu();
-        RenderEditMenu();
+        Project* project = GetCurrentProject();
+        RenderFileMenu(project);
+        RenderEditMenu(project);
         RenderHelpMenu();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         RenderDeveloperMenu();
@@ -335,8 +316,8 @@ AppWindow::RenderFileDialogs()
         }
         ImGuiFileDialog::Instance()->Close();
     }
-    // Handle file save dialog
-    if(ImGuiFileDialog::Instance()->Display(FILE_SAVE_DIALOG_NAME))
+    Project* project = GetCurrentProject();
+    if(ImGuiFileDialog::Instance()->Display(FILE_SAVE_DIALOG_NAME) && project)
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {
@@ -344,11 +325,10 @@ AppWindow::RenderFileDialogs()
                 ImGuiFileDialog::Instance()->GetFilePathName());
 
             std::string file_path_str = file_path.string();
-            HandleSaveSelection(file_path_str);
+            project->TrimSave(file_path_str);
         }
         ImGuiFileDialog::Instance()->Close();
     }
-    Project* project = GetCurrentProject();
     if(ImGuiFileDialog::Instance()->Display(PROJECT_SAVE_DIALOG_NAME) && project)
     {
         if(ImGuiFileDialog::Instance()->IsOk())
@@ -366,7 +346,7 @@ AppWindow::RenderFileDialogs()
 }
 
 void
-AppWindow::RenderFileMenu()
+AppWindow::RenderFileMenu(Project* project)
 {
     if(ImGui::BeginMenu("File"))
     {
@@ -384,7 +364,6 @@ AppWindow::RenderFileMenu()
             ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, "Choose File",
                                                     supported_extensions.c_str(), config);
         }
-        Project* project = GetCurrentProject();
         if(ImGui::MenuItem("Save", nullptr, false, project && project->IsProject()))
         {
             project->Save();
@@ -399,20 +378,15 @@ AppWindow::RenderFileMenu()
 }
 
 void
-AppWindow::RenderEditMenu()
+AppWindow::RenderEditMenu(Project* project)
 {
     if(ImGui::BeginMenu("Edit"))
     {
-        if(ImGui::MenuItem("Save Trace Selection", nullptr, false, IsTrimSaveAllowed()))
+        if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
+                           project && project->IsTrimSaveAllowed()))
         {
-            // Save the currently selected tab's content
-            auto active_tab = m_tab_container->GetActiveTab();
-            if(active_tab)
-            {
-                // Open the save dialog
-                ImGuiFileDialog::Instance()->OpenDialog(FILE_SAVE_DIALOG_NAME,
-                                                        "Save Selection", ".db,.rpd");
-            }
+            ImGuiFileDialog::Instance()->OpenDialog(FILE_SAVE_DIALOG_NAME,
+                                                    "Save Trace Selection", ".db,.rpd");
         }
         ImGui::Separator();
         if(ImGui::MenuItem("Preferences"))
@@ -444,49 +418,6 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
     {
         m_projects[tab_closed_event->GetTabId()]->Close();
         m_projects.erase(tab_closed_event->GetTabId());
-    }
-}
-
-void
-AppWindow::HandleSaveSelection(const std::string& file_path_str)
-{
-    // Check if file already exists
-    std::error_code ec;
-    if(std::filesystem::exists(file_path_str, ec))
-    {
-        // Show confirmation dialog
-        m_confirmation_dialog->Show(
-            "Confirm Save", "File already exists. Do you want to overwrite it?",
-            [this, file_path_str]() { SaveSelection(file_path_str); });
-        return;
-    }
-    else
-    {
-        SaveSelection(file_path_str);
-    }
-}
-
-void
-AppWindow::SaveSelection(const std::string& file_path_str)
-{
-    // Get the active tab
-    auto active_tab = m_tab_container->GetActiveTab();
-    if(active_tab)
-    {
-        // Check if active tab is a trace view
-        auto trace_view = std::dynamic_pointer_cast<TraceView>(active_tab->m_widget);
-        if(trace_view)
-        {
-            trace_view->SaveSelection(file_path_str);
-        }
-        else
-        {
-            spdlog::warn("Active tab is not a Trace View, cannot save selection.");
-        }
-    }
-    else
-    {
-        spdlog::warn("No active tab to save selection from.");
     }
 }
 

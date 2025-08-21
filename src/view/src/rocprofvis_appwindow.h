@@ -42,19 +42,14 @@ private:
     AppWindow();
     ~AppWindow();
 
-    void RenderFileMenu();
-    void RenderEditMenu();
+    void RenderFileMenu(Project* project);
+    void RenderEditMenu(Project* project);
     void RenderHelpMenu();
 
     void RenderFileDialogs();
-
-    void HandleTabClosed(std::shared_ptr<RocEvent> e);
-    void HandleSaveSelection(const std::string& file_path_str);
-    void SaveSelection(const std::string& file_path_str);
-
     void RenderAboutDialog();
 
-    bool IsTrimSaveAllowed();
+    void HandleTabClosed(std::shared_ptr<RocEvent> e);
 
     static AppWindow* s_instance;
 

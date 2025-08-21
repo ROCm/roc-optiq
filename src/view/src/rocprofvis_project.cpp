@@ -125,8 +125,7 @@ Project::OpenProject(std::string& file_path)
             json_string += std::move(json_line);
         }
         std::pair<jt::Json::Status, jt::Json> json_parsed = jt::Json::parse(json_string);
-        if(json_parsed.first == jt::Json::success &&
-           JsonValidForLoad(json_parsed.second))
+        if(json_parsed.first == jt::Json::success && JsonValidForLoad(json_parsed.second))
         {
             m_project_file_path = file_path;
             m_settings_json     = json_parsed.second;
@@ -250,6 +249,58 @@ Project::SaveSetttingsJson()
         }
     }
     return result;
+}
+
+bool
+Project::IsTrimSaveAllowed()
+{
+    // Check if save is allowed
+    bool save_allowed = false;
+    if(m_trace_type == System)
+    {
+        // Check if the active tab is a TraceView
+        std::shared_ptr<TraceView> trace_view =
+            std::dynamic_pointer_cast<TraceView>(m_view);
+        if(trace_view)
+        {
+            // Check if the trace view has a selection that can be saved
+            save_allowed = trace_view->IsTrimSaveAllowed();
+        }
+    }
+    return save_allowed;
+}
+
+void
+Project::TrimSave(const std::string& file_path_str)
+{
+    // Check if file already exists
+    std::error_code ec;
+    if(std::filesystem::exists(file_path_str, ec))
+    {
+        // Show confirmation dialog
+        AppWindow::GetInstance()->ShowConfirmationDialog(
+            "Confirm Save", "File already exists. Do you want to overwrite it?",
+            [this, file_path_str]() { TrimSaveOverwrite(file_path_str); });
+        return;
+    }
+    else
+    {
+        TrimSaveOverwrite(file_path_str);
+    }
+}
+
+void
+Project::TrimSaveOverwrite(const std::string& file_path_str)
+{
+    if(m_trace_type == System)
+    {
+        std::shared_ptr<TraceView> trace_view =
+            std::dynamic_pointer_cast<TraceView>(m_view);
+        if(trace_view)
+        {
+            trace_view->SaveSelection(file_path_str);
+        }
+    }
 }
 
 ProjectSetting::ProjectSetting(const std::string project_id)

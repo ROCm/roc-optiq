@@ -31,7 +31,7 @@ public:
     };
 
     Project();
-    ~Project();
+    virtual ~Project();
 
     /*
      * Returns the ID of the project.

@@ -36,8 +36,9 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
     {
         if(event)
         {
-            int iterator = 1;
-            int starter  = 0;
+            int stride  = 1;
+            int starter = 0;
+
             if(m_flow_display_mode == FlowDisplayMode::Hide)
             {
                 starter = event->flow_info.size();
@@ -45,16 +46,24 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
 
             if(m_flow_display_mode == FlowDisplayMode::ShowAll)
             {
-                iterator = 1;  // Show all flows
-                starter  = 0;  // Start from the first flow
+                stride  = 1;  // Show all flows
+                starter = 0;  // Start from the first flow
             }
             else if(m_flow_display_mode == FlowDisplayMode::ShowFirstAndLast)
             {
-                iterator = event->flow_info.size() - 1;
-                starter  = 0;  // Start from the first flow
+                if(event->flow_info.size() > 1)
+                {
+                    stride  = event->flow_info.size() - 1;  // Jump from first to last
+                    starter = 0;
+                }
+                else
+                {
+                    stride  = 1;  // Only one element, just draw it once
+                    starter = 0;
+                }
             }
 
-            for(int i = starter; i < event->flow_info.size(); i += iterator)
+            for(int i = starter; i < event->flow_info.size(); i += stride)
             {
                 const event_flow_data_t& flow = event->flow_info[i];
                 double                   start_time_ns =

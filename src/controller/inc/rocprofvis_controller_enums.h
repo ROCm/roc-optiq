@@ -529,6 +529,8 @@ typedef enum rocprofvis_controller_flow_control_properties_t
     kRPVControllerFlowControlTrackId   = 0x50000002,
     // Flow direction 0 - outgoing, 1 - incoming
     kRPVControllerFlowControlDirection = 0x50000003,
+    // The target name
+    kRPVControllerFlowControlName      = 0x50000004
 } rocprofvis_controller_flow_control_properties_t;
 /* JSON: RPVFlowControl
 {

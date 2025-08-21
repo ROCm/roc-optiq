@@ -142,14 +142,16 @@ typedef struct {
     bool metadata_loaded;                           // status of metadata being fully loaded
 } rocprofvis_dm_trace_params_t;
 
-// rocprofvis_db_flow_data_t is used to pass record data from database to data model. Used by database query callbacks
+// rocprofvis_db_flow_data_t is used to pass record flow data from database to data model. Used by database query callbacks
 typedef struct {
     rocprofvis_dm_event_id_t id;                    // 60-bit endpoint event id and 4-bit operation type               
     rocprofvis_dm_timestamp_t time;                 // 64-bit endpoint timestamp
     rocprofvis_dm_track_id_t track_id;              // endpoint track index
+    rocprofvis_dm_id_t  symbol_id;
+    rocprofvis_dm_id_t  category_id;
 }rocprofvis_db_flow_data_t;
 
-// rocprofvis_db_flow_data_t is used to pass record data from database to data model. Used by database query callbacks
+// rocprofvis_db_stack_data_t is used to pass record stack data from database to data model. Used by database query callbacks
 typedef struct {
     rocprofvis_dm_charptr_t symbol;                 // stacktrace call symbol
     rocprofvis_dm_charptr_t args;                   // stacktrace call arguments

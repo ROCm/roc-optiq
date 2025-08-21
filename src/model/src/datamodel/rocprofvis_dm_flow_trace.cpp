@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include "rocprofvis_dm_flow_trace.h"
+#include "rocprofvis_dm_trace.h"
 
 namespace RocProfVis
 {
@@ -31,7 +32,7 @@ rocprofvis_dm_size_t  FlowTrace::GetMemoryFootprint(){
 
 rocprofvis_dm_result_t  FlowTrace::AddRecord( rocprofvis_db_flow_data_t & data){
     try{
-        m_flows.push_back(FlowRecord(data.time, data.id, data.track_id));
+        m_flows.push_back(FlowRecord(data.time, data.id, data.track_id, data.category_id, data.symbol_id));
     }
     catch(std::exception ex)
     {
@@ -56,6 +57,21 @@ rocprofvis_dm_result_t FlowTrace::GetRecordTrackIdAt(const rocprofvis_dm_propert
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t  FlowTrace::GetRecordCategoryStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & category_charptr){
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_flows.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACK_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
+    category_charptr = Ctx()->GetStringAt(m_flows[index].CategoryId());
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t  FlowTrace::GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & symbol_charptr){
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_flows.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACK_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
+    symbol_charptr = Ctx()->GetStringAt(m_flows[index].SymbolId());
+    return kRocProfVisDmResultSuccess;
+}
 
 rocprofvis_dm_result_t FlowTrace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
@@ -76,6 +92,19 @@ rocprofvis_dm_result_t FlowTrace::GetPropertyAsUint64(rocprofvis_dm_property_t p
 
 }
 
+ rocprofvis_dm_result_t   FlowTrace::GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value){
+    ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    switch(property)
+    {
+        case kRPVDMEndpointSymbolCharPtrIndexed:
+            return GetRecordSymbolStringAt(index, *(rocprofvis_dm_charptr_t*) value);
+        case kRPVDMEndpointCategoryCharPtrIndexed:
+            return GetRecordCategoryStringAt(index, *(rocprofvis_dm_charptr_t*) value);
+        default:
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
+    }
+}
+
 
 #ifdef TEST
 const char*  FlowTrace::GetPropertySymbol(rocprofvis_dm_property_t property) {
@@ -89,6 +118,10 @@ const char*  FlowTrace::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMEndpointIDUInt64Indexed";
         case kRPVDMEndpointTrackIDUInt64Indexed:
             return "kRPVDMEndpointTrackIDUInt64Indexed";
+        case kRPVDMEndpointSymbolCharPtrIndexed:
+            return "kRPVDMEndpointSymbolCharPtrIndexed";
+        case kRPVDMEndpointCategoryCharPtrIndexed:
+            return "kRPVDMEndpointCategoryCharPtrIndexed";
         default:
             return "Unknown property";
     }   

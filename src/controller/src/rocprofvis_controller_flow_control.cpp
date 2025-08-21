@@ -10,11 +10,13 @@ namespace Controller
 
 typedef Reference<rocprofvis_controller_flow_control_t, FlowControl, kRPVControllerObjectTypeFlowControl> FlowControlRef;
 
-FlowControl::FlowControl(uint64_t id, uint64_t timestamp, uint32_t track_id, uint32_t direction)
+FlowControl::FlowControl(uint64_t id, uint64_t timestamp, uint32_t track_id, uint32_t direction,const char* category, const char* symbol)
 : m_id(id)
 , m_timestamp(timestamp)
 , m_track_id(track_id)
 , m_direction(direction)
+, m_category(category)
+, m_symbol(symbol)
 {
 }
 
@@ -131,6 +133,31 @@ rocprofvis_result_t FlowControl::GetString(rocprofvis_property_t property, uint6
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
+        case kRPVControllerFlowControlName:
+        {
+            if(*length == 0)
+            {
+                result = m_symbol.GetString(value, length);
+                if(result != kRocProfVisResultSuccess || *length == 0)
+                {
+                    result = m_category.GetString(value, length);
+                }
+            }
+            else
+            {
+                uint32_t len = 0;
+                result       = m_symbol.GetString(value, &len);
+                if(result != kRocProfVisResultSuccess || len == 0)
+                {
+                    result = m_category.GetString(value, length);
+                }
+                else
+                {
+                    result = m_symbol.GetString(value, length);
+                }
+            }
+            break;
+        }
         case kRPVControllerFlowControltId:
         case kRPVControllerFlowControlTimestamp:
         case kRPVControllerFlowControlTrackId:

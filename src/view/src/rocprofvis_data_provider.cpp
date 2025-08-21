@@ -2096,6 +2096,9 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
             {
                 event_info.flow_info[j].direction  = data;
             }
+
+            event_info.flow_info[j].name = GetString(flow_control_handle, 
+                                                kRPVControllerFlowControlName, 0);
         }
     }
 

@@ -84,6 +84,14 @@ typedef struct rocprofvis_db_sqlite_sample_table_query_format
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_sample_table_query_format;
 
+typedef struct rocprofvis_db_sqlite_dataflow_query_format
+{
+    static constexpr const int NUM_PARAMS = 9;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+    std::vector<std::string>   where;
+} rocprofvis_db_sqlite_dataflow_query_format;
+
 class Builder
 {
     public:
@@ -115,6 +123,7 @@ class Builder
         static std::string Select(rocprofvis_db_sqlite_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_sample_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_rocpd_table_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_dataflow_query_format params);
         static std::string SelectAll(std::string query);
         static std::string QParam(std::string name, std::string public_name);
         static std::string QParamBlank(std::string public_name);
@@ -131,11 +140,17 @@ class Builder
         static std::string TVar(std::string tag, std::string var);
         static std::string TVar(std::string tag, std::string var1, std::string var2);
         static std::string Concat(std::vector<std::string> strings);
+        static std::string Where(std::string name, std::string condition, std::string value);
+        static std::string Union();
     private:
         static void        BuildBlanksMask(SqliteDatabase* owner, int num_params, std::string* params);
         static std::string BuildQuery(std::string select, int num_params,
                                       std::string* params, std::vector<std::string> from,
                                       std::string finalize_with);
+        static std::string BuildQuery(std::string select, int num_params,
+                                      std::string* params, std::vector<std::string> from,
+                                      std::vector<std::string> where,
+                                      std::string              finalize_with);
        
 };
 

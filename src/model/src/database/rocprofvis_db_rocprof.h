@@ -120,8 +120,7 @@ private:
     rocprofvis_dm_result_t          FindTrackId(
                                                         uint64_t node,
                                                         uint32_t process,
-                                                        uint32_t subprocess,
-                                                        const char* proc_name,
+                                                        const char* subprocess,
                                                         rocprofvis_dm_op_t operation,
                                                         rocprofvis_dm_track_id_t& track_id) override;
 

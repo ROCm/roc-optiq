@@ -72,7 +72,7 @@ typedef struct rocprofvis_db_sqlite_table_query_format
 
 typedef struct rocprofvis_db_sqlite_rocpd_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 8;
+    static constexpr const int NUM_PARAMS = 9;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_rocpd_table_query_format;

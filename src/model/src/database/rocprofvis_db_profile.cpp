@@ -101,7 +101,7 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
         if (db->FindTrackId((uint64_t)sqlite3_column_int64(stmt, 6),
             sqlite3_column_int(stmt, 7),
             (record.event.id.bitfield.event_op != kRocProfVisDmOperationNoOp ? sqlite3_column_int(stmt, 8) : 0), 
-            (record.event.id.bitfield.event_op == kRocProfVisDmOperationNoOp ? (char*)sqlite3_column_text(stmt, 8) : ""),
+            (record.event.id.bitfield.event_op == kRocProfVisDmOperationNoOp ? (const char*)sqlite3_column_text(stmt, 8) : ""),
             record.event.id.bitfield.event_op,
             callback_params->track_id) != kRocProfVisDmResultSuccess)
         {

@@ -128,7 +128,7 @@ private:
                                                         uint64_t node,
                                                         uint32_t process,
                                                         uint32_t subprocess,
-                                                        char* proc_name,
+                                                        const char* proc_name,
                                                         rocprofvis_dm_op_t operation,
                                                         rocprofvis_dm_track_id_t& track_id) override;
 

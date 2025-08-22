@@ -21,14 +21,6 @@ public:
         Duplicate,
         Failed,
     };
-    enum TraceType
-    {
-        Undefined,
-        System,
-#ifdef COMPUTE_UI_SUPPORT
-        Compute,
-#endif
-    };
 
     Project();
     virtual ~Project();
@@ -89,6 +81,15 @@ public:
     void TrimSaveOverwrite(const std::string& file_path_str);
 
 private:
+    enum TraceType
+    {
+        Undefined,
+        System,
+#ifdef COMPUTE_UI_SUPPORT
+        Compute,
+#endif
+    };
+
     /*
      * Opens a project + attached trace file and returns Success/Duplicate/Failed.
      * @param file_path: The path of the file to open. If Duplicate is returned, this will

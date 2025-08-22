@@ -96,7 +96,7 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
     Future* future = (Future*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
-    rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end); 
+    rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end, num, tracks); 
     if(result != kRocProfVisDmResultNotLoaded)
     {
         spdlog::debug("Slice ({},{}) exists!", start, end);

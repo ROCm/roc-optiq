@@ -189,7 +189,7 @@ typedef rocprofvis_dm_result_t (*rocprofvis_db_find_cached_table_value_func_t) (
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_event_level_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id, uint8_t level);
 
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_slice_exists_t) (const rocprofvis_dm_trace_t object, 
-                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
+                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_db_num_of_tracks_t num, const rocprofvis_db_track_selection_t tracks);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_event_property_exists_t) (const rocprofvis_dm_trace_t object, 
                                                                     rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_table_exists_t) (const rocprofvis_dm_trace_t object,  const rocprofvis_dm_table_id_t table_id);

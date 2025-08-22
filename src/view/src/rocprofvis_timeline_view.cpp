@@ -184,9 +184,34 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImGui::EndChild();
 }
 
-void 
-TimelineView::RenderTimelineOptionsMenu(ImVec2 window_position) {
-     
+void
+TimelineView::ShowTimelineContextMenu(const ImVec2& window_position)
+{
+    ImVec2 mouse_pos = ImGui::GetMousePos();
+    ImVec2 rel_mouse_pos =
+        ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
+
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
+       ImGui::IsMouseHoveringRect(window_position,
+                                  ImVec2(window_position.x + m_graph_size.x,
+                                         window_position.y + m_graph_size.y)))
+    {
+        ImGui::OpenPopup("TimelineContextMenu");
+    }
+
+    if(ImGui::BeginPopup("TimelineContextMenu"))
+    {
+        if(ImGui::MenuItem("Add Sticky Note"))
+        {
+            float  x_in_chart = rel_mouse_pos.x;
+            double time_ns =
+                m_v_min_x + (x_in_chart / m_graph_size.x) * (m_v_max_x - m_v_min_x);
+            float y_offset = rel_mouse_pos.y;
+            m_annotations_view.OpenStickyNotePopup(time_ns, y_offset);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void

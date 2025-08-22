@@ -1,5 +1,5 @@
 #include "rocprofvis_annotations.h"
-
+#include "rocprofvis_settings.h"
 namespace RocProfVis
 {
 namespace View
@@ -10,9 +10,9 @@ AnnotationsView::~AnnotationsView() {}
 
 void
 AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
-                           const std::string& text)
+                           const std::string& text, const std::string& title)
 {
-    m_sticky_notes.emplace_back(time_ns, y_offset, size, text);
+    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title);
 }
 
 bool
@@ -24,14 +24,13 @@ AnnotationsView::Render(ImDrawList* draw_list, const ImVec2& window_position,
 
     for(auto& note : m_sticky_notes)
     {
-       
         movement_drag |= note.HandleDrag(window_position, v_min_x, pixels_per_ns);
-         movement_resize |= note.HandleResize(window_position, v_min_x, pixels_per_ns);
-
+        movement_resize |= note.HandleResize(window_position, v_min_x, pixels_per_ns);
         note.Render(draw_list, window_position, v_min_x, pixels_per_ns);
     }
     return movement_drag || movement_resize;
 }
+
 void
 AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
                                     const ImVec2& graph_size, double v_min_x,
@@ -65,40 +64,89 @@ AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
         ImGui::EndPopup();
     }
 }
-
 void
 AnnotationsView::ShowStickyNotePopup()
 {
-    if(m_show_sticky_popup)
+    using namespace RocProfVis::View;
+
+    if(!m_show_sticky_popup) return;
+
+    Settings& settings     = Settings::GetInstance();
+    ImU32     popup_bg     = settings.GetColor(Colors::kFillerColor);
+    ImU32     border_color = settings.GetColor(Colors::kBorderColor);
+    ImU32     text_color   = settings.GetColor(Colors::kRulerTextColor);
+    ImU32     button_color = settings.GetColor(Colors::kHighlightChart);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+
+    ImGui::OpenPopup("StickyNoteInputPopup");
+    if(ImGui::BeginPopupModal("StickyNoteInputPopup", nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize))
     {
-        ImGui::OpenPopup("StickyNoteInputPopup");
-        if(ImGui::BeginPopupModal("StickyNoteInputPopup", nullptr,
-                                  ImGuiWindowFlags_AlwaysAutoResize))
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+
+        ImGui::Text("Add Sticky Note");
+        ImGui::Separator();
+        ImGui::Dummy(ImVec2(0, 8));  // Top margin
+
+        ImGui::Text("Title:");
+        ImGui::InputText("##StickyTitle", m_sticky_title, IM_ARRAYSIZE(m_sticky_title),
+                         ImGuiInputTextFlags_AutoSelectAll);
+        ImGui::Dummy(ImVec2(0, 4));  // Small vertical space
+
+        ImGui::Text("Text:");
+        // This constrains the text area and wraps text
+       ImGui::InputTextMultiline("##StickyText", m_sticky_text,
+                          IM_ARRAYSIZE(m_sticky_text), ImVec2(300, 100),
+                          ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_NoHorizontalScroll);
+
+        ImGui::PopStyleColor();  // ImGuiCol_Text
+
+        ImGui::Dummy(ImVec2(0, 12));  // Bottom margin
+
+        ImGui::PushStyleColor(ImGuiCol_Button, button_color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                              settings.GetColor(Colors::kHighlightChart));
+
+        bool save_clicked = ImGui::Button("Save", ImVec2(100, 0));
+        ImGui::SameLine();
+        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(100, 0));
+
+        ImGui::PopStyleColor(3);  // Button colors
+
+        if(save_clicked)
         {
-            ImGui::Text("Sticky Note");
-            ImGui::InputText("Title", m_sticky_title, IM_ARRAYSIZE(m_sticky_title));
-            ImGui::InputTextMultiline("Text", m_sticky_text, IM_ARRAYSIZE(m_sticky_text),
-                                      ImVec2(250, 80));
-            ImGui::Spacing();
-            if(ImGui::Button("Save"))
-            {
-                std::string content = std::string(m_sticky_title);
-                if(strlen(m_sticky_title) > 0 && strlen(m_sticky_text) > 0)
-                    content += "\n";
-                content += m_sticky_text;
-                AddSticky(m_sticky_time_ns, m_sticky_y_offset, ImVec2(180, 80), content);
-                m_show_sticky_popup = false;
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            if(ImGui::Button("Cancel"))
-            {
-                m_show_sticky_popup = false;
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::EndPopup();
+            AddSticky(m_sticky_time_ns, m_sticky_y_offset, ImVec2(180, 80),
+                      std::string(m_sticky_text), std::string(m_sticky_title));
+            m_show_sticky_popup = false;
+            ImGui::CloseCurrentPopup();
         }
+        if(cancel_clicked)
+        {
+            m_show_sticky_popup = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
     }
+
+    ImGui::PopStyleColor(2);  // PopupBg, Border
+    ImGui::PopStyleVar(2);    // WindowPadding, ItemSpacing
+}
+
+void
+AnnotationsView::OpenStickyNotePopup(double time_ns, float y_offset)
+{
+    m_sticky_time_ns    = time_ns;
+    m_sticky_y_offset   = y_offset;
+    m_sticky_title[0]   = '\0';
+    m_sticky_text[0]    = '\0';
+    m_show_sticky_popup = true;
 }
 
 std::vector<StickyNote>&

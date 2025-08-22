@@ -1,34 +1,108 @@
 #include "imgui.h"
 #include "rocprofvis_stickynote.h"
-
+#include "rocprofvis_settings.h"
 namespace RocProfVis
 {
 namespace View
 {
 
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
-                       const std::string& text)
+                       const std::string& text, const std::string& title)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
 , m_size(size)
 , m_text(text)
+, m_title(title)
 {}
 
 void
 StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
                    double pixels_per_ns)
 {
+    Settings& settings     = Settings::GetInstance();
+    ImU32     bg_color     = settings.GetColor(Colors::kFillerColor);
+    ImU32     border_color = settings.GetColor(Colors::kBorderColor);
+    ImU32     text_color   = settings.GetColor(Colors::kRulerTextColor);
+    ImU32     shadow_color = IM_COL32(0, 0, 0, 60);
+
+    const float rounding      = 8.0f;
+    const float border_thick  = 2.0f;
+    const float shadow_offset = 4.0f;
+    const float margin        = 12.0f;
+    const float header_height = 28.0f;
+    const float edit_btn_size = 20.0f;
+
     float  x          = static_cast<float>((m_time_ns - v_min_x) * pixels_per_ns);
     float  y          = m_y_offset;
     ImVec2 sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);
 
-    draw_list->AddRectFilled(sticky_pos, sticky_max, IM_COL32(255, 255, 150, 220), 6.0f);
-    draw_list->AddRect(sticky_pos, sticky_max, IM_COL32(200, 200, 80, 255), 6.0f, 0,
-                       2.0f);
-    ImVec2 text_pos = ImVec2(sticky_pos.x + 8, sticky_pos.y + 8);
-    draw_list->AddText(text_pos, IM_COL32(60, 60, 60, 255), m_text.c_str());
+    // Drop Shadow
+    draw_list->AddRectFilled(
+        ImVec2(sticky_pos.x + shadow_offset, sticky_pos.y + shadow_offset),
+        ImVec2(sticky_max.x + shadow_offset, sticky_max.y + shadow_offset), shadow_color,
+        rounding);
+
+    // Main Box
+    draw_list->AddRectFilled(sticky_pos, sticky_max, bg_color, rounding);
+
+    // Border
+    draw_list->AddRect(sticky_pos, sticky_max, border_color, rounding, 0, border_thick);
+
+    // Header/Accent Bar
+    ImU32 accent_color = settings.GetColor(Colors::kHighlightChart);
+    draw_list->AddRectFilled(ImVec2(sticky_pos.x, sticky_pos.y),
+                             ImVec2(sticky_max.x, sticky_pos.y + header_height),
+                             accent_color, rounding, ImDrawFlags_RoundCornersTop);
+
+    // Title (top left, clipped if too long)
+    float title_padding_x = margin;
+    float title_padding_y = 4.0f;
+    float title_max_width =
+        m_size.x - 2 * margin - edit_btn_size - margin;  // leave space for edit button
+
+    ImVec2 title_pos =
+        ImVec2(sticky_pos.x + title_padding_x, sticky_pos.y + title_padding_y);
+    ImVec4 title_clip = ImVec4(title_pos.x, title_pos.y, title_pos.x + title_max_width,
+                               title_pos.y + header_height - title_padding_y);
+
+    draw_list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), title_pos, text_color,
+                       m_title.c_str(), nullptr, title_max_width, &title_clip);
+
+    // Edit Button (top right)
+    ImVec2 edit_btn_pos = ImVec2(sticky_max.x - edit_btn_size - margin / 2,
+                                 sticky_pos.y + (header_height - edit_btn_size) / 2);
+    ImVec2 edit_btn_max =
+        ImVec2(edit_btn_pos.x + edit_btn_size, edit_btn_pos.y + edit_btn_size);
+
+    draw_list->AddRectFilled(edit_btn_pos, edit_btn_max, IM_COL32(220, 220, 220, 255),
+                             6.0f);
+    draw_list->AddLine(ImVec2(edit_btn_pos.x + 5, edit_btn_pos.y + 15),
+                       ImVec2(edit_btn_pos.x + 15, edit_btn_pos.y + 5),
+                       IM_COL32(80, 80, 80, 255), 2.0f);
+
+    ImGui::SetCursorScreenPos(edit_btn_pos);
+    if(ImGui::InvisibleButton(
+           ("EditSticky##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
+           ImVec2(edit_btn_size, edit_btn_size)))
+    {
+        // Handle edit action
+    }
+
+    // Text Area
+    float text_area_x = sticky_pos.x + margin;
+    float text_area_y = sticky_pos.y + header_height + margin;
+    float text_area_w = m_size.x - 2 * margin;
+    float text_area_h = m_size.y - header_height - 2 * margin;
+
+    ImVec2 text_pos = ImVec2(text_area_x, text_area_y);
+
+    draw_list->AddText(ImGui::GetFont(), ImGui::GetFontSize(), text_pos, text_color,
+                       m_text.c_str(), nullptr, text_area_w,
+                       &ImVec4(text_area_x, text_area_y, text_area_x + text_area_w,
+                               text_area_y + text_area_h));
 }
+
 bool
 StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
                        double pixels_per_ns)

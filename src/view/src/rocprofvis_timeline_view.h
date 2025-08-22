@@ -67,7 +67,7 @@ public:
     ViewCoords                       GetViewCoords() const;
     void                             SetViewCoords(const ViewCoords& coords);
     void                             RenderArrowOptionsMenu();
-    void                             RenderTimelineOptionsMenu(ImVec2 window_position);
+    void ShowTimelineContextMenu(const ImVec2& window_position);
     void RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position);
 
 private:

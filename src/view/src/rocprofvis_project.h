@@ -138,6 +138,7 @@ constexpr char* JSON_KEY_TIMELINE_BOOKMARK_Z   = "z";
 constexpr char* JSON_KEY_TIMELINE_TRACK                 = "tracks";
 constexpr char* JSON_KEY_TIMELINE_TRACK_ORDER           = "order";
 constexpr char* JSON_KEY_TIMELINE_TRACK_DISPLAY         = "display";
+constexpr char* JSON_KEY_TIMELINE_TRACK_HEIGHT          = "height";
 constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR           = "color";
 constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN = "color_min";
 constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX = "color_max";

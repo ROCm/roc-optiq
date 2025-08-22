@@ -29,16 +29,15 @@ namespace DataModel
 
 rocprofvis_dm_result_t RocpdDatabase::FindTrackId(
                                                     uint64_t node,
-                                                    uint32_t process,
-                                                    uint32_t subprocess,
-                                                    const char* proc_name,
+                                                    uint32_t process, 
+                                                    const char* subprocess,
                                                     rocprofvis_dm_op_t operation,    
                                                     rocprofvis_dm_track_id_t& track_id) {
     if (operation > 0)
     {
         auto it1 = find_track_map.find(process);
         if (it1!=find_track_map.end()){
-            auto it2 = it1->second.find(subprocess);
+            auto it2 = it1->second.find(std::atol(subprocess));
             if (it2!=it1->second.end()){
                 track_id = it2->second;
                 return kRocProfVisDmResultSuccess;
@@ -49,7 +48,7 @@ rocprofvis_dm_result_t RocpdDatabase::FindTrackId(
     {
         auto it1 = find_track_pmc_map.find(process);
         if (it1!=find_track_pmc_map.end()){
-            auto it2 = it1->second.find(proc_name);
+            auto it2 = it1->second.find(subprocess);
             if (it2!=it1->second.end()){
                 track_id = it2->second;
                 return kRocProfVisDmResultSuccess;

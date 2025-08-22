@@ -100,8 +100,7 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
     {
         if (db->FindTrackId((uint64_t)sqlite3_column_int64(stmt, 6),
             sqlite3_column_int(stmt, 7),
-            (record.event.id.bitfield.event_op != kRocProfVisDmOperationNoOp ? sqlite3_column_int(stmt, 8) : 0), 
-            (record.event.id.bitfield.event_op == kRocProfVisDmOperationNoOp ? (const char*)sqlite3_column_text(stmt, 8) : ""),
+            (const char*)sqlite3_column_text(stmt, 8),
             record.event.id.bitfield.event_op,
             callback_params->track_id) != kRocProfVisDmResultSuccess)
         {
@@ -146,8 +145,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
     record.id.bitfield.event_op = sqlite3_column_int(stmt,0 );
     if (db->FindTrackId((uint64_t)sqlite3_column_int64(stmt,3), 
                         (uint32_t)sqlite3_column_int(stmt,4), 
-                        (uint32_t)sqlite3_column_int(stmt,5),
-                        "",
+                        (const char*)sqlite3_column_text(stmt,5),
                         record.id.bitfield.event_op, record.track_id) == kRocProfVisDmResultSuccess) {
         record.id.bitfield.event_id = sqlite3_column_int64(stmt, 2 );
         record.time = sqlite3_column_int64(stmt, 6 );

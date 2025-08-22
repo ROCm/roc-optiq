@@ -1,8 +1,9 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "widgets/rocprofvis_widget.h"
+#include "rocprofvis_project.h"
 #include "rocprofvis_timeline_view.h"
+#include "widgets/rocprofvis_widget.h"
 
 #include <unordered_map>
 
@@ -17,9 +18,26 @@ class AnalysisView;
 class TimelineSelection;
 class TrackTopology;
 class MessageDialog;
+class TraceView;
+
+class SystemTraceProjectSettings : public ProjectSetting
+{
+public:
+    SystemTraceProjectSettings(const std::string& project_id, TraceView& view);
+    ~SystemTraceProjectSettings() override;
+    void ToJson() override;
+    bool Valid() const override;
+
+    std::unordered_map<int, ViewCoords> Bookmarks();
+
+private:
+    TraceView& m_view;
+};
 
 class TraceView : public RocWidget
 {
+    friend SystemTraceProjectSettings;
+
 public:
     TraceView();
     ~TraceView();
@@ -67,6 +85,8 @@ private:
     EventManager::SubscriptionToken       m_event_selection_changed_event_token;
 
     std::string m_save_notification_id;
+
+    std::unique_ptr<SystemTraceProjectSettings> m_project_settings;
 };
 
 }  // namespace View

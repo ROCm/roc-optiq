@@ -1,9 +1,9 @@
 #include "rocprofvis_track_item.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_utils.h"
-#include "icons/rocprovfis_icon_defines.h"
-#include "widgets/rocprofvis_gui_helpers.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 namespace RocProfVis
 {
@@ -39,7 +39,13 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_group_id_counter(0)
 , m_chunk_duration_ns(TimeConstants::nanoseconds_per_second *
                       30)  // Default chunk duration
-{}
+, m_project_settings(m_data_provider.GetTraceFilePath(), *this)
+{
+    if(m_project_settings.Valid())
+    {
+        m_track_height = m_project_settings.Height();
+    }
+}
 
 bool
 TrackItem::GetResizeStatus()
@@ -472,6 +478,39 @@ bool
 TrackItem::HasPendingRequests() const
 {
     return !m_pending_requests.empty();
+}
+
+TrackProjectSettings::TrackProjectSettings(const std::string& project_id,
+                                           TrackItem&         track_item)
+: ProjectSetting(project_id)
+, m_track_item(track_item)
+{}
+
+TrackProjectSettings::~TrackProjectSettings() {}
+
+void
+TrackProjectSettings::ToJson()
+{
+    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                   [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT] =
+                       m_track_item.GetTrackHeight();
+}
+
+bool
+TrackProjectSettings::Valid() const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT]
+                              .isNumber();
+}
+
+float
+TrackProjectSettings::Height() const
+{
+    return static_cast<float>(
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT]
+                           .getNumber());
 }
 
 }  // namespace View

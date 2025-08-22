@@ -7,25 +7,29 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_project.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
-#include "widgets/rocprofvis_debug_window.h"
-#include "widgets/rocprofvis_dialog.h"
-#include "widgets/rocprofvis_notification_manager.h"
-
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
 #endif
+#include "widgets/rocprofvis_debug_window.h"
+#include "widgets/rocprofvis_dialog.h"
+#include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
-constexpr ImVec2 FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
-constexpr char*  FILE_DIALOG_NAME       = "ChooseFileDlgKey";
-constexpr char*  FILE_SAVE_DIALOG_NAME  = "SaveFileDlgKey";
-constexpr char*  TAB_CONTAINER_SRC_NAME = "MainTabContainer";
-constexpr char*  ABOUT_DIALOG_NAME      = "About##_dialog";
+constexpr ImVec2 FILE_DIALOG_SIZE         = ImVec2(480.0f, 360.0f);
+constexpr char*  FILE_DIALOG_NAME         = "ChooseFileDlgKey";
+constexpr char*  FILE_SAVE_DIALOG_NAME    = "SaveFileDlgKey";
+constexpr char*  PROJECT_SAVE_DIALOG_NAME = "SaveProjectDlgKey";
+constexpr char*  TAB_CONTAINER_SRC_NAME   = "MainTabContainer";
+constexpr char*  ABOUT_DIALOG_NAME        = "About##_dialog";
 
 // For testing DataProvider
 void
@@ -68,14 +72,14 @@ AppWindow::AppWindow()
 , m_show_metrics(false)
 #endif
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
+, m_message_dialog(std::make_unique<MessageDialog>())
 {}
 
 AppWindow::~AppWindow()
 {
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
                                              m_tabclosed_event_token);
-
-    m_open_views.clear();
+    m_projects.clear();
 #ifdef COMPUTE_UI_SUPPORT
     NavigationManager::DestroyInstance();
 #endif
@@ -132,6 +136,48 @@ AppWindow::GetMainTabSourceName() const
 }
 
 void
+AppWindow::SetTabLabel(const std::string& label, const std::string& id)
+{
+    m_tab_container->SetTabLabel(label, id);
+}
+
+void
+AppWindow::ShowConfirmationDialog(const std::string& title, const std::string& message,
+                                  std::function<void()> on_confirm_callback) const
+{
+    m_confirmation_dialog->Show(title, message, on_confirm_callback);
+}
+
+void
+AppWindow::ShowMessageDialog(const std::string& title, const std::string& message) const
+{
+    m_message_dialog->Show(title, message);
+}
+
+Project*
+AppWindow::GetProject(const std::string& id)
+{
+    Project* project = nullptr;
+    if(m_projects.count(id) > 0)
+    {
+        project = m_projects[id].get();
+    }
+    return project;
+}
+
+Project*
+AppWindow::GetCurrentProject()
+{
+    Project*       project    = nullptr;
+    const TabItem* active_tab = m_tab_container->GetActiveTab();
+    if(active_tab)
+    {
+        project = GetProject(active_tab->m_id);
+    }
+    return project;
+}
+
+void
 AppWindow::Update()
 {
     EventManager::GetInstance()->DispatchEvents();
@@ -140,25 +186,6 @@ AppWindow::Update()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
-}
-
-bool
-AppWindow::IsTrimSaveAllowed()
-{
-    // Check if save is allowed
-    bool save_allowed = false;
-    auto active_tab   = m_tab_container->GetActiveTab();
-    if(active_tab)
-    {
-        // Check if the active tab is a TraceView
-        auto trace_view = std::dynamic_pointer_cast<TraceView>(active_tab->m_widget);
-        if(trace_view)
-        {
-            // Check if the trace view has a selection that can be saved
-            save_allowed = trace_view->IsTrimSaveAllowed();
-        }
-    }
-    return save_allowed;
 }
 
 void
@@ -188,38 +215,9 @@ AppWindow::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
     if(ImGui::BeginMenuBar())
     {
-        if(ImGui::BeginMenu("File"))
-        {
-            if(ImGui::MenuItem("Open", "CTRL+O"))
-            {
-                IGFD::FileDialogConfig config;
-                config.path                      = ".";
-                std::string supported_extensions = ".db,.rpd";
-#ifdef JSON_SUPPORT
-                supported_extensions += ",.json";
-#endif
-#ifdef COMPUTE_UI_SUPPORT
-                supported_extensions += ",.csv";
-#endif
-                ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, "Choose File",
-                                                        supported_extensions.c_str(),
-                                                        config);
-            }
-            if(ImGui::MenuItem("Save Selection", nullptr, false, IsTrimSaveAllowed()))
-            {
-                // Save the currently selected tab's content
-                auto active_tab = m_tab_container->GetActiveTab();
-                if(active_tab)
-                {
-                    // Open the save dialog
-                    ImGuiFileDialog::Instance()->OpenDialog(FILE_SAVE_DIALOG_NAME,
-                                                            "Save Selection", ".db,.rpd");
-                }
-            }
-            ImGui::EndMenu();
-        }
-
-        RenderSettingsMenu();
+        Project* project = GetCurrentProject();
+        RenderFileMenu(project);
+        RenderEditMenu(project);
         RenderHelpMenu();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         RenderDeveloperMenu();
@@ -240,6 +238,7 @@ AppWindow::Render()
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
     m_confirmation_dialog->Render();
+    m_message_dialog->Render();
 
     if(m_settings_panel->IsOpen())
     {
@@ -264,7 +263,8 @@ void
 AppWindow::RenderFileDialogs()
 {
     if(!ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME) &&
-       !ImGuiFileDialog::Instance()->IsOpened(FILE_SAVE_DIALOG_NAME))
+       !ImGuiFileDialog::Instance()->IsOpened(FILE_SAVE_DIALOG_NAME) &&
+       !ImGuiFileDialog::Instance()->IsOpened(PROJECT_SAVE_DIALOG_NAME))
     {
         return;  // No file dialog is opened, nothing to render
     }
@@ -290,52 +290,34 @@ AppWindow::RenderFileDialogs()
 
             std::string file_path_str = file_path.string();
 
-            // Check if the file is already opened using our m_open_views map
-            auto it = m_open_views.find(file_path_str);
-            if(it != m_open_views.end())
+            spdlog::info("Opening file: {}", file_path_str);
+
+            std::unique_ptr<Project> project = std::make_unique<Project>();
+            switch(project->Open(file_path_str))
             {
-                // File is already opened, just switch to that tab
-                m_tab_container->SetActiveTab(it->second.m_id);
-            }
-            else
-            {
-                TabItem tab_item;
-                tab_item.m_label     = file_path.filename().string();
-                tab_item.m_id        = file_path_str;
-                tab_item.m_can_close = true;
-#ifdef COMPUTE_UI_SUPPORT
-                // Determine the type of view to create based on the file extension
-                if(file_path.extension().string() == ".csv")
+                case Project::OpenResult::Success:
                 {
-                    auto compute_view = std::make_shared<ComputeRoot>();
-                    compute_view->OpenTrace(file_path.parent_path().string());
-                    tab_item.m_widget = compute_view;
-                    spdlog::info("Opening file: {}", file_path.string());
-                    m_tab_container->AddTab(tab_item);
-                    m_open_views[file_path_str] = tab_item;
-                    NavigationManager::GetInstance()->RefreshNavigationTree();
+                    m_tab_container->AddTab(TabItem{ project->GetName(), project->GetID(),
+                                                     project->GetView(), true });
+                    m_projects[project->GetID()] = std::move(project);
+                    break;
                 }
-                else
-#endif
+                case Project::OpenResult::Duplicate:
                 {
-                    auto trace_view = std::make_shared<TraceView>();
-                    trace_view->OpenFile(file_path.string());
-                    tab_item.m_widget = trace_view;
-                    spdlog::info("Opening file: {}", file_path.string());
-                    m_tab_container->AddTab(tab_item);
-                    m_open_views[file_path_str] = tab_item;
+                    // File is already opened, just switch to that tab
+                    m_tab_container->SetActiveTab(file_path_str);
+                    break;
+                }
+                default:
+                {
+                    break;
                 }
             }
         }
         ImGuiFileDialog::Instance()->Close();
     }
-
-    // Handle file save dialog
-    ImGui::SetNextWindowPos(
-        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
-        ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
-    if(ImGuiFileDialog::Instance()->Display(FILE_SAVE_DIALOG_NAME))
+    Project* project = GetCurrentProject();
+    if(ImGuiFileDialog::Instance()->Display(FILE_SAVE_DIALOG_NAME) && project)
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {
@@ -343,7 +325,19 @@ AppWindow::RenderFileDialogs()
                 ImGuiFileDialog::Instance()->GetFilePathName());
 
             std::string file_path_str = file_path.string();
-            HandleSaveSelection(file_path_str);
+            project->TrimSave(file_path_str);
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+    if(ImGuiFileDialog::Instance()->Display(PROJECT_SAVE_DIALOG_NAME) && project)
+    {
+        if(ImGuiFileDialog::Instance()->IsOk())
+        {
+            std::filesystem::path file_path(
+                ImGuiFileDialog::Instance()->GetFilePathName());
+
+            std::string file_path_str = file_path.string();
+            project->SaveAs(file_path_str);
         }
         ImGuiFileDialog::Instance()->Close();
     }
@@ -352,11 +346,50 @@ AppWindow::RenderFileDialogs()
 }
 
 void
-AppWindow::RenderSettingsMenu()
+AppWindow::RenderFileMenu(Project* project)
 {
-    if(ImGui::BeginMenu("Settings"))
+    if(ImGui::BeginMenu("File"))
     {
-        if(ImGui::MenuItem("Display Settings"))
+        if(ImGui::MenuItem("Open", nullptr))
+        {
+            IGFD::FileDialogConfig config;
+            config.path                      = ".";
+            std::string supported_extensions = ".rpv,.db,.rpd,";
+#ifdef JSON_SUPPORT
+            supported_extensions += ",.json";
+#endif
+#ifdef COMPUTE_UI_SUPPORT
+            supported_extensions += ",.csv";
+#endif
+            ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, "Choose File",
+                                                    supported_extensions.c_str(), config);
+        }
+        if(ImGui::MenuItem("Save", nullptr, false, project && project->IsProject()))
+        {
+            project->Save();
+        }
+        if(ImGui::MenuItem("Save As", nullptr, false, project))
+        {
+            ImGuiFileDialog::Instance()->OpenDialog(PROJECT_SAVE_DIALOG_NAME,
+                                                    "Save as Project", ".rpv");
+        }
+        ImGui::EndMenu();
+    }
+}
+
+void
+AppWindow::RenderEditMenu(Project* project)
+{
+    if(ImGui::BeginMenu("Edit"))
+    {
+        if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
+                           project && project->IsTrimSaveAllowed()))
+        {
+            ImGuiFileDialog::Instance()->OpenDialog(FILE_SAVE_DIALOG_NAME,
+                                                    "Save Trace Selection", ".db,.rpd");
+        }
+        ImGui::Separator();
+        if(ImGui::MenuItem("Preferences"))
         {
             m_settings_panel->SetOpen(true);
         }
@@ -381,59 +414,10 @@ void
 AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 {
     auto tab_closed_event = std::dynamic_pointer_cast<TabEvent>(e);
-    if(tab_closed_event)
+    if(tab_closed_event && m_projects.count(tab_closed_event->GetTabId()) > 0)
     {
-        auto it = m_open_views.find(tab_closed_event->GetTabId());
-        if(it != m_open_views.end())
-        {
-            m_open_views.erase(it);
-        }
-    }
-#ifdef COMPUTE_UI_SUPPORT
-    NavigationManager::GetInstance()->RefreshNavigationTree();
-#endif
-}
-
-void
-AppWindow::HandleSaveSelection(const std::string& file_path_str)
-{
-    // Check if file already exists
-    std::error_code ec;
-    if(std::filesystem::exists(file_path_str, ec))
-    {
-        // Show confirmation dialog
-        m_confirmation_dialog->Show(
-            "Confirm Save", "File already exists. Do you want to overwrite it?",
-            [this, file_path_str]() { SaveSelection(file_path_str); });
-        return;
-    }
-    else
-    {
-        SaveSelection(file_path_str);
-    }
-}
-
-void
-AppWindow::SaveSelection(const std::string& file_path_str)
-{
-    // Get the active tab
-    auto active_tab = m_tab_container->GetActiveTab();
-    if(active_tab)
-    {
-        // Check if active tab is a trace view
-        auto trace_view = std::dynamic_pointer_cast<TraceView>(active_tab->m_widget);
-        if(trace_view)
-        {
-            trace_view->SaveSelection(file_path_str);
-        }
-        else
-        {
-            spdlog::warn("Active tab is not a Trace View, cannot save selection.");
-        }
-    }
-    else
-    {
-        spdlog::warn("No active tab to save selection from.");
+        m_projects[tab_closed_event->GetTabId()]->Close();
+        m_projects.erase(tab_closed_event->GetTabId());
     }
 }
 
@@ -663,3 +647,6 @@ AppWindow::RenderDebugOuput()
     }
 }
 #endif  // ROCPROFVIS_DEVELOPER_MODE
+
+}  // namespace View
+}  // namespace RocProfVis

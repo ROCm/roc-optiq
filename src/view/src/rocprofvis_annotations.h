@@ -1,7 +1,6 @@
 #pragma once
-
-#include <cstdint>
-#include <string>
+#include "imgui.h"
+#include "rocprofvis_stickynote.h"
 #include <vector>
 
 namespace RocProfVis
@@ -9,31 +8,22 @@ namespace RocProfVis
 namespace View
 {
 
-class Annotations
+class AnnotationsView
 {
 public:
-    Annotations();
-    ~Annotations();
+    AnnotationsView();
+    ~AnnotationsView();
 
-    // Example: Add an annotation
-    void AddAnnotation(uint64_t track_id, const std::string& text, double timestamp);
+    void AddSticky(double time_ns, float y_offset, const ImVec2& size,
+                   const std::string& text);
+    bool Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
+                double pixels_per_ns);
 
-    // Example: Get all annotations for a track
-    std::vector<std::string> GetAnnotations(uint64_t track_id) const;
-
-    // Example: Remove an annotation
-    bool RemoveAnnotation(uint64_t track_id, double timestamp);
+    std::vector<StickyNote>& GetStickyNotes();
 
 private:
-    // Internal storage for annotations (replace with your actual data structure)
-    struct Annotation
-    {
-        uint64_t    track_id;
-        std::string text;
-        double      timestamp;
-    };
+    std::vector<StickyNote> m_sticky_notes;
 
-    std::vector<Annotation> m_annotations;
 };
 
 }  // namespace View

@@ -5,48 +5,106 @@ namespace RocProfVis
 namespace View
 {
 
-Annotations::Annotations()
-{
-    // Constructor implementation
-}
-
-Annotations::~Annotations()
-{
-    // Destructor implementation
-}
+AnnotationsView::AnnotationsView() {}
+AnnotationsView::~AnnotationsView() {}
 
 void
-Annotations::AddAnnotation(uint64_t track_id, const std::string& text, double timestamp)
+AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
+                           const std::string& text)
 {
-    m_annotations.push_back({ track_id, text, timestamp });
-}
-
-std::vector<std::string>
-Annotations::GetAnnotations(uint64_t track_id) const
-{
-    std::vector<std::string> result;
-    for(const auto& annotation : m_annotations)
-    {
-        if(annotation.track_id == track_id)
-        {
-            result.push_back(annotation.text);
-        }
-    }
-    return result;
+    m_sticky_notes.emplace_back(time_ns, y_offset, size, text);
 }
 
 bool
-Annotations::RemoveAnnotation(uint64_t track_id, double timestamp)
+AnnotationsView::Render(ImDrawList* draw_list, const ImVec2& window_position,
+                        double v_min_x, double pixels_per_ns)
 {
-    for(auto it = m_annotations.begin(); it != m_annotations.end(); ++it)
+    bool movement_drag   = false;
+    bool movement_resize = false;
+
+    for(auto& note : m_sticky_notes)
     {
-        if(it->track_id == track_id && it->timestamp == timestamp)
+       
+        movement_drag |= note.HandleDrag(window_position, v_min_x, pixels_per_ns);
+         movement_resize |= note.HandleResize(window_position, v_min_x, pixels_per_ns);
+
+        note.Render(draw_list, window_position, v_min_x, pixels_per_ns);
+    }
+    return movement_drag || movement_resize;
+}
+void
+AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
+                                    const ImVec2& graph_size, double v_min_x,
+                                    double v_max_x)
+{
+    ImVec2 mouse_pos = ImGui::GetMousePos();
+    ImVec2 rel_mouse_pos =
+        ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
+
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
+       ImGui::IsMouseHoveringRect(
+           window_position,
+           ImVec2(window_position.x + graph_size.x, window_position.y + graph_size.y)))
+    {
+        ImGui::OpenPopup("StickyNoteContextMenu");
+    }
+
+    if(ImGui::BeginPopup("StickyNoteContextMenu"))
+    {
+        if(ImGui::MenuItem("Add Sticky"))
         {
-            m_annotations.erase(it);
-            return true;
+            float x_in_chart = rel_mouse_pos.x;
+            m_sticky_time_ns =
+                v_min_x + (x_in_chart / graph_size.x) * (v_max_x - v_min_x);
+            m_sticky_y_offset   = rel_mouse_pos.y;
+            m_sticky_title[0]   = '\0';
+            m_sticky_text[0]    = '\0';
+            m_show_sticky_popup = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void
+AnnotationsView::ShowStickyNotePopup()
+{
+    if(m_show_sticky_popup)
+    {
+        ImGui::OpenPopup("StickyNoteInputPopup");
+        if(ImGui::BeginPopupModal("StickyNoteInputPopup", nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("Sticky Note");
+            ImGui::InputText("Title", m_sticky_title, IM_ARRAYSIZE(m_sticky_title));
+            ImGui::InputTextMultiline("Text", m_sticky_text, IM_ARRAYSIZE(m_sticky_text),
+                                      ImVec2(250, 80));
+            ImGui::Spacing();
+            if(ImGui::Button("Save"))
+            {
+                std::string content = std::string(m_sticky_title);
+                if(strlen(m_sticky_title) > 0 && strlen(m_sticky_text) > 0)
+                    content += "\n";
+                content += m_sticky_text;
+                AddSticky(m_sticky_time_ns, m_sticky_y_offset, ImVec2(180, 80), content);
+                m_show_sticky_popup = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if(ImGui::Button("Cancel"))
+            {
+                m_show_sticky_popup = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
         }
     }
-    return false;
+}
+
+std::vector<StickyNote>&
+AnnotationsView::GetStickyNotes()
+{
+    return m_sticky_notes;
 }
 
 }  // namespace View

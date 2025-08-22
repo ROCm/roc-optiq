@@ -2,6 +2,7 @@
 
 #include "rocprofvis_timeline_view.h"
 #include "imgui.h"
+#include "rocprofvis_annotations.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_track_item.h"
@@ -18,7 +19,6 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-
 namespace RocProfVis
 {
 namespace View
@@ -72,7 +72,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_track_height_total({})
 , m_arrow_layer(m_data_provider, timeline_selection)
 , m_timeline_selection(timeline_selection)
-{
+ {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
     };
@@ -137,6 +137,10 @@ TimelineView::RenderArrowOptionsMenu()
     }
 }
 void
+TimelineView::TimelineOptions()
+{}
+
+void
 TimelineView::RenderArrows(ImVec2 screen_pos)
 {
     float total_height = m_graph_size.y;
@@ -176,7 +180,23 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
+    RenderStickyNotes(draw_list, window_position);
     ImGui::EndChild();
+}
+
+void 
+TimelineView::RenderTimelineOptionsMenu(ImVec2 window_position) {
+     
+}
+
+void
+TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
+{
+    m_annotations_view.ShowStickyNoteMenu(window_position, m_graph_size, m_v_min_x,
+                                          m_v_max_x);
+    m_annotations_view.ShowStickyNotePopup();
+    m_resize_activity =
+        m_annotations_view.Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns);
 }
 
 void
@@ -1043,18 +1063,19 @@ TimelineView::RenderGraphView()
                            ImVec2(track_item.chart->GetReorderGripWidth(), 0), false,
                            window_flags | ImGuiWindowFlags_NoScrollbar))
                     {
-
                         // Check if the resize grip area is hovered to change the cursor
-                        ImVec2 cursor_pos = ImGui::GetCursorPos();
+                        ImVec2 cursor_pos             = ImGui::GetCursorPos();
                         ImVec2 invisible_hotspot_size = ImGui::GetContentRegionAvail();
-                        ImVec2 invisible_hotspot_pos = cursor_pos;
+                        ImVec2 invisible_hotspot_pos  = cursor_pos;
                         ImGui::SetCursorPos(invisible_hotspot_pos);
-                        ImGui::InvisibleButton("##InvisibleHotspot", invisible_hotspot_size, ImGuiButtonFlags_None);
-                        if (ImGui::IsItemHovered())
+                        ImGui::InvisibleButton("##InvisibleHotspot",
+                                               invisible_hotspot_size,
+                                               ImGuiButtonFlags_None);
+                        if(ImGui::IsItemHovered())
                         {
                             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
                         }
-                        ImGui::SetCursorPos(cursor_pos); // Reset cursor position
+                        ImGui::SetCursorPos(cursor_pos);  // Reset cursor position
 
                         if(ImGui::BeginDragDropSource(
                                ImGuiDragDropFlags_SourceNoPreviewTooltip))
@@ -1112,7 +1133,7 @@ TimelineView::RenderGraphView()
                 ImGui::SetNextWindowPos(
                     ImVec2(graph_view_pos.x, mouse_pos.y - ImGui::GetFrameHeight() / 2),
                     ImGuiCond_Always);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0, 0));  
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
                 if(ImGui::Begin("##ReorderPreview", nullptr,
                                 ImGuiWindowFlags_Tooltip | ImGuiWindowFlags_NoInputs |
                                     ImGuiWindowFlags_NoNav |

@@ -12,6 +12,7 @@
 - Fixed issue where some tracks would not initially load.
 - Fixed hidden (internal) columns appearing group-by combo box.
 - Fixed table aggregation not working for .rpd files.
+- Fixed flow arrow direction flag not being used.
 
 ## 0.1.3
 

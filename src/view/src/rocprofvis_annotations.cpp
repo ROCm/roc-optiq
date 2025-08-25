@@ -1,18 +1,45 @@
 #include "rocprofvis_annotations.h"
+#include "rocprofvis_events.h"
 #include "rocprofvis_settings.h"
+#include <random>
+#include <sstream>
+
 namespace RocProfVis
 {
 namespace View
 {
+int
+GetUniqueId()
+{
+    static std::mt19937_64                    rng{ std::random_device{}() };
+    static std::uniform_int_distribution<int> dist;
+    return dist(rng);
+}
 
-AnnotationsView::AnnotationsView() {}
+AnnotationsView::AnnotationsView()
+{
+    auto sticky_note_handler = [this](std::shared_ptr<RocEvent> e) {
+        m_show_sticky_edit_popup = true;
+        auto evt                 = std::dynamic_pointer_cast<StickyNoteEvent>(e);
+        if(evt)
+        {
+            m_edit_sticky_index = evt->GetID();
+            strncpy(m_sticky_text, evt->GetText().c_str(), sizeof(m_sticky_text) - 1);
+            m_sticky_text[sizeof(m_sticky_text) - 1] = '\0';
+            strncpy(m_sticky_title, evt->GetTitle().c_str(), sizeof(m_sticky_title) - 1);
+            m_sticky_title[sizeof(m_sticky_title) - 1] = '\0';
+        }
+    };
+    m_edit_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kStickyNoteEdited), sticky_note_handler);
+}
 AnnotationsView::~AnnotationsView() {}
 
 void
 AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
                            const std::string& text, const std::string& title)
 {
-    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title);
+    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, GetUniqueId());
 }
 
 bool
@@ -64,6 +91,144 @@ AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
         ImGui::EndPopup();
     }
 }
+
+void
+WordBreakWrap(char* buffer, int buf_size, ImVec2 box_size)
+{
+    // Get font size from ImGui context
+    ImFont* font = ImGui::GetFont();
+    // Estimate average character width (proportional fonts: ~0.55 * font_size)
+    float avg_char_width  = font->GetCharAdvance('a');
+    int   max_line_length = static_cast<int>(box_size.x / avg_char_width);
+
+    int line_len = 0;
+    for(int i = 0; buffer[i] != '\0' && i < buf_size; ++i)
+    {
+        if(buffer[i] == '\n')
+        {
+            line_len = 0;
+        }
+        else
+        {
+            ++line_len;
+            if(line_len >= max_line_length)
+            {
+                // Only break if not at whitespace
+                if(buffer[i] != ' ' && buffer[i] != '\n')
+                {
+                    if(i + 1 < buf_size - 1)
+                    {
+                        memmove(buffer + i + 1, buffer + i, strlen(buffer + i) + 1);
+                        buffer[i] = '\n';
+                        line_len  = 0;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void
+AnnotationsView::ShowStickyNoteEditPopup()
+{
+    using namespace RocProfVis::View;
+
+    if(!m_show_sticky_edit_popup || m_edit_sticky_index < 0) return;
+
+    Settings& settings     = Settings::GetInstance();
+    ImU32     popup_bg     = settings.GetColor(Colors::kFillerColor);
+    ImU32     border_color = settings.GetColor(Colors::kBorderColor);
+    ImU32     text_color   = settings.GetColor(Colors::kRulerTextColor);
+    ImU32     button_color = settings.GetColor(Colors::kHighlightChart);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+
+    ImGui::OpenPopup("EditStickyNote");
+    if(ImGui::BeginPopupModal("EditStickyNote", nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+
+        ImGui::Text("Edit Sticky Note");
+        ImGui::Separator();
+        ImGui::Dummy(ImVec2(0, 8));
+
+        ImGui::Text("Title:");
+        ImGui::InputText("##StickyTitle", m_sticky_title, IM_ARRAYSIZE(m_sticky_title),
+                         ImGuiInputTextFlags_AutoSelectAll);
+        ImGui::Dummy(ImVec2(0, 4));
+
+        ImGui::Text("Text:");
+        WordBreakWrap(m_sticky_text, IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100));
+        ImGui::InputTextMultiline(
+            "##StickyText", m_sticky_text, IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100),
+            ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_NoHorizontalScroll);
+
+        ImGui::PopStyleColor();
+
+        ImGui::Dummy(ImVec2(0, 12));
+
+        ImGui::PushStyleColor(ImGuiCol_Button, button_color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                              settings.GetColor(Colors::kHighlightChart));
+
+        bool save_clicked = ImGui::Button("Save", ImVec2(100, 0));
+        ImGui::SameLine();
+        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(100, 0));
+        bool delete_clicked = ImGui::Button("delete", ImVec2(100, 0));
+        ImGui::PopStyleColor(3);
+
+        if(save_clicked)
+        {
+            for(auto& note : m_sticky_notes)
+            {
+                if(note.GetID() == m_edit_sticky_index)
+                {
+                    note.SetText(std::string(m_sticky_text));
+                    note.SetTitle(std::string(m_sticky_title));
+                    m_edit_sticky_index      = -1;
+                    m_show_sticky_edit_popup = false;
+                    ImGui::CloseCurrentPopup();
+                    break;
+                }
+            }
+        }
+        if(cancel_clicked)
+        {
+            m_show_sticky_edit_popup = false;
+            m_edit_sticky_index      = -1;
+            ImGui::CloseCurrentPopup();
+        }
+        if(delete_clicked)
+        {
+            int count = 0;
+            for(auto& note : m_sticky_notes)
+            {
+                if(note.GetID() == m_edit_sticky_index)
+                {
+                    m_sticky_notes.erase(m_sticky_notes.begin() + count);
+
+                    break;
+                }
+                count++;
+            }
+            m_show_sticky_edit_popup = false;
+            m_edit_sticky_index      = -1;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();  // <-- Always call EndPopup if BeginPopupModal returns true
+    }
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+}
+
 void
 AnnotationsView::ShowStickyNotePopup()
 {
@@ -82,30 +247,30 @@ AnnotationsView::ShowStickyNotePopup()
     ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
     ImGui::PushStyleColor(ImGuiCol_Border, border_color);
 
-    ImGui::OpenPopup("StickyNoteInputPopup");
-    if(ImGui::BeginPopupModal("StickyNoteInputPopup", nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize))
+    ImGui::OpenPopup("Annotation");
+    if(ImGui::BeginPopupModal("Annotation", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
         ImGui::Text("Add Sticky Note");
         ImGui::Separator();
-        ImGui::Dummy(ImVec2(0, 8));  // Top margin
+        ImGui::Dummy(ImVec2(0, 8));
 
         ImGui::Text("Title:");
         ImGui::InputText("##StickyTitle", m_sticky_title, IM_ARRAYSIZE(m_sticky_title),
                          ImGuiInputTextFlags_AutoSelectAll);
-        ImGui::Dummy(ImVec2(0, 4));  // Small vertical space
+        ImGui::Dummy(ImVec2(0, 4));
 
         ImGui::Text("Text:");
-        // This constrains the text area and wraps text
-       ImGui::InputTextMultiline("##StickyText", m_sticky_text,
-                          IM_ARRAYSIZE(m_sticky_text), ImVec2(300, 100),
-                          ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_NoHorizontalScroll);
 
-        ImGui::PopStyleColor();  // ImGuiCol_Text
+        WordBreakWrap(m_sticky_text, IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100));
+        ImGui::InputTextMultiline(
+            "##StickyText", m_sticky_text, IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100),
+            ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_NoHorizontalScroll);
 
-        ImGui::Dummy(ImVec2(0, 12));  // Bottom margin
+        ImGui::PopStyleColor();
+
+        ImGui::Dummy(ImVec2(0, 12));
 
         ImGui::PushStyleColor(ImGuiCol_Button, button_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
@@ -117,8 +282,7 @@ AnnotationsView::ShowStickyNotePopup()
         ImGui::SameLine();
         bool cancel_clicked = ImGui::Button("Cancel", ImVec2(100, 0));
 
-        ImGui::PopStyleColor(3);  // Button colors
-
+        ImGui::PopStyleColor(3);
         if(save_clicked)
         {
             AddSticky(m_sticky_time_ns, m_sticky_y_offset, ImVec2(180, 80),
@@ -135,8 +299,8 @@ AnnotationsView::ShowStickyNotePopup()
         ImGui::EndPopup();
     }
 
-    ImGui::PopStyleColor(2);  // PopupBg, Border
-    ImGui::PopStyleVar(2);    // WindowPadding, ItemSpacing
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
 }
 
 void

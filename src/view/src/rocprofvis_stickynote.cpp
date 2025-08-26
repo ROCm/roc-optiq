@@ -108,7 +108,6 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
            ("EditSticky##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
            ImVec2(edit_btn_size, edit_btn_size)))
     {
-        std::cout << "PRESSED" << std::endl;
         EventManager::GetInstance()->AddEvent(
             std::make_shared<StickyNoteEvent>(m_text, m_title, false, m_id));
     }

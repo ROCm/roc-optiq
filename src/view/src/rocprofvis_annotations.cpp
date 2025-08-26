@@ -112,7 +112,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
     ImGui::PushStyleColor(ImGuiCol_Border, border_color);
 
     ImGui::OpenPopup("Edit Sticky Note");
-    if(ImGui::BeginPopupModal("EditStickyNote", nullptr,
+    if(ImGui::BeginPopupModal("Edit Sticky Note", nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
@@ -141,12 +141,11 @@ AnnotationsView::ShowStickyNoteEditPopup()
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                               settings.GetColor(Colors::kHighlightChart));
 
-        bool save_clicked = ImGui::Button("Save", ImVec2(70, 0));
+        bool save_clicked = ImGui::Button("Save", ImVec2(80, 0));
         ImGui::SameLine();
-        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(70, 0));
+        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(80, 0));
         ImGui::SameLine();
-
-        bool delete_clicked = ImGui::Button("Delete", ImVec2(70, 0));
+        bool delete_clicked = ImGui::Button("Delete", ImVec2(80, 0));
         ImGui::PopStyleColor(3);
 
         if(save_clicked)
@@ -188,7 +187,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
             ImGui::CloseCurrentPopup();
         }
 
-        ImGui::EndPopup();   
+        ImGui::EndPopup();  // <-- Always call EndPopup if BeginPopupModal returns true
     }
 
     ImGui::PopStyleColor(2);

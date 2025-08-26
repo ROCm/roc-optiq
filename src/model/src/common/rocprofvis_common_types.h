@@ -26,6 +26,7 @@
 
 #include "rocprofvis_c_interface_types.h"
 #include "rocprofvis_error_handling.h"
+#include "rocprofvis_controller_enums.h"
 #include <algorithm>
 #include <list>
 
@@ -159,11 +160,13 @@ typedef struct {
     uint32_t depth;                                 // stacktrace depth
 }rocprofvis_db_stack_data_t;
 
-// rocprofvis_db_flow_data_t is used to pass record data from database to data model. Used by database query callbacks
+// rocprofvis_db_ext_data_t is used to pass extended data record from database to data model. Used by database query callbacks
 typedef struct {
     rocprofvis_dm_charptr_t category;               // extended data category
     rocprofvis_dm_charptr_t name;                   // extended data name
     rocprofvis_dm_charptr_t data;                   // extended data value
+    rocprofvis_db_data_type_t type;                 // data type
+    rocprofvis_event_data_category_enum_t category_enum;          // category enumeration
 }rocprofvis_db_ext_data_t;
 
 /***********************Trace to Database binding info******************************/

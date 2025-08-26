@@ -57,6 +57,60 @@ SqliteDatabase::isServiceColumn(char* name)
 }
 
 void
+SqliteDatabase::FindTrackIDs(
+    SqliteDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
+    int& trackId, int & streamTrackId)
+{ 
+    trackId = -1;
+    streamTrackId = -1;
+    rocprofvis_dm_process_identifiers_t process;
+    for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++)
+    {
+        process.is_numeric[i] = true;
+    }
+    process.category = service_data.category;
+    if(service_data.category == kRocProfVisDmKernelDispatchTrack ||
+            service_data.category == kRocProfVisDmMemoryAllocationTrack ||
+            service_data.category == kRocProfVisDmMemoryCopyTrack ||
+            service_data.category == kRocProfVisDmRegionTrack)
+    {
+        process.id[TRACK_ID_NODE]         = service_data.nid;
+        process.id[TRACK_ID_PID_OR_AGENT] = service_data.process;
+        process.id[TRACK_ID_TID_OR_QUEUE] = service_data.thread;
+        rocprofvis_dm_track_params_it it = db->FindTrack(process);
+        if(it != db->TrackPropertiesEnd())
+        {
+            trackId = it->get()->track_id;
+        }
+        process.category            = kRocProfVisDmStreamTrack;
+        process.id[TRACK_ID_STREAM] = service_data.stream_id;
+        process.id[TRACK_ID_QUEUE]  = -1;
+        it                          = db->FindTrack(process);
+        if(it != db->TrackPropertiesEnd())
+        {
+            streamTrackId = it->get()->track_id;
+        }
+    }
+    else if(service_data.category == kRocProfVisDmPmcTrack)
+    {
+        process.id[TRACK_ID_NODE]    = service_data.nid;
+        process.id[TRACK_ID_AGENT]   = service_data.process;
+        process.id[TRACK_ID_COUNTER] = service_data.thread;
+        if(service_data.monitor_type.length() > 0)
+        {
+            process.is_numeric[TRACK_ID_COUNTER] = false;
+            process.name[TRACK_ID_COUNTER]       = service_data.monitor_type;
+        }
+
+        rocprofvis_dm_track_params_it it = db->FindTrack(process);
+        if(it != db->TrackPropertiesEnd())
+        {
+            trackId = it->get()->track_id;
+        }
+    }
+}
+
+void
 SqliteDatabase::CollectTrackServiceData(
     sqlite3_stmt* stmt, int column_index, std::string& column_name,
                         rocprofvis_db_sqlite_track_service_data_t& service_data)
@@ -176,7 +230,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
     rocprofvis_dm_table_row_t row = db->BindObject()->FuncAddTableRow(callback_params->handle);
     ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
     uint64_t op = 0;
-    rocprofvis_dm_process_identifiers_t process;
+
     service_data.category = kRocProfVisDmNotATrack;
     service_data.op       = kRocProfVisDmOperationNoOp;
     for (int i=0; i < argc; i++)
@@ -214,60 +268,8 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
         int trackId       = -1;
         int streamTrackId = -1;
 
-        for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++)
-        {
-            process.is_numeric[i] = true;
-        }
-        process.category = service_data.category;
-        if(service_data.category == kRocProfVisDmRegionTrack)
-        {
-            process.id[TRACK_ID_NODE]        = service_data.nid;
-            process.id[TRACK_ID_PID]         = service_data.process;
-            process.id[TRACK_ID_TID]         = service_data.thread;
-            rocprofvis_dm_track_params_it it = db->FindTrack(process);
-            if(it != db->TrackPropertiesEnd())
-            {
-                trackId = it->get()->track_id;
-            }
-        }
-        else if(service_data.category == kRocProfVisDmKernelDispatchTrack ||
-                service_data.category == kRocProfVisDmMemoryAllocationTrack ||
-                service_data.category == kRocProfVisDmMemoryCopyTrack)
-        {
-            process.id[TRACK_ID_NODE]        = service_data.nid;
-            process.id[TRACK_ID_AGENT]       = service_data.process;
-            process.id[TRACK_ID_QUEUE]       = service_data.thread;
-            rocprofvis_dm_track_params_it it = db->FindTrack(process);
-            if(it != db->TrackPropertiesEnd())
-            {
-                trackId = it->get()->track_id;
-            }
-            process.category            = kRocProfVisDmStreamTrack;
-            process.id[TRACK_ID_STREAM] = service_data.stream_id;
-            process.id[TRACK_ID_QUEUE] = -1;
-            it                          = db->FindTrack(process);
-            if(it != db->TrackPropertiesEnd())
-            {
-                streamTrackId = it->get()->track_id;
-            }
-        }
-        else if(service_data.category == kRocProfVisDmPmcTrack)
-        {
-            process.id[TRACK_ID_NODE]    = service_data.nid;
-            process.id[TRACK_ID_AGENT]   = service_data.process;
-            process.id[TRACK_ID_COUNTER] = service_data.thread;
-            if(service_data.monitor_type.length() > 0)
-            {
-                process.is_numeric[TRACK_ID_COUNTER] = false;
-                process.name[TRACK_ID_COUNTER]       = service_data.monitor_type;
-            }
+        FindTrackIDs(db, service_data, trackId, streamTrackId);
 
-            rocprofvis_dm_track_params_it it = db->FindTrack(process);
-            if(it != db->TrackPropertiesEnd())
-            {
-                trackId = it->get()->track_id;
-            }
-        }
         if(kRocProfVisDmResultSuccess !=
            db->BindObject()->FuncAddTableRowCell(row, std::to_string(trackId).c_str()))
             return 1;
@@ -524,7 +526,8 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future,
 rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, 
                                                         const char* query,
                                                         const char* cache_table_name,
-                                                        rocprofvis_dm_handle_t handle, 
+                                                        rocprofvis_dm_handle_t handle,
+                                                        rocprofvis_dm_event_operation_t op,
                                                         RpvSqliteExecuteQueryCallback callback){
     rocprofvis_db_sqlite_callback_parameters params = {
         this,
@@ -532,10 +535,30 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future,
         handle,
         callback,
         { query, cache_table_name },
-        static_cast<rocprofvis_dm_track_id_t>(-1)
+        static_cast<rocprofvis_dm_track_id_t>(-1),
+        op
     };
     return SqliteDatabase::ExecuteSQLQuery(query, &params);
 }
+
+
+rocprofvis_dm_result_t
+SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query,
+                                const char*                     cache_table_name,
+                                rocprofvis_dm_handle_t          handle,
+                                RpvSqliteExecuteQueryCallback   callback)
+{
+    rocprofvis_db_sqlite_callback_parameters params = {
+        this,
+        future,
+        handle,
+        callback,
+        { query, cache_table_name },
+        static_cast<rocprofvis_dm_track_id_t>(-1),
+    };
+    return SqliteDatabase::ExecuteSQLQuery(query, &params);
+}
+
 
 rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future, 
                                                         std::vector<std::string> query,

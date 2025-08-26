@@ -106,10 +106,6 @@ public:
     // Method to get amount of memory used by Track class object
     // @return used memory size
     rocprofvis_dm_size_t                                GetMemoryFootprint();
-    // Method to get track extended data as JSON Blob
-    // @param json - reference to a JSON format string pointer
-    // @return status of operation    
-    rocprofvis_dm_result_t                              GetExtendedInfoAsJsonBlob(rocprofvis_dm_json_blob_t & json);
     // Method to read Track object property as uint64
     // @param property - property enumeration rocprofvis_dm_track_property_t
     // @param index - index of any indexed property

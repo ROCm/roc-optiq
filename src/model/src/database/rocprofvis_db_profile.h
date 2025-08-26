@@ -46,9 +46,13 @@ typedef struct rocprofvis_db_sqlite_trim_parameters
     std::map<std::string, std::string> tables;
 } rocprofvis_db_sqlite_trim_parameters;
 
+typedef std::map<uint64_t, std::map<std::string, rocprofvis_event_data_category_enum_t>>
+    rocprofvis_event_data_category_map_t;
+
 // class for methods and members common for all RocPd-based schemas
 class ProfileDatabase : public SqliteDatabase
 {
+    
     public:
         // Database constructor
         // @param path - full path to database file
@@ -158,6 +162,13 @@ class ProfileDatabase : public SqliteDatabase
     // @param azColName - pointer to column names 
     // @return SQLITE_OK if successful
         static int CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+    // sqlite3_exec callback to add essential info into ExtData container.
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names 
+    // @return SQLITE_OK if successful
+        static int CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
     // sqlite3_exec callback to calculate graph level for an event and store it into trace object map array
     // @param data - pointer to callback caller argument
@@ -184,6 +195,12 @@ class ProfileDatabase : public SqliteDatabase
                                                 char** azColName);
         static int CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
                                           char** azColName);
+        static rocprofvis_event_data_category_enum_t GetColumnDataCategory(
+            const rocprofvis_event_data_category_map_t category_map,
+            rocprofvis_dm_event_operation_t op, std::string column);
+
+    virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
+
     protected:
     // offset of kernel symbols in string table
         uint32_t m_symbols_offset;

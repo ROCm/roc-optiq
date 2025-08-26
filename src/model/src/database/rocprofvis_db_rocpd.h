@@ -136,9 +136,47 @@ private:
     // @return True if remapped
     const bool RemapStringId(uint64_t & id);
 
+    const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override
+    {
+        return &s_rocpd_categorized_data;
+    };
+
     private:
         track_find_map_t find_track_map;
         track_find_pmc_map_t find_track_pmc_map;
+
+        inline static const rocprofvis_event_data_category_map_t
+            s_rocpd_categorized_data = {
+                {
+                    kRocProfVisDmOperationNoOp,
+                    {
+                        { "id", kRocProfVisEventEssentialDataId },
+                        { "start", kRocProfVisEventEssentialDataStart },
+                        { "end", kRocProfVisEventEssentialDataEnd },
+                        { "duration", kRocProfVisEventEssentialDataDuration },
+                    },
+                },
+                {
+                    kRocProfVisDmOperationLaunch,
+                    {
+                        { "apiName", kRocProfVisEventEssentialDataCategory },
+                        { "args", kRocProfVisEventEssentialDataName },
+                        { "pid", kRocProfVisEventEssentialDataProcess },
+                        { "tid", kRocProfVisEventEssentialDataThread },
+                    },
+                },
+                {
+                    kRocProfVisDmOperationDispatch,
+                    {
+                        { "opType", kRocProfVisEventEssentialDataCategory },
+                        { "description", kRocProfVisEventEssentialDataName },
+                        { "agent_type", kRocProfVisEventEssentialDataAgentType },
+                        { "gpuId", kRocProfVisEventEssentialDataAgentIndex },
+                        { "queueId", kRocProfVisEventEssentialDataQueue },
+                        { "stream", kRocProfVisEventEssentialDataStream },
+                    }
+                }
+            };
 
 };
 

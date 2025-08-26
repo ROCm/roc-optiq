@@ -68,6 +68,7 @@ typedef struct{
     // pointer to query string, convenient for multiuse callback debugging
     const char*              query[kRPVNumSourceQueryTypes];
     rocprofvis_dm_track_id_t track_id;
+    rocprofvis_dm_event_operation_t operation;
 } rocprofvis_db_sqlite_callback_parameters;
 
 // class for any Sqlite database methods and properties 
@@ -188,19 +189,12 @@ class SqliteDatabase : public Database
                                                 const char* cache_table_name,
                                                 rocprofvis_dm_handle_t handle, 
                                                 RpvSqliteExecuteQueryCallback callback);
-        // Method for SQL query execution for requesting track information and building track related data.
-        // Used for callbacks storing data into container with rocprofvis_dm_handle_t
-        // handle
-        // @param future - future object for asynchronous execution status
-        // @param query - SQL query
-        // @param timeline_subquery - timeline view events or samples subquery
-        // @param table_subquery - table view events or samples subquery
-        // @param handle - handle of a container processed rows to be stored
-        // @param callback - sqlite3_exec callback method for data processing
-        // @return status of operation
-        rocprofvis_dm_result_t ExecuteSQLQuery(
-            Future* future, rocprofvis_dm_charptr_t query[kRPVNumSourceQueryTypes],
-                                               RpvSqliteExecuteQueryCallback callback);
+
+        rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, const char* query,
+                                               const char*            cache_table_name,
+                                               rocprofvis_dm_handle_t handle,
+                                               rocprofvis_dm_event_operation_t op,
+                                               RpvSqliteExecuteQueryCallback   callback);
 
         // Method to check if table exists in database
         // @param is_view - true if view
@@ -237,6 +231,12 @@ class SqliteDatabase : public Database
         // @param params - set of parameters to be passed to sqlite3_exec callback
         rocprofvis_dm_result_t ExecuteSQLQuery(const char* query, rocprofvis_db_sqlite_callback_parameters * params);
 
+        static void CollectTrackServiceData(
+            sqlite3_stmt* stmt, int column_index, std::string& column_name,
+            rocprofvis_db_sqlite_track_service_data_t& service_data);
+        static void SqliteDatabase::FindTrackIDs(
+            SqliteDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
+            int& trackId, int & streamTrackId);
     private:     
 
         std::set<sqlite3*> m_available_connections;
@@ -257,9 +257,6 @@ class SqliteDatabase : public Database
         
         void ReleaseConnection(sqlite3* conn);
         bool isServiceColumn(char* name);
-        static void CollectTrackServiceData(
-            sqlite3_stmt* stmt, int column_index, std::string& column_name,
-            rocprofvis_db_sqlite_track_service_data_t& service_data);
         uint64_t GetBlanksMaskForQuery(std::string query);
 
 };

@@ -27,6 +27,34 @@ namespace RocProfVis
 namespace DataModel
 {
 
+    
+rocprofvis_event_data_category_enum_t
+ProfileDatabase::GetColumnDataCategory( const rocprofvis_event_data_category_map_t category_map,
+                                        rocprofvis_dm_event_operation_t op,
+                                        std::string                     name)
+{
+    auto it_op = category_map.find(op);
+    if(it_op != category_map.end())
+    {
+        auto it = it_op->second.find(name);
+        if(it != it_op->second.end())
+        {
+            return it->second;
+        }
+    }
+    it_op = category_map.find(kRocProfVisDmOperationNoOp);
+    if(it_op != category_map.end())
+    {
+        auto it = it_op->second.find(name);
+        if(it != it_op->second.end())
+        {
+            return it->second;
+        }
+    }
+    return kRocProfVisEventEssentialDataUncategorized;
+}
+
+
 int
 ProfileDatabase::CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt* stmt,
                                             char** azColName)
@@ -54,7 +82,6 @@ ProfileDatabase::CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt
         (rocprofvis_db_sqlite_callback_parameters*) data;
     rocprofvis_db_sqlite_trim_parameters* params =
         (rocprofvis_db_sqlite_trim_parameters*) callback_params->handle;
-    rocprofvis_db_ext_data_t record;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
 
     char* table_name = (char*) sqlite3_column_text(stmt, 0);
@@ -168,7 +195,9 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
     for (int i = 0; i < argc; i++)
     {
         record.name = azColName[i];
+        record.type = (rocprofvis_db_data_type_t) sqlite3_column_type(stmt, i);
         record.data = (char*)sqlite3_column_text(stmt,i);
+        record.category_enum = GetColumnDataCategory(*db->GetCategoryEnumMap(), callback_params->operation, record.name);
         if (record.data != nullptr) {
             if (db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) != kRocProfVisDmResultSuccess) return 1;
         }
@@ -176,6 +205,71 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
     callback_params->future->CountThisRow();
     return 0;
 }
+
+int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == rocprofvis_db_sqlite_essential_data_query_format::NUM_PARAMS,
+                                 ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
+    rocprofvis_db_ext_data_t record;
+    if (callback_params->future->Interrupted()) return SQLITE_ABORT;
+    rocprofvis_db_sqlite_track_service_data_t service_data{};
+
+    for(int i = 0; i < argc-2; i++)
+    {
+        std::string column = azColName[i];
+        CollectTrackServiceData(stmt, i, column, service_data);
+    }
+
+    int trackId       = -1;
+    int streamTrackId = -1;
+
+    FindTrackIDs(db, service_data, trackId, streamTrackId);
+
+    if(trackId != -1)
+    {
+        record.category = "Track";
+        record.name     = "trackId";
+        record.type     = kRPVDataTypeInt;
+        record.data     = std::to_string(trackId).c_str();
+        record.category_enum = kRocProfVisEventEssentialDataTrack;
+        if(db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) !=
+           kRocProfVisDmResultSuccess)
+            return 1;
+        record.category = "Track";
+        record.name     = "levelForTrack";
+        record.type     = kRPVDataTypeInt;
+        record.data     = std::to_string(sqlite3_column_int64(stmt, argc - 2)).c_str();
+        record.category_enum = kRocProfVisEventEssentialDataLevel;
+        if(db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) !=
+           kRocProfVisDmResultSuccess)
+            return 1;
+    }
+    if(streamTrackId != -1)
+    {
+        record.category = "Track";
+        record.name     = "streamTrackId";
+        record.type     = kRPVDataTypeInt;
+        record.data     = std::to_string(streamTrackId).c_str();
+        record.category_enum = kRocProfVisEventEssentialDataStreamTrack;
+        if(db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) !=
+           kRocProfVisDmResultSuccess)
+            return 1;
+        record.category = "Track";
+        record.name     = "levelForStreamTrack";
+        record.type     = kRPVDataTypeInt;
+        record.data     = std::to_string(sqlite3_column_int64(stmt, argc - 2)).c_str();
+        record.category_enum = kRocProfVisEventEssentialDataStreamLevel;
+        if(db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) !=
+           kRocProfVisDmResultSuccess)
+            return 1;
+    }
+  
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
 
 rocprofvis_dm_result_t
 ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,

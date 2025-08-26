@@ -299,6 +299,8 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
                                     char* category = nullptr;
                                     char* name     = nullptr;
                                     char* value    = nullptr;
+                                    uint64_t type     = 0;   
+                                    uint64_t cat_enum = 0;
                                     if(kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_extdata,
@@ -313,10 +315,21 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_extdata,
                                                kRPVDMExtDataValueCharPtrIndexed, index,
-                                               &value))
+                                               &value) &&
+                                       kRocProfVisDmResultSuccess ==
+                                           rocprofvis_dm_get_property_as_uint64(
+                                               dm_extdata,
+                                               kRPVDMExtDataTypeUint64Indexed, index,
+                                               &type) && 
+                                       kRocProfVisDmResultSuccess ==
+                                           rocprofvis_dm_get_property_as_uint64(
+                                               dm_extdata,
+                                               kRPVDMExtDataEnumUint64Indexed, index,
+                                               &cat_enum))
                                     {
                                         ExtData* ext_data =
-                                            new ExtData(category, name, value);
+                                            new ExtData(category, name, value,
+                                                        (rocprofvis_db_data_type_t) type, cat_enum);
 
                                         if(result == kRocProfVisResultSuccess)
                                         {

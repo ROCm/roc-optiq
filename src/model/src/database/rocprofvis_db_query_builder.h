@@ -72,7 +72,7 @@ typedef struct rocprofvis_db_sqlite_table_query_format
 
 typedef struct rocprofvis_db_sqlite_rocpd_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 8;
+    static constexpr const int NUM_PARAMS = 9;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_rocpd_table_query_format;
@@ -91,6 +91,14 @@ typedef struct rocprofvis_db_sqlite_dataflow_query_format
     std::vector<std::string>   from;
     std::vector<std::string>   where;
 } rocprofvis_db_sqlite_dataflow_query_format;
+
+typedef struct rocprofvis_db_sqlite_essential_data_query_format
+{
+    static constexpr const int NUM_PARAMS = 7;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+    std::vector<std::string>   where;
+} rocprofvis_db_sqlite_essential_data_query_format;
 
 class Builder
 {
@@ -124,6 +132,7 @@ class Builder
         static std::string Select(rocprofvis_db_sqlite_sample_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_rocpd_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_dataflow_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_essential_data_query_format params);
         static std::string SelectAll(std::string query);
         static std::string QParam(std::string name, std::string public_name);
         static std::string QParamBlank(std::string public_name);

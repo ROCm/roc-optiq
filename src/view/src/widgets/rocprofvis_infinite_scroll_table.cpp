@@ -217,25 +217,36 @@ InfiniteScrollTable::Render()
             }
             else
             {
+                // Create a combo box for selecting the group column
+                // populate the combo box with column names but filter out empty and
+                // internal columns (those starting with '_')
+                // TODO: detect when table data changes so this doesn't have to be
+                // recalculated every frame
                 std::vector<const char*> items;
+                std::map<size_t, size_t> item_idx_to_column_idx_map;
                 items.reserve(column_names.size() + 1);
                 items.push_back("-- None --");
-                for(const auto& col : column_names)
+                for(size_t i = 0; i < column_names.size(); i++)
                 {
+                    const auto& col = column_names[i];
+                    if(col.empty() || col[0] == '_')
+                        continue;  // Skip empty or internal columns
                     items.push_back(col.c_str());
+                    item_idx_to_column_idx_map[items.size() - 1] = i;
                 }
 
                 if(ImGui::Combo("##combo", &m_current_group_selection_idx, items.data(),
                                 items.size()))
                 {
-                    if(m_current_group_selection_idx > 0 &&
-                       m_current_group_selection_idx <= column_names.size())
+                    auto col_idx = item_idx_to_column_idx_map[m_current_group_selection_idx];
+                    if(col_idx > 0 &&
+                       col_idx <= column_names.size())
                     {
-                        m_group = column_names[m_current_group_selection_idx - 1];
+                        m_group = column_names[col_idx];
                     }
                     else
                     {
-                        m_group.clear();
+                        m_group.clear();                    
                     }
                     filter_changed = true;
                 }

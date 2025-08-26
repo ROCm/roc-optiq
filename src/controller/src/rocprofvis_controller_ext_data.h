@@ -15,7 +15,8 @@ namespace Controller
 class ExtData : public Handle
 {
 public:
-    ExtData(const char* category, const char* name, const char* value);
+    ExtData(const char* category, const char* name, const char* value,
+            rocprofvis_db_data_type_t type, uint64_t category_enum);
 
     virtual ~ExtData();
 
@@ -44,6 +45,7 @@ private:
     Data m_category;
     Data m_name;
     Data m_value;
+    uint64_t m_enum;
 };
 
 }

@@ -63,6 +63,11 @@ namespace DataModel
         return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
                           params.where, "");
     }
+    std::string Builder::Select(rocprofvis_db_sqlite_essential_data_query_format params) 
+    {
+        return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
+                          params.where, "");
+    }
     std::string Builder::SelectAll(std::string query)
     {
         return "SELECT * FROM(" + query + ")";

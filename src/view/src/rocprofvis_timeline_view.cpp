@@ -19,6 +19,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+
 namespace RocProfVis
 {
 namespace View
@@ -71,8 +72,9 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_reorder_request({ true, 0, 0 })
 , m_track_height_total({})
 , m_arrow_layer(m_data_provider, timeline_selection)
-, m_timeline_selection(timeline_selection)
 , m_stop_user_interaction(false)
+, m_timeline_selection(timeline_selection)
+, m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -1244,10 +1246,27 @@ TimelineView::MakeGraphView()
     float    track_height_total = 0;
     m_graphs.resize(num_graphs);
 
-    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
+    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
+    bool                             project_valid = m_project_settings.Valid();
+
     for(int i = 0; i < track_list.size(); i++)
     {
         const track_info_t* track_info = track_list[i];
+        bool                display    = true;
+
+        if(project_valid)
+        {
+            uint64_t            track_id_at_index = m_project_settings.TrackID(i);
+            const track_info_t* track_at_index_info =
+                m_data_provider.GetTrackInfo(track_id_at_index);
+            if(track_at_index_info && track_at_index_info->index != i)
+            {
+                ROCPROFVIS_ASSERT(m_data_provider.SetGraphIndex(track_id_at_index, i));
+            }
+            track_info = track_at_index_info;
+            display    = m_project_settings.DisplayTrack(track_id_at_index);
+        }
+
         if(!track_info)
         {
             // log warning (should this be an error?)
@@ -1255,66 +1274,43 @@ TimelineView::MakeGraphView()
             continue;
         }
 
+        rocprofvis_graph_t graph = { rocprofvis_graph_t::TYPE_FLAMECHART, display,
+                                     nullptr, false };
         switch(track_info->track_type)
         {
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                FlameTrackItem* flame =
+                graph.chart =
                     new FlameTrackItem(m_data_provider, m_timeline_selection,
                                        track_info->id, track_info->name, m_zoom,
                                        m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
-
-                std::tuple<float, float> temp_min_max_flame =
-                    std::tuple<float, float>(static_cast<float>(track_info->min_ts),
-                                             static_cast<float>(track_info->max_ts));
-
-                rocprofvis_graph_t temp_flame;
-                temp_flame.chart            = flame;
-                temp_flame.graph_type       = rocprofvis_graph_t::TYPE_FLAMECHART;
-                temp_flame.display          = true;
-                temp_flame.selected         = false;
-                m_graphs[track_info->index] = std::move(temp_flame);
-                m_track_height_total[track_info->index] =
-                    track_height_total;  // Store the height of the flame chart
-                track_height_total += flame->GetTrackHeight();
+                graph.graph_type = rocprofvis_graph_t::TYPE_FLAMECHART;
                 break;
             }
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                LineTrackItem* line = new LineTrackItem(
+                graph.chart = new LineTrackItem(
                     m_data_provider, track_info->id, track_info->name, m_zoom,
                     m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns);
-
-                std::tuple<float, float> temp_min_max_flame =
-                    std::tuple<float, float>(static_cast<float>(track_info->min_ts),
-                                             static_cast<float>(track_info->max_ts));
-
-                if(std::get<0>(temp_min_max_flame) < m_min_x)
-                {
-                    m_min_x = std::get<0>(temp_min_max_flame);
-                }
-                if(std::get<1>(temp_min_max_flame) > m_max_x)
-                {
-                    m_max_x = std::get<1>(temp_min_max_flame);
-                }
-
-                rocprofvis_graph_t temp;
-                temp.chart                  = line;
-                temp.graph_type             = rocprofvis_graph_t::TYPE_LINECHART;
-                temp.display                = true;
-                temp.selected               = false;
-                m_graphs[track_info->index] = std::move(temp);
-                m_track_height_total[track_info->index] =
-                    track_height_total;  // Store the height of the line chart
-                track_height_total += line->GetTrackHeight();
+                graph.graph_type = rocprofvis_graph_t::TYPE_LINECHART;
                 break;
             }
             default:
             {
                 break;
             }
+        }
+        if(graph.chart)
+        {
+            m_min_x = std::min(track_info->min_ts, m_min_x);
+            m_max_x = std::max(track_info->max_ts, m_max_x);
+
+            m_graphs[track_info->index] = std::move(graph);
+            m_track_height_total[track_info->id] =
+                track_height_total;  // Store the height of the chart
+            track_height_total += graph.chart->GetTrackHeight();
         }
     }
     m_meta_map_made = true;
@@ -1580,6 +1576,97 @@ TimelineView::SetViewCoords(const ViewCoords& coords)
     m_view_time_offset_ns = coords.time_offset_ns;
     m_scroll_position_y   = coords.y_scroll_position;
     m_zoom                = coords.zoom;
+}
+
+TimelineViewProjectSettings::TimelineViewProjectSettings(const std::string& project_id,
+                                                         TimelineView&      timeline_view)
+: ProjectSetting(project_id)
+, m_timeline_view(timeline_view)
+{}
+
+TimelineViewProjectSettings::~TimelineViewProjectSettings() {}
+
+void
+TimelineViewProjectSettings::ToJson()
+{
+    const std::vector<rocprofvis_graph_t>& graphs = *m_timeline_view.GetGraphs();
+    for(int i = 0; i < graphs.size(); i++)
+    {
+        uint64_t id = graphs[i].chart->GetID();
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][i] = id;
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK][id]
+                       [JSON_KEY_TIMELINE_TRACK_DISPLAY] = graphs[i].display;
+    }
+}
+
+bool
+TimelineViewProjectSettings::Valid() const
+{
+    bool valid = false;
+    if(m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER].isArray())
+    {
+        std::vector<jt::Json>& track_order =
+            m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER]
+                .getArray();
+        if(track_order.size() == m_timeline_view.m_graphs.size())
+        {
+            int valid_count = 0;
+            for(jt::Json& track_id : track_order)
+            {
+                if(track_id.isLong())
+                {
+                    valid_count++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            valid = (valid_count == track_order.size());
+        }
+    }
+    if(valid)
+    {
+        valid = false;
+        if(m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK].isArray())
+        {
+            std::vector<jt::Json>& tracks =
+                m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                    .getArray();
+            if(tracks.size() == m_timeline_view.m_graphs.size())
+            {
+                int valid_count = 0;
+                for(jt::Json& track_id : tracks)
+                {
+                    if(track_id[JSON_KEY_TIMELINE_TRACK_DISPLAY].isBool())
+                    {
+                        valid_count++;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                valid = (valid_count == tracks.size());
+            }
+        }
+    }
+    return valid;
+}
+
+uint64_t
+TimelineViewProjectSettings::TrackID(int index) const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][index]
+        .getLong();
+}
+
+bool
+TimelineViewProjectSettings::DisplayTrack(uint64_t track_id) const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK][track_id]
+                          [JSON_KEY_TIMELINE_TRACK_DISPLAY]
+                              .getBool();
 }
 
 }  // namespace View

@@ -2,14 +2,12 @@
 
 #pragma once
 
-#include "rocprofvis_compute_root.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_trace_view.h"
-#include "widgets/rocprofvis_widget.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
+#include "widgets/rocprofvis_widget.h"
 
-#include <memory>
 
 namespace RocProfVis
 {
@@ -17,6 +15,8 @@ namespace View
 {
 
 class ConfirmationDialog;
+class MessageDialog;
+class Project;
 
 class AppWindow : public RocWidget
 {
@@ -29,22 +29,27 @@ public:
     void Update() override;
 
     const std::string& GetMainTabSourceName() const;
+    void SetTabLabel(const std::string& label, const std::string& id);
+
+    void ShowConfirmationDialog(const std::string& title, const std::string& message,
+                                std::function<void()> on_confirm_callback) const;
+    void ShowMessageDialog(const std::string& title, const std::string& message) const;
+
+    Project* GetProject(const std::string& id);
+    Project* GetCurrentProject();
 
 private:
     AppWindow();
     ~AppWindow();
 
-    void RenderFileDialogs();
-    void RenderSettingsMenu();
+    void RenderFileMenu(Project* project);
+    void RenderEditMenu(Project* project);
     void RenderHelpMenu();
-    
-    void HandleTabClosed(std::shared_ptr<RocEvent> e);
-    void HandleSaveSelection(const std::string& file_path_str);
-    void SaveSelection(const std::string& file_path_str);
 
+    void RenderFileDialogs();
     void RenderAboutDialog();
 
-    bool IsTrimSaveAllowed();
+    void HandleTabClosed(std::shared_ptr<RocEvent> e);
 
     static AppWindow* s_instance;
 
@@ -54,7 +59,7 @@ private:
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;
 
-    std::map<std::string, TabItem> m_open_views;
+    std::unordered_map<std::string, std::unique_ptr<Project>> m_projects;
 
     EventManager::SubscriptionToken m_tabclosed_event_token;
 
@@ -70,8 +75,8 @@ private:
     bool m_open_about_dialog;
 
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
+    std::unique_ptr<MessageDialog>      m_message_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
-
 };
 
 }  // namespace View

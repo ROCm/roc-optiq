@@ -1,23 +1,11 @@
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings.h"
-#include <random>
-#include <sstream>
-#include <chrono>
-#include <ctime>
 
 namespace RocProfVis
 {
 namespace View
 {
-int
-AnnotationsView::GetUniqueId()
-{
-    auto epoch_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::system_clock::now().time_since_epoch())
-                        .count();
-    return static_cast<int>(epoch_ms);
-}
 
 AnnotationsView::AnnotationsView()
 {
@@ -42,7 +30,7 @@ void
 AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
                            const std::string& text, const std::string& title)
 {
-    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, GetUniqueId());
+    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title);
 }
 
 bool
@@ -100,7 +88,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
 {
     using namespace RocProfVis::View;
 
-    if(!m_show_sticky_edit_popup  ) return;
+    if(!m_show_sticky_edit_popup) return;
 
     Settings& settings     = Settings::GetInstance();
     ImU32     popup_bg     = settings.GetColor(Colors::kFillerColor);

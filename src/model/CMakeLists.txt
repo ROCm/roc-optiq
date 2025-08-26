@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 add_subdirectory(../../thirdparty/sqlite3 thirdparty/sqlite3)
 
-include_directories(inc ${CMAKE_CURRENT_SOURCE_DIR}/src/common ${CMAKE_CURRENT_SOURCE_DIR}/src/database ${CMAKE_CURRENT_SOURCE_DIR}/src/datamodel )
+include_directories(inc ${CMAKE_CURRENT_SOURCE_DIR}/src/common ${CMAKE_CURRENT_SOURCE_DIR}/src/database ${CMAKE_CURRENT_SOURCE_DIR}/src/datamodel ${CMAKE_CURRENT_SOURCE_DIR}/../controller/inc)
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})

@@ -125,11 +125,17 @@ class ExtData : public DmBase {
         // @category  - reference to data string
         // @return status of operation
         rocprofvis_dm_result_t          GetRecordDataAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t &data);
-        // method to generate json blob out of extended record data parameters (category, name and data) 
-        // the blob is stored to m_json_blob member variable 
-        // @param blob - reference to json blob string
-        // @return status of operation 
-        rocprofvis_dm_result_t          MakeJsonBlob(rocprofvis_dm_charptr_t & blob);
+        // method to get data type at provided record index
+        // @param index - record index
+        // @type  - reference to data type
+        // @return status of operation
+        rocprofvis_dm_result_t          GetRecordTypeAt(const rocprofvis_dm_property_index_t index, uint64_t &type);
+        // method to get data category enumeration at provided record index
+        // @param index - record index
+        // @type  - reference to data category enumeration
+        // @return status of operation
+        rocprofvis_dm_result_t GetRecordCategoryEnumAt(const rocprofvis_dm_property_index_t index, uint64_t& category_enum);
+
 
 };
 

@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_flame_track_item.h"
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings.h"
@@ -30,6 +31,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_timeline_selection(timeline_selection)
 , m_selection_changed(false)
 , m_has_drawn_tool_tip(false)
+, m_project_settings(dp.GetTraceFilePath(), *this)
 {
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
@@ -38,6 +40,11 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
     m_timeline_event_selection_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         time_line_selection_changed_handler);
+
+    if(m_project_settings.Valid())
+    {
+        m_request_random_color = m_project_settings.ColorEvents();
+    }
 }
 
 FlameTrackItem::~FlameTrackItem()
@@ -82,7 +89,8 @@ FlameTrackItem::ExtractPointsFromData()
         return false;
     }
 
-    if(event_track->AllDataReady()) {
+    if(event_track->AllDataReady())
+    {
         m_request_state = TrackDataRequestState::kIdle;
     }
 
@@ -237,6 +245,38 @@ void
 FlameTrackItem::RenderMetaAreaOptions()
 {
     ImGui::Checkbox("Color Events", &m_request_random_color);
+}
+
+FlameTrackProjectSettings::FlameTrackProjectSettings(const std::string& project_id,
+                                                     FlameTrackItem&    track_item)
+: ProjectSetting(project_id)
+, m_track_item(track_item)
+{}
+
+FlameTrackProjectSettings::~FlameTrackProjectSettings() {}
+
+void
+FlameTrackProjectSettings::ToJson()
+{
+    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                   [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR] =
+                       m_track_item.m_request_random_color;
+}
+
+bool
+FlameTrackProjectSettings::Valid() const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
+                              .isBool();
+}
+
+bool
+FlameTrackProjectSettings::ColorEvents() const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
+                              .getBool();
 }
 
 }  // namespace View

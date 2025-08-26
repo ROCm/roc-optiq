@@ -29,16 +29,15 @@ namespace DataModel
 
 rocprofvis_dm_result_t RocpdDatabase::FindTrackId(
                                                     uint64_t node,
-                                                    uint32_t process,
-                                                    uint32_t subprocess,
-                                                    char* proc_name,
+                                                    uint32_t process, 
+                                                    const char* subprocess,
                                                     rocprofvis_dm_op_t operation,    
                                                     rocprofvis_dm_track_id_t& track_id) {
     if (operation > 0)
     {
         auto it1 = find_track_map.find(process);
         if (it1!=find_track_map.end()){
-            auto it2 = it1->second.find(subprocess);
+            auto it2 = it1->second.find(std::atol(subprocess));
             if (it2!=it1->second.end()){
                 track_id = it2->second;
                 return kRocProfVisDmResultSuccess;
@@ -49,7 +48,7 @@ rocprofvis_dm_result_t RocpdDatabase::FindTrackId(
     {
         auto it1 = find_track_pmc_map.find(process);
         if (it1!=find_track_pmc_map.end()){
-            auto it2 = it1->second.find(proc_name);
+            auto it2 = it1->second.find(subprocess);
             if (it2!=it1->second.end()){
                 track_id = it2->second;
                 return kRocProfVisDmResultSuccess;
@@ -253,10 +252,10 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                            Builder::QParam("args", "name"), 
                            Builder::QParam("start", Builder::START_SERVICE_NAME),
                            Builder::QParam("end", Builder::END_SERVICE_NAME),
+                           Builder::QParam("(end-start)", "duration"),
                            Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                            Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME) },
                        { Builder::From("api") } })),
-                        //"select 1 as op, id, apiName, args, start, end, pid, tid from api "
             },
                         &CallBackAddTrack)) break;
 
@@ -308,6 +307,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                            Builder::QParam("description", "name"), 
                            Builder::QParam("start", Builder::START_SERVICE_NAME),
                            Builder::QParam("end", Builder::END_SERVICE_NAME),
+                           Builder::QParam("(end-start)", "duration"),
                            Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
                            Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME) },
                          { Builder::From("op") } })),
@@ -730,32 +730,86 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
         std::stringstream query;
         if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {
-            query << "select * from api where id == ";
+            query << "select *, end-start as duration from api where id == ";
             query << event_id.bitfield.event_id << ";";  
             ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Properties", extdata, &CallbackAddExtInfo)) break;
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, query.str().c_str(), "Properties", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
             query.str("");
-            query << "select * from copy where id == ";
+            query << "select *, end-start as duration from copy where id == ";
             query << event_id.bitfield.event_id << ";";  
             ShowProgress(50, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Copy", extdata, &CallbackAddExtInfo)) break;
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, query.str().c_str(), "Copy", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
+
+            std::string level_query = Builder::Select(rocprofvis_db_sqlite_essential_data_query_format(
+                { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                    Builder::SpaceSaver(0),
+                    Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
+                    Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
+                    Builder::SpaceSaver(0), 
+                    Builder::QParam("L.level"),
+                    Builder::SpaceSaver(0) },
+                  { Builder::From("rocpd_api"),
+                    Builder::LeftJoin("event_levels_api", "L", "id = L.eid") },
+                  { Builder::Where(
+                      "id", "==", std::to_string(event_id.bitfield.event_id)) } }));
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(future, level_query.c_str(), extdata, &CallbackAddEssentialInfo))
+                break;
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
-            query << "select * from op where id == ";
+            query << "select *, end-start as duration, 'GPU' as agent_type from op where id == ";
             query << event_id.bitfield.event_id << ";";  
             ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Properties", extdata, &CallbackAddExtInfo)) break;
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, query.str().c_str(), "Properties", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
             query.str("");
             query << "select * from copyop where id == ";
             query << event_id.bitfield.event_id << ";";  
             ShowProgress(25, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Copy", extdata, &CallbackAddExtInfo)) break;
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, query.str().c_str(), "Copy", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
             query.str("");
             query << "select * from kernel where id == ";
             query << event_id.bitfield.event_id << ";";  
             ShowProgress(50, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Dispatch", extdata, &CallbackAddExtInfo)) break;
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, query.str().c_str(), "Dispatch", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
+
+            std::string level_query =
+                Builder::Select(rocprofvis_db_sqlite_essential_data_query_format(
+                    { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                        Builder::SpaceSaver(0),
+                        Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
+                        Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME),
+                        Builder::SpaceSaver(0), Builder::QParam("L.level"),
+                        Builder::SpaceSaver(0) },
+                      { Builder::From("rocpd_api"),
+                        Builder::LeftJoin("event_levels_api", "L", "id = L.eid") },
+                      { Builder::Where(
+                          "id", "==", std::to_string(event_id.bitfield.event_id)) } }));
         } else    
         {
             ShowProgress(0, "Extended data not available for specified operation type!", kRPVDbError, future );

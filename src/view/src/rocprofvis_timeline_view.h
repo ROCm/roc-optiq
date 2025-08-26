@@ -7,12 +7,11 @@
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_flame_track_item.h"
-#include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
+#include "rocprofvis_project.h"
 #include "widgets/rocprofvis_widget.h"
 #include <map>
 #include <string>
@@ -25,6 +24,7 @@ namespace View
 {
 
 class TimelineSelection;
+class TimelineView;
 
 enum class TimeFormat
 {
@@ -39,8 +39,26 @@ typedef struct ViewCoords
     float  zoom;
 } ViewCoords;
 
+class TimelineViewProjectSettings : public ProjectSetting
+{
+public:
+    TimelineViewProjectSettings(const std::string& project_id,
+                                TimelineView&      timeline_view);
+    ~TimelineViewProjectSettings() override;
+    void ToJson() override;
+    bool Valid() const override;
+
+    uint64_t TrackID(int index) const;
+    bool     DisplayTrack(uint64_t track_id) const;
+
+private:
+    TimelineView& m_timeline_view;
+};
+
 class TimelineView : public RocWidget
 {
+    friend TimelineViewProjectSettings;
+
 public:
     TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
     ~TimelineView();
@@ -116,13 +134,12 @@ private:
     float                              m_last_zoom;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     RocProfVis::View::AnnotationsView  m_annotations_view;
-
-    struct
-    {
-        bool     handled;
-        uint64_t track_id;
-        int      new_index;
-    } m_reorder_request;
+    struct {
+        bool        handled;
+        uint64_t    track_id;
+        int         new_index;
+    }                                  m_reorder_request;
+    TimelineViewProjectSettings        m_project_settings;
 };
 
 }  // namespace View

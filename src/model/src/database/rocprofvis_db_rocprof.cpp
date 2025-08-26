@@ -30,8 +30,7 @@ namespace DataModel
 rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
                                                     uint64_t node,
                                                     uint32_t process,
-                                                    uint32_t subprocess,
-                                                    char* proc_name,
+                                                    const char* subprocess,
                                                     rocprofvis_dm_op_t operation,
                                                     rocprofvis_dm_track_id_t& track_id) {
     
@@ -40,7 +39,7 @@ rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
     if (it_node!=find_track_map.end()){
         auto it_process = it_node->second.find(process);
         if (it_process!=it_node->second.end()){
-            auto it_subprocess = it_process->second.find(subprocess);
+            auto it_subprocess = it_process->second.find(std::atol(subprocess));
             if (it_subprocess!=it_process->second.end()){
                 track_id = it_subprocess->second;
                 return kRocProfVisDmResultSuccess;
@@ -328,7 +327,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
                          Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
                          Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
-                         Builder::SpaceSaver(0) },
+                         Builder::QParam("-1", Builder::STREAM_ID_SERVICE_NAME) },
                        { Builder::From("rocpd_region", "R"),
                          Builder::InnerJoin("rocpd_string", "S", "S.id = R.name_id AND S.guid = R.guid"),
                          Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id AND E.guid = R.guid"),
@@ -1326,34 +1325,108 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_extdata_t extdata = BindObject()->FuncAddExtData(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(extdata, ERROR_EXT_DATA_CANNOT_BE_NULL);
-        std::stringstream query;
+        std::string query;
         if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {
-            query << "select * from regions where id == ";
-            query << event_id.bitfield.event_id << ";";  
-            ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Properties", extdata, &CallbackAddExtInfo)) break;
+            query = "select * from regions where id == ";
+            query += std::to_string(event_id.bitfield.event_id);
+            ShowProgress(0, query.c_str(),kRPVDbBusy, future);
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, query.c_str(), "Properties", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
+            query = Builder::Select(rocprofvis_db_sqlite_essential_data_query_format(
+                { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                    Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
+                    Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                    Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
+                    Builder::QParam("-1", Builder::STREAM_ID_SERVICE_NAME),
+                    Builder::QParam("L.level"),
+                    Builder::QParam("L.level_for_stream") },
+                  { Builder::From("rocpd_region", "R"),
+                    Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id"),
+                    Builder::LeftJoin("event_levels_launch_v1", "L", "R.id = L.eid") },
+                  { Builder::Where(
+                      "R.id", "==", std::to_string(event_id.bitfield.event_id)) } }));
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
+
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
-            query << "select * from kernels where id == ";
-            query << event_id.bitfield.event_id << ";";  
-            ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Properties", extdata, &CallbackAddExtInfo)) break;
+            query = "select * from kernels where id == ";
+            query += std::to_string(event_id.bitfield.event_id); 
+            ShowProgress(0, query.c_str(),kRPVDbBusy, future);
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, query.c_str(), "Properties", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
+            query = Builder::Select(rocprofvis_db_sqlite_essential_data_query_format(
+                { { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
+                    Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
+                    Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                    Builder::QParam("K.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                    Builder::QParam("K.stream_id", Builder::STREAM_ID_SERVICE_NAME), 
+                    Builder::QParam("L.level"), 
+                    Builder::QParam("L.level_for_stream") },
+                  { Builder::From("rocpd_kernel_dispatch", "K"),
+                    Builder::LeftJoin("event_levels_launch_v1", "L", "K.id = L.eid") },
+                  { Builder::Where(
+                      "K.id", "==", std::to_string(event_id.bitfield.event_id)) } }));
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
         } else   
         if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
         {
-            query << "select * from memory_allocation where id == ";
-            query << event_id.bitfield.event_id << ";";
-            ShowProgress(0, query.str().c_str(), kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Properties", extdata, &CallbackAddExtInfo)) break;
+            query = "select * from memory_allocations where id == ";
+            query += std::to_string(event_id.bitfield.event_id);
+            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, query.c_str(), "Properties", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
+            query = Builder::Select(rocprofvis_db_sqlite_essential_data_query_format(
+                { { Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
+                    Builder::QParam("M.nid", Builder::NODE_ID_SERVICE_NAME),
+                    Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                    Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                    Builder::QParam("M.stream_id", Builder::STREAM_ID_SERVICE_NAME), 
+                    Builder::QParam("L.level"),
+                    Builder::QParam("L.level_for_stream") },
+                  { Builder::From("rocpd_memory_allocate", "M"),
+                    Builder::LeftJoin("event_levels_launch_v1", "L", "M.id = L.eid") },
+                  { Builder::Where(
+                      "M.id", "==", std::to_string(event_id.bitfield.event_id)) } }));
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryCopy)
         {
-            query << "select * from memory_copies where id == ";
-            query << event_id.bitfield.event_id << ";";
-            ShowProgress(0, query.str().c_str(), kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), "Properties", extdata, &CallbackAddExtInfo)) break;
+            query = "select * from memory_copies where id == ";
+            query += std::to_string(event_id.bitfield.event_id);
+            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, query.c_str(), "Properties", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
+            query = Builder::Select(rocprofvis_db_sqlite_essential_data_query_format(
+                { { Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
+                    Builder::QParam("M.nid", Builder::NODE_ID_SERVICE_NAME),
+                    Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                    Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                    Builder::QParam("M.stream_id", Builder::STREAM_ID_SERVICE_NAME), 
+                    Builder::QParam("L.level"), 
+                    Builder::QParam("L.level_for_stream") },
+                  { Builder::From("rocpd_memory_copy", "M"),
+                    Builder::LeftJoin("event_levels_launch_v1", "L", "M.id = L.eid") },
+                  { Builder::Where(
+                      "M.id", "==", std::to_string(event_id.bitfield.event_id)) } }));
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
         } else
         {
             ShowProgress(0, "Extended data not available for specified operation type!", kRPVDbError, future );

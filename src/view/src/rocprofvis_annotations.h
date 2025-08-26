@@ -25,8 +25,7 @@ public:
     void ShowStickyNotePopup();
 
     void                     ShowStickyNoteEditPopup();
-    int                      GetUniqueId();
-    std::vector<StickyNote>& GetStickyNotes();
+     std::vector<StickyNote>& GetStickyNotes();
     void                     OpenStickyNotePopup(double time_ns, float y_offset);
 
 private:

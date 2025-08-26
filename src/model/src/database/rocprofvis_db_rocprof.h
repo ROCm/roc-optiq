@@ -120,13 +120,64 @@ private:
     rocprofvis_dm_result_t          FindTrackId(
                                                         uint64_t node,
                                                         uint32_t process,
-                                                        uint32_t subprocess,
-                                                        char* proc_name,
+                                                        const char* subprocess,
                                                         rocprofvis_dm_op_t operation,
                                                         rocprofvis_dm_track_id_t& track_id) override;
 
+    protected:
+    const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override {
+        return &s_rocprof_categorized_data;
+    };
+
     private:
         track_find_map_t find_track_map;
+
+        inline static const rocprofvis_event_data_category_map_t
+            s_rocprof_categorized_data = {
+                {
+                    kRocProfVisDmOperationNoOp,
+                    {
+                        { "id", kRocProfVisEventEssentialDataId },
+                        { "category", kRocProfVisEventEssentialDataCategory },
+                        { "name", kRocProfVisEventEssentialDataName },
+                        { "start", kRocProfVisEventEssentialDataStart },
+                        { "end", kRocProfVisEventEssentialDataEnd },
+                        { "duration", kRocProfVisEventEssentialDataDuration },
+                        { "nid", kRocProfVisEventEssentialDataNode },
+                        { "pid", kRocProfVisEventEssentialDataProcess },
+                        { "tid", kRocProfVisEventEssentialDataThread },
+                        { "queue_name", kRocProfVisEventEssentialDataQueue },
+                        { "stream_name", kRocProfVisEventEssentialDataStream },
+                        { "stack_id", kRocProfVisEventEssentialDataInternal },
+                        { "parent_stack_id", kRocProfVisEventEssentialDataInternal },
+                        { "corr_id", kRocProfVisEventEssentialDataInternal },
+                        { "stream_id", kRocProfVisEventEssentialDataInternal },
+                        { "queue_id", kRocProfVisEventEssentialDataInternal },
+                    },
+                },
+                {
+                    kRocProfVisDmOperationDispatch,
+                    {
+                        { "agent_type", kRocProfVisEventEssentialDataAgentType },
+                        { "agent_type_index", kRocProfVisEventEssentialDataAgentIndex },
+                    },
+                },
+                {
+                    kRocProfVisDmOperationMemoryAllocate,
+                    {
+                        { "agent_type", kRocProfVisEventEssentialDataAgentType },
+                        { "agent_type_index", kRocProfVisEventEssentialDataAgentIndex },
+                        { "type", kRocProfVisEventEssentialDataName },
+                    },
+                },
+                {
+                    kRocProfVisDmOperationMemoryCopy,
+                    {
+                        { "dst_agent_type", kRocProfVisEventEssentialDataAgentType },
+                        { "dst_agent_type_index", kRocProfVisEventEssentialDataAgentIndex },
+                    } 
+                }
+            };
 };
 
 }  // namespace DataModel

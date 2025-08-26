@@ -8,15 +8,18 @@ namespace RocProfVis
 namespace View
 {
 
+static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
-                       const std::string& text, const std::string& title, int id)
+                       const std::string& text, const std::string& title)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
 , m_size(size)
 , m_text(text)
 , m_title(title)
-, m_id(id)
-{}
+, m_id(s_unique_id_counter)
+{
+    s_unique_id_counter = s_unique_id_counter + 1;
+}
 int
 StickyNote::GetID()
 {

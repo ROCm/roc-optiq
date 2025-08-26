@@ -13,7 +13,10 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 TraceView::TraceView()
 : m_timeline_view(nullptr)
@@ -29,6 +32,7 @@ TraceView::TraceView()
 , m_tabselected_event_token(-1)
 , m_event_selection_changed_event_token(-1)
 , m_save_notification_id("")
+, m_project_settings(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -137,6 +141,12 @@ TraceView::Update()
         if(m_timeline_view)
         {
             m_timeline_view->MakeGraphView();
+        }
+        m_project_settings = std::make_unique<SystemTraceProjectSettings>(
+            m_data_provider.GetTraceFilePath(), *this);
+        if(m_project_settings && m_project_settings->Valid())
+        {
+            m_bookmarks = std::move(m_project_settings->Bookmarks());
         }
     }
 
@@ -397,3 +407,77 @@ TraceView::SaveSelection(const std::string& file_path)
     }
     return false;
 }
+
+SystemTraceProjectSettings::SystemTraceProjectSettings(const std::string& project_id,
+                                                       TraceView&         view)
+: ProjectSetting(project_id)
+, m_view(view)
+{}
+
+SystemTraceProjectSettings::~SystemTraceProjectSettings() {}
+
+void
+SystemTraceProjectSettings::ToJson()
+{
+    int i = 0;
+    for(const auto& it : m_view.m_bookmarks)
+    {
+        jt::Json& bookmark =
+            m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK][i];
+        bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY] = it.first;
+        bookmark[JSON_KEY_TIMELINE_BOOKMARK_X]   = it.second.time_offset_ns;
+        bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y]   = it.second.y_scroll_position;
+        bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z]   = it.second.zoom;
+        i++;
+    }
+}
+
+bool
+SystemTraceProjectSettings::Valid() const
+{
+    bool valid = false;
+    if(m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK].isArray())
+    {
+        int valid_count = 0;
+        for(jt::Json& bookmark :
+            m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK]
+                .getArray())
+        {
+            if(bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].isLong() &&
+               bookmark[JSON_KEY_TIMELINE_BOOKMARK_X].isNumber() &&
+               bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y].isNumber() &&
+               bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z].isNumber())
+            {
+                valid_count++;
+            }
+            else
+            {
+                break;
+            }
+        }
+        valid = (valid_count ==
+                 m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK]
+                     .getArray()
+                     .size());
+    }
+    return valid;
+}
+
+std::unordered_map<int, ViewCoords>
+SystemTraceProjectSettings::Bookmarks()
+{
+    std::unordered_map<int, ViewCoords> bookmarks;
+    for(jt::Json& bookmark :
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK].getArray())
+    {
+        bookmarks[bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].getNumber()] = ViewCoords{
+            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_X].getNumber()),
+            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y].getNumber()),
+            static_cast<float>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z].getNumber())
+        };
+    }
+    return bookmarks;
+}
+
+}  // namespace View
+}  // namespace RocProfVis

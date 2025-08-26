@@ -230,8 +230,6 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
             return m_ext_data.get()->GetPropertyAsCharPtr(kRPVDMExtDataNameCharPtrIndexed, index, value);
         case kRPVDMTrackExtDataValueCharPtrIndexed:
             return m_ext_data.get()->GetPropertyAsCharPtr(kRPVDMExtDataValueCharPtrIndexed, index, value);
-        case kRPVDMTrackInfoJsonCharPtr:
-            return GetExtendedInfoAsJsonBlob(*(rocprofvis_dm_json_blob_t*)value);
         case kRPVDMTrackMainProcessNameCharPtr:
             *value = (char*)Process();
             return kRocProfVisDmResultSuccess;
@@ -293,11 +291,6 @@ rocprofvis_dm_result_t  Track::GetPropertyAsHandle(rocprofvis_dm_property_t prop
     }
 }
 
-rocprofvis_dm_result_t Track::GetExtendedInfoAsJsonBlob(rocprofvis_dm_json_blob_t & json) {
-    ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
-    ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params->extdata, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
-    return m_ext_data.get()->GetPropertyAsCharPtr(kRPVDMExtDataJsonBlobCharPtr, 0, (char**) & json);
-}
 
 
 #ifdef TEST

@@ -777,6 +777,10 @@ typedef enum rocprofvis_controller_extdata_properties_t
     kRPVControllerExtDataName = 0xD0000001,
     // Extended data value
     kRPVControllerExtDataValue = 0xD0000002,
+    // Extended data value
+    kRPVControllerExtDataType = 0xD0000003,
+    // Extended data category enumeration
+    kRPVControllerExtDataCategoryEnum = 0xD0000004,
 } rocprofvis_controller_extdata_properties_t;
 /* JSON: RPVCallstack
 {
@@ -791,6 +795,49 @@ typedef enum rocprofvis_controller_sort_order_t
     kRPVControllerSortOrderAscending,
     kRPVControllerSortOrderDescending,
 } rocprofvis_controller_sort_order_t;
+
+typedef enum rocprofvis_event_data_category_enum_t
+{
+    // Internal information, user should not see it
+    kRocProfVisEventEssentialDataInternal,
+    // Uncategorized information
+    kRocProfVisEventEssentialDataUncategorized,
+    // Event Id
+    kRocProfVisEventEssentialDataId,
+    // Event category
+    kRocProfVisEventEssentialDataCategory,
+    // Event name
+    kRocProfVisEventEssentialDataName,
+    // Event start
+    kRocProfVisEventEssentialDataStart,
+    // Event end
+    kRocProfVisEventEssentialDataEnd,
+    // Event duration
+    kRocProfVisEventEssentialDataDuration,
+    // Event node id
+    kRocProfVisEventEssentialDataNode,
+    // Event PID
+    kRocProfVisEventEssentialDataProcess,
+    // Event TID
+    kRocProfVisEventEssentialDataThread,
+    // Event Agent type - GPU/CPU
+    kRocProfVisEventEssentialDataAgentType,
+    // Event agent index
+    kRocProfVisEventEssentialDataAgentIndex,
+    // Event queue
+    kRocProfVisEventEssentialDataQueue,
+    // Event stream
+    kRocProfVisEventEssentialDataStream,
+    // Event track
+    kRocProfVisEventEssentialDataTrack,
+    // Event stream track
+    kRocProfVisEventEssentialDataStreamTrack,
+    // Event track level
+    kRocProfVisEventEssentialDataLevel,
+    // Event stream track level
+    kRocProfVisEventEssentialDataStreamLevel,
+
+} rocprofvis_event_data_category_enum_t;
 
 #ifdef COMPUTE_UI_SUPPORT
 /*

@@ -95,6 +95,7 @@ Data& Data::operator=(Data const& other)
 Data& Data::operator=(Data&& other)
 {
     Reset();
+    m_type = other.m_type;
     switch(m_type)
     {
         case kRPVControllerPrimitiveTypeObject:

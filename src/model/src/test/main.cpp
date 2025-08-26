@@ -362,8 +362,6 @@ int main(int argc, char** argv)
                                                                     char* data_value = rocprofvis_dm_get_property_as_charptr(extdata, kRPVDMExtDataValueCharPtrIndexed, k);
                                                                     printf(ANSI_COLOR_MAGENTA "\tItem %d : category=%s, name=%s, value=%s \n", k, data_category, data_name, data_value);
                                                                 }
-                                                                char* data_json_blob = rocprofvis_dm_get_property_as_charptr(extdata, kRPVDMExtDataJsonBlobCharPtr, 0);
-                                                                printf("\x1b[35mExtended data as JSON:\n%s\n", data_json_blob);
                                                                 rocprofvis_dm_delete_event_property_for(trace, kRPVDMEventExtData, event_id);
                                                             }
                                                         } 

@@ -690,14 +690,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                                        k, data_category, data_name,
                                                        data_value);
                                             }
-                                            char* data_json_blob =
-                                                rocprofvis_dm_get_property_as_charptr(
-                                                    extdata, kRPVDMExtDataJsonBlobCharPtr,
-                                                    0);
-                                            REQUIRE(data_json_blob);
-                                            spdlog::info(
-                                                "\x1b[35mExtended data as JSON:\n{}",
-                                                   data_json_blob);
                                             rocprofvis_dm_delete_event_property_for(
                                                 m_trace, kRPVDMEventExtData, event_id);
                                         }

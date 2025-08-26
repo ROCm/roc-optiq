@@ -72,6 +72,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_track_height_total({})
 , m_arrow_layer(m_data_provider, timeline_selection)
 , m_timeline_selection(timeline_selection)
+, m_stop_user_interaction(false)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -221,7 +222,7 @@ TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
                                           m_v_max_x);
     m_annotations_view.ShowStickyNotePopup();
     m_annotations_view.ShowStickyNoteEditPopup();
-    m_resize_activity =
+    m_stop_user_interaction =
         m_annotations_view.Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns);
 }
 
@@ -1356,7 +1357,7 @@ TimelineView::RenderGraphPoints()
 
         RenderScrubber(screen_pos);
 
-        if(!m_resize_activity)
+        if(!m_resize_activity && !m_stop_user_interaction)
         {
             // Funtion enables user interactions to be captured
             HandleTopSurfaceTouch();

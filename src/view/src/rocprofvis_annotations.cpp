@@ -3,6 +3,8 @@
 #include "rocprofvis_settings.h"
 #include <random>
 #include <sstream>
+#include <chrono>
+#include <ctime>
 
 namespace RocProfVis
 {
@@ -11,10 +13,10 @@ namespace View
 int
 AnnotationsView::GetUniqueId()
 {
-    // Each annotation gets its own unique ID.
-    static std::mt19937_64                    rng{ std::random_device{}() };
-    static std::uniform_int_distribution<int> dist;
-    return dist(rng);
+    auto epoch_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now().time_since_epoch())
+                        .count();
+    return static_cast<int>(epoch_ms);
 }
 
 AnnotationsView::AnnotationsView()
@@ -98,7 +100,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
 {
     using namespace RocProfVis::View;
 
-    if(!m_show_sticky_edit_popup || m_edit_sticky_index < 0) return;
+    if(!m_show_sticky_edit_popup  ) return;
 
     Settings& settings     = Settings::GetInstance();
     ImU32     popup_bg     = settings.GetColor(Colors::kFillerColor);

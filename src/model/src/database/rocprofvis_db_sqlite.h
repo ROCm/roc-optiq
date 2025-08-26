@@ -234,7 +234,7 @@ class SqliteDatabase : public Database
         static void CollectTrackServiceData(
             sqlite3_stmt* stmt, int column_index, std::string& column_name,
             rocprofvis_db_sqlite_track_service_data_t& service_data);
-        static void SqliteDatabase::FindTrackIDs(
+        static void FindTrackIDs(
             SqliteDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
             int& trackId, int & streamTrackId);
     private:     

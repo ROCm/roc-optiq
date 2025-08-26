@@ -141,7 +141,7 @@ TimelineView::TimelineOptions()
 {}
 
 void
-TimelineView::RenderArrows(ImVec2 screen_pos)
+TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
 {
     float total_height = m_graph_size.y;
     if(!m_track_height_total.empty())
@@ -158,11 +158,11 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
     //  ImGui::SetCursorPos(
     // ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
-    ImGui::BeginChild("Arrows Overlay", ImVec2(m_graph_size.x, m_graph_size.y), false,
-                      window_flags);
+    ImGui::BeginChild("UI Interactive Overlay", ImVec2(m_graph_size.x, m_graph_size.y),
+                      false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
-    ImGui::BeginChild("Arrows Overlay Content", ImVec2(m_graph_size.x, total_height),
+    ImGui::BeginChild("UI Interactive Content", ImVec2(m_graph_size.x, total_height),
                       false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -177,10 +177,10 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
                          m_track_height_total);
 
     RenderArrowOptionsMenu();
+    RenderStickyNotes(draw_list, window_position);
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
-    RenderStickyNotes(draw_list, window_position);
     ImGui::EndChild();
 }
 
@@ -1352,7 +1352,7 @@ TimelineView::RenderGraphPoints()
         RenderGridAlt();
         RenderGraphView();
         RenderSplitter(screen_pos);
-        RenderArrows(screen_pos);
+        RenderInteractiveUI(screen_pos);
 
         RenderScrubber(screen_pos);
 

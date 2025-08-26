@@ -50,7 +50,7 @@ public:
     void                             ResetView();
     void                             DestroyGraphs();
     std::vector<rocprofvis_graph_t>* GetGraphs();
-    void                             RenderArrows(ImVec2 screen_pos);
+    void                             RenderInteractiveUI(ImVec2 screen_pos);
     void                             TimelineOptions();
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);

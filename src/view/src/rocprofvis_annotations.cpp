@@ -9,8 +9,9 @@ namespace RocProfVis
 namespace View
 {
 int
-GetUniqueId()
+AnnotationsView::GetUniqueId()
 {
+    // Each annotation gets its own unique ID.
     static std::mt19937_64                    rng{ std::random_device{}() };
     static std::uniform_int_distribution<int> dist;
     return dist(rng);
@@ -93,42 +94,6 @@ AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
 }
 
 void
-WordBreakWrap(char* buffer, int buf_size, ImVec2 box_size)
-{
-    // Get font size from ImGui context
-    ImFont* font = ImGui::GetFont();
-    // Estimate average character width (proportional fonts: ~0.55 * font_size)
-    float avg_char_width  = font->GetCharAdvance('a');
-    int   max_line_length = static_cast<int>(box_size.x / avg_char_width);
-
-    int line_len = 0;
-    for(int i = 0; buffer[i] != '\0' && i < buf_size; ++i)
-    {
-        if(buffer[i] == '\n')
-        {
-            line_len = 0;
-        }
-        else
-        {
-            ++line_len;
-            if(line_len >= max_line_length)
-            {
-                // Only break if not at whitespace
-                if(buffer[i] != ' ' && buffer[i] != '\n')
-                {
-                    if(i + 1 < buf_size - 1)
-                    {
-                        memmove(buffer + i + 1, buffer + i, strlen(buffer + i) + 1);
-                        buffer[i] = '\n';
-                        line_len  = 0;
-                    }
-                }
-            }
-        }
-    }
-}
-
-void
 AnnotationsView::ShowStickyNoteEditPopup()
 {
     using namespace RocProfVis::View;
@@ -146,7 +111,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
     ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
     ImGui::PushStyleColor(ImGuiCol_Border, border_color);
 
-    ImGui::OpenPopup("EditStickyNote");
+    ImGui::OpenPopup("Edit Sticky Note");
     if(ImGui::BeginPopupModal("EditStickyNote", nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize))
     {
@@ -162,10 +127,9 @@ AnnotationsView::ShowStickyNoteEditPopup()
         ImGui::Dummy(ImVec2(0, 4));
 
         ImGui::Text("Text:");
-        WordBreakWrap(m_sticky_text, IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100));
-        ImGui::InputTextMultiline(
-            "##StickyText", m_sticky_text, IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100),
-            ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_NoHorizontalScroll);
+        ImGui::InputTextMultiline("##StickyText", m_sticky_text,
+                                  IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100),
+                                  ImGuiInputTextFlags_AllowTabInput);
 
         ImGui::PopStyleColor();
 
@@ -177,10 +141,12 @@ AnnotationsView::ShowStickyNoteEditPopup()
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                               settings.GetColor(Colors::kHighlightChart));
 
-        bool save_clicked = ImGui::Button("Save", ImVec2(100, 0));
+        bool save_clicked = ImGui::Button("Save", ImVec2(70, 0));
         ImGui::SameLine();
-        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(100, 0));
-        bool delete_clicked = ImGui::Button("delete", ImVec2(100, 0));
+        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(70, 0));
+        ImGui::SameLine();
+
+        bool delete_clicked = ImGui::Button("Delete", ImVec2(70, 0));
         ImGui::PopStyleColor(3);
 
         if(save_clicked)
@@ -222,7 +188,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
             ImGui::CloseCurrentPopup();
         }
 
-        ImGui::EndPopup();  // <-- Always call EndPopup if BeginPopupModal returns true
+        ImGui::EndPopup();   
     }
 
     ImGui::PopStyleColor(2);
@@ -263,10 +229,9 @@ AnnotationsView::ShowStickyNotePopup()
 
         ImGui::Text("Text:");
 
-        WordBreakWrap(m_sticky_text, IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100));
-        ImGui::InputTextMultiline(
-            "##StickyText", m_sticky_text, IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100),
-            ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_NoHorizontalScroll);
+        ImGui::InputTextMultiline("##StickyText", m_sticky_text,
+                                  IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100),
+                                  ImGuiInputTextFlags_AllowTabInput);
 
         ImGui::PopStyleColor();
 

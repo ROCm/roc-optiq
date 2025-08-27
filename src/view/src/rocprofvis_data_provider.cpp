@@ -2643,12 +2643,12 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
             return;
         }
 
-        delete m_raw_trackdata[params.m_track_id];
-        m_raw_trackdata[params.m_track_id] = nullptr;
         spdlog::debug(
             "Replacing existing track data from group {} with group {} for id {}",
             existing_raw_data->GetDataGroupID(), params.m_data_group_id,
             params.m_track_id);
+        delete m_raw_trackdata[params.m_track_id];
+        m_raw_trackdata[params.m_track_id] = nullptr;
     }
 
     if(!raw_event_data)

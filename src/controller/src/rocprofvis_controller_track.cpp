@@ -403,6 +403,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                 result = kRocProfVisResultUnknownError;
             }
         }
+        future->RemoveDependentFuture(futures[i]);
         rocprofvis_db_future_free(futures[i]);
     }
     s_data_model_load--;

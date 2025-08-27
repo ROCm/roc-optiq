@@ -36,6 +36,11 @@ MemoryManager::MemoryManager(uint64_t id)
     //}
 }
 
+bool
+MemoryManager::IsShuttingDown() {
+    return m_lru_mgmt_shutdown;
+}
+
 MemoryManager::~MemoryManager()
 {
     if(m_mem_mgmt_initialized)

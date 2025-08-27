@@ -32,13 +32,13 @@ Segment::~Segment()
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
     Trace* trace = (Trace*) m_ctx->GetContext()->GetContext();
-    if(trace->GetMemoryManager())
+    if(trace->GetMemoryManager() && !trace->GetMemoryManager()->IsShuttingDown())
     {
         for(auto& level : m_entries)
         {
             for(auto& pair : level.second)
             {
-                ((Trace*) m_ctx->GetContext()->GetContext())->GetMemoryManager()->Delete(pair.second, m_ctx);
+                trace->GetMemoryManager()->Delete(pair.second, m_ctx);
             }
         }
     }

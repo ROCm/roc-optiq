@@ -14,9 +14,26 @@ namespace View
 {
 
 class TimelineSelection;
+class FlameTrackItem;
+
+class FlameTrackProjectSettings : public ProjectSetting
+{
+public:
+    FlameTrackProjectSettings(const std::string& project_id, FlameTrackItem& track_item);
+    ~FlameTrackProjectSettings() override;
+    void ToJson() override;
+    bool Valid() const override;
+
+    bool ColorEvents() const;
+
+private:
+    FlameTrackItem& m_track_item;
+};
 
 class FlameTrackItem : public TrackItem
 {
+    friend FlameTrackProjectSettings;
+
 public:
     FlameTrackItem(DataProvider&                      dp,
                    std::shared_ptr<TimelineSelection> timeline_selection, int chart_id,
@@ -51,6 +68,7 @@ private:
     float                              m_level_height;
     std::vector<uint64_t>              m_selected_event_id;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
+    FlameTrackProjectSettings          m_project_settings;
 
     // Used to enforce one selection change per render cycle.
     bool                            m_selection_changed;

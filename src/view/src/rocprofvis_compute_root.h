@@ -16,7 +16,7 @@ class ComputeRoot : public RocWidget
 public:
     void Render() override;
     void Update() override;
-    void OpenTrace(const std::string& path);
+    bool OpenTrace(const std::string& path);
     ComputeRoot();
     ~ComputeRoot();
 

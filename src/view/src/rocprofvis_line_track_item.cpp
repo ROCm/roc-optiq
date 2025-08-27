@@ -21,11 +21,19 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_is_color_value_existant(false)
 , m_dp(dp)
 , m_show_boxplot(false)
+, m_project_settings(dp.GetTraceFilePath(), *this)
 {
     m_track_height                   = 100.0f;
     m_track_specific_height_original = m_track_height;
     m_graph_level                    = 1;
     UpdateYScaleExtents();
+
+    if(m_project_settings.Valid())
+    {
+        m_show_boxplot            = m_project_settings.BoxPlot();
+        m_is_color_value_existant = m_project_settings.Highlight();
+        m_color_by_value_digits   = m_project_settings.HighlightRange();
+    }
 }
 
 LineTrackItem::~LineTrackItem() {}
@@ -396,6 +404,65 @@ LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
     double y = cursor_position.y + content_size.y - (point.y_value - m_min_y) * scaleY;
 
     return ImVec2(x, y);
+}
+
+LineTrackProjectSettings::LineTrackProjectSettings(const std::string& project_id,
+                                                   LineTrackItem&     track_item)
+: ProjectSetting(project_id)
+, m_track_item(track_item)
+{}
+
+LineTrackProjectSettings::~LineTrackProjectSettings() {}
+
+void
+LineTrackProjectSettings::ToJson()
+{
+    jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                                     [m_track_item.GetID()];
+    track[JSON_KEY_TIMELINE_TRACK_BOX_PLOT] = m_track_item.m_show_boxplot;
+    track[JSON_KEY_TIMELINE_TRACK_COLOR]    = m_track_item.m_is_color_value_existant;
+    track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN] =
+        m_track_item.m_color_by_value_digits.interest_1_min;
+    track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX] =
+        m_track_item.m_color_by_value_digits.interest_1_max;
+}
+
+bool
+LineTrackProjectSettings::Valid() const
+{
+    jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                                     [m_track_item.GetID()];
+    return track[JSON_KEY_TIMELINE_TRACK_BOX_PLOT].isBool() &&
+           track[JSON_KEY_TIMELINE_TRACK_COLOR].isBool() &&
+           track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN].isNumber() &&
+           track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX].isNumber();
+}
+
+bool
+LineTrackProjectSettings::BoxPlot() const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_BOX_PLOT]
+                              .getBool();
+}
+
+bool
+LineTrackProjectSettings::Highlight() const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
+                              .getBool();
+}
+
+rocprofvis_color_by_value_t
+LineTrackProjectSettings::HighlightRange() const
+{
+    jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                                     [m_track_item.GetID()];
+    return rocprofvis_color_by_value_t{
+        static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX].getNumber()),
+        static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN].getNumber())
+    };
 }
 
 }  // namespace View

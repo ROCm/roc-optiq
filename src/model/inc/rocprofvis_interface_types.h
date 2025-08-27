@@ -143,6 +143,16 @@ typedef enum rocprofvis_db_status_t {
     kRPVDbBusy = 2
 } rocprofvis_db_status_t;
 
+typedef enum rocprofvis_db_data_type_t
+{
+    kRPVDataTypeDefault = 0,
+    kRPVDataTypeInt     = 1,
+    kRPVDataTypeDouble  = 2,
+    kRPVDataTypeString  = 3,
+    kRPVDataTypeBlob    = 4,
+    kRPVDataTypeNull    = 5
+} rocprofvis_db_data_type_t;
+
 // Trace properties
 typedef enum  rocprofvis_dm_trace_property_t {
     // Trace start time
@@ -285,8 +295,10 @@ typedef enum rocprofvis_dm_extdata_property_t {
     kRPVDMExtDataNameCharPtrIndexed,
     // Extended data value by specified index
     kRPVDMExtDataValueCharPtrIndexed,
-    // Extended data as JSON blob
-    kRPVDMExtDataJsonBlobCharPtr
+    // Extended data type
+    kRPVDMExtDataTypeUint64Indexed,
+    // Extended data category enumeration
+    kRPVDMExtDataEnumUint64Indexed
 } rocprofvis_dm_extdata_property_t;
 
 // Table object properties

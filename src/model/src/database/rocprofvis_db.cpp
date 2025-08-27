@@ -294,6 +294,7 @@ rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(Database
         record.name = it->first.c_str();
         record.data = (rocprofvis_dm_charptr_t)id_to_str_conv_array;
         record.category = table_name;
+        record.type  = kRPVDataTypeString;
         rocprofvis_dm_result_t result = db->BindObject()->FuncAddExtDataRecord(track_properties->extdata, record);
         if (result != kRocProfVisDmResultSuccess) return result;
     }

@@ -1,5 +1,6 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_project.h"
 #include "rocprofvis_view_structs.h"
 
 #include <deque>
@@ -11,6 +12,7 @@ namespace View
 {
 
 class Settings;
+class TrackItem;
 
 enum class TrackDataRequestState
 {
@@ -18,6 +20,20 @@ enum class TrackDataRequestState
     kRequesting,
     kTimeout,
     kError
+};
+
+class TrackProjectSettings : public ProjectSetting
+{
+public:
+    TrackProjectSettings(const std::string& project_id, TrackItem& track_item);
+    ~TrackProjectSettings() override;
+    void ToJson() override;
+    bool Valid() const override;
+
+    float Height() const;
+
+private:
+    TrackItem& m_track_item;
 };
 
 class TrackItem
@@ -103,6 +119,9 @@ protected:
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;
     static float                                     s_metadata_width;
+
+private:
+    TrackProjectSettings m_project_settings;
 };
 
 }  // namespace View

@@ -58,9 +58,10 @@ void ComputeRoot::Update()
     }
 }
 
-void ComputeRoot::OpenTrace(const std::string& path)
+bool ComputeRoot::OpenTrace(const std::string& path)
 {
     m_trace_opened = (kRocProfVisResultSuccess == m_compute_data_provider->LoadTrace(path));
+    return m_trace_opened;
 }
 
 void ComputeRoot::Render()

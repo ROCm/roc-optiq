@@ -1,3 +1,19 @@
+## 0.1.4
+
+### Features and Improvements
+
+- **Event Details**
+  - Event names added to event flow table
+  - Option added to show and hide flow arrows. Press F3 to show flow control panel.
+
+### Fixes
+
+- Fixed issues opening .db files without levels table.
+- Fixed issue where some tracks would not initially load.
+- Fixed hidden (internal) columns appearing group-by combo box.
+- Fixed table aggregation not working for .rpd files.
+- Fixed flow arrow direction flag not being used.
+
 ## 0.1.3
 
 ### Features and Improvements

@@ -182,10 +182,28 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
     if (callback_params->future->Interrupted()) return 1;
     rocprofvis_db_sqlite_track_service_data_t service_data{};
     bool  is_query_for_table_view = false;
-    uint32_t                                  op_pos                  = 0;
-    for(int i = 0; i < argc; i++)
+    uint32_t op_pos = 0;
+    int arg0 = 0;
+    std::string  column_text;
+    std::string  column = azColName[0];
+    rocprofvis_dm_table_row_t row =
+        db->BindObject()->FuncAddTableRow(callback_params->handle);
+    ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
+    if(column == "NumRecords")
     {
-        std::string column = azColName[i];
+        if(kRocProfVisDmResultSuccess !=
+           db->BindObject()->FuncAddTableColumn(callback_params->handle, azColName[0]))
+            return 1;
+        column_text = (char*) sqlite3_column_text(stmt, 0);
+        if(kRocProfVisDmResultSuccess !=
+           db->BindObject()->FuncAddTableRowCell(row, column_text.c_str()))
+            return 1;
+        arg0 = 1;
+    }
+    for(int i = arg0; i < argc; i++)
+    {
+        column = azColName[i];
+        
         if(column == Builder::OPERATION_SERVICE_NAME)
         {
             op_pos                  = i;
@@ -196,7 +214,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
     uint64_t blanks_mask = is_query_for_table_view ? db->GetBlanksMaskForQuery(callback_params->query[0]) : 0;
     if(0 == callback_params->future->GetProcessedRowsCount())
     {
-        for (int i=0; i < argc; i++)
+        for (int i=arg0; i < argc; i++)
         {
             if((blanks_mask & (uint64_t) 1 << (i-op_pos)) != 0) 
                 continue;
@@ -227,17 +245,17 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
             }
         }
     }
-    rocprofvis_dm_table_row_t row = db->BindObject()->FuncAddTableRow(callback_params->handle);
-    ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
+
+
     uint64_t op = 0;
 
     service_data.category = kRocProfVisDmNotATrack;
     service_data.op       = kRocProfVisDmOperationNoOp;
-    for (int i=0; i < argc; i++)
+    for (int i=arg0; i < argc; i++)
     {
-        if((blanks_mask & (uint64_t) 1 << i-(op_pos)) != 0) 
+        if((blanks_mask & (uint64_t) 1 << (i-op_pos)) != 0) 
             continue;
-        std::string       column_text;
+        
         std::string column = azColName[i];        
         if(is_query_for_table_view)
         {
@@ -672,6 +690,47 @@ SqliteDatabase::DropSQLTable(const char* table_name)
 
     sqlite3_mutex_leave(sqlite3_db_mutex(conn));
     ReleaseConnection(conn);
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t
+SqliteDatabase::DropSQLIndex(const char* index_name)
+{
+    sqlite3* conn = GetConnection();
+    sqlite3_mutex_enter(sqlite3_db_mutex(conn));
+
+    std::string query = "DROP INDEX IF EXISTS ";
+    query += index_name;
+    query += ";";
+    sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr);
+
+    sqlite3_mutex_leave(sqlite3_db_mutex(conn));
+    ReleaseConnection(conn);
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t
+SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries)
+{
+    sqlite3* conn = GetConnection();
+    if(sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
+
+    for (auto query : queries)
+    {
+        sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr);
+    }
+
+    if(sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
+    if(sqlite3_exec(conn, "ANALYZE;", nullptr, nullptr, nullptr) != SQLITE_OK)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
     return kRocProfVisDmResultSuccess;
 }
 

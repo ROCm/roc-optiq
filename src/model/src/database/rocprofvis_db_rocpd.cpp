@@ -188,6 +188,17 @@ int RocpdDatabase::CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stm
     return 0;
 }       
 
+rocprofvis_dm_result_t
+RocpdDatabase::CreateIndexes()
+{
+    std::vector<std::string> vec;
+    vec.push_back("CREATE INDEX IF NOT EXISTS pid_tid_idx ON rocpd_api(pid, tid, start);");
+    vec.push_back("CREATE INDEX IF NOT EXISTS gid_qid_idx ON rocpd_op(gpuId, queueId, start);");
+    vec.push_back("CREATE INDEX IF NOT EXISTS monitorTypeIdx on rocpd_monitor(gpuId,monitorType,start);");
+
+    return ExecuteTransaction(vec);
+}
+
 rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
@@ -195,14 +206,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
     {
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
 
-        ShowProgress(10, "Create CPU tracks indexes", kRPVDbBusy, future);
-        ExecuteSQLQuery(future,"CREATE INDEX pid_tid_idx ON rocpd_api(pid,tid);");
-
-        ShowProgress(10, "Create GPU tracks indexes", kRPVDbBusy, future );
-        ExecuteSQLQuery(future,"CREATE INDEX gid_qid_idx ON rocpd_op(gpuId, queueId);");
-        
-        ShowProgress(10, "Create PMC tracks indexes", kRPVDbBusy, future );
-        ExecuteSQLQuery(future,"CREATE INDEX monitorTypeIdx on rocpd_monitor(monitorType);");
+        ShowProgress(10, "Create tracks indexes", kRPVDbBusy, future);
+        CreateIndexes();
 
         ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
         if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(

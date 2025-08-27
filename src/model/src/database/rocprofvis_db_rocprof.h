@@ -33,6 +33,7 @@ class RocprofDatabase : public ProfileDatabase
     typedef std::map<uint32_t, uint32_t> sub_process_map_t;
     typedef std::map<uint32_t, sub_process_map_t> process_map_t;
     typedef std::map<uint32_t, process_map_t> track_find_map_t;
+
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
         ProfileDatabase(path) {
@@ -105,6 +106,15 @@ private:
     // @return SQLITE_OK if successful
     static int CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
                                      char** azColName);
+    // sqlite3_exec callback to detect nodes and table names in the database
+    // object to StackTrace container
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stmt,
+                                       char** azColName);
     // method to remap string IDs. Main reason for remapping is having strings and kernel symbol names in one array 
     // @param record - event record structure
     // @return status of operation
@@ -129,6 +139,8 @@ private:
         return &s_rocprof_categorized_data;
     };
 
+    private:
+        rocprofvis_dm_result_t CreateIndexes();
     private:
         track_find_map_t find_track_map;
 

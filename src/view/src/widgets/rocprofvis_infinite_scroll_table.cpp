@@ -299,7 +299,9 @@ InfiniteScrollTable::Render()
             // If the outer size has changed, we need to recalulate the number of items to
             // fetch
             int visible_rows   = outer_size.y / row_height;
-            m_fetch_chunk_size = std::max(visible_rows * 4, 100);
+            // Suggesting increasing chunk size. 
+            // For SQL it doesn't matter much 100 or 1000 rows
+            m_fetch_chunk_size = std::max(visible_rows * 4, 1000);
             m_fetch_pad_items  = clamp(visible_rows / 2, 10, 30);
             m_last_table_size  = outer_size;
 

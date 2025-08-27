@@ -56,6 +56,13 @@ TraceView::TraceView()
         EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
             static_cast<int>(RocEvents::kTrackMetadataChanged)));
     });
+
+    m_data_provider.SetTableDataReadyCallback(
+        [](const std::string& trace_path, uint64_t request_id) {
+            EventManager::GetInstance()->AddEvent(
+                std::make_shared<TableDataEvent>(trace_path, request_id));
+        });
+
     m_data_provider.SetTraceLoadedCallback(
         [this](const std::string& trace_path, uint64_t response_code) {
             if(response_code != kRocProfVisResultSuccess)

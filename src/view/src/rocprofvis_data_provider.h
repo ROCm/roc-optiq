@@ -515,6 +515,8 @@ public:
 
     void SetTrackMetadataChangedCallback(
         const std::function<void(const std::string&)>& callback);
+    void SetTableDataReadyCallback(
+        const std::function<void(const std::string&, uint64_t)>& callback);
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>&
             callback);
@@ -587,6 +589,8 @@ private:
 
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;
+    // Called when table data has changed
+    std::function<void(const std::string&, uint64_t)> m_table_data_ready_callback;
     // Called when new track data is ready
     std::function<void(uint64_t, const std::string&, const data_req_info_t&)> m_track_data_ready_callback;
     // Called when a new trace is loaded

@@ -14,6 +14,7 @@ enum class RocEvents
 {
     kInvalidEvent = -1,
     kNewTrackData,
+    kNewTableData,
     kTabClosed,
     kTabSelected,
     kTimelineTrackSelectionChanged,
@@ -32,6 +33,7 @@ enum class RocEventType
 {
     kRocEvent,
     kTrackDataEvent,
+    kTableDataEvent,
     kTabEvent,
     kTimelineTrackSelectionChangedEvent,
     kTimelineEventSelectionChangedEvent,
@@ -80,6 +82,18 @@ private:
     std::string m_trace_path;
     uint64_t    m_request_id;
     uint64_t    m_response_code;
+};
+
+class TableDataEvent : public RocEvent
+{
+public:
+    TableDataEvent(const std::string& trace_path, uint64_t request_id);
+    const std::string& GetTracePath() const;
+    uint64_t           GetRequestID() const;
+
+private:
+    std::string m_trace_path;
+    uint64_t    m_request_id;
 };
 
 class StickyNoteEvent : public RocEvent

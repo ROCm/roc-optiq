@@ -10,7 +10,10 @@
 #include <sstream>
 #include <future>
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 const uint64_t DataProvider::EVENT_TABLE_REQUEST_ID  = MakeRequestId(RequestType::kFetchTrackEventTable);
 const uint64_t DataProvider::SAMPLE_TABLE_REQUEST_ID = MakeRequestId(RequestType::kFetchTrackSampleTable);
@@ -27,6 +30,7 @@ DataProvider::DataProvider()
 , m_track_data_ready_callback(nullptr)
 , m_trace_data_ready_callback(nullptr)
 , m_track_metadata_changed_callback(nullptr)
+, m_table_data_ready_callback(nullptr)
 , m_save_trace_callback(nullptr)
 , m_num_graphs(0)
 , m_min_ts(0)
@@ -296,6 +300,14 @@ DataProvider::SetTrackMetadataChangedCallback(
 {
     m_track_metadata_changed_callback = callback;
 }
+
+void
+DataProvider::SetTableDataReadyCallback(
+    const std::function<void(const std::string&, uint64_t)>& callback)
+{
+    m_table_data_ready_callback = callback;
+}
+
 void
 DataProvider::SetTrackDataReadyCallback(
     const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>& callback)
@@ -2350,6 +2362,11 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
         rocprofvis_controller_array_free(req.request_array);
         req.request_array = nullptr;
     }
+
+    if(m_table_data_ready_callback)
+    {
+        m_table_data_ready_callback(m_trace_file_path, req.request_id);
+    }
 }
 
 void
@@ -2892,3 +2909,6 @@ DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t prope
 
     return str;
 }
+
+}  // namespace View
+}  // namespace RocProfVis

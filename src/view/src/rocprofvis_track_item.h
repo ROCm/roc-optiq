@@ -23,8 +23,8 @@ enum class TrackDataRequestState
 class TrackItem
 {
 public:
-    TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom, double time_offset_ns,
-              double& min_x, double& max_x, double scale_x);
+    TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
+              double time_offset_ns, double& min_x, double& max_x, double scale_x);
 
     virtual ~TrackItem() {}
     void               SetID(uint64_t id);
@@ -34,12 +34,11 @@ public:
     virtual void       Update();
     const std::string& GetName();
 
-    virtual void UpdateMovement(float zoom, double time_offset_ns, double& min_x, double& max_x,
-                                double scale_x,
-                                float m_scroll_position);
+    virtual void UpdateMovement(float zoom, double time_offset_ns, double& min_x,
+                                double& max_x, double scale_x, float m_scroll_position);
 
-    bool         IsInViewVertical();
-    void         SetInViewVertical(bool in_view);
+    bool IsInViewVertical();
+    void SetInViewVertical(bool in_view);
 
     bool IsSelected() const;
     void SetSelected(bool selected);
@@ -48,7 +47,7 @@ public:
     float GetDistanceToView();
 
     virtual std::tuple<double, double> GetMinMax();
-    
+
     bool        GetResizeStatus();
     static void SetSidebarSize(int sidebar_size);
 
@@ -57,18 +56,17 @@ public:
     virtual void RequestData(double min, double max, float width);
     virtual bool HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
     virtual bool HasPendingRequests() const;
-    
+
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
     bool IsMetaAreaClicked() const { return m_meta_area_clicked; }
 
     float GetReorderGripWidth();
 
-
 protected:
     virtual void RenderMetaArea();
-    virtual void RenderMetaAreaScale() = 0;
-    virtual void RenderMetaAreaOptions() = 0;
+    virtual void RenderMetaAreaScale()          = 0;
+    virtual void RenderMetaAreaOptions()        = 0;
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
     virtual bool ExtractPointsFromData() = 0;
@@ -100,7 +98,8 @@ protected:
 
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
     uint64_t m_group_id_counter;   // Counter for grouping requests
-
+    int      m_graph_level;
+    float    m_track_specific_height_original;
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;
     static float                                     s_metadata_width;

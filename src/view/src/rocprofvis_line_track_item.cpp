@@ -1,9 +1,9 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_line_track_item.h"
+#include "imgui.h"
 #include "rocprofvis_settings.h"
 #include "spdlog/spdlog.h"
-#include "imgui.h"
 
 namespace RocProfVis
 {
@@ -11,7 +11,8 @@ namespace View
 {
 
 LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
-                             double time_offset_ns, double& min_x, double& max_x, double scale_x)
+                             double time_offset_ns, double& min_x, double& max_x,
+                             double scale_x)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
@@ -21,14 +22,17 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_dp(dp)
 , m_show_boxplot(false)
 {
-    m_track_height = 90.0f;
-
+    m_track_height                   = 100.0f;
+    m_track_specific_height_original = m_track_height;
+    m_graph_level                    = 1;
     UpdateYScaleExtents();
 }
 
 LineTrackItem::~LineTrackItem() {}
 
-void LineTrackItem::UpdateYScaleExtents() {
+void
+LineTrackItem::UpdateYScaleExtents()
+{
     const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
     if(track_info)
     {
@@ -245,9 +249,9 @@ bool
 LineTrackItem::ReleaseData()
 {
     if(TrackItem::ReleaseData())
-    {       
+    {
         m_data.clear();
-        m_data  = {};
+        m_data = {};
 
         return true;
     }
@@ -278,7 +282,8 @@ LineTrackItem::ExtractPointsFromData()
         return false;
     }
 
-    if(sample_track->AllDataReady()) {
+    if(sample_track->AllDataReady())
+    {
         m_request_state = TrackDataRequestState::kIdle;
     }
 
@@ -294,7 +299,8 @@ LineTrackItem::ExtractPointsFromData()
     m_data.reserve(count);
     for(uint64_t i = 0; i < count; i++)
     {
-        m_data.emplace_back(rocprofvis_data_point_t{track_data[i].m_start_ts, track_data[i].m_value});
+        m_data.emplace_back(
+            rocprofvis_data_point_t{ track_data[i].m_start_ts, track_data[i].m_value });
     }
     return true;
 }
@@ -365,16 +371,18 @@ LineTrackItem::RenderMetaAreaOptions()
     ImGui::Checkbox("Show as Box Plot", &m_show_boxplot);
     ImGui::Checkbox("Highlight Y Range", &m_is_color_value_existant);
     if(m_is_color_value_existant)
-    {        
+    {
         float width = ImGui::GetItemRectSize().x;
         ImGui::TextUnformatted("Max");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
-        ImGui::SliderFloat("##max", &m_color_by_value_digits.interest_1_max, m_color_by_value_digits.interest_1_min, m_max_y, "%.1f");
+        ImGui::SliderFloat("##max", &m_color_by_value_digits.interest_1_max,
+                           m_color_by_value_digits.interest_1_min, m_max_y, "%.1f");
         ImGui::TextUnformatted("Min");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
-        ImGui::SliderFloat("##min", &m_color_by_value_digits.interest_1_min, m_min_y, m_color_by_value_digits.interest_1_max, "%.1f");
+        ImGui::SliderFloat("##min", &m_color_by_value_digits.interest_1_min, m_min_y,
+                           m_color_by_value_digits.interest_1_max, "%.1f");
     }
 }
 

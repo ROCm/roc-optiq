@@ -30,7 +30,10 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_timeline_selection(timeline_selection)
 , m_selection_changed(false)
 , m_has_drawn_tool_tip(false)
+, m_max_level(1)
 {
+    m_track_specific_height_original         = m_level_height;
+    m_track_height                           = 75;
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
     };
@@ -82,7 +85,8 @@ FlameTrackItem::ExtractPointsFromData()
         return false;
     }
 
-    if(event_track->AllDataReady()) {
+    if(event_track->AllDataReady())
+    {
         m_request_state = TrackDataRequestState::kIdle;
     }
 
@@ -173,8 +177,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id);
             m_selection_changed = true;
         }
-    
-        if(!m_has_drawn_tool_tip) {
+
+        if(!m_has_drawn_tool_tip)
+        {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
             ImGui::BeginTooltip();
             ImGui::Text("%s", chart_item.event.m_name.c_str());
@@ -197,7 +202,7 @@ FlameTrackItem::RenderChart(float graph_width)
     auto colorCount = m_settings.GetColorWheel().size();
     ROCPROFVIS_ASSERT(colorCount > 0);
 
-    int color_index = 0;
+    int color_index      = 0;
     m_has_drawn_tool_tip = false;
     for(ChartItem& item : m_chart_items)
     {
@@ -211,9 +216,14 @@ FlameTrackItem::RenderChart(float graph_width)
         double normalized_end      = normalized_start + normalized_duration;
 
         ImVec2 start_position;
-
         // Calculate the start position based on the normalized start time and level
         start_position = ImVec2(normalized_start, item.event.m_level * m_level_height);
+
+        if(item.event.m_level > m_max_level)
+        {
+            m_max_level   = item.event.m_level;
+            m_graph_level = m_max_level;
+        }
 
         if(normalized_end < container_pos.x ||
            normalized_start > container_pos.x + graph_width)

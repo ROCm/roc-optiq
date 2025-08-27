@@ -53,8 +53,9 @@ private:
     std::shared_ptr<TimelineSelection> m_timeline_selection;
 
     // Used to enforce one selection change per render cycle.
-    bool m_selection_changed;
-    bool m_has_drawn_tool_tip;
+    bool                            m_selection_changed;
+    bool                            m_has_drawn_tool_tip;
+    int                             m_max_level;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
 };
 

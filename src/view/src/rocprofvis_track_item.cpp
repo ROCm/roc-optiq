@@ -1,9 +1,9 @@
 #include "rocprofvis_track_item.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_settings.h"
 #include "rocprofvis_utils.h"
-#include "icons/rocprovfis_icon_defines.h"
-#include "widgets/rocprofvis_gui_helpers.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 namespace RocProfVis
 {
@@ -24,6 +24,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_scale_x(scale_x)
 , m_name(name)
 , m_track_height(75.0f)
+, m_track_specific_height_original()
 , m_track_content_height(0.0f)
 , m_min_track_height(10.0f)
 , m_is_in_view_vertical(false)
@@ -39,6 +40,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_group_id_counter(0)
 , m_chunk_duration_ns(TimeConstants::nanoseconds_per_second *
                       30)  // Default chunk duration
+, m_graph_level(1)
 {}
 
 bool
@@ -176,10 +178,11 @@ TrackItem::RenderMetaArea()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 4));
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
-                                     : (m_request_state == TrackDataRequestState::kError ?
-                                        m_settings.GetColor(Colors::kGridRed) :
-                                        m_settings.GetColor(Colors::kMetaDataColor)));
+                          m_selected
+                              ? m_settings.GetColor(Colors::kMetaDataColorSelected)
+                              : (m_request_state == TrackDataRequestState::kError
+                                     ? m_settings.GetColor(Colors::kGridRed)
+                                     : m_settings.GetColor(Colors::kMetaDataColor)));
     ImGui::SetCursorPos(metadata_shrink_padding);
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
@@ -277,6 +280,56 @@ TrackItem::RenderMetaArea()
         ImGui::PopStyleVar();
         RenderMetaAreaScale();
     }
+
+    if(m_graph_level != 1)
+    {
+        int padding_size_for_chart = 35;
+        ImVec2 child_size     = ImGui::GetWindowSize();
+        float  control_width  = 90.0f;   
+        float  control_height = 28.0f;
+        float  padding        = 3.0f;
+
+        // Position at bottom right
+        ImGui::SetCursorPos(ImVec2(child_size.x - control_width - padding,
+                                   child_size.y - control_height - padding));
+
+         ImGui::BeginGroup();
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetColorU32(ImGuiCol_FrameBg));
+        ImGui::BeginChild("TrackHeightControl", ImVec2(control_width, control_height),
+                          true, ImGuiWindowFlags_NoScrollbar);
+
+        ImGui::SetCursorPos(ImVec2(8, 4));   
+
+    
+        if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
+        {
+            m_track_height = m_track_specific_height_original + 35;
+        }
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to minimum height");
+
+        // Number in the middle
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(39);
+        ImGui::Text("%d", static_cast<int>(m_graph_level));
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Current track height");
+
+        // Down arrow (expand)
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(64);
+
+        if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
+        {
+            m_track_height = m_graph_level * m_track_specific_height_original + 15;
+        }
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to maximum height");
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        ImGui::EndGroup();
+    }
+
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(4);
@@ -334,8 +387,8 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 void
 TrackItem::RequestData(double min, double max, float width)
 {
-    //create request chunks with ranges of m_chunk_duration_ns  max
-    double range = max - min;
+    // create request chunks with ranges of m_chunk_duration_ns  max
+    double range       = max - min;
     size_t chunk_count = static_cast<size_t>(std::ceil(range / m_chunk_duration_ns));
     m_group_id_counter++;
     std::deque<TrackRequestParams> temp_request_queue;
@@ -350,8 +403,9 @@ TrackItem::RequestData(double min, double max, float width)
         float  chunk_width = width * percentage;
 
         TrackRequestParams request_params(m_id, chunk_start, chunk_end,
-                                          static_cast<uint32_t>(chunk_width), m_group_id_counter, i, chunk_count);
-        
+                                          static_cast<uint32_t>(chunk_width),
+                                          m_group_id_counter, i, chunk_count);
+
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
                       m_id, chunk_start, chunk_end, chunk_range, chunk_width);
@@ -373,8 +427,10 @@ TrackItem::RequestData(double min, double max, float width)
         spdlog::warn(
             "Fetch request deferred for track {}, requests are already pending...", m_id);
 
-        for(const auto& [request_id, req] : m_pending_requests) {
-            spdlog::debug("RequestData: Found pending request {} for track {}", request_id, m_id);
+        for(const auto& [request_id, req] : m_pending_requests)
+        {
+            spdlog::debug("RequestData: Found pending request {} for track {}",
+                          request_id, m_id);
             m_data_provider.CancelRequest(request_id);
         }
     }
@@ -397,7 +453,7 @@ TrackItem::FetchHelper()
 {
     while(!m_request_queue.empty())
     {
-        TrackRequestParams& req    = m_request_queue.front();
+        TrackRequestParams&       req    = m_request_queue.front();
         std::pair<bool, uint64_t> result = m_data_provider.FetchTrack(req);
         if(!result.first)
         {
@@ -412,11 +468,10 @@ TrackItem::FetchHelper()
 
             m_request_state = TrackDataRequestState::kRequesting;
             // Store the request with its ID
-            m_pending_requests.insert({result.second, req});
+            m_pending_requests.insert({ result.second, req });
         }
         m_request_queue.pop_front();
     }
-
 }
 
 bool
@@ -430,7 +485,7 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
     }
 
     result = ExtractPointsFromData();
-    
+
     return result;
 }
 
@@ -460,7 +515,7 @@ TrackItem::ReleaseData()
         else
         {
             spdlog::warn("Failed to cancel pending request {} for track {}", request_id,
-                          m_id);
+                         m_id);
             ++it;
         }
     }

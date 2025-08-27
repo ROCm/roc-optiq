@@ -727,10 +727,6 @@ SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries)
     {
         return kRocProfVisDmResultDbAccessFailed;
     }
-    if(sqlite3_exec(conn, "ANALYZE;", nullptr, nullptr, nullptr) != SQLITE_OK)
-    {
-        return kRocProfVisDmResultDbAccessFailed;
-    }
     return kRocProfVisDmResultSuccess;
 }
 

@@ -29,6 +29,8 @@ namespace RocProfVis
 namespace DataModel
 {
 
+class Database;
+
 // Asynchronous execution handler class
 class Future
 {
@@ -60,7 +62,7 @@ class Future
         // @return True if thread has been timeouted
         bool                                Interrupted() {return m_interrupt_status;};
         // sets interrupted flag
-        void                                SetInterrupted() { m_interrupt_status = true; };
+        void                                SetInterrupted();
         // calls progress callback, if provided
         // @param db_name - path to database file
         // @param step - progress percentage of single database operation
@@ -77,6 +79,8 @@ class Future
         // returns processed rows counter
         uint32_t 							GetProcessedRowsCount() { return m_processed_rows; }
 
+        void                                LinkDatabase(Database* db, void* connection);
+
     private:
         // stdlib promise object
         std::promise<rocprofvis_dm_result_t> m_promise;
@@ -92,6 +96,8 @@ class Future
         std::thread m_worker;
         // number of rows processed by query
         std::atomic<uint32_t> m_processed_rows;
+        Database*             m_db;
+        void*                 m_connection;
 };
 
 }  // namespace DataModel

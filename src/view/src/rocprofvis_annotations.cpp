@@ -15,10 +15,6 @@ AnnotationsView::AnnotationsView()
         if(evt)
         {
             m_edit_sticky_index = evt->GetID();
-            strncpy(m_sticky_text, evt->GetText().c_str(), sizeof(m_sticky_text) - 1);
-            m_sticky_text[sizeof(m_sticky_text) - 1] = '\0';
-            strncpy(m_sticky_title, evt->GetTitle().c_str(), sizeof(m_sticky_title) - 1);
-            m_sticky_title[sizeof(m_sticky_title) - 1] = '\0';
         }
     };
     m_edit_token = EventManager::GetInstance()->Subscribe(
@@ -86,8 +82,6 @@ AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
 void
 AnnotationsView::ShowStickyNoteEditPopup()
 {
-    using namespace RocProfVis::View;
-
     if(!m_show_sticky_edit_popup) return;
 
     Settings& settings     = Settings::GetInstance();
@@ -177,7 +171,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
             ImGui::CloseCurrentPopup();
         }
 
-        ImGui::EndPopup();  // <-- Always call EndPopup if BeginPopupModal returns true
+        ImGui::EndPopup();
     }
 
     ImGui::PopStyleColor(2);
@@ -187,9 +181,23 @@ AnnotationsView::ShowStickyNoteEditPopup()
 void
 AnnotationsView::ShowStickyNotePopup()
 {
-    using namespace RocProfVis::View;
-
     if(!m_show_sticky_popup) return;
+
+    int count = 0;
+    for(auto& note : m_sticky_notes)
+    {
+        if(note.GetID() == m_edit_sticky_index)
+        {
+            const std::string& title = note.GetTitle();
+            std::strncpy(m_sticky_title, title.c_str(), sizeof(m_sticky_title) - 1);
+            m_sticky_title[sizeof(m_sticky_title) - 1] = '\0';
+            // Copy the text string to m_sticky_text safely
+            const std::string& text = note.GetText();
+            std::strncpy(m_sticky_text, text.c_str(), sizeof(m_sticky_text) - 1);
+            m_sticky_text[sizeof(m_sticky_text) - 1] = '\0';
+        }
+        count++;
+    }
 
     Settings& settings     = Settings::GetInstance();
     ImU32     popup_bg     = settings.GetColor(Colors::kFillerColor);

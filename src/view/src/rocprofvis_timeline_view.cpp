@@ -13,12 +13,6 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include <GLFW/glfw3.h>
-#include <iostream>
-#include <map>
-#include <string>
-#include <tuple>
-#include <utility>
-#include <vector>
 
 namespace RocProfVis
 {

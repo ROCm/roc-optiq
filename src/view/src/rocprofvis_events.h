@@ -85,21 +85,15 @@ private:
 class StickyNoteEvent : public RocEvent
 {
 public:
-    StickyNoteEvent(const std::string& text, const std::string& title, bool deleted,
-                    int id)
+    StickyNoteEvent(int id)
     : RocEvent(static_cast<int>(RocEvents::kStickyNoteEdited))
-    , m_text(text)
-    , m_title(title)
-    , m_deleted(deleted)
+
     , m_id(id)
     {
         SetType(RocEventType::kStickyNoteEvent);
     }
 
-    const std::string& GetText() const { return m_text; }
-    const std::string& GetTitle() const { return m_title; }
-    const int GetID() const { return m_id; }
-    bool               IsDeleted() const { return m_deleted; }
+    const int GetID();
 
 private:
     std::string m_text;

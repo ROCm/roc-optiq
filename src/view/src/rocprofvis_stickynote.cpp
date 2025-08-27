@@ -20,10 +20,37 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 {
     s_unique_id_counter = s_unique_id_counter + 1;
 }
+
+double
+StickyNote::GetTimeNs()
+{
+    return m_time_ns;
+}
+float
+StickyNote::GetYOffset()
+{
+    return m_y_offset;
+}
+ImVec2
+StickyNote::GetSize()
+{
+    return m_size;
+}
+std::string&
+StickyNote::GetText()
+{
+    return m_text;
+}
+
 int
 StickyNote::GetID()
 {
     return m_id;
+}
+std::string&
+StickyNote::GetTitle()
+{
+    return m_title;
 }
 
 void
@@ -111,8 +138,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
            ("EditSticky##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
            ImVec2(edit_btn_size, edit_btn_size)))
     {
-        EventManager::GetInstance()->AddEvent(
-            std::make_shared<StickyNoteEvent>(m_text, m_title, false, m_id));
+        EventManager::GetInstance()->AddEvent(std::make_shared<StickyNoteEvent>(m_id));
     }
 
     // Draw edit button graphics over the button

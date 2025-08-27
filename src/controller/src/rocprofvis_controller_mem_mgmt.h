@@ -121,6 +121,7 @@ namespace RocProfVis
         public:
             MemoryManager(uint64_t id);
             void Init(size_t num_objects);
+            bool IsShuttingDown();
 
             virtual ~MemoryManager();
 

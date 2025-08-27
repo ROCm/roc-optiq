@@ -54,11 +54,14 @@ rocprofvis_result_t Future::Cancel()
     {
         result = JobSystem::Get().CancelJob(m_job);
         m_cancelled = true;
-        if(m_db_futures.size() > 0)
-        {       
-            for(auto future : m_db_futures)
+        {
+            std::unique_lock lock(m_mutex);
+            if(m_db_futures.size() > 0)
             {
-                rocprofvis_db_future_cancel(future);
+                for(auto future : m_db_futures)
+                {
+                    rocprofvis_db_future_cancel(future);
+                }
             }
         }
     }
@@ -72,8 +75,22 @@ bool Future::IsCancelled() {
 rocprofvis_result_t
 Future::AddDependentFuture(rocprofvis_db_future_t db_future)
 {
+    std::unique_lock lock(m_mutex);
     m_db_futures.push_back(db_future);
     return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t
+Future::RemoveDependentFuture(rocprofvis_db_future_t db_future)
+{
+    std::unique_lock lock(m_mutex);
+    auto it = std::find(m_db_futures.begin(), m_db_futures.end(), db_future);
+    if (it != m_db_futures.end())
+    {
+        m_db_futures.erase(it);
+        return kRocProfVisResultSuccess;
+    }
+    return kRocProfVisResultNotLoaded;
 }
 
 rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 

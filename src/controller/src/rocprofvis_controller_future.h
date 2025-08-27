@@ -29,6 +29,7 @@ public:
     rocprofvis_result_t Cancel();
     bool                IsCancelled();
     rocprofvis_result_t AddDependentFuture(rocprofvis_db_future_t db_future);
+    rocprofvis_result_t RemoveDependentFuture(rocprofvis_db_future_t db_future);
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -46,6 +47,7 @@ private:
     Data m_object;
     std::vector<rocprofvis_db_future_t> m_db_futures;
     std::atomic<bool>                   m_cancelled;
+    std::mutex                          m_mutex;
 
 };
 

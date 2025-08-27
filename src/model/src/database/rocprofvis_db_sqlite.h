@@ -91,6 +91,7 @@ class SqliteDatabase : public Database
         // Method to close sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Close() override;
+        void  InterruptQuery(void* connection) override;
 
         void SetBlankMask(std::string op, uint64_t mask);
 

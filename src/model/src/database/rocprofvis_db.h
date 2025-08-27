@@ -170,6 +170,7 @@ class Database
                                                     rocprofvis_dm_timestamp_t end, 
                                                     rocprofvis_dm_string_t new_db_path,
                                                     Future* object);
+       virtual void InterruptQuery(void* connection) {};
 
     private:
     /************************static methods to be used as a parameter to std::thread**********************/

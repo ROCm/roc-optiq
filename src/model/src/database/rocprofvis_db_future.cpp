@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include "rocprofvis_db_future.h"
+#include "rocprofvis_db.h"
 
 namespace RocProfVis
 {
@@ -29,7 +30,10 @@ Future::Future(rocprofvis_db_progress_callback_t progress_callback):
                                 m_progress_callback(progress_callback),
                                 m_interrupt_status(false),
                                 m_progress(0.0),
-                                m_processed_rows(0){
+                                m_processed_rows(0), 
+                                m_db(nullptr), 
+                                m_connection(nullptr)
+{
     m_future=m_promise.get_future();
 }
 
@@ -39,6 +43,23 @@ Future::~Future(){
         m_interrupt_status = true;
         m_worker.join();
     }
+}
+
+void
+Future::SetInterrupted()
+{
+    if (m_db != nullptr && m_connection != nullptr)
+    {
+        m_db->InterruptQuery(m_connection);
+    }
+    m_interrupt_status = true;
+};
+
+void
+Future::LinkDatabase(Database* db, void* connection)
+{
+    m_db = db;
+    m_connection = connection;
 }
 
 rocprofvis_dm_result_t Future::WaitForCompletion(rocprofvis_db_timeout_ms_t timeout_ms) {

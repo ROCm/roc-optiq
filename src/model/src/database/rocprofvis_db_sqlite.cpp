@@ -384,6 +384,14 @@ rocprofvis_dm_result_t SqliteDatabase::Close()
     return result;
 }
 
+void
+SqliteDatabase::InterruptQuery(void* connection) {
+    if (connection != nullptr)
+    {
+        sqlite3_interrupt((sqlite3*) connection);
+    }
+}
+
 sqlite3* SqliteDatabase::GetConnection() 
 {
     std::unique_lock<std::mutex> lock(m_mutex);
@@ -595,6 +603,12 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
 {
     int rc=0;
     sqlite3_stmt* stmt = nullptr;
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) user_data;
+    if (callback_params->future != nullptr)
+    {
+        callback_params->future->LinkDatabase(this, db);
+    }
     sqlite3_mutex_enter(sqlite3_db_mutex(db));
     rc = sqlite3_prepare_v2(db, query, -1, &stmt, nullptr);
     if(rc == SQLITE_OK)
@@ -624,7 +638,7 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
                 rc = callback(user_data, cols, stmt, col_names.data());
                 if(rc != 0)
                 {
-                    sqlite3_interrupt(db);
+                    break;
                 }
             }
         }
@@ -632,6 +646,10 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
         sqlite3_finalize(stmt);
     }
     sqlite3_mutex_leave(sqlite3_db_mutex(db));
+    if(callback_params->future != nullptr)
+    {
+        callback_params->future->LinkDatabase(nullptr, nullptr);
+    }
     return rc;
 }
 

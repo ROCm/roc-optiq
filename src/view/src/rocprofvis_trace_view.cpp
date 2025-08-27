@@ -35,10 +35,9 @@ TraceView::TraceView()
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
-            std::shared_ptr<TrackDataEvent> e = std::make_shared<TrackDataEvent>(
+            EventManager::GetInstance()->AddEvent(std::make_shared<TrackDataEvent>(
                 static_cast<int>(RocEvents::kNewTrackData), track_id, trace_path,
-                req.request_id, req.response_code);
-            EventManager::GetInstance()->AddEvent(e);
+                req.request_id, req.response_code));
         });
 
     auto new_tab_selected_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -53,6 +52,10 @@ TraceView::TraceView()
         }
     };
 
+    m_data_provider.SetTrackMetadataChangedCallback([](const std::string& trace_path) {
+        EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
+            static_cast<int>(RocEvents::kTrackMetadataChanged)));
+    });
     m_data_provider.SetTraceLoadedCallback(
         [this](const std::string& trace_path, uint64_t response_code) {
             if(response_code != kRocProfVisResultSuccess)

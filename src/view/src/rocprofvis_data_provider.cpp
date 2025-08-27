@@ -1,7 +1,6 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
-#include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
 
 #include "spdlog/spdlog.h"
@@ -27,6 +26,7 @@ DataProvider::DataProvider()
 , m_trace_timeline(nullptr)
 , m_track_data_ready_callback(nullptr)
 , m_trace_data_ready_callback(nullptr)
+, m_track_metadata_changed_callback(nullptr)
 , m_save_trace_callback(nullptr)
 , m_num_graphs(0)
 , m_min_ts(0)
@@ -291,6 +291,12 @@ DataProvider::ClearTable(TableType type)
 }
 
 void
+DataProvider::SetTrackMetadataChangedCallback(
+    const std::function<void(const std::string&)>& callback)
+{
+    m_track_metadata_changed_callback = callback;
+}
+void
 DataProvider::SetTrackDataReadyCallback(
     const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>& callback)
 {
@@ -343,8 +349,10 @@ DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
                     }
                 }
             }
-            EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
-                static_cast<int>(RocEvents::kTrackMetadataChanged)));
+            if(m_track_metadata_changed_callback)
+            {
+                m_track_metadata_changed_callback(m_trace_file_path);
+            }
         }
     }
     return (result == kRocProfVisResultSuccess);

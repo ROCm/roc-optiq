@@ -513,6 +513,8 @@ public:
 
     const char*                                  GetProgressMessage();
 
+    void SetTrackMetadataChangedCallback(
+        const std::function<void(const std::string&)>& callback);
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>&
             callback);
@@ -583,6 +585,8 @@ private:
 
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 
+    // Called when track metadata has changed
+    std::function<void(const std::string&)> m_track_metadata_changed_callback;
     // Called when new track data is ready
     std::function<void(uint64_t, const std::string&, const data_req_info_t&)> m_track_data_ready_callback;
     // Called when a new trace is loaded

@@ -2909,7 +2909,7 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
 
     future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            result = table.Setup(dm_handle, args);
+            result = table.Setup(dm_handle, args, future);
             if (result == kRocProfVisResultSuccess)
             {
                 uint64_t start_index = 0;

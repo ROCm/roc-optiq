@@ -196,7 +196,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
     return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }
 
-rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args)
+rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     std::vector<uint32_t> tracks;
@@ -212,7 +212,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
     std::string group_cols;
     rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeSamples;
     uint64_t table_type = kRPVControllerTableTypeEvents;
-    result = args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
+    result = future->IsCancelled() ? kRocProfVisResultCancelled : args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
     if (result == kRocProfVisResultSuccess)
     {
         switch (table_type)
@@ -384,9 +384,11 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
 
             if(dm_result == kRocProfVisDmResultSuccess)
             {
+                future->AddDependentFuture(object2wait);
                 dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
             }
 
+            future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
 
             if(dm_result == kRocProfVisDmResultSuccess)
@@ -406,7 +408,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
                             table, kRPVDMNumberOfTableColumnsUInt64, 0);
                         uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(
                             table, kRPVDMNumberOfTableRowsUInt64, 0);
-                        if(strcmp(table_description, count_query) == 0 &&
+                        if(!future->IsCancelled() && strcmp(table_description, count_query) == 0 &&
                            num_columns > 1 && num_rows == 1)
                         {
                             char const* column = rocprofvis_dm_get_property_as_charptr(
@@ -454,7 +456,10 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
             }
         }
     }
-
+    if(future->IsCancelled())
+    {
+        Reset();
+    }
     return result;
 }
 

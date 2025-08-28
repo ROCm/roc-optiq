@@ -29,7 +29,7 @@ public:
 
     void Reset();
 
-    rocprofvis_result_t Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args) final;
+    rocprofvis_result_t Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future) final;
     rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index,
                               uint64_t count, Array& array, Future* future) final;
 

@@ -2889,7 +2889,7 @@ Trace::AsyncFetch(Table& table, Future& future, Array& array,
 
     future.Set(JobSystem::Get().IssueJob([&table, &array, index, count, dm_handle](Future* future) -> rocprofvis_result_t {
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                              result = table.Fetch(dm_handle, index, count, array);
+                              result = table.Fetch(dm_handle, index, count, array, future);
                               return result;
                           },&future));
 
@@ -2924,7 +2924,7 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
                     result = args.GetUInt64(kRPVControllerTableArgsStartCount, 0,
                                             &start_count);
                 }
-                result = table.Fetch(dm_handle, start_index, start_count, array);
+                result = table.Fetch(dm_handle, start_index, start_count, array, future);
             }
             return result;
         }, &future));

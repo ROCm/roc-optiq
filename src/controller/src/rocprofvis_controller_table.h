@@ -17,6 +17,7 @@ namespace Controller
 
 class Arguments;
 class Array;
+class Future;
 
 class Table : public Handle
 {
@@ -29,7 +30,7 @@ public:
 
     virtual rocprofvis_result_t Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args) = 0;
     virtual rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index,
-                              uint64_t count, Array& array) = 0;
+                              uint64_t count, Array& array, Future* future) = 0;
 
 protected:
     struct ColumnDefintion

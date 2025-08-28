@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_array.h"
+#include "rocprofvis_controller_future.h"
 
 namespace RocProfVis
 {
@@ -37,7 +38,7 @@ void SystemTable::Reset()
     m_group_cols.clear();
 }
 
-rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array)
+rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
@@ -62,6 +63,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
 
         if(dm_result == kRocProfVisDmResultSuccess)
         {
+            future->AddDependentFuture(object2wait);
             dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
         }
 
@@ -77,54 +79,57 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
                     dm_handle, kRPVDMTableHandleByID, table_id);
                 if(nullptr != table)
                 {
-                    char* table_query = rocprofvis_dm_get_property_as_charptr(
-                        table, kRPVDMExtTableQueryCharPtr, 0);
-                    uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(
-                        table, kRPVDMNumberOfTableColumnsUInt64, 0);
-                    uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(
-                        table, kRPVDMNumberOfTableRowsUInt64, 0);
-                    num_records = num_rows;
-                    if(strcmp(table_query, fetch_query) == 0)
-                    {
-                        ROCPROFVIS_ASSERT(m_columns.size() == num_columns);
-
-                        std::vector<Data> row;
-                        row.resize(m_columns.size());
-                        for (uint32_t i = 0; i < num_rows; i++)
+                    if(!future->IsCancelled())
+                    {                    
+                        char* table_query = rocprofvis_dm_get_property_as_charptr(
+                            table, kRPVDMExtTableQueryCharPtr, 0);
+                        uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(
+                            table, kRPVDMNumberOfTableColumnsUInt64, 0);
+                        uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(
+                            table, kRPVDMNumberOfTableRowsUInt64, 0);
+                        num_records = num_rows;
+                        if(strcmp(table_query, fetch_query) == 0)
                         {
-                            rocprofvis_dm_table_row_t table_row =
-                                rocprofvis_dm_get_property_as_handle(
-                                    table, kRPVDMExtTableRowHandleIndexed, i);
-                            if(table_row != nullptr)
+                            ROCPROFVIS_ASSERT(m_columns.size() == num_columns);
+
+                            std::vector<Data> row;
+                            row.resize(m_columns.size());
+                            for (uint32_t i = 0; i < num_rows; i++)
                             {
-                                uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(
-                                    table_row, kRPVDMNumberOfTableRowCellsUInt64, 0);
-                                ROCPROFVIS_ASSERT(num_cells == num_columns);
-                                for(uint32_t j = 0; j < num_cells; j++)
+                                rocprofvis_dm_table_row_t table_row =
+                                    rocprofvis_dm_get_property_as_handle(
+                                        table, kRPVDMExtTableRowHandleIndexed, i);
+                                if(table_row != nullptr)
                                 {
-                                    char const* value =
-                                        rocprofvis_dm_get_property_as_charptr(
-                                            table_row,
-                                            kRPVDMExtTableRowCellValueCharPtrIndexed, j);
-                                    ROCPROFVIS_ASSERT(value);
+                                    uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(
+                                        table_row, kRPVDMNumberOfTableRowCellsUInt64, 0);
+                                    ROCPROFVIS_ASSERT(num_cells == num_columns);
+                                    for(uint32_t j = 0; j < num_cells; j++)
+                                    {
+                                        char const* value =
+                                            rocprofvis_dm_get_property_as_charptr(
+                                                table_row,
+                                                kRPVDMExtTableRowCellValueCharPtrIndexed, j);
+                                        ROCPROFVIS_ASSERT(value);
 
-                                    auto& column    = m_columns[j];
-                                    Data& row_value = row[j];
-                                    row_value.SetType(m_columns[j].m_type);
-                                    row_value.SetString(value);
+                                        auto& column    = m_columns[j];
+                                        Data& row_value = row[j];
+                                        row_value.SetType(m_columns[j].m_type);
+                                        row_value.SetString(value);
+                                    }
+
+                                    m_rows[index + i] = row;
                                 }
-
-                                m_rows[index + i] = row;
-                            }
-                            else
-                            {
-                                dm_result = kRocProfVisDmResultUnknownError;
+                                else
+                                {
+                                    dm_result = kRocProfVisDmResultUnknownError;
+                                }
                             }
                         }
-                    }
-                    else
-                    {
-                        dm_result = kRocProfVisDmResultUnknownError;
+                        else
+                        {
+                            dm_result = kRocProfVisDmResultUnknownError;
+                        }
                     }
                     rocprofvis_dm_delete_table_at(dm_handle, table_id);
                 }
@@ -139,43 +144,46 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
             }
         }
         
-        switch (dm_result)
+        if(!future->IsCancelled())
         {
-            case kRocProfVisDmResultSuccess:
+            switch (dm_result)
             {
-                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, num_records);
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultUnknownError;
-                break;
-            }
-        }
-
-
-
-        for(uint32_t i = index;
-            (result == kRocProfVisResultSuccess) && i < index + num_records; i++)
-        {
-            try
-            {
-                Array* row_array = new Array();
+                case kRocProfVisDmResultSuccess:
                 {
-                    auto& row_vec = row_array->GetVector();
-                    row_vec.resize(m_rows[i].size());
-                    for (uint32_t j = 0; j < m_rows[i].size(); j++)
-                    {
-                        row_vec[j].SetType(m_rows[i][j].GetType());
-                        row_vec[j] = m_rows[i][j];
-                    }
-                    result = array.SetObject(kRPVControllerArrayEntryIndexed, i - index,
-                                    (rocprofvis_handle_t*)row_array);
+                    result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, num_records);
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultUnknownError;
+                    break;
                 }
             }
-            catch(const std::exception&)
+
+
+
+            for(uint32_t i = index;
+                (result == kRocProfVisResultSuccess) && i < index + num_records; i++)
             {
-                result = kRocProfVisResultMemoryAllocError;
+                try
+                {
+                    Array* row_array = new Array();
+                    {
+                        auto& row_vec = row_array->GetVector();
+                        row_vec.resize(m_rows[i].size());
+                        for (uint32_t j = 0; j < m_rows[i].size(); j++)
+                        {
+                            row_vec[j].SetType(m_rows[i][j].GetType());
+                            row_vec[j] = m_rows[i][j];
+                        }
+                        result = array.SetObject(kRPVControllerArrayEntryIndexed, i - index,
+                                        (rocprofvis_handle_t*)row_array);
+                    }
+                }
+                catch(const std::exception&)
+                {
+                    result = kRocProfVisResultMemoryAllocError;
+                }
             }
         }
 
@@ -185,7 +193,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
     {
         result = kRocProfVisResultMemoryAllocError;
     }
-    return result;
+    return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }
 
 rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args)

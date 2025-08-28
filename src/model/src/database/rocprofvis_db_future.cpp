@@ -49,6 +49,7 @@ Future::~Future(){
 void
 Future::SetInterrupted()
 {
+    std::unique_lock lock(m_mutex);
     if (m_db != nullptr && m_connection != nullptr)
     {
         m_db->InterruptQuery(m_connection);
@@ -59,6 +60,7 @@ Future::SetInterrupted()
 void
 Future::LinkDatabase(Database* db, void* connection)
 {
+    std::unique_lock lock(m_mutex);
     m_db = db;
     m_connection = connection;
 }

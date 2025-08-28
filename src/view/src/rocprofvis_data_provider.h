@@ -31,8 +31,6 @@ enum class RequestType
     kFetchGraph,
     kFetchTrackEventTable,
     kFetchTrackSampleTable,
-    kClearTrackEventTable,
-    kClearTrackSampleTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
     kFetchEventCallStack,
@@ -272,7 +270,6 @@ typedef struct data_req_info_t
     rocprofvis_controller_arguments_t* request_args;        // arguments for the request
     ProviderState                      loading_state;       // state of the request
     RequestType                        request_type;        // type of request
-    bool                               internal_request;    // true if request is handled by view (and not controller)
     std::shared_ptr<RequestParamsBase> custom_params;       // custom request parameters
     std::chrono::steady_clock::time_point request_time;     // time when the request was made
     uint64_t                           response_code;       // response code for the request
@@ -431,8 +428,6 @@ public:
 
     bool IsRequestPending(uint64_t request_id) const;
 
-    bool QueueClearTrackTableRequest(rocprofvis_controller_table_type_t table_type);
-
     /*
      * Release memory buffer holding raw data for selected track
      * @param id: The id of the track to select
@@ -514,6 +509,7 @@ public:
     const std::vector<std::vector<std::string>>& GetTableData(TableType type);
     std::shared_ptr<TableRequestParams>          GetTableParams(TableType type);
     uint64_t                                     GetTableTotalRowCount(TableType type);
+    void                                         ClearTable(TableType type);
 
     const char*                                  GetProgressMessage();
 
@@ -552,11 +548,6 @@ private:
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
-    /*
-    Clears data for a given table type.
-    This should not be called directly, instead use QueueClearTrackTableRequest().
-    */
-    void ClearTable(TableType type);
 
     void CreateRawEventData(const TrackRequestParams& params, const data_req_info_t& req);
     void CreateRawSampleData(const TrackRequestParams& params, const data_req_info_t& req);

@@ -99,6 +99,7 @@ class Future
         Database*             m_db;
         void*                 m_connection;
         void*                 m_user_data;
+        std::mutex            m_mutex;
 };
 
 }  // namespace DataModel

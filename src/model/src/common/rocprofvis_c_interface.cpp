@@ -122,10 +122,10 @@ rocprofvis_dm_size_t rocprofvis_db_get_memory_footprint(rocprofvis_dm_database_t
  * 
  ***************************************************************************************************/
 rocprofvis_db_future_t rocprofvis_db_future_alloc(
-                                        rocprofvis_db_progress_callback_t callback){
+                                        rocprofvis_db_progress_callback_t callback, void* user_data){
     PROFILE;
     try{
-        return new RocProfVis::DataModel::Future(callback);
+        return new RocProfVis::DataModel::Future(callback, user_data);
     }
     catch(std::exception ex)
     {

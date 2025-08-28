@@ -37,7 +37,7 @@ class Future
     public:
         // Future object constructor
         // @param progress_callback - optional progress callback pointer 
-        Future(rocprofvis_db_progress_callback_t progress_callback = nullptr);
+        Future(rocprofvis_db_progress_callback_t progress_callback, void* user_data = nullptr);
         // Future object destructor. Takes care of joining worker thread, if joinable
         ~Future();
         // @return callback method pointer
@@ -98,6 +98,7 @@ class Future
         std::atomic<uint32_t> m_processed_rows;
         Database*             m_db;
         void*                 m_connection;
+        void*                 m_user_data;
 };
 
 }  // namespace DataModel

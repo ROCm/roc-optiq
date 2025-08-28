@@ -35,7 +35,7 @@ void PrintHeader(const char* fmt, ...) {
     printf("\x1b[0m%s%s%s\n", header.c_str(), buffer, header.c_str());
 }
 
-void db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status, rocprofvis_db_status_message_t msg)
+void db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status, rocprofvis_db_status_message_t msg, void* user_data)
 {
     const char* str = " ERROR ";
     const char* color = "\x1b[31m";

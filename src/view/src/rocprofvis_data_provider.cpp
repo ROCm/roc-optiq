@@ -32,6 +32,7 @@ DataProvider::DataProvider()
 , m_min_ts(0)
 , m_max_ts(0)
 , m_trace_file_path("")
+, m_progress_percent(0)
 , m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
 {}
 
@@ -274,6 +275,12 @@ DataProvider::GetTableTotalRowCount(TableType type)
     return m_table_infos[static_cast<size_t>(type)].total_row_count;
 }
 
+const char*
+DataProvider::GetProgressMessage()
+{
+    return m_progress_mesage.c_str();
+}
+
 void
 DataProvider::ClearTable(TableType type)
 {
@@ -484,6 +491,30 @@ DataProvider::HandleLoadTrace()
         else
         {
             // timed out, do nothing and try again later
+            uint64_t            progress_percent;
+            rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+                m_trace_controller, kRPVControllerGetDmProgress, 0, &progress_percent);
+            if(result == kRocProfVisResultSuccess)
+            {
+               if (progress_percent != m_progress_percent)
+               {
+                   uint32_t            length = 0;
+                   rocprofvis_result_t result = rocprofvis_controller_get_string(
+                       m_trace_controller, kRPVControllerGetDmMessage, 0, nullptr,
+                       &length);
+                   if(result == kRocProfVisResultSuccess)
+                   {
+                       length++;
+                       char* str_buffer = new char[length];
+                       result           = rocprofvis_controller_get_string(
+                           m_trace_controller, kRPVControllerGetDmMessage, 0, str_buffer,
+                           &length);
+                       m_progress_mesage = std::string(str_buffer);
+                       delete[] str_buffer;
+                   }
+               }
+               m_progress_percent = progress_percent; 
+            }
         }
     }
 }

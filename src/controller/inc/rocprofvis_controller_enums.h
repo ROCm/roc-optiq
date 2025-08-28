@@ -161,6 +161,10 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerTrackById = 0x00000015,
     // Notify controller when user select the trace
     kRPVControllerNotifySelected = 0x00000016,
+    // Get last stored data-model message
+    kRPVControllerGetDmMessage = 0x00000017,
+    // Get last stored data-model progress in percent 
+    kRPVControllerGetDmProgress = 0x00000018,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {

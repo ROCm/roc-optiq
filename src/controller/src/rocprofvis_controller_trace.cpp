@@ -58,6 +58,7 @@ Trace::Trace()
 , m_sample_table(nullptr)
 , m_dm_handle(nullptr)
 , m_mem_mgmt(nullptr)
+, m_dm_progress_percent(0)
 #ifdef COMPUTE_UI_SUPPORT
 , m_compute_trace(nullptr)
 #endif
@@ -370,6 +371,18 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
 }
 #endif
 
+void Trace::ProgressCallback(rocprofvis_db_filename_t db_filename,
+    rocprofvis_db_progress_percent_t progress_percent,
+    rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data)
+{ 
+    ROCPROFVIS_ASSERT_MSG_RETURN(user_data, ERROR_TRACE_PARAMETERS_NOT_ASSIGNED,);
+    Trace* trace          = (Trace*) user_data;
+    std::lock_guard lock(trace->m_mutex);
+    trace->m_dm_message = Data(message);
+    trace->m_dm_progress_percent = progress_percent;
+}
+
+
 rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
@@ -384,7 +397,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
             if(nullptr != db && kRocProfVisDmResultSuccess ==
                                     rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
             {
-                rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+                rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Trace::ProgressCallback, this);
                 if(nullptr != object2wait)
                 {
                     std::map<uint64_t, Track*> queue_to_track;
@@ -3020,6 +3033,13 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerGetDmProgress:
+            {
+                std::lock_guard lock(m_mutex);
+                *value = m_dm_progress_percent;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerNodeIndexed:
             case kRPVControllerTimeline:
             case kRPVControllerTrackIndexed:
@@ -3028,6 +3048,7 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerSampleTable:
             case kRPVControllerAnalysisViewIndexed:
             case kRPVControllerNotifySelected:
+            case kRPVControllerGetDmMessage:
 #ifdef COMPUTE_UI_SUPPORT
             case kRPVControllerComputeTrace:
 #endif
@@ -3061,6 +3082,8 @@ rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerNotifySelected:
+        case kRPVControllerGetDmProgress:
+        case kRPVControllerGetDmMessage:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif
@@ -3162,6 +3185,8 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerId:
             case kRPVControllerNumAnalysisView:
             case kRPVControllerNotifySelected:
+            case kRPVControllerGetDmProgress:
+            case kRPVControllerGetDmMessage:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -3180,6 +3205,12 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
+        case kRPVControllerGetDmMessage:
+        {
+            std::lock_guard lock(m_mutex);
+            result = m_dm_message.GetString(value, length);
+            break;
+        }
         case kRPVControllerId:
         case kRPVControllerNumAnalysisView:
         case kRPVControllerNumTracks:
@@ -3192,6 +3223,7 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerNotifySelected:
+        case kRPVControllerGetDmProgress:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif
@@ -3274,6 +3306,8 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackIndexed:
         case kRPVControllerTrackById:
         case kRPVControllerNodeIndexed:
+        case kRPVControllerGetDmProgress:
+        case kRPVControllerGetDmMessage:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif
@@ -3306,6 +3340,8 @@ rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerNotifySelected:
+        case kRPVControllerGetDmProgress:
+        case kRPVControllerGetDmMessage:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif
@@ -3408,6 +3444,8 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerNumAnalysisView:
             case kRPVControllerTrackById:
             case kRPVControllerNotifySelected:
+            case kRPVControllerGetDmProgress:
+            case kRPVControllerGetDmMessage:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -3438,6 +3476,8 @@ rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerSampleTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerNotifySelected:
+        case kRPVControllerGetDmProgress:
+        case kRPVControllerGetDmMessage:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif

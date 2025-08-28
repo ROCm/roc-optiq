@@ -515,6 +515,8 @@ public:
     std::shared_ptr<TableRequestParams>          GetTableParams(TableType type);
     uint64_t                                     GetTableTotalRowCount(TableType type);
 
+    const char*                                  GetProgressMessage();
+
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>&
             callback);
@@ -596,6 +598,10 @@ private:
     std::function<void(const std::string&, uint64_t)> m_trace_data_ready_callback;
     // Callback when trace is saved
     std::function<void(bool)> m_save_trace_callback;
+    // Current loading status message retrieved form data model
+    std::string  m_progress_mesage;
+    // Current loading status progress in percents
+    uint64_t    m_progress_percent;
 };
 
 }  // namespace View

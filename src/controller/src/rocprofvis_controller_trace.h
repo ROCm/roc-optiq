@@ -8,6 +8,7 @@
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller_mem_mgmt.h"
+#include "rocprofvis_controller_data.h"
 #include <string>
 #include <vector>
 
@@ -90,6 +91,10 @@ private:
     SystemTable*          m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;
     MemoryManager*        m_mem_mgmt;
+    Data                  m_dm_message;
+    uint16_t              m_dm_progress_percent;
+    std::mutex            m_mutex;
+
 #ifdef COMPUTE_UI_SUPPORT
     ComputeTrace* m_compute_trace;
 #endif
@@ -99,6 +104,13 @@ private:
     rocprofvis_result_t LoadJson(char const* const filename);
 #endif
     rocprofvis_result_t LoadRocpd(char const* const filename);
+
+    static void         ProgressCallback(rocprofvis_db_filename_t         db_filename,
+                                         rocprofvis_db_progress_percent_t progress_percent,
+                                         rocprofvis_db_status_t           status,
+                                         rocprofvis_db_status_message_t   message,
+                                         void*                            user_data);
+    
 };
 
 }  // namespace Controller

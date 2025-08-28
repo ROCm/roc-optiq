@@ -1,6 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_timeline_view.h"
+#include "imgui.h"
+#include "rocprofvis_annotations.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_track_item.h"
@@ -64,6 +66,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_reorder_request({ true, 0, 0 })
 , m_track_height_total({})
 , m_arrow_layer(m_data_provider, timeline_selection)
+, m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
@@ -131,7 +134,11 @@ TimelineView::RenderArrowOptionsMenu()
     }
 }
 void
-TimelineView::RenderArrows(ImVec2 screen_pos)
+TimelineView::TimelineOptions()
+{}
+
+void
+TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
 {
     float total_height = m_graph_size.y;
     if(!m_track_height_total.empty())
@@ -148,11 +155,11 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
     ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
     //  ImGui::SetCursorPos(
     // ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
-    ImGui::BeginChild("Arrows Overlay", ImVec2(m_graph_size.x, m_graph_size.y), false,
-                      window_flags);
+    ImGui::BeginChild("UI Interactive Overlay", ImVec2(m_graph_size.x, m_graph_size.y),
+                      false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
-    ImGui::BeginChild("Arrows Overlay Content", ImVec2(m_graph_size.x, total_height),
+    ImGui::BeginChild("UI Interactive Content", ImVec2(m_graph_size.x, total_height),
                       false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -167,10 +174,52 @@ TimelineView::RenderArrows(ImVec2 screen_pos)
                          m_track_height_total);
 
     RenderArrowOptionsMenu();
+    RenderStickyNotes(draw_list, window_position);
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::EndChild();
+}
+
+void
+TimelineView::ShowTimelineContextMenu(const ImVec2& window_position)
+{
+    ImVec2 mouse_pos = ImGui::GetMousePos();
+    ImVec2 rel_mouse_pos =
+        ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
+
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
+       ImGui::IsMouseHoveringRect(window_position,
+                                  ImVec2(window_position.x + m_graph_size.x,
+                                         window_position.y + m_graph_size.y)))
+    {
+        ImGui::OpenPopup("TimelineContextMenu");
+    }
+
+    if(ImGui::BeginPopup("TimelineContextMenu"))
+    {
+        if(ImGui::MenuItem("Add Sticky Note"))
+        {
+            float  x_in_chart = rel_mouse_pos.x;
+            double time_ns =
+                m_v_min_x + (x_in_chart / m_graph_size.x) * (m_v_max_x - m_v_min_x);
+            float y_offset = rel_mouse_pos.y;
+            m_annotations_view.OpenStickyNotePopup(time_ns, y_offset);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void
+TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
+{
+    m_annotations_view.ShowStickyNoteMenu(window_position, m_graph_size, m_v_min_x,
+                                          m_v_max_x);
+    m_annotations_view.ShowStickyNotePopup();
+    m_annotations_view.ShowStickyNoteEditPopup();
+    m_stop_user_interaction =
+        m_annotations_view.Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns);
 }
 
 void
@@ -1037,18 +1086,19 @@ TimelineView::RenderGraphView()
                            ImVec2(track_item.chart->GetReorderGripWidth(), 0), false,
                            window_flags | ImGuiWindowFlags_NoScrollbar))
                     {
-
                         // Check if the resize grip area is hovered to change the cursor
-                        ImVec2 cursor_pos = ImGui::GetCursorPos();
+                        ImVec2 cursor_pos             = ImGui::GetCursorPos();
                         ImVec2 invisible_hotspot_size = ImGui::GetContentRegionAvail();
-                        ImVec2 invisible_hotspot_pos = cursor_pos;
+                        ImVec2 invisible_hotspot_pos  = cursor_pos;
                         ImGui::SetCursorPos(invisible_hotspot_pos);
-                        ImGui::InvisibleButton("##InvisibleHotspot", invisible_hotspot_size, ImGuiButtonFlags_None);
-                        if (ImGui::IsItemHovered())
+                        ImGui::InvisibleButton("##InvisibleHotspot",
+                                               invisible_hotspot_size,
+                                               ImGuiButtonFlags_None);
+                        if(ImGui::IsItemHovered())
                         {
                             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
                         }
-                        ImGui::SetCursorPos(cursor_pos); // Reset cursor position
+                        ImGui::SetCursorPos(cursor_pos);  // Reset cursor position
 
                         if(ImGui::BeginDragDropSource(
                                ImGuiDragDropFlags_SourceNoPreviewTooltip))
@@ -1106,7 +1156,7 @@ TimelineView::RenderGraphView()
                 ImGui::SetNextWindowPos(
                     ImVec2(graph_view_pos.x, mouse_pos.y - ImGui::GetFrameHeight() / 2),
                     ImGuiCond_Always);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0, 0));  
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
                 if(ImGui::Begin("##ReorderPreview", nullptr,
                                 ImGuiWindowFlags_Tooltip | ImGuiWindowFlags_NoInputs |
                                     ImGuiWindowFlags_NoNav |
@@ -1292,11 +1342,12 @@ TimelineView::RenderGraphPoints()
         // RenderGrid();
         RenderGridAlt();
         RenderGraphView();
-        RenderArrows(screen_pos);
         RenderSplitter(screen_pos);
+        RenderInteractiveUI(screen_pos);
+
         RenderScrubber(screen_pos);
 
-        if(!m_resize_activity)
+        if(!m_resize_activity && !m_stop_user_interaction)
         {
             // Funtion enables user interactions to be captured
             HandleTopSurfaceTouch();

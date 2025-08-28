@@ -20,6 +20,7 @@ enum class RocEvents
     kTimelineEventSelectionChanged,
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
+    kStickyNoteEdited,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeDataDirty,
     kComputeBlockNavigationChanged,
@@ -35,6 +36,7 @@ enum class RocEventType
     kTimelineTrackSelectionChangedEvent,
     kTimelineEventSelectionChangedEvent,
     kScrollToTrackEvent,
+    kStickyNoteEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
 #endif
@@ -78,6 +80,16 @@ private:
     std::string m_trace_path;
     uint64_t    m_request_id;
     uint64_t    m_response_code;
+};
+
+class StickyNoteEvent : public RocEvent
+{
+public:
+    StickyNoteEvent(int id);
+    const int GetID();
+
+private:
+    int m_id;
 };
 
 class ScrollToTrackEvent : public RocEvent

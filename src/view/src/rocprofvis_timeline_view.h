@@ -3,6 +3,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "rocprofvis_annotations.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
@@ -67,7 +68,8 @@ public:
     void                             ResetView();
     void                             DestroyGraphs();
     std::vector<rocprofvis_graph_t>* GetGraphs();
-    void                             RenderArrows(ImVec2 screen_pos);
+    void                             RenderInteractiveUI(ImVec2 screen_pos);
+    void                             TimelineOptions();
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             RenderGraphPoints();
@@ -83,6 +85,8 @@ public:
     ViewCoords                       GetViewCoords() const;
     void                             SetViewCoords(const ViewCoords& coords);
     void                             RenderArrowOptionsMenu();
+    void ShowTimelineContextMenu(const ImVec2& window_position);
+    void RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position);
 
 private:
     std::vector<rocprofvis_graph_t>    m_graphs;
@@ -126,8 +130,10 @@ private:
     ImVec2                             m_last_graph_size;
     std::map<uint64_t, float>          m_track_height_total;  // Track index to height
     TimelineArrow                      m_arrow_layer;
+    bool                               m_stop_user_interaction;
     float                              m_last_zoom;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
+    AnnotationsView  m_annotations_view;
     struct {
         bool        handled;
         uint64_t    track_id;

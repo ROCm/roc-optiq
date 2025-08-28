@@ -65,8 +65,8 @@ RocEvent::CanPropagate() const
 
 // TrackDataEvent Implementation
 TrackDataEvent::TrackDataEvent(int event_id, uint64_t track_id,
-                               const std::string& trace_path,
-                               uint64_t request_id, uint64_t response_code)
+                               const std::string& trace_path, uint64_t request_id,
+                               uint64_t response_code)
 : RocEvent(event_id)
 , m_track_id(track_id)
 , m_trace_path(trace_path)
@@ -218,4 +218,16 @@ const std::string&
 EventSelectionChangedEvent::GetTracePath()
 {
     return m_trace_path;
+}
+const int
+StickyNoteEvent::GetID()
+{
+    return m_id;
+}
+
+StickyNoteEvent::StickyNoteEvent(int id)
+: RocEvent(static_cast<int>(RocEvents::kStickyNoteEdited))
+, m_id(id)
+{
+    SetType(RocEventType::kStickyNoteEvent);
 }

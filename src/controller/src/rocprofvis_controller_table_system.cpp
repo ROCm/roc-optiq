@@ -186,7 +186,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
                 }
             }
         }
-
+        future->RemoveDependentFuture(object2wait);
         rocprofvis_db_future_free(object2wait);
     }
     else

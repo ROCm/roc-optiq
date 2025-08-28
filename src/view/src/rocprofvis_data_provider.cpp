@@ -494,22 +494,26 @@ DataProvider::HandleLoadTrace()
             uint64_t            progress_percent;
             rocprofvis_result_t result = rocprofvis_controller_get_uint64(
                 m_trace_controller, kRPVControllerGetDmProgress, 0, &progress_percent);
-            if(result == kRocProfVisResultSuccess &&
-               progress_percent != m_progress_percent)
+            if(result == kRocProfVisResultSuccess)
             {
-                uint32_t            length = 0;
-                rocprofvis_result_t result = rocprofvis_controller_get_string(
-                    m_trace_controller, kRPVControllerGetDmMessage, 0, nullptr, &length);
-                if(result == kRocProfVisResultSuccess)
-                {
-                    length++;
-                    char* str_buffer = new char[length];
-                    result = rocprofvis_controller_get_string(m_trace_controller,
-                                                              kRPVControllerGetDmMessage,
-                                                              0, str_buffer, &length);
-                    m_progress_mesage = std::string(str_buffer);
-                    delete[] str_buffer;
-                }
+               if (progress_percent != m_progress_percent)
+               {
+                   uint32_t            length = 0;
+                   rocprofvis_result_t result = rocprofvis_controller_get_string(
+                       m_trace_controller, kRPVControllerGetDmMessage, 0, nullptr,
+                       &length);
+                   if(result == kRocProfVisResultSuccess)
+                   {
+                       length++;
+                       char* str_buffer = new char[length];
+                       result           = rocprofvis_controller_get_string(
+                           m_trace_controller, kRPVControllerGetDmMessage, 0, str_buffer,
+                           &length);
+                       m_progress_mesage = std::string(str_buffer);
+                       delete[] str_buffer;
+                   }
+               }
+               m_progress_percent = progress_percent; 
             }
         }
     }

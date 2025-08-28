@@ -71,6 +71,8 @@ typedef struct{
     rocprofvis_dm_event_operation_t operation;
 } rocprofvis_db_sqlite_callback_parameters;
 
+typedef std::vector<std::string> guid_list_t;
+
 // class for any Sqlite database methods and properties 
 class SqliteDatabase : public Database
 {
@@ -95,6 +97,8 @@ class SqliteDatabase : public Database
 
         void SetBlankMask(std::string op, uint64_t mask);
 
+        guid_list_t & GuidList() { return m_guid_list; } 
+
     protected:
         // Method to create SQL table
         // @param table_name - table name 
@@ -112,6 +116,7 @@ class SqliteDatabase : public Database
         // @param table_name - table name 
         // @return status of operation
         rocprofvis_dm_result_t DropSQLTable(const char* table_name);
+        rocprofvis_dm_result_t DropSQLIndex(const char* table_name);
         // Method for SQL query execution without any callback
         // @param future - future object for asynchronous execution status
         // @param query - SQL query
@@ -226,6 +231,8 @@ class SqliteDatabase : public Database
 
         sqlite3* GetServiceConnection();
 
+        rocprofvis_dm_result_t ExecuteTransaction(std::vector<std::string> queries);
+
         // method to run SQL query
         // @param db_conn - database connection 
         // @param query - SQL query
@@ -238,6 +245,7 @@ class SqliteDatabase : public Database
         static void FindTrackIDs(
             SqliteDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
             int& trackId, int & streamTrackId);
+        
     private:     
 
         std::set<sqlite3*> m_available_connections;
@@ -245,6 +253,7 @@ class SqliteDatabase : public Database
         std::mutex         m_mutex;
         std::condition_variable      m_inuse_cv;
         std::map<std::string, uint64_t> m_blank_mask;
+        guid_list_t        m_guid_list;
 
         // method to mimic slite3_exec using sqlite3_prepare_v2
         // @param db - database connection

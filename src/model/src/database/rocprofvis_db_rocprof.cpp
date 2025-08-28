@@ -189,6 +189,26 @@ int RocprofDatabase::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt
 }
 
 int
+RocprofDatabase::CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stmt,
+                                         char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    RocprofDatabase* db = (RocprofDatabase*) callback_params->db;
+    guid_list_t*     guid_list = (guid_list_t*) callback_params->handle;
+    std::string      table_name_befor_guid = callback_params->query[kRPVCacheTableName];
+    std::string      table_name            = (char*) sqlite3_column_text(stmt, 0);
+    size_t           pos                   = table_name.find(table_name_befor_guid);
+    if(pos == 0)
+    {
+        guid_list->push_back(table_name.substr(table_name_befor_guid.length()));
+    }
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
+int
 RocprofDatabase::CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
                                        char** azColName)
 {
@@ -210,6 +230,32 @@ RocprofDatabase::CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
     return 0;
 }   
 
+rocprofvis_dm_result_t
+RocprofDatabase::CreateIndexes()
+{ 
+    std::vector<std::string> vec;
+    for(int i = 0; i < GuidList().size(); i++)
+    {
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_idx_") + GuidList()[i] +
+                 " ON rocpd_region_" + GuidList()[i] + "(nid,pid,tid,start);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_idx_") + GuidList()[i] +
+                 " ON rocpd_kernel_dispatch_" + GuidList()[i] + "(nid,agent_id,queue_id,start);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_stream_idx_") + GuidList()[i] +
+                 " ON rocpd_kernel_dispatch_" + GuidList()[i] + "(nid,stream_id,start);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_allocate_idx_") + GuidList()[i] +
+                 " ON rocpd_memory_allocate_" + GuidList()[i] + "(nid,agent_id,queue_id,start);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_allocate_stream_idx_") + GuidList()[i] +
+                 " ON rocpd_memory_allocate_" + GuidList()[i] + "(nid,stream_id,start);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_idx_") + GuidList()[i] +
+                 " ON rocpd_memory_copy_" + GuidList()[i] + "(nid,dst_agent_id,queue_id,start);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_stream_idx_") + GuidList()[i] +
+                 " ON rocpd_memory_copy_" + GuidList()[i] + "(nid,stream_id,start);");
+    }
+
+    return ExecuteTransaction(vec);
+}
+
+
 rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
@@ -217,6 +263,20 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
     {
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
         std::string value;
+
+        ShowProgress(2, "Detect Nodes", kRPVDbBusy, future);
+        ExecuteSQLQuery(future,
+                        "SELECT name from sqlite_master where type = 'table' and name like 'rocpd_info_node_%';",
+                        "rocpd_info_node_", (rocprofvis_dm_handle_t) &GuidList(),
+                        &CallbackNodeEnumeration);
+        if(GuidList().size() > 1)
+        {
+            spdlog::debug("Multi-node databases are not yet supported!");
+            break;
+        }
+
+        ShowProgress(5, "Create indexes", kRPVDbBusy, future);
+        CreateIndexes();
 
         ShowProgress(2, "Load Nodes information", kRPVDbBusy, future);
         ExecuteSQLQuery(future,"SELECT * from rocpd_info_node;", "Node", (rocprofvis_dm_handle_t)CachedTables(), &CallbackCacheTable);
@@ -277,7 +337,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
                          Builder::QParam("L.level") },
                        { Builder::From("rocpd_region", "R"),
-                         Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id"),
+                         Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id AND E.guid = R.guid"),
                          Builder::LeftJoin("event_levels_launch_v1", "L", "R.id = L.eid") } })),
                  // Slice query by Stream
                  "",
@@ -377,7 +437,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("K.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                          Builder::QParam("L.level") },
                        { Builder::From("rocpd_kernel_dispatch", "K"),
-                         Builder::InnerJoin("rocpd_event", "E", "E.id = K.event_id"),
+                         Builder::InnerJoin("rocpd_event", "E", "E.id = K.event_id AND E.guid = K.guid"),
                          Builder::LeftJoin("event_levels_dispatch_v1", "L", "K.id = L.eid") } })),
                  // Slice query by stream
                  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
@@ -392,7 +452,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::SpaceSaver(-1),
                          Builder::QParam("L.level_for_stream", "level") },
                        { Builder::From("rocpd_kernel_dispatch", "K"),
-                         Builder::InnerJoin("rocpd_event", "E", "E.id = K.event_id"),
+                         Builder::InnerJoin("rocpd_event", "E", "E.id = K.event_id AND E.guid = K.guid"),
                          Builder::LeftJoin("event_levels_dispatch_v1", "L", "K.id = L.eid") } })),
                  // Table query
                  Builder::Select(rocprofvis_db_sqlite_table_query_format(
@@ -492,7 +552,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                          Builder::QParam("L.level") },
                        { Builder::From("rocpd_memory_allocate", "M"),
-                         Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
+                         Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id AND E.guid = M.guid"),
                          Builder::LeftJoin("event_levels_mem_alloc_v1", "L", "M.id = L.eid") } })),
                  // Slice query by stream
                  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
@@ -507,7 +567,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::SpaceSaver(-1),
                          Builder::QParam("L.level_for_stream", "level") },
                        { Builder::From("rocpd_memory_allocate", "M"),
-                         Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
+                         Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id AND E.guid = M.guid"),
                          Builder::LeftJoin("event_levels_mem_alloc_v1", "L", "M.id = L.eid") } })),
                  // Table query
                  Builder::Select(rocprofvis_db_sqlite_table_query_format(
@@ -615,7 +675,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                              Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                              Builder::QParam("L.level") },
                          { Builder::From("rocpd_memory_copy", "M"),
-                           Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
+                           Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id AND E.guid = M.guid"),
                            Builder::LeftJoin("event_levels_mem_copy_v1", "L", "M.id = L.eid")
                          } })),
                      // Slice query by stream
@@ -631,7 +691,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                              Builder::SpaceSaver(-1),
                              Builder::QParam("L.level_for_stream", "level") },
                            { Builder::From("rocpd_memory_copy", "M"),
-                             Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
+                             Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id AND E.guid = M.guid"),
                              Builder::LeftJoin("event_levels_mem_copy_v1", "L", "M.id = L.eid") } })),
                     // Table query
                      Builder::Select(rocprofvis_db_sqlite_table_query_format(

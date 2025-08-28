@@ -281,7 +281,7 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
     ROCPROFVIS_ASSERT_MSG_RETURN(size, "Error! SQL query cannot be empty!", kRocProfVisDmResultUnknownError);
     ss << query << " FROM (";
     for (int i=0; i < size; i++){
-        if (i > 0) ss << " UNION ";
+        if (i > 0) ss << " UNION ALL ";
         ss << TrackPropertiesAt(index)->query[type][i];
     } 
     ss << ") where ";
@@ -422,7 +422,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
     }
     query = "SELECT * FROM ( ";
     for (std::map<std::string, std::string>::iterator it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
-        if (it_query!=slice_query_map.begin()) query += " UNION ";
+        if (it_query!=slice_query_map.begin()) query += " UNION ALL ";
         query += it_query->first;
         query += it_query->second;
         query += ")";
@@ -463,9 +463,9 @@ ProfileDatabase::BuildTableQuery(
             for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
                 if (props->process.tag[k] != "const") {
                     if (tuple.length() > 1) tuple += ",";
-                    if(props->process.is_numeric[k]) tuple += "coalesce(";
+                    //if(props->process.is_numeric[k]) tuple += "coalesce(";
                     tuple += props->process.tag[k];
-                    if(props->process.is_numeric[k]) tuple += ",0)";
+                    //if(props->process.is_numeric[k]) tuple += ",0)";
                 }
             }
             tuple += ")";
@@ -486,14 +486,8 @@ ProfileDatabase::BuildTableQuery(
             slice_query_map[q] += tuple ;
         }
     }
-    if(count_only)
-    {
-        query = "SELECT COUNT(*) AS [NumRecords], * FROM ( ";
-    }
-    else
-    { 
-        query = "SELECT * FROM ( "; 
-    } 
+    query = "WITH all_rows AS (";
+
     if (group && strlen(group))
     {
         query += "SELECT ";
@@ -504,13 +498,15 @@ ProfileDatabase::BuildTableQuery(
         }
         else
         {
-            query += "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, MIN(duration) as min_duration, MAX(duration) as max_duration";
+            query += group;
+            query += ", COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+            "MIN(duration) as min_duration, MAX(duration) as max_duration";
         }
 
         query += " FROM ( "; 
     }
     for (std::map<std::string, std::string>::iterator it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
-        if (it_query!=slice_query_map.begin()) query += " UNION ";
+        if (it_query!=slice_query_map.begin()) query += " UNION ALL ";
         query += it_query->first;
         query += it_query->second;
         query += ") and ";
@@ -522,12 +518,20 @@ ProfileDatabase::BuildTableQuery(
         query += " < ";
         query += std::to_string(end);
     }
-    if(group && strlen(group))
+    if (group && strlen(group))
     {
         query += ") GROUP BY ";
         query += group;
     }
     query += ")";
+    if(count_only)
+    {
+        query += " SELECT (SELECT COUNT(*) FROM all_rows) AS [NumRecords], * FROM all_rows "; 
+    }
+    else
+    {
+        query += " SELECT * FROM all_rows "; 
+    }
     if (filter && strlen(filter))
     {
         query += " WHERE (";

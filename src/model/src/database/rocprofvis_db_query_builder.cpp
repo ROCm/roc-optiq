@@ -125,7 +125,7 @@ namespace DataModel
     };
     std::string Builder::Union()
     {
-        return std::string(" UNION ");
+        return std::string(" UNION ALL ");
     }
     std::string Builder::Concat(std::vector<std::string> strings)
     {

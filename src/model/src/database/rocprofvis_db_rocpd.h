@@ -142,6 +142,9 @@ private:
     };
 
     private:
+        rocprofvis_dm_result_t CreateIndexes();
+
+    private:
         track_find_map_t find_track_map;
         track_find_pmc_map_t find_track_pmc_map;
 

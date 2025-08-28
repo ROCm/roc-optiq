@@ -133,7 +133,7 @@ private:
     bool                               m_stop_user_interaction;
     float                              m_last_zoom;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
-    RocProfVis::View::AnnotationsView  m_annotations_view;
+    AnnotationsView  m_annotations_view;
     struct {
         bool        handled;
         uint64_t    track_id;

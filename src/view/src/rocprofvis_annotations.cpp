@@ -14,13 +14,17 @@ AnnotationsView::AnnotationsView()
         auto evt                 = std::dynamic_pointer_cast<StickyNoteEvent>(e);
         if(evt)
         {
-            m_edit_sticky_index = evt->GetID();
+            m_edit_sticky_id = evt->GetID();
         }
     };
     m_edit_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kStickyNoteEdited), sticky_note_handler);
 }
-AnnotationsView::~AnnotationsView() {}
+AnnotationsView::~AnnotationsView()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kStickyNoteEdited), m_edit_token);
+}
 
 void
 AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
@@ -136,11 +140,11 @@ AnnotationsView::ShowStickyNoteEditPopup()
         {
             for(auto& note : m_sticky_notes)
             {
-                if(note.GetID() == m_edit_sticky_index)
+                if(note.GetID() == m_edit_sticky_id)
                 {
                     note.SetText(std::string(m_sticky_text));
                     note.SetTitle(std::string(m_sticky_title));
-                    m_edit_sticky_index      = -1;
+                    m_edit_sticky_id         = -1;
                     m_show_sticky_edit_popup = false;
                     ImGui::CloseCurrentPopup();
                     break;
@@ -150,7 +154,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
         if(cancel_clicked)
         {
             m_show_sticky_edit_popup = false;
-            m_edit_sticky_index      = -1;
+            m_edit_sticky_id         = -1;
             ImGui::CloseCurrentPopup();
         }
         if(delete_clicked)
@@ -158,7 +162,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
             int count = 0;
             for(auto& note : m_sticky_notes)
             {
-                if(note.GetID() == m_edit_sticky_index)
+                if(note.GetID() == m_edit_sticky_id)
                 {
                     m_sticky_notes.erase(m_sticky_notes.begin() + count);
 
@@ -167,7 +171,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
                 count++;
             }
             m_show_sticky_edit_popup = false;
-            m_edit_sticky_index      = -1;
+            m_edit_sticky_id         = -1;
             ImGui::CloseCurrentPopup();
         }
 
@@ -186,7 +190,7 @@ AnnotationsView::ShowStickyNotePopup()
     int count = 0;
     for(auto& note : m_sticky_notes)
     {
-        if(note.GetID() == m_edit_sticky_index)
+        if(note.GetID() == m_edit_sticky_id)
         {
             const std::string& title = note.GetTitle();
             std::strncpy(m_sticky_title, title.c_str(), sizeof(m_sticky_title) - 1);

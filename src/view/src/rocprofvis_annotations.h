@@ -36,7 +36,7 @@ private:
     float                           m_sticky_y_offset        = 0.0f;
     char                            m_sticky_title[128]      = { 0 };
     char                            m_sticky_text[512]       = { 0 };
-    int                             m_edit_sticky_index      = -1;
+    int                             m_edit_sticky_id      = -1;
     EventManager::SubscriptionToken m_edit_token;
 };
 }  // namespace View

@@ -85,21 +85,11 @@ private:
 class StickyNoteEvent : public RocEvent
 {
 public:
-    StickyNoteEvent(int id)
-    : RocEvent(static_cast<int>(RocEvents::kStickyNoteEdited))
-
-    , m_id(id)
-    {
-        SetType(RocEventType::kStickyNoteEvent);
-    }
-
+    StickyNoteEvent(int id);
     const int GetID();
 
 private:
-    std::string m_text;
-    std::string m_title;
-    int         m_id;
-    bool        m_deleted;
+    int m_id;
 };
 
 class ScrollToTrackEvent : public RocEvent

@@ -224,3 +224,10 @@ StickyNoteEvent::GetID()
 {
     return m_id;
 }
+
+StickyNoteEvent::StickyNoteEvent(int id)
+: RocEvent(static_cast<int>(RocEvents::kStickyNoteEdited))
+, m_id(id)
+{
+    SetType(RocEventType::kStickyNoteEvent);
+}

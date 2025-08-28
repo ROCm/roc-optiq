@@ -365,5 +365,6 @@ typedef void ( *rocprofvis_db_progress_callback_t)(
 		        rocprofvis_db_filename_t,
                 rocprofvis_db_progress_percent_t, 
                 rocprofvis_db_status_t, 
-                rocprofvis_db_status_message_t
+                rocprofvis_db_status_message_t,
+                void*
 );

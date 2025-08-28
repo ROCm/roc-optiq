@@ -206,10 +206,10 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
     {
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
 
-        ShowProgress(10, "Create tracks indexes", kRPVDbBusy, future);
+        ShowProgress(10, "Indexing tables", kRPVDbBusy, future);
         CreateIndexes();
 
-        ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
+        ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );
         if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(
             future,
             { 
@@ -264,7 +264,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             },
                         &CallBackAddTrack)) break;
 
-        ShowProgress(5, "Adding GPU tracks", kRPVDbBusy, future );
+        ShowProgress(5, "Adding kernel dispatch tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(
             future, 
             {
@@ -319,7 +319,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             },
                         &CallBackAddTrack)) break;
 
-        ShowProgress(5, "Adding PMC tracks", kRPVDbBusy, future );
+        ShowProgress(5, "Adding performance counters tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(
             future, 
             { 
@@ -373,7 +373,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT string, GROUP_CONCAT(id) AS ids FROM rocpd_string GROUP BY string;", &CallBackAddString)) break;
 
-        ShowProgress(5, "Collect track items count", kRPVDbBusy, future);
+        ShowProgress(5, "Counting events", kRPVDbBusy, future);
         TraceProperties()->events_count[kRocProfVisDmOperationLaunch]   = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
         if(kRocProfVisDmResultSuccess !=
@@ -393,7 +393,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             m_event_levels[kRocProfVisDmOperationDispatch].reserve(
                 TraceProperties()->events_count[kRocProfVisDmOperationDispatch]);
 
-            ShowProgress(10, "Calculate event levels", kRPVDbBusy, future);
+            ShowProgress(10, "Calculating event levels", kRPVDbBusy, future);
             if(kRocProfVisDmResultSuccess !=
                ExecuteQueryForAllTracksAsync(
                    0,
@@ -432,7 +432,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                 });
         }
       
-        ShowProgress(5, "Collect track items count, minimum and maximum timestamps",
+        ShowProgress(5, "Collecting track properties",
                      kRPVDbBusy, future);
         TraceProperties()->start_time                                   = UINT64_MAX;
         TraceProperties()->end_time                                     = 0;

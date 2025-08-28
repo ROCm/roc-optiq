@@ -275,7 +275,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             break;
         }
 
-        ShowProgress(5, "Create indexes", kRPVDbBusy, future);
+        ShowProgress(5, "Indexing tables", kRPVDbBusy, future);
         CreateIndexes();
 
         ShowProgress(2, "Load Nodes information", kRPVDbBusy, future);
@@ -301,7 +301,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         CachedTables()->AddTableCell("PMC", -1, "name", "MALLOC");
                 
-        ShowProgress(5, "Adding CPU tracks", kRPVDbBusy, future );
+        ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,
             { 
                 // Track query by agent/queue
@@ -396,7 +396,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             },
                     &CallBackAddTrack)) break;
 
-        ShowProgress(5, "Adding Kernel Dispatch tracks", kRPVDbBusy, future );
+        ShowProgress(5, "Adding kernel dispatch tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,
             {
                 // Track query by agent/queue
@@ -512,7 +512,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
                     &CallBackAddTrack)) break;
 
-        ShowProgress(5, "Adding Memory Allocation tracks", kRPVDbBusy, future );
+        ShowProgress(5, "Adding memory allocation tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
             { // Track query by agent/queue
                  Builder::Select(rocprofvis_db_sqlite_track_query_format(
@@ -634,7 +634,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     &CallBackAddTrack)) break;
 */
    
-        ShowProgress(5, "Adding Memory Copy tracks", kRPVDbBusy, future );
+        ShowProgress(5, "Adding memory copy tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, 
             {
                     // Track query by agent/queue
@@ -751,7 +751,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     &CallBackAddTrack)) break;
         
         // PMC schema is not fully defined yet
-        ShowProgress(5, "Adding PMC tracks", kRPVDbBusy, future );
+        ShowProgress(5, "Adding performance counters tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,   
             {
                     // Track query by agent/queue
@@ -824,7 +824,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"SELECT COUNT(*) FROM rocpd_string;", &CallbackGetValue, m_symbols_offset)) break;
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, "SELECT display_name FROM rocpd_info_kernel_symbol;", &CallBackAddString)) break;
 
-        ShowProgress(5, "Collect track items count",
+        ShowProgress(5, "Counting events",
                      kRPVDbBusy, future);
         TraceProperties()->events_count[kRocProfVisDmOperationLaunch]   = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
@@ -861,7 +861,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             m_event_levels[kRocProfVisDmOperationMemoryCopy].reserve(
                 TraceProperties()->events_count[kRocProfVisDmOperationMemoryCopy]);
 
-             ShowProgress(10, "Calculate event levels", kRPVDbBusy, future);
+             ShowProgress(10, "Calculating event levels", kRPVDbBusy, future);
             if(kRocProfVisDmResultSuccess !=
                ExecuteQueryForAllTracksAsync(
                    kRocProfVisDmIncludeStreamTracks, 
@@ -943,7 +943,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 });
         }
 
-        ShowProgress(5, "Collect track minimum and maximum timestamps and level/value",
+        ShowProgress(5, "Collecting track properties",
                      kRPVDbBusy, future);
         TraceProperties()->start_time = UINT64_MAX;
         TraceProperties()->end_time   = 0;

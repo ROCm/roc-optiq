@@ -266,6 +266,9 @@ TraceView::Render()
             const char* label      = "Please wait...";
             ImVec2      label_size = ImGui::CalcTextSize(label);
 
+            const char* progress_label      = m_data_provider.GetProgressMessage();
+            ImVec2      progress_label_size = ImGui::CalcTextSize(progress_label);
+
             int item_spacing = 10.0f;
 
             float dot_radius  = 5.0f;
@@ -280,7 +283,8 @@ TraceView::Render()
             ImVec2 pos             = ImGui::GetCursorScreenPos();
             ImVec2 center_pos      = ImVec2(
                 pos.x + (available_space.x - label_size.x) * 0.5f,
-                pos.y + (available_space.y - (label_size.y + dot_size.y + item_spacing)) *
+                       pos.y + (available_space.y - (label_size.y + dot_size.y +
+                                                     progress_label_size.y + item_spacing)) *
                             0.5f);
             ImGui::SetCursorScreenPos(center_pos);
 
@@ -293,6 +297,16 @@ TraceView::Render()
 
             RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
                                        IM_COL32(85, 85, 85, 255), anim_speed);
+
+            pos        = ImGui::GetCursorScreenPos();
+            center_pos = ImVec2(
+                pos.x + (available_space.x - progress_label_size.x) * 0.5f,
+                pos.y + (available_space.y - (label_size.y + dot_size.y +
+                                              progress_label_size.y + item_spacing)) *
+                            0.5f);
+            ImGui::SetCursorScreenPos(center_pos);
+            ImGui::Text(progress_label);
+
             ImGui::EndPopup();
         }
     }

@@ -26,13 +26,14 @@ namespace RocProfVis
 namespace DataModel
 {
 
-Future::Future(rocprofvis_db_progress_callback_t progress_callback):
+Future::Future(rocprofvis_db_progress_callback_t progress_callback, void* user_data):
                                 m_progress_callback(progress_callback),
                                 m_interrupt_status(false),
                                 m_progress(0.0),
                                 m_processed_rows(0), 
                                 m_db(nullptr), 
-                                m_connection(nullptr)
+                                m_connection(nullptr), 
+                                m_user_data(user_data)
 {
     m_future=m_promise.get_future();
 }
@@ -96,7 +97,7 @@ rocprofvis_dm_result_t Future::SetPromise(rocprofvis_dm_result_t status) {
 
 void Future::ShowProgress(rocprofvis_dm_charptr_t db_name, double step, rocprofvis_dm_charptr_t action, rocprofvis_db_status_t status){
     m_progress = m_progress+step; 
-    if (m_progress_callback) m_progress_callback(db_name, (int)m_progress, status, action);
+    if (m_progress_callback) m_progress_callback(db_name, (int)m_progress, status, action, m_user_data);
 }
 
 }  // namespace DataModel

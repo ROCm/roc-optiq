@@ -31,8 +31,6 @@ enum class RequestType
     kFetchGraph,
     kFetchTrackEventTable,
     kFetchTrackSampleTable,
-    kClearTrackEventTable,
-    kClearTrackSampleTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
     kFetchEventCallStack,
@@ -272,7 +270,6 @@ typedef struct data_req_info_t
     rocprofvis_controller_arguments_t* request_args;        // arguments for the request
     ProviderState                      loading_state;       // state of the request
     RequestType                        request_type;        // type of request
-    bool                               internal_request;    // true if request is handled by view (and not controller)
     std::shared_ptr<RequestParamsBase> custom_params;       // custom request parameters
     std::chrono::steady_clock::time_point request_time;     // time when the request was made
     uint64_t                           response_code;       // response code for the request
@@ -430,8 +427,6 @@ public:
     bool FetchMultiTrackTable(const TableRequestParams& table_params);
 
     bool IsRequestPending(uint64_t request_id) const;
-
-    bool QueueClearTrackTableRequest(rocprofvis_controller_table_type_t table_type);
 
     /*
      * Release memory buffer holding raw data for selected track

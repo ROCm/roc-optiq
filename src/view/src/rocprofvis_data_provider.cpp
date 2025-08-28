@@ -980,7 +980,6 @@ DataProvider::SaveTrimmedTrace(const std::string& path, double start_ns, double 
         request_info.request_id         = SAVE_TRIMMED_TRACE_REQUEST_ID;
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kSaveTrimmedTrace;
-        request_info.internal_request   = false;
         m_requests.emplace(request_info.request_id, request_info);
         return true;
     }
@@ -1041,7 +1040,6 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
                 request_info.request_id         = request_id; //track_id;
                 request_info.loading_state      = ProviderState::kLoading;
                 request_info.request_type       = RequestType::kFetchTrack;
-                request_info.internal_request   = false;
 
                 auto params = std::make_shared<TrackRequestParams>(track_id, start_ts, end_ts,
                                                                 horz_pixel_range, group_id,
@@ -1133,7 +1131,6 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
                 request_info.request_id         = request_id;
                 request_info.loading_state      = ProviderState::kLoading;
                 request_info.request_type       = RequestType::kFetchGraph;
-                request_info.internal_request   = false;
 
                 auto params = std::make_shared<TrackRequestParams>(request_params);
                 request_info.custom_params = params;
@@ -1368,7 +1365,6 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
                 (table_params.m_table_type == kRPVControllerTableTypeEvents)
                     ? RequestType::kFetchTrackEventTable
                     : RequestType::kFetchTrackSampleTable;
-            request_info.internal_request = false;
 
             std::vector<uint64_t> track_ids;
             track_ids.push_back(track_id);
@@ -1573,7 +1569,6 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
                 (table_params.m_table_type == kRPVControllerTableTypeEvents)
                     ? RequestType::kFetchTrackEventTable
                     : RequestType::kFetchTrackSampleTable;
-            request_info.internal_request = false;
 
             auto params         = std::make_shared<TableRequestParams>(table_params);
             params->m_track_ids = std::move(filtered_track_ids);
@@ -1597,48 +1592,6 @@ DataProvider::FetchMultiTrackTable(const TableRequestParams& table_params)
     else
     {
         spdlog::debug("Cannot fetch table, no track id provided");
-        return false;
-    }
-}
-
-bool
-DataProvider::QueueClearTrackTableRequest(rocprofvis_controller_table_type_t table_type)
-{
-    if(m_state != ProviderState::kReady)
-    {
-        spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
-                     static_cast<int>(m_state));
-        return false;
-    }
-    uint64_t request_id = table_type == kRPVControllerTableTypeEvents
-                              ? EVENT_TABLE_REQUEST_ID
-                              : SAMPLE_TABLE_REQUEST_ID;
-
-    auto it = m_requests.find(request_id);
-    // only allow load if a request for a table of this type is not pending
-    if(it == m_requests.end())
-    {
-        data_req_info_t request_info;
-        request_info.loading_state = ProviderState::kLoading;
-        if(table_type == kRPVControllerTableTypeEvents)
-        {
-            request_info.request_id   = EVENT_TABLE_REQUEST_ID;
-            request_info.request_type = RequestType::kClearTrackEventTable;
-        }
-        else
-        {
-            request_info.request_id   = SAMPLE_TABLE_REQUEST_ID;
-            request_info.request_type = RequestType::kClearTrackSampleTable;
-        }
-        request_info.internal_request = true;
-        m_requests.emplace(request_id, request_info);
-        return true;
-    }
-    else
-    {
-        // request for item already exists
-        spdlog::debug("Request for this table, type {}, is already pending",
-                      static_cast<uint64_t>(table_type));
         return false;
     }
 }
@@ -1908,40 +1861,30 @@ DataProvider::HandleRequests()
         for(auto it = m_requests.begin(); it != m_requests.end();)
         {
             data_req_info_t& req = it->second;
+            rocprofvis_result_t result =
+                rocprofvis_controller_future_wait(req.request_future, 0);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
+                                result == kRocProfVisResultTimeout);
 
-            if(req.internal_request)
+            // the response is ready
+            if(result == kRocProfVisResultSuccess)
             {
-                req.loading_state = ProviderState::kReady;
-                ProcessRequest(req);
-                it = m_requests.erase(it);
+                req.loading_state  = ProviderState::kReady;
+                req.response_code = kRocProfVisResultSuccess;
+                uint64_t future_result = 0;
+                result = rocprofvis_controller_get_uint64(req.request_future, kRPVControllerFutureResult,
+                                    0, &req.response_code);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                rocprofvis_controller_future_free(req.request_future);
+                req.request_future = nullptr;
+                    ProcessRequest(req);
+                    // remove request from processing container
+                    it = m_requests.erase(it);
             }
             else
             {
-                rocprofvis_result_t result =
-                    rocprofvis_controller_future_wait(req.request_future, 0);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
-                                  result == kRocProfVisResultTimeout);
-
-                // the response is ready
-                if(result == kRocProfVisResultSuccess)
-                {
-                    req.loading_state  = ProviderState::kReady;
-                    req.response_code = kRocProfVisResultSuccess;
-                    uint64_t future_result = 0;
-                    result = rocprofvis_controller_get_uint64(req.request_future, kRPVControllerFutureResult,
-                                        0, &req.response_code);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                    rocprofvis_controller_future_free(req.request_future);
-                    req.request_future = nullptr;
-                        ProcessRequest(req);
-                        // remove request from processing container
-                        it = m_requests.erase(it);
-                }
-                else
-                {
-                    ++it;
-                }
+                ++it;
             }
         }
     }
@@ -2191,16 +2134,6 @@ DataProvider::ProcessRequest(data_req_info_t& req)
         {
             spdlog::debug("Processing table data {}", req.request_id);
             ProcessTableRequest(req);
-            break;
-        }
-        case RequestType::kClearTrackEventTable:
-        {
-            ClearTable(TableType::kEventTable);
-            break;
-        }
-        case RequestType::kClearTrackSampleTable:
-        {
-            ClearTable(TableType::kSampleTable);
             break;
         }
         case RequestType::kSaveTrimmedTrace:
@@ -2827,7 +2760,6 @@ DataProvider::FetchEventExtData(uint64_t event_id)
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventExtendedData;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
-        request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
         return true;
@@ -2872,7 +2804,6 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventFlowDetails;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
-        request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
         return true;
@@ -2917,7 +2848,6 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         request_info.loading_state      = ProviderState::kLoading;
         request_info.request_type       = RequestType::kFetchEventCallStack;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
-        request_info.internal_request   = false;
 
         m_requests.emplace(request_info.request_id, request_info);
         return true;

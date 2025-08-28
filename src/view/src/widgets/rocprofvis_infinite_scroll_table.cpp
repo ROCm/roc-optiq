@@ -76,6 +76,7 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
         uint64_t request_id = (m_table_type == TableType::kEventTable)
                                   ? DataProvider::EVENT_TABLE_REQUEST_ID
                                   : DataProvider::SAMPLE_TABLE_REQUEST_ID;
+        // Cancel pending requests.
         if(m_data_provider.IsRequestPending(request_id))
         {
             m_data_provider.CancelRequest(request_id);

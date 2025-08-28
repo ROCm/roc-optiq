@@ -2244,156 +2244,163 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
         return;
     }
 
-    rocprofvis_controller_table_type_t table_type =
-        (req.request_type == RequestType::kFetchTrackEventTable)
-            ? kRPVControllerTableTypeEvents
-            : kRPVControllerTableTypeSamples;
+    if(req.response_code == kRocProfVisResultSuccess)
+    {   
+        rocprofvis_controller_table_type_t table_type =
+            (req.request_type == RequestType::kFetchTrackEventTable)
+                ? kRPVControllerTableTypeEvents
+                : kRPVControllerTableTypeSamples;
 
-    rocprofvis_handle_t* table_handle = nullptr;
-    rocprofvis_result_t  result       = kRocProfVisResultUnknownError;
+        rocprofvis_handle_t* table_handle = nullptr;
+        rocprofvis_result_t  result       = kRocProfVisResultUnknownError;
 
-    if(table_type == kRPVControllerTableTypeEvents)
-    {
-        result = rocprofvis_controller_get_object(
-            m_trace_controller, kRPVControllerEventTable, 0, &table_handle);
-    }
-    else if(table_type == kRPVControllerTableTypeSamples)
-    {
-        result = rocprofvis_controller_get_object(
-            m_trace_controller, kRPVControllerSampleTable, 0, &table_handle);
-    }
-    else
-    {
-        spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
-        return;
-    }
-
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    ROCPROFVIS_ASSERT(table_handle);
-
-    uint64_t num_columns    = 0;
-    uint64_t total_num_rows = 0;
-
-    // get the number of columns and rows in the table
-    result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumColumns,
-                                              0, &num_columns);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-    result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumRows, 0,
-                                              &total_num_rows);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-    // get the column names
-    std::vector<std::string> column_names;
-    column_names.reserve(num_columns);
-    for(int i = 0; i < num_columns; i++)
-    {
-        column_names.emplace_back(
-            GetString(table_handle, kRPVControllerTableColumnHeaderIndexed, i));
-    }
-
-    uint64_t num_rows = 0;
-    ROCPROFVIS_ASSERT(req.request_array);
-
-    result = rocprofvis_controller_get_uint64(
-        req.request_array, kRPVControllerArrayNumEntries, 0, &num_rows);
-    spdlog::debug("Table request returned {0} rows", num_rows);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-    // get row data
-    std::vector<std::vector<std::string>> table_data;
-    table_data.reserve(num_rows);
-    for(uint32_t i = 0; i < num_rows; i++)
-    {
-        // get the row data, for now all data will be stored as strings
-        std::vector<std::string> row_data;
-        row_data.reserve(num_columns);
-
-        rocprofvis_handle_t* row_array = nullptr;
-        result                         = rocprofvis_controller_get_object(
-            req.request_array, kRPVControllerArrayEntryIndexed, i, &row_array);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        ROCPROFVIS_ASSERT(row_array);
-        for(uint32_t j = 0; j < num_columns; j++)
+        if(table_type == kRPVControllerTableTypeEvents)
         {
-            uint64_t column_type = 0;
-            result               = rocprofvis_controller_get_uint64(
-                table_handle, kRPVControllerTableColumnTypeIndexed, j, &column_type);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            std::string column_value = "";
-            switch(column_type)
-            {
-                case kRPVControllerPrimitiveTypeUInt64:
-                {
-                    uint64_t value = 0;
-                    result         = rocprofvis_controller_get_uint64(
-                        row_array, kRPVControllerArrayEntryIndexed, j, &value);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                    column_value = std::to_string(value);
-                    break;
-                }
-                case kRPVControllerPrimitiveTypeDouble:
-                {
-                    double value = 0;
-                    result       = rocprofvis_controller_get_double(
-                        row_array, kRPVControllerArrayEntryIndexed, j, &value);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                    column_value = std::to_string(value);
-                    break;
-                }
-                case kRPVControllerPrimitiveTypeString:
-                {
-                    column_value =
-                        GetString(row_array, kRPVControllerArrayEntryIndexed, j);
-                    break;
-                }
-                case kRPVControllerPrimitiveTypeObject:
-                default:
-                {
-                    // skip columns with object types for now
-                    spdlog::debug("Skipping column {} with object type", j);
-                    break;
-                }
-            }
-            row_data.push_back(std::move(column_value));
+            result = rocprofvis_controller_get_object(
+                m_trace_controller, kRPVControllerEventTable, 0, &table_handle);
         }
-        table_data.push_back(std::move(row_data));
-    }
+        else if(table_type == kRPVControllerTableTypeSamples)
+        {
+            result = rocprofvis_controller_get_object(
+                m_trace_controller, kRPVControllerSampleTable, 0, &table_handle);
+        }
+        else
+        {
+            spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
+            return;
+        }
 
-    std::shared_ptr<TableRequestParams> table_params =
-        std::dynamic_pointer_cast<TableRequestParams>(req.custom_params);
-    if(!table_params)
-    {
-        spdlog::warn("Table request params are not set or invalid");
-        table_params = nullptr;
-    }
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        ROCPROFVIS_ASSERT(table_handle);
 
-    if(table_type == kRPVControllerTableTypeEvents)
-    {
-        table_info_t& table_info =
-            m_table_infos[static_cast<size_t>(TableType::kEventTable)];
-        // store the event table data
-        table_info.table_header    = std::move(column_names);
-        table_info.table_data      = std::move(table_data);
-        table_info.table_params    = table_params;
-        table_info.total_row_count = total_num_rows;
-    }
-    else if(table_type == kRPVControllerTableTypeSamples)
-    {
-        // store the sample table data
-        table_info_t& table_info =
-            m_table_infos[static_cast<size_t>(TableType::kSampleTable)];
-        table_info.table_header    = std::move(column_names);
-        table_info.table_data      = std::move(table_data);
-        table_info.table_params    = table_params;
-        table_info.total_row_count = total_num_rows;
+        uint64_t num_columns    = 0;
+        uint64_t total_num_rows = 0;
+
+        // get the number of columns and rows in the table
+        result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumColumns,
+                                                  0, &num_columns);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumRows, 0,
+                                                  &total_num_rows);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // get the column names
+        std::vector<std::string> column_names;
+        column_names.reserve(num_columns);
+        for(int i = 0; i < num_columns; i++)
+        {
+            column_names.emplace_back(
+                GetString(table_handle, kRPVControllerTableColumnHeaderIndexed, i));
+        }
+
+        uint64_t num_rows = 0;
+        ROCPROFVIS_ASSERT(req.request_array);
+
+        result = rocprofvis_controller_get_uint64(
+            req.request_array, kRPVControllerArrayNumEntries, 0, &num_rows);
+        spdlog::debug("Table request returned {0} rows", num_rows);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // get row data
+        std::vector<std::vector<std::string>> table_data;
+        table_data.reserve(num_rows);
+        for(uint32_t i = 0; i < num_rows; i++)
+        {
+            // get the row data, for now all data will be stored as strings
+            std::vector<std::string> row_data;
+            row_data.reserve(num_columns);
+
+            rocprofvis_handle_t* row_array = nullptr;
+            result                         = rocprofvis_controller_get_object(
+                req.request_array, kRPVControllerArrayEntryIndexed, i, &row_array);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(row_array);
+            for(uint32_t j = 0; j < num_columns; j++)
+            {
+                uint64_t column_type = 0;
+                result               = rocprofvis_controller_get_uint64(
+                    table_handle, kRPVControllerTableColumnTypeIndexed, j, &column_type);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                std::string column_value = "";
+                switch(column_type)
+                {
+                    case kRPVControllerPrimitiveTypeUInt64:
+                    {
+                        uint64_t value = 0;
+                        result         = rocprofvis_controller_get_uint64(
+                            row_array, kRPVControllerArrayEntryIndexed, j, &value);
+                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                        column_value = std::to_string(value);
+                        break;
+                    }
+                    case kRPVControllerPrimitiveTypeDouble:
+                    {
+                        double value = 0;
+                        result       = rocprofvis_controller_get_double(
+                            row_array, kRPVControllerArrayEntryIndexed, j, &value);
+                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                        column_value = std::to_string(value);
+                        break;
+                    }
+                    case kRPVControllerPrimitiveTypeString:
+                    {
+                        column_value =
+                            GetString(row_array, kRPVControllerArrayEntryIndexed, j);
+                        break;
+                    }
+                    case kRPVControllerPrimitiveTypeObject:
+                    default:
+                    {
+                        // skip columns with object types for now
+                        spdlog::debug("Skipping column {} with object type", j);
+                        break;
+                    }
+                }
+                row_data.push_back(std::move(column_value));
+            }
+            table_data.push_back(std::move(row_data));
+        }
+
+        std::shared_ptr<TableRequestParams> table_params =
+            std::dynamic_pointer_cast<TableRequestParams>(req.custom_params);
+        if(!table_params)
+        {
+            spdlog::warn("Table request params are not set or invalid");
+            table_params = nullptr;
+        }
+
+        if(table_type == kRPVControllerTableTypeEvents)
+        {
+            table_info_t& table_info =
+                m_table_infos[static_cast<size_t>(TableType::kEventTable)];
+            // store the event table data
+            table_info.table_header    = std::move(column_names);
+            table_info.table_data      = std::move(table_data);
+            table_info.table_params    = table_params;
+            table_info.total_row_count = total_num_rows;
+        }
+        else if(table_type == kRPVControllerTableTypeSamples)
+        {
+            // store the sample table data
+            table_info_t& table_info =
+                m_table_infos[static_cast<size_t>(TableType::kSampleTable)];
+            table_info.table_header    = std::move(column_names);
+            table_info.table_data      = std::move(table_data);
+            table_info.table_params    = table_params;
+            table_info.total_row_count = total_num_rows;
+        }
+        else
+        {
+            spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
+            return;
+        }
     }
     else
     {
-        spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
-        return;
+        spdlog::debug("Table request failed with code {}", req.response_code);
     }
 
     // free the array

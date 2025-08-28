@@ -514,6 +514,7 @@ public:
     const std::vector<std::vector<std::string>>& GetTableData(TableType type);
     std::shared_ptr<TableRequestParams>          GetTableParams(TableType type);
     uint64_t                                     GetTableTotalRowCount(TableType type);
+    void                                         ClearTable(TableType type);
 
     const char*                                  GetProgressMessage();
 
@@ -552,11 +553,6 @@ private:
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
-    /*
-    Clears data for a given table type.
-    This should not be called directly, instead use QueueClearTrackTableRequest().
-    */
-    void ClearTable(TableType type);
 
     void CreateRawEventData(const TrackRequestParams& params, const data_req_info_t& req);
     void CreateRawSampleData(const TrackRequestParams& params, const data_req_info_t& req);

@@ -71,11 +71,20 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
             }
         }
 
-        bool result = false;
+        bool fetch_result = false;
+
+        uint64_t request_id = (m_table_type == TableType::kEventTable)
+                                  ? DataProvider::EVENT_TABLE_REQUEST_ID
+                                  : DataProvider::SAMPLE_TABLE_REQUEST_ID;
+        if(m_data_provider.IsRequestPending(request_id))
+        {
+            m_data_provider.CancelRequest(request_id);
+        }
         // if no tracks match the table type, clear the table
         if(filtered_tracks.empty())
         {
-            result = m_data_provider.QueueClearTrackTableRequest(m_req_table_type);
+            m_data_provider.ClearTable(m_table_type);
+            fetch_result = true;
         }
         else
         {
@@ -87,10 +96,10 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
                 m_group_columns.size() ? m_group_columns.data() : "", 0,
                 m_fetch_chunk_size);
 
-            result = m_data_provider.FetchMultiTrackTable(event_table_params);
+            fetch_result = m_data_provider.FetchMultiTrackTable(event_table_params);
         }
 
-        if(!result)
+        if(!fetch_result)
         {
             spdlog::error("Failed to queue table request for tracks: {}",
                           filtered_tracks.size());

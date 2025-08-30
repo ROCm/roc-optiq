@@ -280,7 +280,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             break;
         }
 
-        ShowProgress(5, "Indexing tables", kRPVDbBusy, future);
+        ShowProgress(5, "Indexing tables (once per database)", kRPVDbBusy, future);
         CreateIndexes();
 
         ShowProgress(2, "Load Nodes information", kRPVDbBusy, future);
@@ -866,7 +866,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             m_event_levels[kRocProfVisDmOperationMemoryCopy].reserve(
                 TraceProperties()->events_count[kRocProfVisDmOperationMemoryCopy]);
 
-             ShowProgress(10, "Calculating event levels", kRPVDbBusy, future);
+             ShowProgress(10, "Calculating event levels (once per database)", kRPVDbBusy, future);
             if(kRocProfVisDmResultSuccess !=
                ExecuteQueryForAllTracksAsync(
                    kRocProfVisDmIncludeStreamTracks, 

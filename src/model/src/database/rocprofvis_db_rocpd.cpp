@@ -209,7 +209,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
     {
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
 
-        ShowProgress(10, "Indexing tables", kRPVDbBusy, future);
+        ShowProgress(10, "Indexing tables (once per database)", kRPVDbBusy, future);
         CreateIndexes();
 
         ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );
@@ -396,7 +396,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             m_event_levels[kRocProfVisDmOperationDispatch].reserve(
                 TraceProperties()->events_count[kRocProfVisDmOperationDispatch]);
 
-            ShowProgress(10, "Calculating event levels", kRPVDbBusy, future);
+            ShowProgress(10, "Calculating event levels (once per database)", kRPVDbBusy, future);
             if(kRocProfVisDmResultSuccess !=
                ExecuteQueryForAllTracksAsync(
                    0,

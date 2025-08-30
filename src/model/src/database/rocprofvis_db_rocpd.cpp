@@ -357,7 +357,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                          Builder::SpaceSaver(0),
                          Builder::QParam("deviceId", Builder::AGENT_ID_SERVICE_NAME),
                          Builder::QParam("monitorType", Builder::COUNTER_NAME_SERVICE_NAME),
-                         Builder::QParam("value", "level") },
+                         Builder::QParam("CAST(value AS REAL)", "level") },
                        { Builder::From("rocpd_monitor") } })),
                         // Slice query by stream
                         "",
@@ -442,7 +442,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         if(kRocProfVisDmResultSuccess !=
            ExecuteQueryForAllTracksAsync(kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks,
                kRPVQuerySliceByTrackSliceQuery,
-               "SELECT MIN(startTs), MAX(endTs), MIN(CAST(level as REAL)), MAX(CAST(level as REAL)), ", ";", &CallbackGetTrackProperties,
+               "SELECT MIN(startTs), MAX(endTs), MIN(level), MAX(level), ", ";", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {
                }))
         {

@@ -956,7 +956,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if(kRocProfVisDmResultSuccess !=
            ExecuteQueryForAllTracksAsync(
                kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
-               "SELECT MIN(startTs), MAX(endTs), MIN(CAST(level as REAL)), MAX(CAST(level as REAL)), ",
+               "SELECT MIN(startTs), MAX(endTs), MIN(level), MAX(level), ",
                "", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {}))
         {

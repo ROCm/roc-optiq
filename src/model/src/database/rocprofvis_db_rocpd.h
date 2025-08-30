@@ -140,7 +140,18 @@ private:
     {
         return &s_rocpd_categorized_data;
     };
-
+    const rocprofvis_null_data_exceptions_int* GetNullDataExceptionsInt() override
+    {
+        return &s_null_data_exception_int;
+    }
+    const rocprofvis_null_data_exceptions_string* GetNullDataExceptionsString() override
+    {
+        return &s_null_data_exception_string;
+    }
+    const rocprofvis_null_data_exceptions_skip* GetNullDataExceptionsSkip() override
+    {
+        return &s_null_data_exceptions_skip;
+    }
     private:
         rocprofvis_dm_result_t CreateIndexes();
 
@@ -179,6 +190,20 @@ private:
                         { "stream", kRocProfVisEventEssentialDataStream },
                     }
                 }
+            };
+
+         inline static const rocprofvis_null_data_exceptions_skip
+            s_null_data_exceptions_skip = {
+
+            };
+
+        inline static const rocprofvis_null_data_exceptions_int
+            s_null_data_exception_int = {
+
+            };
+        inline static const rocprofvis_null_data_exceptions_string
+            s_null_data_exception_string = {
+
             };
 
 };

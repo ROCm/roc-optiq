@@ -30,10 +30,12 @@ namespace DataModel
 int SqliteDatabase::CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, char** azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void*  func = &CallbackGetValue;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    SqliteDatabase* db = (SqliteDatabase*) callback_params->db;
     std::string * string_ptr = (rocprofvis_dm_string_t*)callback_params->handle;
     ROCPROFVIS_ASSERT_MSG_RETURN(string_ptr, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    *string_ptr = (char*) sqlite3_column_text(stmt,0);
+    *string_ptr = db->Sqlite3ColumnText(func, stmt, azColName, 0);
     return 0;
 } 
 
@@ -54,6 +56,118 @@ SqliteDatabase::isServiceColumn(char* name)
         if(service_column == name) return true;
     }
     return false;
+}
+
+
+uint64_t
+SqliteDatabase::GetNullExceptionInt(void* func, char* column) {
+    spdlog::debug("Column {} value is NULL!", column);
+    const rocprofvis_null_data_exceptions_int* exceptions_map =
+        GetNullDataExceptionsInt();
+    if(exceptions_map != nullptr)
+    {
+        auto fcit = exceptions_map->find(func);
+        if(fcit != exceptions_map->end())
+        {
+            auto it = fcit->second.find(column);
+            if(it != fcit->second.end())
+            {
+                return it->second;
+                spdlog::debug("Column {} value is NULL, replace with {}", column, it->second);
+            }
+        }
+    }
+    spdlog::debug("Column {} value is NULL, replace with 0", column);
+    return 0;
+}
+
+char*
+SqliteDatabase::GetNullExceptionString(void* func, char* column) {
+    const rocprofvis_null_data_exceptions_string* exceptions_map =
+        GetNullDataExceptionsString();
+    if(exceptions_map != nullptr)
+    {
+        auto fcit = exceptions_map->find(func);
+        if(fcit != exceptions_map->end())
+        {
+            auto it = fcit->second.find(column);
+            if(it != fcit->second.end())
+            {
+                spdlog::debug("Column {} value is NULL, replace with {}", column, it->second.c_str());
+                return (char*) it->second.c_str();
+            }
+        }
+    }
+    spdlog::debug("Column {} value is NULL, replace with empty string", column);
+    return "";
+}
+
+bool
+SqliteDatabase::NullExceptionSkip(void* func, char* column)
+{
+    const rocprofvis_null_data_exceptions_skip* exceptions_map =
+        GetNullDataExceptionsSkip();
+    if(exceptions_map != nullptr)
+    {
+        auto fcit = exceptions_map->find(func);
+        if(fcit != exceptions_map->end())
+        {
+            auto it = fcit->second.find(column);
+            if(it != fcit->second.end())
+            {
+                spdlog::debug("Column {} value is NULL, skip column", column);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+char*
+SqliteDatabase::Sqlite3ColumnText(void* func, sqlite3_stmt* stmt, char** azColName, int index) {
+
+    if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
+    {
+        return GetNullExceptionString(func, azColName[index]);
+    }
+    else
+    {
+        return (char*) sqlite3_column_text(stmt, index);
+    }
+}
+
+int
+SqliteDatabase::Sqlite3ColumnInt(void* func, sqlite3_stmt* stmt, char** azColName, int index) {
+    if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
+    {
+        return GetNullExceptionInt(func, azColName[index]);
+    }
+    else
+    {
+        return sqlite3_column_int(stmt, index);
+    }
+}
+int64_t
+SqliteDatabase::Sqlite3ColumnInt64(void* func, sqlite3_stmt* stmt, char** azColName, int index) {
+    if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
+    {
+        return GetNullExceptionInt(func, azColName[index]);
+    }
+    else
+    {
+        return sqlite3_column_int64(stmt, index);
+    }
+}
+double
+SqliteDatabase::Sqlite3ColumnDouble(void* func, sqlite3_stmt* stmt, char** azColName, int index) {
+    if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
+    {
+        return GetNullExceptionInt(func, azColName[index]);
+    }
+    else
+    {
+        return sqlite3_column_double(stmt, index);
+    }
 }
 
 void
@@ -112,13 +226,16 @@ SqliteDatabase::FindTrackIDs(
 
 void
 SqliteDatabase::CollectTrackServiceData(
-    sqlite3_stmt* stmt, int column_index, std::string& column_name,
+    SqliteDatabase* db,
+    sqlite3_stmt* stmt, int column_index, char** azColName,
                         rocprofvis_db_sqlite_track_service_data_t& service_data)
 {
+    void* func = &CollectTrackServiceData;
+    std::string column_name = azColName[column_index];
     if(column_name == Builder::OPERATION_SERVICE_NAME)
     {
 
-        service_data.op = (rocprofvis_dm_event_operation_t)sqlite3_column_int(stmt, column_index);
+        service_data.op = (rocprofvis_dm_event_operation_t)db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
         if(service_data.op == kRocProfVisDmOperationLaunch)
         {
             service_data.category = kRocProfVisDmRegionTrack;
@@ -142,35 +259,36 @@ SqliteDatabase::CollectTrackServiceData(
     }
     else if(column_name == Builder::NODE_ID_SERVICE_NAME)
     {
-        service_data.nid              = sqlite3_column_int64(stmt, column_index);
+        service_data.nid = db->Sqlite3ColumnInt64(func, stmt, azColName, column_index);
     }
     else if(column_name == Builder::AGENT_ID_SERVICE_NAME)
     {
-        service_data.process         = sqlite3_column_int(stmt, column_index);
+        service_data.process = db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
     }
     else if(column_name == Builder::QUEUE_ID_SERVICE_NAME)
     {
-        service_data.thread      = sqlite3_column_int(stmt, column_index);
+        service_data.thread = db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
     }
     else if(column_name == Builder::STREAM_ID_SERVICE_NAME)
     {
-        service_data.stream_id     = sqlite3_column_int(stmt, column_index);
+        service_data.stream_id = db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
     }
     else if(column_name == Builder::PROCESS_ID_SERVICE_NAME)
     {
-        service_data.process           = sqlite3_column_int(stmt, column_index);
+        service_data.process = db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
     }
     else if(column_name == Builder::THREAD_ID_SERVICE_NAME)
     {
-        service_data.thread         = sqlite3_column_int(stmt, column_index);
+        service_data.thread = db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
     }
     else if(column_name == Builder::COUNTER_ID_SERVICE_NAME)
     {
-        service_data.thread  = sqlite3_column_int(stmt, column_index);
+        service_data.thread = db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
     }
     else if(column_name == Builder::COUNTER_NAME_SERVICE_NAME)
     {
-        service_data.monitor_type = (char*)sqlite3_column_text(stmt, column_index);
+        service_data.monitor_type =
+            db->Sqlite3ColumnText(func, stmt, azColName, column_index);
     }
 }
 
@@ -178,7 +296,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     SqliteDatabase* db = (SqliteDatabase*)callback_params->db;
-
+    void* func = &CallbackRunQuery;
     if (callback_params->future->Interrupted()) return 1;
     rocprofvis_db_sqlite_track_service_data_t service_data{};
     bool  is_query_for_table_view = false;
@@ -194,7 +312,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
         if(kRocProfVisDmResultSuccess !=
            db->BindObject()->FuncAddTableColumn(callback_params->handle, azColName[0]))
             return 1;
-        column_text = (char*) sqlite3_column_text(stmt, 0);
+        column_text = db->Sqlite3ColumnText(func, stmt, azColName, 0);
         if(kRocProfVisDmResultSuccess !=
            db->BindObject()->FuncAddTableRowCell(row, column_text.c_str()))
             return 1;
@@ -219,7 +337,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
             if((blanks_mask & (uint64_t) 1 << (i-op_pos)) != 0) 
                 continue;
             std::string column = azColName[i];
-            CollectTrackServiceData(stmt, i, column, service_data);
+            CollectTrackServiceData(db, stmt, i, azColName, service_data);
             if(db->isServiceColumn(azColName[i]))
                 continue;
             if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumn(callback_params->handle,azColName[i])) return 1;
@@ -259,23 +377,23 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
         std::string column = azColName[i];        
         if(is_query_for_table_view)
         {
-            CollectTrackServiceData(stmt, i, column, service_data);
+            CollectTrackServiceData(db, stmt, i, azColName, service_data);
             if(db->isServiceColumn(azColName[i])) 
                 continue;
             if(column == "id")
             {
-                uint64_t id = sqlite3_column_int64(stmt, i);
+                uint64_t id = db->Sqlite3ColumnInt64(func, stmt, azColName, i);
                 id |= (uint64_t)service_data.op << 60;
                 column_text = std::to_string(id);
             }
             else
             {
-                column_text = (char*) sqlite3_column_text(stmt, i);
+                column_text = db->Sqlite3ColumnText(func, stmt, azColName, i);
             }
         }
         else
         {
-            column_text = (char*) sqlite3_column_text(stmt, i);
+            column_text = db->Sqlite3ColumnText(func, stmt, azColName, i);
         }
 
         if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, column_text.c_str())) return 1;
@@ -640,18 +758,29 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
 
         while(sqlite3_step(stmt) == SQLITE_ROW)
         {
-            bool null_data_in_the_row = false;
+            for(int i = 0; i < cols; ++i)
+            {
+                if(sqlite3_column_type(stmt, i) == SQLITE_NULL)
+                {
+                    
+                }
+            }
+
+            bool skip_this_row = false;
 
             for(int i = 0; i < cols; ++i)
             {
                 if(sqlite3_column_type(stmt, i) == SQLITE_NULL)
                 {
-                    null_data_in_the_row = true;
-                    spdlog::debug("NULL data in column {}", col_names[i]);
-                    break;
+                    skip_this_row = NullExceptionSkip(callback, col_names[i]);
+                    if(skip_this_row)
+                    {
+                        break;
+                    }
                 }
             }
-            if(null_data_in_the_row == false)
+
+            if(skip_this_row == false)
             {
                 rc = callback(user_data, cols, stmt, col_names.data());
                 if(rc != 0)

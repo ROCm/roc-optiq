@@ -68,18 +68,19 @@ rocprofvis_dm_result_t RocprofDatabase::RemapStringIds(rocprofvis_db_flow_data_t
 int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS+1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void* func = &CallBackAddTrack;
     rocprofvis_dm_track_params_t track_params = {0};
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     track_params.track_id = (rocprofvis_dm_track_id_t)db->NumTracks();
-    track_params.process.category = (rocprofvis_dm_track_category_t)sqlite3_column_int(stmt,TRACK_ID_CATEGORY);
+    track_params.process.category = (rocprofvis_dm_track_category_t)db->Sqlite3ColumnInt(func, stmt, azColName,TRACK_ID_CATEGORY);
     for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
         track_params.process.tag[i] = azColName[i];
-        char* arg = (char*) sqlite3_column_text(stmt, i);
+        char* arg = (char*) db->Sqlite3ColumnText(func, stmt, azColName, i);
         track_params.process.is_numeric[i] = Database::IsNumber(arg);
         if (track_params.process.is_numeric[i]) {
-            track_params.process.id[i] = sqlite3_column_int64(stmt, i);
+            track_params.process.id[i] = db->Sqlite3ColumnInt64(func, stmt, azColName, i);
         } else {
             track_params.process.name[i] = arg;
         }        
@@ -164,10 +165,11 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
 int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void*  func = &CallBackAddString;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
-    uint32_t stringId = db->BindObject()->FuncAddString(db->BindObject()->trace_object, (char*) sqlite3_column_text(stmt,0));
+    uint32_t stringId = db->BindObject()->FuncAddString(db->BindObject()->trace_object, (char*) db->Sqlite3ColumnText(func, stmt, azColName,0));
     callback_params->future->CountThisRow();
     return 0;
 }
@@ -175,14 +177,15 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt,
 
 int RocprofDatabase::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void* func = &CallbackCacheTable;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     DatabaseCache * ref_tables = (DatabaseCache *)callback_params->handle;
-    uint64_t id = sqlite3_column_int64(stmt,0);
+    uint64_t id = db->Sqlite3ColumnInt64(func, stmt, azColName,0);
     for (int i=0; i < argc; i++)
     {
         ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName], id, azColName[i],
-                                 (char*) sqlite3_column_text(stmt, i));
+                                 (char*) db->Sqlite3ColumnText(func, stmt, azColName, i));
     }
     callback_params->future->CountThisRow();
     return 0;
@@ -193,12 +196,13 @@ RocprofDatabase::CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stm
                                          char** azColName)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void*  func = &CallbackNodeEnumeration;
     rocprofvis_db_sqlite_callback_parameters* callback_params =
         (rocprofvis_db_sqlite_callback_parameters*) data;
     RocprofDatabase* db = (RocprofDatabase*) callback_params->db;
     guid_list_t*     guid_list = (guid_list_t*) callback_params->handle;
     std::string      table_name_befor_guid = callback_params->query[kRPVCacheTableName];
-    std::string      table_name            = (char*) sqlite3_column_text(stmt, 0);
+    std::string      table_name            = (char*) db->Sqlite3ColumnText(func, stmt, azColName, 0);
     size_t           pos                   = table_name.find(table_name_befor_guid);
     if(pos == 0)
     {
@@ -214,13 +218,14 @@ RocprofDatabase::CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(argc == 2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    void*  func = &CallbackAddStackTrace;
     rocprofvis_db_sqlite_callback_parameters* callback_params =
         (rocprofvis_db_sqlite_callback_parameters*) data;
     RocprofDatabase*           db = (RocprofDatabase*) callback_params->db;
     rocprofvis_db_stack_data_t record;
     if(callback_params->future->Interrupted()) return 1;
-    record.symbol = (char*) sqlite3_column_text(stmt, 0);
-    record.line   = (char*) sqlite3_column_text(stmt, 1);
+    record.symbol = (char*) db->Sqlite3ColumnText(func, stmt, azColName, 0);
+    record.line   = (char*) db->Sqlite3ColumnText(func, stmt, azColName, 1);
     record.args   = "";
     record.depth  = callback_params->future->GetProcessedRowsCount();
     if(db->BindObject()->FuncAddStackFrame(callback_params->handle, record) !=

@@ -77,8 +77,6 @@ private:
     
     popup_info_t m_popup_info;
 
-    std::unique_ptr<MessageDialog> m_message_dialog;
-
     std::unordered_map<int,ViewCoords> m_bookmarks;
 
     EventManager::SubscriptionToken       m_tabselected_event_token;

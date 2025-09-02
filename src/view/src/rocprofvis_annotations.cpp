@@ -1,6 +1,7 @@
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings.h"
+#include <cstring>
 
 namespace RocProfVis
 {

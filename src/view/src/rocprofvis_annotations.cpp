@@ -60,7 +60,7 @@ AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
     ImVec2 rel_mouse_pos =
         ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
 
-    // Use the visible area for hover detection adjusted for user scroll 
+    // Use the visible area for hover detection adjusted for user scroll.
     ImVec2 win_min = window_position;
     ImVec2 win_max = ImVec2(window_position.x + graph_size.x,
                             window_position.y + graph_size.y + scroll_y);

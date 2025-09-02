@@ -21,7 +21,7 @@ public:
     bool Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
                 double pixels_per_ns);
     void ShowStickyNoteMenu(const ImVec2& window_position, const ImVec2& graph_size,
-                            double v_min_x, double v_max_x);
+                            double v_min_x, double v_max_x, float scroll_y);
     void ShowStickyNotePopup();
 
     void                     ShowStickyNoteEditPopup();

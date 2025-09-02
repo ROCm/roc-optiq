@@ -128,6 +128,7 @@ target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
 target_link_libraries(rocprof-visualizer PRIVATE imgui)
 target_link_libraries(rocprof-visualizer PRIVATE implot)
 target_link_libraries(rocprof-visualizer PRIVATE ImGuiFileDialog)
+target_link_libraries(rocprof-visualizer PRIVATE ImGuiColorTextEdit)
 target_link_libraries(rocprof-visualizer PRIVATE glfw)
 target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-controller)
 target_link_libraries(rocprof-visualizer PRIVATE datamodel)

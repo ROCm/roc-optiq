@@ -138,7 +138,18 @@ private:
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override {
         return &s_rocprof_categorized_data;
     };
-
+    const rocprofvis_null_data_exceptions_int* GetNullDataExceptionsInt() override
+    {
+        return &s_null_data_exceptions_int;
+    }
+    const rocprofvis_null_data_exceptions_string* GetNullDataExceptionsString() override
+    {
+        return &s_null_data_exceptions_string;
+    }
+    const rocprofvis_null_data_exceptions_skip* GetNullDataExceptionsSkip() override
+    {
+        return &s_null_data_exceptions_skip;
+    }
     private:
         rocprofvis_dm_result_t CreateIndexes();
     private:
@@ -190,6 +201,43 @@ private:
                     } 
                 }
             };
+
+        inline static const rocprofvis_null_data_exceptions_skip
+            s_null_data_exceptions_skip = { 
+                { &CallBackAddTrack,
+                  { 
+                        Builder::AGENT_ID_SERVICE_NAME, 
+                        Builder::QUEUE_ID_SERVICE_NAME 
+                  }
+                } 
+        };
+
+        inline static const rocprofvis_null_data_exceptions_int 
+            s_null_data_exceptions_int = {
+            { 
+
+            }
+        };
+        inline static const rocprofvis_null_data_exceptions_string
+            s_null_data_exceptions_string = { 
+            { 
+                &CallbackCacheTable, 
+                { 
+                    { "name", "N/A" }, 
+                    { "start", "0" }, 
+                    { "end", "0" } 
+                },
+            },
+            {
+                &CallbackRunQuery,
+                { 
+                    { "name", "N/A" },  
+                    { "start", "0" }, 
+                    { "end", "0" } 
+                },
+            }
+
+       };
 };
 
 }  // namespace DataModel

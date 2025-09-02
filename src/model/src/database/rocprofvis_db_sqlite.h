@@ -72,6 +72,9 @@ typedef struct{
 } rocprofvis_db_sqlite_callback_parameters;
 
 typedef std::vector<std::string> guid_list_t;
+typedef std::map<void*, std::map<std::string, uint64_t>> rocprofvis_null_data_exceptions_int;
+typedef std::map<void*, std::map<std::string, std::string>> rocprofvis_null_data_exceptions_string;
+typedef std::map<void*, std::set<std::string>> rocprofvis_null_data_exceptions_skip;
 
 // class for any Sqlite database methods and properties 
 class SqliteDatabase : public Database
@@ -239,13 +242,24 @@ class SqliteDatabase : public Database
         // @param params - set of parameters to be passed to sqlite3_exec callback
         rocprofvis_dm_result_t ExecuteSQLQuery(const char* query, rocprofvis_db_sqlite_callback_parameters * params);
 
-        static void CollectTrackServiceData(
-            sqlite3_stmt* stmt, int column_index, std::string& column_name,
+        static void CollectTrackServiceData(SqliteDatabase* db,
+            sqlite3_stmt* stmt, int column_index, char** azColName,
             rocprofvis_db_sqlite_track_service_data_t& service_data);
         static void FindTrackIDs(
             SqliteDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
             int& trackId, int & streamTrackId);
-        
+    
+    protected:
+        char* Sqlite3ColumnText(void* func, sqlite3_stmt* stmt, char** azColName, int index);
+        int Sqlite3ColumnInt(void* func, sqlite3_stmt* stmt, char** azColName, int index);
+        int64_t Sqlite3ColumnInt64(void* func, sqlite3_stmt* stmt, char** azColName, int index);
+        double Sqlite3ColumnDouble(void* func, sqlite3_stmt* stmt, char** azColName, int index);
+        uint64_t GetNullExceptionInt(void* func, char* column);
+        char* GetNullExceptionString(void* func, char* column);
+        bool NullExceptionSkip(void* func, char* column);
+        virtual const rocprofvis_null_data_exceptions_int* GetNullDataExceptionsInt() = 0;
+        virtual const rocprofvis_null_data_exceptions_string* GetNullDataExceptionsString() = 0;
+        virtual const rocprofvis_null_data_exceptions_skip* GetNullDataExceptionsSkip() = 0;
     private:     
 
         std::set<sqlite3*> m_available_connections;

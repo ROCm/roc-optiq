@@ -375,11 +375,14 @@ void Trace::ProgressCallback(rocprofvis_db_filename_t db_filename,
     rocprofvis_db_progress_percent_t progress_percent,
     rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data)
 { 
-    ROCPROFVIS_ASSERT_MSG_RETURN(user_data, ERROR_TRACE_PARAMETERS_NOT_ASSIGNED,);
-    Trace* trace          = (Trace*) user_data;
-    std::lock_guard lock(trace->m_mutex);
-    trace->m_dm_message = Data(message);
-    trace->m_dm_progress_percent = progress_percent;
+    ROCPROFVIS_ASSERT(user_data);
+    Trace* trace = (Trace*) user_data;
+    if(trace != nullptr)
+    {
+        std::lock_guard lock(trace->m_mutex);
+        trace->m_dm_message = Data(message);
+        trace->m_dm_progress_percent = progress_percent;
+    }
 }
 
 

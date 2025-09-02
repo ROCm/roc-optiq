@@ -28,7 +28,7 @@ ComputeTable::~ComputeTable()
 {
 }
 
-rocprofvis_result_t ComputeTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array)
+rocprofvis_result_t ComputeTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;    
     result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, m_rows.size());
@@ -51,7 +51,7 @@ rocprofvis_result_t ComputeTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_
     return result;
 }
 
-rocprofvis_result_t ComputeTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args)
+rocprofvis_result_t ComputeTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future)
 {
     rocprofvis_result_t result = kRocProfVisResultSuccess;
     return result;

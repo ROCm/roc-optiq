@@ -35,6 +35,7 @@ public:
     std::shared_ptr<RocWidget> m_item;  // Widget that this item will render
     float                      m_height;
     float                      m_width;
+    bool                       m_visible;
 
     int32_t m_bg_color;
 
@@ -65,7 +66,10 @@ public:
     // Todo, add, insert, remove operations
     // ex: void AddItem(LayoutItem &item);
 
-    bool   SetAt(int index, const LayoutItem& item);
+    bool              SetAt(int index, const LayoutItem& item);
+    const LayoutItem* GetAt(int index) const;
+    LayoutItem*       GetMutableAt(int index);
+
     size_t ItemCount();
 
     virtual void Render();

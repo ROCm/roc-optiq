@@ -44,6 +44,7 @@ private:
 
     void RenderFileMenu(Project* project);
     void RenderEditMenu(Project* project);
+    void RenderViewMenu(Project* project);
     void RenderHelpMenu();
 
     void RenderFileDialogs();
@@ -53,8 +54,8 @@ private:
 
     static AppWindow* s_instance;
 
-    std::shared_ptr<RocWidget>    m_main_view;
-    std::shared_ptr<TabContainer> m_tab_container;
+    std::shared_ptr<VFixedContainer> m_main_view;
+    std::shared_ptr<TabContainer>    m_tab_container;
 
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;
@@ -77,6 +78,8 @@ private:
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
+
+    size_t m_tool_bar_index;
 };
 
 }  // namespace View

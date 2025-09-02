@@ -31,6 +31,9 @@ constexpr char*  PROJECT_SAVE_DIALOG_NAME = "SaveProjectDlgKey";
 constexpr char*  TAB_CONTAINER_SRC_NAME   = "MainTabContainer";
 constexpr char*  ABOUT_DIALOG_NAME        = "About##_dialog";
 
+constexpr float STATUS_BAR_HEIGHT = 30.0f;
+constexpr float TOOL_BAR_HEIGHT = 40.0f;
+
 // For testing DataProvider
 void
 RenderProviderTest(DataProvider& provider);
@@ -73,6 +76,7 @@ AppWindow::AppWindow()
 #endif
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
 , m_message_dialog(std::make_unique<MessageDialog>())
+, m_tool_bar_index(0)
 {}
 
 AppWindow::~AppWindow()
@@ -101,9 +105,10 @@ AppWindow::Init()
         Settings::GetInstance().LoadSettings("settings_application.json");
     }
 
-    LayoutItem status_bar_item(-1, 30.0f);
+    LayoutItem status_bar_item(-1, STATUS_BAR_HEIGHT);
     status_bar_item.m_item = std::make_shared<RocWidget>();
-    LayoutItem main_area_item(-1, -30.0f);
+    LayoutItem main_area_item(-1, -STATUS_BAR_HEIGHT);
+    LayoutItem tool_bar_item(-1, TOOL_BAR_HEIGHT);
 
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->SetEventSourceName(TAB_CONTAINER_SRC_NAME);
@@ -113,6 +118,8 @@ AppWindow::Init()
     main_area_item.m_item = m_tab_container;
 
     std::vector<LayoutItem> layout_items;
+    layout_items.push_back(tool_bar_item);
+    m_tool_bar_index = layout_items.size() - 1;
     layout_items.push_back(main_area_item);
     layout_items.push_back(status_bar_item);
     m_main_view = std::make_shared<VFixedContainer>(layout_items);
@@ -218,6 +225,7 @@ AppWindow::Render()
         Project* project = GetCurrentProject();
         RenderFileMenu(project);
         RenderEditMenu(project);
+        RenderViewMenu(project);
         RenderHelpMenu();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         RenderDeveloperMenu();
@@ -392,6 +400,24 @@ AppWindow::RenderEditMenu(Project* project)
         if(ImGui::MenuItem("Preferences"))
         {
             m_settings_panel->SetOpen(true);
+        }
+        ImGui::EndMenu();
+    }
+}
+
+void
+AppWindow::RenderViewMenu(Project* project)
+{
+    (void) project;
+
+    if(ImGui::BeginMenu("View"))
+    {
+        LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
+        if(tool_bar_item) {
+            if(ImGui::MenuItem("Show Tool Bar", nullptr, tool_bar_item->m_visible))
+            {
+                tool_bar_item->m_visible = !tool_bar_item->m_visible;
+            }
         }
         ImGui::EndMenu();
     }

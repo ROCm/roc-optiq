@@ -28,7 +28,6 @@ TraceView::TraceView()
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
-, m_message_dialog(std::make_unique<MessageDialog>())
 , m_tabselected_event_token(-1)
 , m_event_selection_changed_event_token(-1)
 , m_save_notification_id("")
@@ -59,12 +58,9 @@ TraceView::TraceView()
             if(response_code != kRocProfVisResultSuccess)
             {
                 spdlog::error("Failed to load trace: {}", response_code);
-                if(m_message_dialog)
-                {
-                    m_popup_info.show_popup = true;
-                    m_popup_info.title      = "Error";
-                    m_popup_info.message    = "Failed to load trace: " + trace_path;
-                }
+                m_popup_info.show_popup = true;
+                m_popup_info.title      = "Error";
+                m_popup_info.message    = "Failed to load trace: " + trace_path;
             }
         });
 
@@ -241,15 +237,7 @@ TraceView::Render()
     if(m_popup_info.show_popup)
     {
         m_popup_info.show_popup = false;
-        if(m_message_dialog)
-        {
-            m_message_dialog->Show(m_popup_info.title, m_popup_info.message);
-        }
-    }
-
-    if(m_message_dialog)
-    {
-        m_message_dialog->Render();
+        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title, m_popup_info.message);
     }
 
     if(m_data_provider.GetState() == ProviderState::kLoading)

@@ -215,7 +215,7 @@ void
 TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
 {
     m_annotations_view.ShowStickyNoteMenu(window_position, m_graph_size, m_v_min_x,
-                                          m_v_max_x);
+                                          m_v_max_x, m_scroll_position_y);
     m_annotations_view.ShowStickyNotePopup();
     m_annotations_view.ShowStickyNoteEditPopup();
     m_stop_user_interaction =

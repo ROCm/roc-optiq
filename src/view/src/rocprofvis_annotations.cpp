@@ -69,16 +69,20 @@ AnnotationsView::Render(ImDrawList* draw_list, const ImVec2& window_position,
 void
 AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
                                     const ImVec2& graph_size, double v_min_x,
-                                    double v_max_x)
+                                    double v_max_x, float scroll_y)
 {
     ImVec2 mouse_pos = ImGui::GetMousePos();
+    // Mouse position relative without adjusting for user scroll. 
     ImVec2 rel_mouse_pos =
         ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
 
+    // Use the visible area for hover detection adjusted for user scroll.
+    ImVec2 win_min = window_position;
+    ImVec2 win_max = ImVec2(window_position.x + graph_size.x,
+                            window_position.y + graph_size.y + scroll_y);
+
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
-       ImGui::IsMouseHoveringRect(
-           window_position,
-           ImVec2(window_position.x + graph_size.x, window_position.y + graph_size.y)))
+       ImGui::IsMouseHoveringRect(win_min, win_max))
     {
         ImGui::OpenPopup("StickyNoteContextMenu");
     }

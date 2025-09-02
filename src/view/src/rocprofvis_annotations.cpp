@@ -16,6 +16,22 @@ AnnotationsView::AnnotationsView()
         if(evt)
         {
             m_edit_sticky_id = evt->GetID();
+
+            for(int i = 0; i < m_sticky_notes.size(); i++)
+            {
+                if(m_sticky_notes[i].GetID() == m_edit_sticky_id)
+                {
+                    const std::string& title = m_sticky_notes[i].GetTitle();
+                    std::strncpy(m_sticky_title, title.c_str(),
+                                 sizeof(m_sticky_title) - 1);
+                    m_sticky_title[sizeof(m_sticky_title) - 1] = '\0';
+                    // Copy the text string to m_sticky_text safely
+                    const std::string& text = m_sticky_notes[i].GetText();
+                    std::strncpy(m_sticky_text, text.c_str(), sizeof(m_sticky_text) - 1);
+                    m_sticky_text[sizeof(m_sticky_text) - 1] = '\0';
+                    break;
+                }
+            }
         }
     };
     m_edit_token = EventManager::GetInstance()->Subscribe(

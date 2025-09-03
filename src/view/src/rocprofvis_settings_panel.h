@@ -2,8 +2,9 @@
 
 #pragma once
 
-#include <rocprofvis_settings.h>
+#include "rocprofvis_settings_manager.h"
 #include <string>
+
 namespace RocProfVis
 {
 namespace View

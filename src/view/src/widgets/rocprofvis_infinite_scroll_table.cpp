@@ -1,6 +1,8 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_infinite_scroll_table.h"
+#include "rocprofvis_settings_manager.h"
+#include "rocprofvis_font_manager.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_timeline_selection.h"
 
@@ -28,7 +30,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_fetch_threshold_items(10)  // Number of items from the edge to trigger a fetch
 , m_last_table_size(0, 0)
 , m_track_selection_event_to_handle(nullptr)
-, m_settings(Settings::GetInstance())
+, m_settings(SettingsManager::GetInstance())
 , m_req_table_type(table_type == TableType::kEventTable ? kRPVControllerTableTypeEvents
                                                         : kRPVControllerTableTypeSamples)
 , m_filter_options({ 0, "", "" })

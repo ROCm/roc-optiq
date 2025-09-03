@@ -1,6 +1,6 @@
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_events.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
 #include <cstring>
 
 namespace RocProfVis
@@ -109,7 +109,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
 {
     if(!m_show_sticky_edit_popup) return;
 
-    Settings& settings     = Settings::GetInstance();
+    SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32     popup_bg     = settings.GetColor(Colors::kFillerColor);
     ImU32     border_color = settings.GetColor(Colors::kBorderColor);
     ImU32     text_color   = settings.GetColor(Colors::kRulerTextColor);
@@ -224,7 +224,7 @@ AnnotationsView::ShowStickyNotePopup()
         count++;
     }
 
-    Settings& settings     = Settings::GetInstance();
+    SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32     popup_bg     = settings.GetColor(Colors::kFillerColor);
     ImU32     border_color = settings.GetColor(Colors::kBorderColor);
     ImU32     text_color   = settings.GetColor(Colors::kRulerTextColor);

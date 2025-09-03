@@ -92,7 +92,7 @@ rocprofvis_dm_size_t RocpdDatabase::GetMemoryFootprint()
 int RocpdDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc== NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS + 1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    void* func = &CallBackAddTrack;
+    void* func = (void*)&CallBackAddTrack;
     rocprofvis_dm_track_params_t track_params = {0};
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
@@ -157,7 +157,7 @@ int RocpdDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, ch
 int RocpdDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    void* func = &CallBackAddString;
+    void* func = (void*)&CallBackAddString;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
@@ -177,7 +177,7 @@ int RocpdDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, c
 int RocpdDatabase::CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    void* func = &CallbackAddStackTrace;
+    void* func = (void*)&CallbackAddStackTrace;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
     rocprofvis_db_stack_data_t record;

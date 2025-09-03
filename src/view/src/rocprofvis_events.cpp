@@ -100,6 +100,26 @@ TrackDataEvent::GetResponseCode() const
     return m_response_code;
 }
 
+TableDataEvent::TableDataEvent(const std::string& trace_path, uint64_t request_id)
+: RocEvent(static_cast<int>(RocEvents::kNewTableData))
+, m_trace_path(trace_path)
+, m_request_id(request_id)
+{
+    m_event_type = RocEventType::kTableDataEvent;
+}
+
+const std::string&
+TableDataEvent::GetTracePath() const
+{
+    return m_trace_path;
+}
+
+uint64_t
+TableDataEvent::GetRequestID() const
+{
+    return m_request_id;
+}
+
 #ifdef COMPUTE_UI_SUPPORT
 ComputeTableSearchEvent::ComputeTableSearchEvent(int event_id, std::string& term)
 : RocEvent(event_id)

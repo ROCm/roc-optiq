@@ -70,7 +70,7 @@ public:
      */
     void RegisterSetting(ProjectSetting* setting);
     /*
-     * Clean up tasks prior to being deleted.
+     * Returns the project settings json.
      */
     jt::Json& GetSettingsJson();
 

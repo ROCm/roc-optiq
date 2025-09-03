@@ -1038,7 +1038,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                 { {
                       Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
                       Builder::QParam("E.id", "id"),
-                      Builder::QParam("E.correlation_id"),
+                      Builder::QParam("E.stack_id"),
                       Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
                       Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                       Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
@@ -1084,7 +1084,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                 { {
                       Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                       Builder::QParam("E.id", "id"),
-                      Builder::QParam("E.correlation_id"),
+                      Builder::QParam("E.stack_id"),
                       Builder::QParam("R.nid", Builder::AGENT_ID_SERVICE_NAME),
                       Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
                       Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
@@ -1096,7 +1096,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                     Builder::InnerJoin("rocpd_event", "E",
                                        "K.event_id = E.id AND K.guid = E.guid"),
                     Builder::InnerJoin("rocpd_region", "R",
-                                       "R.id = E.correlation_id AND R.guid = E.guid") },
+                                       "R.id = E.stack_id AND R.guid = E.guid") },
                   { Builder::Where(
                       "K.id", "==", std::to_string(event_id.bitfield.event_id)) } })));
             ShowProgress(0, query.c_str(),kRPVDbBusy, future);
@@ -1109,7 +1109,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                     { {
                           Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                           Builder::QParam("E.id", "id"),
-                          Builder::QParam("E.correlation_id"),
+                          Builder::QParam("E.stack_id"),
                           Builder::QParam("R.nid", Builder::AGENT_ID_SERVICE_NAME),
                           Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
                           Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
@@ -1121,7 +1121,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                         Builder::InnerJoin("rocpd_event", "E",
                                            "M.event_id = E.id AND M.guid = E.guid"),
                         Builder::InnerJoin("rocpd_region", "R",
-                                           "R.id = E.correlation_id AND R.guid = E.guid") },
+                                           "R.id = E.stack_id AND R.guid = E.guid") },
                       { Builder::Where("M.id", "==",
                                        std::to_string(event_id.bitfield.event_id)) } })));
             ShowProgress(0, query.c_str(), kRPVDbBusy, future);
@@ -1135,7 +1135,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                     { {
                           Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                           Builder::QParam("E.id", "id"),
-                          Builder::QParam("E.correlation_id"),
+                          Builder::QParam("E.stack_id"),
                           Builder::QParam("R.nid", Builder::AGENT_ID_SERVICE_NAME),
                           Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
                           Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
@@ -1147,7 +1147,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                         Builder::InnerJoin("rocpd_event", "E",
                                            "M.event_id = E.id AND M.guid = E.guid"),
                         Builder::InnerJoin("rocpd_region", "R",
-                                           "R.id = E.correlation_id AND R.guid = E.guid")},
+                                           "R.id = E.stack_id AND R.guid = E.guid")},
                       { Builder::Where("M.id", "==",
                                        std::to_string(event_id.bitfield.event_id)) } })));
             //query <<    "SELECT E.id as id, 1, E.correlation_id, R.nid, R.pid, R.tid, R.end "

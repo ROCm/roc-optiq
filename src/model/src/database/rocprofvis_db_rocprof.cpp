@@ -1018,7 +1018,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                 { {
                       Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                       Builder::QParam("E.id", "id"),
-                      Builder::QParam("E.correlation_id"),
+                      Builder::QParam("E.stack_id"),
                       Builder::QParam("K.nid", Builder::AGENT_ID_SERVICE_NAME),
                       Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                       Builder::QParam("K.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
@@ -1030,7 +1030,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                     Builder::InnerJoin("rocpd_event", "E",
                                        "R.event_id = E.id AND R.guid = E.guid"),
                     Builder::InnerJoin("rocpd_kernel_dispatch", "K",
-                                       "K.id = E.correlation_id AND K.guid = E.guid") },
+                                       "K.id = E.stack_id AND K.guid = E.guid") },
                   { Builder::Where(
                       "R.id", "==", std::to_string(event_id.bitfield.event_id)) } })) + 
             Builder::Union() +
@@ -1050,7 +1050,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                     Builder::InnerJoin("rocpd_event", "E",
                                        "R.event_id = E.id AND R.guid = E.guid"),
                     Builder::InnerJoin("rocpd_memory_copy", "M",
-                                       "M.id = E.correlation_id AND M.guid = E.guid") },
+                                       "M.id = E.stack_id AND M.guid = E.guid") },
                   { Builder::Where(
                       "R.id", "==", std::to_string(event_id.bitfield.event_id)) } })) +
             Builder::Union() +
@@ -1058,7 +1058,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                 { {
                       Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                       Builder::QParam("E.id", "id"),
-                      Builder::QParam("E.correlation_id"),
+                      Builder::QParam("E.stack_id"),
                       Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
                       Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                       Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
@@ -1070,7 +1070,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                     Builder::InnerJoin("rocpd_event", "E",
                                        "R.event_id = E.id AND R.guid = E.guid"),
                     Builder::InnerJoin("rocpd_memory_allocate", "M",
-                                       "M.id = E.correlation_id AND M.guid = E.guid")},
+                                       "M.id = E.stack_id AND M.guid = E.guid")},
                   { Builder::Where(
                       "R.id", "==", std::to_string(event_id.bitfield.event_id)) } }))
                    );

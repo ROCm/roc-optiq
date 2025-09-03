@@ -69,6 +69,8 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
+, m_annotations_view(m_data_provider)
+ 
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);

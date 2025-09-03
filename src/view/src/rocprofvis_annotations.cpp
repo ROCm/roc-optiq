@@ -2,13 +2,36 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings.h"
 #include <cstring>
+#include "json.h"
+ #include <vector>
 
 namespace RocProfVis
 {
 namespace View
 {
+AnnotationsViewProjectSettings::AnnotationsViewProjectSettings(
+    const std::string& project_id, AnnotationsView& annotations_view)
+: ProjectSetting(project_id)
+, m_annotations_view(annotations_view)
+{}
 
-AnnotationsView::AnnotationsView()
+AnnotationsViewProjectSettings::~AnnotationsViewProjectSettings() {}
+
+void
+AnnotationsViewProjectSettings::ToJson()
+{
+  
+    m_settings_json["annotations"] = 1;
+}
+bool
+AnnotationsViewProjectSettings::Valid() const
+{
+   
+    return true;
+}
+
+AnnotationsView::AnnotationsView(DataProvider& dp):
+    m_project_settings(dp.GetTraceFilePath(), *this)
 {
     auto sticky_note_handler = [this](std::shared_ptr<RocEvent> e) {
         m_show_sticky_edit_popup = true;

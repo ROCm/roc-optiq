@@ -3,7 +3,7 @@
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_view.h"

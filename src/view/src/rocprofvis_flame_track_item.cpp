@@ -4,7 +4,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "spdlog/spdlog.h"
 #include <limits>

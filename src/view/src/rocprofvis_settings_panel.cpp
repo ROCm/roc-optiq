@@ -1,12 +1,13 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_settings_panel.h"
+#include "rocprofvis_settings_manager.h"
+#include "rocprofvis_font_manager.h"
 #include "json.h"
 #include <filesystem>
 #include <fstream>
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <rocprofvis_settings.h>
 
 namespace RocProfVis
 {
@@ -26,7 +27,7 @@ SettingsPanel::SetOpen(bool open)
     if(open)
     {
         // Save current display settings and initialize preview/font index
-        m_display_settings_initial  = Settings::GetInstance().GetCurrentDisplaySettings();
+        m_display_settings_initial  = SettingsManager::GetInstance().GetCurrentDisplaySettings();
         m_preview_font_size         = m_display_settings_initial.font_size_index;
         m_display_settings_modified = m_display_settings_initial;
     }
@@ -56,7 +57,7 @@ SettingsPanel::Render()
     ImGui::SetNextWindowSize(kWindowSize, ImGuiCond_Always);
     ImGui::OpenPopup("Settings");
 
-    auto& settings     = Settings::GetInstance();
+    auto& settings     = SettingsManager::GetInstance();
     auto& font_manager = settings.GetFontManager();
     int   theme        = settings.IsDarkMode() ? 0 : 1;
     int   num_sizes    = static_cast<int>(font_manager.GetFontSizes().size());

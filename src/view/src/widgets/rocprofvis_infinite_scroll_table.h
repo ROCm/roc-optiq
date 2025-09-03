@@ -5,7 +5,6 @@
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
-#include "rocprofvis_settings.h"
 #include "widgets/rocprofvis_widget.h"
 #include <string>
 #include <vector>
@@ -14,6 +13,8 @@ namespace RocProfVis
 {
 namespace View
 {
+
+class SettingsManager;
 
 class InfiniteScrollTable : public RocWidget
 {
@@ -46,8 +47,8 @@ private:
     TableType m_table_type;  // Type of table (e.g., EventTable, SampleTable)
     rocprofvis_controller_table_type_t m_req_table_type;
 
-    DataProvider& m_data_provider;
-    Settings&     m_settings;
+    DataProvider&    m_data_provider;
+    SettingsManager& m_settings;
 
     int m_fetch_chunk_size;
     int m_fetch_pad_items;

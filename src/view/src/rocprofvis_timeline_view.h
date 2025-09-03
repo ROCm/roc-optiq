@@ -7,11 +7,11 @@
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_project.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
-#include "rocprofvis_project.h"
 #include "widgets/rocprofvis_widget.h"
 #include <map>
 #include <string>
@@ -118,7 +118,7 @@ private:
     double                             m_range_x;
     DataProvider&                      m_data_provider;
     std::pair<double, double>          m_highlighted_region;
-    Settings&                          m_settings;
+    SettingsManager&                   m_settings;
     EventManager::SubscriptionToken    m_new_track_token;
     double                             m_last_data_req_view_time_offset_ns;
     int                                m_artificial_scrollbar_height;
@@ -133,11 +133,12 @@ private:
     bool                               m_stop_user_interaction;
     float                              m_last_zoom;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
-    AnnotationsView  m_annotations_view;
-    struct {
-        bool        handled;
-        uint64_t    track_id;
-        int         new_index;
+    AnnotationsView                    m_annotations_view;
+    struct
+    {
+        bool     handled;
+        uint64_t track_id;
+        int      new_index;
     }                                  m_reorder_request;
     TimelineViewProjectSettings        m_project_settings;
 };

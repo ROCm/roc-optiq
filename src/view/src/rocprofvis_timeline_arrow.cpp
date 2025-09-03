@@ -3,7 +3,7 @@
 
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "spdlog/spdlog.h"
 
@@ -28,7 +28,7 @@ void
 TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
                       ImVec2 window, std::map<uint64_t, float>& track_height_total)
 {
-    ImU32 color     = Settings::GetInstance().GetColor(Colors::kArrowColor);
+    ImU32 color     = SettingsManager::GetInstance().GetColor(Colors::kArrowColor);
     float thickness = 2.0f;
     float head_size = 8.0f;
     float scroll_y  = ImGui::GetScrollY();

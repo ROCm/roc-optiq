@@ -8,7 +8,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #ifdef COMPUTE_UI_SUPPORT
@@ -90,15 +90,15 @@ AppWindow::Init()
 {
     ImPlot::CreateContext();
 
-    // setup fonts
-    bool result = Settings::GetInstance().GetFontManager().Init();
-    if(!result)
+    SettingsManager& settings = SettingsManager::GetInstance();
+    bool             result   = settings.Init();
+    if(result)
     {
-        spdlog::warn("Failed to initialize fonts");
+        settings.LoadSettings("settings_application.json");
     }
     else
     {
-        Settings::GetInstance().LoadSettings("settings_application.json");
+        spdlog::warn("Failed to initialize SettingsManager");
     }
 
     LayoutItem status_bar_item(-1, 30.0f);
@@ -272,7 +272,7 @@ AppWindow::RenderFileDialogs()
     // Set Itemspacing to values from original default ImGui style
     // custom values to break the 3rd party file dialog implementation
     // especially the cell padding
-    auto defaultStyle = Settings::GetInstance().GetDefaultStyle();
+    auto defaultStyle = SettingsManager::GetInstance().GetDefaultStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, defaultStyle.ItemSpacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, defaultStyle.WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, defaultStyle.CellPadding);

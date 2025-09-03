@@ -204,7 +204,7 @@ private:
 
         inline static const rocprofvis_null_data_exceptions_skip
             s_null_data_exceptions_skip = { 
-                { &CallBackAddTrack,
+                { (void*)&CallBackAddTrack,
                   { 
                         Builder::AGENT_ID_SERVICE_NAME, 
                         Builder::QUEUE_ID_SERVICE_NAME 
@@ -221,7 +221,7 @@ private:
         inline static const rocprofvis_null_data_exceptions_string
             s_null_data_exceptions_string = { 
             { 
-                &CallbackCacheTable, 
+                (void*)&CallbackCacheTable, 
                 { 
                     { "name", "N/A" }, 
                     { "start", "0" }, 
@@ -229,7 +229,7 @@ private:
                 },
             },
             {
-                &CallbackRunQuery,
+                (void*)&CallbackRunQuery,
                 { 
                     { "name", "N/A" },  
                     { "start", "0" }, 

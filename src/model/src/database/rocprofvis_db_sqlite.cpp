@@ -30,7 +30,7 @@ namespace DataModel
 int SqliteDatabase::CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, char** azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    void*  func = &CallbackGetValue;
+    void*  func = (void*)&CallbackGetValue;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     SqliteDatabase* db = (SqliteDatabase*) callback_params->db;
     std::string * string_ptr = (rocprofvis_dm_string_t*)callback_params->handle;
@@ -230,7 +230,7 @@ SqliteDatabase::CollectTrackServiceData(
     sqlite3_stmt* stmt, int column_index, char** azColName,
                         rocprofvis_db_sqlite_track_service_data_t& service_data)
 {
-    void* func = &CollectTrackServiceData;
+    void* func = (void*)&CollectTrackServiceData;
     std::string column_name = azColName[column_index];
     if(column_name == Builder::OPERATION_SERVICE_NAME)
     {
@@ -296,7 +296,7 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     SqliteDatabase* db = (SqliteDatabase*)callback_params->db;
-    void* func = &CallbackRunQuery;
+    void* func = (void*)&CallbackRunQuery;
     if (callback_params->future->Interrupted()) return 1;
     rocprofvis_db_sqlite_track_service_data_t service_data{};
     bool  is_query_for_table_view = false;
@@ -772,7 +772,7 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
             {
                 if(sqlite3_column_type(stmt, i) == SQLITE_NULL)
                 {
-                    skip_this_row = NullExceptionSkip(callback, col_names[i]);
+                    skip_this_row = NullExceptionSkip((void*)callback, col_names[i]);
                     if(skip_this_row)
                     {
                         break;

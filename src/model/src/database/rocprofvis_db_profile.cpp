@@ -697,6 +697,11 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
         } 
         else if(end_time >= it->start_time)
         {
+            if(level < it->level)
+            {
+                break;
+            }
+
             level = it->level + 1;
         }
         it = next_it;

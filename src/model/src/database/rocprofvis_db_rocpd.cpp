@@ -249,7 +249,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
                          Builder::QParam("L.level") },
                        { Builder::From("rocpd_api"),
-                         Builder::LeftJoin("event_levels_api", "L", "id = L.eid") } })),
+                         Builder::LeftJoin(Builder::LevelTable("api"), "L", "id = L.eid") } })),
                         // Slice query by stream
                         "",
                         // Table query
@@ -304,7 +304,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                            Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME),
                          Builder::QParam("L.level") },
                        { Builder::From("rocpd_op"),
-                         Builder::LeftJoin("event_levels_op", "L", "id = L.eid") } })),
+                         Builder::LeftJoin(Builder::LevelTable("op"), "L", "id = L.eid") } })),
                         // Slice query by stream
                         "",
                         // Table query
@@ -388,8 +388,19 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             break;
         }
 
-        if(SQLITE_OK != DetectTable(GetServiceConnection(), "event_levels_api", false) ||
-           SQLITE_OK != DetectTable(GetServiceConnection(), "event_levels_op", false))
+        std::vector<std::string> to_drop = Builder::OldLevelTables("api");
+        for(auto table : to_drop)
+        {
+            DropSQLTable(table.c_str());
+        }
+        to_drop = Builder::OldLevelTables("op");
+        for(auto table : to_drop)
+        {
+            DropSQLTable(table.c_str());
+        }
+
+        if(SQLITE_OK != DetectTable(GetServiceConnection(), Builder::LevelTable("api").c_str(), false) ||
+           SQLITE_OK != DetectTable(GetServiceConnection(), Builder::LevelTable("op").c_str(), false))
         {
             m_event_levels[kRocProfVisDmOperationLaunch].reserve(
                 TraceProperties()->events_count[kRocProfVisDmOperationLaunch]);
@@ -413,7 +424,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             SQLInsertParams params[] = { { "eid", "INTEGER PRIMARY KEY" },
                                          { "level", "INTEGER" } };
             CreateSQLTable(
-                "event_levels_api", params, 2,
+                Builder::LevelTable("api").c_str(), params, 2,
                 m_event_levels[kRocProfVisDmOperationLaunch].size(),
                 [&](sqlite3_stmt* stmt, int index) {
                     sqlite3_bind_int64(
@@ -422,8 +433,10 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         stmt, 2,
                         m_event_levels[kRocProfVisDmOperationLaunch][index].level_for_queue);
                 });
+            m_event_levels[kRocProfVisDmOperationLaunch].clear();
+            m_event_levels_id_to_index[kRocProfVisDmOperationLaunch].clear();
             CreateSQLTable(
-                "event_levels_op", params, 2,
+                Builder::LevelTable("op").c_str(), params, 2,
                 m_event_levels[kRocProfVisDmOperationDispatch].size(),
                 [&](sqlite3_stmt* stmt, int index) {
                     sqlite3_bind_int64(
@@ -433,6 +446,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         stmt, 2,
                         m_event_levels[kRocProfVisDmOperationDispatch][index].level_for_queue);
                 });
+            m_event_levels[kRocProfVisDmOperationDispatch].clear();
+            m_event_levels_id_to_index[kRocProfVisDmOperationDispatch].clear();
         }
       
         ShowProgress(5, "Collecting track properties",
@@ -767,7 +782,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
                     Builder::QParam("L.level"),
                     Builder::SpaceSaver(0) },
                   { Builder::From("rocpd_api"),
-                    Builder::LeftJoin("event_levels_api", "L", "id = L.eid") },
+                    Builder::LeftJoin(Builder::LevelTable("api"), "L", "id = L.eid") },
                   { Builder::Where(
                       "id", "==", std::to_string(event_id.bitfield.event_id)) } }));
             if(kRocProfVisDmResultSuccess !=
@@ -814,8 +829,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
                         Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME),
                         Builder::SpaceSaver(0), Builder::QParam("L.level"),
                         Builder::SpaceSaver(0) },
-                      { Builder::From("rocpd_api"),
-                        Builder::LeftJoin("event_levels_api", "L", "id = L.eid") },
+                      { Builder::From("rocpd_op"),
+                        Builder::LeftJoin(Builder::LevelTable("op"), "L", "id = L.eid") },
                       { Builder::Where(
                           "id", "==", std::to_string(event_id.bitfield.event_id)) } }));
         } else    

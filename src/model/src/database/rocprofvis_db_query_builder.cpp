@@ -199,5 +199,23 @@ namespace DataModel
         return query + finalize_with;
     }
 
+    std::string Builder::LevelTable(std::string operation)
+    {
+        return std::string("event_levels_")+ operation + "_v" + std::to_string(LEVEL_CALCULATION_VERSION);
+    }
+
+    std::vector<std::string>
+    Builder::OldLevelTables(std::string operation)
+    {
+        std::vector<std::string> v;
+        std::string base = std::string("event_levels_");
+        v.push_back(base+operation);
+        for(int i = 1; i < LEVEL_CALCULATION_VERSION; i++)
+        {
+            v.push_back(base + operation + "_v" + std::to_string(i)); 
+        }
+        return v;
+    }
+
 }  // namespace DataModel
 }  // namespace RocProfVis

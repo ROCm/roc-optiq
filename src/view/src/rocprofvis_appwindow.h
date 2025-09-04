@@ -51,6 +51,7 @@ private:
     void RenderAboutDialog();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
+    void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
 
     static AppWindow* s_instance;
 
@@ -63,6 +64,7 @@ private:
     std::unordered_map<std::string, std::unique_ptr<Project>> m_projects;
 
     EventManager::SubscriptionToken m_tabclosed_event_token;
+    EventManager::SubscriptionToken m_tabselected_event_token;
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();

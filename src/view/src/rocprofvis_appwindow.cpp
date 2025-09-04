@@ -14,6 +14,7 @@
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
 #endif
+#include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -83,6 +84,8 @@ AppWindow::~AppWindow()
 {
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
                                              m_tabclosed_event_token);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
+                                             m_tabselected_event_token);
     m_projects.clear();
 #ifdef COMPUTE_UI_SUPPORT
     NavigationManager::DestroyInstance();
@@ -112,6 +115,8 @@ AppWindow::Init()
 
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->SetEventSourceName(TAB_CONTAINER_SRC_NAME);
+    m_tab_container->EnableSendCloseEvent(true);
+    m_tab_container->EnableSendChangeEvent(true);
 #ifdef COMPUTE_UI_SUPPORT
     NavigationManager::GetInstance()->RegisterRootContainer(m_tab_container);
 #endif
@@ -132,6 +137,13 @@ AppWindow::Init()
     };
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
+
+    auto new_tab_selected_handler = [this](std::shared_ptr<RocEvent> e) {
+        this->HandleTabSelectionChanged(e);
+    };
+
+    m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 
     return result;
 }
@@ -442,8 +454,56 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
     auto tab_closed_event = std::dynamic_pointer_cast<TabEvent>(e);
     if(tab_closed_event && m_projects.count(tab_closed_event->GetTabId()) > 0)
     {
+        auto activeProject = GetCurrentProject();
+        if(!activeProject) {
+            spdlog::debug("No active project found after tab closed");
+            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
+        } else {
+            spdlog::debug("Active project found after tab closed: {}", activeProject->GetName());
+            std::shared_ptr<RootView> root_view =
+                std::dynamic_pointer_cast<RootView>(activeProject->GetView());
+            if(root_view)
+            {
+                m_main_view->GetMutableAt(m_tool_bar_index)->m_item =
+                    root_view->GetToolbar();
+            }
+        }
+        spdlog::debug("Tab closed: {}", tab_closed_event->GetTabId());
         m_projects[tab_closed_event->GetTabId()]->Close();
         m_projects.erase(tab_closed_event->GetTabId());
+    }
+}
+
+void
+AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
+{
+    auto tab_selected_event = std::dynamic_pointer_cast<TabEvent>(e);
+    if(tab_selected_event)
+    {
+        // Only handle the event if the tab source is the main tab source
+        if(tab_selected_event->GetTabSource() == GetMainTabSourceName())
+        {
+            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
+
+            auto id = tab_selected_event->GetTabId();
+            spdlog::debug("Tab selected: {}", id);
+            auto project = GetProject(id);
+            if(!project)
+            {
+                spdlog::warn("Project not found for tab: {}", id);
+                return;
+            }
+            else
+            {
+                std::shared_ptr<RootView> root_view =
+                    std::dynamic_pointer_cast<RootView>(project->GetView());
+                if(root_view)
+                {
+                    m_main_view->GetMutableAt(m_tool_bar_index)->m_item =
+                        root_view->GetToolbar();
+                }
+            }
+        }
     }
 }
 

@@ -12,6 +12,7 @@
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
 
 namespace RocProfVis
 {
@@ -104,6 +105,7 @@ TraceView::TraceView()
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         event_selection_handler);
 
+    m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("TraceView");
 }
 
@@ -408,6 +410,91 @@ TraceView::SaveSelection(const std::string& file_path)
         spdlog::warn("Timeline selection is not initialized.");
     }
     return false;
+}
+
+std::shared_ptr<RocWidget>
+TraceView::GetToolbar()
+{
+    return m_tool_bar;
+};
+
+void
+TraceView::RenderToolbar()
+{
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImVec2 frame_padding = style.FramePadding;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
+    ImGui::BeginChild("Toolbar", ImVec2(0, 0), ImGuiChildFlags_None | ImGuiChildFlags_FrameStyle);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
+    ImGui::AlignTextToFramePadding();
+
+    //Toolbar Controls
+    RenderFlowControls();
+
+    //pop content style
+    ImGui::PopStyleVar(); 
+    ImGui::EndChild();
+    //pop child window style
+    ImGui::PopStyleVar();
+}
+
+void
+TraceView::RenderFlowControls() {
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    static const char* flow_labels[]    = { ICON_EYE, ICON_EYE_THIN, ICON_EYE_SLASH };
+    static const char* flow_tool_tips[] = { "Show All", "Show First & Last", "Hide All" };
+
+    TimelineArrow&  arrow_layer  = m_timeline_view->GetArrowLayer();
+    FlowDisplayMode current_mode = arrow_layer.GetFlowDisplayMode();
+
+    FlowDisplayMode mode = current_mode;
+
+    ImFont* icon_font =
+        Settings::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+    ImGui::PushFont(icon_font);
+    
+    ImGui::BeginGroup();
+    for(int i = 0; i <= static_cast<int>(FlowDisplayMode::__kLastMode); ++i)
+    {
+        bool selected = static_cast<int>(current_mode) == i;
+        // Use active colors when selected
+        if(selected)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonActive]);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                  style.Colors[ImGuiCol_ButtonActive]);
+        }
+
+        ImGui::PushID(i);
+        if(ImGui::Button(flow_labels[i]))
+        {
+            mode = static_cast<FlowDisplayMode>(i);
+        }
+
+        if(ImGui::IsItemHovered())
+        {
+            ImGui::PopFont();
+            ImGui::SetTooltip(flow_tool_tips[i]);
+            ImGui::PushFont(icon_font);
+        }
+
+        if(selected) {
+            ImGui::PopStyleColor(2);
+        }
+        ImGui::PopID();
+        ImGui::SameLine();
+    }
+    ImGui::EndGroup();
+    ImGui::PopFont();
+
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Flow");
+
+    // Update the mode if changed
+    if(mode != current_mode) arrow_layer.SetFlowDisplayMode(mode);
 }
 
 SystemTraceProjectSettings::SystemTraceProjectSettings(const std::string& project_id,

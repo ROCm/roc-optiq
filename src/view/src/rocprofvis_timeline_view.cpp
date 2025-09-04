@@ -90,50 +90,6 @@ TimelineView::TimelineView(DataProvider&                      dp,
 }
 
 void
-TimelineView::RenderArrowOptionsMenu()
-{
-    // The following popup only exists due to a lack of a navbar.
-    if(ImGui::IsKeyPressed(ImGuiKey_F3))
-    {
-        ImGui::OpenPopup("FlowDisplayPopup");
-    }
-
-    if(ImGui::BeginPopupModal("FlowDisplayPopup", nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize))
-    {
-        FlowDisplayMode current_mode = m_arrow_layer.GetFlowDisplayMode();
-
-        ImGui::Text("Flow Display Options");
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        int mode = static_cast<int>(current_mode);
-        if(ImGui::RadioButton("Show Flow",
-                              mode == static_cast<int>(FlowDisplayMode::ShowAll)))
-            mode = static_cast<int>(FlowDisplayMode::ShowAll);
-        ImGui::SameLine();
-        if(ImGui::RadioButton("Show First & Last",
-                              mode ==
-                                  static_cast<int>(FlowDisplayMode::ShowFirstAndLast)))
-            mode = static_cast<int>(FlowDisplayMode::ShowFirstAndLast);
-        ImGui::SameLine();
-        if(ImGui::RadioButton("Hide Flow",
-                              mode == static_cast<int>(FlowDisplayMode::Hide)))
-            mode = static_cast<int>(FlowDisplayMode::Hide);
-
-        ImGui::SameLine();
-        ImGui::Dummy(ImVec2(10, 0));
-        // Update the mode if changed
-        if(mode != static_cast<int>(current_mode))
-            m_arrow_layer.SetFlowDisplayMode(static_cast<FlowDisplayMode>(mode));
-
-        ImGui::Spacing();
-        if(ImGui::Button("Close", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
-
-        ImGui::EndPopup();
-    }
-}
-void
 TimelineView::TimelineOptions()
 {}
 
@@ -173,7 +129,6 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
     m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
                          m_track_height_total);
 
-    RenderArrowOptionsMenu();
     RenderStickyNotes(draw_list, window_position);
 
     ImGui::EndChild();
@@ -1570,6 +1525,12 @@ TimelineView::SetViewCoords(const ViewCoords& coords)
     m_view_time_offset_ns = coords.time_offset_ns;
     m_scroll_position_y   = coords.y_scroll_position;
     m_zoom                = coords.zoom;
+}
+
+TimelineArrow&
+TimelineView::GetArrowLayer()
+{
+    return m_arrow_layer;
 }
 
 TimelineViewProjectSettings::TimelineViewProjectSettings(const std::string& project_id,

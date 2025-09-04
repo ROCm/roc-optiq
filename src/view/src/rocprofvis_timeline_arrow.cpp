@@ -39,17 +39,17 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
             int stride  = 1;
             int starter = 0;
 
-            if(m_flow_display_mode == FlowDisplayMode::Hide)
+            if(m_flow_display_mode == FlowDisplayMode::kHide)
             {
                 starter = event->flow_info.size();
             }
 
-            if(m_flow_display_mode == FlowDisplayMode::ShowAll)
+            if(m_flow_display_mode == FlowDisplayMode::kShowAll)
             {
                 stride  = 1;  // Show all flows
                 starter = 0;  // Start from the first flow
             }
-            else if(m_flow_display_mode == FlowDisplayMode::ShowFirstAndLast)
+            else if(m_flow_display_mode == FlowDisplayMode::kShowFirstAndLast)
             {
                 if(event->flow_info.size() > 1)
                 {

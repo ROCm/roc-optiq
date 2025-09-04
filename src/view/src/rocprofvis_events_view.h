@@ -10,7 +10,7 @@ namespace View
 {
 
 class DataProvider;
-class Settings;
+class SettingsManager;
 class TimelineSelection;
 struct event_info_t;
 
@@ -37,7 +37,7 @@ private:
     bool XButton();
 
     DataProvider&                      m_data_provider;
-    Settings&                          m_settings;
+    SettingsManager&                   m_settings;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::vector<EventItem>             m_event_items;
 };

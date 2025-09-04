@@ -1,6 +1,9 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_infinite_scroll_table.h"
+#include "rocprofvis_settings_manager.h"
+#include "rocprofvis_font_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_timeline_selection.h"
 
 #include "spdlog/spdlog.h"
@@ -10,7 +13,10 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
 
 constexpr const char* ROWCONTEXTMENU_POPUP_NAME = "RowContextMenu";
 
@@ -24,10 +30,12 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_fetch_threshold_items(10)  // Number of items from the edge to trigger a fetch
 , m_last_table_size(0, 0)
 , m_track_selection_event_to_handle(nullptr)
-, m_settings(Settings::GetInstance())
-, m_current_group_selection_idx(0)
+, m_settings(SettingsManager::GetInstance())
 , m_req_table_type(table_type == TableType::kEventTable ? kRPVControllerTableTypeEvents
                                                         : kRPVControllerTableTypeSamples)
+, m_filter_options({ 0, "", "" })
+, m_pending_filter_options({ 0, "", "" })
+, m_data_changed(true)
 {
     m_widget_name = (table_type == TableType::kEventTable)
                         ? GenUniqueName("Event Table")
@@ -36,15 +44,13 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 
 void
 InfiniteScrollTable::HandleTrackSelectionChanged(
-    std::shared_ptr<TrackSelectionChangedEvent> selection_changed_event)
+    std::shared_ptr<TrackSelectionChangedEvent> e)
 {
-    if(selection_changed_event &&
-       selection_changed_event->GetTracePath() == m_data_provider.GetTraceFilePath())
+    if(e && e->GetTracePath() == m_data_provider.GetTraceFilePath())
     {
-        const std::vector<uint64_t>& tracks =
-            selection_changed_event->GetSelectedTracks();
-        double start_ns = selection_changed_event->GetStartNs();
-        double end_ns   = selection_changed_event->GetEndNs();
+        const std::vector<uint64_t>& tracks   = e->GetSelectedTracks();
+        double                       start_ns = e->GetStartNs();
+        double                       end_ns   = e->GetEndNs();
 
         // If no valid time range is provided, use the full trace range
         if(start_ns == TimelineSelection::INVALID_SELECTION_TIME ||
@@ -92,10 +98,11 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
             // Fetch table data for the selected tracks
             TableRequestParams event_table_params(
                 m_req_table_type, filtered_tracks, start_ns, end_ns,
-                m_filter.size() ? m_filter.data() : "",
-                m_group.size() ? m_group.data() : "",
-                m_group_columns.size() ? m_group_columns.data() : "", 0,
-                m_fetch_chunk_size);
+                m_filter_options.filter,
+                (m_filter_options.column_index == 0)
+                    ? ""
+                    : m_column_names_ptr[m_filter_options.column_index],
+                m_filter_options.group_columns, 0, m_fetch_chunk_size);
 
             fetch_result = m_data_provider.FetchMultiTrackTable(event_table_params);
         }
@@ -106,7 +113,7 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
                           filtered_tracks.size());
             // save this selection event to reprocess it later (it's ok to replace the
             // previous one as the new one reflects the current selection)
-            m_track_selection_event_to_handle = selection_changed_event;
+            m_track_selection_event_to_handle = e;
         }
         else
         {
@@ -115,6 +122,15 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
         }
         // Update the selected tracks for this table type
         m_selected_tracks = std::move(filtered_tracks);
+    }
+}
+
+void
+InfiniteScrollTable::HandleNewTableData(std::shared_ptr<TableDataEvent> e)
+{
+    if(e && e->GetTracePath() == m_data_provider.GetTraceFilePath())
+    {
+        m_data_changed = true;
     }
 }
 
@@ -134,6 +150,45 @@ InfiniteScrollTable::Update()
                 m_table_type == TableType::kEventTable ? "Event Table" : "Sample Table");
             HandleTrackSelectionChanged(m_track_selection_event_to_handle);
         }
+    }
+    if(m_data_changed)
+    {
+        if(m_table_type == TableType::kEventTable)
+        {
+            if(m_filter_options.column_index == 0)
+            {
+                m_column_names.clear();
+                const std::vector<std::string>& column_names =
+                    m_data_provider.GetTableHeader(m_table_type);
+                // Create a combo box for selecting the group column
+                // populate the combo box with column names but filter out empty and
+                // internal columns (those starting with '_')
+                m_column_names.reserve(column_names.size() + 1);
+                m_column_names.push_back("-- None --");
+                for(size_t i = 0; i < column_names.size(); i++)
+                {
+                    const auto& col = column_names[i];
+                    if(col.empty() || col[0] == '_')
+                        continue;  // Skip empty or internal columns
+                    m_column_names.push_back(col);
+                }
+            }
+            else
+            {
+                std::string selected_option =
+                    m_column_names[m_filter_options.column_index];
+                m_column_names.resize(2);
+                m_column_names[1]                     = selected_option;
+                m_filter_options.column_index         = 1;
+                m_pending_filter_options.column_index = 1;
+            }
+            m_column_names_ptr.resize(m_column_names.size());
+            for(int i = 0; i < m_column_names.size(); i++)
+            {
+                m_column_names_ptr[i] = m_column_names[i].c_str();
+            }
+        }
+        m_data_changed = false;
     }
 }
 
@@ -189,7 +244,7 @@ InfiniteScrollTable::Render()
     float end_row_position   = end_row * row_height;
 
     bool                               sort_requested    = false;
-    bool                               filter_changed    = false;
+    bool                               filter_requested  = false;
     uint64_t                           sort_column_index = 0;
     rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending;
 
@@ -214,93 +269,76 @@ InfiniteScrollTable::Render()
         ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks", start_row,
                     end_row, total_row_count, selected_track_count);
 
+        ImGui::BeginGroup();
         if(m_table_type == TableType::kEventTable)
         {
-            if(m_current_group_selection_idx != 0)
-            {
-                if(ImGui::Button("Clear Group Selection"))
-                {
-                    m_current_group_selection_idx = 0;
-                    m_group.clear();
-                    filter_changed = true;
-                }
-            }
-            else
-            {
-                // Create a combo box for selecting the group column
-                // populate the combo box with column names but filter out empty and
-                // internal columns (those starting with '_')
-                // TODO: detect when table data changes so this doesn't have to be
-                // recalculated every frame
-                std::vector<const char*> items;
-                std::map<size_t, size_t> item_idx_to_column_idx_map;
-                items.reserve(column_names.size() + 1);
-                items.push_back("-- None --");
-                for(size_t i = 0; i < column_names.size(); i++)
-                {
-                    const auto& col = column_names[i];
-                    if(col.empty() || col[0] == '_')
-                        continue;  // Skip empty or internal columns
-                    items.push_back(col.c_str());
-                    item_idx_to_column_idx_map[items.size() - 1] = i;
-                }
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Group By");
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Group Columns");
+        }
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Filter");
+        ImGui::EndGroup();
 
-                if(ImGui::Combo("##combo", &m_current_group_selection_idx, items.data(),
-                                items.size()))
-                {
-                    auto col_idx = item_idx_to_column_idx_map[m_current_group_selection_idx];
-                    if(col_idx > 0 &&
-                       col_idx <= column_names.size())
-                    {
-                        m_group = column_names[col_idx];
-                    }
-                    else
-                    {
-                        m_group.clear();                    
-                    }
-                    filter_changed = true;
-                }
+        ImGui::SameLine();
+
+        ImGui::BeginGroup();
+        if(m_table_type == TableType::kEventTable)
+        {
+            ImGui::SetNextItemAllowOverlap();
+            ImGui::Combo("##group_by", &m_pending_filter_options.column_index,
+                         m_column_names_ptr.data(), m_column_names_ptr.size());
+            if(m_pending_filter_options.column_index != 0)
+            {
                 ImGui::SameLine();
-                ImGui::Text("Group by");
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() -
+                                     ImGui::GetFrameHeightWithSpacing() -
+                                     ImGui::GetFontSize());
+                if(XButton("clear_group"))
+                {
+                    m_pending_filter_options.column_index = 0;
+                }
             }
 
-            if(m_group_columns.size() == 0 ||
-               strlen(m_group_columns.data()) == m_group_columns.size())
+            ImGui::SetNextItemAllowOverlap();
+            ImGui::BeginDisabled(m_filter_options.column_index == 0);
+            ImGui::InputTextWithHint(
+                "##group_columns",
+                "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+                "MIN(duration) as min_duration, MAX(duration) as max_duration",
+                m_pending_filter_options.group_columns,
+                IM_ARRAYSIZE(m_pending_filter_options.group_columns));
+            if(strlen(m_pending_filter_options.group_columns) > 0)
             {
-                m_group_columns.resize(m_group_columns.size() + 256);
+                ImGui::SameLine();
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
+                if(XButton("clear_group_columns"))
+                {
+                    strcpy(m_pending_filter_options.group_columns, "");
+                }
             }
-
-            if(ImGui::InputTextWithHint(
-                   "Group columns",
-                   "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
-                   "MIN(duration) as min_duration, MAX(duration) as max_duration",
-                   m_group_columns.data(), m_group_columns.size()))
-            {
-                filter_changed = true;
-            }
-
-            if(strlen(m_group_columns.data()) == 0)
-            {
-                m_group_columns.resize(256);
-                memset(m_group_columns.data(), 0, m_group_columns.size());
-            }
+            ImGui::EndDisabled();
         }
 
-        if(m_filter.size() == 0 || strlen(m_filter.data()) == m_filter.size())
+        ImGui::SetNextItemAllowOverlap();
+        ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
+                                 m_pending_filter_options.filter,
+                                 IM_ARRAYSIZE(m_pending_filter_options.filter));
+        if(strlen(m_pending_filter_options.filter) > 0)
         {
-            m_filter.resize(m_filter.size() + 256);
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
+            if(XButton("clear_filters"))
+            {
+                strcpy(m_pending_filter_options.filter, "");
+            }
         }
-
-        if(ImGui::InputTextWithHint("Filter", "SQL WHERE comparisons", m_filter.data(),
-                                    m_filter.size()))
+        ImGui::EndGroup();
+        ImGui::SameLine();
+        if(ImGui::Button("Submit", ImVec2(0, ImGui::GetItemRectSize().y)))
         {
-            filter_changed = true;
-        }
-
-        if(strlen(m_filter.data()) == 0)
-        {
-            m_filter.resize(256);
-            memset(m_filter.data(), 0, m_filter.size());
+            filter_requested = true;
         }
 
         ImVec2 outer_size = ImVec2(0.0f, ImGui::GetContentRegionAvail().y);
@@ -338,7 +376,8 @@ InfiniteScrollTable::Render()
                 ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_None;
                 if(!col.empty() && col[0] == '_')
                 {
-                    col_flags = ImGuiTableColumnFlags_DefaultHide | ImGuiTableColumnFlags_Disabled;
+                    col_flags = ImGuiTableColumnFlags_DefaultHide |
+                                ImGuiTableColumnFlags_Disabled;
                 }
                 ImGui::TableSetupColumn(col.c_str(), col_flags);
             }
@@ -537,9 +576,9 @@ InfiniteScrollTable::Render()
                 ImGui::EndPopup();
             }
             // Pop the style vars for window padding and item spacing
-            ImGui::PopStyleVar(2);  
+            ImGui::PopStyleVar(2);
             ImGui::EndTable();  // End BeginTable
-        }  
+        }
         else
         {
             ImGui::Separator();
@@ -551,10 +590,11 @@ InfiniteScrollTable::Render()
     {
         // Show a loading indicator if the data is being fetched
         // Create an overlay child window to display the loading indicator
-        ImGui::SetCursorPos(ImVec2(0,0));
+        ImGui::SetCursorPos(ImVec2(0, 0));
         // set transparent background for the overlay window
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-        ImGui::BeginChild(m_widget_name.c_str(), ImGui::GetWindowSize(), ImGuiChildFlags_None);
+        ImGui::BeginChild(m_widget_name.c_str(), ImGui::GetWindowSize(),
+                          ImGuiChildFlags_None);
         RenderLoadingIndicator();
         ImGui::EndChild();
         ImGui::PopStyleColor();
@@ -562,22 +602,28 @@ InfiniteScrollTable::Render()
 
     ImGui::EndChild();
 
-    if(sort_requested || filter_changed)
+    if(sort_requested || filter_requested)
     {
         if(event_table_params)
         {
+            FilterOptions& filter =
+                filter_requested ? m_pending_filter_options : m_filter_options;
+            if(filter.column_index == 0)
+            {
+                strcpy(filter.group_columns, "");
+            }
             // check that sort order and column index actually are different from the
             // current values before fetching
-            if(filter_changed || sort_order != event_table_params->m_sort_order ||
+            if(filter_requested || sort_order != event_table_params->m_sort_order ||
                sort_column_index != event_table_params->m_sort_column_index)
-            {               
+            {
                 // Update the event table params with the new sort request
                 event_table_params->m_sort_column_index = sort_column_index;
                 event_table_params->m_sort_order        = sort_order;
-                event_table_params->m_filter            = m_filter.data();
-                event_table_params->m_group             = m_group;
-                event_table_params->m_group_columns =
-                    m_group_columns.size() ? m_group_columns.data() : "";
+                event_table_params->m_filter            = filter.filter;
+                event_table_params->m_group =
+                    (filter.column_index == 0) ? "" : m_column_names[filter.column_index];
+                event_table_params->m_group_columns = filter.group_columns;
 
                 spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
@@ -585,11 +631,14 @@ InfiniteScrollTable::Render()
                 m_data_provider.FetchMultiTrackTable(TableRequestParams(
                     m_req_table_type, event_table_params->m_track_ids,
                     event_table_params->m_start_ts, event_table_params->m_end_ts,
-                    event_table_params->m_filter.c_str(), event_table_params->m_group.c_str(),
+                    event_table_params->m_filter.c_str(),
+                    event_table_params->m_group.c_str(),
                     event_table_params->m_group_columns.c_str(),
                     event_table_params->m_start_row, event_table_params->m_req_row_count,
                     event_table_params->m_sort_column_index,
                     event_table_params->m_sort_order));
+
+                m_filter_options = filter;
             }
         }
         else
@@ -603,7 +652,7 @@ InfiniteScrollTable::Render()
 }
 
 void
-InfiniteScrollTable::RenderLoadingIndicator()
+InfiniteScrollTable::RenderLoadingIndicator() const
 {
     float dot_radius  = 5.0f;
     int   num_dots    = 3;
@@ -626,3 +675,35 @@ InfiniteScrollTable::RenderLoadingIndicator()
     // Reset cursor position after rendering spinner
     ImGui::SetCursorPos(pos);
 }
+
+bool
+InfiniteScrollTable::XButton(const char* id) const
+{
+    bool clicked = false;
+    ImGui::PushStyleColor(ImGuiCol_Button,
+                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushID(id);
+    clicked = ImGui::SmallButton(ICON_X_CIRCLED);
+    ImGui::PopID();
+    ImGui::PopFont();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultStyle().WindowPadding);
+    if(ImGui::BeginItemTooltip())
+    {
+        ImGui::TextUnformatted("Clear");
+        ImGui::EndTooltip();
+    }
+    ImGui::PopStyleVar();
+    return clicked;
+}
+
+}  // namespace View
+}  // namespace RocProfVis

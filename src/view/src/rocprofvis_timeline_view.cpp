@@ -7,7 +7,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_line_track_item.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
@@ -50,7 +50,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
                          TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(static_cast<uint64_t>(-1))
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
-, m_settings(Settings::GetInstance())
+, m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0)
 , m_v_width(0)
 , m_last_data_req_view_time_offset_ns(0)
@@ -163,7 +163,7 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
     ImGui::BeginChild("UI Interactive Content", ImVec2(m_graph_size.x, total_height),
                       false,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+                      window_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();

@@ -48,7 +48,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_flame_track_item.cpp 
     src/view/src/rocprofvis_timeline_arrow.cpp 
     src/view/src/rocprofvis_events_view.cpp 
-    src/view/src/rocprofvis_settings.cpp 
+    src/view/src/rocprofvis_settings_manager.cpp
+    src/view/src/rocprofvis_font_manager.cpp 
     src/view/src/rocprofvis_annotations.cpp
     src/view/src/rocprofvis_settings_panel.cpp 
     src/view/src/rocprofvis_stickynote.cpp
@@ -63,10 +64,10 @@ set(VIEW_FILES
     src/view/src/rocprofvis_events.cpp
     src/view/src/rocprofvis_event_manager.cpp
     src/view/src/rocprofvis_utils.cpp
-	src/view/src/rocprofvis_timeline_selection.cpp
-	src/view/src/rocprofvis_track_topology.cpp
-	src/view/src/rocprofvis_track_details.cpp
-	src/view/src/rocprofvis_project.cpp
+    src/view/src/rocprofvis_timeline_selection.cpp
+    src/view/src/rocprofvis_track_topology.cpp
+    src/view/src/rocprofvis_track_details.cpp
+    src/view/src/rocprofvis_project.cpp
     src/view/src/widgets/rocprofvis_widget.cpp	
     src/view/src/widgets/rocprofvis_debug_window.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp

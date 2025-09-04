@@ -10,7 +10,7 @@ namespace RocProfVis
 namespace View
 {
 
-class Settings;
+class SettingsManager;
 class TrackTopology;
 class TimelineSelection;
 
@@ -27,7 +27,7 @@ public:
 private:
     void RenderTrackItem(const int& index);
 
-    Settings&                          m_settings;
+    SettingsManager&                   m_settings;
     std::shared_ptr<TrackTopology>     m_track_topology;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::vector<rocprofvis_graph_t>*   m_graphs;

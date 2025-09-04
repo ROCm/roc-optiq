@@ -3,7 +3,8 @@
 #include "rocprofvis_events_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
+#include "rocprofvis_font_manager.h"
 #include "rocprofvis_timeline_selection.h"
 
 namespace RocProfVis
@@ -18,7 +19,7 @@ constexpr ImGuiTabBarFlags TABLE_FLAGS = ImGuiTableFlags_Borders | ImGuiTableFla
 EventsView::EventsView(DataProvider&                      dp,
                        std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
-, m_settings(Settings::GetInstance())
+, m_settings(SettingsManager::GetInstance())
 , m_timeline_selection(timeline_selection)
 {}
 

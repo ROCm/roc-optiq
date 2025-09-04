@@ -1,199 +1,18 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_settings.h"
-#include "icons/rocprofvis_icon_data.h"
-#include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_settings_manager.h"
+#include "rocprofvis_font_manager.h"
+#include "rocprofvis_settings_panel.h"
+#include "rocprofvis_core.h"
 #include "imgui.h"
 #include "implot.h"
-#include "rocprofvis_core.h"
-#include "rocprofvis_core_assert.h"
-#include <algorithm>
-#include <cmath>
 #include <cstdlib>
-#include <filesystem>
 #include <fstream>
-#include <imgui_internal.h>
-#include <iostream>
-#include <string>
-#include <utility>
-#include <vector>
 
 namespace RocProfVis
 {
 namespace View
 {
-
-FontManager::FontManager()
-: m_font_sizes(
-      { 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 20, 21, 23, 25, 27, 29, 33 })
-{}
-
-FontManager::~FontManager() {}
-
-std::vector<float>
-FontManager::GetFontSizes()
-{
-    // Return a vector of font sizes
-    return m_font_sizes;
-}
-ImFont*
-FontManager::GetIconFontByIndex(int idx)
-{
-    if(idx < 0 || idx >= static_cast<int>(m_all_icon_fonts.size())) return nullptr;
-    return m_all_icon_fonts[idx];
-}
-
-int
-FontManager::GetCurrentFontSizeIndex()
-{
-    // Return the font size index for the default font type
-    return m_font_size_indices[static_cast<int>(FontType::kDefault)];
-}
-ImFont*
-FontManager::GetFontByIndex(int idx)
-{
-    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return nullptr;
-    return m_all_fonts[idx];
-}
-
-int
-FontManager::GetFontSizeIndexForDPI(float dpi)
-{
-    // DPI returns the dots per inch of the display. Essentially, it is a scaling factor.
-
-    float base_size = 13.0f;
-    float scaled_size =
-        base_size *
-        std::sqrt(dpi);  // Scale the base size by the square root of DPI. SQRT needed to
-                         // prevent scaling from becoming comical on higher res monitors.
-
-    // Find the index of the font size closest to scaled_size
-    int best_index = 0;
-    for(int i = 1; i < static_cast<int>(std::size(m_font_sizes)); ++i)
-    {
-        if(std::abs(m_font_sizes[i] - scaled_size) <
-           std::abs(m_font_sizes[best_index] - scaled_size))
-            best_index = i;
-    }
-
-    return best_index;
-}
-
-void
-FontManager::SetFontSize(int size_index)
-{
-    constexpr int num_types = static_cast<int>(FontType::__kLastFont);
-
-    if(num_types == 0 || m_all_fonts.empty()) return;
-    if(size_index < 0 || size_index >= static_cast<int>(m_all_fonts.size())) return;
-
-    for(int i = 0; i < num_types; ++i)
-    {
-        m_font_size_indices[i] = size_index;
-        m_fonts[i]             = m_all_fonts[size_index];
-        m_icon_fonts[i]        = m_all_icon_fonts[size_index];
-    }
-
-    ImGui::GetIO().FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
-}
-bool
-FontManager::Init()
-{
-    ImGuiIO& io = ImGui::GetIO();
-    m_fonts.clear();
-
-    const int     num_sizes = static_cast<int>(m_font_sizes.size());
-    constexpr int num_types = static_cast<int>(FontType::__kLastFont);
-
-#ifdef _WIN32
-    const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
-#else
-    const char* font_paths[] = {
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"
-    };
-#endif
-
-    const char* font_path = nullptr;
-    for(const char* path : font_paths)
-    {
-        if(std::filesystem::exists(path))
-        {
-            font_path = path;
-            break;
-        }
-    }
-
-    // Prepare storage
-    m_all_fonts.clear();
-    m_all_fonts.resize(num_sizes, nullptr);
-    m_font_size_indices.resize(num_types, 6);  // Default to index 6 (12pt)
-    m_fonts.resize(num_types);
-    m_icon_fonts.resize(num_types);
-
-    ImFontConfig config;
-    config.FontDataOwnedByAtlas = false;
-
-    // Load all font sizes once
-    for(int sz = 0; sz < num_sizes; ++sz)
-    {
-        ImFont* font = nullptr;
-        if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, m_font_sizes[sz]);
-        if(!font) font = io.Fonts->AddFontDefault();
-        m_all_fonts[sz] = font;
-    }
-
-    // Load all icon fonts
-    m_all_icon_fonts.clear();
-    m_all_icon_fonts.resize(num_sizes, nullptr);
-
-    for(int sz = 0; sz < num_sizes; ++sz)
-    {
-        ImFont* icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
-            &icon_font_compressed_data, icon_font_compressed_size, m_font_sizes[sz],
-            &config, icon_ranges);
-        m_all_icon_fonts[sz] = icon_font;
-    }
-
-    // Set m_fonts to currently selected size for each FontType
-    for(int type = 0; type < num_types; ++type)
-    {
-        int sz_idx    = m_font_size_indices[type];
-        m_fonts[type] = m_all_fonts[sz_idx];
-
-        // Load icon font for each type at the selected size
-        m_icon_fonts[type] = io.Fonts->AddFontFromMemoryCompressedTTF(
-            &icon_font_compressed_data, icon_font_compressed_size, m_font_sizes[sz_idx],
-            &config, icon_ranges);
-    }
-
-    // Set ImGui's default font
-    io.FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
-    return io.Fonts->Build();
-}
-ImFont*
-FontManager::GetFont(FontType font_type)
-{
-    if(static_cast<int>(font_type) < 0 ||
-       static_cast<int>(font_type) >= static_cast<int>(FontType::__kLastFont))
-    {
-        return nullptr;  // Invalid font type
-    }
-    return m_fonts[static_cast<int>(font_type)];
-}
-
-ImFont*
-FontManager::GetIconFont(FontType font_type)
-{
-    if(static_cast<int>(font_type) < 0 ||
-       static_cast<int>(font_type) >= static_cast<int>(FontType::__kLastFont))
-    {
-        return nullptr;  // Invalid font type
-    }
-    return m_icon_fonts[static_cast<int>(font_type)];
-}
 
 const std::vector<ImU32> DARK_THEME_COLORS = []() {
     std::vector<ImU32> colors(static_cast<int>(Colors::__kLastColor));
@@ -300,15 +119,15 @@ const std::vector<ImU32> LIGHT_THEME_COLORS = []() {
     return colors;
 }();
 
-Settings&
-Settings::GetInstance()
+SettingsManager&
+SettingsManager::GetInstance()
 {
-    static Settings instance;
+    static SettingsManager instance;
     return instance;
 }
 
 void
-Settings::ApplyColorStyling()
+SettingsManager::ApplyColorStyling()
 {
     ImGuiStyle& style = ImGui::GetStyle();
 
@@ -430,7 +249,7 @@ Settings::ApplyColorStyling()
 }
 
 void
-Settings::DarkMode()
+SettingsManager::DarkMode()
 {
     m_color_store = DARK_THEME_COLORS;
     ImGui::StyleColorsDark();
@@ -440,7 +259,7 @@ Settings::DarkMode()
 }
 
 void
-Settings::LightMode()
+SettingsManager::LightMode()
 {
     m_color_store = LIGHT_THEME_COLORS;
     ImGui::StyleColorsLight();
@@ -450,12 +269,20 @@ Settings::LightMode()
 }
 
 bool
-Settings::IsDarkMode() const
+SettingsManager::IsDarkMode() const
 {
     return m_display_settings_current.use_dark_mode;
 }
+
+FontManager&
+SettingsManager::GetFontManager()
+{
+    return m_font_manager;
+}
+
 void
-Settings::SerializeDisplaySettings(jt::Json& parent, const DisplaySettings& settings)
+SettingsManager::SerializeDisplaySettings(jt::Json&              parent,
+                                          const DisplaySettings& settings)
 {
     jt::Json display_settings;
     display_settings.setObject();
@@ -467,8 +294,8 @@ Settings::SerializeDisplaySettings(jt::Json& parent, const DisplaySettings& sett
 }
 
 bool
-Settings::DeserializeDisplaySettings(jt::Json&        saved_results,
-                                     DisplaySettings& saved_settings)
+SettingsManager::DeserializeDisplaySettings(jt::Json&        saved_results,
+                                            DisplaySettings& saved_settings)
 {
     if(saved_results.contains("display_settings") &&
        saved_results["display_settings"].isObject())
@@ -507,7 +334,8 @@ Settings::DeserializeDisplaySettings(jt::Json&        saved_results,
 }
 
 void
-Settings::SaveSettings(const std::string& filename, const DisplaySettings& settings)
+SettingsManager::SaveSettings(const std::string&     filename,
+                              const DisplaySettings& settings)
 {
     jt::Json parent;
     parent.setObject();
@@ -529,7 +357,7 @@ Settings::SaveSettings(const std::string& filename, const DisplaySettings& setti
 }
 
 void
-Settings::LoadSettings(const std::string& filename)
+SettingsManager::LoadSettings(const std::string& filename)
 {
     std::filesystem::path in_path = GetStandardConfigPath(filename);
     std::ifstream         in_file(in_path);
@@ -558,7 +386,7 @@ Settings::LoadSettings(const std::string& filename)
 }
 
 std::filesystem::path
-Settings::GetStandardConfigPath(const std::string& filename)
+SettingsManager::GetStandardConfigPath(const std::string& filename)
 {
 #ifdef _WIN32
     const char*           appdata = std::getenv("APPDATA");
@@ -577,18 +405,18 @@ Settings::GetStandardConfigPath(const std::string& filename)
 }
 
 void
-Settings::SetDPI(float DPI)
+SettingsManager::SetDPI(float DPI)
 {
     m_display_settings_current.dpi = DPI;
 }
 
 float
-Settings ::GetDPI()
+SettingsManager ::GetDPI()
 {
     return m_display_settings_current.dpi;
 }
 void
-Settings::SetDisplaySettings(const DisplaySettings& settings)
+SettingsManager::SetDisplaySettings(const DisplaySettings& settings)
 {
     bool font_changed =
         (m_display_settings_current.font_size_index != settings.font_size_index) ||
@@ -620,34 +448,34 @@ Settings::SetDisplaySettings(const DisplaySettings& settings)
 }
 
 ImU32
-Settings::GetColor(int value) const
+SettingsManager::GetColor(int value) const
 {
     return m_color_store[value];
 }
 
 ImU32
-Settings::GetColor(Colors color) const
+SettingsManager::GetColor(Colors color) const
 {
     return m_color_store[static_cast<int>(color)];
 }
 
 const std::vector<ImU32>&
-Settings::GetColorWheel()
+SettingsManager::GetColorWheel()
 {
     return m_flame_color_wheel;
 }
 bool
-Settings::IsDPIBasedScaling() const
+SettingsManager::IsDPIBasedScaling() const
 {
     return m_display_settings_current.dpi_based_scaling;
 }
 
 void
-Settings::SetDPIBasedScaling(bool enabled)
+SettingsManager::SetDPIBasedScaling(bool enabled)
 {
     m_display_settings_current.dpi_based_scaling = enabled;
 }
-Settings::Settings()
+SettingsManager::SettingsManager()
 : m_color_store(static_cast<int>(Colors::__kLastColor))
 , m_flame_color_wheel({
 
@@ -655,35 +483,32 @@ Settings::Settings()
       IM_COL32(204, 121, 167, 204), IM_COL32(86, 180, 233, 204),
       IM_COL32(213, 94, 0, 204), IM_COL32(0, 204, 102, 204), IM_COL32(230, 159, 0, 204),
       IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204) })
-, m_display_settings_current(DisplaySettings())
+, m_display_settings_initial({ 1.5, false, true, 6 })
+, m_display_settings_current(m_display_settings_initial)
+{}
+
+SettingsManager::~SettingsManager() {}
+
+bool
+SettingsManager::Init()
 {
     InitStyling();
     LightMode();
-
-    m_display_settings_initial               = DisplaySettings();
-    m_display_settings_initial.dpi           = 1.5;  // Will be set to the current DPI.
-    m_display_settings_initial.use_dark_mode = false;
-    m_display_settings_initial.dpi_based_scaling = true;
-    m_display_settings_initial.font_size_index   = 6;  // Default to 12pt font size
-    m_display_settings_current =
-        m_display_settings_initial;  // Once file saving is enabled this will point to
-                                     // file contents.
+    return m_font_manager.Init();
 }
 
-Settings::~Settings() {}
-
 DisplaySettings&
-Settings::GetCurrentDisplaySettings()
+SettingsManager::GetCurrentDisplaySettings()
 {
     return m_display_settings_current;
 }
 DisplaySettings&
-Settings::GetInitialDisplaySettings()
+SettingsManager::GetInitialDisplaySettings()
 {
     return m_display_settings_initial;
 }
 void
-Settings::RestoreDisplaySettings(const DisplaySettings& settings)
+SettingsManager::RestoreDisplaySettings(const DisplaySettings& settings)
 {
     SetDPI(settings.dpi);
     SetDPIBasedScaling(settings.dpi_based_scaling);
@@ -707,7 +532,7 @@ Settings::RestoreDisplaySettings(const DisplaySettings& settings)
 }
 
 void
-Settings::InitStyling()
+SettingsManager::InitStyling()
 {
     ImGuiStyle& style = ImGui::GetStyle();
     m_default_style   = style;  // Store the default style

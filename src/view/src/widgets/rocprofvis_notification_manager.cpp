@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_notification_manager.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
 #include "imgui.h"
 #include <algorithm>
 
@@ -215,11 +215,11 @@ NotificationManager::GetBgColorForLevel(NotificationLevel level)
         default:
         case NotificationLevel::Info:
         case NotificationLevel::Success: 
-            return ImGui::ColorConvertU32ToFloat4(Settings::GetInstance().GetColor(Colors::kBgPanel));
+            return ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kBgPanel));
         case NotificationLevel::Warning: 
-            return ImGui::ColorConvertU32ToFloat4(Settings::GetInstance().GetColor(Colors::kBgWarning));
+            return ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kBgWarning));
         case NotificationLevel::Error: 
-            return ImGui::ColorConvertU32ToFloat4(Settings::GetInstance().GetColor(Colors::kBgError));
+            return ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kBgError));
     }
 }
 
@@ -233,7 +233,7 @@ NotificationManager::GetFgColorForLevel(NotificationLevel level)
         case NotificationLevel::Success:
         case NotificationLevel::Warning:
         case NotificationLevel::Error: 
-            return ImGui::ColorConvertU32ToFloat4(Settings::GetInstance().GetColor(Colors::kTextMain));
+            return ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kTextMain));
     }
 }
 

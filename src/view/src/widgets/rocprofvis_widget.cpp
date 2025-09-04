@@ -5,7 +5,7 @@
 #include "rocprofvis_core.h"
 #include "rocprofvis_debug_window.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 
 #include <iostream>
@@ -111,7 +111,7 @@ VFixedContainer::Render()
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_children[i].m_window_padding);
         ImGui::PushStyleColor(
             ImGuiCol_ChildBg,
-            Settings::GetInstance().GetColor(static_cast<int>(Colors::kFillerColor)));
+            SettingsManager::GetInstance().GetColor(static_cast<int>(Colors::kFillerColor)));
 
         ImGui::BeginChild(ImGui::GetID(i),
                           ImVec2(m_children[i].m_width, m_children[i].m_height),
@@ -189,7 +189,7 @@ HSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_left.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_left.m_window_padding);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, SettingsManager::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_left_name.c_str(), ImVec2(left_col_width, col_height),
                       m_left.m_child_flags, m_left.m_window_flags);
@@ -213,7 +213,7 @@ HSplitContainer::Render()
     ImVec2 splitter_max = ImGui::GetItemRectMax();
     ImGui::GetWindowDrawList()->AddRectFilled(
         splitter_min, splitter_max,
-        Settings::GetInstance().GetColor(static_cast<int>(Colors::kSplitterColor)));
+        SettingsManager::GetInstance().GetColor(static_cast<int>(Colors::kSplitterColor)));
 
     // Change cursor appearance when hovering over the resize handle
     if(ImGui::IsItemHovered())
@@ -238,7 +238,7 @@ HSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_right.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_right.m_window_padding);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, SettingsManager::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_right_name.c_str(), ImVec2(-1, col_height),
                       m_right.m_child_flags, m_right.m_window_flags);
@@ -313,7 +313,7 @@ VSplitContainer::Render()
     // Start Top Row
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_top.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_top.m_window_padding);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, SettingsManager::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_top_name.c_str(), ImVec2(col_width, top_row_height),
                       m_top.m_child_flags, m_top.m_window_flags);
@@ -334,7 +334,7 @@ VSplitContainer::Render()
     ImVec2 splitter_max = ImGui::GetItemRectMax();
     ImGui::GetWindowDrawList()->AddRectFilled(
         splitter_min, splitter_max,
-        Settings::GetInstance().GetColor(static_cast<int>(Colors::kSplitterColor)));
+        SettingsManager::GetInstance().GetColor(static_cast<int>(Colors::kSplitterColor)));
 
     // Change cursor appearance when hovering over the resize handle
     if(ImGui::IsItemHovered())
@@ -357,7 +357,7 @@ VSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_bottom.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_bottom.m_window_padding);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings::GetInstance().GetColor(
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, SettingsManager::GetInstance().GetColor(
                                                 static_cast<int>(Colors::kFillerColor)));
     ImGui::BeginChild(m_bottom_name.c_str(), ImVec2(col_width, 0),
                       m_bottom.m_child_flags, m_bottom.m_window_flags);

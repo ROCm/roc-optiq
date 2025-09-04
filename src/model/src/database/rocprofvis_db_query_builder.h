@@ -124,6 +124,8 @@ class Builder
         static constexpr const char* START_SERVICE_NAME     = "startTs";
         static constexpr const char* END_SERVICE_NAME       = "endTs";
 
+        static constexpr const int  LEVEL_CALCULATION_VERSION  = 2;
+
     public:
         static std::string Select(rocprofvis_db_sqlite_track_query_format params);
         static std::string Select(rocprofvis_db_sqlite_level_query_format params);
@@ -151,6 +153,8 @@ class Builder
         static std::string Concat(std::vector<std::string> strings);
         static std::string Where(std::string name, std::string condition, std::string value);
         static std::string Union();
+        static std::string LevelTable(std::string operation);
+        static std::vector<std::string> OldLevelTables(std::string operation);
     private:
         static void        BuildBlanksMask(SqliteDatabase* owner, int num_params, std::string* params);
         static std::string BuildQuery(std::string select, int num_params,

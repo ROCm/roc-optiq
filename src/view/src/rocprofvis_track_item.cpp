@@ -1,6 +1,7 @@
 #include "rocprofvis_track_item.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
+#include "rocprofvis_font_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -33,7 +34,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_is_resize(false)
 , m_meta_area_clicked(false)
 , m_meta_area_scale_width(0.0f)
-, m_settings(Settings::GetInstance())
+, m_settings(SettingsManager::GetInstance())
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
 , m_group_id_counter(0)

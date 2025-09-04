@@ -2,12 +2,11 @@
 
 #pragma once
 
+#include "rocprofvis_font_manager.h"
 #include "imgui.h"
 #include "json.h"
-#include <cstdlib>
 #include <filesystem>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace RocProfVis
@@ -73,84 +72,47 @@ enum class Colors
     __kLastColor
 };
 
-enum class FontType
-{
-    kSmall,
-    kMedium,
-    kMedLarge,
-    kLarge,
-    // Used to get the size of the enum, insert new fonts before this line
-    __kLastFont,
-    kDefault = kMedium
-};
-
-class FontManager
+class SettingsManager
 {
 public:
-    FontManager();
-    ~FontManager();
-    FontManager(const FontManager&)                  = delete;
-    FontManager&       operator=(const FontManager&) = delete;
-    std::vector<float> GetFontSizes();
-    ImFont*            GetIconFontByIndex(int idx);
+    SettingsManager(const SettingsManager&)            = delete;
+    SettingsManager& operator=(const SettingsManager&) = delete;
 
-    /*
-     * Called to initialize the font manager. Should be once called after ImGui context is
-     * created, but before the first frame.
-     */
+    static SettingsManager& GetInstance();
+
     bool Init();
 
-    ImFont* GetFont(FontType font_type);
-    ImFont* GetIconFont(FontType font_type);
+    void  SetDPI(float DPI);
+    float GetDPI();
 
-    void    SetFontSize(int size_index);
-    int     GetCurrentFontSizeIndex();
-    ImFont* GetFontByIndex(int idx);
-    int     GetFontSizeIndexForDPI(float dpi);
-
-private:
-    std::vector<ImFont*> m_fonts;
-    std::vector<float>   m_font_sizes;
-    std::vector<ImFont*> m_icon_fonts;
-    std::vector<ImFont*> m_all_fonts;
-    std::vector<int>     m_font_size_indices;
-    std::vector<ImFont*> m_all_icon_fonts;
-};
-
-class Settings
-{
-public:
-    static Settings& GetInstance();
-    void             SetDPI(float DPI);
-    float            GetDPI();
-    Settings(const Settings&)            = delete;
-    Settings& operator=(const Settings&) = delete;
-    ImU32     GetColor(int value) const;
-    ImU32     GetColor(Colors color) const;
-
+    ImU32                     GetColor(int value) const;
+    ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel();
-    void                      LoadSettings(const std::string& filename);
+
+    void LoadSettings(const std::string& filename);
     void SaveSettings(const std::string& filename, const DisplaySettings& settings);
     void SerializeDisplaySettings(jt::Json& parent, const DisplaySettings& settings);
     bool DeserializeDisplaySettings(jt::Json&        saved_results,
                                     DisplaySettings& saved_settings);
+    std::filesystem::path GetStandardConfigPath(const std::string& filename);
+
     void DarkMode();
     void LightMode();
     bool IsDarkMode() const;
 
-    FontManager&          GetFontManager() { return m_font_manager; }
-    const ImGuiStyle&     GetDefaultStyle() const { return m_default_style; }
-    bool                  IsDPIBasedScaling() const;
-    void                  SetDPIBasedScaling(bool enabled);
-    DisplaySettings&      GetCurrentDisplaySettings();
-    void                  RestoreDisplaySettings(const DisplaySettings& settings);
-    DisplaySettings&      GetInitialDisplaySettings();
-    void                  SetDisplaySettings(const DisplaySettings& settings);
-    std::filesystem::path GetStandardConfigPath(const std::string& filename);
+    FontManager& GetFontManager();
+
+    const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
+    bool              IsDPIBasedScaling() const;
+    void              SetDPIBasedScaling(bool enabled);
+    DisplaySettings&  GetCurrentDisplaySettings();
+    void              RestoreDisplaySettings(const DisplaySettings& settings);
+    DisplaySettings&  GetInitialDisplaySettings();
+    void              SetDisplaySettings(const DisplaySettings& settings);
 
 private:
-    Settings();
-    ~Settings();
+    SettingsManager();
+    ~SettingsManager();
 
     void InitStyling();
     void ApplyColorStyling();

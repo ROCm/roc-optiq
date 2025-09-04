@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
-#include "rocprofvis_settings.h"
+#include "rocprofvis_settings_manager.h"
 namespace RocProfVis
 {
 namespace View
@@ -67,11 +67,11 @@ void
 StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
                    double pixels_per_ns)
 {
-    Settings& settings     = Settings::GetInstance();
-    ImU32     bg_color     = settings.GetColor(Colors::kFillerColor);
-    ImU32     border_color = settings.GetColor(Colors::kBorderColor);
-    ImU32     text_color   = settings.GetColor(Colors::kRulerTextColor);
-    ImU32     shadow_color = IM_COL32(0, 0, 0, 60);
+    SettingsManager& settings     = SettingsManager::GetInstance();
+    ImU32            bg_color     = settings.GetColor(Colors::kFillerColor);
+    ImU32            border_color = settings.GetColor(Colors::kBorderColor);
+    ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
+    ImU32            shadow_color = IM_COL32(0, 0, 0, 60);
 
     const float rounding      = 8.0f;
     const float border_thick  = 2.0f;

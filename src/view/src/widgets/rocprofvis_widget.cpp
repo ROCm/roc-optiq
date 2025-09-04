@@ -401,6 +401,8 @@ TabContainer::TabContainer()
 : m_active_tab_index(-1)
 , m_set_active_tab_index(-1)
 , m_allow_tool_tips(true)
+, m_enable_send_close_event(false)
+, m_enable_send_change_event(false)
 {
     m_widget_name = GenUniqueName("TabContainer");
 }
@@ -413,6 +415,18 @@ void TabContainer::SetEventSourceName(const std::string& source_name) {
 
 const std::string& TabContainer::GetEventSourceName() const {
     return m_event_source_name;
+}
+
+void
+TabContainer::EnableSendCloseEvent(bool enable)
+{
+    m_enable_send_close_event = enable;
+}
+
+void
+TabContainer::EnableSendChangeEvent(bool enable)
+{
+    m_enable_send_change_event = enable;
 }
 
 void
@@ -493,7 +507,7 @@ TabContainer::Render()
         if(m_active_tab_index != new_selected_tab)
         {
             m_active_tab_index = new_selected_tab;
-            if(new_selected_tab < m_tabs.size())
+            if(new_selected_tab < m_tabs.size() && m_enable_send_change_event)
             {
                 std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
                     static_cast<int>(RocEvents::kTabSelected),
@@ -534,11 +548,13 @@ TabContainer::RemoveTab(const std::string& id)
                              [&id](const TabItem& tab) { return tab.m_id == id; });
     if(it != m_tabs.end())
     {
-        // notify the event manager of the tab removal
-        std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-            static_cast<int>(RocEvents::kTabClosed), it->m_id,
-            m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-        EventManager::GetInstance()->AddEvent(e);
+        if(m_enable_send_close_event) {
+            // notify the event manager of the tab removal
+            std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
+                static_cast<int>(RocEvents::kTabClosed), it->m_id,
+                m_event_source_name.empty() ? m_widget_name : m_event_source_name);
+            EventManager::GetInstance()->AddEvent(e);
+        }
 
         m_tabs.erase(it, m_tabs.end());
     }
@@ -549,11 +565,14 @@ TabContainer::RemoveTab(int index)
 {
     if(index >= 0 && index < static_cast<int>(m_tabs.size()))
     {
-        // notify the event manager of the tab removal
-        std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-            static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id,
-            m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-        EventManager::GetInstance()->AddEvent(e);
+        if(m_enable_send_close_event)
+        {
+            // notify the event manager of the tab removal
+            std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
+                static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id,
+                m_event_source_name.empty() ? m_widget_name : m_event_source_name);
+            EventManager::GetInstance()->AddEvent(e);
+        }
 
         m_tabs.erase(m_tabs.begin() + index);
     }

@@ -22,6 +22,7 @@ LayoutItem::LayoutItem()
 , m_window_padding(ImVec2(0, 0))
 , m_child_flags(ImGuiChildFlags_Borders)
 , m_window_flags(ImGuiWindowFlags_None)
+, m_visible(true)
 {}
 
 LayoutItem::LayoutItem(float w, float h)
@@ -33,6 +34,7 @@ LayoutItem::LayoutItem(float w, float h)
 , m_window_padding(ImVec2(0, 0))
 , m_child_flags(ImGuiChildFlags_Borders)
 , m_window_flags(ImGuiWindowFlags_None)
+, m_visible(true)
 {}
 
 //------------------------------------------------------------------
@@ -95,6 +97,26 @@ VFixedContainer::SetAt(int index, const LayoutItem& item)
     return false;
 }
 
+const LayoutItem*
+VFixedContainer::GetAt(int index) const
+{
+    if(index < m_children.size() && index >= 0)
+    {
+        return &m_children[index];
+    }
+    return nullptr;
+}
+
+LayoutItem*
+VFixedContainer::GetMutableAt(int index)
+{
+    if(index < m_children.size() && index >= 0)
+    {
+        return &m_children[index];
+    }
+    return nullptr;
+}
+
 size_t
 VFixedContainer::ItemCount()
 {
@@ -107,13 +129,17 @@ VFixedContainer::Render()
     size_t len = m_children.size();
     for(size_t i = 0; i < len; ++i)
     {
+        if(!m_children[i].m_visible) {
+            continue;
+        }
+
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_children[i].m_item_spacing);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_children[i].m_window_padding);
         ImGui::PushStyleColor(
             ImGuiCol_ChildBg,
             SettingsManager::GetInstance().GetColor(static_cast<int>(Colors::kFillerColor)));
 
-        ImGui::BeginChild(ImGui::GetID(i),
+        ImGui::BeginChild(ImGui::GetID(static_cast<int>(i)),
                           ImVec2(m_children[i].m_width, m_children[i].m_height),
                           m_children[i].m_child_flags, m_children[i].m_window_flags);
         if(m_children[i].m_item)
@@ -258,7 +284,7 @@ VSplitContainer::VSplitContainer(const LayoutItem& t, const LayoutItem& b)
 , m_resize_grip_size(4.0f)
 , m_top_min_height(200.0f)
 , m_bottom_min_height(100.0f)
-, m_split_ratio(0.6)  // Initial split ratio
+, m_split_ratio(0.6f)  // Initial split ratio
 {
     m_widget_name = GenUniqueName("VSplitContainer");
     m_top_name    = GenUniqueName("TopRow");
@@ -375,6 +401,8 @@ TabContainer::TabContainer()
 : m_active_tab_index(-1)
 , m_set_active_tab_index(-1)
 , m_allow_tool_tips(true)
+, m_enable_send_close_event(false)
+, m_enable_send_change_event(false)
 {
     m_widget_name = GenUniqueName("TabContainer");
 }
@@ -387,6 +415,18 @@ void TabContainer::SetEventSourceName(const std::string& source_name) {
 
 const std::string& TabContainer::GetEventSourceName() const {
     return m_event_source_name;
+}
+
+void
+TabContainer::EnableSendCloseEvent(bool enable)
+{
+    m_enable_send_close_event = enable;
+}
+
+void
+TabContainer::EnableSendChangeEvent(bool enable)
+{
+    m_enable_send_change_event = enable;
 }
 
 void
@@ -438,7 +478,7 @@ TabContainer::Render()
                         ImGui::SetTooltip("%s", tab.m_id.c_str());
                     }
 
-                    new_selected_tab = i;
+                    new_selected_tab = static_cast<int>(i);
                     if(tab.m_widget)
                     {
                         tab.m_widget->Render();
@@ -457,7 +497,7 @@ TabContainer::Render()
 
                 if(p_open && !is_open)
                 {
-                    index_to_remove = i;
+                    index_to_remove = static_cast<int>(i);
                 }
             }
             ImGui::EndTabBar();
@@ -467,7 +507,7 @@ TabContainer::Render()
         if(m_active_tab_index != new_selected_tab)
         {
             m_active_tab_index = new_selected_tab;
-            if(new_selected_tab < m_tabs.size())
+            if(new_selected_tab < m_tabs.size() && m_enable_send_change_event)
             {
                 std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
                     static_cast<int>(RocEvents::kTabSelected),
@@ -508,11 +548,13 @@ TabContainer::RemoveTab(const std::string& id)
                              [&id](const TabItem& tab) { return tab.m_id == id; });
     if(it != m_tabs.end())
     {
-        // notify the event manager of the tab removal
-        std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-            static_cast<int>(RocEvents::kTabClosed), it->m_id,
-            m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-        EventManager::GetInstance()->AddEvent(e);
+        if(m_enable_send_close_event) {
+            // notify the event manager of the tab removal
+            std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
+                static_cast<int>(RocEvents::kTabClosed), it->m_id,
+                m_event_source_name.empty() ? m_widget_name : m_event_source_name);
+            EventManager::GetInstance()->AddEvent(e);
+        }
 
         m_tabs.erase(it, m_tabs.end());
     }
@@ -523,11 +565,14 @@ TabContainer::RemoveTab(int index)
 {
     if(index >= 0 && index < static_cast<int>(m_tabs.size()))
     {
-        // notify the event manager of the tab removal
-        std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-            static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id,
-            m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-        EventManager::GetInstance()->AddEvent(e);
+        if(m_enable_send_close_event)
+        {
+            // notify the event manager of the tab removal
+            std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
+                static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id,
+                m_event_source_name.empty() ? m_widget_name : m_event_source_name);
+            EventManager::GetInstance()->AddEvent(e);
+        }
 
         m_tabs.erase(m_tabs.begin() + index);
     }
@@ -551,7 +596,7 @@ TabContainer::SetActiveTab(const std::string& id)
                            [&id](const TabItem& tab) { return tab.m_id == id; });
     if(it != m_tabs.end())
     {
-        m_set_active_tab_index = std::distance(m_tabs.begin(), it);
+        m_set_active_tab_index = static_cast<int>(std::distance(m_tabs.begin(), it));
     }
 }
 

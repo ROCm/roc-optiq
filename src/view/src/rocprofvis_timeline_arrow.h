@@ -13,9 +13,10 @@ namespace View
 
 enum class FlowDisplayMode
 {
-    ShowAll,
-    ShowFirstAndLast,
-    Hide
+    kShowAll,
+    kShowFirstAndLast,
+    kHide,
+    __kLastMode = kHide
 };
 
 class DataProvider;
@@ -42,7 +43,7 @@ private:
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     EventManager::SubscriptionToken    m_selection_changed_token;
     std::vector<const event_info_t*>   m_selected_event_data;
-    FlowDisplayMode                    m_flow_display_mode = FlowDisplayMode::ShowAll;
+    FlowDisplayMode                    m_flow_display_mode = FlowDisplayMode::kShowAll;
 };
 
 }  // namespace View

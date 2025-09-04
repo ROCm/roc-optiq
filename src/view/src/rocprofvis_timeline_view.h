@@ -84,9 +84,9 @@ public:
     void                             CalculateGridInterval();
     ViewCoords                       GetViewCoords() const;
     void                             SetViewCoords(const ViewCoords& coords);
-    void                             RenderArrowOptionsMenu();
     void ShowTimelineContextMenu(const ImVec2& window_position);
     void RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position);
+    TimelineArrow &GetArrowLayer();
 
 private:
     std::vector<rocprofvis_graph_t>    m_graphs;

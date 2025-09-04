@@ -11,7 +11,8 @@ namespace View
 		0xF267, 0xF267,
 		0xF306, 0xF306,
 		0xF35C, 0xF35C,
-		0 
+		0xF424, 0xF424,
+		0
 	};
 
 	constexpr char* ICON_X_CIRCLED     = u8"\uF128";
@@ -20,6 +21,7 @@ namespace View
 	constexpr char* ICON_ARROWS_SHRINK = u8"\uF267";
 	constexpr char* ICON_EYE_SLASH     = u8"\uF306";
 	constexpr char* ICON_GRID          = u8"\uF35C";
+	constexpr char* ICON_EYE_THIN  	   = u8"\uF424";
 
 }  // namespace View
 }  // namespace RocProfVis

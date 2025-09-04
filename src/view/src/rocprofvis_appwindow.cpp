@@ -14,6 +14,7 @@
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
 #endif
+#include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -30,6 +31,9 @@ constexpr char*  FILE_SAVE_DIALOG_NAME    = "SaveFileDlgKey";
 constexpr char*  PROJECT_SAVE_DIALOG_NAME = "SaveProjectDlgKey";
 constexpr char*  TAB_CONTAINER_SRC_NAME   = "MainTabContainer";
 constexpr char*  ABOUT_DIALOG_NAME        = "About##_dialog";
+
+constexpr float STATUS_BAR_HEIGHT = 30.0f;
+constexpr float TOOL_BAR_HEIGHT = 40.0f;
 
 // For testing DataProvider
 void
@@ -73,12 +77,15 @@ AppWindow::AppWindow()
 #endif
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
 , m_message_dialog(std::make_unique<MessageDialog>())
+, m_tool_bar_index(0)
 {}
 
 AppWindow::~AppWindow()
 {
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
                                              m_tabclosed_event_token);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
+                                             m_tabselected_event_token);
     m_projects.clear();
 #ifdef COMPUTE_UI_SUPPORT
     NavigationManager::DestroyInstance();
@@ -101,18 +108,23 @@ AppWindow::Init()
         spdlog::warn("Failed to initialize SettingsManager");
     }
 
-    LayoutItem status_bar_item(-1, 30.0f);
+    LayoutItem status_bar_item(-1, STATUS_BAR_HEIGHT);
     status_bar_item.m_item = std::make_shared<RocWidget>();
-    LayoutItem main_area_item(-1, -30.0f);
+    LayoutItem main_area_item(-1, -STATUS_BAR_HEIGHT);
+    LayoutItem tool_bar_item(-1, TOOL_BAR_HEIGHT);
 
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->SetEventSourceName(TAB_CONTAINER_SRC_NAME);
+    m_tab_container->EnableSendCloseEvent(true);
+    m_tab_container->EnableSendChangeEvent(true);
 #ifdef COMPUTE_UI_SUPPORT
     NavigationManager::GetInstance()->RegisterRootContainer(m_tab_container);
 #endif
     main_area_item.m_item = m_tab_container;
 
     std::vector<LayoutItem> layout_items;
+    layout_items.push_back(tool_bar_item);
+    m_tool_bar_index = layout_items.size() - 1;
     layout_items.push_back(main_area_item);
     layout_items.push_back(status_bar_item);
     m_main_view = std::make_shared<VFixedContainer>(layout_items);
@@ -125,6 +137,13 @@ AppWindow::Init()
     };
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
+
+    auto new_tab_selected_handler = [this](std::shared_ptr<RocEvent> e) {
+        this->HandleTabSelectionChanged(e);
+    };
+
+    m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 
     return result;
 }
@@ -218,6 +237,7 @@ AppWindow::Render()
         Project* project = GetCurrentProject();
         RenderFileMenu(project);
         RenderEditMenu(project);
+        RenderViewMenu(project);
         RenderHelpMenu();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         RenderDeveloperMenu();
@@ -398,6 +418,24 @@ AppWindow::RenderEditMenu(Project* project)
 }
 
 void
+AppWindow::RenderViewMenu(Project* project)
+{
+    (void) project;
+
+    if(ImGui::BeginMenu("View"))
+    {
+        LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
+        if(tool_bar_item) {
+            if(ImGui::MenuItem("Show Tool Bar", nullptr, tool_bar_item->m_visible))
+            {
+                tool_bar_item->m_visible = !tool_bar_item->m_visible;
+            }
+        }
+        ImGui::EndMenu();
+    }
+}
+
+void
 AppWindow::RenderHelpMenu()
 {
     if(ImGui::BeginMenu("Help"))
@@ -416,8 +454,56 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
     auto tab_closed_event = std::dynamic_pointer_cast<TabEvent>(e);
     if(tab_closed_event && m_projects.count(tab_closed_event->GetTabId()) > 0)
     {
+        auto activeProject = GetCurrentProject();
+        if(!activeProject) {
+            spdlog::debug("No active project found after tab closed");
+            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
+        } else {
+            spdlog::debug("Active project found after tab closed: {}", activeProject->GetName());
+            std::shared_ptr<RootView> root_view =
+                std::dynamic_pointer_cast<RootView>(activeProject->GetView());
+            if(root_view)
+            {
+                m_main_view->GetMutableAt(m_tool_bar_index)->m_item =
+                    root_view->GetToolbar();
+            }
+        }
+        spdlog::debug("Tab closed: {}", tab_closed_event->GetTabId());
         m_projects[tab_closed_event->GetTabId()]->Close();
         m_projects.erase(tab_closed_event->GetTabId());
+    }
+}
+
+void
+AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
+{
+    auto tab_selected_event = std::dynamic_pointer_cast<TabEvent>(e);
+    if(tab_selected_event)
+    {
+        // Only handle the event if the tab source is the main tab source
+        if(tab_selected_event->GetTabSource() == GetMainTabSourceName())
+        {
+            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
+
+            auto id = tab_selected_event->GetTabId();
+            spdlog::debug("Tab selected: {}", id);
+            auto project = GetProject(id);
+            if(!project)
+            {
+                spdlog::warn("Project not found for tab: {}", id);
+                return;
+            }
+            else
+            {
+                std::shared_ptr<RootView> root_view =
+                    std::dynamic_pointer_cast<RootView>(project->GetView());
+                if(root_view)
+                {
+                    m_main_view->GetMutableAt(m_tool_bar_index)->m_item =
+                        root_view->GetToolbar();
+                }
+            }
+        }
     }
 }
 

@@ -22,33 +22,33 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 }
 
 double
-StickyNote::GetTimeNs()
+StickyNote::GetTimeNs() const
 {
     return m_time_ns;
 }
 float
-StickyNote::GetYOffset()
+StickyNote::GetYOffset() const
 {
     return m_y_offset;
 }
 ImVec2
-StickyNote::GetSize()
+StickyNote::GetSize() const
 {
     return m_size;
 }
-std::string&
-StickyNote::GetText()
+const std::string&
+StickyNote::GetText() const
 {
     return m_text;
 }
 
 int
-StickyNote::GetID()
+StickyNote::GetID() const
 {
     return m_id;
 }
-std::string&
-StickyNote::GetTitle()
+const std::string&
+StickyNote::GetTitle() const
 {
     return m_title;
 }
@@ -159,14 +159,14 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     float  text_area_h = sticky_size.y - header_height - 2 * margin;
     ImVec2 text_pos    = ImVec2(text_area_x, text_area_y);
 
-    const ImVec4 clip_rect = ImVec4(child_offset.x + text_area_x, child_offset.y + text_area_y,
-                child_offset.x + text_area_x + text_area_w,
-                child_offset.y + text_area_y + text_area_h);
+    const ImVec4 clip_rect =
+        ImVec4(child_offset.x + text_area_x, child_offset.y + text_area_y,
+               child_offset.x + text_area_x + text_area_w,
+               child_offset.y + text_area_y + text_area_h);
 
-    child_draw_list->AddText(
-        ImGui::GetFont(), ImGui::GetFontSize(), child_offset + text_pos, text_color,
-        m_text.c_str(), nullptr, text_area_w,
-        &clip_rect);
+    child_draw_list->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                             child_offset + text_pos, text_color, m_text.c_str(), nullptr,
+                             text_area_w, &clip_rect);
 
     ImGui::EndChild();
 }

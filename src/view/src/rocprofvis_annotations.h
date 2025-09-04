@@ -22,6 +22,7 @@ public:
     ~AnnotationsViewProjectSettings() override;
 
     void ToJson() override;
+    void FromJson();
     bool Valid() const override;
 
 private:
@@ -35,6 +36,8 @@ class AnnotationsView
 public:
     AnnotationsView(DataProvider& dp);
     ~AnnotationsView();
+
+    void Clear();
 
     void AddSticky(double time_ns, float y_offset, const ImVec2& size,
                    const std::string& text, const std::string& title);
@@ -60,8 +63,6 @@ private:
 
     AnnotationsViewProjectSettings m_project_settings;
 };
-
- 
 
 }  // namespace View
 }  // namespace RocProfVis

@@ -1,10 +1,10 @@
 #include "rocprofvis_annotations.h"
+#include "json.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings.h"
+#include "rocprofvis_stickynote.h"
 #include <cstring>
-#include "json.h"
- #include <vector>
-
+#include <vector>
 namespace RocProfVis
 {
 namespace View
@@ -18,21 +18,96 @@ AnnotationsViewProjectSettings::AnnotationsViewProjectSettings(
 AnnotationsViewProjectSettings::~AnnotationsViewProjectSettings() {}
 
 void
+AnnotationsViewProjectSettings::FromJson()
+{
+    m_annotations_view.Clear();
+    std::vector<jt::Json>& annotation_vec = m_settings_json["annotations"].getArray();
+
+    for(auto& note_json : annotation_vec)
+    {
+        double time_ns = 0.0;
+        if(note_json.contains("time_ns") && note_json["time_ns"].isDouble())
+            time_ns = note_json["time_ns"].getDouble();
+
+        float y_offset = 0.0f;
+        if(note_json.contains("y_offset") && note_json["y_offset"].isDouble())
+            y_offset = static_cast<float>(note_json["y_offset"].getDouble());
+
+        float size_x = 100.0f;
+        if(note_json.contains("size_x") && note_json["size_x"].isLong())
+            size_x = static_cast<float>(note_json["size_x"].getLong());
+
+        float size_y = 50.0f;
+        if(note_json.contains("size_y") && note_json["size_y"].isLong())
+            size_y = static_cast<float>(note_json["size_y"].getLong());
+
+        std::string text = "<missing>";
+        if(note_json.contains("text") && note_json["text"].isString())
+            text = note_json["text"].getString();
+
+        std::string title = "<untitled>";
+        if(note_json.contains("title") && note_json["title"].isString())
+            title = note_json["title"].getString();
+
+        ImVec2 size(size_x, size_y);
+        m_annotations_view.AddSticky(time_ns, y_offset, size, text, title);
+    }
+}
+
+void
 AnnotationsViewProjectSettings::ToJson()
 {
-  
-    m_settings_json["annotations"] = 1;
+    const std::vector<StickyNote>& notes = m_annotations_view.GetStickyNotes();
+
+    // Create an empty array for annotations
+    m_settings_json["annotations"] = jt::Json();
+
+    // Add each sticky note as an object in the array
+    for(size_t i = 0; i < notes.size(); ++i)
+    {
+        jt::Json sticky_json;
+        sticky_json["time_ns"]  = notes[i].GetTimeNs();
+        sticky_json["y_offset"] = notes[i].GetYOffset();
+        sticky_json["size_x"]   = notes[i].GetSize().x;
+        sticky_json["size_y"]   = notes[i].GetSize().y;
+        sticky_json["text"]     = notes[i].GetText();
+        sticky_json["title"]    = notes[i].GetTitle();
+        sticky_json["id"]       = notes[i].GetID();
+
+        m_settings_json["annotations"][i] = sticky_json;
+    }
 }
+
 bool
 AnnotationsViewProjectSettings::Valid() const
 {
-   
+    // Check that "annotations" exists and is an array
+    if(!m_settings_json.contains("annotations") ||
+       !m_settings_json["annotations"].isArray())
+        return false;
+
+    const jt::Json& annotations = m_settings_json["annotations"];
+    // Use the public array_value member to iterate
+    for(const auto& note_json : annotations.getArray())
+    {
+        if(!note_json.contains("time_ns") || !note_json.contains("y_offset") ||
+           !note_json.contains("size_x") || !note_json.contains("size_y") ||
+           !note_json.contains("text") || !note_json.contains("title"))
+        {
+            return false;
+        }
+    }
     return true;
 }
 
-AnnotationsView::AnnotationsView(DataProvider& dp):
-    m_project_settings(dp.GetTraceFilePath(), *this)
+AnnotationsView::AnnotationsView(DataProvider& dp)
+: m_project_settings(dp.GetTraceFilePath(), *this)
 {
+    if(m_project_settings.Valid())
+    {
+        m_project_settings.FromJson();
+    }
+
     auto sticky_note_handler = [this](std::shared_ptr<RocEvent> e) {
         m_show_sticky_edit_popup = true;
         auto evt                 = std::dynamic_pointer_cast<StickyNoteEvent>(e);
@@ -67,6 +142,12 @@ AnnotationsView::~AnnotationsView()
 }
 
 void
+AnnotationsView::Clear()
+{
+    m_sticky_notes.clear();
+}
+
+void
 AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
                            const std::string& text, const std::string& title)
 {
@@ -95,7 +176,7 @@ AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
                                     double v_max_x, float scroll_y)
 {
     ImVec2 mouse_pos = ImGui::GetMousePos();
-    // Mouse position relative without adjusting for user scroll. 
+    // Mouse position relative without adjusting for user scroll.
     ImVec2 rel_mouse_pos =
         ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
 

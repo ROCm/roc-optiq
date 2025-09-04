@@ -550,8 +550,8 @@ Settings::LoadSettings(const std::string& filename)
 
         if(DeserializeDisplaySettings(settings_json, loaded_settings))
             SetDisplaySettings(loaded_settings);
-    } 
-    else 
+    }
+    else
     {
         spdlog::warn("Settings file failed to load");
     }
@@ -606,10 +606,14 @@ Settings::SetDisplaySettings(const DisplaySettings& settings)
 
     if(font_changed)
     {
-        if(m_display_settings_current.dpi_based_scaling) {
-            int ideal_dpi_index = GetFontManager().GetFontSizeIndexForDPI(m_display_settings_current.dpi);
+        if(m_display_settings_current.dpi_based_scaling)
+        {
+            int ideal_dpi_index =
+                GetFontManager().GetFontSizeIndexForDPI(m_display_settings_current.dpi);
             GetFontManager().SetFontSize(ideal_dpi_index);
-        } else {
+        }
+        else
+        {
             GetFontManager().SetFontSize(m_display_settings_current.font_size_index);
         }
     }

@@ -2,7 +2,6 @@
 #include "json.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
-#include "rocprofvis_settings.h"
 #include "rocprofvis_stickynote.h"
 #include <cstring>
 #include <vector>
@@ -215,10 +214,10 @@ AnnotationsView::ShowStickyNoteEditPopup()
     if(!m_show_sticky_edit_popup) return;
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32     popup_bg     = settings.GetColor(Colors::kFillerColor);
-    ImU32     border_color = settings.GetColor(Colors::kBorderColor);
-    ImU32     text_color   = settings.GetColor(Colors::kRulerTextColor);
-    ImU32     button_color = settings.GetColor(Colors::kHighlightChart);
+    ImU32            popup_bg     = settings.GetColor(Colors::kFillerColor);
+    ImU32            border_color = settings.GetColor(Colors::kBorderColor);
+    ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
+    ImU32            button_color = settings.GetColor(Colors::kHighlightChart);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
@@ -330,10 +329,10 @@ AnnotationsView::ShowStickyNotePopup()
     }
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32     popup_bg     = settings.GetColor(Colors::kFillerColor);
-    ImU32     border_color = settings.GetColor(Colors::kBorderColor);
-    ImU32     text_color   = settings.GetColor(Colors::kRulerTextColor);
-    ImU32     button_color = settings.GetColor(Colors::kHighlightChart);
+    ImU32            popup_bg     = settings.GetColor(Colors::kFillerColor);
+    ImU32            border_color = settings.GetColor(Colors::kBorderColor);
+    ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
+    ImU32            button_color = settings.GetColor(Colors::kHighlightChart);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));

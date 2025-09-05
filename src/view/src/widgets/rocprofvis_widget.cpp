@@ -129,7 +129,8 @@ VFixedContainer::Render()
     size_t len = m_children.size();
     for(size_t i = 0; i < len; ++i)
     {
-        if(!m_children[i].m_visible) {
+        if(!m_children[i].m_visible || !m_children[i].m_item)
+        {
             continue;
         }
 
@@ -141,10 +142,7 @@ VFixedContainer::Render()
         ImGui::BeginChild(ImGui::GetID(static_cast<int>(i)),
                           ImVec2(m_children[i].m_width, m_children[i].m_height),
                           m_children[i].m_child_flags, m_children[i].m_window_flags);
-        if(m_children[i].m_item)
-        {
-            m_children[i].m_item->Render();
-        }
+        m_children[i].m_item->Render();
         ImGui::EndChild();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);

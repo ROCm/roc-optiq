@@ -33,7 +33,6 @@ constexpr char*  TAB_CONTAINER_SRC_NAME   = "MainTabContainer";
 constexpr char*  ABOUT_DIALOG_NAME        = "About##_dialog";
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
-constexpr float TOOL_BAR_HEIGHT = 40.0f;
 
 // For testing DataProvider
 void
@@ -111,7 +110,8 @@ AppWindow::Init()
     LayoutItem status_bar_item(-1, STATUS_BAR_HEIGHT);
     status_bar_item.m_item = std::make_shared<RocWidget>();
     LayoutItem main_area_item(-1, -STATUS_BAR_HEIGHT);
-    LayoutItem tool_bar_item(-1, TOOL_BAR_HEIGHT);
+    LayoutItem tool_bar_item(-1, 0);
+    tool_bar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
 
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->SetEventSourceName(TAB_CONTAINER_SRC_NAME);

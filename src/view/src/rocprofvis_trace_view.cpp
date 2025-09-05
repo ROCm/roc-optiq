@@ -435,7 +435,8 @@ TraceView::RenderToolbar()
     ImVec2 frame_padding = style.FramePadding;
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
-    ImGui::BeginChild("Toolbar", ImVec2(0, 0), ImGuiChildFlags_None | ImGuiChildFlags_FrameStyle);
+    ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle);
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
     ImGui::AlignTextToFramePadding();

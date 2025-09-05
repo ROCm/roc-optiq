@@ -34,13 +34,11 @@ SideBar::Render()
     if(!m_track_topology->Dirty())
     {
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, DEFAULT_WINDOW_PADDING);
-        ImGui::PushStyleColor(
-            ImGuiCol_Header, m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
-        ImGui::PushStyleColor(
-            ImGuiCol_HeaderHovered,
-            m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive, m_settings.GetColor(static_cast<int>(
-                                                         Colors::kTransparent)));
+        ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              m_settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              m_settings.GetColor(Colors::kTransparent));
 
         const TopologyModel& topology = m_track_topology->GetTopology();
         if(ImGui::CollapsingHeader("Project", CATEGORY_HEADER_FLAGS))
@@ -207,13 +205,12 @@ void
 SideBar::RenderTrackItem(const int& index)
 {
     rocprofvis_graph_t& graph = (*m_graphs)[index];
-    
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+                          m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+                          m_settings.GetColor(Colors::kTransparent));
     bool display = graph.display;
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
     if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
@@ -247,13 +244,11 @@ SideBar::RenderTrackItem(const int& index)
     bool highlight = graph.selected;
     if(!highlight)
     {
-        ImGui::PushStyleColor(
-            ImGuiCol_Button, m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
-        ImGui::PushStyleColor(
-            ImGuiCol_ButtonHovered,
-            m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, m_settings.GetColor(static_cast<int>(
-                                                         Colors::kTransparent)));
+        ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              m_settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                              m_settings.GetColor(Colors::kTransparent));
     }
     if(!display)
     {
@@ -276,26 +271,25 @@ SideBar::RenderTrackItem(const int& index)
     // Lets you know if component is in Frame. Dev purpose only.
     if(graph.chart->IsInViewVertical())
     {
-        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
-                               static_cast<int>(Colors::kTextSuccess))),
-                           "Component Is: ");
+        ImGui::TextColored(
+            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
+            "Component Is: ");
 
         ImGui::SameLine();
-        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
-                               static_cast<int>(Colors::kTextSuccess))),
-                           "In Frame ");
+        ImGui::TextColored(
+            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
+            "In Frame ");
     }
     else
     {
-        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
-                               static_cast<int>(Colors::kTextSuccess))),
-                           "Component Is: ");
+        ImGui::TextColored(
+            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
+            "Component Is: ");
 
         ImGui::SameLine();
-        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(
-                               m_settings.GetColor(static_cast<int>(Colors::kTextError))),
-                           "Not In Frame by: %f units.",
-                           graph.chart->GetDistanceToView());
+        ImGui::TextColored(
+            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextError)),
+            "Not In Frame by: %f units.", graph.chart->GetDistanceToView());
     }
 #endif
 }

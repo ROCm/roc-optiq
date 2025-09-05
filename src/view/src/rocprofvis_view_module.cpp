@@ -34,14 +34,14 @@ rocprofvis_view_destroy()
 void
 rocprofvis_view_set_dpi(float dpi)
 {
-    SettingsManager& setting = SettingsManager::GetInstance();
-    if(setting.IsDPIBasedScaling())
+    SettingsManager& settings = SettingsManager::GetInstance();
+    if(settings.GetUserSettings().display_settings.dpi_based_scaling)
     {
-        if(setting.GetDPI() != dpi)
+        if(settings.GetDPI() != dpi)
         {
-            setting.SetDPI(dpi);
-            int ideal_dpi_index = setting.GetFontManager().GetFontSizeIndexForDPI(dpi);
-            setting.GetFontManager().SetFontSize(ideal_dpi_index);
+            settings.SetDPI(dpi);
+            FontManager& fonts = settings.GetFontManager();
+            fonts.SetFontSize(fonts.GetDPIScaledFontIndex());
         }
     }
 }

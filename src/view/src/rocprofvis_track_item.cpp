@@ -303,8 +303,7 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     m_is_resize = false;
 
     ImGui::SetCursorPos(ImVec2(0, parent_size.y - m_resize_grip_thickness));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, m_resize_grip_thickness),
                       false);
 

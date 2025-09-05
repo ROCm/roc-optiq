@@ -2,9 +2,10 @@
 
 #pragma once
 
-#include "rocprofvis_font_manager.h"
 #include "imgui.h"
 #include "json.h"
+#include "rocprofvis_font_manager.h"
+#include <array>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -16,11 +17,15 @@ namespace View
 
 typedef struct DisplaySettings
 {
-    float dpi;
-    bool  use_dark_mode;
-    bool  dpi_based_scaling;
-    int   font_size_index;
+    bool use_dark_mode;
+    bool dpi_based_scaling;
+    int  font_size_index;
 } DisplaySettings;
+
+typedef struct UserSettings
+{
+    DisplaySettings display_settings;
+} UserSettings;
 
 enum class Colors
 {
@@ -72,6 +77,15 @@ enum class Colors
     __kLastColor
 };
 
+constexpr char* JSON_KEY_VERSION = "version";
+
+constexpr char* JSON_KEY_GROUP_SETTINGS            = "settings";
+constexpr char* JSON_KEY_SETTINGS_CATEGORY_DISPLAY = "display_settings";
+
+constexpr char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
+constexpr char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
+constexpr char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
+
 class SettingsManager
 {
 public:
@@ -82,33 +96,20 @@ public:
 
     bool Init();
 
-    void  SetDPI(float DPI);
-    float GetDPI();
+    // Fonts
+    FontManager& GetFontManager();
+    void         SetDPI(float DPI);
+    float        GetDPI();
 
-    ImU32                     GetColor(int value) const;
+    // Styling
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel();
+    const ImGuiStyle&         GetDefaultStyle() const;
 
-    void LoadSettings(const std::string& filename);
-    void SaveSettings(const std::string& filename, const DisplaySettings& settings);
-    void SerializeDisplaySettings(jt::Json& parent, const DisplaySettings& settings);
-    bool DeserializeDisplaySettings(jt::Json&        saved_results,
-                                    DisplaySettings& saved_settings);
-    std::filesystem::path GetStandardConfigPath(const std::string& filename);
-
-    void DarkMode();
-    void LightMode();
-    bool IsDarkMode() const;
-
-    FontManager& GetFontManager();
-
-    const ImGuiStyle& GetDefaultStyle() const { return m_default_style; }
-    bool              IsDPIBasedScaling() const;
-    void              SetDPIBasedScaling(bool enabled);
-    DisplaySettings&  GetCurrentDisplaySettings();
-    void              RestoreDisplaySettings(const DisplaySettings& settings);
-    DisplaySettings&  GetInitialDisplaySettings();
-    void              SetDisplaySettings(const DisplaySettings& settings);
+    // User settings
+    UserSettings&       GetUserSettings();
+    const UserSettings& GetDefaultUserSettings() const;
+    void                ApplyUserSettings();
 
 private:
     SettingsManager();
@@ -117,15 +118,24 @@ private:
     void InitStyling();
     void ApplyColorStyling();
 
-    std::vector<ImU32> m_color_store;
-    std::vector<ImU32> m_flame_color_wheel;
+    void                  LoadSettingsJson();
+    void                  SaveSettingsJson();
+    std::filesystem::path GetStandardConfigPath();
+
+    void SerializeDisplaySettings(jt::Json& json);
+    void DeserializeDisplaySettings(jt::Json& json);
+    void ApplyUserDisplaySettings();
+
+    const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
     FontManager m_font_manager;
     ImGuiStyle  m_default_style;
-    DisplaySettings
-        m_display_settings_initial;  // Needed if you want to truly go back to factory
-                                     // settings after changing settings and saving.
-    DisplaySettings m_display_settings_current;
+    float       m_display_dpi;
+
+    UserSettings m_usersettings_default;
+    UserSettings m_usersettings;
+
+    std::filesystem::path m_json_path;
 };
 
 }  // namespace View

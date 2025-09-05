@@ -64,7 +64,7 @@ AppWindow::DestroyInstance()
 
 AppWindow::AppWindow()
 : m_main_view(nullptr)
-, m_settings_panel(std::make_unique<SettingsPanel>())
+, m_settings_panel(nullptr)
 , m_tab_container(nullptr)
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
@@ -98,10 +98,10 @@ AppWindow::Init()
     ImPlot::CreateContext();
 
     SettingsManager& settings = SettingsManager::GetInstance();
-    bool             result   = settings.Init();
+    bool result = settings.Init();
     if(result)
     {
-        settings.LoadSettings("settings_application.json");
+        m_settings_panel = std::make_unique<SettingsPanel>(settings);
     }
     else
     {
@@ -259,11 +259,7 @@ AppWindow::Render()
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
-
-    if(m_settings_panel->IsOpen())
-    {
-        m_settings_panel->Render();
-    }
+    m_settings_panel->Render();
 
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
@@ -411,7 +407,7 @@ AppWindow::RenderEditMenu(Project* project)
         ImGui::Separator();
         if(ImGui::MenuItem("Preferences"))
         {
-            m_settings_panel->SetOpen(true);
+            m_settings_panel->Show();
         }
         ImGui::EndMenu();
     }

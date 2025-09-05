@@ -212,12 +212,11 @@ bool
 EventsView::XButton()
 {
     bool clicked = false;
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+                          m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+                          m_settings.GetColor(Colors::kTransparent));
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
     clicked = ImGui::SmallButton(ICON_X_CIRCLED);
     ImGui::PopFont();

@@ -173,7 +173,7 @@ TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
                                           m_v_max_x, m_scroll_position_y);
     m_annotations_view.ShowStickyNotePopup();
     m_annotations_view.ShowStickyNoteEditPopup();
-    m_stop_user_interaction =
+    m_stop_user_interaction |=
         m_annotations_view.Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns);
 }
 
@@ -507,7 +507,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(
            window_position, ImVec2(window_position.x + m_graph_size.x - scrollbar_width,
-                                   window_position.y + m_graph_size.y)))
+                                   window_position.y + m_graph_size.y)) &&
+       !m_stop_user_interaction)
     {
         float cursor_screen_percentage =
             (mouse_position.x - window_position.x) / m_graph_size.x;
@@ -1294,6 +1295,8 @@ TimelineView::RenderGraphPoints()
         m_v_max_x       = m_v_min_x + m_v_width;
         m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
 
+        m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
+
         // RenderGrid();
         RenderGridAlt();
         RenderGraphView();
@@ -1361,6 +1364,8 @@ TimelineView::RenderGraphPoints()
             m_artifical_scrollbar_active = false;
         }
 
+        m_stop_user_interaction = false;
+
         ImGui::EndChild();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);
@@ -1386,8 +1391,7 @@ TimelineView::HandleTopSurfaceTouch()
                                    container_pos.y + m_graph_size.y);
 
     bool is_mouse_in_sidebar = ImGui::IsMouseHoveringRect(sidebar_min, sidebar_max);
-    bool is_mouse_in_graph = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max) &&
-                             !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
+    bool is_mouse_in_graph   = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
 
     ImGuiIO& io = ImGui::GetIO();
 

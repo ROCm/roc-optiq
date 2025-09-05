@@ -147,7 +147,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
     }
     else
     {
-        rectColor = m_settings.GetColor(static_cast<int>(Colors::kFlameChartColor));
+        rectColor = m_settings.GetColor(Colors::kFlameChartColor);
     }
 
     float rounding = 2.0f;
@@ -156,8 +156,8 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
     if(chart_item.selected)
     {
         draw_list->AddRect(rectMin - ImVec2(2, 2), rectMax + ImVec2(2, 2),
-                           m_settings.GetColor(static_cast<int>(Colors::kEventHighlight)),
-                           rounding + 2, 0, HIGHLIGHT_THICKNESS + 2);
+                           m_settings.GetColor(Colors::kEventHighlight), rounding + 2, 0,
+                           HIGHLIGHT_THICKNESS + 2);
     }
 
     if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH)
@@ -165,12 +165,12 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         draw_list->PushClipRect(rectMin, rectMax, true);
         ImVec2 textPos =
             ImVec2(rectMin.x + m_text_padding.x, rectMin.y + m_text_padding.y);
-        draw_list->AddText(textPos,
-                           m_settings.GetColor(static_cast<int>(Colors::kTextMain)),
+        draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
                            chart_item.event.m_name.c_str());
         draw_list->PopClipRect();
     }
-    if(ImGui::IsMouseHoveringRect(rectMin, rectMax))
+    if(ImGui::IsMouseHoveringRect(rectMin, rectMax) &&
+       !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
     {
         // Select on click
         if(!m_selection_changed && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -181,8 +181,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id);
             m_selection_changed = true;
         }
-    
-        if(!m_has_drawn_tool_tip) {
+
+        if(!m_has_drawn_tool_tip)
+        {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
             ImGui::BeginTooltip();
             ImGui::Text("%s", chart_item.event.m_name.c_str());
@@ -205,7 +206,7 @@ FlameTrackItem::RenderChart(float graph_width)
     auto colorCount = m_settings.GetColorWheel().size();
     ROCPROFVIS_ASSERT(colorCount > 0);
 
-    int color_index = 0;
+    int color_index      = 0;
     m_has_drawn_tool_tip = false;
     for(ChartItem& item : m_chart_items)
     {

@@ -680,12 +680,11 @@ bool
 InfiniteScrollTable::XButton(const char* id) const
 {
     bool clicked = false;
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+                          m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          m_settings.GetColor(static_cast<int>(Colors::kTransparent)));
+                          m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
     ImGui::PushID(id);

@@ -72,8 +72,8 @@ LineTrackItem::LineTrackRender(float graph_width)
     float tooltip_x     = 0;
     float tooltip_y     = 0;
     bool  show_tooltip  = false;
-    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kLineChartColor));
-    ImU32 generic_red   = m_settings.GetColor(static_cast<int>(Colors::kGridRed));
+    ImU32 generic_black = m_settings.GetColor(Colors::kLineChartColor);
+    ImU32 generic_red   = m_settings.GetColor(Colors::kGridRed);
 
     for(int i = 1; i < m_data.size(); i++)
     {
@@ -206,8 +206,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
     float tooltip_x     = 0;
     float tooltip_y     = 0;
     bool  show_tooltip  = false;
-    ImU32 generic_black = m_settings.GetColor(static_cast<int>(Colors::kLineChartColor));
-    ImU32 generic_red   = m_settings.GetColor(static_cast<int>(Colors::kGridRed));
+    ImU32 generic_black = m_settings.GetColor(Colors::kLineChartColor);
+    ImU32 generic_red   = m_settings.GetColor(Colors::kGridRed);
 
     for(int i = 1; i < m_data.size(); i++)
     {
@@ -236,7 +236,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
         draw_list->AddRectFilled(
             point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
-            m_settings.GetColor(static_cast<int>(Colors::kLineChartColor)), 2.0f);
+            m_settings.GetColor(Colors::kLineChartColor), 2.0f);
     }
     if(show_tooltip == true)
     {

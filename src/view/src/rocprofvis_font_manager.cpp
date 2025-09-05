@@ -4,6 +4,7 @@
 #include "icons/rocprofvis_icon_data.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#include "rocprofvis_settings_manager.h"
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -15,19 +16,16 @@ namespace RocProfVis
 namespace View
 {
 
-FontManager::FontManager()
-: m_font_sizes(
-      { 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 20, 21, 23, 25, 27, 29, 33 })
-{}
+constexpr float      BASE_FONT_SIZE       = 13.0f;
+constexpr std::array FONT_AVAILABLE_SIZES = { 7.0f,  8.0f,  9.0f,  10.0f, 11.0f,
+                                              12.0f, 13.0f, 14.0f, 15.0f, 16.0f,
+                                              17.0f, 18.0f, 19.0f, 20.0f, 21.0f,
+                                              23.0f, 25.0f, 27.0f, 29.0f, 33.0f };
+
+FontManager::FontManager() {}
 
 FontManager::~FontManager() {}
 
-std::vector<float>
-FontManager::GetFontSizes()
-{
-    // Return a vector of font sizes
-    return m_font_sizes;
-}
 ImFont*
 FontManager::GetIconFontByIndex(int idx)
 {
@@ -35,12 +33,6 @@ FontManager::GetIconFontByIndex(int idx)
     return m_all_icon_fonts[idx];
 }
 
-int
-FontManager::GetCurrentFontSizeIndex()
-{
-    // Return the font size index for the default font type
-    return m_font_size_indices[static_cast<int>(FontType::kDefault)];
-}
 ImFont*
 FontManager::GetFontByIndex(int idx)
 {
@@ -49,22 +41,22 @@ FontManager::GetFontByIndex(int idx)
 }
 
 int
-FontManager::GetFontSizeIndexForDPI(float dpi)
+FontManager::GetDPIScaledFontIndex()
 {
     // DPI returns the dots per inch of the display. Essentially, it is a scaling factor.
-
-    float base_size = 13.0f;
     float scaled_size =
-        base_size *
-        std::sqrt(dpi);  // Scale the base size by the square root of DPI. SQRT needed to
-                         // prevent scaling from becoming comical on higher res monitors.
+        BASE_FONT_SIZE *
+        std::sqrt(SettingsManager::GetInstance()
+                      .GetDPI());  // Scale the base size by the square root of DPI. SQRT
+                                   // needed to prevent scaling from becoming comical on
+                                   // higher res monitors.
 
     // Find the index of the font size closest to scaled_size
     int best_index = 0;
-    for(int i = 1; i < static_cast<int>(std::size(m_font_sizes)); ++i)
+    for(int i = 1; i < m_all_fonts.size(); i++)
     {
-        if(std::abs(m_font_sizes[i] - scaled_size) <
-           std::abs(m_font_sizes[best_index] - scaled_size))
+        if(std::abs(m_all_fonts[i]->FontSize - scaled_size) <
+           std::abs(m_all_fonts[i - 1]->FontSize - scaled_size))
             best_index = i;
     }
 
@@ -72,30 +64,29 @@ FontManager::GetFontSizeIndexForDPI(float dpi)
 }
 
 void
-FontManager::SetFontSize(int size_index)
+FontManager::SetFontSize(int idx)
 {
     constexpr int num_types = static_cast<int>(FontType::__kLastFont);
 
     if(num_types == 0 || m_all_fonts.empty()) return;
-    if(size_index < 0 || size_index >= static_cast<int>(m_all_fonts.size())) return;
+    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return;
 
     for(int i = 0; i < num_types; ++i)
     {
-        m_font_size_indices[i] = size_index;
-        m_fonts[i]             = m_all_fonts[size_index];
-        m_icon_fonts[i]        = m_all_icon_fonts[size_index];
+        m_fonts[i]      = m_all_fonts[idx];
+        m_icon_fonts[i] = m_all_icon_fonts[idx];
     }
 
     ImGui::GetIO().FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
 }
+
 bool
 FontManager::Init()
 {
     ImGuiIO& io = ImGui::GetIO();
     m_fonts.clear();
 
-    const int     num_sizes = static_cast<int>(m_font_sizes.size());
-    constexpr int num_types = static_cast<int>(FontType::__kLastFont);
+    const int num_types = static_cast<int>(FontType::__kLastFont);
 
 #ifdef _WIN32
     const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
@@ -119,9 +110,7 @@ FontManager::Init()
     }
 
     // Prepare storage
-    m_all_fonts.clear();
-    m_all_fonts.resize(num_sizes, nullptr);
-    m_font_size_indices.resize(num_types, 6);  // Default to index 6 (12pt)
+    m_all_fonts.resize(FONT_AVAILABLE_SIZES.size(), nullptr);
     m_fonts.resize(num_types);
     m_icon_fonts.resize(num_types);
 
@@ -129,42 +118,35 @@ FontManager::Init()
     config.FontDataOwnedByAtlas = false;
 
     // Load all font sizes once
-    for(int sz = 0; sz < num_sizes; ++sz)
+    for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)
     {
         ImFont* font = nullptr;
-        if(font_path) font = io.Fonts->AddFontFromFileTTF(font_path, m_font_sizes[sz]);
+        if(font_path)
+            font = io.Fonts->AddFontFromFileTTF(font_path, FONT_AVAILABLE_SIZES[sz]);
         if(!font) font = io.Fonts->AddFontDefault();
         m_all_fonts[sz] = font;
     }
 
     // Load all icon fonts
-    m_all_icon_fonts.clear();
-    m_all_icon_fonts.resize(num_sizes, nullptr);
+    m_all_icon_fonts.resize(FONT_AVAILABLE_SIZES.size(), nullptr);
 
-    for(int sz = 0; sz < num_sizes; ++sz)
+    for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)
     {
         ImFont* icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
-            &icon_font_compressed_data, icon_font_compressed_size, m_font_sizes[sz],
-            &config, icon_ranges);
+            &icon_font_compressed_data, icon_font_compressed_size,
+            FONT_AVAILABLE_SIZES[sz], &config, icon_ranges);
         m_all_icon_fonts[sz] = icon_font;
     }
 
-    // Set m_fonts to currently selected size for each FontType
-    for(int type = 0; type < num_types; ++type)
-    {
-        int sz_idx    = m_font_size_indices[type];
-        m_fonts[type] = m_all_fonts[sz_idx];
-
-        // Load icon font for each type at the selected size
-        m_icon_fonts[type] = io.Fonts->AddFontFromMemoryCompressedTTF(
-            &icon_font_compressed_data, icon_font_compressed_size, m_font_sizes[sz_idx],
-            &config, icon_ranges);
-    }
-
-    // Set ImGui's default font
-    io.FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
     return io.Fonts->Build();
 }
+
+const std::vector<ImFont*>
+FontManager::GetAvailableFonts() const
+{
+    return m_all_fonts;
+}
+
 ImFont*
 FontManager::GetFont(FontType font_type)
 {

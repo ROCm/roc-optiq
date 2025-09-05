@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <list>
 
 namespace RocProfVis
 {
@@ -26,6 +27,11 @@ typedef struct UserSettings
 {
     DisplaySettings display_settings;
 } UserSettings;
+
+typedef struct InternalSettings
+{
+    std::list<std::string> recent_files;
+} InternalSettings;
 
 enum class Colors
 {
@@ -79,12 +85,15 @@ enum class Colors
 
 constexpr char* JSON_KEY_VERSION = "version";
 
-constexpr char* JSON_KEY_GROUP_SETTINGS            = "settings";
-constexpr char* JSON_KEY_SETTINGS_CATEGORY_DISPLAY = "display_settings";
+constexpr char* JSON_KEY_GROUP_SETTINGS             = "settings";
+constexpr char* JSON_KEY_SETTINGS_CATEGORY_DISPLAY  = "display_settings";
+constexpr char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
+
+constexpr char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
 
 class SettingsManager
 {
@@ -111,6 +120,11 @@ public:
     const UserSettings& GetDefaultUserSettings() const;
     void                ApplyUserSettings();
 
+    // Internal settings
+    InternalSettings&   GetInternalSettings();
+    void AddRecentFile(const std::string& file_path);
+    void RemoveRecentFile(const std::string& file_path);
+
 private:
     SettingsManager();
     ~SettingsManager();
@@ -126,14 +140,18 @@ private:
     void DeserializeDisplaySettings(jt::Json& json);
     void ApplyUserDisplaySettings();
 
+    void SerializeInternalSettings(jt::Json& json);
+    void DeserializeInternalSettings(jt::Json& json);
+
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
     FontManager m_font_manager;
     ImGuiStyle  m_default_style;
     float       m_display_dpi;
 
-    UserSettings m_usersettings_default;
-    UserSettings m_usersettings;
+    UserSettings     m_usersettings_default;
+    UserSettings     m_usersettings;
+    InternalSettings m_internalsettings;
 
     std::filesystem::path m_json_path;
 };

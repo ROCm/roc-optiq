@@ -50,6 +50,8 @@ private:
     void RenderFileDialogs();
     void RenderAboutDialog();
 
+    void OpenFile(std::string file_path);
+
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
 

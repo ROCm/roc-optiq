@@ -115,7 +115,8 @@ const std::vector<ImU32> FLAME_COLORS = {
     IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
     IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
 };
-constexpr char* SETTINGS_FILE_NAME = "settings_application.json";
+constexpr char*  SETTINGS_FILE_NAME = "settings_application.json";
+constexpr size_t RECENT_FILES_LIMIT = 5;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -294,6 +295,7 @@ SettingsManager::SaveSettingsJson()
     jt::Json settings_json;
     settings_json[JSON_KEY_VERSION] = "1.0";
 
+    SerializeInternalSettings(settings_json);
     SerializeDisplaySettings(settings_json);
 
     std::ofstream out_file(m_json_path);
@@ -319,6 +321,7 @@ SettingsManager::LoadSettingsJson()
 
     if(result.second[JSON_KEY_GROUP_SETTINGS].isObject())
     {
+        DeserializeInternalSettings(result.second);
         DeserializeDisplaySettings(result.second);
     }
     else
@@ -400,7 +403,7 @@ SettingsManager::SettingsManager()
 , m_json_path(GetStandardConfigPath())
 {}
 
-SettingsManager::~SettingsManager() {}
+SettingsManager::~SettingsManager() { SaveSettingsJson(); }
 
 bool
 SettingsManager::Init()
@@ -464,6 +467,62 @@ const ImGuiStyle&
 SettingsManager::GetDefaultStyle() const
 {
     return m_default_style;
+}
+
+InternalSettings&
+SettingsManager::GetInternalSettings()
+{
+    return m_internalsettings;
+}
+
+void
+SettingsManager::AddRecentFile(const std::string& file_path)
+{
+    RemoveRecentFile(file_path);
+    m_internalsettings.recent_files.emplace_front(file_path);
+    if(m_internalsettings.recent_files.size() > RECENT_FILES_LIMIT)
+    {
+        m_internalsettings.recent_files.pop_back();
+    }
+}
+
+void
+SettingsManager::RemoveRecentFile(const std::string& file_path)
+{
+    auto pos = std::find(m_internalsettings.recent_files.begin(),
+                         m_internalsettings.recent_files.end(), file_path);
+    if(pos != m_internalsettings.recent_files.end())
+    {
+        m_internalsettings.recent_files.erase(pos);
+    }
+}
+
+void
+SettingsManager::SerializeInternalSettings(jt::Json& json)
+{
+    jt::Json& is = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_INTERNAL];
+    int       i  = 0;
+    for(const std::string& file : m_internalsettings.recent_files)
+    {
+        is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES][i++] = file;
+    }
+}
+
+void
+SettingsManager::DeserializeInternalSettings(jt::Json& json)
+{
+    jt::Json& is = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_INTERNAL];
+    if(is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES].isArray())
+    {
+        for(jt::Json& entry :
+            is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES].getArray())
+        {
+            if(entry.isString())
+            {
+                m_internalsettings.recent_files.emplace_back(entry.getString());
+            }
+        }
+    }
 }
 
 }  // namespace View

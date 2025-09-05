@@ -301,34 +301,8 @@ AppWindow::RenderFileDialogs()
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {
-            std::filesystem::path file_path(
-                ImGuiFileDialog::Instance()->GetFilePathName());
-
-            std::string file_path_str = file_path.string();
-
-            spdlog::info("Opening file: {}", file_path_str);
-
-            std::unique_ptr<Project> project = std::make_unique<Project>();
-            switch(project->Open(file_path_str))
-            {
-                case Project::OpenResult::Success:
-                {
-                    m_tab_container->AddTab(TabItem{ project->GetName(), project->GetID(),
-                                                     project->GetView(), true });
-                    m_projects[project->GetID()] = std::move(project);
-                    break;
-                }
-                case Project::OpenResult::Duplicate:
-                {
-                    // File is already opened, just switch to that tab
-                    m_tab_container->SetActiveTab(file_path_str);
-                    break;
-                }
-                default:
-                {
-                    break;
-                }
-            }
+            OpenFile(std::filesystem::path(ImGuiFileDialog::Instance()->GetFilePathName())
+                         .string());
         }
         ImGuiFileDialog::Instance()->Close();
     }
@@ -362,6 +336,36 @@ AppWindow::RenderFileDialogs()
 }
 
 void
+AppWindow::OpenFile(std::string file_path)
+{
+    spdlog::info("Opening file: {}", file_path);
+
+    std::unique_ptr<Project> project = std::make_unique<Project>();
+    switch(project->Open(file_path))
+    {
+        case Project::OpenResult::Success:
+        {
+            m_tab_container->AddTab(TabItem{ project->GetName(), project->GetID(),
+                                             project->GetView(), true });
+            m_projects[project->GetID()] = std::move(project);
+            SettingsManager::GetInstance().AddRecentFile(file_path);
+            break;
+        }
+        case Project::OpenResult::Duplicate:
+        {
+            // File is already opened, just switch to that tab
+            m_tab_container->SetActiveTab(file_path);
+            break;
+        }
+        default:
+        {
+            SettingsManager::GetInstance().RemoveRecentFile(file_path);
+            break;
+        }
+    }
+}
+
+void
 AppWindow::RenderFileMenu(Project* project)
 {
     if(ImGui::BeginMenu("File"))
@@ -388,6 +392,20 @@ AppWindow::RenderFileMenu(Project* project)
         {
             ImGuiFileDialog::Instance()->OpenDialog(PROJECT_SAVE_DIALOG_NAME,
                                                     "Save as Project", ".rpv");
+        }
+        ImGui::Separator();
+        const std::list<std::string> recent_files =
+            SettingsManager::GetInstance().GetInternalSettings().recent_files;
+        if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))
+        {
+            for(const std::string& file : recent_files)
+            {
+                if(ImGui::MenuItem(file.c_str(), nullptr))
+                {
+                    OpenFile(file);
+                }
+            }
+            ImGui::EndMenu();
         }
         ImGui::EndMenu();
     }

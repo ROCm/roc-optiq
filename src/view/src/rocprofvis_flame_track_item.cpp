@@ -49,70 +49,38 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
         m_request_random_color = m_project_settings.ColorEvents();
     }
 }
+
 void
 FlameTrackItem::RenderMetaDataAreaExpand()
 {
-    int    padding_size_for_chart = 35;
-    ImVec2 child_size             = ImGui::GetWindowSize();
-    float  control_width          = 90.0f;
-    float  control_height         = 28.0f;
-    float  padding                = 3.0f;
+    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 button_size = ImVec2(28.0f, 28.0f);   
+    ImVec2 pos = ImVec2(window_size.x - button_size.x, window_size.y - button_size.y);
 
-    // Position at bottom right
-    ImGui::SetCursorPos(ImVec2(child_size.x - control_width - padding,
-                               child_size.y - control_height - padding));
-
-    ImGui::BeginGroup();
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetColorU32(ImGuiCol_FrameBg));
-    ImGui::BeginChild("TrackHeightControl", ImVec2(control_width, control_height), true,
-                      ImGuiWindowFlags_NoScrollbar);
-
-    ImGui::SetCursorPos(ImVec2(8, 4));
+    ImGui::SetCursorPos(pos);
 
     int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
-
-    ImGui::BeginDisabled(visible_levels == m_min_level);
-    if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
+    if(m_max_level != m_min_level)
     {
-        m_track_height = 75;  // Default track height defined in parent class.
+        if(visible_levels < m_max_level)
+        {
+            if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
+            {
+                m_track_height = m_max_level * m_level_height + m_level_height;
+            }
+            if(ImGui::IsItemHovered())
+                ImGui::SetTooltip("Expand track to maximum height");
+        }
+        else
+        {
+            if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
+            {
+                m_track_height = 75;  // Default track height defined in parent class.
+            }
+            if(ImGui::IsItemHovered())
+                ImGui::SetTooltip("Contract track to minimum height");
+        }
     }
-    ImGui::EndDisabled();
-
-    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to minimum height");
-
-    // Prevents user from expanding to a silly height;
-    if(visible_levels > m_max_level + 2)
-    {
-        m_track_height = m_max_level * m_level_height + m_level_height;
-    }
-
-    // Prevents user from contracting to a silly height;
-    if(visible_levels < m_min_level + 2)
-    {
-        m_track_height = 75;  // Default track height defined in parent class.
-    }
-
-    // Number in the middle
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(39);
-    ImGui::Text("%d", visible_levels);
-    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Current track height");
-
-    // Down arrow (expand)
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(64);
-
-    if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
-    {
-        m_track_height = m_max_level * m_level_height + m_level_height;
-    }
-    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to maximum height");
-
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar();
-    ImGui::EndGroup();
 }
 FlameTrackItem::~FlameTrackItem()
 {

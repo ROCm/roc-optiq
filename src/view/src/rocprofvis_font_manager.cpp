@@ -4,6 +4,7 @@
 #include "icons/rocprofvis_icon_data.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include <algorithm>
 #include <cmath>
@@ -78,6 +79,8 @@ FontManager::SetFontSize(int idx)
     }
 
     ImGui::GetIO().FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kFontSizeChanged)));
 }
 
 bool

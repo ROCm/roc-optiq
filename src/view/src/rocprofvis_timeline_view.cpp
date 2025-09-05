@@ -38,8 +38,8 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_pixels_per_ns(0.0f)
 , m_meta_map_made(false)
 , m_previous_scroll_position(0.0f)
-, m_ruler_height(30)
-, m_ruler_padding(0.0f, 4.0f)
+, m_ruler_height(ImGui::GetTextLineHeightWithSpacing())
+, m_ruler_padding(4)
 , m_unload_track_distance(1000.0f)
 , m_sidebar_size(400)
 , m_resize_activity(false)
@@ -50,6 +50,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
                          TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(static_cast<uint64_t>(-1))
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
+, m_font_changed_token(static_cast<uint64_t>(-1))
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0)
 , m_v_width(0)
@@ -87,11 +88,14 @@ TimelineView::TimelineView(DataProvider&                      dp,
     m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         scroll_to_track_handler);
-}
 
-void
-TimelineView::TimelineOptions()
-{}
+    auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        m_recalculate_grid_interval = true;
+        m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
+    };
+    m_font_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+}
 
 void
 TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
@@ -209,6 +213,8 @@ TimelineView::~TimelineView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         m_scroll_to_track_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), m_new_track_token);
 }
 
 void
@@ -521,9 +527,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
         constexpr float label_padding = 4.0f;
         ImVec2 rect_pos1 = ImVec2(mouse_position.x, screen_pos.y + container_size.y -
-                                                        label_size.y - m_ruler_padding.y);
+                                                        label_size.y - m_ruler_padding);
         ImVec2 rect_pos2 = ImVec2(mouse_position.x + label_size.x + label_padding * 2,
-                                  screen_pos.y + container_size.y - m_ruler_padding.y);
+                                  screen_pos.y + container_size.y - m_ruler_padding);
         ImVec2 text_pos  = ImVec2(rect_pos1.x + label_padding, rect_pos1.y);
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
@@ -531,7 +537,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), text);
         draw_list->AddLine(
             ImVec2(mouse_position.x, screen_pos.y),
-            ImVec2(mouse_position.x, screen_pos.y + container_size.y - m_ruler_padding.y),
+            ImVec2(mouse_position.x, screen_pos.y + container_size.y - m_ruler_padding),
             m_settings.GetColor(Colors::kGridColor), 2.0f);
 
         // Code below is for detecting range selection by double clicking
@@ -713,7 +719,7 @@ TimelineView::RenderGridAlt()
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
             ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
                                        cursor_position.y + content_size.y - label_size.y -
-                                           m_ruler_padding.y);
+                                           m_ruler_padding);
             draw_list->AddText(label_pos, m_settings.GetColor(Colors::kRulerTextColor),
                                label.c_str());
         }
@@ -856,7 +862,7 @@ TimelineView::RenderGrid()
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
             ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
                                        cursor_position.y + content_size.y - label_size.y -
-                                           m_ruler_padding.y);
+                                           m_ruler_padding);
             draw_list->AddText(label_pos, m_settings.GetColor(Colors::kGridColor),
                                label.c_str());
         }

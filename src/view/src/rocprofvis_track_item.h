@@ -49,9 +49,9 @@ public:
     virtual void       Render(float width);
     virtual void       Update();
     const std::string& GetName();
-
-    virtual void UpdateMovement(float zoom, double time_offset_ns, double& min_x,
-                                double& max_x, double scale_x, float m_scroll_position);
+    virtual void       RenderMetaDataAreaExpand() = 0;
+    virtual void       UpdateMovement(float zoom, double time_offset_ns, double& min_x,
+                                      double& max_x, double scale_x, float m_scroll_position);
 
     bool IsInViewVertical();
     void SetInViewVertical(bool in_view);

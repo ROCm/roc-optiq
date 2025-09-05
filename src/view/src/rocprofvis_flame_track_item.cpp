@@ -7,6 +7,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "spdlog/spdlog.h"
+#include <cmath>
 #include <limits>
 #include <string>
 #include <unordered_set>
@@ -23,12 +24,14 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
                                int id, std::string name, double zoom,
                                double time_offset_ns, double min_x, double max_x,
-                               double scale_x)
+                               double scale_x, float level_min, float level_max)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_request_random_color(true)
 , m_text_padding(ImVec2(4.0f, 2.0f))
 , m_level_height(40.0f)
 , m_timeline_selection(timeline_selection)
+, m_min_level(level_min)
+, m_max_level(level_max)
 , m_selection_changed(false)
 , m_has_drawn_tool_tip(false)
 , m_project_settings(dp.GetTraceFilePath(), *this)
@@ -46,7 +49,71 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
         m_request_random_color = m_project_settings.ColorEvents();
     }
 }
+void
+FlameTrackItem::RenderMetaDataAreaExpand()
+{
+    int    padding_size_for_chart = 35;
+    ImVec2 child_size             = ImGui::GetWindowSize();
+    float  control_width          = 90.0f;
+    float  control_height         = 28.0f;
+    float  padding                = 3.0f;
 
+    // Position at bottom right
+    ImGui::SetCursorPos(ImVec2(child_size.x - control_width - padding,
+                               child_size.y - control_height - padding));
+
+    ImGui::BeginGroup();
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetColorU32(ImGuiCol_FrameBg));
+    ImGui::BeginChild("TrackHeightControl", ImVec2(control_width, control_height), true,
+                      ImGuiWindowFlags_NoScrollbar);
+
+    ImGui::SetCursorPos(ImVec2(8, 4));
+
+    int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
+
+    ImGui::BeginDisabled(visible_levels == m_min_level);
+    if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
+    {
+        m_track_height = 75;  // Default track height defined in parent class.
+    }
+    ImGui::EndDisabled();
+
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to minimum height");
+
+    // Prevents user from expanding to a silly height;
+    if(visible_levels > m_max_level + 2)
+    {
+        m_track_height = m_max_level * m_level_height + m_level_height;
+    }
+
+    // Prevents user from contracting to a silly height;
+    if(visible_levels < m_min_level + 2)
+    {
+        m_track_height = 75;  // Default track height defined in parent class.
+    }
+
+    // Number in the middle
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(39);
+    ImGui::Text("%d", visible_levels);
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Current track height");
+
+    // Down arrow (expand)
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(64);
+
+    if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
+    {
+        m_track_height = m_max_level * m_level_height + m_level_height;
+    }
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to maximum height");
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    ImGui::EndGroup();
+}
 FlameTrackItem::~FlameTrackItem()
 {
     EventManager::GetInstance()->Unsubscribe(
@@ -181,8 +248,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id);
             m_selection_changed = true;
         }
-    
-        if(!m_has_drawn_tool_tip) {
+
+        if(!m_has_drawn_tool_tip)
+        {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
             ImGui::BeginTooltip();
             ImGui::Text("%s", chart_item.event.m_name.c_str());
@@ -205,7 +273,7 @@ FlameTrackItem::RenderChart(float graph_width)
     auto colorCount = m_settings.GetColorWheel().size();
     ROCPROFVIS_ASSERT(colorCount > 0);
 
-    int color_index = 0;
+    int color_index      = 0;
     m_has_drawn_tool_tip = false;
     for(ChartItem& item : m_chart_items)
     {

@@ -283,6 +283,7 @@ TrackItem::RenderMetaArea()
         }
         ImGui::PopStyleVar();
         RenderMetaAreaScale();
+        RenderMetaDataAreaExpand();
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();

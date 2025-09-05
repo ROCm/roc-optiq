@@ -159,9 +159,9 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
                       false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
-    ImGui::BeginChild("UI Interactive Content", ImVec2(m_graph_size.x, total_height),
-                      false,
-                      window_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::BeginChild(
+        "UI Interactive Content", ImVec2(m_graph_size.x, total_height), false,
+        window_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
@@ -1275,10 +1275,11 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                graph.chart =
-                    new FlameTrackItem(m_data_provider, m_timeline_selection,
-                                       track_info->id, track_info->name, m_zoom,
-                                       m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
+
+                graph.chart = new FlameTrackItem(
+                    m_data_provider, m_timeline_selection, track_info->id,
+                    track_info->name, m_zoom, m_view_time_offset_ns, m_min_x, m_max_x,
+                    scale_x, track_info->min_value, track_info->max_value);
                 graph.graph_type = rocprofvis_graph_t::TYPE_FLAMECHART;
                 break;
             }

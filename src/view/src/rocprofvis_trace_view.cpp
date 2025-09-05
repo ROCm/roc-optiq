@@ -463,7 +463,7 @@ TraceView::RenderFlowControls() {
     FlowDisplayMode mode = current_mode;
 
     ImFont* icon_font =
-        Settings::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
     ImGui::PushFont(icon_font);
     
     ImGui::BeginGroup();

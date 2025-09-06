@@ -11,15 +11,12 @@ namespace RocProfVis
 namespace View
 {
 
+
 TimelineSelection::TimelineSelection(DataProvider& dp)
 : m_selected_range_start(INVALID_SELECTION_TIME)
 , m_selected_range_end(INVALID_SELECTION_TIME)
-, m_last_event_id(0)
-, m_last_event_track_id(0)
-, m_last_event_selected(true)
 , m_tracks_changed(false)
 , m_range_changed(false)
-, m_events_changed(false)
 , m_data_provider(dp)
 {}
 
@@ -37,14 +34,6 @@ TimelineSelection::Update()
                 m_data_provider.GetTraceFilePath()));
         m_tracks_changed = false;
         m_range_changed  = false;
-    }
-    if(m_events_changed)
-    {
-        EventManager::GetInstance()->AddEvent(
-            std::make_shared<EventSelectionChangedEvent>(
-                m_last_event_id, m_last_event_track_id, m_last_event_selected,
-                m_data_provider.GetTraceFilePath()));
-        m_events_changed = false;
     }
 }
 
@@ -72,6 +61,21 @@ TimelineSelection::UnselectTrack(rocprofvis_graph_t& graph)
         m_selected_track_ids.erase(graph.chart->GetID());
         m_tracks_changed = true;
     }
+}
+
+void
+TimelineSelection::UnselectAllTracks(std::vector<rocprofvis_graph_t>& graphs)
+{
+    for(auto& graph : graphs)
+    {
+        graph.selected = false;
+        if(graph.chart)
+        {
+            graph.chart->SetSelected(false);
+        }
+    }
+    m_selected_track_ids.clear();
+    m_tracks_changed = true;
 }
 
 void
@@ -132,10 +136,7 @@ TimelineSelection::SelectTrackEvent(uint64_t track_id, uint64_t event_id)
     if(m_selected_event_ids.count(event_id) == 0)
     {
         m_selected_event_ids.insert(event_id);
-        m_last_event_selected = true;
-        m_last_event_id       = event_id;
-        m_last_event_track_id = track_id;
-        m_events_changed      = true;
+        SendEventSelectionChanged(event_id, track_id, true);
     }
 }
 
@@ -145,11 +146,14 @@ TimelineSelection::UnselectTrackEvent(uint64_t track_id, uint64_t event_id)
     if(m_selected_event_ids.count(event_id) > 0)
     {
         m_selected_event_ids.erase(event_id);
-        m_last_event_selected = false;
-        m_last_event_id       = event_id;
-        m_last_event_track_id = track_id;
-        m_events_changed      = true;
+        SendEventSelectionChanged(event_id, track_id, false);
     }
+}
+
+bool
+TimelineSelection::HasSelectedTracks() const
+{
+    return !m_selected_track_ids.empty();
 }
 
 bool
@@ -170,6 +174,28 @@ TimelineSelection::EventSelected(uint64_t event_id) const
 {
     return m_selected_event_ids.count(event_id) > 0;
 }
+
+void
+TimelineSelection::UnselectAllEvents()
+{
+    m_selected_event_ids.clear();
+    SendEventSelectionChanged(INVALID_SELECTION_ID, INVALID_SELECTION_ID, false, true);
+}
+
+void
+TimelineSelection::SendEventSelectionChanged(uint64_t event_id, uint64_t track_id,
+                                             bool selected, bool all)
+{
+    EventManager::GetInstance()->AddEvent(std::make_shared<EventSelectionChangedEvent>(
+        event_id, track_id, selected, m_data_provider.GetTraceFilePath(), all));
+}
+
+bool
+TimelineSelection::HasSelectedEvents() const
+{
+    return !m_selected_event_ids.empty();
+}
+
 
 }  // namespace View
 }  // namespace RocProfVis

@@ -40,6 +40,12 @@ Project::GetView()
     return m_view;
 }
 
+Project::TraceType
+Project::GetTraceType() const
+{
+    return m_trace_type;
+}
+
 bool
 Project::IsProject() const
 {

@@ -101,6 +101,10 @@ TraceView::TraceView()
                 m_data_provider.FetchEvent(event->GetEventTrackID(),
                                                event->GetEventID());
             }
+            else if(event->IsBatch())
+            {
+                m_data_provider.FreeAllEvents();
+            }
             else
             {
                 m_data_provider.FreeEvent(event->GetEventID());
@@ -422,11 +426,41 @@ TraceView::SaveSelection(const std::string& file_path)
     return false;
 }
 
+std::shared_ptr<TimelineSelection> TraceView::GetTimelineSelection() const
+{
+    return m_timeline_selection;
+}
+
 std::shared_ptr<RocWidget>
 TraceView::GetToolbar()
 {
     return m_tool_bar;
 };
+
+void
+TraceView::RenderEditMenuOptions()
+{
+    if(ImGui::MenuItem("Unselect All Tracks", nullptr, false,
+                       m_timeline_selection && m_timeline_selection->HasSelectedTracks()))
+    {
+        if(m_timeline_selection)
+        {
+            std::vector<rocprofvis_graph_t> *graphs = m_timeline_view->GetGraphs();
+            if(graphs) {
+                m_timeline_selection->UnselectAllTracks(*graphs);
+            }
+        }
+    }
+    if(ImGui::MenuItem("Unselect All Events", nullptr, false,
+                       m_timeline_selection && m_timeline_selection->HasSelectedEvents()))
+    {
+        if(m_timeline_selection)
+        {
+            m_timeline_selection->UnselectAllEvents();
+        }
+    }
+    ImGui::Separator();
+}
 
 void
 TraceView::RenderToolbar()
@@ -463,7 +497,7 @@ TraceView::RenderFlowControls() {
     FlowDisplayMode mode = current_mode;
 
     ImFont* icon_font =
-        Settings::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
     ImGui::PushFont(icon_font);
     
     ImGui::BeginGroup();

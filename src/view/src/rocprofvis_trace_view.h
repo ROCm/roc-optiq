@@ -55,7 +55,10 @@ public:
     
     bool SaveSelection(const std::string& file_path);
 
+    std::shared_ptr<TimelineSelection> GetTimelineSelection() const;
     std::shared_ptr<RocWidget> GetToolbar() override;
+    void RenderEditMenuOptions() override;
+
 private:
     void HandleHotKeys();
     void RenderToolbar();

@@ -15,6 +15,8 @@ public:
     virtual ~RootView() {};
 
     virtual std::shared_ptr<RocWidget> GetToolbar() {return nullptr;};
+
+    virtual void RenderEditMenuOptions() {};
 };
 
 }

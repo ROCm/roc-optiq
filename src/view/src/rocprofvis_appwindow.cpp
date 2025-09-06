@@ -400,8 +400,21 @@ AppWindow::RenderFileMenu(Project* project)
 void
 AppWindow::RenderEditMenu(Project* project)
 {
+    Project::TraceType trace_type =
+        project == nullptr ? Project::Undefined : project->GetTraceType();
+
     if(ImGui::BeginMenu("Edit"))
     {
+        // Trace project specific menu options
+        if(trace_type == Project::System)
+        {
+            std::shared_ptr<RootView> root_view =
+                    std::dynamic_pointer_cast<RootView>(project->GetView());
+
+            if(root_view) {
+                root_view->RenderEditMenuOptions();
+            }
+        }
         if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
                            project && project->IsTrimSaveAllowed()))
         {

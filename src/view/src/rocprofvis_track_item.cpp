@@ -25,6 +25,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_scale_x(scale_x)
 , m_name(name)
 , m_track_height(75.0f)
+, m_track_default_height(75.0f)
 , m_track_content_height(0.0f)
 , m_min_track_height(10.0f)
 , m_is_in_view_vertical(false)

@@ -66,11 +66,11 @@ bool
 AnnotationsViewProjectSettings::Valid() const
 {
     // Check that "annotations" exists and is an array
-    if(!m_settings_json.contains("annotations") ||
-       !m_settings_json["annotations"].isArray())
+    if(!m_settings_json.contains(JSON_KEY_ANNOTATIONS) ||
+       !m_settings_json[JSON_KEY_ANNOTATIONS].isArray())
         return false;
 
-    auto annotations = m_settings_json["annotations"];
+    auto annotations = m_settings_json[JSON_KEY_ANNOTATIONS];
 
     for(auto& note_json : annotations.getArray())
     {

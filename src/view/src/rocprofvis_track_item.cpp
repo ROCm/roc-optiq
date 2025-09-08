@@ -12,7 +12,6 @@ namespace View
 {
 
 float            TrackItem::s_metadata_width = 400.0f;
-constexpr ImVec2 DEFAULT_WINDOW_PADDING      = ImVec2(4.0f, 4.0f);
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                      double time_offset_ns, double& min_x, double& max_x, double scale_x)
@@ -265,7 +264,8 @@ TrackItem::RenderMetaArea()
         ImGui::Button(ICON_GEAR);
         ImGui::PopFont();
         ImGui::PopStyleColor(3);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, 
+                            m_settings.GetDefaultStyle().WindowPadding);
         if(ImGui::BeginItemTooltip())
         {
             ImGui::TextUnformatted("Track Options");

@@ -8,13 +8,14 @@
 #include <array>
 #include <filesystem>
 #include <string>
-#include <vector>
 #include <list>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+enum class TimeFormat;
 
 typedef struct DisplaySettings
 {
@@ -23,9 +24,15 @@ typedef struct DisplaySettings
     int  font_size_index;
 } DisplaySettings;
 
+typedef struct UnitSettings
+{
+    TimeFormat time_format;
+} UnitSettings;
+
 typedef struct UserSettings
 {
     DisplaySettings display_settings;
+    UnitSettings    unit_settings;
 } UserSettings;
 
 typedef struct InternalSettings
@@ -83,15 +90,24 @@ enum class Colors
     __kLastColor
 };
 
+enum class TimeFormat
+{
+    kTimecode,
+    kNanoseconds,
+};
+
 constexpr char* JSON_KEY_VERSION = "version";
 
 constexpr char* JSON_KEY_GROUP_SETTINGS             = "settings";
 constexpr char* JSON_KEY_SETTINGS_CATEGORY_DISPLAY  = "display_settings";
+constexpr char* JSON_KEY_SETTINGS_CATEGORY_UNITS    = "units";
 constexpr char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
+
+constexpr char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
 constexpr char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
 
@@ -118,12 +134,12 @@ public:
     // User settings
     UserSettings&       GetUserSettings();
     const UserSettings& GetDefaultUserSettings() const;
-    void                ApplyUserSettings();
+    void                ApplyUserSettings(bool save_json = false);
 
     // Internal settings
-    InternalSettings&   GetInternalSettings();
-    void AddRecentFile(const std::string& file_path);
-    void RemoveRecentFile(const std::string& file_path);
+    InternalSettings& GetInternalSettings();
+    void              AddRecentFile(const std::string& file_path);
+    void              RemoveRecentFile(const std::string& file_path);
 
 private:
     SettingsManager();
@@ -140,6 +156,9 @@ private:
     void DeserializeDisplaySettings(jt::Json& json);
     void ApplyUserDisplaySettings();
 
+    void SerializeUnitSettings(jt::Json& json);
+    void DeserializeUnitSettings(jt::Json& json);
+
     void SerializeInternalSettings(jt::Json& json);
     void DeserializeInternalSettings(jt::Json& json);
 
@@ -149,9 +168,9 @@ private:
     ImGuiStyle  m_default_style;
     float       m_display_dpi;
 
-    UserSettings     m_usersettings_default;
-    UserSettings     m_usersettings;
-    InternalSettings m_internalsettings;
+    const UserSettings m_usersettings_default;
+    UserSettings       m_usersettings;
+    InternalSettings   m_internalsettings;
 
     std::filesystem::path m_json_path;
 };

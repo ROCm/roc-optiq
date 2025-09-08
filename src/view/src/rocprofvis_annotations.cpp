@@ -74,9 +74,12 @@ AnnotationsViewProjectSettings::Valid() const
 
     for(const auto& note_json : annotations.getArray())
     {
-        if(!note_json.contains("time_ns") || !note_json.contains("y_offset") ||
-           !note_json.contains("size_x") || !note_json.contains("size_y") ||
-           !note_json.contains("text") || !note_json.contains("title"))
+        if(!note_json.contains(JSON_KEY_ANNOTATION_TIME_NS) ||
+           !note_json.contains(JSON_KEY_ANNOTATION_Y_OFFSET) ||
+           !note_json.contains(JSON_KEY_ANNOTATION_SIZE_X) ||
+           !note_json.contains(JSON_KEY_ANNOTATION_SIZE_Y) ||
+           !note_json.contains(JSON_KEY_ANNOTATION_TEXT) ||
+           !note_json.contains(JSON_KEY_ANNOTATION_TITLE))
         {
             jt::Json sticky_json;
             if(!sticky_json[JSON_KEY_ANNOTATION_TIME_NS].isNumber() ||
@@ -218,28 +221,41 @@ AnnotationsView::ShowStickyNoteEditPopup()
     ImGui::PushStyleColor(ImGuiCol_Border, border_color);
 
     ImGui::OpenPopup("Edit Sticky Note");
-    if(ImGui::BeginPopupModal("Edit Sticky Note", nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize))
-    {
-        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
+    ImGui::SetNextWindowSize(ImVec2(300, 420),
+                             ImGuiCond_Once);  // Initial size, user can resize
+    if(ImGui::BeginPopupModal("Edit Sticky Note", nullptr, ImGuiWindowFlags_NoCollapse))
+    {
         ImGui::Text("Edit Sticky Note");
         ImGui::Separator();
-        ImGui::Dummy(ImVec2(0, 8));
+        ImGui::Spacing();
 
         ImGui::Text("Title:");
+        ImGui::SetNextItemWidth(-FLT_MIN);  // Full width
         ImGui::InputText("##StickyTitle", m_sticky_title, IM_ARRAYSIZE(m_sticky_title),
                          ImGuiInputTextFlags_AutoSelectAll);
-        ImGui::Dummy(ImVec2(0, 4));
+
+        ImGui::Spacing();
 
         ImGui::Text("Text:");
+        ImVec2 text_box_size = ImVec2(ImGui::GetContentRegionAvail().x,
+                                      ImGui::GetContentRegionAvail().y - 60);
         ImGui::InputTextMultiline("##StickyText", m_sticky_text,
-                                  IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100),
+                                  IM_ARRAYSIZE(m_sticky_text), text_box_size,
                                   ImGuiInputTextFlags_AllowTabInput);
 
-        ImGui::PopStyleColor();
+        ImGui::Spacing();
 
-        ImGui::Dummy(ImVec2(0, 12));
+        float button_width       = 80.0f;
+        float spacing            = ImGui::GetStyle().ItemSpacing.x;
+        float total_button_width = button_width * 3 + spacing * 2;
+        float cursor_x           = ImGui::GetContentRegionAvail().x - total_button_width;
+        if(cursor_x > 0) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cursor_x);
 
         ImGui::PushStyleColor(ImGuiCol_Button, button_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
@@ -247,11 +263,12 @@ AnnotationsView::ShowStickyNoteEditPopup()
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                               settings.GetColor(Colors::kHighlightChart));
 
-        bool save_clicked = ImGui::Button("Save", ImVec2(80, 0));
+        bool save_clicked = ImGui::Button("Save", ImVec2(button_width, 0));
         ImGui::SameLine();
-        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(80, 0));
+        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(button_width, 0));
         ImGui::SameLine();
-        bool delete_clicked = ImGui::Button("Delete", ImVec2(80, 0));
+        bool delete_clicked = ImGui::Button("Delete", ImVec2(button_width, 0));
+
         ImGui::PopStyleColor(3);
 
         if(save_clicked)
@@ -283,7 +300,6 @@ AnnotationsView::ShowStickyNoteEditPopup()
                 if(note.GetID() == m_edit_sticky_id)
                 {
                     m_sticky_notes.erase(m_sticky_notes.begin() + count);
-
                     break;
                 }
                 count++;
@@ -295,6 +311,8 @@ AnnotationsView::ShowStickyNoteEditPopup()
 
         ImGui::EndPopup();
     }
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
 
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
@@ -333,28 +351,42 @@ AnnotationsView::ShowStickyNotePopup()
     ImGui::PushStyleColor(ImGuiCol_Border, border_color);
 
     ImGui::OpenPopup("Annotation");
-    if(ImGui::BeginPopupModal("Annotation", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-    {
-        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
+    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
+    ImGui::SetNextWindowSize(ImVec2(300, 420),
+                             ImGuiCond_Once);  // Initial size, user can resize
+    if(ImGui::BeginPopupModal("Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
+    {
         ImGui::Text("Add Sticky Note");
         ImGui::Separator();
-        ImGui::Dummy(ImVec2(0, 8));
+        ImGui::Spacing();
 
         ImGui::Text("Title:");
+        ImGui::SetNextItemWidth(-FLT_MIN);  // Make the input take the full width
         ImGui::InputText("##StickyTitle", m_sticky_title, IM_ARRAYSIZE(m_sticky_title),
                          ImGuiInputTextFlags_AutoSelectAll);
-        ImGui::Dummy(ImVec2(0, 4));
+
+        ImGui::Spacing();
 
         ImGui::Text("Text:");
-
+        ImVec2 text_box_size = ImVec2(ImGui::GetContentRegionAvail().x,
+                                      ImGui::GetContentRegionAvail().y - 60);
         ImGui::InputTextMultiline("##StickyText", m_sticky_text,
-                                  IM_ARRAYSIZE(m_sticky_text), ImVec2(290, 100),
+                                  IM_ARRAYSIZE(m_sticky_text), text_box_size,
                                   ImGuiInputTextFlags_AllowTabInput);
 
-        ImGui::PopStyleColor();
+        ImGui::Spacing();
 
-        ImGui::Dummy(ImVec2(0, 12));
+        // Button row, right-aligned
+        float button_width       = 100.0f;
+        float spacing            = ImGui::GetStyle().ItemSpacing.x;
+        float total_button_width = button_width * 2 + spacing;
+        float cursor_x           = ImGui::GetContentRegionAvail().x - total_button_width;
+        if(cursor_x > 0) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cursor_x);
 
         ImGui::PushStyleColor(ImGuiCol_Button, button_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
@@ -362,11 +394,12 @@ AnnotationsView::ShowStickyNotePopup()
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                               settings.GetColor(Colors::kHighlightChart));
 
-        bool save_clicked = ImGui::Button("Save", ImVec2(100, 0));
+        bool save_clicked = ImGui::Button("Save", ImVec2(button_width, 0));
         ImGui::SameLine();
-        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(100, 0));
+        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(button_width, 0));
 
         ImGui::PopStyleColor(3);
+
         if(save_clicked)
         {
             AddSticky(m_sticky_time_ns, m_sticky_y_offset, ImVec2(180, 80),
@@ -382,6 +415,8 @@ AnnotationsView::ShowStickyNotePopup()
 
         ImGui::EndPopup();
     }
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
 
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);

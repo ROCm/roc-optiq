@@ -149,6 +149,16 @@ constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN = "color_min";
 constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX = "color_max";
 constexpr char* JSON_KEY_TIMELINE_TRACK_BOX_PLOT        = "box_plot";
 
+constexpr const char* JSON_KEY_ANNOTATIONS         = "annotations";
+constexpr const char* JSON_KEY_ANNOTATION_TIME_NS  = "time_ns";
+constexpr const char* JSON_KEY_ANNOTATION_Y_OFFSET = "y_offset";
+constexpr const char* JSON_KEY_ANNOTATION_SIZE_X   = "size_x";
+constexpr const char* JSON_KEY_ANNOTATION_SIZE_Y   = "size_y";
+constexpr const char* JSON_KEY_ANNOTATION_TEXT     = "text";
+constexpr const char* JSON_KEY_ANNOTATION_TITLE    = "title";
+constexpr const char* JSON_KEY_ANNOTATION_ID       = "id";
+
+
 class ProjectSetting
 {
 public:

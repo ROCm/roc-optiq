@@ -23,13 +23,13 @@ public:
     void SetTitle(std::string title);
     void SetText(std::string title);
 
-    double             GetTimeNs();
-    float              GetYOffset();
-    ImVec2             GetSize();
-   std::string& GetText();
-    std::string&       GetTitle();
+    double       GetTimeNs() const;
+    float        GetYOffset() const;
+    ImVec2       GetSize() const;
+    const std::string& GetText() const;
+    const std::string& GetTitle() const;
 
-    int  GetID();
+    int  GetID() const;
     void SetTimeNs(double t) { m_time_ns = t; }
     void SetYOffset(float y) { m_y_offset = y; }
 

@@ -6,6 +6,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_stickynote.h"
+#include <string>
 #include <vector>
 
 namespace RocProfVis
@@ -34,7 +35,7 @@ class AnnotationsViewProjectSettings;
 class AnnotationsView
 {
 public:
-    AnnotationsView(DataProvider& dp);
+    AnnotationsView(const std::string& project_id);
     ~AnnotationsView();
 
     void Clear();

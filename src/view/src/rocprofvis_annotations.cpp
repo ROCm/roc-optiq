@@ -21,33 +21,20 @@ void
 AnnotationsViewProjectSettings::FromJson()
 {
     m_annotations_view.Clear();
-    std::vector<jt::Json>& annotation_vec = m_settings_json["annotations"].getArray();
+    std::vector<jt::Json>& annotation_vec =
+        m_settings_json[JSON_KEY_ANNOTATIONS].getArray();
 
     for(auto& note_json : annotation_vec)
     {
-        double time_ns = 0.0;
-        if(note_json.contains("time_ns") && note_json["time_ns"].isDouble())
-            time_ns = note_json["time_ns"].getDouble();
-
-        float y_offset = 0.0f;
-        if(note_json.contains("y_offset") && note_json["y_offset"].isDouble())
-            y_offset = static_cast<float>(note_json["y_offset"].getDouble());
-
-        float size_x = 100.0f;
-        if(note_json.contains("size_x") && note_json["size_x"].isLong())
-            size_x = static_cast<float>(note_json["size_x"].getLong());
-
-        float size_y = 50.0f;
-        if(note_json.contains("size_y") && note_json["size_y"].isLong())
-            size_y = static_cast<float>(note_json["size_y"].getLong());
-
-        std::string text = "<missing>";
-        if(note_json.contains("text") && note_json["text"].isString())
-            text = note_json["text"].getString();
-
-        std::string title = "<untitled>";
-        if(note_json.contains("title") && note_json["title"].isString())
-            title = note_json["title"].getString();
+        double time_ns = note_json[JSON_KEY_ANNOTATION_TIME_NS].getDouble();
+        float  y_offset =
+            static_cast<float>(note_json[JSON_KEY_ANNOTATION_Y_OFFSET].getDouble());
+        float size_x =
+            static_cast<float>(note_json[JSON_KEY_ANNOTATION_SIZE_X].getLong());
+        float size_y =
+            static_cast<float>(note_json[JSON_KEY_ANNOTATION_SIZE_Y].getLong());
+        std::string text  = note_json[JSON_KEY_ANNOTATION_TEXT].getString();
+        std::string title = note_json[JSON_KEY_ANNOTATION_TITLE].getString();
 
         ImVec2 size(size_x, size_y);
         m_annotations_view.AddSticky(time_ns, y_offset, size, text, title);
@@ -57,24 +44,21 @@ AnnotationsViewProjectSettings::FromJson()
 void
 AnnotationsViewProjectSettings::ToJson()
 {
-    const std::vector<StickyNote>& notes = m_annotations_view.GetStickyNotes();
+    const std::vector<StickyNote>& notes  = m_annotations_view.GetStickyNotes();
+    m_settings_json[JSON_KEY_ANNOTATIONS] = jt::Json();
 
-    // Create an empty array for annotations
-    m_settings_json["annotations"] = jt::Json();
-
-    // Add each sticky note as an object in the array
     for(size_t i = 0; i < notes.size(); ++i)
     {
         jt::Json sticky_json;
-        sticky_json["time_ns"]  = notes[i].GetTimeNs();
-        sticky_json["y_offset"] = notes[i].GetYOffset();
-        sticky_json["size_x"]   = notes[i].GetSize().x;
-        sticky_json["size_y"]   = notes[i].GetSize().y;
-        sticky_json["text"]     = notes[i].GetText();
-        sticky_json["title"]    = notes[i].GetTitle();
-        sticky_json["id"]       = notes[i].GetID();
+        sticky_json[JSON_KEY_ANNOTATION_TIME_NS]  = notes[i].GetTimeNs();
+        sticky_json[JSON_KEY_ANNOTATION_Y_OFFSET] = notes[i].GetYOffset();
+        sticky_json[JSON_KEY_ANNOTATION_SIZE_X]   = notes[i].GetSize().x;
+        sticky_json[JSON_KEY_ANNOTATION_SIZE_Y]   = notes[i].GetSize().y;
+        sticky_json[JSON_KEY_ANNOTATION_TEXT]     = notes[i].GetText();
+        sticky_json[JSON_KEY_ANNOTATION_TITLE]    = notes[i].GetTitle();
+        sticky_json[JSON_KEY_ANNOTATION_ID]       = notes[i].GetID();
 
-        m_settings_json["annotations"][i] = sticky_json;
+        m_settings_json[JSON_KEY_ANNOTATIONS][i] = sticky_json;
     }
 }
 
@@ -86,8 +70,8 @@ AnnotationsViewProjectSettings::Valid() const
        !m_settings_json["annotations"].isArray())
         return false;
 
-    const jt::Json& annotations = m_settings_json["annotations"];
-    // Use the public array_value member to iterate
+    auto annotations = m_settings_json["annotations"];
+
     for(const auto& note_json : annotations.getArray())
     {
         if(!note_json.contains("time_ns") || !note_json.contains("y_offset") ||
@@ -100,8 +84,8 @@ AnnotationsViewProjectSettings::Valid() const
     return true;
 }
 
-AnnotationsView::AnnotationsView(DataProvider& dp)
-: m_project_settings(dp.GetTraceFilePath(), *this)
+AnnotationsView::AnnotationsView(const std::string& project_id)
+: m_project_settings(project_id, *this)
 {
     if(m_project_settings.Valid())
     {

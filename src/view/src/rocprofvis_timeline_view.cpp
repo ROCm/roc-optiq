@@ -69,8 +69,8 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
-, m_annotations_view(m_data_provider)
- 
+, m_annotations_view(dp.GetTraceFilePath())
+
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -161,9 +161,9 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
                       false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
-    ImGui::BeginChild("UI Interactive Content", ImVec2(m_graph_size.x, total_height),
-                      false,
-                      window_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::BeginChild(
+        "UI Interactive Content", ImVec2(m_graph_size.x, total_height), false,
+        window_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();

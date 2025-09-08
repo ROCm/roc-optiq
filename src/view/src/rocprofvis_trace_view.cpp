@@ -467,22 +467,25 @@ TraceView::RenderToolbar()
 {
     ImGuiStyle& style = ImGui::GetStyle();
     ImVec2 frame_padding = style.FramePadding;
+    float frame_rounding = style.FrameRounding;
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle);
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, frame_rounding);
     ImGui::AlignTextToFramePadding();
 
     //Toolbar Controls
     RenderFlowControls();
 
     //pop content style
-    ImGui::PopStyleVar(); 
+    ImGui::PopStyleVar(2); 
     ImGui::EndChild();
     //pop child window style
-    ImGui::PopStyleVar();
+    ImGui::PopStyleVar(2);
 }
 
 void

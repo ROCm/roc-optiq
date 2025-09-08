@@ -1,17 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_infinite_scroll_table.h"
-#include "rocprofvis_settings_manager.h"
-#include "rocprofvis_font_manager.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_font_manager.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
-
+#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-#include <sstream>
-
-#include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include <sstream>
 
 namespace RocProfVis
 {

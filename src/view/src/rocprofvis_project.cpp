@@ -55,15 +55,23 @@ Project::IsProject() const
 Project::OpenResult
 Project::Open(std::string& file_path)
 {
-    OpenResult  result   = Failed;
-    std::string file_ext = std::filesystem::path(file_path).extension().string();
-    if(file_ext == ".rpv")
+    OpenResult result = Failed;
+    if(std::filesystem::exists(file_path))
     {
-        result = OpenProject(file_path);
+        std::string file_ext = std::filesystem::path(file_path).extension().string();
+        if(file_ext == ".rpv")
+        {
+            result = OpenProject(file_path);
+        }
+        else
+        {
+            result = OpenTrace(file_path);
+        }
     }
     else
     {
-        result = OpenTrace(file_path);
+        AppWindow::GetInstance()->ShowMessageDialog(
+                "Error", "File does not exist: " + file_path);
     }
     return result;
 }

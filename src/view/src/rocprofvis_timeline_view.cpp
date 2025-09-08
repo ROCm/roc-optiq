@@ -125,10 +125,6 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
-    ImVec2      clip_min        = window_position;
-    ImVec2      clip_max = ImVec2(m_graph_size.x + window_position.x, m_graph_size.y);
-
-    draw_list->PushClipRect(clip_min, clip_max, true);
 
     m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
                          m_track_height_total);

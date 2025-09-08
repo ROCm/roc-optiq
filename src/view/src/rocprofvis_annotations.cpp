@@ -72,26 +72,26 @@ AnnotationsViewProjectSettings::Valid() const
 
     auto annotations = m_settings_json["annotations"];
 
-    for(const auto& note_json : annotations.getArray())
+    for(auto& note_json : annotations.getArray())
     {
         if(!note_json.contains(JSON_KEY_ANNOTATION_TIME_NS) ||
-           !note_json.contains(JSON_KEY_ANNOTATION_Y_OFFSET) ||
-           !note_json.contains(JSON_KEY_ANNOTATION_SIZE_X) ||
-           !note_json.contains(JSON_KEY_ANNOTATION_SIZE_Y) ||
-           !note_json.contains(JSON_KEY_ANNOTATION_TEXT) ||
-           !note_json.contains(JSON_KEY_ANNOTATION_TITLE))
-        {
-            jt::Json sticky_json;
-            if(!sticky_json[JSON_KEY_ANNOTATION_TIME_NS].isNumber() ||
-               !sticky_json[JSON_KEY_ANNOTATION_Y_OFFSET].isNumber() ||
-               !sticky_json[JSON_KEY_ANNOTATION_SIZE_X].isNumber() ||
-               !sticky_json[JSON_KEY_ANNOTATION_SIZE_Y].isNumber() ||
-               !sticky_json[JSON_KEY_ANNOTATION_TEXT].isString() ||
-               !sticky_json[JSON_KEY_ANNOTATION_TITLE].isString())
-            {
-                return false;
-            }
-        }
+           !note_json[JSON_KEY_ANNOTATION_TIME_NS].isNumber())
+            return false;
+        if(!note_json.contains(JSON_KEY_ANNOTATION_Y_OFFSET) ||
+           !note_json[JSON_KEY_ANNOTATION_Y_OFFSET].isNumber())
+            return false;
+        if(!note_json.contains(JSON_KEY_ANNOTATION_SIZE_X) ||
+           !note_json[JSON_KEY_ANNOTATION_SIZE_X].isNumber())
+            return false;
+        if(!note_json.contains(JSON_KEY_ANNOTATION_SIZE_Y) ||
+           !note_json[JSON_KEY_ANNOTATION_SIZE_Y].isNumber())
+            return false;
+        if(!note_json.contains(JSON_KEY_ANNOTATION_TEXT) ||
+           !note_json[JSON_KEY_ANNOTATION_TEXT].isString())
+            return false;
+        if(!note_json.contains(JSON_KEY_ANNOTATION_TITLE) ||
+           !note_json[JSON_KEY_ANNOTATION_TITLE].isString())
+            return false;
     }
     return true;
 }

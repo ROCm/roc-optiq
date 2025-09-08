@@ -206,12 +206,14 @@ ScrollToTrackEvent::GetTrackID() const
 
 EventSelectionChangedEvent::EventSelectionChangedEvent(uint64_t event_id,
                                                        uint64_t track_id, bool selected,
-                                                       const std::string& trace_path)
+                                                       const std::string& trace_path,
+                                                       bool               batch)
 : RocEvent(static_cast<int>(RocEvents::kTimelineEventSelectionChanged))
 , m_event_id(event_id)
 , m_event_track_id(track_id)
 , m_selected(selected)
 , m_trace_path(trace_path)
+, m_is_batch(batch)
 {
     m_event_type = RocEventType::kTimelineEventSelectionChangedEvent;
 }
@@ -239,6 +241,13 @@ EventSelectionChangedEvent::GetTracePath()
 {
     return m_trace_path;
 }
+
+bool
+EventSelectionChangedEvent::IsBatch() const
+{
+    return m_is_batch;
+}
+
 const int
 StickyNoteEvent::GetID()
 {

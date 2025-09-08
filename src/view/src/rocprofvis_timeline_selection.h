@@ -21,27 +21,37 @@ public:
     ~TimelineSelection();
 
     /*
-     * Notifies event manager if selections have changed.
+     * Notifies event manager if track selections have changed.
      */
     void Update();
 
     void SelectTrack(rocprofvis_graph_t& graph);
     void UnselectTrack(rocprofvis_graph_t& graph);
     void ToggleSelectTrack(rocprofvis_graph_t& graph);
+    void UnselectAllTracks(std::vector<rocprofvis_graph_t>& graphs);
+    bool HasSelectedTracks() const;
 
     void SelectTimeRange(double start_ts, double end_ts);
     bool GetSelectedTimeRange(double& start_ts_out, double& end_ts_out) const;
     void ClearTimeRange();
     bool HasValidTimeRangeSelection() const;
-    static constexpr double INVALID_SELECTION_TIME =
-        std::numeric_limits<double>::lowest();
+
 
     void SelectTrackEvent(uint64_t track_id, uint64_t event_id);
     void UnselectTrackEvent(uint64_t track_id, uint64_t event_id);
     bool GetSelectedEvents(std::vector<uint64_t>& event_ids);
     bool EventSelected(uint64_t event_id) const;
+    void UnselectAllEvents();
+    bool HasSelectedEvents() const;
+
+    static constexpr double INVALID_SELECTION_TIME =
+        std::numeric_limits<double>::lowest();
+    static constexpr uint64_t INVALID_SELECTION_ID = std::numeric_limits<uint64_t>::max();
 
 private:
+    void SendEventSelectionChanged(uint64_t event_id, uint64_t track_id, bool selected,
+                                   bool all = false);
+
     DataProvider& m_data_provider;
 
     std::unordered_set<uint64_t> m_selected_track_ids;
@@ -49,13 +59,9 @@ private:
     double                       m_selected_range_end;
 
     std::unordered_set<uint64_t> m_selected_event_ids;
-    uint64_t                     m_last_event_id;
-    uint64_t                     m_last_event_track_id;
-    bool                         m_last_event_selected;
 
     bool m_tracks_changed;
     bool m_range_changed;
-    bool m_events_changed;
 };
 
 }  // namespace View

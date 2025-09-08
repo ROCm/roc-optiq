@@ -448,6 +448,9 @@ public:
      */
     bool FreeEvent(uint64_t event_id);
 
+    /* Removes all events from m_event_data. */
+    bool FreeAllEvents();
+
     /*
      * Output track list meta data.
      */

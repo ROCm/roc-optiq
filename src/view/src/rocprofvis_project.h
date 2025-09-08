@@ -22,6 +22,15 @@ public:
         Failed,
     };
 
+    enum TraceType
+    {
+        Undefined,
+        System,
+#ifdef COMPUTE_UI_SUPPORT
+        Compute,
+#endif
+    };
+
     Project();
     virtual ~Project();
 
@@ -38,6 +47,10 @@ public:
      * Returns the RocWidget that renders the project.
      */
     std::shared_ptr<RocWidget> GetView();
+    /*
+     * Returns the trace type of the project.
+     */
+    TraceType GetTraceType() const;
     /*
      * Returns true if the project is saved as a project (as opposed to a trace).
      */
@@ -81,14 +94,6 @@ public:
     void TrimSaveOverwrite(const std::string& file_path_str);
 
 private:
-    enum TraceType
-    {
-        Undefined,
-        System,
-#ifdef COMPUTE_UI_SUPPORT
-        Compute,
-#endif
-    };
 
     /*
      * Opens a project + attached trace file and returns Success/Duplicate/Failed.

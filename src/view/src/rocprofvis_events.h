@@ -162,16 +162,18 @@ class EventSelectionChangedEvent : public RocEvent
 {
 public:
     EventSelectionChangedEvent(uint64_t event_id, uint64_t track_id, bool selected,
-                               const std::string& trace_path);
+                               const std::string& trace_path, bool batch = false);
     uint64_t           GetEventID() const;
     uint64_t           GetEventTrackID() const;
     bool               EventSelected() const;
     const std::string& GetTracePath();
-
+    bool               IsBatch() const;
+    
 private:
     uint64_t    m_event_id;
     uint16_t    m_event_track_id;
     bool        m_selected;
+    bool        m_is_batch;
     std::string m_trace_path;
 };
 

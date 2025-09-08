@@ -1729,6 +1729,22 @@ DataProvider::FreeEvent(uint64_t event_id)
     return false;
 }
 
+bool 
+DataProvider::FreeAllEvents()
+{
+    if(!m_event_data.empty())
+    {
+        m_event_data.clear();
+        spdlog::debug("Deleted all events");
+        return true;
+    }
+    else
+    {
+        spdlog::debug("No events to delete");
+    }
+    return false;
+}
+
 void
 DataProvider::DumpMetaData()
 {

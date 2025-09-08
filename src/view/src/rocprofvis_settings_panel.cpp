@@ -1,239 +1,269 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_settings_panel.h"
-#include "rocprofvis_settings_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
+#include "imgui.h"
 #include "rocprofvis_font_manager.h"
-#include "json.h"
-#include <filesystem>
-#include <fstream>
-#include <imgui.h>
-#include <imgui_internal.h>
+#include "rocprofvis_settings_manager.h"
+
+// Layout constants
+constexpr float kCategorywidth = 150.0f;
+constexpr float kContentwidth  = 450.0f;
+constexpr float kContentHeight = 450.0f;
 
 namespace RocProfVis
 {
 namespace View
 {
 
-bool
-SettingsPanel::IsOpen()
+SettingsPanel::SettingsPanel(SettingsManager& settings)
+: m_should_open(false)
+, m_settings_changed(false)
+, m_category(Display)
+, m_settings(settings)
+, m_fonts(settings.GetFontManager())
+, m_usersettings(settings.GetUserSettings())
+, m_usersettings_initial(m_usersettings)
+, m_font_settings({ m_usersettings.display_settings.dpi_based_scaling,
+                    m_usersettings.display_settings.font_size_index })
 {
-    return m_is_open;
-}
-
-void
-SettingsPanel::SetOpen(bool open)
-{
-    m_is_open = open;
-    if(open)
+    for(const ImFont* font : m_fonts.GetAvailableFonts())
     {
-        // Save current display settings and initialize preview/font index
-        m_display_settings_initial  = SettingsManager::GetInstance().GetCurrentDisplaySettings();
-        m_preview_font_size         = m_display_settings_initial.font_size_index;
-        m_display_settings_modified = m_display_settings_initial;
+        m_font_sizes.emplace_back(std::to_string(static_cast<int>(font->FontSize)));
+        m_font_sizes_ptr.emplace_back(m_font_sizes.back().c_str());
     }
 }
-SettingsPanel::SettingsPanel()
-: m_is_open(false)
-, m_preview_font_size(-1)
-, m_display_settings_initial()
-, m_display_settings_modified()
-{}
 
 SettingsPanel::~SettingsPanel() {}
+
+void
+SettingsPanel::Show()
+{
+    m_should_open               = true;
+    m_category                  = Display;
+    m_usersettings_initial      = m_usersettings;
+    m_font_settings.dpi_scaling = m_usersettings.display_settings.dpi_based_scaling;
+    m_font_settings.size_index  = m_usersettings.display_settings.font_size_index;
+}
+
 void
 SettingsPanel::Render()
 {
-    // Layout constants
-    static constexpr ImVec2 kWindowSize(420, 480);
-    static constexpr float  kMargin            = 20.0f;
-    static constexpr float  kTopSpace          = 16.0f;
-    static constexpr float  kBottomBarHeight   = 60.0f;
-    static constexpr float  kButtonWidth       = 100.0f;
-    static constexpr float  kButtonSpacing     = 16.0f;
-    static constexpr float  kThemeRadioSpacing = 120.0f;
-    static constexpr float  kFontButtonWidth   = 28.0f;
-    static constexpr float  kFontSliderWidth   = 100.0f;
-
-    ImGui::SetNextWindowSize(kWindowSize, ImGuiCond_Always);
-    ImGui::OpenPopup("Settings");
-
-    auto& settings     = SettingsManager::GetInstance();
-    auto& font_manager = settings.GetFontManager();
-    int   theme        = settings.IsDarkMode() ? 0 : 1;
-    int   num_sizes    = static_cast<int>(font_manager.GetFontSizes().size());
-
-    if(ImGui::BeginPopupModal("Settings", nullptr,
-                              ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
+    if(m_should_open)
     {
-        ImGui::SetCursorPosX(kMargin);
-        ImVec2 child_size = ImVec2(kWindowSize.x - 2 * kMargin,
-                                   kWindowSize.y - kMargin - kBottomBarHeight);
-        ImGui::BeginChild("SettingsContent", child_size, true,
-                          ImGuiWindowFlags_HorizontalScrollbar);
-
-        ImGui::Dummy(ImVec2(0, kTopSpace));
-
-        // Appearance Section
-        ImGui::Text("Appearance");
-
-        ImGui::Spacing();
-        ImGui::Separator();
-
-        ImGui::Dummy(ImVec2(0, 10));
-
-        // Theme selection
-        ImGui::TextUnformatted("Theme");
-        ImGui::SameLine(kThemeRadioSpacing);
-
-        int theme_radio = theme;
-        if(ImGui::RadioButton("Dark", theme_radio == 0)) theme_radio = 0;
-        ImGui::SameLine();
-        if(ImGui::RadioButton("Light", theme_radio == 1)) theme_radio = 1;
-
-        ImGui::Dummy(ImVec2(0, 20));
-
-        if(ImGui::IsItemHovered())
-            ImGui::SetTooltip("Switch between dark and light UI themes.");
-
-        if(theme_radio != theme)
-        {
-            if(theme_radio == 0)
-            {
-                m_display_settings_modified.use_dark_mode = true;
-            }
-            else
-            {
-                m_display_settings_modified.use_dark_mode = false;
-            }
-            settings.SetDisplaySettings(m_display_settings_modified);
-        }
-
-        ImGui::Spacing();
-        ImGui::Separator();
-
-        // DPI-based scaling toggle
-        bool dpi_scaling = settings.IsDPIBasedScaling();
-        ImGui::Dummy(ImVec2(0, 6));
-        ImGui::Dummy(ImVec2(4, 0));
-        ImGui::SameLine();
-        if(ImGui::Checkbox("DPI-based Font Scaling", &dpi_scaling))
-        {
-            m_display_settings_modified.dpi_based_scaling = dpi_scaling;
-            settings.SetDisplaySettings(m_display_settings_modified);
-        }
-
-        if(ImGui::IsItemHovered())
-            ImGui::SetTooltip("Automatically scale font size based on display DPI. "
-                              "Unchecked if you adjust font size manually.");
-        ImGui::Dummy(ImVec2(0, 6));
-        ImGui::Spacing();
-        ImGui::Separator();
-
-        // Font size section
-        ImGui::TextUnformatted("Font Size");
-        ImGui::SameLine(kThemeRadioSpacing);
-
-        ImGui::BeginDisabled(dpi_scaling);
-
-        // Only update font_size_index when user interacts
-        if(ImGui::Button("-", ImVec2(kFontButtonWidth, 0)) && m_preview_font_size > 0)
-        {
-            m_preview_font_size--;
-        }
-
-        ImGui::SameLine();
-
-        ImGui::SetNextItemWidth(kFontSliderWidth);
-        int slider_min = 0;
-        int slider_max = num_sizes - 1;
-        if(ImGui::SliderInt("##FontSizeSlider", &m_preview_font_size, slider_min,
-                            slider_max, "%d"))
-        {
-        }
-
-        ImGui::SameLine();
-
-        if(ImGui::Button("+", ImVec2(kFontButtonWidth, 0)) &&
-           m_preview_font_size < num_sizes - 1)
-        {
-            m_preview_font_size++;
-        }
-
-        ImGui::EndDisabled();
-
-        if(ImGui::IsItemHovered())
-            ImGui::SetTooltip("Increase or decrease the font size for the UI.");
-
-        // Font preview
-        ImFont* preview_font = font_manager.GetFontByIndex(m_preview_font_size);
-        if(preview_font)
-        {
-            ImGui::Spacing();
-            ImGui::PushFont(preview_font);
-            ImGui::Text("AMD ROCm Visualizer");
-            ImGui::PopFont();
-        }
-
-        ImGui::Spacing();
-        ImGui::Separator();
-
-        // Actions Section
-        ImGui::Text("Actions");
-        ImGui::Dummy(ImVec2(0, 10));
-
-        if(ImGui::SmallButton("Restore Defaults"))
-        {
-            m_display_settings_modified = settings.GetInitialDisplaySettings();
-            settings.SetDisplaySettings(m_display_settings_modified);
-
-            m_preview_font_size = m_display_settings_modified.font_size_index;
-        }
-        if(ImGui::IsItemHovered())
-            ImGui::SetTooltip("Restore all settings to their default values.");
-
-        ImGui::EndChild();
-
-        // Bottom bar for Save/Close
-        ImGui::SetCursorPosY(kWindowSize.y - kBottomBarHeight - kMargin);
-        ImGui::SetCursorPosX(kMargin);
-        ImGui::BeginChild("SettingsBottomBar",
-                          ImVec2(kWindowSize.x - 2 * kMargin, kBottomBarHeight), true);
-
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        float total_width = kButtonWidth * 2 + kButtonSpacing;
-        float x           = ((kWindowSize.x - 2 * kMargin) - total_width) * 0.5f;
-        ImGui::SetCursorPosX(x);
-
-        if(ImGui::Button("Cancel", ImVec2(kButtonWidth, 0)))
-        {
-            m_is_open           = false;
-            m_preview_font_size = -1;
-            ImGui::CloseCurrentPopup();
-
-            settings.RestoreDisplaySettings(m_display_settings_initial);
-        }
-        ImGui::SameLine(0, kButtonSpacing);
-        if(ImGui::Button("Ok", ImVec2(kButtonWidth, 0)))
-        {
-            m_is_open = false;
-            // Always use a valid font size index
-            if(!m_display_settings_modified.dpi_based_scaling) {
-                m_display_settings_modified.font_size_index = m_preview_font_size;
-            }
-            settings.SetDisplaySettings(m_display_settings_modified);
-            m_preview_font_size = -1;
-            settings.SaveSettings("settings_application.json",
-                                  m_display_settings_modified);
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndChild();
-
-        ImGui::Spacing();
-        ImGui::EndPopup();
+        ImGui::OpenPopup("Settings");
+        m_should_open = false;
     }
+
+    if(ImGui::IsPopupOpen("Settings"))
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            m_settings.GetDefaultStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                            m_settings.GetDefaultStyle().ItemSpacing);
+        if(ImGui::BeginPopupModal("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::BeginChild("SettingsCategories",
+                              ImVec2(kCategorywidth, kContentHeight),
+                              ImGuiChildFlags_Borders);
+            if(ImGui::Selectable("Display", m_category == Display))
+            {
+                m_category = Display;
+            }
+            ImGui::EndChild();
+
+            ImGui::SameLine();
+
+            ImGui::BeginChild("SettingsContent", ImVec2(kContentwidth, kContentHeight),
+                              ImGuiChildFlags_Borders);
+            switch(m_category)
+            {
+                case Display:
+                {
+                    RenderDisplayOptions();
+                }
+                break;
+            }
+            ImGui::EndChild();
+
+            ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                                 ImGui::CalcTextSize("O").x -
+                                 2 * ImGui::GetStyle().FramePadding.x);
+            ImGui::SetCursorPosY(ImGui::GetCursorPos().y -
+                                 ImGui::GetFrameHeightWithSpacing());
+            if(ResetButton())
+            {
+                ResetCategory(m_category);
+            }
+
+            // Bottom bar for Ok/Cancel
+            float button_width =
+                ImGui::CalcTextSize("Cancel").x + 2 * ImGui::GetStyle().FramePadding.x;
+            ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                                 ImGui::GetStyle().ItemSpacing.x - 2 * button_width);
+            if(ImGui::Button("Ok", ImVec2(button_width, 0)))
+            {
+                m_usersettings.display_settings.dpi_based_scaling =
+                    m_font_settings.dpi_scaling;
+                m_usersettings.display_settings.font_size_index =
+                    m_font_settings.size_index;
+
+                m_settings_changed = true;
+                m_should_open      = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if(ImGui::Button("Cancel", ImVec2(button_width, 0)))
+            {
+                m_usersettings     = m_usersettings_initial;
+                m_settings_changed = true;
+                m_should_open      = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
+
+        if(m_settings_changed)
+        {
+            m_settings.ApplyUserSettings();
+            m_settings_changed = false;
+        }
+    }
+}
+
+void
+SettingsPanel::RenderDisplayOptions()
+{
+    ImGuiStyle& style       = ImGui::GetStyle();
+    int         theme_index = m_usersettings.display_settings.use_dark_mode ? 1 : 0;
+
+    // Theme selection
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Theme");
+    ImGui::SameLine();
+    if(ImGui::Combo("##theme", &theme_index, "Light\0Dark\0\0"))
+    {
+        m_usersettings.display_settings.use_dark_mode = (theme_index == 0) ? false : true;
+        m_settings_changed                            = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Switch between dark and light UI themes.");
+    }
+
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Fonts");
+    ImGui::Separator();
+
+    // DPI-based scaling toggle
+    ImGui::Checkbox("DPI-based Font Scaling", &m_font_settings.dpi_scaling);
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Automatically scale font size based on display DPI.");
+    }
+
+    // Font size section
+    float button_width = ImGui::CalcTextSize("+").x + 2 * style.FramePadding.x;
+    ImGui::BeginDisabled(m_font_settings.dpi_scaling);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Font Size");
+    ImGui::SameLine();
+    if(ImGui::Button("-", ImVec2(button_width, 0)) && m_font_settings.size_index > 0)
+    {
+        m_font_settings.size_index--;
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("000").x +
+                            ImGui::GetFrameHeightWithSpacing());
+    ImGui::Combo("##font_size", &m_font_settings.size_index, m_font_sizes_ptr.data(),
+                 m_font_sizes_ptr.size());
+    ImGui::SameLine();
+    if(ImGui::Button("+", ImVec2(button_width, 0)) &&
+       m_font_settings.size_index < m_fonts.GetAvailableFonts().size())
+    {
+        m_font_settings.size_index++;
+    }
+    ImGui::EndDisabled();
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Increase or decrease the font size for the UI.");
+    }
+
+    // Font preview
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Preview");
+    ImGui::SameLine();
+    ImFont* preview_font = m_fonts.GetFontByIndex(m_font_settings.dpi_scaling
+                                                      ? m_fonts.GetDPIScaledFontIndex()
+                                                      : m_font_settings.size_index);
+    if(preview_font)
+    {
+        ImGui::Spacing();
+        ImGui::SameLine();
+        ImGui::PushFont(preview_font);
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
+            ImGui::GetCursorScreenPos() +
+                ImVec2(ImGui::CalcTextSize("AMD ROCm Visualizer").x +
+                           style.FramePadding.x,
+                       ImGui::GetFrameHeightWithSpacing()),
+            ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)),
+            style.FrameRounding);
+        ImGui::Text("AMD ROCm Visualizer");
+        ImGui::PopFont();
+    }
+}
+
+void
+SettingsPanel::ResetCategory(Category category)
+{
+    const UserSettings& usersettings_default = m_settings.GetDefaultUserSettings();
+    switch(m_category)
+    {
+        case Display:
+        {
+            m_usersettings.display_settings = usersettings_default.display_settings;
+            m_font_settings.dpi_scaling =
+                usersettings_default.display_settings.dpi_based_scaling;
+            m_font_settings.size_index =
+                usersettings_default.display_settings.font_size_index;
+        }
+        break;
+    }
+    m_settings_changed = true;
+}
+
+bool
+SettingsPanel::ResetButton()
+{
+    bool        clicked = false;
+    ImGuiStyle& style   = ImGui::GetStyle();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::BeginChild("reset_button",
+                      ImGui::CalcTextSize("O") + style.FramePadding + style.FramePadding);
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushFont(m_fonts.GetIconFont(FontType::kDefault));
+    clicked = ImGui::Button(ICON_ARROWS_CYCLE);
+    ImGui::PopFont();
+    ImGui::PopStyleColor(3);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultStyle().WindowPadding);
+    if(ImGui::BeginItemTooltip())
+    {
+        ImGui::TextUnformatted("Restore defaults");
+        ImGui::EndTooltip();
+    }
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
+    return clicked;
 }
 
 }  // namespace View

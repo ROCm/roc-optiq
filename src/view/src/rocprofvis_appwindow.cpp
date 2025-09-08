@@ -33,7 +33,6 @@ constexpr char*  TAB_CONTAINER_SRC_NAME   = "MainTabContainer";
 constexpr char*  ABOUT_DIALOG_NAME        = "About##_dialog";
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
-constexpr float TOOL_BAR_HEIGHT = 40.0f;
 
 // For testing DataProvider
 void
@@ -64,7 +63,7 @@ AppWindow::DestroyInstance()
 
 AppWindow::AppWindow()
 : m_main_view(nullptr)
-, m_settings_panel(std::make_unique<SettingsPanel>())
+, m_settings_panel(nullptr)
 , m_tab_container(nullptr)
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
@@ -98,10 +97,10 @@ AppWindow::Init()
     ImPlot::CreateContext();
 
     SettingsManager& settings = SettingsManager::GetInstance();
-    bool             result   = settings.Init();
+    bool result = settings.Init();
     if(result)
     {
-        settings.LoadSettings("settings_application.json");
+        m_settings_panel = std::make_unique<SettingsPanel>(settings);
     }
     else
     {
@@ -111,7 +110,8 @@ AppWindow::Init()
     LayoutItem status_bar_item(-1, STATUS_BAR_HEIGHT);
     status_bar_item.m_item = std::make_shared<RocWidget>();
     LayoutItem main_area_item(-1, -STATUS_BAR_HEIGHT);
-    LayoutItem tool_bar_item(-1, TOOL_BAR_HEIGHT);
+    LayoutItem tool_bar_item(-1, 0);
+    tool_bar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
 
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->SetEventSourceName(TAB_CONTAINER_SRC_NAME);
@@ -259,11 +259,7 @@ AppWindow::Render()
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
-
-    if(m_settings_panel->IsOpen())
-    {
-        m_settings_panel->Render();
-    }
+    m_settings_panel->Render();
 
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
@@ -305,34 +301,8 @@ AppWindow::RenderFileDialogs()
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {
-            std::filesystem::path file_path(
-                ImGuiFileDialog::Instance()->GetFilePathName());
-
-            std::string file_path_str = file_path.string();
-
-            spdlog::info("Opening file: {}", file_path_str);
-
-            std::unique_ptr<Project> project = std::make_unique<Project>();
-            switch(project->Open(file_path_str))
-            {
-                case Project::OpenResult::Success:
-                {
-                    m_tab_container->AddTab(TabItem{ project->GetName(), project->GetID(),
-                                                     project->GetView(), true });
-                    m_projects[project->GetID()] = std::move(project);
-                    break;
-                }
-                case Project::OpenResult::Duplicate:
-                {
-                    // File is already opened, just switch to that tab
-                    m_tab_container->SetActiveTab(file_path_str);
-                    break;
-                }
-                default:
-                {
-                    break;
-                }
-            }
+            OpenFile(std::filesystem::path(ImGuiFileDialog::Instance()->GetFilePathName())
+                         .string());
         }
         ImGuiFileDialog::Instance()->Close();
     }
@@ -366,6 +336,36 @@ AppWindow::RenderFileDialogs()
 }
 
 void
+AppWindow::OpenFile(std::string file_path)
+{
+    spdlog::info("Opening file: {}", file_path);
+
+    std::unique_ptr<Project> project = std::make_unique<Project>();
+    switch(project->Open(file_path))
+    {
+        case Project::OpenResult::Success:
+        {
+            m_tab_container->AddTab(TabItem{ project->GetName(), project->GetID(),
+                                             project->GetView(), true });
+            m_projects[project->GetID()] = std::move(project);
+            SettingsManager::GetInstance().AddRecentFile(file_path);
+            break;
+        }
+        case Project::OpenResult::Duplicate:
+        {
+            // File is already opened, just switch to that tab
+            m_tab_container->SetActiveTab(file_path);
+            break;
+        }
+        default:
+        {
+            SettingsManager::GetInstance().RemoveRecentFile(file_path);
+            break;
+        }
+    }
+}
+
+void
 AppWindow::RenderFileMenu(Project* project)
 {
     if(ImGui::BeginMenu("File"))
@@ -393,6 +393,20 @@ AppWindow::RenderFileMenu(Project* project)
             ImGuiFileDialog::Instance()->OpenDialog(PROJECT_SAVE_DIALOG_NAME,
                                                     "Save as Project", ".rpv");
         }
+        ImGui::Separator();
+        const std::list<std::string> recent_files =
+            SettingsManager::GetInstance().GetInternalSettings().recent_files;
+        if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))
+        {
+            for(const std::string& file : recent_files)
+            {
+                if(ImGui::MenuItem(file.c_str(), nullptr))
+                {
+                    OpenFile(file);
+                }
+            }
+            ImGui::EndMenu();
+        }
         ImGui::EndMenu();
     }
 }
@@ -411,7 +425,7 @@ AppWindow::RenderEditMenu(Project* project)
         ImGui::Separator();
         if(ImGui::MenuItem("Preferences"))
         {
-            m_settings_panel->SetOpen(true);
+            m_settings_panel->Show();
         }
         ImGui::EndMenu();
     }

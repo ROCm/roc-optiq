@@ -22,6 +22,7 @@ enum class RocEvents
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
     kStickyNoteEdited,
+    kFontSizeChanged,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeDataDirty,
     kComputeBlockNavigationChanged,

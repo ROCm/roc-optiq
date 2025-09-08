@@ -54,32 +54,29 @@ void
 FlameTrackItem::RenderMetaDataAreaExpand()
 {
     ImVec2 window_size = ImGui::GetWindowSize();
-    ImVec2 button_size = ImVec2(28.0f, 28.0f);   
+    ImVec2 button_size = ImVec2(28.0f, 28.0f);
     ImVec2 pos = ImVec2(window_size.x - button_size.x, window_size.y - button_size.y);
 
     ImGui::SetCursorPos(pos);
 
     int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
-    if(m_max_level != m_min_level)
+
+    if(visible_levels <= m_max_level + 1)
     {
-        if(visible_levels < m_max_level)
+        if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
-            if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
-            {
-                m_track_height = m_max_level * m_level_height + m_level_height;
-            }
-            if(ImGui::IsItemHovered())
-                ImGui::SetTooltip("Expand track to maximum height");
+            m_track_height = m_max_level * m_level_height + m_level_height + 2.0f;
         }
-        else
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to see all events");
+    }
+    else if(m_track_height > std::max(m_max_level * m_level_height + m_level_height,
+                                      75.0f))  // stand-in for default height..
+    {
+        if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
         {
-            if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
-            {
-                m_track_height = 75;  // Default track height defined in parent class.
-            }
-            if(ImGui::IsItemHovered())
-                ImGui::SetTooltip("Contract track to minimum height");
+            m_track_height = 75;  // Default track height defined in parent class.
         }
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to default height");
     }
 }
 FlameTrackItem::~FlameTrackItem()

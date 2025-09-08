@@ -57,7 +57,7 @@ private:
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
     void   LineTrackRender(float graph_width);
     void   BoxPlotRender(float graph_width);
-    void   RenderMetaDataAreaExpand() override;
+
     std::vector<rocprofvis_data_point_t> m_data;
     rocprofvis_color_by_value_t          m_color_by_value_digits;
     double                               m_min_y;

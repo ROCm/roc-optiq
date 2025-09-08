@@ -1,7 +1,7 @@
 #include "rocprofvis_track_item.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_font_manager.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -167,6 +167,12 @@ TrackItem::GetReorderGripWidth()
 }
 
 void
+TrackItem::RenderMetaDataAreaExpand()
+{
+    // no-op
+}
+
+void
 TrackItem::RenderMetaArea()
 {
     // Shrink the meta data content area by one unit in the vertical direction so that the
@@ -183,10 +189,11 @@ TrackItem::RenderMetaArea()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 4));
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          m_selected ? m_settings.GetColor(Colors::kMetaDataColorSelected)
-                                     : (m_request_state == TrackDataRequestState::kError ?
-                                        m_settings.GetColor(Colors::kGridRed) :
-                                        m_settings.GetColor(Colors::kMetaDataColor)));
+                          m_selected
+                              ? m_settings.GetColor(Colors::kMetaDataColorSelected)
+                              : (m_request_state == TrackDataRequestState::kError
+                                     ? m_settings.GetColor(Colors::kGridRed)
+                                     : m_settings.GetColor(Colors::kMetaDataColor)));
     ImGui::SetCursorPos(metadata_shrink_padding);
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
@@ -342,8 +349,8 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 void
 TrackItem::RequestData(double min, double max, float width)
 {
-    //create request chunks with ranges of m_chunk_duration_ns  max
-    double range = max - min;
+    // create request chunks with ranges of m_chunk_duration_ns  max
+    double range       = max - min;
     size_t chunk_count = static_cast<size_t>(std::ceil(range / m_chunk_duration_ns));
     m_group_id_counter++;
     std::deque<TrackRequestParams> temp_request_queue;
@@ -358,8 +365,9 @@ TrackItem::RequestData(double min, double max, float width)
         float  chunk_width = width * percentage;
 
         TrackRequestParams request_params(m_id, chunk_start, chunk_end,
-                                          static_cast<uint32_t>(chunk_width), m_group_id_counter, i, chunk_count);
-        
+                                          static_cast<uint32_t>(chunk_width),
+                                          m_group_id_counter, i, chunk_count);
+
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
                       m_id, chunk_start, chunk_end, chunk_range, chunk_width);
@@ -381,8 +389,10 @@ TrackItem::RequestData(double min, double max, float width)
         spdlog::warn(
             "Fetch request deferred for track {}, requests are already pending...", m_id);
 
-        for(const auto& [request_id, req] : m_pending_requests) {
-            spdlog::debug("RequestData: Found pending request {} for track {}", request_id, m_id);
+        for(const auto& [request_id, req] : m_pending_requests)
+        {
+            spdlog::debug("RequestData: Found pending request {} for track {}",
+                          request_id, m_id);
             m_data_provider.CancelRequest(request_id);
         }
     }
@@ -405,7 +415,7 @@ TrackItem::FetchHelper()
 {
     while(!m_request_queue.empty())
     {
-        TrackRequestParams& req    = m_request_queue.front();
+        TrackRequestParams&       req    = m_request_queue.front();
         std::pair<bool, uint64_t> result = m_data_provider.FetchTrack(req);
         if(!result.first)
         {
@@ -420,11 +430,10 @@ TrackItem::FetchHelper()
 
             m_request_state = TrackDataRequestState::kRequesting;
             // Store the request with its ID
-            m_pending_requests.insert({result.second, req});
+            m_pending_requests.insert({ result.second, req });
         }
         m_request_queue.pop_front();
     }
-
 }
 
 bool
@@ -438,7 +447,7 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
     }
 
     result = ExtractPointsFromData();
-    
+
     return result;
 }
 
@@ -468,7 +477,7 @@ TrackItem::ReleaseData()
         else
         {
             spdlog::warn("Failed to cancel pending request {} for track {}", request_id,
-                          m_id);
+                         m_id);
             ++it;
         }
     }

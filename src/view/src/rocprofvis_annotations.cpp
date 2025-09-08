@@ -227,7 +227,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
     ImGui::PushStyleColor(ImGuiCol_Border, border_color);
     ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
-    ImGui::SetNextWindowSize(ImVec2(300, 420),
+    ImGui::SetNextWindowSize(ImVec2(390, 420),
                              ImGuiCond_Once);  // Initial size, user can resize
     if(ImGui::BeginPopupModal("Edit Sticky Note", nullptr, ImGuiWindowFlags_NoCollapse))
     {
@@ -357,7 +357,7 @@ AnnotationsView::ShowStickyNotePopup()
     ImGui::PushStyleColor(ImGuiCol_Border, border_color);
     ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
-    ImGui::SetNextWindowSize(ImVec2(300, 420),
+    ImGui::SetNextWindowSize(ImVec2(390, 420),
                              ImGuiCond_Once);  // Initial size, user can resize
     if(ImGui::BeginPopupModal("Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
     {

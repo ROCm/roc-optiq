@@ -26,13 +26,13 @@ AnnotationsViewProjectSettings::FromJson()
 
     for(auto& note_json : annotation_vec)
     {
-        double time_ns = note_json[JSON_KEY_ANNOTATION_TIME_NS].getDouble();
+        double time_ns = note_json[JSON_KEY_ANNOTATION_TIME_NS].getNumber();
         float  y_offset =
-            static_cast<float>(note_json[JSON_KEY_ANNOTATION_Y_OFFSET].getDouble());
+            static_cast<float>(note_json[JSON_KEY_ANNOTATION_Y_OFFSET].getNumber());
         float size_x =
-            static_cast<float>(note_json[JSON_KEY_ANNOTATION_SIZE_X].getLong());
+            static_cast<float>(note_json[JSON_KEY_ANNOTATION_SIZE_X].getNumber());
         float size_y =
-            static_cast<float>(note_json[JSON_KEY_ANNOTATION_SIZE_Y].getLong());
+            static_cast<float>(note_json[JSON_KEY_ANNOTATION_SIZE_Y].getNumber());
         std::string text  = note_json[JSON_KEY_ANNOTATION_TEXT].getString();
         std::string title = note_json[JSON_KEY_ANNOTATION_TITLE].getString();
 
@@ -78,7 +78,16 @@ AnnotationsViewProjectSettings::Valid() const
            !note_json.contains("size_x") || !note_json.contains("size_y") ||
            !note_json.contains("text") || !note_json.contains("title"))
         {
-            return false;
+            jt::Json sticky_json;
+            if(!sticky_json[JSON_KEY_ANNOTATION_TIME_NS].isNumber() ||
+               !sticky_json[JSON_KEY_ANNOTATION_Y_OFFSET].isNumber() ||
+               !sticky_json[JSON_KEY_ANNOTATION_SIZE_X].isNumber() ||
+               !sticky_json[JSON_KEY_ANNOTATION_SIZE_Y].isNumber() ||
+               !sticky_json[JSON_KEY_ANNOTATION_TEXT].isString() ||
+               !sticky_json[JSON_KEY_ANNOTATION_TITLE].isString())
+            {
+                return false;
+            }
         }
     }
     return true;

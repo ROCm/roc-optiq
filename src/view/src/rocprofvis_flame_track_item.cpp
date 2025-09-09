@@ -70,11 +70,12 @@ FlameTrackItem::RenderMetaDataAreaExpand()
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to see all events");
     }
     else if(m_track_height > std::max(m_max_level * m_level_height + m_level_height,
-                                      75.0f))  // stand-in for default height..
+                     m_track_default_height))  // stand-in for default height..
     {
         if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
         {
-            m_track_height = 75;  // Default track height defined in parent class.
+            m_track_height =
+                m_track_default_height;  // Default track height defined in parent class.
         }
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to default height");
     }

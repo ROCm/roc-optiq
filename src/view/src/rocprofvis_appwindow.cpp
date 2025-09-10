@@ -288,7 +288,7 @@ AppWindow::RenderFileDialogs()
     // Set Itemspacing to values from original default ImGui style
     // custom values to break the 3rd party file dialog implementation
     // especially the cell padding
-    auto defaultStyle = SettingsManager::GetInstance().GetDefaultStyle();
+    auto defaultStyle = SettingsManager::GetInstance().GetDefaultIMGUIStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, defaultStyle.ItemSpacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, defaultStyle.WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, defaultStyle.CellPadding);

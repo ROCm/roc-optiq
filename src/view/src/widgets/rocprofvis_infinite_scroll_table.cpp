@@ -712,9 +712,11 @@ InfiniteScrollTable::GetTrackIdHelper(
 void 
 InfiniteScrollTable::RenderContextMenu() const
 {
+    auto style =  SettingsManager::GetInstance().GetDefaultStyle();
+    
     // Render context menu for row actions
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup(ROWCONTEXTMENU_POPUP_NAME))
     {
         const std::vector<std::vector<std::string>>& table_data =
@@ -848,7 +850,7 @@ InfiniteScrollTable::XButton(const char* id) const
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        m_settings.GetDefaultStyle().WindowPadding);
+                        m_settings.GetDefaultIMGUIStyle().WindowPadding);
     if(ImGui::BeginItemTooltip())
     {
         ImGui::TextUnformatted("Clear");

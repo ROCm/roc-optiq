@@ -186,14 +186,16 @@ TrackSelectionChangedEvent::GetEndNs() const
 }
 
 const std::string&
-TrackSelectionChangedEvent::GetTracePath()
+TrackSelectionChangedEvent::GetTracePath() const
 {
     return m_trace_path;
 }
 
-ScrollToTrackEvent::ScrollToTrackEvent(int event_id, const uint64_t& track_id)
+ScrollToTrackEvent::ScrollToTrackEvent(int event_id, const uint64_t& track_id,
+                                       const std::string& trace_path)
 : RocEvent(event_id)
 , m_track_id(track_id)
+, m_trace_path(trace_path)
 {
     m_event_type = RocEventType::kScrollToTrackEvent;
 }
@@ -202,6 +204,12 @@ const uint64_t
 ScrollToTrackEvent::GetTrackID() const
 {
     return m_track_id;
+}
+
+const std::string&
+ScrollToTrackEvent::GetTracePath() const
+{
+    return m_trace_path;
 }
 
 EventSelectionChangedEvent::EventSelectionChangedEvent(uint64_t event_id,
@@ -237,7 +245,7 @@ EventSelectionChangedEvent::EventSelected() const
 }
 
 const std::string&
-EventSelectionChangedEvent::GetTracePath()
+EventSelectionChangedEvent::GetTracePath() const
 {
     return m_trace_path;
 }
@@ -284,7 +292,7 @@ RangeEvent::GetEndNs() const
 }
 
 const std::string&
-RangeEvent::GetTracePath()
+RangeEvent::GetTracePath() const
 {
     return m_trace_path;
 }

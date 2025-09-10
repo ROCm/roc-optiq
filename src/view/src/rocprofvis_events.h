@@ -112,11 +112,14 @@ private:
 class ScrollToTrackEvent : public RocEvent
 {
 public:
-    ScrollToTrackEvent(int event_id, const uint64_t& track_id);
-    const uint64_t GetTrackID() const;
+    ScrollToTrackEvent(int event_id, const uint64_t& track_id,
+                       const std::string& trace_path);
+    const uint64_t     GetTrackID() const;
+    const std::string& GetTracePath() const;
 
 private:
-    uint64_t m_track_id;
+    uint64_t    m_track_id;
+    std::string m_trace_path;
 };
 
 #ifdef COMPUTE_UI_SUPPORT
@@ -151,7 +154,7 @@ public:
     const std::vector<uint64_t>& GetSelectedTracks() const;
     double                       GetStartNs() const;
     double                       GetEndNs() const;
-    const std::string&           GetTracePath();
+    const std::string&           GetTracePath() const;
 
 private:
     std::vector<uint64_t> m_selected_tracks;  // IDs of selected tracks
@@ -168,7 +171,7 @@ public:
     uint64_t           GetEventID() const;
     uint64_t           GetEventTrackID() const;
     bool               EventSelected() const;
-    const std::string& GetTracePath();
+    const std::string& GetTracePath() const;
     bool               IsBatch() const;
     
 private:
@@ -186,7 +189,7 @@ public:
                       const std::string& trace_path);
     double             GetStartNs() const;
     double             GetEndNs() const;
-    const std::string& GetTracePath();
+    const std::string& GetTracePath() const;
 
 private:
     double      m_start_ns;

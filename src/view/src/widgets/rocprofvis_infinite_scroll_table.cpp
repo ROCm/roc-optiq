@@ -760,7 +760,7 @@ InfiniteScrollTable::RenderContextMenu() const
                     spdlog::info("Navigating to track ID: {} from row: {}", target_track_id, m_selected_row);
                     EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
                         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                        target_track_id));
+                        target_track_id, m_data_provider.GetTraceFilePath()));
                     //get start time and duration
                     uint64_t start_time = 0;
                     uint64_t duration = 0;
@@ -776,23 +776,10 @@ InfiniteScrollTable::RenderContextMenu() const
                         duration = std::stoull(table_data[m_selected_row][m_important_column_idxs[kDurationNs]]);
                     }
 
-                    //ensure duration is at least 100ns (for display purposes)
-                    double duration_orig_ns = static_cast<double>(duration);
-                    double duration_ns = std::max(100.0, duration_orig_ns);
-                    double start_time_ns = static_cast<double>(start_time);
-
-                    double multiplier = 10.0;
-                    if(duration_ns < 1000.0) {
-                        multiplier = 100.0;
-                    }
-
-                    //have the viewable range be N (multiplier) times longer than the duration
-                    //and center the event in the middle of this range
-                    double viewable_range_start = start_time_ns + duration_orig_ns * 0.5 - multiplier * duration_ns;
-                    double viewable_range_end = start_time_ns + duration_orig_ns * 0.5 + multiplier * duration_ns;
+                    ViewRangeNS view_range = calculate_adaptive_view_range(static_cast<double>(start_time),  static_cast<double>(duration));
                     EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
-                        static_cast<int>(RocEvents::kSetViewRange), viewable_range_start,
-                        viewable_range_end, m_data_provider.GetTraceFilePath()));
+                        static_cast<int>(RocEvents::kSetViewRange), view_range.start_ns,
+                        view_range.end_ns, m_data_provider.GetTraceFilePath()));
                 }
                 else
                 {

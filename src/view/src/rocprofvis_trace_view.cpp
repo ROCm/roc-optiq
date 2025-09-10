@@ -188,7 +188,7 @@ TraceView::CreateView()
     m_timeline_view =
         std::make_shared<TimelineView>(m_data_provider, m_timeline_selection);
     m_sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                           m_timeline_view->GetGraphs());
+                                           m_timeline_view->GetGraphs(), m_data_provider);
     m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                 m_timeline_selection);
 

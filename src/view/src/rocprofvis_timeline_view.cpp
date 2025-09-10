@@ -83,7 +83,10 @@ TimelineView::TimelineView(DataProvider&                      dp,
         auto evt = std::dynamic_pointer_cast<ScrollToTrackEvent>(e);
         if(evt)
         {
-            this->ScrollToTrack(evt->GetTrackID());
+            if(evt->GetTracePath() == m_data_provider.GetTraceFilePath())
+            {
+                this->ScrollToTrack(evt->GetTrackID());
+            }
         }
     };
     m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
@@ -94,7 +97,10 @@ TimelineView::TimelineView(DataProvider&                      dp,
         auto evt = std::dynamic_pointer_cast<RangeEvent>(e);
         if(evt)
         {
-            this->SetViewableRangeNS(evt->GetStartNs(), evt->GetEndNs());
+            if(evt->GetTracePath() == m_data_provider.GetTraceFilePath())
+            {
+                this->SetViewableRangeNS(evt->GetStartNs(), evt->GetEndNs());
+            }
         }
     };
     m_set_view_range_token = EventManager::GetInstance()->Subscribe(

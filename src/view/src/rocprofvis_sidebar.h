@@ -2,6 +2,7 @@
 
 #pragma once
 #include "rocprofvis_view_structs.h"
+#include "rocprofvis_data_provider.h"
 #include "widgets/rocprofvis_widget.h"
 #include <vector>
 
@@ -19,7 +20,8 @@ class SideBar : public RocWidget
 public:
     SideBar(std::shared_ptr<TrackTopology>     topology,
             std::shared_ptr<TimelineSelection> timeline_selection,
-            std::vector<rocprofvis_graph_t>*   graphs);
+            std::vector<rocprofvis_graph_t>*   graphs,
+            DataProvider &dp);
     ~SideBar();
     virtual void Render() override;
     virtual void Update() override;
@@ -31,6 +33,7 @@ private:
     std::shared_ptr<TrackTopology>     m_track_topology;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::vector<rocprofvis_graph_t>*   m_graphs;
+    DataProvider &                     m_data_provider;
 };
 
 }  // namespace View

@@ -40,6 +40,7 @@ private:
     SettingsManager&                   m_settings;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::vector<EventItem>             m_event_items;
+    float                                m_standard_eventcard_height;
 };
 
 }  // namespace View

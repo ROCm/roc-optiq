@@ -2,7 +2,6 @@
 
 #pragma once
 #include "rocprofvis_view_structs.h"
-#include "rocprofvis_data_provider.h"
 #include "widgets/rocprofvis_widget.h"
 #include <vector>
 
@@ -14,6 +13,7 @@ namespace View
 class SettingsManager;
 class TrackTopology;
 class TimelineSelection;
+class DataProvider;
 
 class SideBar : public RocWidget
 {

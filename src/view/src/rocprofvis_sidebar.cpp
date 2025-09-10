@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_sidebar.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_font_manager.h"

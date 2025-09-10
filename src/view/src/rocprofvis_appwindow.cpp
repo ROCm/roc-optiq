@@ -744,16 +744,6 @@ AppWindow::RenderDebugOuput()
         DebugWindow::GetInstance()->Render();
     }
 
-    if(ImGui::IsKeyPressed(ImGuiKey_D))
-    {
-        m_show_debug_window = !m_show_debug_window;
-
-        if(m_show_debug_window)
-        {
-            ImGui::SetWindowFocus("Debug Window");
-        }
-    }
-
     if(m_show_provider_test_widow)
     {
         RenderProviderTest(m_test_data_provider);

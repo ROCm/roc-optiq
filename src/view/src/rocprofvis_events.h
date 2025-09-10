@@ -23,6 +23,7 @@ enum class RocEvents
     kTrackMetadataChanged,
     kStickyNoteEdited,
     kFontSizeChanged,
+    kSetViewRange,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeDataDirty,
     kComputeBlockNavigationChanged,
@@ -40,6 +41,7 @@ enum class RocEventType
     kTimelineEventSelectionChangedEvent,
     kScrollToTrackEvent,
     kStickyNoteEvent,
+    kRangeEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
 #endif
@@ -174,6 +176,21 @@ private:
     uint16_t    m_event_track_id;
     bool        m_selected;
     bool        m_is_batch;
+    std::string m_trace_path;
+};
+
+class RangeEvent : public RocEvent
+{
+public:
+    RangeEvent(int event_id, double start_ns, double end_ns,
+                      const std::string& trace_path);
+    double             GetStartNs() const;
+    double             GetEndNs() const;
+    const std::string& GetTracePath();
+
+private:
+    double      m_start_ns;
+    double      m_end_ns;
     std::string m_trace_path;
 };
 

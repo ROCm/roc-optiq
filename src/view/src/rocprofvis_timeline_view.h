@@ -71,6 +71,7 @@ public:
     void                             RenderInteractiveUI(ImVec2 screen_pos);
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
+    void                             SetViewableRangeNS(double start_ns, double end_ns);
     void                             RenderGraphPoints();
     void                             RenderGridAlt();
     void                             RenderGrid();
@@ -91,6 +92,7 @@ private:
     EventManager::SubscriptionToken    m_scroll_to_track_token;
     EventManager::SubscriptionToken    m_new_track_token;
     EventManager::SubscriptionToken    m_font_changed_token;
+    EventManager::SubscriptionToken    m_set_view_range_token;
 
     std::vector<rocprofvis_graph_t>    m_graphs;
     int                                m_ruler_height;

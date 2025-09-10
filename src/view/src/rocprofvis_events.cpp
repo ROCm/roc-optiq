@@ -260,3 +260,31 @@ StickyNoteEvent::StickyNoteEvent(int id)
 {
     SetType(RocEventType::kStickyNoteEvent);
 }
+
+RangeEvent::RangeEvent(int event_id, double start_ns, double end_ns,
+                       const std::string& trace_path)
+: RocEvent(event_id)
+, m_start_ns(start_ns)
+, m_end_ns(end_ns)
+, m_trace_path(trace_path)
+{
+    m_event_type = RocEventType::kRangeEvent;
+}
+
+double
+RangeEvent::GetStartNs() const
+{
+    return m_start_ns;
+}
+
+double
+RangeEvent::GetEndNs() const
+{
+    return m_end_ns;
+}
+
+const std::string&
+RangeEvent::GetTracePath()
+{
+    return m_trace_path;
+}

@@ -51,6 +51,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_new_track_token(static_cast<uint64_t>(-1))
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_font_changed_token(static_cast<uint64_t>(-1))
+, m_set_view_range_token(static_cast<uint64_t>(-1))
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0)
 , m_v_width(0)
@@ -88,6 +89,16 @@ TimelineView::TimelineView(DataProvider&                      dp,
     m_scroll_to_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         scroll_to_track_handler);
+
+    auto set_view_range_handle = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<RangeEvent>(e);
+        if(evt)
+        {
+            this->SetViewableRangeNS(evt->GetStartNs(), evt->GetEndNs());
+        }
+    };
+    m_set_view_range_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kSetViewRange), set_view_range_handle);
 
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         m_recalculate_grid_interval = true;
@@ -201,6 +212,53 @@ TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
         m_view_time_offset_ns = time_pos_ns;
     }
 }
+
+void
+TimelineView::SetViewableRangeNS(double start_ns, double end_ns) {
+    // Configure the timeline view so that the visible horizontal range is
+    // [start_ns, end_ns] in absolute timestamp units.
+    // Guard against invalid inputs.
+    if(end_ns <= start_ns) return;
+
+    // Clamp requested range to known data bounds when available.
+    start_ns = std::max(start_ns, m_min_x);
+    end_ns   = std::min(end_ns, m_max_x);
+    if(end_ns <= start_ns) return; // Fully outside bounds after clamping.
+
+    double new_width_ns = end_ns - start_ns;
+    // Prevent division by zero and overly small widths.
+    const double kMinWidth = 10.0; // 10 ns minimum span.
+    if(new_width_ns < kMinWidth) new_width_ns = kMinWidth;
+
+    // Compute zoom: m_v_width = m_range_x / m_zoom  =>  m_zoom = m_range_x / m_v_width
+    if(m_range_x > 0.0)
+    {
+        m_zoom = std::max(0.000001, m_range_x / new_width_ns);
+    }
+
+    // view_time_offset is relative to m_min_x
+    m_view_time_offset_ns = start_ns - m_min_x;
+
+    // Update derived viewport values.
+    m_v_width = new_width_ns;
+    m_v_min_x = (m_min_x < m_max_x) ? start_ns : m_view_time_offset_ns;
+    m_v_max_x = m_v_min_x + m_v_width;
+
+    ROCPROFVIS_ASSERT(m_v_max_x > m_v_min_x);
+    m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
+
+    // Ensure offsets remain within global bounds (after potential zoom computation).
+    if(m_range_x > 0.0 && m_view_time_offset_ns + m_v_width > m_range_x)
+    {
+        m_view_time_offset_ns = std::max(0.0, m_range_x - m_v_width);
+        m_v_min_x             = m_min_x + m_view_time_offset_ns;
+        m_v_max_x             = m_v_min_x + m_v_width;
+    }
+
+    // Mark grid for recalculation since scale changed.
+    m_recalculate_grid_interval = true;
+}
+
 TimelineView::~TimelineView()
 {
     DestroyGraphs();
@@ -211,6 +269,8 @@ TimelineView::~TimelineView()
         m_scroll_to_track_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), m_new_track_token);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kSetViewRange),
+                                             m_set_view_range_token);
 }
 
 void

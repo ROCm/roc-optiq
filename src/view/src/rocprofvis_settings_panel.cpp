@@ -8,7 +8,7 @@
 
 // Layout constants
 constexpr float kCategorywidth = 150.0f;
-constexpr float kContentwidth  = 450.0f;
+constexpr float kContentwidth  = 460.0f;
 constexpr float kContentHeight = 450.0f;
 
 namespace RocProfVis
@@ -19,11 +19,13 @@ namespace View
 SettingsPanel::SettingsPanel(SettingsManager& settings)
 : m_should_open(false)
 , m_settings_changed(false)
+, m_settings_confirmed(false)
 , m_category(Display)
 , m_settings(settings)
 , m_fonts(settings.GetFontManager())
+, m_usersettings_default(settings.GetDefaultUserSettings())
+, m_usersettings_initial(m_usersettings_default)
 , m_usersettings(settings.GetUserSettings())
-, m_usersettings_initial(m_usersettings)
 , m_font_settings({ m_usersettings.display_settings.dpi_based_scaling,
                     m_usersettings.display_settings.font_size_index })
 {
@@ -70,6 +72,10 @@ SettingsPanel::Render()
             {
                 m_category = Display;
             }
+            if(ImGui::Selectable("Units", m_category == Units))
+            {
+                m_category = Units;
+            }
             ImGui::EndChild();
 
             ImGui::SameLine();
@@ -81,6 +87,12 @@ SettingsPanel::Render()
                 case Display:
                 {
                     RenderDisplayOptions();
+                    break;
+                }
+                case Units:
+                {
+                    RenderUnitOptions();
+                    break;
                 }
                 break;
             }
@@ -93,7 +105,20 @@ SettingsPanel::Render()
                                  ImGui::GetFrameHeightWithSpacing());
             if(ResetButton())
             {
-                ResetCategory(m_category);
+                switch(m_category)
+                {
+                    case Display:
+                    {
+                        ResetDisplayOptions();
+                        break;
+                    }
+                    case Units:
+                    {
+                        ResetUnitOptions();
+                        break;
+                    }
+                    break;
+                }
             }
 
             // Bottom bar for Ok/Cancel
@@ -108,8 +133,9 @@ SettingsPanel::Render()
                 m_usersettings.display_settings.font_size_index =
                     m_font_settings.size_index;
 
-                m_settings_changed = true;
-                m_should_open      = false;
+                m_settings_changed   = true;
+                m_settings_confirmed = true;
+                m_should_open        = false;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -126,8 +152,9 @@ SettingsPanel::Render()
 
         if(m_settings_changed)
         {
-            m_settings.ApplyUserSettings();
-            m_settings_changed = false;
+            m_settings.ApplyUserSettings(m_settings_confirmed);
+            m_settings_changed   = false;
+            m_settings_confirmed = false;
         }
     }
 }
@@ -142,6 +169,8 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Theme");
     ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Light").x + 2 * style.FramePadding.x +
+                            ImGui::GetFrameHeightWithSpacing());
     if(ImGui::Combo("##theme", &theme_index, "Light\0Dark\0\0"))
     {
         m_usersettings.display_settings.use_dark_mode = (theme_index == 0) ? false : true;
@@ -174,7 +203,7 @@ SettingsPanel::RenderDisplayOptions()
         m_font_settings.size_index--;
     }
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::CalcTextSize("000").x +
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("00").x + 2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     ImGui::Combo("##font_size", &m_font_settings.size_index, m_font_sizes_ptr.data(),
                  m_font_sizes_ptr.size());
@@ -216,21 +245,43 @@ SettingsPanel::RenderDisplayOptions()
 }
 
 void
-SettingsPanel::ResetCategory(Category category)
+SettingsPanel::RenderUnitOptions()
 {
-    const UserSettings& usersettings_default = m_settings.GetDefaultUserSettings();
-    switch(m_category)
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    // Theme selection
+    ImGui::TextUnformatted("Time");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Time Format");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("0Nanoseconds").x +
+                            2 * style.FramePadding.x +
+                            ImGui::GetFrameHeightWithSpacing());
+    int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
+    if(ImGui::Combo("##time_format", &time_format_index, "Timecode\0Nanoseconds\0\0"))
     {
-        case Display:
-        {
-            m_usersettings.display_settings = usersettings_default.display_settings;
-            m_font_settings.dpi_scaling =
-                usersettings_default.display_settings.dpi_based_scaling;
-            m_font_settings.size_index =
-                usersettings_default.display_settings.font_size_index;
-        }
-        break;
+        m_usersettings.unit_settings.time_format =
+            static_cast<TimeFormat>(time_format_index);
+        m_settings_changed = true;
     }
+}
+
+void
+SettingsPanel::ResetDisplayOptions()
+{
+    m_usersettings.display_settings = m_usersettings_default.display_settings;
+    m_font_settings.dpi_scaling =
+        m_usersettings_default.display_settings.dpi_based_scaling;
+    m_font_settings.size_index = m_usersettings_default.display_settings.font_size_index;
+    m_settings_changed         = true;
+}
+
+void
+SettingsPanel::ResetUnitOptions()
+{
+    m_usersettings.unit_settings.time_format =
+        m_usersettings_default.unit_settings.time_format;
     m_settings_changed = true;
 }
 

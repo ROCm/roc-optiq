@@ -38,10 +38,11 @@ public:
     FlameTrackItem(DataProvider&                      dp,
                    std::shared_ptr<TimelineSelection> timeline_selection, int chart_id,
                    std::string name, double zoom, double movement, double min_x,
-                   double max_x, double scale_x);
+                   double max_x, double scale_x, float level_min, float level_max);
     ~FlameTrackItem();
 
     bool ReleaseData() override;
+    void RenderMetaDataAreaExpand() override;
 
 protected:
     void RenderChart(float graph_width) override;
@@ -69,10 +70,11 @@ private:
     std::vector<uint64_t>              m_selected_event_id;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     FlameTrackProjectSettings          m_project_settings;
-
+    float                              m_min_level;
+    float                              m_max_level;
     // Used to enforce one selection change per render cycle.
-    bool m_selection_changed;
-    bool m_has_drawn_tool_tip;
+    bool                            m_selection_changed;
+    bool                            m_has_drawn_tool_tip;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
 };
 

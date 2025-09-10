@@ -532,19 +532,30 @@ ProfileDatabase::BuildTableQuery(
         query += group;
     }
     query += ")";
-    if(count_only)
+    if (filter && strlen(filter))
     {
-        query += " SELECT (SELECT COUNT(*) FROM all_rows) AS [NumRecords], * FROM all_rows "; 
+        query += ", filtered_rows AS (SELECT * FROM all_rows WHERE (";
+        query += filter;
+        query += "))";
+        if(count_only)
+        {
+            query += " SELECT (SELECT COUNT(*) FROM filtered_rows) AS [NumRecords], * FROM filtered_rows "; 
+        }
+        else
+        {
+            query += " SELECT * FROM filtered_rows "; 
+        }
     }
     else
     {
-        query += " SELECT * FROM all_rows "; 
-    }
-    if (filter && strlen(filter))
-    {
-        query += " WHERE (";
-        query += filter;
-        query += ")";
+        if(count_only)
+        {
+            query += " SELECT (SELECT COUNT(*) FROM all_rows) AS [NumRecords], * FROM all_rows "; 
+        }
+        else
+        {
+            query += " SELECT * FROM all_rows "; 
+        }
     }
     if (sort_column && strlen(sort_column))
     {

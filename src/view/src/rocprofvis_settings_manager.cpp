@@ -1,11 +1,11 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_settings_manager.h"
-#include "rocprofvis_font_manager.h"
-#include "rocprofvis_settings_panel.h"
-#include "rocprofvis_core.h"
 #include "imgui.h"
 #include "implot.h"
+#include "rocprofvis_core.h"
+#include "rocprofvis_font_manager.h"
+#include "rocprofvis_settings_panel.h"
 #include <cstdlib>
 #include <fstream>
 
@@ -297,6 +297,7 @@ SettingsManager::SaveSettingsJson()
 
     SerializeInternalSettings(settings_json);
     SerializeDisplaySettings(settings_json);
+    SerializeUnitSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -323,6 +324,7 @@ SettingsManager::LoadSettingsJson()
     {
         DeserializeInternalSettings(result.second);
         DeserializeDisplaySettings(result.second);
+        DeserializeUnitSettings(result.second);
     }
     else
     {
@@ -397,7 +399,8 @@ SettingsManager::GetColorWheel()
 
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
-, m_usersettings_default({ DisplaySettings{ false, true, 6 } })
+, m_usersettings_default(
+      { DisplaySettings{ false, true, 6 }, UnitSettings{ TimeFormat::kTimecode } })
 , m_usersettings(m_usersettings_default)
 , m_display_dpi(1.5f)
 , m_json_path(GetStandardConfigPath())
@@ -429,10 +432,13 @@ SettingsManager::GetDefaultUserSettings() const
 }
 
 void
-SettingsManager::ApplyUserSettings()
+SettingsManager::ApplyUserSettings(bool save_json)
 {
     ApplyUserDisplaySettings();
-    SaveSettingsJson();
+    if(save_json)
+    {
+        SaveSettingsJson();
+    }
 }
 
 void
@@ -522,14 +528,32 @@ SettingsManager::DeserializeInternalSettings(jt::Json& json)
     jt::Json& is = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_INTERNAL];
     if(is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES].isArray())
     {
-        for(jt::Json& entry :
-            is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES].getArray())
+        for(jt::Json& entry : is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES].getArray())
         {
             if(entry.isString())
             {
                 m_internalsettings.recent_files.emplace_back(entry.getString());
             }
         }
+    }
+}
+
+void
+SettingsManager::SerializeUnitSettings(jt::Json& json)
+{
+    jt::Json& us = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_UNITS];
+    us[JSON_KEY_SETTINGS_UNITS_TIME_FORMAT] =
+        static_cast<int>(m_usersettings.unit_settings.time_format);
+}
+
+void
+SettingsManager::DeserializeUnitSettings(jt::Json& json)
+{
+    jt::Json& us = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_UNITS];
+    if(us[JSON_KEY_SETTINGS_UNITS_TIME_FORMAT].isLong())
+    {
+        m_usersettings.unit_settings.time_format =
+            static_cast<TimeFormat>(us[JSON_KEY_SETTINGS_UNITS_TIME_FORMAT].getLong());
     }
 }
 

@@ -7,6 +7,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "spdlog/spdlog.h"
+#include <cmath>
 #include <limits>
 #include <string>
 #include <unordered_set>
@@ -23,12 +24,14 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
                                int id, std::string name, double zoom,
                                double time_offset_ns, double min_x, double max_x,
-                               double scale_x)
+                               double scale_x, float level_min, float level_max)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_request_random_color(true)
 , m_text_padding(ImVec2(4.0f, 2.0f))
 , m_level_height(40.0f)
 , m_timeline_selection(timeline_selection)
+, m_min_level(level_min)
+, m_max_level(level_max)
 , m_selection_changed(false)
 , m_has_drawn_tool_tip(false)
 , m_project_settings(dp.GetTraceFilePath(), *this)
@@ -47,6 +50,36 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
     }
 }
 
+void
+FlameTrackItem::RenderMetaDataAreaExpand()
+{
+    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 button_size = ImVec2(28.0f, 28.0f);
+    ImVec2 pos = ImVec2(window_size.x - button_size.x, window_size.y - button_size.y);
+
+    ImGui::SetCursorPos(pos);
+
+    int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
+
+    if(visible_levels <= m_max_level + 1)
+    {
+        if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
+        {
+            m_track_height = m_max_level * m_level_height + m_level_height + 2.0f;
+        }
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to see all events");
+    }
+    else if(m_track_height > std::max(m_max_level * m_level_height + m_level_height,
+                     m_track_default_height))  // stand-in for default height..
+    {
+        if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
+        {
+            m_track_height =
+                m_track_default_height;  // Default track height defined in parent class.
+        }
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to default height");
+    }
+}
 FlameTrackItem::~FlameTrackItem()
 {
     EventManager::GetInstance()->Unsubscribe(

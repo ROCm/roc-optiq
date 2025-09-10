@@ -22,33 +22,33 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 }
 
 double
-StickyNote::GetTimeNs()
+StickyNote::GetTimeNs() const
 {
     return m_time_ns;
 }
 float
-StickyNote::GetYOffset()
+StickyNote::GetYOffset() const
 {
     return m_y_offset;
 }
 ImVec2
-StickyNote::GetSize()
+StickyNote::GetSize() const
 {
     return m_size;
 }
-std::string&
-StickyNote::GetText()
+const std::string&
+StickyNote::GetText() const
 {
     return m_text;
 }
 
 int
-StickyNote::GetID()
+StickyNote::GetID() const
 {
     return m_id;
 }
-std::string&
-StickyNote::GetTitle()
+const std::string&
+StickyNote::GetTitle() const
 {
     return m_title;
 }

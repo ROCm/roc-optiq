@@ -86,11 +86,8 @@ SideBar::Render()
                                                 {
                                                     if(queue.info)
                                                     {
-                                                        ImGui::PushID(
-                                                            queue.info->name.c_str());
                                                         RenderTrackItem(
                                                             queue.graph_index);
-                                                        ImGui::PopID();
                                                     }
                                                 }
                                                 ImGui::Unindent();
@@ -106,11 +103,8 @@ SideBar::Render()
                                                 {
                                                     if(stream.info)
                                                     {
-                                                        ImGui::PushID(
-                                                            stream.info->name.c_str());
                                                         RenderTrackItem(
                                                             stream.graph_index);
-                                                        ImGui::PopID();
                                                     }
                                                 }
                                                 ImGui::Unindent();
@@ -126,11 +120,8 @@ SideBar::Render()
                                                 {
                                                     if(thread.info)
                                                     {
-                                                        ImGui::PushID(
-                                                            thread.info->name.c_str());
                                                         RenderTrackItem(
                                                             thread.graph_index);
-                                                        ImGui::PopID();
                                                     }
                                                 }
                                                 ImGui::Unindent();
@@ -146,11 +137,8 @@ SideBar::Render()
                                                 {
                                                     if(counter.info)
                                                     {
-                                                        ImGui::PushID(
-                                                            counter.info->name.c_str());
                                                         RenderTrackItem(
                                                             counter.graph_index);
-                                                        ImGui::PopID();
                                                     }
                                                 }
                                                 ImGui::Unindent();
@@ -183,9 +171,7 @@ SideBar::Render()
                 {
                     for(const int& index : topology.uncategorized_graph_indices)
                     {
-                        ImGui::PushID((*m_graphs)[index].chart->GetID());
                         RenderTrackItem(index);
-                        ImGui::PopID();
                     }
                 }
                 if(use_header)
@@ -209,6 +195,7 @@ SideBar::RenderTrackItem(const int& index)
 {
     rocprofvis_graph_t& graph = (*m_graphs)[index];
 
+    ImGui::PushID(graph.chart->GetID());
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
                           m_settings.GetColor(Colors::kTransparent));
@@ -295,6 +282,7 @@ SideBar::RenderTrackItem(const int& index)
             "Not In Frame by: %f units.", graph.chart->GetDistanceToView());
     }
 #endif
+    ImGui::PopID();
 }
 
 }  // namespace View

@@ -41,13 +41,12 @@ public:
                   double time_offset_ns, double& min_x, double& max_x, double scale_x);
     ~LineTrackItem();
 
-    bool  ReleaseData() override;
+    bool ReleaseData() override;
 
 protected:
     virtual void RenderMetaAreaScale() override;
     virtual void RenderChart(float graph_width) override;
     virtual void RenderMetaAreaOptions() override;
-    
 
     void UpdateYScaleExtents();
 

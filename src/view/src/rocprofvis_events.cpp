@@ -19,10 +19,17 @@ RocEvent::RocEvent(int event_id)
 , m_allow_propagate(true)
 {}
 
+RocEvent::RocEvent(int event_id, const std::string& src_id)
+: m_event_id(event_id)
+, m_event_type(RocEventType::kRocEvent)
+, m_allow_propagate(true)
+, m_source_id(src_id)
+{}
+
 RocEvent::~RocEvent() {}
 
 int
-RocEvent::GetId()
+RocEvent::GetId() const
 {
     return m_event_id;
 }
@@ -34,7 +41,7 @@ RocEvent::SetId(int id)
 }
 
 RocEventType
-RocEvent::GetType()
+RocEvent::GetType() const
 {
     return m_event_type;
 }
@@ -63,13 +70,25 @@ RocEvent::CanPropagate() const
     return m_allow_propagate;
 }
 
+void
+RocEvent::SetSourceId(const std::string& source_id)
+{
+    m_source_id = source_id;
+}
+
+const std::string
+RocEvent::GetSourceId() const
+{
+    return m_source_id;
+}
+
 // TrackDataEvent Implementation
+
 TrackDataEvent::TrackDataEvent(int event_id, uint64_t track_id,
-                               const std::string& trace_path, uint64_t request_id,
+                               const std::string& source_id, uint64_t request_id,
                                uint64_t response_code)
-: RocEvent(event_id)
+: RocEvent(event_id, source_id)
 , m_track_id(track_id)
-, m_trace_path(trace_path)
 , m_request_id(request_id)
 , m_response_code(response_code)
 {
@@ -80,12 +99,6 @@ uint64_t
 TrackDataEvent::GetTrackID() const
 {
     return m_track_id;
-}
-
-const std::string&
-TrackDataEvent::GetTracePath() const
-{
-    return m_trace_path;
 }
 
 uint64_t
@@ -100,18 +113,11 @@ TrackDataEvent::GetResponseCode() const
     return m_response_code;
 }
 
-TableDataEvent::TableDataEvent(const std::string& trace_path, uint64_t request_id)
-: RocEvent(static_cast<int>(RocEvents::kNewTableData))
-, m_trace_path(trace_path)
+TableDataEvent::TableDataEvent(const std::string& source_id, uint64_t request_id)
+: RocEvent(static_cast<int>(RocEvents::kNewTableData), source_id)
 , m_request_id(request_id)
 {
     m_event_type = RocEventType::kTableDataEvent;
-}
-
-const std::string&
-TableDataEvent::GetTracePath() const
-{
-    return m_trace_path;
 }
 
 uint64_t
@@ -135,10 +141,9 @@ RocProfVis::View::ComputeTableSearchEvent::GetSearchTerm()
 }
 #endif
 
-TabEvent::TabEvent(int event_id, const std::string& tab_id, const std::string& tab_source)
-: RocEvent(event_id)
+TabEvent::TabEvent(int event_id, const std::string& tab_id, const std::string& source_id)
+: RocEvent(event_id, source_id)
 , m_tab_id(tab_id)
-, m_tab_source(tab_source)
 {
     m_event_type = RocEventType::kTabEvent;
 }
@@ -149,20 +154,13 @@ TabEvent::GetTabId() const
     return m_tab_id;
 }
 
-const std::string&
-TabEvent::GetTabSource() const
-{
-    return m_tab_source;
-}
-
 TrackSelectionChangedEvent::TrackSelectionChangedEvent(
     std::vector<uint64_t> selected_tracks, double start_ns, double end_ns,
-    const std::string& trace_path)
-: RocEvent(static_cast<int>(RocEvents::kTimelineTrackSelectionChanged))
+    const std::string& source_id)
+: RocEvent(static_cast<int>(RocEvents::kTimelineTrackSelectionChanged), source_id)
 , m_selected_tracks(std::move(selected_tracks))
 , m_start_ns(start_ns)
 , m_end_ns(end_ns)
-, m_trace_path(trace_path)
 {
     m_event_type = RocEventType::kTimelineTrackSelectionChangedEvent;
 }
@@ -185,17 +183,10 @@ TrackSelectionChangedEvent::GetEndNs() const
     return m_end_ns;
 }
 
-const std::string&
-TrackSelectionChangedEvent::GetTracePath() const
-{
-    return m_trace_path;
-}
-
 ScrollToTrackEvent::ScrollToTrackEvent(int event_id, const uint64_t& track_id,
-                                       const std::string& trace_path)
-: RocEvent(event_id)
+                                       const std::string& source_id)
+: RocEvent(event_id, source_id)
 , m_track_id(track_id)
-, m_trace_path(trace_path)
 {
     m_event_type = RocEventType::kScrollToTrackEvent;
 }
@@ -206,21 +197,14 @@ ScrollToTrackEvent::GetTrackID() const
     return m_track_id;
 }
 
-const std::string&
-ScrollToTrackEvent::GetTracePath() const
-{
-    return m_trace_path;
-}
-
 EventSelectionChangedEvent::EventSelectionChangedEvent(uint64_t event_id,
                                                        uint64_t track_id, bool selected,
-                                                       const std::string& trace_path,
+                                                       const std::string& source_id,
                                                        bool               batch)
-: RocEvent(static_cast<int>(RocEvents::kTimelineEventSelectionChanged))
+: RocEvent(static_cast<int>(RocEvents::kTimelineEventSelectionChanged), source_id)
 , m_event_id(event_id)
 , m_event_track_id(track_id)
 , m_selected(selected)
-, m_trace_path(trace_path)
 , m_is_batch(batch)
 {
     m_event_type = RocEventType::kTimelineEventSelectionChangedEvent;
@@ -244,37 +228,30 @@ EventSelectionChangedEvent::EventSelected() const
     return m_selected;
 }
 
-const std::string&
-EventSelectionChangedEvent::GetTracePath() const
-{
-    return m_trace_path;
-}
-
 bool
 EventSelectionChangedEvent::IsBatch() const
 {
     return m_is_batch;
 }
 
-const int
-StickyNoteEvent::GetID()
-{
-    return m_id;
-}
-
-StickyNoteEvent::StickyNoteEvent(int id)
-: RocEvent(static_cast<int>(RocEvents::kStickyNoteEdited))
+StickyNoteEvent::StickyNoteEvent(int id, const std::string& source_id)
+: RocEvent(static_cast<int>(RocEvents::kStickyNoteEdited), source_id)
 , m_id(id)
 {
     SetType(RocEventType::kStickyNoteEvent);
 }
 
+const int
+StickyNoteEvent::GetNoteId() const
+{
+    return m_id;
+}
+
 RangeEvent::RangeEvent(int event_id, double start_ns, double end_ns,
-                       const std::string& trace_path)
-: RocEvent(event_id)
+                       const std::string& source_id)
+: RocEvent(event_id, source_id)
 , m_start_ns(start_ns)
 , m_end_ns(end_ns)
-, m_trace_path(trace_path)
 {
     m_event_type = RocEventType::kRangeEvent;
 }
@@ -289,10 +266,4 @@ double
 RangeEvent::GetEndNs() const
 {
     return m_end_ns;
-}
-
-const std::string&
-RangeEvent::GetTracePath() const
-{
-    return m_trace_path;
 }

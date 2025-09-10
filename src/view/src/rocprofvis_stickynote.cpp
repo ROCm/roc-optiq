@@ -10,12 +10,14 @@ namespace View
 
 static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
-                       const std::string& text, const std::string& title)
+                       const std::string& text, const std::string& title,
+                       const std::string& project_id)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
 , m_size(size)
 , m_text(text)
 , m_title(title)
+, m_project_id(project_id)
 , m_id(s_unique_id_counter)
 {
     s_unique_id_counter = s_unique_id_counter + 1;
@@ -138,7 +140,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
            ("EditSticky##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
            ImVec2(edit_btn_size, edit_btn_size)))
     {
-        EventManager::GetInstance()->AddEvent(std::make_shared<StickyNoteEvent>(m_id));
+        EventManager::GetInstance()->AddEvent(std::make_shared<StickyNoteEvent>(m_id, m_project_id));
     }
 
     // Draw edit button graphics over the button

@@ -109,7 +109,7 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
         {
             std::shared_ptr<TrackSelectionChangedEvent> selection_changed_event =
                 std::static_pointer_cast<TrackSelectionChangedEvent>(e);
-            if(selection_changed_event && selection_changed_event->GetTracePath() ==
+            if(selection_changed_event && selection_changed_event->GetSourceId() ==
                                               m_data_provider.GetTraceFilePath())
             {
                 if(m_event_table)
@@ -130,7 +130,7 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
         {
             std::shared_ptr<EventSelectionChangedEvent> selection_changed_event =
                 std::static_pointer_cast<EventSelectionChangedEvent>(e);
-            if(selection_changed_event && selection_changed_event->GetTracePath() ==
+            if(selection_changed_event && selection_changed_event->GetSourceId() ==
                                               m_data_provider.GetTraceFilePath())
             {
                 if(m_events_view)
@@ -151,7 +151,7 @@ AnalysisView::HandleNewTableData(std::shared_ptr<RocEvent> e)
         std::shared_ptr<TableDataEvent> table_data_event =
             std::static_pointer_cast<TableDataEvent>(e);
         if(table_data_event &&
-           table_data_event->GetTracePath() == m_data_provider.GetTraceFilePath())
+           table_data_event->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
             const uint64_t& request_id = table_data_event->GetRequestID();
             if(request_id == DataProvider::EVENT_TABLE_REQUEST_ID && m_event_table)

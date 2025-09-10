@@ -152,7 +152,7 @@ FlameTrackItem::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
     std::shared_ptr<EventSelectionChangedEvent> selection_changed_event =
         std::static_pointer_cast<EventSelectionChangedEvent>(e);
     if(selection_changed_event &&
-       selection_changed_event->GetTracePath() == m_data_provider.GetTraceFilePath())
+       selection_changed_event->GetSourceId() == m_data_provider.GetTraceFilePath())
     {
         // Update selection state cache.
         for(ChartItem& item : m_chart_items)

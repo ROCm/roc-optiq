@@ -62,6 +62,7 @@ private:
     int                             m_edit_sticky_id         = -1;
     EventManager::SubscriptionToken m_edit_token;
 
+    std::string                    m_project_id;
     AnnotationsViewProjectSettings m_project_settings;
 };
 

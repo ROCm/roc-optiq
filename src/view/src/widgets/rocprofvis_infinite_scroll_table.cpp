@@ -55,7 +55,7 @@ void
 InfiniteScrollTable::HandleTrackSelectionChanged(
     std::shared_ptr<TrackSelectionChangedEvent> e)
 {
-    if(e && e->GetTracePath() == m_data_provider.GetTraceFilePath())
+    if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
     {
         const std::vector<uint64_t>& tracks   = e->GetSelectedTracks();
         double                       start_ns = e->GetStartNs();
@@ -137,7 +137,7 @@ InfiniteScrollTable::HandleTrackSelectionChanged(
 void
 InfiniteScrollTable::HandleNewTableData(std::shared_ptr<TableDataEvent> e)
 {
-    if(e && e->GetTracePath() == m_data_provider.GetTraceFilePath())
+    if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
     {
         m_data_changed = true;
     }

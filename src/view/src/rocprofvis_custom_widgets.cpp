@@ -11,35 +11,37 @@ void
 RocProfVisCustomWidget::WithPadding(float left, float right, float top, float bottom, float height,
                                     const std::function<void()>& content)
 {
-    // Top padding
     if(top > 0.0f) ImGui::Dummy(ImVec2(0, top));
 
-    // Left padding
-    if(left > 0.0f)
+    // No border flags for invisible borders
+    if(ImGui::BeginTable("##padding_table", 3, ImGuiTableFlags_SizingFixedFit))
     {
-        ImGui::Dummy(ImVec2(left, 0));
-        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::TableSetupColumn("LeftPad", ImGuiTableColumnFlags_WidthFixed, left);
+        ImGui::TableSetupColumn("Content", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("RightPad", ImGuiTableColumnFlags_WidthFixed, right);
+
+        ImGui::TableNextRow();
+
+        // Left padding
+        ImGui::TableSetColumnIndex(0);
+        if(left > 0.0f) ImGui::Dummy(ImVec2(left, 0));
+
+        // Content
+        ImGui::TableSetColumnIndex(1);
+        ImGui::BeginGroup();
+        content();
+        ImGui::EndGroup();
+
+        // Right padding
+        ImGui::TableSetColumnIndex(2);
+        if(right > 0.0f) ImGui::Dummy(ImVec2(right, 0));
+
+        ImGui::EndTable();
     }
 
-    // Calculate width for the child: available width minus right padding
-    float content_width = ImGui::GetContentRegionAvail().x - right;
-    if(content_width < 0.0f) content_width = 0.0f;
-
-
-    ImGui::BeginChild("##padded_child", ImVec2(content_width, height), false,
-                      ImGuiChildFlags_AutoResizeY);
-    content();
-    ImGui::EndChild();
-
-    // Right padding
-    if(right > 0.0f)
-    {
-        ImGui::SameLine(0.0f, 0.0f);
-        ImGui::Dummy(ImVec2(right, 0));
-    }
-
-    // Bottom padding
     if(bottom > 0.0f) ImGui::Dummy(ImVec2(0, bottom));
+
+    
 }
 
 }  // namespace View

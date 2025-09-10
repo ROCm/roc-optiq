@@ -82,7 +82,7 @@ void
 EventsView::RenderEventExtData(const event_info_t* event_data)
 {
     RocProfVisCustomWidget::WithPadding(
-        16.0f, 16.0f, 16.0f, 16.0f, m_standard_eventcard_height, [this, event_data]() {
+        7.0f, 7.0f, 7.0f, 7.0f, m_standard_eventcard_height, [this, event_data]() {
             ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(
                 m_settings.GetColor(Colors::kSplitterColor));
 
@@ -178,9 +178,7 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
                 else
                 {
                     float parent_width = ImGui::GetContentRegionAvail().x;
-                    ImGui::BeginChild("ExtDataTableChild",
-                                      ImVec2(parent_width, m_standard_eventcard_height),
-                                      ImGuiChildFlags_Borders);
+                   
 
                     if(ImGui::BeginTable("ExtDataTable", 2, TABLE_FLAGS))
                     {
@@ -205,8 +203,7 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
                         }
                         ImGui::EndTable();
                     }
-                    ImGui::EndChild();
-                }
+                 }
             }
 
             ImGui::PopStyleColor(3);
@@ -217,7 +214,7 @@ void
 EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 {
     RocProfVisCustomWidget::WithPadding(
-        16.0f, 16.0f, 16.0f, 16.0f, m_standard_eventcard_height, [this, event_data]() {
+        7.0f, 7.0f, 7.0f, 1.0f, m_standard_eventcard_height, [this, event_data]() {
             ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(
                 m_settings.GetColor(Colors::kSplitterColor));
 
@@ -233,13 +230,9 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                 }
                 else
                 {
-                    // Set a fixed width for the child region (e.g., 700.0f)
-                    float parent_width = ImGui::GetContentRegionAvail().x;
-                    ImGui::BeginChild("FlowInfoTableChild", ImVec2(parent_width, 400.0f),
-                                      ImGuiChildFlags_Borders);
+                    
 
-                    // Optionally, set the next item width to match the child
-                    ImGui::SetNextItemWidth(parent_width);
+                
 
                     if(ImGui::BeginTable("FlowInfoTable", 5, TABLE_FLAGS))
                     {
@@ -279,8 +272,7 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                         }
                         ImGui::EndTable();
                     }
-                    ImGui::EndChild();
-                }
+                 }
             }
             ImGui::PopStyleColor(3);
         });
@@ -290,7 +282,7 @@ void
 EventsView::RenderCallStackData(const event_info_t* event_data)
 {
     RocProfVisCustomWidget::WithPadding(
-        16.0f, 16.0f, 16.0f, 16.0f, m_standard_eventcard_height, [this, event_data]() {
+        7.0f, 7.0f, 1.0f, 7.0f, m_standard_eventcard_height, [this, event_data]() {
             ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
                 Colors::kSplitterColor));  // Use your desired color enum
 

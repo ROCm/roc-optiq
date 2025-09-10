@@ -60,7 +60,6 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_range_x(0.0f)
 , m_can_drag_to_pan(false)
 , m_artificial_scrollbar_height(30)
-, m_display_time_format(TimeFormat::kTimecode)
 , m_grid_interval_ns(0.0)
 , m_recalculate_grid_interval(true)
 , m_last_zoom(1.0f)
@@ -71,6 +70,8 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
+, m_annotations_view(dp.GetTraceFilePath())
+
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -136,9 +137,9 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
                       false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
-    ImGui::BeginChild("UI Interactive Content", ImVec2(m_graph_size.x, total_height),
-                      false,
-                      window_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::BeginChild(
+        "UI Interactive Content", ImVec2(m_graph_size.x, total_height), false,
+        window_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
@@ -645,7 +646,7 @@ TimelineView::CalculateGridInterval()
 {
     // measure the size of the label to determine the step size
     std::string label;
-    switch(m_display_time_format)
+    switch(m_settings.GetUserSettings().unit_settings.time_format)
     {
         // use the largest time point to determine the label size
         case TimeFormat::kTimecode:
@@ -733,28 +734,6 @@ TimelineView::RenderGridAlt()
             ImGui::OpenPopup("Time Format Selection");
         }
 
-        // Context menu for time format selection
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
-        if(ImGui::BeginPopup("Time Format Selection"))
-        {
-            ImGui::Text("Time format:");
-            ImGui::Separator();
-
-            if(ImGui::MenuItem("Timecode", nullptr,
-                               m_display_time_format == TimeFormat::kTimecode))
-            {
-                m_display_time_format = TimeFormat::kTimecode;
-            }
-            if(ImGui::MenuItem("Nanoseconds", nullptr,
-                               m_display_time_format == TimeFormat::kNanoseconds))
-            {
-                m_display_time_format = TimeFormat::kNanoseconds;
-            }
-            ImGui::EndPopup();
-        }
-        ImGui::PopStyleVar(2);
-
         std::string label;
         for(auto i = 0; i < m_grid_interval_count; i++)
         {
@@ -768,7 +747,7 @@ TimelineView::RenderGridAlt()
                        cursor_position.y + content_size.y + tick_height - m_ruler_height),
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
-            switch(m_display_time_format)
+            switch(m_settings.GetUserSettings().unit_settings.time_format)
             {
                 // use the largest time point to determine the step size
                 case TimeFormat::kTimecode:
@@ -816,7 +795,7 @@ TimelineView::RenderGrid()
     {
         std::string label;
 
-        switch(m_display_time_format)
+        switch(m_settings.GetUserSettings().unit_settings.time_format)
         {
             // use the largest time point to determine the step size
             case TimeFormat::kTimecode:
@@ -866,28 +845,6 @@ TimelineView::RenderGrid()
             ImGui::OpenPopup("Time Format Selection");
         }
 
-        // Context menu for time format selection
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
-        if(ImGui::BeginPopup("Time Format Selection"))
-        {
-            ImGui::Text("Time format:");
-            ImGui::Separator();
-
-            if(ImGui::MenuItem("Timecode", nullptr,
-                               m_display_time_format == TimeFormat::kTimecode))
-            {
-                m_display_time_format = TimeFormat::kTimecode;
-            }
-            if(ImGui::MenuItem("Nanoseconds", nullptr,
-                               m_display_time_format == TimeFormat::kNanoseconds))
-            {
-                m_display_time_format = TimeFormat::kNanoseconds;
-            }
-            ImGui::EndPopup();
-        }
-        ImGui::PopStyleVar(2);
-
         // Draw the vertical lines for the grid
         constexpr float tick_height = 10.0f;
 
@@ -911,7 +868,7 @@ TimelineView::RenderGrid()
             std::string label;
             double      time_point_ns =
                 m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
-            switch(m_display_time_format)
+            switch(m_settings.GetUserSettings().unit_settings.time_format)
             {
                 // use the largest time point to determine the step size
                 case TimeFormat::kTimecode:
@@ -1299,10 +1256,11 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                graph.chart =
-                    new FlameTrackItem(m_data_provider, m_timeline_selection,
-                                       track_info->id, track_info->name, m_zoom,
-                                       m_view_time_offset_ns, m_min_x, m_max_x, scale_x);
+
+                graph.chart = new FlameTrackItem(
+                    m_data_provider, m_timeline_selection, track_info->id,
+                    track_info->name, m_zoom, m_view_time_offset_ns, m_min_x, m_max_x,
+                    scale_x, track_info->min_value, track_info->max_value);
                 graph.graph_type = rocprofvis_graph_t::TYPE_FLAMECHART;
                 break;
             }

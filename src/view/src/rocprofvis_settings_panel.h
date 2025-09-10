@@ -27,16 +27,21 @@ private:
     };
     enum Category
     {
-        Display
+        Display,
+        Units
     };
 
     void RenderDisplayOptions();
+    void RenderUnitOptions();
 
-    void ResetCategory(Category category);
+    void ResetDisplayOptions();
+    void ResetUnitOptions();
+
     bool ResetButton();
 
     bool                     m_should_open;
     bool                     m_settings_changed;
+    bool                     m_settings_confirmed;
     Category                 m_category;
     std::list<std::string>   m_font_sizes;
     std::vector<const char*> m_font_sizes_ptr;
@@ -45,6 +50,7 @@ private:
     FontManager&     m_fonts;
     UserSettings&    m_usersettings;
 
+    const UserSettings& m_usersettings_default;
     // Copy of settings on Show().
     UserSettings m_usersettings_initial;
     // Seperate store for font settings to keep changes isolated to preview.

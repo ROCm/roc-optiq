@@ -26,12 +26,6 @@ namespace View
 class TimelineSelection;
 class TimelineView;
 
-enum class TimeFormat
-{
-    kTimecode,
-    kNanoseconds,
-};
-
 typedef struct ViewCoords
 {
     double time_offset_ns;
@@ -126,7 +120,6 @@ private:
     double                             m_last_data_req_view_time_offset_ns;
     int                                m_artificial_scrollbar_height;
     ImVec2                             m_graph_size;
-    TimeFormat                         m_display_time_format;
     double                             m_grid_interval_ns;
     int                                m_grid_interval_count;
     bool                               m_recalculate_grid_interval;

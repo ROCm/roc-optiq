@@ -29,15 +29,32 @@ public:
     void HandleNewTableData(std::shared_ptr<TableDataEvent> e);
 
 private:
+
+    // Important columns in the table
+    enum ImportantColumns
+    {
+        kId,
+        kName,
+        kTimeStartNs,
+        kTimeEndNs,
+        kDurationNs,
+        kTrackId,
+        kStreamId,
+        kNumImportantColumns
+    };
+
     struct FilterOptions
     {
         int  column_index;
         char group_columns[256];
         char filter[256];
     };
-
+    void RenderContextMenu() const;
     void RenderLoadingIndicator() const;
     bool XButton(const char* id) const;
+
+    uint64_t GetTrackIdHelper(
+        const std::vector<std::vector<std::string>>& table_data) const;
 
     std::vector<std::string> m_column_names;
     std::vector<const char*> m_column_names_ptr;
@@ -66,6 +83,8 @@ private:
 
     // Keep track of currently selected tracks for this table type
     std::vector<uint64_t> m_selected_tracks;
+
+    std::vector<size_t> m_important_column_idxs;
 };
 
 }  // namespace View

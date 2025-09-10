@@ -94,41 +94,65 @@ private:
     size_t m_max_capacity;
 };
 
-
-/**  
- * @brief Formats a time point, originally from a double representing nanoseconds (can be negative),  
- *        into a human-readable [+-]HH:MM:SS.nanoseconds string.  
- *  
- * @param time_point_ns The time point in nanoseconds, stored as a double.  
- * @param round_before_cast If true, std::round will be applied to the absolute value  
- *                          before casting to integer nanoseconds. Otherwise, it truncates.  
- * @return std::string The formatted duration string. Handles positive, negative, and zero values.  
- *                     Also handles NaN and Inf.  
- */ 
-std::string nanosecond_to_timecode_str(double time_point_ns, bool round_before_cast = false);
-
-/**  
- * @brief Converts a double representing nanoseconds into a string representation.  
- *  
- * @param time_point_ns The duration in nanoseconds as a double.  
- * @return std::string The formatted duration string in nanoseconds.  
+/**
+ * @brief Formats a time point, originally from a double representing nanoseconds (can be
+ * negative), into a human-readable [+-]HH:MM:SS.nanoseconds string.
+ *
+ * @param time_point_ns The time point in nanoseconds, stored as a double.
+ * @param round_before_cast If true, std::round will be applied to the absolute value
+ *                          before casting to integer nanoseconds. Otherwise, it
+ * truncates.
+ * @return std::string The formatted duration string. Handles positive, negative, and zero
+ * values. Also handles NaN and Inf.
  */
-std::string nanosecond_to_str(double time_point_ns);
+std::string
+nanosecond_to_timecode_str(double time_point_ns, bool round_before_cast = false);
+
+/**
+ * @brief Converts a double representing nanoseconds into a string representation.
+ *
+ * @param time_point_ns The duration in nanoseconds as a double.
+ * @return std::string The formatted duration string in nanoseconds.
+ */
+std::string
+nanosecond_to_str(double time_point_ns);
 
 /**
  * @brief Calculates a "nice" grid interval for a timeline.
  *
- * @param viewRange The total duration of the visible timeline range in nanoseconds, specified as a double.
+ * @param viewRange The total duration of the visible timeline range in nanoseconds,
+ * specified as a double.
  * @param targetDivisions The desired number of divisions on the screen.
  * @return A "nice" interval in nanoseconds (e.g., 1000, 2000, 5000, 10000...).
  */
-double calculate_nice_interval(double view_range, int target_divisions);
+double
+calculate_nice_interval(double view_range, int target_divisions);
 
-namespace TimeConstants {
-    constexpr uint64_t nanoseconds_per_second = 1'000'000'000;
-    constexpr uint64_t seconds_per_minute     = 60;
-    constexpr uint64_t minute_ns = seconds_per_minute * nanoseconds_per_second;
-} // namespace TimeConstants
+typedef struct ViewRangeNS
+{
+    double start_ns;
+    double end_ns;
+} ViewRangeNS;
+
+/**
+ * @brief Calculates an adaptive view range based on the item start time and duration.
+ *        Centers the item in view with an adaptive padding around it.
+ *
+ * @param item_start_ns The start time of the item in nanoseconds.
+ * @param item_duration_ns The duration of the item in nanoseconds.
+ * @return A ViewRangeNS struct representing the calculated view range.
+ */
+ViewRangeNS
+calculate_adaptive_view_range(double item_start_ns, double item_duration_ns);
+
+namespace TimeConstants
+{
+constexpr uint64_t ns_per_us    = 1000;
+constexpr uint64_t ns_per_ms    = 1000 * ns_per_us;
+constexpr uint64_t ns_per_s     = 1000 * ns_per_ms;
+constexpr uint64_t minute_in_s  = 60;
+constexpr uint64_t minute_in_ns = minute_in_s * ns_per_s;
+}  // namespace TimeConstants
 
 } // namespace View
 } // namespace RocProfVis

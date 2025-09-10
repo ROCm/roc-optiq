@@ -129,6 +129,13 @@ public:
     // Styling
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel();
+    /**
+     * Returns the default ImGui style.
+     */
+    const ImGuiStyle&         GetDefaultIMGUIStyle() const;
+    /**
+     * Returns the default style as configured by this class
+     */
     const ImGuiStyle&         GetDefaultStyle() const;
 
     // User settings
@@ -165,6 +172,7 @@ private:
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
     FontManager m_font_manager;
+    ImGuiStyle  m_default_imgui_style;
     ImGuiStyle  m_default_style;
     float       m_display_dpi;
 

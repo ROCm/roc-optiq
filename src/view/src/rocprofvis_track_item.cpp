@@ -38,7 +38,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
 , m_group_id_counter(0)
-, m_chunk_duration_ns(TimeConstants::nanoseconds_per_second *
+, m_chunk_duration_ns(TimeConstants::ns_per_s *
                       30)  // Default chunk duration
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
@@ -357,8 +357,8 @@ TrackItem::RequestData(double min, double max, float width)
 
     for(size_t i = 0; i < chunk_count; ++i)
     {
-        double chunk_start = min + i * TimeConstants::minute_ns;
-        double chunk_end   = std::min(chunk_start + TimeConstants::minute_ns, max);
+        double chunk_start = min + i * TimeConstants::minute_in_ns;
+        double chunk_end   = std::min(chunk_start + TimeConstants::minute_in_ns, max);
 
         double chunk_range = chunk_end - chunk_start;
         float  percentage  = static_cast<float>(chunk_range / range);

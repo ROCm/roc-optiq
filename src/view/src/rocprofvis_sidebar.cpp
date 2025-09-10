@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_sidebar.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_font_manager.h"
@@ -19,11 +20,13 @@ constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
 
 SideBar::SideBar(std::shared_ptr<TrackTopology>     topology,
                  std::shared_ptr<TimelineSelection> timeline_selection,
-                 std::vector<rocprofvis_graph_t>*   graphs)
+                 std::vector<rocprofvis_graph_t>*   graphs,
+                 DataProvider &dp)
 : m_settings(SettingsManager::GetInstance())
 , m_track_topology(topology)
 , m_timeline_selection(timeline_selection)
 , m_graphs(graphs)
+, m_data_provider(dp)
 {}
 
 SideBar::~SideBar() {}
@@ -217,7 +220,7 @@ SideBar::RenderTrackItem(const int& index)
     {
         EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
             static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-            graph.chart->GetID()));
+            graph.chart->GetID(), m_data_provider.GetTraceFilePath()));
     }
     ImGui::PopFont();
     if(ImGui::BeginItemTooltip())

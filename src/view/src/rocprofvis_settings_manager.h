@@ -172,7 +172,7 @@ private:
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
     FontManager m_font_manager;
-    ImGuiStyle  default_imgui_style;
+    ImGuiStyle  m_default_imgui_style;
     ImGuiStyle  m_default_style;
     float       m_display_dpi;
 

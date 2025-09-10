@@ -445,7 +445,7 @@ void
 SettingsManager::InitStyling()
 {
     ImGuiStyle& style = ImGui::GetStyle();
-    default_imgui_style   = style;  // Store the default imgui style
+    m_default_imgui_style   = style;  // Store the default imgui style
 
     // Set sizes and rounding
     style.CellPadding       = ImVec2(10, 6);
@@ -474,7 +474,7 @@ SettingsManager::InitStyling()
 const ImGuiStyle&
 SettingsManager::GetDefaultIMGUIStyle() const
 {
-    return default_imgui_style;
+    return m_default_imgui_style;
 }
 
 const ImGuiStyle&

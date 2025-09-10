@@ -710,7 +710,7 @@ InfiniteScrollTable::GetTrackIdHelper(
 void 
 InfiniteScrollTable::RenderContextMenu() const
 {
-    auto style =  SettingsManager::GetInstance().GetDefaultStyle();
+    auto style =  m_settings.GetDefaultStyle();
     
     // Render context menu for row actions
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);

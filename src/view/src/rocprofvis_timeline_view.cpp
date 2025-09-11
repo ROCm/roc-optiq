@@ -84,7 +84,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
         auto evt = std::dynamic_pointer_cast<ScrollToTrackEvent>(e);
         if(evt)
         {
-            if(evt->GetTracePath() == m_data_provider.GetTraceFilePath())
+            if(evt->GetSourceId() == m_data_provider.GetTraceFilePath())
             {
                 this->ScrollToTrack(evt->GetTrackID());
             }
@@ -98,7 +98,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
         auto evt = std::dynamic_pointer_cast<RangeEvent>(e);
         if(evt)
         {
-            if(evt->GetTracePath() == m_data_provider.GetTraceFilePath())
+            if(evt->GetSourceId() == m_data_provider.GetTraceFilePath())
             {
                 this->SetViewableRangeNS(evt->GetStartNs(), evt->GetEndNs());
             }
@@ -332,7 +332,7 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
     }
     else
     {
-        const std::string& trace_path = tde->GetTracePath();
+        const std::string& trace_path = tde->GetSourceId();
         // check if event trace path matches the current our data provider's trace path
         // since events are global for all views
         if(m_data_provider.GetTraceFilePath() != trace_path)

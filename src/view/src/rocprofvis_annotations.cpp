@@ -98,6 +98,7 @@ AnnotationsViewProjectSettings::Valid() const
 
 AnnotationsView::AnnotationsView(const std::string& project_id)
 : m_project_settings(project_id, *this)
+, m_project_id(project_id)
 {
     if(m_project_settings.Valid())
     {
@@ -105,11 +106,11 @@ AnnotationsView::AnnotationsView(const std::string& project_id)
     }
 
     auto sticky_note_handler = [this](std::shared_ptr<RocEvent> e) {
-        m_show_sticky_edit_popup = true;
-        auto evt                 = std::dynamic_pointer_cast<StickyNoteEvent>(e);
-        if(evt)
+        auto evt = std::dynamic_pointer_cast<StickyNoteEvent>(e);
+        if(evt && evt->GetSourceId() == m_project_id)
         {
-            m_edit_sticky_id = evt->GetID();
+            m_show_sticky_edit_popup = true;
+            m_edit_sticky_id         = evt->GetNoteId();
 
             for(int i = 0; i < m_sticky_notes.size(); i++)
             {
@@ -147,7 +148,7 @@ void
 AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
                            const std::string& text, const std::string& title)
 {
-    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title);
+    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id);
 }
 
 bool

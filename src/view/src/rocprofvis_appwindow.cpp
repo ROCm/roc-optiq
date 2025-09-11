@@ -508,7 +508,7 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
     if(tab_selected_event)
     {
         // Only handle the event if the tab source is the main tab source
-        if(tab_selected_event->GetTabSource() == GetMainTabSourceName())
+        if(tab_selected_event->GetSourceId() == GetMainTabSourceName())
         {
             m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
 

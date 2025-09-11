@@ -243,7 +243,7 @@ void
 TrackDetails::HandleTrackSelectionChanged(
     std::shared_ptr<TrackSelectionChangedEvent> event)
 {
-    if(event && event->GetTracePath() == m_data_provider.GetTraceFilePath())
+    if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
     {
         m_selected_track_ids = event->GetSelectedTracks();
         m_selection_dirty    = true;

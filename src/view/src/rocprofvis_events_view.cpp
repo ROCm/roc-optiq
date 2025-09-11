@@ -189,6 +189,7 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                 ImGui::TableSetupColumn("Name");
                 ImGui::TableSetupColumn("Timestamp");
                 ImGui::TableSetupColumn("Track ID");
+                ImGui::TableSetupColumn("Level");
                 ImGui::TableSetupColumn("Direction");
                 ImGui::TableHeadersRow();
 

@@ -1025,12 +1025,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                       Builder::QParam("K.start"),
                       Builder::QParam("E.category_id"),
                       Builder::QParam("K.kernel_id"),
+                      Builder::QParam("L.level"),
                   },
                   { Builder::From("rocpd_region", "R"),
                     Builder::InnerJoin("rocpd_event", "E",
                                        "R.event_id = E.id AND R.guid = E.guid"),
                     Builder::InnerJoin("rocpd_kernel_dispatch", "K",
-                                       "K.id = E.stack_id AND K.guid = E.guid") },
+                                       "K.id = E.stack_id AND K.guid = E.guid"),
+                    Builder::InnerJoin(Builder::LevelTable("dispatch"), "L", 
+                                       "E.stack_id = L.eid") },
                   { Builder::Where(
                       "R.id", "==", std::to_string(event_id.bitfield.event_id)) } })) + 
             Builder::Union() +
@@ -1045,12 +1048,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                       Builder::QParam("M.start"),
                       Builder::QParam("E.category_id"),
                       Builder::QParam("M.name_id"),
+                      Builder::QParam("L.level"),
                   },
                   { Builder::From("rocpd_region", "R"),
                     Builder::InnerJoin("rocpd_event", "E",
                                        "R.event_id = E.id AND R.guid = E.guid"),
                     Builder::InnerJoin("rocpd_memory_copy", "M",
-                                       "M.id = E.stack_id AND M.guid = E.guid") },
+                                       "M.id = E.stack_id AND M.guid = E.guid"),
+                    Builder::InnerJoin(Builder::LevelTable("mem_copy"), "L", 
+                                       "E.stack_id = L.eid") },
                   { Builder::Where(
                       "R.id", "==", std::to_string(event_id.bitfield.event_id)) } })) +
             Builder::Union() +
@@ -1065,12 +1071,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                       Builder::QParam("M.start"),
                       Builder::QParam("E.category_id"),
                       Builder::QParam("E.category_id"),
+                      Builder::QParam("L.level"),
                   },
                   { Builder::From("rocpd_region", "R"),
                     Builder::InnerJoin("rocpd_event", "E",
                                        "R.event_id = E.id AND R.guid = E.guid"),
                     Builder::InnerJoin("rocpd_memory_allocate", "M",
-                                       "M.id = E.stack_id AND M.guid = E.guid")},
+                                       "M.id = E.stack_id AND M.guid = E.guid"),
+                    Builder::InnerJoin(Builder::LevelTable("mem_alloc"), "L", 
+                                       "E.stack_id = L.eid") },
                   { Builder::Where(
                       "R.id", "==", std::to_string(event_id.bitfield.event_id)) } }))
                    );
@@ -1091,12 +1100,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                       Builder::QParam("R.start"),
                       Builder::QParam("E.category_id"),
                       Builder::QParam("R.name_id"),
+                      Builder::QParam("L.level"),
                   },
                   { Builder::From("rocpd_kernel_dispatch", "K"),
                     Builder::InnerJoin("rocpd_event", "E",
                                        "K.event_id = E.id AND K.guid = E.guid"),
                     Builder::InnerJoin("rocpd_region", "R",
-                                       "R.id = E.stack_id AND R.guid = E.guid") },
+                                       "R.id = E.stack_id AND R.guid = E.guid"),
+                    Builder::InnerJoin(Builder::LevelTable("launch"), "L", 
+                                       "E.stack_id = L.eid") },
                   { Builder::Where(
                       "K.id", "==", std::to_string(event_id.bitfield.event_id)) } })));
             ShowProgress(0, query.c_str(),kRPVDbBusy, future);
@@ -1116,12 +1128,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                           Builder::QParam("R.start"),
                           Builder::QParam("E.category_id"),
                           Builder::QParam("R.name_id"),
+                          Builder::QParam("L.level"),
                       },
                       { Builder::From("rocpd_memory_copy", "M"),
                         Builder::InnerJoin("rocpd_event", "E",
                                            "M.event_id = E.id AND M.guid = E.guid"),
                         Builder::InnerJoin("rocpd_region", "R",
-                                           "R.id = E.stack_id AND R.guid = E.guid") },
+                                           "R.id = E.stack_id AND R.guid = E.guid"),
+                        Builder::InnerJoin(Builder::LevelTable("launch"), "L", 
+                                           "E.stack_id = L.eid") },
                       { Builder::Where("M.id", "==",
                                        std::to_string(event_id.bitfield.event_id)) } })));
             ShowProgress(0, query.c_str(), kRPVDbBusy, future);
@@ -1142,12 +1157,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                           Builder::QParam("R.start"),
                           Builder::QParam("E.category_id"),
                           Builder::QParam("R.name_id"),
+                          Builder::QParam("L.level"),
                       },
                       { Builder::From("rocpd_memory_allocate", "M"),
                         Builder::InnerJoin("rocpd_event", "E",
                                            "M.event_id = E.id AND M.guid = E.guid"),
                         Builder::InnerJoin("rocpd_region", "R",
-                                           "R.id = E.stack_id AND R.guid = E.guid")},
+                                           "R.id = E.stack_id AND R.guid = E.guid"),
+                        Builder::InnerJoin(Builder::LevelTable("launch"), "L", 
+                                           "E.stack_id = L.eid") },
                       { Builder::Where("M.id", "==",
                                        std::to_string(event_id.bitfield.event_id)) } })));
             //query <<    "SELECT E.id as id, 1, E.correlation_id, R.nid, R.pid, R.tid, R.end "

@@ -32,7 +32,7 @@ rocprofvis_dm_size_t  FlowTrace::GetMemoryFootprint(){
 
 rocprofvis_dm_result_t  FlowTrace::AddRecord( rocprofvis_db_flow_data_t & data){
     try{
-        m_flows.push_back(FlowRecord(data.time, data.id, data.track_id, data.category_id, data.symbol_id));
+        m_flows.push_back(FlowRecord(data.time, data.id, data.track_id, data.category_id, data.symbol_id, data.level));
     }
     catch(std::exception ex)
     {
@@ -73,6 +73,15 @@ rocprofvis_dm_result_t  FlowTrace::GetRecordSymbolStringAt(const rocprofvis_dm_p
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t  FlowTrace::GetRecordLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t & level)
+{    
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_flows.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACK_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
+    ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
+    level = m_flows[index].Level();
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_result_t FlowTrace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
@@ -86,6 +95,8 @@ rocprofvis_dm_result_t FlowTrace::GetPropertyAsUint64(rocprofvis_dm_property_t p
             return GetRecordIdAt(index, *(rocprofvis_dm_event_id_t*)value);
         case kRPVDMEndpointTrackIDUInt64Indexed:
             return GetRecordTrackIdAt(index, *(rocprofvis_dm_track_id_t*)value);
+        case kRPVDMEndpointLevelUInt64Indexed:
+            return GetRecordLevelAt(index, *(rocprofvis_dm_event_level_t*) value);
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }

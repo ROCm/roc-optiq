@@ -233,6 +233,7 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
 
     int trackId       = -1;
     int streamTrackId = -1;
+    std::string column_data;
 
     FindTrackIDs(db, service_data, trackId, streamTrackId);
 
@@ -241,7 +242,8 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
         record.category = "Track";
         record.name     = "trackId";
         record.type     = kRPVDataTypeInt;
-        record.data     = std::to_string(trackId).c_str();
+        column_data     = std::to_string(trackId).c_str();
+        record.data     = column_data.c_str();
         record.category_enum = kRocProfVisEventEssentialDataTrack;
         if(db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) !=
            kRocProfVisDmResultSuccess)
@@ -249,7 +251,8 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
         record.category = "Track";
         record.name     = "levelForTrack";
         record.type     = kRPVDataTypeInt;
-        record.data     = std::to_string(db->Sqlite3ColumnInt64(func, stmt, azColName, argc - 2)).c_str();
+        column_data     = std::to_string(db->Sqlite3ColumnInt64(func, stmt, azColName, argc - 2));       
+        record.data     = column_data.c_str();
         record.category_enum = kRocProfVisEventEssentialDataLevel;
         if(db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) !=
            kRocProfVisDmResultSuccess)
@@ -260,7 +263,8 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
         record.category = "Track";
         record.name     = "streamTrackId";
         record.type     = kRPVDataTypeInt;
-        record.data     = std::to_string(streamTrackId).c_str();
+        column_data     = std::to_string(streamTrackId).c_str();
+        record.data     = column_data.c_str();
         record.category_enum = kRocProfVisEventEssentialDataStreamTrack;
         if(db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) !=
            kRocProfVisDmResultSuccess)
@@ -268,7 +272,8 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
         record.category = "Track";
         record.name     = "levelForStreamTrack";
         record.type     = kRPVDataTypeInt;
-        record.data     = std::to_string(db->Sqlite3ColumnInt64(func, stmt, azColName, argc - 2)).c_str();
+        column_data     = std::to_string(db->Sqlite3ColumnInt64(func, stmt, azColName, argc - 1));
+        record.data     = column_data.c_str();
         record.category_enum = kRocProfVisEventEssentialDataStreamLevel;
         if(db->BindObject()->FuncAddExtDataRecord(callback_params->handle, record) !=
            kRocProfVisDmResultSuccess)

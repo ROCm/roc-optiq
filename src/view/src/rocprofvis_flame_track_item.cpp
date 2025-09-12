@@ -26,7 +26,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                double time_offset_ns, double min_x, double max_x,
                                double scale_x, float level_min, float level_max)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
-, m_request_random_color(true)
+, m_event_color_mode(EventColorMode::kByEventName)
 , m_text_padding(ImVec2(4.0f, 2.0f))
 , m_level_height(40.0f)
 , m_timeline_selection(timeline_selection)
@@ -46,7 +46,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 
     if(m_project_settings.Valid())
     {
-        m_request_random_color = m_project_settings.ColorEvents();
+        m_event_color_mode = m_project_settings.ColorEvents();
     }
 }
 
@@ -141,6 +141,7 @@ FlameTrackItem::ExtractPointsFromData()
         const rocprofvis_trace_event_t& event = events_data[i];
         m_chart_items[i].event                = event;
         m_chart_items[i].selected = m_timeline_selection->EventSelected(event.m_id);
+        m_chart_items[i].name_hash = std::hash<std::string>{}(event.m_name);
     }
 
     return true;
@@ -174,13 +175,13 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                             start_position.y + m_level_height + cursor_position.y);
 
     ImU32 rectColor;
-    if(m_request_random_color)
+    if(m_event_color_mode == EventColorMode::kNone)
     {
-        rectColor = m_settings.GetColorWheel()[color_index];
+        rectColor = m_settings.GetColor(Colors::kFlameChartColor);
     }
     else
     {
-        rectColor = m_settings.GetColor(Colors::kFlameChartColor);
+        rectColor = m_settings.GetColorWheel()[color_index];
     }
 
     float rounding = 2.0f;
@@ -217,12 +218,15 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
 
         if(!m_has_drawn_tool_tip)
         {
+            rocprofvis_trace_event_t_id_t event_id{};
+            event_id.id = chart_item.event.m_id;
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
             ImGui::BeginTooltip();
             ImGui::Text("%s", chart_item.event.m_name.c_str());
             ImGui::Text("Start: %.2f", chart_item.event.m_start_ts - m_min_x);
             ImGui::Text("Duration: %.2f", chart_item.event.m_duration);
             ImGui::Text("Id: %llu", chart_item.event.m_id);
+            ImGui::Text("DB Id: %llu", event_id.bitfield.db_event_id);
             ImGui::EndTooltip();
             ImGui::PopStyleVar();
             m_has_drawn_tool_tip = true;
@@ -263,7 +267,17 @@ FlameTrackItem::RenderChart(float graph_width)
             continue;  // Skip if the item is not visible in the current view
         }
 
-        color_index = static_cast<long long>(item.event.m_start_ts) % colorCount;
+        if(m_event_color_mode == EventColorMode::kByTimeLevel)
+        {
+            color_index =
+                static_cast<long long>(item.event.m_start_ts + item.event.m_level) %
+                colorCount;
+        }
+        else if(m_event_color_mode == EventColorMode::kByEventName)
+        {
+            color_index = static_cast<long long>(item.name_hash) % colorCount;
+        }
+
         DrawBox(start_position, color_index, item, normalized_duration, draw_list);
     }
     m_selection_changed = false;
@@ -278,7 +292,18 @@ FlameTrackItem::RenderMetaAreaScale()
 void
 FlameTrackItem::RenderMetaAreaOptions()
 {
-    ImGui::Checkbox("Color Events", &m_request_random_color);
+    EventColorMode mode = m_event_color_mode;
+
+    if(ImGui::RadioButton("Color by Name", mode == EventColorMode::kByEventName))
+        mode = EventColorMode::kByEventName;
+    ImGui::SameLine();
+    if(ImGui::RadioButton("Color by Time Level", mode == EventColorMode::kByTimeLevel))
+        mode = EventColorMode::kByTimeLevel;
+    ImGui::SameLine();
+    if(ImGui::RadioButton("No Color", mode == EventColorMode::kNone))
+        mode = EventColorMode::kNone;
+
+    m_event_color_mode = mode;
 }
 
 FlameTrackProjectSettings::FlameTrackProjectSettings(const std::string& project_id,
@@ -294,7 +319,7 @@ FlameTrackProjectSettings::ToJson()
 {
     m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                    [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR] =
-                       m_track_item.m_request_random_color;
+                       static_cast<int>(m_track_item.m_event_color_mode);
 }
 
 bool
@@ -302,15 +327,21 @@ FlameTrackProjectSettings::Valid() const
 {
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                           [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
-                              .isBool();
+                              .isNumber();
 }
 
-bool
+EventColorMode
 FlameTrackProjectSettings::ColorEvents() const
 {
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+    EventColorMode color_mode = EventColorMode::kNone;
+
+    double color_mode_raw = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                           [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
-                              .getBool();
+                              .getNumber();
+    if(color_mode_raw >= 0 && color_mode_raw < static_cast<int>(EventColorMode::__kCount)) {
+        color_mode = static_cast<EventColorMode>(color_mode_raw);
+    }
+    return color_mode;
 }
 
 }  // namespace View

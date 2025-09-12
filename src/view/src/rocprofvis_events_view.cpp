@@ -2,7 +2,6 @@
 
 #include "rocprofvis_events_view.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_custom_widgets.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -57,8 +56,6 @@ EventsView::Render()
                     ImGui::SameLine();
                     deselect_event = XButton();
 
-                    if(item.height <= 0.0f) item.height = 500.0f;
-
                     ImGui::BeginChild("EventDetails", ImVec2(0, item.height), false,
                                       ImGuiChildFlags_None);
                     item.contents->Render();
@@ -96,225 +93,211 @@ EventsView::Render()
                 ImGui::PopID();
             }
         }
-
-
     }
     ImGui::EndChild();
     ImGui::Dummy(ImVec2(0, 5));  // space between event popup and bottom of window
 }
 
-
 void
 EventsView::RenderEventExtData(const event_info_t* event_data)
 {
-    RocProfVisCustomWidget::WithPadding(
-        7.0f, 7.0f, 7.0f, 7.0f, m_standard_eventcard_height, [this, event_data]() {
-            ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kSplitterColor));
+    PaddingWrapper::WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
+        ImVec4 headerColor =
+            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
 
-            ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
 
-            ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
+        ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
 
-            ImGui::PushFont(large_font);
+        ImGui::PushFont(large_font);
 
-            const auto& info = event_data->basic_info;
+        const auto& info = event_data->basic_info;
 
-            ImGui::TextUnformatted("ID");
-            ImGui::SameLine(160);
-            ImGui::Text("%llu", static_cast<unsigned long long>(info.m_id));
+        ImGui::TextUnformatted("ID");
+        ImGui::SameLine(160);
+        ImGui::Text("%llu", static_cast<unsigned long long>(info.m_id));
 
-            ImGui::TextUnformatted("Name");
-            ImGui::SameLine(160);
-            ImGui::TextUnformatted(info.m_name.c_str());
+        ImGui::TextUnformatted("Name");
+        ImGui::SameLine(160);
+        ImGui::TextUnformatted(info.m_name.c_str());
 
-            ImGui::TextUnformatted("Start Time");
-            ImGui::SameLine(160);
-            ImGui::Text("%.3f", info.m_start_ts);
+        ImGui::TextUnformatted("Start Time");
+        ImGui::SameLine(160);
+        ImGui::Text("%.3f", info.m_start_ts);
 
-            ImGui::TextUnformatted("Duration");
-            ImGui::SameLine(160);
-            ImGui::Text("%.3f", info.m_duration);
+        ImGui::TextUnformatted("Duration");
+        ImGui::SameLine(160);
+        ImGui::Text("%.3f", info.m_duration);
 
-            ImGui::TextUnformatted("Level");
-            ImGui::SameLine(160);
-            ImGui::Text("%u", info.m_level);
+        ImGui::TextUnformatted("Level");
+        ImGui::SameLine(160);
+        ImGui::Text("%u", info.m_level);
 
-            ImGui::PopFont();
-            ImGui::Dummy(ImVec2(10, 10));
+        ImGui::PopFont();
+        ImGui::Dummy(ImVec2(10, 10));
 
-            // --- Expandable full extended data ---
-            if(ImGui::CollapsingHeader("Show More Event Extended Data",
-                                       ImGuiTreeNodeFlags_DefaultOpen))
+        // --- Expandable full extended data ---
+        if(ImGui::CollapsingHeader("Show More Event Extended Data",
+                                   ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::Separator();
+            if(event_data->ext_info.empty())
             {
-                ImGui::Separator();
-                if(event_data->ext_info.empty())
-                {
-                    ImGui::TextUnformatted("No data available.");
-                }
-                else
-                {
-                    float parent_width = ImGui::GetContentRegionAvail().x;
+                ImGui::TextUnformatted("No data available.");
+            }
+            else
+            {
+                float parent_width = ImGui::GetContentRegionAvail().x;
 
-                    if(ImGui::BeginTable("ExtDataTable", 2, TABLE_FLAGS))
+                if(ImGui::BeginTable("ExtDataTable", 2, TABLE_FLAGS))
+                {
+                    ImGuiListClipper clipper;
+                    clipper.Begin(static_cast<int>(event_data->ext_info.size()));
+                    while(clipper.Step())
                     {
-                        ImGuiListClipper clipper;
-                        clipper.Begin(static_cast<int>(event_data->ext_info.size()));
-                        while(clipper.Step())
+                        for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                         {
-                            for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-                            {
-                                ImGui::TableNextRow();
-                                ImGui::TableSetColumnIndex(0);
-                                ImGui::TextUnformatted(
-                                    event_data->ext_info[i].name.c_str());
-                                ImGui::TableSetColumnIndex(1);
-                                ImGui::TextUnformatted(
-                                    event_data->ext_info[i].value.c_str());
-                            }
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::TextUnformatted(event_data->ext_info[i].name.c_str());
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::TextUnformatted(event_data->ext_info[i].value.c_str());
                         }
-                        ImGui::EndTable();
                     }
+                    ImGui::EndTable();
                 }
             }
+        }
 
-            ImGui::PopStyleColor(3);
-        });
+        ImGui::PopStyleColor(3);
+    });
 }
 
 void
 EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 {
-    RocProfVisCustomWidget::WithPadding(
-        7.0f, 7.0f, 7.0f, 1.0f, m_standard_eventcard_height, [this, event_data]() {
-            ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kSplitterColor));
+    PaddingWrapper::WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
+        ImVec4 headerColor =
+            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
 
-            ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
 
-            if(ImGui::CollapsingHeader("Flow Extended Data"))
+        if(ImGui::CollapsingHeader("Flow Extended Data", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+           
+
+            if(event_data->flow_info.empty())
             {
-                ImGui::BeginChild("FlowInfoChild", ImVec2(0, 0), false,
-                                  ImGuiChildFlags_None);
-
-                if(event_data->flow_info.empty())
+                ImGui::TextUnformatted("No data available.");
+            }
+            else
+            {
+                if(ImGui::BeginTable("FlowInfoTable", 5, TABLE_FLAGS))
                 {
-                    ImGui::TextUnformatted("No data available.");
+                    m_table_expanded = true;
+                    ImGui::TableSetupColumn("ID");
+                    ImGui::TableSetupColumn("Name");
+                    ImGui::TableSetupColumn("Timestamp");
+                    ImGui::TableSetupColumn("Track ID");
+                    ImGui::TableSetupColumn("Direction");
+                    ImGui::TableHeadersRow();
+
+                    ImGuiListClipper clipper;
+                    clipper.Begin(event_data->flow_info.size());
+                    while(clipper.Step())
+                    {
+                        for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+                        {
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::TextUnformatted(
+                                std::to_string(event_data->flow_info[i].id).c_str());
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::TextUnformatted(event_data->flow_info[i].name.c_str());
+                            ImGui::TableSetColumnIndex(2);
+                            ImGui::TextUnformatted(
+                                std::to_string(event_data->flow_info[i].timestamp)
+                                    .c_str());
+                            ImGui::TableSetColumnIndex(3);
+                            ImGui::TextUnformatted(
+                                std::to_string(event_data->flow_info[i].track_id)
+                                    .c_str());
+                            ImGui::TableSetColumnIndex(4);
+                            ImGui::TextUnformatted(
+                                std::to_string(event_data->flow_info[i].direction)
+                                    .c_str());
+                        }
+                    }
+                    ImGui::EndTable();
                 }
                 else
                 {
-                    if(ImGui::BeginTable("FlowInfoTable", 5, TABLE_FLAGS))
-                    {
-                        m_table_expanded = true;
-                        ImGui::TableSetupColumn("ID");
-                        ImGui::TableSetupColumn("Name");
-                        ImGui::TableSetupColumn("Timestamp");
-                        ImGui::TableSetupColumn("Track ID");
-                        ImGui::TableSetupColumn("Direction");
-                        ImGui::TableHeadersRow();
-
-                        ImGuiListClipper clipper;
-                        clipper.Begin(event_data->flow_info.size());
-                        while(clipper.Step())
-                        {
-                            for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-                            {
-                                ImGui::TableNextRow();
-                                ImGui::TableSetColumnIndex(0);
-                                ImGui::TextUnformatted(
-                                    std::to_string(event_data->flow_info[i].id).c_str());
-                                ImGui::TableSetColumnIndex(1);
-                                ImGui::TextUnformatted(
-                                    event_data->flow_info[i].name.c_str());
-                                ImGui::TableSetColumnIndex(2);
-                                ImGui::TextUnformatted(
-                                    std::to_string(event_data->flow_info[i].timestamp)
-                                        .c_str());
-                                ImGui::TableSetColumnIndex(3);
-                                ImGui::TextUnformatted(
-                                    std::to_string(event_data->flow_info[i].track_id)
-                                        .c_str());
-                                ImGui::TableSetColumnIndex(4);
-                                ImGui::TextUnformatted(
-                                    std::to_string(event_data->flow_info[i].direction)
-                                        .c_str());
-                            }
-                        }
-                        ImGui::EndTable();
-                    }
-                    else
-                    {
-                        m_table_expanded = false;
-                    }
+                    m_table_expanded = false;
                 }
-                ImGui::EndChild();
             }
-            ImGui::PopStyleColor(3);
-        });
+         }
+        ImGui::PopStyleColor(3);
+    });
 }
 
 void
 EventsView::RenderCallStackData(const event_info_t* event_data)
 {
-    RocProfVisCustomWidget::WithPadding(
-        7.0f, 7.0f, 1.0f, 7.0f, m_standard_eventcard_height, [this, event_data]() {
-            ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(
-                Colors::kSplitterColor));  // Use your desired color enum
+    PaddingWrapper::WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
+        ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(
+            m_settings.GetColor(Colors::kSplitterColor));  // Use your desired color enum
 
-            ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
 
-            if(ImGui::CollapsingHeader("Event Call Stack Data"))
+        if(ImGui::CollapsingHeader("Event Call Stack Data",
+                                   ImGuiTreeNodeFlags_DefaultOpen))
+        {
+          
+
+            if(event_data->call_stack_info.empty())
             {
-                ImGui::BeginChild("CallStackChild", ImVec2(0, 0), false,
-                                  ImGuiChildFlags_None);
-
-                if(event_data->call_stack_info.empty())
-                {
-                    ImGui::TextUnformatted("No data available.");
-                }
-                else
-                {
-                    if(ImGui::BeginTable("CallStackTable", 3, TABLE_FLAGS))
-                    {
-                        ImGui::TableSetupColumn("Line");
-                        ImGui::TableSetupColumn("Function");
-                        ImGui::TableSetupColumn("Arguments");
-                        ImGui::TableHeadersRow();
-
-                        ImGuiListClipper clipper;
-                        clipper.Begin(event_data->call_stack_info.size());
-                        while(clipper.Step())
-                        {
-                            for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-                            {
-                                ImGui::TableNextRow();
-                                ImGui::TableSetColumnIndex(0);
-                                ImGui::TextUnformatted(
-                                    event_data->call_stack_info[i].line.c_str());
-                                ImGui::TableSetColumnIndex(1);
-                                ImGui::TextUnformatted(
-                                    event_data->call_stack_info[i].function.c_str());
-                                ImGui::TableSetColumnIndex(2);
-                                ImGui::TextUnformatted(
-                                    event_data->call_stack_info[i].arguments.c_str());
-                            }
-                        }
-                        ImGui::EndTable();
-                    }
-                }
-                ImGui::EndChild();
+                ImGui::TextUnformatted("No data available.");
             }
-            ImGui::PopStyleColor(3);
-        });
+            else
+            {
+                if(ImGui::BeginTable("CallStackTable", 3, TABLE_FLAGS))
+                {
+                    ImGui::TableSetupColumn("Line");
+                    ImGui::TableSetupColumn("Function");
+                    ImGui::TableSetupColumn("Arguments");
+                    ImGui::TableHeadersRow();
+
+                    ImGuiListClipper clipper;
+                    clipper.Begin(event_data->call_stack_info.size());
+                    while(clipper.Step())
+                    {
+                        for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+                        {
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::TextUnformatted(
+                                event_data->call_stack_info[i].line.c_str());
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::TextUnformatted(
+                                event_data->call_stack_info[i].function.c_str());
+                            ImGui::TableSetColumnIndex(2);
+                            ImGui::TextUnformatted(
+                                event_data->call_stack_info[i].arguments.c_str());
+                        }
+                    }
+                    ImGui::EndTable();
+                }
+            }
+         }
+        ImGui::PopStyleColor(3);
+    });
 }
-
-
 
 bool
 EventsView::XButton()
@@ -356,34 +339,35 @@ EventsView::HandleEventSelectionChanged()
             [this, event_data]() { this->RenderEventExtData(event_data); });
         ;
         left.m_window_padding = ImVec2(4, 4);
-        //left.m_child_flags    = ImGuiChildFlags_AutoResizeY;
+        // left.m_child_flags    = ImGuiChildFlags_AutoResizeY;
         LayoutItem right;
 
         LayoutItem flow;
+        flow.m_child_flags = ImGuiWindowFlags_NoScrollbar;
         flow.m_item = std::make_shared<RocCustomWidget>(
             [this, event_data]() { this->RenderEventFlowInfo(event_data); });
         flow.m_visible = true;
 
         LayoutItem callstack;
+        callstack.m_child_flags = ImGuiWindowFlags_NoScrollbar;
         callstack.m_item = std::make_shared<RocCustomWidget>(
             [this, event_data]() { this->RenderCallStackData(event_data); });
         callstack.m_visible = true;
 
         auto vsplit = std::make_shared<VSplitContainer>(flow, callstack);
-        vsplit->SetSplit(0.5f);  // Optional: set initial split ratio
+        vsplit->SetSplit(0.5f);  
         vsplit->SetMinBottomHeight(15.0f);
         vsplit->SetMinTopHeight(25.0f);
         right.m_item = vsplit;
-        
+
         right.m_window_padding = ImVec2(4, 4);
-        //right.m_child_flags    = ImGuiChildFlags_AutoResizeY;
+        // right.m_child_flags    = ImGuiChildFlags_AutoResizeY;
 
         std::unique_ptr<HSplitContainer> container =
             std::make_unique<HSplitContainer>(left, right);
         container->SetMinLeftWidth(10.0f);
         container->SetMinRightWidth(10.0f);
         container->SetSplit(0.3f);
-        
 
         m_event_items[i].header =
             "Event ID: " + std::to_string(event_data->basic_info.m_id);

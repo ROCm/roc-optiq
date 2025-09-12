@@ -188,8 +188,6 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 
         if(ImGui::CollapsingHeader("Flow Extended Data", ImGuiTreeNodeFlags_DefaultOpen))
         {
-           
-
             if(event_data->flow_info.empty())
             {
                 ImGui::TextUnformatted("No data available.");
@@ -239,7 +237,7 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                     m_table_expanded = false;
                 }
             }
-         }
+        }
         ImGui::PopStyleColor(3);
     });
 }
@@ -258,8 +256,6 @@ EventsView::RenderCallStackData(const event_info_t* event_data)
         if(ImGui::CollapsingHeader("Event Call Stack Data",
                                    ImGuiTreeNodeFlags_DefaultOpen))
         {
-          
-
             if(event_data->call_stack_info.empty())
             {
                 ImGui::TextUnformatted("No data available.");
@@ -294,7 +290,7 @@ EventsView::RenderCallStackData(const event_info_t* event_data)
                     ImGui::EndTable();
                 }
             }
-         }
+        }
         ImGui::PopStyleColor(3);
     });
 }
@@ -344,18 +340,18 @@ EventsView::HandleEventSelectionChanged()
 
         LayoutItem flow;
         flow.m_child_flags = ImGuiWindowFlags_NoScrollbar;
-        flow.m_item = std::make_shared<RocCustomWidget>(
+        flow.m_item        = std::make_shared<RocCustomWidget>(
             [this, event_data]() { this->RenderEventFlowInfo(event_data); });
         flow.m_visible = true;
 
         LayoutItem callstack;
         callstack.m_child_flags = ImGuiWindowFlags_NoScrollbar;
-        callstack.m_item = std::make_shared<RocCustomWidget>(
+        callstack.m_item        = std::make_shared<RocCustomWidget>(
             [this, event_data]() { this->RenderCallStackData(event_data); });
         callstack.m_visible = true;
 
         auto vsplit = std::make_shared<VSplitContainer>(flow, callstack);
-        vsplit->SetSplit(0.5f);  
+        vsplit->SetSplit(0.5f);
         vsplit->SetMinBottomHeight(15.0f);
         vsplit->SetMinTopHeight(25.0f);
         right.m_item = vsplit;

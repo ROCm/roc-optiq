@@ -16,6 +16,14 @@ namespace View
 class TimelineSelection;
 class FlameTrackItem;
 
+enum class EventColorMode
+{
+    kNone,
+    kByEventName,
+    kByTimeLevel,
+    __kCount
+};
+
 class FlameTrackProjectSettings : public ProjectSetting
 {
 public:
@@ -24,7 +32,7 @@ public:
     void ToJson() override;
     bool Valid() const override;
 
-    bool ColorEvents() const;
+    EventColorMode ColorEvents() const;
 
 private:
     FlameTrackItem& m_track_item;
@@ -55,6 +63,7 @@ private:
     {
         rocprofvis_trace_event_t event;
         bool                     selected;
+        size_t                   name_hash;
     };
 
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
@@ -64,7 +73,7 @@ private:
     bool ExtractPointsFromData();
 
     std::vector<ChartItem>             m_chart_items;
-    bool                               m_request_random_color;
+    EventColorMode                     m_event_color_mode;
     ImVec2                             m_text_padding;
     float                              m_level_height;
     std::vector<uint64_t>              m_selected_event_id;

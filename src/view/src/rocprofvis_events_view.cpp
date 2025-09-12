@@ -47,7 +47,6 @@ EventsView::Render()
                 bool deselect_event = false;
                 ImGui::PushID(item.info->basic_info.m_id);
                 ImGui::SetNextItemAllowOverlap();
-                bool reboot_size = false;
 
                 if(ImGui::CollapsingHeader(item.header.c_str(),
                                            ImGuiTreeNodeFlags_DefaultOpen))
@@ -58,12 +57,28 @@ EventsView::Render()
                     ImGui::SameLine();
                     deselect_event = XButton();
 
-                    ImGui::BeginChild("EventDetails", ImVec2(0, 500), false,
+                    if(item.height <= 0.0f) item.height = 500.0f;
+
+                    ImGui::BeginChild("EventDetails", ImVec2(0, item.height), false,
                                       ImGuiChildFlags_None);
-
                     item.contents->Render();
-
                     ImGui::EndChild();
+
+                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 2));
+                    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(128, 128, 128, 64));
+                    ImGui::Button("##eventdetails_resize", ImVec2(-1, 6));
+                    if(ImGui::IsItemHovered())
+                    {
+                        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                    }
+                    ImGui::PopStyleColor();
+                    ImGui::PopStyleVar();
+
+                    if(ImGui::IsItemActive())
+                    {
+                        item.height += ImGui::GetIO().MouseDelta.y;
+                        if(item.height < 100.0f) item.height = 100.0f;
+                    }
                 }
                 else
                 {
@@ -81,8 +96,11 @@ EventsView::Render()
                 ImGui::PopID();
             }
         }
+
+
     }
     ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0, 5));  // space between event popup and bottom of window
 }
 
 

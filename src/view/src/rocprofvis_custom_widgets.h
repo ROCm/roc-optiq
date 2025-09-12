@@ -14,7 +14,7 @@ class RocProfVisCustomWidget
 {
 public:
     virtual ~RocProfVisCustomWidget() = default;
-    static void WithPadding(float left, float right, float top, float bottom, float height,
+    static float WithPadding(float left, float right, float top, float bottom, float height,
                             const std::function<void()>& content);
 
     

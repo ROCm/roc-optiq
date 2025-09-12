@@ -13,6 +13,9 @@ namespace RocProfVis
 namespace View
 {
 
+
+
+
 class RocWidget
 {
 public:
@@ -57,6 +60,39 @@ public:
 private:
     std::function<void()> m_callback;
 };
+
+
+class EmbeddedVSplitContainer : public RocWidget
+{
+public:
+    EmbeddedVSplitContainer(const LayoutItem& t, const LayoutItem& b);
+
+    virtual void Render();
+
+    void SetTop(const LayoutItem& t);
+    void SetBottom(const LayoutItem& b);
+
+    void SetSplit(float ratio);
+    void SetMinTopHeight(float height);
+    void SetMinBottomHeight(float height);
+
+private:
+    float m_top_min_height    = 20.0f;
+    float m_bottom_min_height = 20.0f;
+
+    LayoutItem m_top;
+    LayoutItem m_bottom;
+    float      m_resize_grip_size = 6.0f;
+
+    float m_split_ratio = 0.5f;
+
+    // Drag state for smooth embedded split
+    bool  m_dragging          = false;
+    float m_drag_start_ratio  = 0.5f;
+    float m_drag_start_mouse  = 0.0f;
+    float m_drag_start_height = 0.0f;
+};
+
 
 class VFixedContainer : public RocWidget
 {

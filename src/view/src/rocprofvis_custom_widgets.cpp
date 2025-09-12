@@ -7,10 +7,11 @@ namespace RocProfVis
 namespace View
 {
 
-void
-RocProfVisCustomWidget::WithPadding(float left, float right, float top, float bottom, float height,
-                                    const std::function<void()>& content)
+float
+RocProfVisCustomWidget::WithPadding(float left, float right, float top, float bottom,
+                                    float height, const std::function<void()>& content)
 {
+    ImVec2 cursor_start = ImGui::GetCursorScreenPos();
     if(top > 0.0f) ImGui::Dummy(ImVec2(0, top));
 
     // No border flags for invisible borders
@@ -41,7 +42,10 @@ RocProfVisCustomWidget::WithPadding(float left, float right, float top, float bo
 
     if(bottom > 0.0f) ImGui::Dummy(ImVec2(0, bottom));
 
-    
+    ImVec2 cursor_end = ImGui::GetCursorScreenPos();
+
+    float content_height = (cursor_end.y - cursor_start.y) + bottom;
+    return content_height;
 }
 
 }  // namespace View

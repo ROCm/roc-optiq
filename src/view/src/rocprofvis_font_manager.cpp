@@ -71,11 +71,19 @@ FontManager::SetFontSize(int idx)
 
     if(num_types == 0 || m_all_fonts.empty()) return;
     if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return;
+ 
+    static const int offsets[] = { -1, 0, 1, 2 };
+
+    m_fonts.resize(num_types);
+    m_icon_fonts.resize(num_types);
 
     for(int i = 0; i < num_types; ++i)
     {
-        m_fonts[i]      = m_all_fonts[idx];
-        m_icon_fonts[i] = m_all_icon_fonts[idx];
+        int font_idx = idx + offsets[i];
+        font_idx =
+            std::max(0, std::min(font_idx, static_cast<int>(m_all_fonts.size()) - 1));
+        m_fonts[i]      = m_all_fonts[font_idx];
+        m_icon_fonts[i] = m_all_icon_fonts[font_idx];
     }
 
     ImGui::GetIO().FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];

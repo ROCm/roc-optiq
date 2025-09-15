@@ -466,7 +466,9 @@ SettingsManager::InitStyling()
     style.ScrollbarRounding = 8.0f;
     style.FramePadding      = ImVec2(10, 6);
     style.ItemSpacing       = ImVec2(10, 8);
-    style.WindowPadding     = ImVec2(14, 10);
+
+
+  
 }
 
 const ImGuiStyle&

@@ -44,6 +44,7 @@ private:
     float                              m_standard_eventcard_height;
     bool                               m_table_expanded;
     bool                               m_table_was_expanded;
+
 };
 
 }  // namespace View

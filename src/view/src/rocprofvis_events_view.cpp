@@ -23,6 +23,7 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_timeline_selection(timeline_selection)
 , m_standard_eventcard_height(ImGui::GetWindowHeight())
 , m_table_expanded(true)
+
 {}
 
 EventsView::~EventsView() {}
@@ -100,7 +101,8 @@ EventsView::Render()
 void
 EventsView::RenderEventExtData(const event_info_t* event_data)
 {
-    WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
+    float padding = m_settings.GetDefaultStyle().CellPadding.y;
+    WithPadding(padding, padding, padding, padding, [this, event_data]() {
         ImVec4 headerColor =
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
 
@@ -177,7 +179,8 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
 void
 EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 {
-    WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
+    float padding = m_settings.GetDefaultStyle().CellPadding.y;
+    WithPadding(padding, padding, padding, padding, [this, event_data]() {
         ImVec4 headerColor =
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
 
@@ -244,7 +247,8 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 void
 EventsView::RenderCallStackData(const event_info_t* event_data)
 {
-    WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
+    float padding = m_settings.GetDefaultStyle().CellPadding.y;
+    WithPadding(padding, padding, padding, padding, [this, event_data]() {
         ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(
             m_settings.GetColor(Colors::kSplitterColor));  // Use your desired color enum
 

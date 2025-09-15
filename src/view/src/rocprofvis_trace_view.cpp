@@ -487,7 +487,10 @@ TraceView::RenderToolbar()
     //pop child window style
     ImGui::PopStyleVar(2);
 }
+void 
+TraceView::RenderAnnotationControls() {
 
+}
 void
 TraceView::RenderFlowControls() {
     ImGuiStyle& style = ImGui::GetStyle();

@@ -481,16 +481,58 @@ TraceView::RenderToolbar()
     //Toolbar Controls
     RenderFlowControls();
 
+    ImGui::SameLine();
+
+    RenderAnnotationControls(); 
+
     //pop content style
     ImGui::PopStyleVar(2); 
     ImGui::EndChild();
     //pop child window style
     ImGui::PopStyleVar(2);
 }
-void 
-TraceView::RenderAnnotationControls() {
+void
+TraceView::RenderAnnotationControls()
+{
+    ImGuiStyle& style = ImGui::GetStyle();
 
+    // Example icon defines; replace with your actual icon names
+    static const char* annotation_labels[] = { ICON_EYE, ICON_EYE_THIN, ICON_ADD_NOTE };
+    static const char* annotation_tool_tips[] = { "Show All Stickies",
+                                                  "Hide All Stickies", "Add New Sticky"};
+
+    ImFont* icon_font =
+        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+    ImGui::PushFont(icon_font);
+    ImGui::Text("%s", ICON_ADD_NOTE);
+    ImGui::BeginGroup();
+    for(int i = 0; i < 3; ++i)
+    {
+        // You can add selection logic here if needed
+        ImGui::PushID(i);
+        if(ImGui::Button(annotation_labels[i]))
+        {
+            // TODO: Implement sticky note control logic here
+        }
+
+        if(ImGui::IsItemHovered())
+        {
+            ImGui::PopFont();
+            ImGui::SetTooltip(annotation_tool_tips[i]);
+            ImGui::PushFont(icon_font);
+        }
+
+        ImGui::PopID();
+        ImGui::SameLine();
+    }
+    ImGui::EndGroup();
+    ImGui::PopFont();
+
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Annotations");
 }
+
+
 void
 TraceView::RenderFlowControls() {
     ImGuiStyle& style = ImGui::GetStyle();

@@ -468,7 +468,7 @@ SettingsManager::InitStyling()
     style.ItemSpacing       = ImVec2(10, 8);
     style.WindowPadding     = ImVec2(14, 10);
 
-    m_default_style = style; // Store the our customized style
+    m_default_style = style; // Store the our customized style.
 }
 
 const ImGuiStyle&

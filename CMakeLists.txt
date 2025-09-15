@@ -58,7 +58,6 @@ set(VIEW_FILES
     src/view/src/rocprofvis_line_track_item.cpp 
     src/view/src/rocprofvis_timeline_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 
-    src/view/src/rocprofvis_custom_widgets.cpp
     src/view/src/rocprofvis_view_module.cpp
     src/view/src/rocprofvis_data_provider.cpp
     src/view/src/rocprofvis_raw_track_data.cpp

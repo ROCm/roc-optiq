@@ -95,13 +95,12 @@ EventsView::Render()
         }
     }
     ImGui::EndChild();
-    ImGui::Dummy(ImVec2(0, 5));  // space between event popup and bottom of window
 }
 
 void
 EventsView::RenderEventExtData(const event_info_t* event_data)
 {
-    PaddingWrapper::WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
+    WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
         ImVec4 headerColor =
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
 
@@ -178,7 +177,7 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
 void
 EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 {
-    PaddingWrapper::WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
+    WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
         ImVec4 headerColor =
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
 
@@ -245,7 +244,7 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 void
 EventsView::RenderCallStackData(const event_info_t* event_data)
 {
-    PaddingWrapper::WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
+    WithPadding(7.0f, 7.0f, 7.0f, 7.0f, [this, event_data]() {
         ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(
             m_settings.GetColor(Colors::kSplitterColor));  // Use your desired color enum
 

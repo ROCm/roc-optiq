@@ -507,35 +507,83 @@ TraceView::RenderAnnotationControls()
 {
     ImGuiStyle& style = ImGui::GetStyle();
 
-    // Example icon defines; replace with your actual icon names
-    static const char* annotation_labels[] = { ICON_EYE, ICON_EYE_THIN, ICON_ADD_NOTE };
-    static const char* annotation_tool_tips[] = { "Show All Stickies",
-                                                  "Hide All Stickies", "Add New Sticky" };
-
     ImFont* icon_font =
         SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
     ImGui::PushFont(icon_font);
 
     ImGui::BeginGroup();
-    for(int i = 0; i < 3; ++i)
+
+    // Get annotation visibility state
+    bool is_sticky_visible = m_timeline_view->GetAnotationsView().IsVisibile();
+
+    // Show All Stickies
+    ImGui::PushID("show_all_stickies");
+    bool show_selected = is_sticky_visible;
+    if(show_selected)
     {
-        // You can add selection logic here if needed
-        ImGui::PushID(i + annotation_labels[i]);
-        if(ImGui::Button(annotation_labels[i]))
-        {
-            // TODO: Implement sticky note control logic here
-        }
-
-        if(ImGui::IsItemHovered())
-        {
-            ImGui::PopFont();
-            ImGui::SetTooltip(annotation_tool_tips[i]);
-            ImGui::PushFont(icon_font);
-        }
-
-        ImGui::PopID();
-        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonActive]);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              style.Colors[ImGuiCol_ButtonActive]);
     }
+    if(ImGui::Button(ICON_EYE))
+    {
+        EventManager::GetInstance()->AddEvent(std::make_shared<ModifyAnnotationEvent>(
+            static_cast<int>(RocEvents::kShowAnnotations)));
+    }
+    if(show_selected)
+    {
+        ImGui::PopStyleColor(2);
+    }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::PopFont();
+        ImGui::SetTooltip("Show All Stickies");
+        ImGui::PushFont(icon_font);
+    }
+    ImGui::PopID();
+    ImGui::SameLine();
+
+    // Hide All Stickies
+    ImGui::PushID("hide_all_stickies");
+    bool hide_selected = !is_sticky_visible;
+    if(hide_selected)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonActive]);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              style.Colors[ImGuiCol_ButtonActive]);
+    }
+    if(ImGui::Button(ICON_EYE_THIN))
+    {
+        EventManager::GetInstance()->AddEvent(std::make_shared<ModifyAnnotationEvent>(
+            static_cast<int>(RocEvents::kHideAnnotations)));
+    }
+    if(hide_selected)
+    {
+        ImGui::PopStyleColor(2);
+    }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::PopFont();
+        ImGui::SetTooltip("Hide All Stickies");
+        ImGui::PushFont(icon_font);
+    }
+    ImGui::PopID();
+    ImGui::SameLine();
+
+    // Add New Sticky
+    ImGui::PushID("add_new_sticky");
+    if(ImGui::Button(ICON_ADD_NOTE))
+    {
+        // Add sticky logic here if needed
+    }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::PopFont();
+        ImGui::SetTooltip("Add New Sticky");
+        ImGui::PushFont(icon_font);
+    }
+    ImGui::PopID();
+
     ImGui::EndGroup();
     ImGui::PopFont();
 

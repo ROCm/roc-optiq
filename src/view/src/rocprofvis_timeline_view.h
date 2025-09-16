@@ -63,6 +63,7 @@ public:
     void                             DestroyGraphs();
     std::vector<rocprofvis_graph_t>* GetGraphs();
     void                             RenderInteractiveUI(ImVec2 screen_pos);
+    AnnotationsView&                 GetAnotationsView();
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             SetViewableRangeNS(double start_ns, double end_ns);

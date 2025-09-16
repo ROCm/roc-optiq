@@ -13,6 +13,7 @@ AnnotationsViewProjectSettings::AnnotationsViewProjectSettings(
     const std::string& project_id, AnnotationsView& annotations_view)
 : ProjectSetting(project_id)
 , m_annotations_view(annotations_view)
+
 {}
 
 AnnotationsViewProjectSettings::~AnnotationsViewProjectSettings() {}
@@ -99,14 +100,33 @@ AnnotationsViewProjectSettings::Valid() const
 AnnotationsView::AnnotationsView(const std::string& project_id)
 : m_project_settings(project_id, *this)
 , m_project_id(project_id)
+, m_hide_stickys(false)
 {
     if(m_project_settings.Valid())
     {
         m_project_settings.FromJson();
     }
 
+    auto new_annotation_handler = [this](std::shared_ptr<RocEvent> e) {
+        if(e->GetType() == RocEventType::kModifyAnnotationEvent)
+        {
+            switch(static_cast<RocEvents>(e->GetId()))
+            {
+                case RocEvents::kShowAnnotations: m_hide_stickys = false; break;
+                case RocEvents::kHideAnnotations: m_hide_stickys = true; break;
+                default: break;
+            }
+        }
+    };
+
+    m_annotation_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kShowAnnotations), new_annotation_handler);
+    EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kHideAnnotations),
+                                           new_annotation_handler);
+
     auto sticky_note_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<StickyNoteEvent>(e);
+
         if(evt && evt->GetSourceId() == m_project_id)
         {
             m_show_sticky_edit_popup = true;
@@ -150,6 +170,11 @@ AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
 {
     m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id);
 }
+bool 
+AnnotationsView::IsVisibile()
+{
+    return !m_hide_stickys;
+}
 
 bool
 AnnotationsView::Render(ImDrawList* draw_list, const ImVec2& window_position,
@@ -157,13 +182,16 @@ AnnotationsView::Render(ImDrawList* draw_list, const ImVec2& window_position,
 {
     bool movement_drag   = false;
     bool movement_resize = false;
-
-    for(auto& note : m_sticky_notes)
+    if(!m_hide_stickys)
     {
-        movement_drag |= note.HandleDrag(window_position, v_min_x, pixels_per_ns);
-        movement_resize |= note.HandleResize(window_position, v_min_x, pixels_per_ns);
-        note.Render(draw_list, window_position, v_min_x, pixels_per_ns);
+        for(auto& note : m_sticky_notes)
+        {
+            movement_drag |= note.HandleDrag(window_position, v_min_x, pixels_per_ns);
+            movement_resize |= note.HandleResize(window_position, v_min_x, pixels_per_ns);
+            note.Render(draw_list, window_position, v_min_x, pixels_per_ns);
+        }
     }
+
     return movement_drag || movement_resize;
 }
 

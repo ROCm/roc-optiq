@@ -288,7 +288,7 @@ AppWindow::RenderFileDialogs()
     // Set Itemspacing to values from original default ImGui style
     // custom values to break the 3rd party file dialog implementation
     // especially the cell padding
-    auto defaultStyle = SettingsManager::GetInstance().GetDefaultStyle();
+    auto defaultStyle = SettingsManager::GetInstance().GetDefaultIMGUIStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, defaultStyle.ItemSpacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, defaultStyle.WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, defaultStyle.CellPadding);
@@ -508,7 +508,7 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
     if(tab_selected_event)
     {
         // Only handle the event if the tab source is the main tab source
-        if(tab_selected_event->GetTabSource() == GetMainTabSourceName())
+        if(tab_selected_event->GetSourceId() == GetMainTabSourceName())
         {
             m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
 
@@ -742,16 +742,6 @@ AppWindow::RenderDebugOuput()
     if(m_show_debug_window)
     {
         DebugWindow::GetInstance()->Render();
-    }
-
-    if(ImGui::IsKeyPressed(ImGuiKey_D))
-    {
-        m_show_debug_window = !m_show_debug_window;
-
-        if(m_show_debug_window)
-        {
-            ImGui::SetWindowFocus("Debug Window");
-        }
     }
 
     if(m_show_provider_test_widow)

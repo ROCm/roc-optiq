@@ -46,7 +46,7 @@ TraceView::TraceView()
         if(ets)
         {
             // Only handle the event if the tab source is the main tab source
-            if(ets->GetTabSource() == AppWindow::GetInstance()->GetMainTabSourceName())
+            if(ets->GetSourceId() == AppWindow::GetInstance()->GetMainTabSourceName())
             {
                 m_data_provider.SetSelectedState(ets->GetTabId());
             }
@@ -94,7 +94,7 @@ TraceView::TraceView()
     auto event_selection_handler = [this](std::shared_ptr<RocEvent> e) {
         std::shared_ptr<EventSelectionChangedEvent> event =
             std::dynamic_pointer_cast<EventSelectionChangedEvent>(e);
-        if(event && event->GetTracePath() == m_data_provider.GetTraceFilePath())
+        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
             if(event->EventSelected())
             {
@@ -188,7 +188,7 @@ TraceView::CreateView()
     m_timeline_view =
         std::make_shared<TimelineView>(m_data_provider, m_timeline_selection);
     m_sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                           m_timeline_view->GetGraphs());
+                                           m_timeline_view->GetGraphs(), m_data_provider);
     m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                 m_timeline_selection);
 

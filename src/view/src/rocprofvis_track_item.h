@@ -49,9 +49,9 @@ public:
     virtual void       Render(float width);
     virtual void       Update();
     const std::string& GetName();
-
-    virtual void UpdateMovement(float zoom, double time_offset_ns, double& min_x,
-                                double& max_x, double scale_x, float m_scroll_position);
+    virtual void       RenderMetaDataAreaExpand();
+    virtual void       UpdateMovement(float zoom, double time_offset_ns, double& min_x,
+                                      double& max_x, double scale_x, float m_scroll_position);
 
     bool IsInViewVertical();
     void SetInViewVertical(bool in_view);
@@ -89,14 +89,15 @@ protected:
 
     void FetchHelper();
 
-    float                 m_zoom;
-    double                m_time_offset_ns;
-    double                m_min_x;
-    double                m_max_x;
-    double                m_scale_x;
-    uint64_t              m_id;
-    float                 m_track_height;
-    float                 m_track_content_height;
+    float    m_zoom;
+    double   m_time_offset_ns;
+    double   m_min_x;
+    double   m_max_x;
+    double   m_scale_x;
+    uint64_t m_id;
+    float    m_track_height;
+    float    m_track_content_height;
+    float    m_track_default_height;
     float                 m_min_track_height;
     bool                  m_is_in_view_vertical;
     float                 m_distance_to_view_y;

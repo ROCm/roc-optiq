@@ -11,7 +11,7 @@ class StickyNote
 {
 public:
     StickyNote(double time_ns, float y_offset, const ImVec2& size,
-               const std::string& text, const std::string& title);
+               const std::string& text, const std::string& title, const std::string &project_id);
 
     void Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
                 double pixels_per_ns);
@@ -40,6 +40,7 @@ private:
     ImVec2      m_size;
     std::string m_text;
     std::string m_title;
+    std::string m_project_id;
     bool        m_dragging      = false;
     ImVec2      m_drag_offset   = ImVec2(0, 0);
     ImVec2      m_resize_offset = ImVec2(0, 0);

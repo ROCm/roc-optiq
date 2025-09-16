@@ -69,12 +69,12 @@ RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
     }
 
     uint32_t nanoseconds_part =
-        static_cast<uint32_t>(ns_duration_magnitude % TimeConstants::nanoseconds_per_second);
-    uint64_t total_seconds   = ns_duration_magnitude / TimeConstants::nanoseconds_per_second;
-    uint8_t  display_seconds = static_cast<uint8_t>(total_seconds % TimeConstants::seconds_per_minute);
-    uint64_t total_minutes   = total_seconds / TimeConstants::seconds_per_minute;
-    uint8_t  display_minutes = static_cast<uint8_t>(total_minutes % TimeConstants::seconds_per_minute);
-    uint64_t display_hours   = total_minutes / TimeConstants::seconds_per_minute;
+        static_cast<uint32_t>(ns_duration_magnitude % TimeConstants::ns_per_s);
+    uint64_t total_seconds   = ns_duration_magnitude / TimeConstants::ns_per_s;
+    uint8_t  display_seconds = static_cast<uint8_t>(total_seconds % TimeConstants::minute_in_s);
+    uint64_t total_minutes   = total_seconds / TimeConstants::minute_in_s;
+    uint8_t  display_minutes = static_cast<uint8_t>(total_minutes % TimeConstants::minute_in_s);
+    uint64_t display_hours   = total_minutes / TimeConstants::minute_in_s;
 
     std::ostringstream oss;
     oss << sign_prefix;
@@ -95,7 +95,9 @@ RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
     return oss.str();
 }
 
-double RocProfVis::View::calculate_nice_interval(double view_range, int target_divisions) {
+double 
+RocProfVis::View::calculate_nice_interval(double view_range, int target_divisions) 
+{
     if (view_range <= 0.0) {
         return 1.0; // Avoid division by zero or log of non-positive
     }
@@ -126,3 +128,35 @@ double RocProfVis::View::calculate_nice_interval(double view_range, int target_d
     return nice_multiplier * scale;
 }
 
+RocProfVis::View::ViewRangeNS
+RocProfVis::View::calculate_adaptive_view_range(double item_start_ns,
+                                                double item_duration_ns)
+{
+    // Compute a smooth, monotonic view span around the item using a
+    // linear blend between two padding regimes (short vs long items).
+    // span = duration * (1 + 2*pad) with pad blended between pad_short and pad_long.
+
+    // 100 microseconds minimum view span
+    const double min_visible_span_ns = 100.0 * TimeConstants::ns_per_us;
+    const double T1 = 10.0 * TimeConstants::ns_per_us;  // 10 microseconds (ns)
+    const double T2 = 5.0 * TimeConstants::ns_per_ms;   // 5 milliseconds (ns)
+
+    const double pad_short = 9.0;  // generous padding for tiny items
+    const double pad_long  = 1.0;  // modest padding for large items
+
+    double d   = std::max(item_duration_ns, 1.0);  // guard against zero
+    double pad = pad_short;
+    if(d >= T2)
+        pad = pad_long;
+    else if(d > T1)
+        pad = pad_short + (pad_long - pad_short) * ((d - T1) / (T2 - T1));
+
+    double span = d * (1.0 + 2.0 * pad);
+    if(span < min_visible_span_ns) span = min_visible_span_ns;
+
+    double center               = item_start_ns + d * 0.5;
+    double viewable_range_start = center - span * 0.5;
+    double viewable_range_end   = center + span * 0.5;
+
+    return { viewable_range_start, viewable_range_end };
+}

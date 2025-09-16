@@ -38,8 +38,7 @@ EventsView::Render()
     }
     else
     {
-        float x_button_width =
-            ImGui::CalcTextSize("X").x + 2 * ImGui::GetStyle().FramePadding.x;
+        float x_button_width = ImGui::CalcTextSize("X").x + ImGui::GetStyle().FramePadding.x;
         int item_index = 0;
         for(EventItem& item : m_event_items)
         {
@@ -294,9 +293,11 @@ EventsView::XButton()
                           m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
     clicked = ImGui::SmallButton(ICON_X_CIRCLED);
     ImGui::PopFont();
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);

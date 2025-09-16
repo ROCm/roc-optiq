@@ -114,7 +114,11 @@ TimelineView::TimelineView(DataProvider&                      dp,
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
 }
-
+AnnotationsView&
+TimelineView::GetAnotationsView()
+{
+    return m_annotations_view;
+}
 void
 TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
 {
@@ -221,7 +225,8 @@ TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
 }
 
 void
-TimelineView::SetViewableRangeNS(double start_ns, double end_ns) {
+TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
+{
     // Configure the timeline view so that the visible horizontal range is
     // [start_ns, end_ns] in absolute timestamp units.
     // Guard against invalid inputs.
@@ -230,11 +235,11 @@ TimelineView::SetViewableRangeNS(double start_ns, double end_ns) {
     // Clamp requested range to known data bounds when available.
     start_ns = std::max(start_ns, m_min_x);
     end_ns   = std::min(end_ns, m_max_x);
-    if(end_ns <= start_ns) return; // Fully outside bounds after clamping.
+    if(end_ns <= start_ns) return;  // Fully outside bounds after clamping.
 
     double new_width_ns = end_ns - start_ns;
     // Prevent division by zero and overly small widths.
-    const double kMinWidth = 10.0; // 10 ns minimum span.
+    const double kMinWidth = 10.0;  // 10 ns minimum span.
     if(new_width_ns < kMinWidth) new_width_ns = kMinWidth;
 
     // Compute zoom: m_v_width = m_range_x / m_zoom  =>  m_zoom = m_range_x / m_v_width

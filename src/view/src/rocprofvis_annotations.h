@@ -28,6 +28,7 @@ public:
 
 private:
     AnnotationsView& m_annotations_view;
+    
 };
 
 class AnnotationsViewProjectSettings;
@@ -47,6 +48,7 @@ public:
     void ShowStickyNoteMenu(const ImVec2& window_position, const ImVec2& graph_size,
                             double v_min_x, double v_max_x, float scroll_y);
     void ShowStickyNotePopup();
+    bool IsVisibile();
     void ShowStickyNoteEditPopup();
     std::vector<StickyNote>& GetStickyNotes();
     void                     OpenStickyNotePopup(double time_ns, float y_offset);
@@ -61,7 +63,8 @@ private:
     char                            m_sticky_text[512]       = { 0 };
     int                             m_edit_sticky_id         = -1;
     EventManager::SubscriptionToken m_edit_token;
-
+    EventManager::SubscriptionToken m_annotation_token;
+    bool                            m_hide_stickys;
     std::string                    m_project_id;
     AnnotationsViewProjectSettings m_project_settings;
 };

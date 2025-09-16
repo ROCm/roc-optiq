@@ -236,7 +236,15 @@ TrackItem::RenderMetaArea()
 
         ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
                                (menu_button_width + 2 * m_metadata_padding.x));
+
+            ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
+
+        ImGui::PushFont(large_font);
+
         ImGui::Text(m_name.c_str());
+
+        ImGui::PopFont();   
+
         ImGui::PopTextWrapPos();
 
         if(m_request_state != TrackDataRequestState::kIdle)

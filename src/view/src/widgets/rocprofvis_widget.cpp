@@ -12,6 +12,46 @@
 #include <sstream>
 
 using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
+void
+WithPadding(float left, float right, float top, float bottom,
+            const std::function<void()>& content)
+{
+    if(top > 0.0f) ImGui::Dummy(ImVec2(0, top));
+
+    // No border flags for invisible borders
+    if(ImGui::BeginTable("##padding_table", 3, ImGuiTableFlags_SizingFixedFit))
+    {
+        ImGui::TableSetupColumn("LeftPad", ImGuiTableColumnFlags_WidthFixed, left);
+        ImGui::TableSetupColumn("Content", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("RightPad", ImGuiTableColumnFlags_WidthFixed, right);
+
+        ImGui::TableNextRow();
+
+        // Left padding
+        ImGui::TableSetColumnIndex(0);
+        if(left > 0.0f) ImGui::Dummy(ImVec2(left, 0));
+
+        // Content
+        ImGui::TableSetColumnIndex(1);
+        ImGui::BeginGroup();
+        content();
+        ImGui::EndGroup();
+
+        // Right padding
+        ImGui::TableSetColumnIndex(2);
+        if(right > 0.0f) ImGui::Dummy(ImVec2(right, 0));
+
+        ImGui::EndTable();
+    }
+
+    if(bottom > 0.0f) ImGui::Dummy(ImVec2(0, bottom));
+}
+}  // namespace View
+}  // namespace RocProfVis
 
 LayoutItem::LayoutItem()
 : m_width(0)
@@ -406,11 +446,15 @@ TabContainer::TabContainer()
 
 TabContainer::~TabContainer() { m_tabs.clear(); }
 
-void TabContainer::SetEventSourceName(const std::string& source_name) {
+void
+TabContainer::SetEventSourceName(const std::string& source_name)
+{
     m_event_source_name = source_name;
 }
 
-const std::string& TabContainer::GetEventSourceName() const {
+const std::string&
+TabContainer::GetEventSourceName() const
+{
     return m_event_source_name;
 }
 
@@ -525,7 +569,7 @@ TabContainer::Render()
             {
                 // If the active tab was closed, reset to -1
                 m_active_tab_index = -1;
-            }   
+            }
         }
     }
     ImGui::EndChild();
@@ -545,7 +589,8 @@ TabContainer::RemoveTab(const std::string& id)
                              [&id](const TabItem& tab) { return tab.m_id == id; });
     if(it != m_tabs.end())
     {
-        if(m_enable_send_close_event) {
+        if(m_enable_send_close_event)
+        {
             // notify the event manager of the tab removal
             std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
                 static_cast<int>(RocEvents::kTabClosed), it->m_id,
@@ -608,7 +653,8 @@ TabContainer::SetTabLabel(const std::string& label, const std::string& id)
     }
 }
 
-const TabItem* TabContainer::GetActiveTab() const
+const TabItem*
+TabContainer::GetActiveTab() const
 {
     if(m_active_tab_index >= 0 && m_active_tab_index < static_cast<int>(m_tabs.size()))
     {

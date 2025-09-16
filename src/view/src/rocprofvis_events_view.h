@@ -29,6 +29,7 @@ private:
         std::string                      header;
         std::unique_ptr<HSplitContainer> contents;
         const event_info_t*              info;
+        float                            height = 500.0f;
     };
 
     void RenderEventExtData(const event_info_t* event_data);
@@ -40,6 +41,10 @@ private:
     SettingsManager&                   m_settings;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::vector<EventItem>             m_event_items;
+    float                              m_standard_eventcard_height;
+    bool                               m_table_expanded;
+    bool                               m_table_was_expanded;
+
 };
 
 }  // namespace View

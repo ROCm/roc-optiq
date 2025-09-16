@@ -2055,20 +2055,20 @@ DataProvider::ProcessEventExtendedRequest(data_req_info_t& req)
 
 //this block is for testing purposes. Use kRPVControllerExtDataType and kRPVControllerExtDataCategoryEnum as needed
             {
-                uint64_t data_type; //rocprofvis_controller_primitive_type_t
-                uint64_t data_enum; //rocprofvis_event_data_category_enum_t
-                if(kRocProfVisResultSuccess ==
-                       rocprofvis_controller_get_uint64(ext_data_handle,
-                                                        kRPVControllerExtDataType, 0,
-                                                        (uint64_t*) &data_type) &&
-                   kRocProfVisResultSuccess ==
-                       rocprofvis_controller_get_uint64(ext_data_handle,
-                                                        kRPVControllerExtDataCategoryEnum,
-                                                        0, (uint64_t*) &data_enum))
-                {
-                    event_info.ext_info[j].value += " (" + std::to_string(data_type) +
-                                                    "," + std::to_string(data_enum) + ")";
-                }
+                //uint64_t data_type; //rocprofvis_controller_primitive_type_t
+                //uint64_t data_enum; //rocprofvis_event_data_category_enum_t
+                //if(kRocProfVisResultSuccess ==
+                //       rocprofvis_controller_get_uint64(ext_data_handle,
+                //                                        kRPVControllerExtDataType, 0,
+                //                                        (uint64_t*) &data_type) &&
+                //   kRocProfVisResultSuccess ==
+                //       rocprofvis_controller_get_uint64(ext_data_handle,
+                //                                        kRPVControllerExtDataCategoryEnum,
+                //                                        0, (uint64_t*) &data_enum))
+                //{
+                //    event_info.ext_info[j].value += " (" + std::to_string(data_type) +
+                //                                    "," + std::to_string(data_enum) + ")";
+                //}
             }
 //end of test block
         }

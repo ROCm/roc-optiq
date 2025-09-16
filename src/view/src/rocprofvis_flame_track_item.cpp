@@ -199,6 +199,8 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         draw_list->PushClipRect(rectMin, rectMax, true);
         ImVec2 textPos =
             ImVec2(rectMin.x + m_text_padding.x, rectMin.y + m_text_padding.y);
+
+
         draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
                            chart_item.event.m_name.c_str());
         draw_list->PopClipRect();

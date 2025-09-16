@@ -4,6 +4,7 @@
 
 #include "imgui.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_view_structs.h"
 #include <memory>
 
 namespace RocProfVis
@@ -33,8 +34,10 @@ public:
     ~TimelineArrow();
     // Draws an arrow from (start_time, y_start) to (end_time, y_end) using the given
     // mapping
-    void Render(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
-                ImVec2 window, std::map<uint64_t, float>& track_height_total);
+    void Render(ImDrawList* draw_list, const double v_min_x, const double pixels_per_ns,
+                const ImVec2                               window,
+                const std::unordered_map<uint64_t, float>& track_position_y,
+                const std::vector<rocprofvis_graph_t>&     graphs) const;
 
 private:
     void HandleEventSelectionChanged(std::shared_ptr<RocEvent> e);

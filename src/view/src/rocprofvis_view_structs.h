@@ -31,6 +31,7 @@ typedef struct rocprofvis_graph_t
         TYPE_FLAMECHART
     } graph_type;
     bool                        display;
+    bool                        display_changed;
     TrackItem*                  chart;
     bool                        selected;
 

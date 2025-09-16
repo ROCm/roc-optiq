@@ -182,7 +182,7 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("FlowInfoTable", 5, TABLE_FLAGS))
+            if(ImGui::BeginTable("FlowInfoTable", 6, TABLE_FLAGS))
             {
                 m_table_expanded = true;
                 ImGui::TableSetupColumn("ID");
@@ -213,10 +213,14 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                         ImGui::TextUnformatted(
                             std::to_string(event_data->flow_info[i].track_id)
                                 .c_str());
-                        ImGui::TableSetColumnIndex(4);
-                        ImGui::TextUnformatted(
-                            std::to_string(event_data->flow_info[i].direction)
-                                .c_str());
+						ImGui::TableSetColumnIndex(4);
+						ImGui::TextUnformatted(
+							std::to_string(event_data->flow_info[i].level)
+								.c_str());
+						ImGui::TableSetColumnIndex(5);
+						ImGui::TextUnformatted(
+							std::to_string(event_data->flow_info[i].direction)
+								.c_str());
                     }
                 }
                 ImGui::EndTable();

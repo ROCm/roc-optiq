@@ -7,8 +7,8 @@
 #include "rocprofvis_font_manager.h"
 #include <array>
 #include <filesystem>
-#include <string>
 #include <list>
+#include <string>
 
 namespace RocProfVis
 {
@@ -132,11 +132,11 @@ public:
     /**
      * Returns the default ImGui style.
      */
-    const ImGuiStyle&         GetDefaultIMGUIStyle() const;
+    const ImGuiStyle& GetDefaultIMGUIStyle() const;
     /**
      * Returns the default style as configured by this class
      */
-    const ImGuiStyle&         GetDefaultStyle() const;
+    const ImGuiStyle& GetDefaultStyle() const;
 
     // User settings
     UserSettings&       GetUserSettings();
@@ -147,6 +147,9 @@ public:
     InternalSettings& GetInternalSettings();
     void              AddRecentFile(const std::string& file_path);
     void              RemoveRecentFile(const std::string& file_path);
+
+    // Constant for event height;
+    const float GetEventLevelHeight() const;
 
 private:
     SettingsManager();

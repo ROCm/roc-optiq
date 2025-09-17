@@ -191,8 +191,12 @@ TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
                                           m_v_max_x, m_scroll_position_y);
     m_annotations_view.ShowStickyNotePopup();
     m_annotations_view.ShowStickyNoteEditPopup();
+
+   double center_time_ns = m_v_min_x + (m_v_max_x - m_v_min_x) * 0.5;
+    float  center_y_offset = m_graph_size.y * 0.5f;
+    
     m_stop_user_interaction |=
-        m_annotations_view.Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns);
+        m_annotations_view.Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns, ImVec2(center_time_ns, center_y_offset));
 }
 
 void
@@ -221,7 +225,8 @@ TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
 }
 
 void
-TimelineView::SetViewableRangeNS(double start_ns, double end_ns) {
+TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
+{
     // Configure the timeline view so that the visible horizontal range is
     // [start_ns, end_ns] in absolute timestamp units.
     // Guard against invalid inputs.
@@ -230,11 +235,11 @@ TimelineView::SetViewableRangeNS(double start_ns, double end_ns) {
     // Clamp requested range to known data bounds when available.
     start_ns = std::max(start_ns, m_min_x);
     end_ns   = std::min(end_ns, m_max_x);
-    if(end_ns <= start_ns) return; // Fully outside bounds after clamping.
+    if(end_ns <= start_ns) return;  // Fully outside bounds after clamping.
 
     double new_width_ns = end_ns - start_ns;
     // Prevent division by zero and overly small widths.
-    const double kMinWidth = 10.0; // 10 ns minimum span.
+    const double kMinWidth = 10.0;  // 10 ns minimum span.
     if(new_width_ns < kMinWidth) new_width_ns = kMinWidth;
 
     // Compute zoom: m_v_width = m_range_x / m_zoom  =>  m_zoom = m_range_x / m_v_width
@@ -1187,6 +1192,11 @@ TimelineView::RenderGraphView()
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
+}
+AnnotationsView&
+TimelineView::GetAnnotationsView()
+{
+    return m_annotations_view;
 }
 
 void

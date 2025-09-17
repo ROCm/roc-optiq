@@ -81,6 +81,7 @@ public:
     void ShowTimelineContextMenu(const ImVec2& window_position);
     void RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position);
     TimelineArrow &GetArrowLayer();
+    AnnotationsView& GetAnnotationsView();
 
 private:
     EventManager::SubscriptionToken    m_scroll_to_track_token;

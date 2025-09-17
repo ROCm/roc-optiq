@@ -57,7 +57,7 @@ EventsView::Render()
                     ImGui::SameLine();
                     deselect_event = XButton();
 
-                    ImGui::BeginChild("EventDetails", ImVec2(0, item.height), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_ResizeY);
+                    ImGui::BeginChild("EventDetails", ImVec2(0, item.height), ImGuiChildFlags_None);
                     item.contents->Render();
                     ImGui::EndChild();
                     
@@ -144,18 +144,15 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
         {
             if(ImGui::BeginTable("ExtDataTable", 2, TABLE_FLAGS))
             {
-                ImGuiListClipper clipper;
-                clipper.Begin(static_cast<int>(event_data->ext_info.size()));
-                while(clipper.Step())
+                ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed); 
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed);
+                for(size_t i = 0; i < event_data->ext_info.size(); ++i)
                 {
-                    for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-                    {
-                        ImGui::TableNextRow();
-                        ImGui::TableSetColumnIndex(0);
-                        ImGui::TextUnformatted(event_data->ext_info[i].name.c_str());
-                        ImGui::TableSetColumnIndex(1);
-                        ImGui::TextUnformatted(event_data->ext_info[i].value.c_str());
-                    }
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(event_data->ext_info[i].name.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextUnformatted(event_data->ext_info[i].value.c_str());
                 }
                 ImGui::EndTable();
             }
@@ -347,6 +344,7 @@ EventsView::HandleEventSelectionChanged()
             "Event ID: " + std::to_string(event_data->basic_info.m_id);
         m_event_items[i].contents = std::move(container);
         m_event_items[i].info     = event_data;
+        m_event_items[i].height   = 0.0f; // Set to auto height initially
     }
 }
 

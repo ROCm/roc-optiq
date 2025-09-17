@@ -1,4 +1,4 @@
-name: Continuous Integration - Ubuntu
+name: Ubuntu Continuous Integration 
 run-name: rocprofiler-visualizer-ubuntu-ci
 
 on:

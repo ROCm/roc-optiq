@@ -466,7 +466,7 @@ SettingsManager::InitStyling()
     style.ScrollbarRounding = 8.0f;
     style.FramePadding      = ImVec2(10, 6);
     style.ItemSpacing       = ImVec2(10, 8);
-    style.WindowPadding     = ImVec2(14, 10);
+    style.WindowPadding     = ImVec2(4, 4);
 
     m_default_style = style; // Store the our customized style
 }

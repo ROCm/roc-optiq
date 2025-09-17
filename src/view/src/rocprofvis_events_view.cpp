@@ -31,7 +31,7 @@ EventsView::~EventsView() {}
 void
 EventsView::Render()
 {
-    ImGui::BeginChild("events_view", ImVec2(0, 0), ImGuiChildFlags_Borders);
+    ImGui::BeginChild("events_view", ImVec2(0, 0), ImGuiChildFlags_None);
     if(m_event_items.empty())
     {
         ImGui::TextUnformatted("No data available for the selected events.");
@@ -57,25 +57,14 @@ EventsView::Render()
                     ImGui::SameLine();
                     deselect_event = XButton();
 
-                    ImGui::BeginChild("EventDetails", ImVec2(0, item.height), false,
-                                      ImGuiChildFlags_None);
+                    ImGui::BeginChild("EventDetails", ImVec2(0, item.height), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_ResizeY);
                     item.contents->Render();
                     ImGui::EndChild();
-
-                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 2));
-                    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(128, 128, 128, 64));
-                    ImGui::Button("##eventdetails_resize", ImVec2(-1, 6));
-                    if(ImGui::IsItemHovered())
+                    
+                    // Use the optimal height of the contents as the new height for the next frame
+                    if(item.contents) 
                     {
-                        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-                    }
-                    ImGui::PopStyleColor();
-                    ImGui::PopStyleVar();
-
-                    if(ImGui::IsItemActive())
-                    {
-                        item.height += ImGui::GetIO().MouseDelta.y;
-                        if(item.height < 100.0f) item.height = 100.0f;
+                        item.height = item.contents->GetOptimalHeight();
                     }
                 }
                 else
@@ -99,16 +88,12 @@ EventsView::Render()
 }
 
 void
-EventsView::RenderEventExtData(const event_info_t* event_data)
+EventsView::RenderBasicData(const event_info_t* event_data) 
 {
     float padding = m_settings.GetDefaultStyle().CellPadding.y;
-    WithPadding(padding, padding, padding, padding, [this, event_data]() {
+    // WithPadding(padding, padding, padding, padding, [this, event_data]() {
         ImVec4 headerColor =
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
-
-        ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
 
         ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
 
@@ -137,21 +122,32 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
         ImGui::Text("%u", info.m_level);
 
         ImGui::PopFont();
-        ImGui::Dummy(ImVec2(10, 10));
+    // });
+}
+
+void
+EventsView::RenderEventExtData(const event_info_t* event_data)
+{
+    float padding = m_settings.GetDefaultStyle().CellPadding.y;
+    // WithPadding(padding, padding, padding, padding, [this, event_data]() {
+        ImVec4 headerColor =
+            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
+
+        ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
 
         // --- Expandable full extended data ---
         if(ImGui::CollapsingHeader("Show More Event Extended Data",
                                    ImGuiTreeNodeFlags_DefaultOpen))
         {
-            ImGui::Separator();
+            // ImGui::Separator();
             if(event_data->ext_info.empty())
             {
                 ImGui::TextUnformatted("No data available.");
             }
             else
             {
-                float parent_width = ImGui::GetContentRegionAvail().x;
-
                 if(ImGui::BeginTable("ExtDataTable", 2, TABLE_FLAGS))
                 {
                     ImGuiListClipper clipper;
@@ -173,14 +169,14 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
         }
 
         ImGui::PopStyleColor(3);
-    });
+    // });
 }
 
 void
 EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 {
     float padding = m_settings.GetDefaultStyle().CellPadding.y;
-    WithPadding(padding, padding, padding, padding, [this, event_data]() {
+    // WithPadding(padding, padding, padding, padding, [this, event_data]() {
         ImVec4 headerColor =
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
 
@@ -241,14 +237,14 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
             }
         }
         ImGui::PopStyleColor(3);
-    });
+    // });
 }
 
 void
 EventsView::RenderCallStackData(const event_info_t* event_data)
 {
     float padding = m_settings.GetDefaultStyle().CellPadding.y;
-    WithPadding(padding, padding, padding, padding, [this, event_data]() {
+//    WithPadding(padding, padding, padding, padding, [this, event_data]() {
         ImVec4 headerColor = ImGui::ColorConvertU32ToFloat4(
             m_settings.GetColor(Colors::kSplitterColor));  // Use your desired color enum
 
@@ -295,7 +291,7 @@ EventsView::RenderCallStackData(const event_info_t* event_data)
             }
         }
         ImGui::PopStyleColor(3);
-    });
+    // });
 }
 
 bool
@@ -335,38 +331,29 @@ EventsView::HandleEventSelectionChanged()
 
         LayoutItem left;
         left.m_item = std::make_shared<RocCustomWidget>(
-            [this, event_data]() { this->RenderEventExtData(event_data); });
-        ;
+            [this, event_data]() {
+                this->RenderBasicData(event_data);
+                ImGui::NewLine();
+                this->RenderEventExtData(event_data); 
+            });
         left.m_window_padding = ImVec2(4, 4);
-        // left.m_child_flags    = ImGuiChildFlags_AutoResizeY;
+        left.m_child_flags = ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding;
+
         LayoutItem right;
-
-        LayoutItem flow;
-        flow.m_child_flags = ImGuiWindowFlags_NoScrollbar;
-        flow.m_item        = std::make_shared<RocCustomWidget>(
-            [this, event_data]() { this->RenderEventFlowInfo(event_data); });
-        flow.m_visible = true;
-
-        LayoutItem callstack;
-        callstack.m_child_flags = ImGuiWindowFlags_NoScrollbar;
-        callstack.m_item        = std::make_shared<RocCustomWidget>(
-            [this, event_data]() { this->RenderCallStackData(event_data); });
-        callstack.m_visible = true;
-
-        auto vsplit = std::make_shared<VSplitContainer>(flow, callstack);
-        vsplit->SetSplit(0.5f);
-        vsplit->SetMinBottomHeight(15.0f);
-        vsplit->SetMinTopHeight(25.0f);
-        right.m_item = vsplit;
-
+        right.m_item = std::make_shared<RocCustomWidget>(
+            [this, event_data]() { 
+                this->RenderEventFlowInfo(event_data);
+                ImGui::NewLine();
+                this->RenderCallStackData(event_data);
+            });
         right.m_window_padding = ImVec2(4, 4);
-        // right.m_child_flags    = ImGuiChildFlags_AutoResizeY;
+        right.m_child_flags = ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding;
 
         std::unique_ptr<HSplitContainer> container =
             std::make_unique<HSplitContainer>(left, right);
         container->SetMinLeftWidth(10.0f);
         container->SetMinRightWidth(10.0f);
-        container->SetSplit(0.3f);
+        container->SetSplit(0.5f);
 
         m_event_items[i].header =
             "Event ID: " + std::to_string(event_data->basic_info.m_id);

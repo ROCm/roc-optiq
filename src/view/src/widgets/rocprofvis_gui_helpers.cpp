@@ -68,13 +68,17 @@ RocProfVis::View::DrawInternalBuildBanner(const char* text /*= "Internal Build"*
     ImVec2      disp = ImGui::GetIO().DisplaySize;
 
     // Parameters
-    const float angle_rad        = IM_PI * 0.25f;  // 45 degrees (down-left)
-    const float ribbon_thickness = 20.0f;              
-    const float min_base_length  = 300.0f;         
-    const float side_padding     = 64.0f;          
-    const ImU32 col_fill         = IM_COL32(200, 16, 32, 150);
-    const ImU32 col_border       = IM_COL32(255, 255, 255, 40);
-    const ImU32 col_text         = IM_COL32(255, 255, 255, 255);
+    static constexpr float angle_rad        = IM_PI * 0.25f;  // 45 degrees (down-left)
+    static constexpr float ribbon_thickness = 20.0f;
+    static constexpr float min_base_length  = 300.0f;
+    static constexpr float side_padding     = 64.0f;
+    static constexpr ImU32 col_fill         = IM_COL32(200, 16, 32, 150);
+    static constexpr ImU32 col_border       = IM_COL32(255, 255, 255, 40);
+    static constexpr ImU32 col_text         = IM_COL32(255, 255, 255, 255);
+
+    // Rotation (same for quad + text)
+    static const float c = cosf(angle_rad);
+    static const float s = sinf(angle_rad);
 
     // Measure text first
     ImVec2 ts = ImGui::CalcTextSize(text);
@@ -93,10 +97,6 @@ RocProfVis::View::DrawInternalBuildBanner(const char* text /*= "Internal Build"*
     // Axis‑aligned rect (local space before rotation)
     ImVec2 local[4] = { ImVec2(-half_len, -half_thick), ImVec2(half_len, -half_thick),
                         ImVec2(half_len, half_thick), ImVec2(-half_len, half_thick) };
-
-    // Rotation (same for quad + text)
-    const float c = cosf(angle_rad);
-    const float s = sinf(angle_rad);
 
     ImVec2 quad[4];
     for(int i = 0; i < 4; ++i)

@@ -35,7 +35,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          apt install -y \
+          sudo apt install -y \
             cmake build-essential \
             libwayland-bin \
             libwayland-dev libxkbcommon-dev wayland-protocols \
@@ -46,9 +46,9 @@ jobs:
         run: |
           wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
           wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${{ matrix.os-name }}.list http://packages.lunarg.com/vulkan/lunarg-vulkan-${{ matrix.os-name }}.list
-          apt update
-          apt install -y vulkan-sdk
-          apt install -y xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+          sudo apt update
+          sudo apt install -y vulkan-sdk
+          sudo apt install -y xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
           echo "✅ Vulkan SDK Installed!"
 
       - name: Build, Make, and Verify Installation

@@ -40,12 +40,13 @@ EventsView::Render()
     {
         float x_button_width =
             ImGui::CalcTextSize("X").x + 2 * ImGui::GetStyle().FramePadding.x;
+        int item_index = 0;
         for(EventItem& item : m_event_items)
         {
             if(item.info && item.contents)
             {
                 bool deselect_event = false;
-                ImGui::PushID(item.info->basic_info.m_id);
+                ImGui::PushID(item_index++);
                 ImGui::SetNextItemAllowOverlap();
 
                 if(ImGui::CollapsingHeader(item.header.c_str(),
@@ -60,7 +61,8 @@ EventsView::Render()
                     ImGui::BeginChild("EventDetails", ImVec2(0, item.height), ImGuiChildFlags_None);
                     item.contents->Render();
                     ImGui::EndChild();
-                    
+                    ImGui::Separator();
+
                     // Use the optimal height of the contents as the new height for the next frame
                     if(item.contents) 
                     {
@@ -145,7 +147,7 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
             if(ImGui::BeginTable("ExtDataTable", 2, TABLE_FLAGS))
             {
                 ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed); 
-                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed);
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
                 for(size_t i = 0; i < event_data->ext_info.size(); ++i)
                 {
                     ImGui::TableNextRow();

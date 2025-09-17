@@ -13,7 +13,6 @@ AnnotationsViewProjectSettings::AnnotationsViewProjectSettings(
     const std::string& project_id, AnnotationsView& annotations_view)
 : ProjectSetting(project_id)
 , m_annotations_view(annotations_view)
-
 {}
 
 AnnotationsViewProjectSettings::~AnnotationsViewProjectSettings() {}
@@ -100,33 +99,16 @@ AnnotationsViewProjectSettings::Valid() const
 AnnotationsView::AnnotationsView(const std::string& project_id)
 : m_project_settings(project_id, *this)
 , m_project_id(project_id)
-, m_hide_stickys(false)
+, m_show_annotations(true)
+, m_visible_center(0.0f, 0.0f)
 {
     if(m_project_settings.Valid())
     {
         m_project_settings.FromJson();
     }
 
-    auto new_annotation_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(e->GetType() == RocEventType::kModifyAnnotationEvent)
-        {
-            switch(static_cast<RocEvents>(e->GetId()))
-            {
-                case RocEvents::kShowAnnotations: m_hide_stickys = false; break;
-                case RocEvents::kHideAnnotations: m_hide_stickys = true; break;
-                default: break;
-            }
-        }
-    };
-
-    m_annotation_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kShowAnnotations), new_annotation_handler);
-    EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kHideAnnotations),
-                                           new_annotation_handler);
-
     auto sticky_note_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<StickyNoteEvent>(e);
-
         if(evt && evt->GetSourceId() == m_project_id)
         {
             m_show_sticky_edit_popup = true;
@@ -170,19 +152,15 @@ AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
 {
     m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id);
 }
-bool 
-AnnotationsView::IsVisibile()
-{
-    return !m_hide_stickys;
-}
 
 bool
 AnnotationsView::Render(ImDrawList* draw_list, const ImVec2& window_position,
-                        double v_min_x, double pixels_per_ns)
+                        double v_min_x, double pixels_per_ns, ImVec2 current_center)
 {
     bool movement_drag   = false;
     bool movement_resize = false;
-    if(!m_hide_stickys)
+    m_visible_center     = current_center;
+    if(m_show_annotations)
     {
         for(auto& note : m_sticky_notes)
         {
@@ -191,8 +169,19 @@ AnnotationsView::Render(ImDrawList* draw_list, const ImVec2& window_position,
             note.Render(draw_list, window_position, v_min_x, pixels_per_ns);
         }
     }
-
     return movement_drag || movement_resize;
+}
+
+bool
+AnnotationsView::IsVisibile()
+{
+    return m_show_annotations;
+}
+
+void
+AnnotationsView::SetVisible(bool SetVisible)
+{
+    m_show_annotations = SetVisible;
 }
 
 void
@@ -452,14 +441,26 @@ AnnotationsView::ShowStickyNotePopup()
 }
 
 void
-AnnotationsView::OpenStickyNotePopup(double time_ns, float y_offset)
+AnnotationsView::OpenStickyNotePopup(double time_ns /* = -1.0 */,
+                                     float  y_offset /* = -1.0f */)
 {
-    m_sticky_time_ns    = time_ns;
-    m_sticky_y_offset   = y_offset;
+    // If both are not present (sentinel values), do something else
+    if(time_ns == -1.0 && y_offset == -1.0f)
+    {
+         
+        m_sticky_time_ns  = m_visible_center.x;    
+        m_sticky_y_offset = m_visible_center.y;  
+     }
+    else
+    {
+        m_sticky_time_ns  = time_ns;
+        m_sticky_y_offset = y_offset;
+    }
     m_sticky_title[0]   = '\0';
     m_sticky_text[0]    = '\0';
     m_show_sticky_popup = true;
 }
+ 
 
 std::vector<StickyNote>&
 AnnotationsView::GetStickyNotes()

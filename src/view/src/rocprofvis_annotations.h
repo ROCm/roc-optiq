@@ -28,7 +28,6 @@ public:
 
 private:
     AnnotationsView& m_annotations_view;
-    
 };
 
 class AnnotationsViewProjectSettings;
@@ -39,19 +38,21 @@ public:
     AnnotationsView(const std::string& project_id);
     ~AnnotationsView();
 
+    bool IsVisibile();
+    void SetVisible(bool visible);
+
     void Clear();
 
     void AddSticky(double time_ns, float y_offset, const ImVec2& size,
                    const std::string& text, const std::string& title);
     bool Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
-                double pixels_per_ns);
+                double pixels_per_ns, ImVec2 current_center);
     void ShowStickyNoteMenu(const ImVec2& window_position, const ImVec2& graph_size,
                             double v_min_x, double v_max_x, float scroll_y);
     void ShowStickyNotePopup();
-    bool IsVisibile();
     void ShowStickyNoteEditPopup();
     std::vector<StickyNote>& GetStickyNotes();
-    void                     OpenStickyNotePopup(double time_ns, float y_offset);
+    void OpenStickyNotePopup(double time_ns /* = -1.0 */, float y_offset /* = -1.0f */);
 
 private:
     std::vector<StickyNote>         m_sticky_notes;
@@ -63,10 +64,10 @@ private:
     char                            m_sticky_text[512]       = { 0 };
     int                             m_edit_sticky_id         = -1;
     EventManager::SubscriptionToken m_edit_token;
-    EventManager::SubscriptionToken m_annotation_token;
-    bool                            m_hide_stickys;
-    std::string                    m_project_id;
-    AnnotationsViewProjectSettings m_project_settings;
+    bool                            m_show_annotations;
+    ImVec2                          m_visible_center;
+    std::string                     m_project_id;
+    AnnotationsViewProjectSettings  m_project_settings;
 };
 
 }  // namespace View

@@ -63,7 +63,6 @@ public:
     void                             DestroyGraphs();
     std::vector<rocprofvis_graph_t>* GetGraphs();
     void                             RenderInteractiveUI(ImVec2 screen_pos);
-    AnnotationsView&                 GetAnotationsView();
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             SetViewableRangeNS(double start_ns, double end_ns);
@@ -82,6 +81,7 @@ public:
     void ShowTimelineContextMenu(const ImVec2& window_position);
     void RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position);
     TimelineArrow &GetArrowLayer();
+    AnnotationsView& GetAnnotationsView();
 
 private:
     EventManager::SubscriptionToken    m_scroll_to_track_token;

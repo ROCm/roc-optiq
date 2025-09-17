@@ -267,9 +267,3 @@ RangeEvent::GetEndNs() const
 {
     return m_end_ns;
 }
-ModifyAnnotationEvent::ModifyAnnotationEvent(int event_id)
-: RocEvent(event_id)
-{
-    m_event_type = RocEventType::kModifyAnnotationEvent;
-}
- 

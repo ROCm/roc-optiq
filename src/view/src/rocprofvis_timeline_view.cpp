@@ -114,11 +114,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
 }
-AnnotationsView&
-TimelineView::GetAnotationsView()
-{
-    return m_annotations_view;
-}
+
 void
 TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
 {
@@ -195,8 +191,12 @@ TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
                                           m_v_max_x, m_scroll_position_y);
     m_annotations_view.ShowStickyNotePopup();
     m_annotations_view.ShowStickyNoteEditPopup();
+
+   double center_time_ns = m_v_min_x + (m_v_max_x - m_v_min_x) * 0.5;
+    float  center_y_offset = m_graph_size.y * 0.5f;
+    
     m_stop_user_interaction |=
-        m_annotations_view.Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns);
+        m_annotations_view.Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns, ImVec2(center_time_ns, center_y_offset));
 }
 
 void
@@ -1192,6 +1192,11 @@ TimelineView::RenderGraphView()
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
+}
+AnnotationsView&
+TimelineView::GetAnnotationsView()
+{
+    return m_annotations_view;
 }
 
 void

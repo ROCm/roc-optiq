@@ -29,9 +29,10 @@ private:
         std::string                      header;
         std::unique_ptr<HSplitContainer> contents;
         const event_info_t*              info;
-        float                            height = 500.0f;
+        float                            height;
     };
 
+    void RenderBasicData(const event_info_t* event_data);
     void RenderEventExtData(const event_info_t* event_data);
     void RenderEventFlowInfo(const event_info_t* event_data);
     void RenderCallStackData(const event_info_t* event_data);

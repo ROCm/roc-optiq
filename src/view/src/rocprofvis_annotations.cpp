@@ -13,6 +13,7 @@ AnnotationsViewProjectSettings::AnnotationsViewProjectSettings(
     const std::string& project_id, AnnotationsView& annotations_view)
 : ProjectSetting(project_id)
 , m_annotations_view(annotations_view)
+
 {}
 
 AnnotationsViewProjectSettings::~AnnotationsViewProjectSettings() {}
@@ -101,6 +102,7 @@ AnnotationsView::AnnotationsView(const std::string& project_id)
 , m_project_id(project_id)
 , m_show_annotations(true)
 , m_visible_center(0.0f, 0.0f)
+, m_dragged_sticky_id(-1)
 {
     if(m_project_settings.Valid())
     {
@@ -160,13 +162,22 @@ AnnotationsView::Render(ImDrawList* draw_list, const ImVec2& window_position,
     bool movement_drag   = false;
     bool movement_resize = false;
     m_visible_center     = current_center;
+
     if(m_show_annotations)
     {
-        for(auto& note : m_sticky_notes)
+        // Interaction --> top-most gets priority
+        for(int i = static_cast<int>(m_sticky_notes.size()) - 1; i >= 0; --i)
         {
-            movement_drag |= note.HandleDrag(window_position, v_min_x, pixels_per_ns);
-            movement_resize |= note.HandleResize(window_position, v_min_x, pixels_per_ns);
-            note.Render(draw_list, window_position, v_min_x, pixels_per_ns);
+            movement_drag |= m_sticky_notes[i].HandleDrag(
+                window_position, v_min_x, pixels_per_ns, m_dragged_sticky_id);
+            movement_resize |=
+                m_sticky_notes[i].HandleResize(window_position, v_min_x, pixels_per_ns);
+        }
+
+        // Rendering --> based on added order (old bottom new on top)
+        for(size_t i = 0; i < m_sticky_notes.size(); ++i)
+        {
+            m_sticky_notes[i].Render(draw_list, window_position, v_min_x, pixels_per_ns);
         }
     }
     return movement_drag || movement_resize;
@@ -447,10 +458,9 @@ AnnotationsView::OpenStickyNotePopup(double time_ns /* = -1.0 */,
     // If both are not present (sentinel values), do something else
     if(time_ns == -1.0 && y_offset == -1.0f)
     {
-         
-        m_sticky_time_ns  = m_visible_center.x;    
-        m_sticky_y_offset = m_visible_center.y;  
-     }
+        m_sticky_time_ns  = m_visible_center.x;
+        m_sticky_y_offset = m_visible_center.y;
+    }
     else
     {
         m_sticky_time_ns  = time_ns;
@@ -460,7 +470,6 @@ AnnotationsView::OpenStickyNotePopup(double time_ns /* = -1.0 */,
     m_sticky_text[0]    = '\0';
     m_show_sticky_popup = true;
 }
- 
 
 std::vector<StickyNote>&
 AnnotationsView::GetStickyNotes()

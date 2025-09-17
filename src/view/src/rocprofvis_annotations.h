@@ -68,6 +68,7 @@ private:
     ImVec2                          m_visible_center;
     std::string                     m_project_id;
     AnnotationsViewProjectSettings  m_project_settings;
+    int m_dragged_sticky_id;  // ID of the sticky note currently being dragged
 };
 
 }  // namespace View

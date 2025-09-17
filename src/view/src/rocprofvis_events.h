@@ -24,8 +24,6 @@ enum class RocEvents
     kStickyNoteEdited,
     kFontSizeChanged,
     kSetViewRange,
-    kHideAnnotations,
-    kShowAnnotations,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeDataDirty,
     kComputeBlockNavigationChanged,
@@ -44,7 +42,6 @@ enum class RocEventType
     kScrollToTrackEvent,
     kStickyNoteEvent,
     kRangeEvent,
-    kModifyAnnotationEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
 #endif
@@ -124,24 +121,24 @@ class TrackDataEvent : public RocEvent
 public:
     TrackDataEvent(int event_id, uint64_t track_id, const std::string& source_id,
                    uint64_t request_id, uint64_t response_code);
-    uint64_t GetTrackID() const;
-    uint64_t GetRequestID() const;
-    uint64_t GetResponseCode() const;
+    uint64_t           GetTrackID() const;
+    uint64_t           GetRequestID() const;
+    uint64_t           GetResponseCode() const;
 
 private:
-    uint64_t m_track_id;
-    uint64_t m_request_id;
-    uint64_t m_response_code;
+    uint64_t    m_track_id;
+    uint64_t    m_request_id;
+    uint64_t    m_response_code;
 };
 
 class TableDataEvent : public RocEvent
 {
 public:
     TableDataEvent(const std::string& source_id, uint64_t request_id);
-    uint64_t GetRequestID() const;
+    uint64_t           GetRequestID() const;
 
 private:
-    uint64_t m_request_id;
+    uint64_t    m_request_id;
 };
 
 class StickyNoteEvent : public RocEvent
@@ -159,19 +156,10 @@ class ScrollToTrackEvent : public RocEvent
 public:
     ScrollToTrackEvent(int event_id, const uint64_t& track_id,
                        const std::string& source_id);
-    const uint64_t GetTrackID() const;
+    const uint64_t     GetTrackID() const;
 
 private:
-    uint64_t m_track_id;
-};
-
-class ModifyAnnotationEvent : public RocEvent
-{
-public:
-    ModifyAnnotationEvent(int event_id);
- 
-
-private:
+    uint64_t    m_track_id;
 };
 
 #ifdef COMPUTE_UI_SUPPORT
@@ -216,29 +204,29 @@ class EventSelectionChangedEvent : public RocEvent
 public:
     EventSelectionChangedEvent(uint64_t event_id, uint64_t track_id, bool selected,
                                const std::string& source_id, bool batch = false);
-    uint64_t GetEventID() const;
-    uint64_t GetEventTrackID() const;
-    bool     EventSelected() const;
-    bool     IsBatch() const;
-
+    uint64_t           GetEventID() const;
+    uint64_t           GetEventTrackID() const;
+    bool               EventSelected() const;
+    bool               IsBatch() const;
+    
 private:
-    uint64_t m_event_id;
-    uint16_t m_event_track_id;
-    bool     m_selected;
-    bool     m_is_batch;
+    uint64_t    m_event_id;
+    uint16_t    m_event_track_id;
+    bool        m_selected;
+    bool        m_is_batch;
 };
 
 class RangeEvent : public RocEvent
 {
 public:
     RangeEvent(int event_id, double start_ns, double end_ns,
-               const std::string& source_id);
-    double GetStartNs() const;
-    double GetEndNs() const;
+                      const std::string& source_id);
+    double             GetStartNs() const;
+    double             GetEndNs() const;
 
 private:
-    double m_start_ns;
-    double m_end_ns;
+    double      m_start_ns;
+    double      m_end_ns;
 };
 
 }  // namespace View

@@ -64,6 +64,7 @@ private:
     void RenderToolbar();
     void RenderFlowControls();
     void RenderAnnotationControls();
+
     
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<SideBar>           m_sidebar;

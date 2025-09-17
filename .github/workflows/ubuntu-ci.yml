@@ -45,7 +45,7 @@ jobs:
       - name: Install Vulkan SDK
         run: |
           wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${{ matrix.os-name }}.list http://packages.lunarg.com/vulkan/lunarg-vulkan-${{ matrix.os-name }}.list
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${{ matrix.os-name }}.list http://packages.lunarg.com/vulkan/lunarg-vulkan-${{ matrix.os-name }}.list
           sudo apt update
           sudo apt install -y vulkan-sdk
           sudo apt install -y xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev

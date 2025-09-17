@@ -92,6 +92,8 @@ public:
     void SetMinLeftWidth(float width);
     void SetMinRightWidth(float width);
 
+    float GetOptimalHeight() const;
+
 private:
     float m_left_min_width;
     float m_right_min_width;
@@ -105,6 +107,7 @@ private:
     std::string m_handle_name;
 
     float m_split_ratio;
+    float m_optimal_height;
 };
 
 class VSplitContainer : public RocWidget

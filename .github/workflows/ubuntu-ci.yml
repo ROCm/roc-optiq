@@ -12,9 +12,10 @@ on:
       - '!doc/**'
       - '!*.md'
   pull_request:
-    - '.github/workflows/ubuntu-ci.yml'
-    - '!doc/**'
-    - '!*.md'
+    paths:
+      - '.github/workflows/ubuntu-ci.yml'
+      - '!doc/**'
+      - '!*.md'
 
 jobs:
   ubuntu:

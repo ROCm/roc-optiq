@@ -11,11 +11,11 @@
 #include <iostream>
 #include <sstream>
 
-using namespace RocProfVis::View;
 namespace RocProfVis
 {
 namespace View
 {
+
 void
 WithPadding(float left, float right, float top, float bottom,
             const std::function<void()>& content)
@@ -50,8 +50,6 @@ WithPadding(float left, float right, float top, float bottom,
 
     if(bottom > 0.0f) ImGui::Dummy(ImVec2(0, bottom));
 }
-}  // namespace View
-}  // namespace RocProfVis
 
 LayoutItem::LayoutItem()
 : m_width(0)
@@ -197,6 +195,7 @@ HSplitContainer::HSplitContainer(const LayoutItem& l, const LayoutItem& r)
 , m_left_min_width(100.0f)
 , m_right_min_width(100.0f)
 , m_split_ratio(0.25)  // Initial split ratio
+, m_optimal_height(0.0f)
 {
     m_widget_name = GenUniqueName("HSplitContainer");
     m_left_name   = GenUniqueName("LeftColumn");
@@ -234,6 +233,12 @@ HSplitContainer::SetSplit(float ratio)
     m_split_ratio = ratio;
 }
 
+float 
+HSplitContainer::GetOptimalHeight() const
+{
+    return m_optimal_height;
+}
+
 void
 HSplitContainer::Render()
 {
@@ -251,9 +256,8 @@ HSplitContainer::Render()
     // Start Left Column
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_left.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_left.m_window_padding);
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          SettingsManager::GetInstance().GetColor(Colors::kFillerColor));
+ 
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,m_left.m_bg_color);
     ImGui::BeginChild(m_left_name.c_str(), ImVec2(left_col_width, col_height),
                       m_left.m_child_flags, m_left.m_window_flags);
     if(m_left.m_item)
@@ -261,8 +265,9 @@ HSplitContainer::Render()
         m_left.m_item->Render();
     }
     ImGui::EndChild();
-    ImGui::PopStyleColor();
+    m_optimal_height = ImGui::GetItemRectSize().y;
 
+    ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
 
     ImGui::SameLine();
@@ -301,8 +306,7 @@ HSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_right.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_right.m_window_padding);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          SettingsManager::GetInstance().GetColor(Colors::kFillerColor));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_right.m_bg_color);
     ImGui::BeginChild(m_right_name.c_str(), ImVec2(-1, col_height), m_right.m_child_flags,
                       m_right.m_window_flags);
     if(m_right.m_item)
@@ -310,6 +314,8 @@ HSplitContainer::Render()
         m_right.m_item->Render();
     }
     ImGui::EndChild();
+    m_optimal_height = std::max(m_optimal_height, ImGui::GetItemRectSize().y);
+
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
 }
@@ -686,4 +692,7 @@ TabContainer::GetTabs()
         tabs.push_back(t);
     }
     return tabs;
+}
+
+}
 }

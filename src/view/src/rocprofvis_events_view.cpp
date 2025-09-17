@@ -311,6 +311,7 @@ EventsView::HandleEventSelectionChanged()
     std::vector<uint64_t> selected_event_ids;
     m_timeline_selection->GetSelectedEvents(selected_event_ids);
     m_event_items.resize(selected_event_ids.size());
+    auto default_style = m_settings.GetDefaultStyle();
     for(int i = 0; i < selected_event_ids.size(); i++)
     {
         const event_info_t* event_data =
@@ -323,7 +324,7 @@ EventsView::HandleEventSelectionChanged()
                 ImGui::NewLine();
                 this->RenderEventExtData(event_data); 
             });
-        left.m_window_padding = ImVec2(4, 4);
+        left.m_window_padding = default_style.WindowPadding;
         left.m_child_flags = ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding;
 
         LayoutItem right;
@@ -333,7 +334,7 @@ EventsView::HandleEventSelectionChanged()
                 ImGui::NewLine();
                 this->RenderCallStackData(event_data);
             });
-        right.m_window_padding = ImVec2(4, 4);
+        right.m_window_padding = default_style.WindowPadding;
         right.m_child_flags = ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding;
 
         std::unique_ptr<HSplitContainer> container =

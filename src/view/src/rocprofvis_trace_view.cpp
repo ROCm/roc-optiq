@@ -45,7 +45,7 @@ TraceView::TraceView()
         auto ets = std::dynamic_pointer_cast<TabEvent>(e);
         if(ets)
         {
-            // Only handle the event if the tab source is the main tab source
+            // Only handle the event if the tab source is the main tab source.
             if(ets->GetSourceId() == AppWindow::GetInstance()->GetMainTabSourceName())
             {
                 m_data_provider.SetSelectedState(ets->GetTabId());

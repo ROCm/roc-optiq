@@ -17,7 +17,7 @@ struct event_info_t;
 class EventsView : public RocWidget
 {
 public:
-    EventsView(DataProvider& dp, std::shared_ptr<TimelineSelection> selection);
+    EventsView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
     ~EventsView();
     void Render() override;
 
@@ -45,7 +45,6 @@ private:
     float                              m_standard_eventcard_height;
     bool                               m_table_expanded;
     bool                               m_table_was_expanded;
-
 };
 
 }  // namespace View

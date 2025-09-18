@@ -20,7 +20,7 @@ class AnalysisView : public RocWidget
 {
 public:
     AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
-                 std::shared_ptr<TimelineSelection> selection);
+                 std::shared_ptr<TimelineSelection> timeline_selection);
     ~AnalysisView();
     void Render() override;
     void Update() override;

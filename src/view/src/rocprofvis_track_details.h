@@ -17,38 +17,39 @@ class QueueModel;
 class ThreadModel;
 class CounterModel;
 class StreamModel;
-class TrackSelectionChangedEvent;
+class TimelineSelection;
 struct InfoTable;
 
 class TrackDetails : public RocWidget
 {
 public:
-    TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology);
+    TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
+                 std::shared_ptr<TimelineSelection> timeline_selection);
     ~TrackDetails();
     virtual void Render() override;
     virtual void Update() override;
 
-    void HandleTrackSelectionChanged(std::shared_ptr<TrackSelectionChangedEvent> event);
+    void HandleTrackSelectionChanged();
 
 private:
     struct Details
     {
         const std::string& track_name;
-        NodeModel&              node;
-        ProcessModel&           process;
-        QueueModel*             queue;
-        ThreadModel*            thread;
-        CounterModel*           counter;
-        StreamModel*            stream;
+        NodeModel&         node;
+        ProcessModel&      process;
+        QueueModel*        queue;
+        ThreadModel*       thread;
+        CounterModel*      counter;
+        StreamModel*       stream;
     };
 
     void RenderTable(InfoTable& table);
 
-    std::shared_ptr<TrackTopology> m_track_topology;
-    DataProvider&                  m_data_provider;
-    std::vector<uint64_t>          m_selected_track_ids;
-    bool                           m_selection_dirty;
-    std::vector<Details>           m_track_details;
+    std::shared_ptr<TrackTopology>     m_track_topology;
+    DataProvider&                      m_data_provider;
+    std::shared_ptr<TimelineSelection> m_timeline_selection;
+    bool                               m_selection_dirty;
+    std::vector<Details>               m_track_details;
 };
 
 }  // namespace View

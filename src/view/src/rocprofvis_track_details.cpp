@@ -3,6 +3,7 @@
 #include "rocprofvis_track_details.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_track_topology.h"
 #include "widgets/rocprofvis_widget.h"
 
@@ -11,9 +12,11 @@ namespace RocProfVis
 namespace View
 {
 
-TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology)
+TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
+                           std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
 , m_track_topology(topology)
+, m_timeline_selection(timeline_selection)
 , m_selection_dirty(false)
 {}
 
@@ -85,8 +88,10 @@ TrackDetails::Update()
     if(m_selection_dirty && !m_track_topology->Dirty())
     {
         m_track_details.clear();
-        const TopologyModel& topology = m_track_topology->GetTopology();
-        for(const uint64_t& track_id : m_selected_track_ids)
+        const TopologyModel&  topology = m_track_topology->GetTopology();
+        std::vector<uint64_t> tracks;
+        m_timeline_selection->GetSelectedTracks(tracks);
+        for(const uint64_t& track_id : tracks)
         {
             const track_info_t* metadata = m_data_provider.GetTrackInfo(track_id);
             if(metadata && metadata->topology.type != track_info_t::Topology::Unknown)
@@ -240,14 +245,9 @@ TrackDetails::RenderTable(InfoTable& table)
 }
 
 void
-TrackDetails::HandleTrackSelectionChanged(
-    std::shared_ptr<TrackSelectionChangedEvent> event)
+TrackDetails::HandleTrackSelectionChanged()
 {
-    if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
-    {
-        m_selected_track_ids = event->GetSelectedTracks();
-        m_selection_dirty    = true;
-    }
+    m_selection_dirty = true;
 }
 
 }  // namespace View

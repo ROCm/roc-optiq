@@ -12,11 +12,12 @@
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #ifdef COMPUTE_UI_SUPPORT
-#    include "rocprofvis_navigation_manager.h"
+    #include "rocprofvis_navigation_manager.h"
 #endif
 #include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
 
@@ -212,6 +213,9 @@ AppWindow::Render()
 {
     Update();
 
+#ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
+    DrawInternalBuildBanner();
+#endif
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->GetWorkPos());

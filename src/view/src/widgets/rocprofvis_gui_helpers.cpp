@@ -52,3 +52,82 @@ RocProfVis::View::RenderLoadingIndicatorDots(float dot_radius, int num_dots,
                                    current_color, 12);
     }
 }
+
+#ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
+
+#ifndef IM_PI
+    #define IM_PI 3.14159265358979323846f
+#endif
+
+void
+RocProfVis::View::DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
+{
+    if(!text || !*text) return;
+
+    ImDrawList* dl   = ImGui::GetForegroundDrawList();
+    ImVec2      disp = ImGui::GetIO().DisplaySize;
+
+    // Parameters
+    static constexpr float angle_rad        = IM_PI * 0.25f;  // 45 degrees (down-left)
+    static constexpr float ribbon_thickness = 20.0f;
+    static constexpr float min_base_length  = 300.0f;
+    static constexpr float side_padding     = 64.0f;
+    static constexpr ImU32 col_fill         = IM_COL32(200, 16, 32, 150);
+    static constexpr ImU32 col_border       = IM_COL32(255, 255, 255, 40);
+    static constexpr ImU32 col_text         = IM_COL32(255, 255, 255, 255);
+
+    // Rotation (same for quad + text)
+    static const float c = cosf(angle_rad);
+    static const float s = sinf(angle_rad);
+
+    // Measure text first
+    ImVec2 ts = ImGui::CalcTextSize(text);
+
+    // Required ribbon length so text fits (no scaling unless absolutely necessary)
+    float desired_length = ts.x + side_padding;
+    float ribbon_length =
+        (desired_length > min_base_length) ? desired_length : min_base_length;
+
+    const float half_len   = ribbon_length * 0.5f;
+    const float half_thick = ribbon_thickness * 0.5f;
+
+    // Center a rotated rectangle so it visually emerges from the top-right corner
+    ImVec2 center = ImVec2(disp.x - half_len * 0.5f, half_thick);
+
+    // Axis‑aligned rect (local space before rotation)
+    ImVec2 local[4] = { ImVec2(-half_len, -half_thick), ImVec2(half_len, -half_thick),
+                        ImVec2(half_len, half_thick), ImVec2(-half_len, half_thick) };
+
+    ImVec2 quad[4];
+    for(int i = 0; i < 4; ++i)
+    {
+        ImVec2 p  = local[i];
+        quad[i].x = center.x + p.x * c - p.y * s;
+        quad[i].y = center.y + p.x * s + p.y * c;
+    }
+
+    dl->AddConvexPolyFilled(quad, 4, col_fill);
+    dl->AddPolyline(quad, 4, col_border, true, 1.0f);
+
+    // Text sizing
+    float scale = 1.0f;
+    if(ts.x > ribbon_length - side_padding) scale = (ribbon_length - side_padding) / ts.x;
+
+    ts.x = 0.0f;  // recalc text size after scaling
+    // Add text at unrotated local position (centered), then rotate vertices
+    ImVec2 text_local_pos(-ts.x * scale * 0.5f, -ts.y * scale * 0.5f);
+    int    v_start = dl->VtxBuffer.Size;
+    dl->AddText(nullptr, ImGui::GetFontSize() * scale,
+                ImVec2(center.x + text_local_pos.x, center.y + text_local_pos.y),
+                col_text, text);
+    int v_end = dl->VtxBuffer.Size;
+
+    for(int i = v_start; i < v_end; ++i)
+    {
+        ImDrawVert& v = dl->VtxBuffer[i];
+        ImVec2      p = v.pos - center;
+        v.pos.x       = center.x + p.x * c - p.y * s;
+        v.pos.y       = center.y + p.x * s + p.y * c;
+    }
+}
+#endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER

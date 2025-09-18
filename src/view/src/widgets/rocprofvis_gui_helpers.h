@@ -14,5 +14,10 @@ RenderLoadingIndicatorDots(float dot_radius, int num_dots, float spacing,
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots, float spacing);
 
+#ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
+void
+DrawInternalBuildBanner(const char* text = "Internal Build");
+#endif
+
 }  // namespace View
 }  // namespace RocProfVis

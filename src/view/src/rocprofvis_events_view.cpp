@@ -38,8 +38,7 @@ EventsView::Render()
     }
     else
     {
-        float x_button_width =
-            ImGui::CalcTextSize("X").x + 2 * ImGui::GetStyle().FramePadding.x;
+        float x_button_width = ImGui::CalcTextSize("X").x + ImGui::GetStyle().FramePadding.x;
         int item_index = 0;
         for(EventItem& item : m_event_items)
         {
@@ -182,13 +181,14 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("FlowInfoTable", 5, TABLE_FLAGS))
+            if(ImGui::BeginTable("FlowInfoTable", 6, TABLE_FLAGS))
             {
                 m_table_expanded = true;
                 ImGui::TableSetupColumn("ID");
                 ImGui::TableSetupColumn("Name");
                 ImGui::TableSetupColumn("Timestamp");
                 ImGui::TableSetupColumn("Track ID");
+                ImGui::TableSetupColumn("Level");
                 ImGui::TableSetupColumn("Direction");
                 ImGui::TableHeadersRow();
 
@@ -212,10 +212,14 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                         ImGui::TextUnformatted(
                             std::to_string(event_data->flow_info[i].track_id)
                                 .c_str());
-                        ImGui::TableSetColumnIndex(4);
-                        ImGui::TextUnformatted(
-                            std::to_string(event_data->flow_info[i].direction)
-                                .c_str());
+						ImGui::TableSetColumnIndex(4);
+						ImGui::TextUnformatted(
+							std::to_string(event_data->flow_info[i].level)
+								.c_str());
+						ImGui::TableSetColumnIndex(5);
+						ImGui::TextUnformatted(
+							std::to_string(event_data->flow_info[i].direction)
+								.c_str());
                     }
                 }
                 ImGui::EndTable();
@@ -289,9 +293,11 @@ EventsView::XButton()
                           m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
     clicked = ImGui::SmallButton(ICON_X_CIRCLED);
     ImGui::PopFont();
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);

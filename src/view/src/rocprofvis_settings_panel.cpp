@@ -233,10 +233,8 @@ SettingsPanel::RenderDisplayOptions()
         ImGui::PushFont(preview_font);
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
-            ImGui::GetCursorScreenPos() +
-                ImVec2(ImGui::CalcTextSize("AMD ROCm Visualizer").x +
-                           style.FramePadding.x,
-                       ImGui::GetFrameHeightWithSpacing()),
+            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm Visualizer") +
+                ImVec2(style.FramePadding.x, 2 * style.FramePadding.y),
             ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)),
             style.FrameRounding);
         ImGui::Text("AMD ROCm Visualizer");

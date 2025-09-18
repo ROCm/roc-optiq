@@ -1,13 +1,13 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_sidebar.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_flame_track_item.h"
-#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_font_manager.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_track_topology.h"
-#include "icons/rocprovfis_icon_defines.h"
 
 namespace RocProfVis
 {
@@ -20,8 +20,7 @@ constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
 
 SideBar::SideBar(std::shared_ptr<TrackTopology>     topology,
                  std::shared_ptr<TimelineSelection> timeline_selection,
-                 std::vector<rocprofvis_graph_t>*   graphs,
-                 DataProvider &dp)
+                 std::vector<rocprofvis_graph_t>* graphs, DataProvider& dp)
 : m_settings(SettingsManager::GetInstance())
 , m_track_topology(topology)
 , m_timeline_selection(timeline_selection)
@@ -205,7 +204,8 @@ SideBar::RenderTrackItem(const int& index)
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
     if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
     {
-        graph.display = !graph.display;
+        graph.display         = !graph.display;
+        graph.display_changed = true;
     }
     ImGui::PopFont();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);

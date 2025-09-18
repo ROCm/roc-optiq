@@ -125,6 +125,11 @@ class FlowTrace : public DmBase {
         // @symbol_charptr  - reference to symbol string
         // @return status of operation
         rocprofvis_dm_result_t          GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & symbol_charptr);
+        // Method to get flow trace record level at provided record index
+        // @param index - record index
+        // @level  - reference to level
+        // @return status of operation
+        rocprofvis_dm_result_t          GetRecordLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t & level);
 };
 
 }  // namespace DataModel

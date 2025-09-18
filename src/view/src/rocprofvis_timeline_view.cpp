@@ -65,7 +65,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_last_zoom(1.0f)
 , m_last_graph_size(0.0f, 0.0f)
 , m_reorder_request({ true, 0, 0 })
-, m_track_height_total({})
+, m_track_height_sum(0)
 , m_arrow_layer(m_data_provider, timeline_selection)
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
@@ -118,10 +118,6 @@ TimelineView::TimelineView(DataProvider&                      dp,
 void
 TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
 {
-    float total_height = m_graph_size.y;
-    if(!m_track_height_total.empty())
-        total_height = std::prev(m_track_height_total.end())->second;
-
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse |
                                     ImGuiWindowFlags_NoInputs;
@@ -131,21 +127,19 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    //  ImGui::SetCursorPos(
-    // ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
     ImGui::BeginChild("UI Interactive Overlay", ImVec2(m_graph_size.x, m_graph_size.y),
                       false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
     ImGui::BeginChild(
-        "UI Interactive Content", ImVec2(m_graph_size.x, total_height), false,
+        "UI Interactive Content", ImVec2(m_graph_size.x, m_track_height_sum), false,
         window_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
 
     m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
-                         m_track_height_total);
+                         m_track_position_y, m_graphs);
 
     RenderStickyNotes(draw_list, window_position);
 
@@ -198,10 +192,10 @@ TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
 void
 TimelineView::ScrollToTrack(const uint64_t& track_id)
 {
-    if(m_track_height_total.count(track_id) > 0)
+    if(m_track_position_y.count(track_id) > 0)
     {
         m_scroll_position_y =
-            std::min(m_content_max_y_scroll, m_track_height_total[track_id]);
+            std::min(m_content_max_y_scroll, m_track_position_y[track_id]);
         ImGui::SetScrollY(m_scroll_position_y);
     }
 }
@@ -221,7 +215,8 @@ TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
 }
 
 void
-TimelineView::SetViewableRangeNS(double start_ns, double end_ns) {
+TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
+{
     // Configure the timeline view so that the visible horizontal range is
     // [start_ns, end_ns] in absolute timestamp units.
     // Guard against invalid inputs.
@@ -230,11 +225,11 @@ TimelineView::SetViewableRangeNS(double start_ns, double end_ns) {
     // Clamp requested range to known data bounds when available.
     start_ns = std::max(start_ns, m_min_x);
     end_ns   = std::min(end_ns, m_max_x);
-    if(end_ns <= start_ns) return; // Fully outside bounds after clamping.
+    if(end_ns <= start_ns) return;  // Fully outside bounds after clamping.
 
     double new_width_ns = end_ns - start_ns;
     // Prevent division by zero and overly small widths.
-    const double kMinWidth = 10.0; // 10 ns minimum span.
+    const double kMinWidth = 10.0;  // 10 ns minimum span.
     if(new_width_ns < kMinWidth) new_width_ns = kMinWidth;
 
     // Compute zoom: m_v_width = m_range_x / m_zoom  =>  m_zoom = m_range_x / m_v_width
@@ -396,38 +391,31 @@ TimelineView::Update()
                 }
                 m_graphs = std::move(m_graphs_reordered);
             }
-            m_reorder_request.handled = true;
-
-            // Rebuild the positioning map.
-            m_track_height_total.clear();
-            int track_height = 0;
+        }
+        // Rebuild the positioning map.
+        if(m_resize_activity || !m_reorder_request.handled)
+        {
+            m_track_position_y.clear();
+            m_track_height_sum = 0;
             for(int i = 0; i < m_graphs.size(); i++)
             {
-                m_track_height_total[m_graphs[i].chart->GetID()] = track_height;
-                track_height +=
-                    m_graphs[i].chart->GetTrackHeight();  // Get the height of the track.
+                m_track_position_y[m_graphs[i].chart->GetID()] = m_track_height_sum;
+                m_track_height_sum +=
+                    m_graphs[i].display
+                        ? m_graphs[i]
+                              .chart->GetTrackHeight()  // Get the height of the track.
+                        : 0;
+                m_graphs[i].display_changed = false;
             }
         }
+        m_reorder_request.handled = true;
+        m_resize_activity         = false;
     }
 }
 
 void
 TimelineView::Render()
 {
-    // Rebuild the positioning map.
-    if(m_resize_activity)
-    {
-        m_track_height_total.clear();
-        int track_height = 0;
-        for(int i = 0; i < m_graphs.size(); i++)
-        {
-            m_track_height_total[m_graphs[i].chart->GetID()] = track_height;
-            track_height +=
-                m_graphs[i].chart->GetTrackHeight();  // Get the height of the track.
-        }
-    }
-
-    m_resize_activity = false;
     if(m_meta_map_made)
     {
         RenderGraphPoints();
@@ -463,7 +451,6 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     if(ImGui::IsItemHovered())
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-        m_resize_activity |= true;
     }
 
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
@@ -966,6 +953,8 @@ TimelineView::RenderGraphView()
     {
         rocprofvis_graph_t& track_item = m_graphs[i];
 
+        m_resize_activity |= track_item.display_changed;
+
         if(track_item.display)
         {
             ROCPROFVIS_ASSERT(track_item.chart);
@@ -1216,9 +1205,8 @@ TimelineView::MakeGraphView()
     m_last_data_req_v_width = m_v_width;
 
     /*This section makes the charts both line and flamechart are constructed here*/
-    uint64_t num_graphs         = m_data_provider.GetTrackCount();
-    int      scale_x            = 1;
-    float    track_height_total = 0;
+    uint64_t num_graphs = m_data_provider.GetTrackCount();
+    int      scale_x    = 1;
     m_graphs.resize(num_graphs);
 
     std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
@@ -1249,7 +1237,7 @@ TimelineView::MakeGraphView()
             continue;
         }
 
-        rocprofvis_graph_t graph = { rocprofvis_graph_t::TYPE_FLAMECHART, display,
+        rocprofvis_graph_t graph = { rocprofvis_graph_t::TYPE_FLAMECHART, display, false,
                                      nullptr, false };
         switch(track_info->track_type)
         {
@@ -1284,12 +1272,10 @@ TimelineView::MakeGraphView()
             m_max_x = std::max(track_info->max_ts, m_max_x);
 
             m_graphs[track_info->index] = std::move(graph);
-            m_track_height_total[track_info->id] =
-                track_height_total;  // Store the height of the chart
-            track_height_total += graph.chart->GetTrackHeight();
         }
     }
-    m_meta_map_made = true;
+    m_meta_map_made   = true;
+    m_resize_activity = true;
 }
 
 void

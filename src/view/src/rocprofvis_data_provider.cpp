@@ -2149,6 +2149,14 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
                 event_info.flow_info[j].direction  = data;
             }
 
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlLevel, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].level  = data;
+            }
+
             event_info.flow_info[j].name = GetString(flow_control_handle, 
                                                 kRPVControllerFlowControlName, 0);
         }

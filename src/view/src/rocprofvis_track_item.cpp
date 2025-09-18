@@ -330,7 +330,6 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     if(ImGui::IsItemHovered())
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-        m_is_resize = true;
     }
 
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))

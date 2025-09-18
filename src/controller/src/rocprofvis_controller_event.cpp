@@ -108,8 +108,9 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                     uint64_t id   = 0;
                                     uint64_t timestamp = 0;
                                     uint64_t track_id  = 0;
+                                    uint64_t level     = 0;
                                     char* category  = "";
-                                    char* symbol    = "";
+                                    char* symbol    = "";                                    
                                     if(kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_uint64(
                                                dm_flowtrace,
@@ -135,11 +136,16 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_flowtrace,
                                                kRPVDMEndpointSymbolCharPtrIndexed,
-                                               index, &symbol)
+                                               index, &symbol) &&
+                                       kRocProfVisDmResultSuccess ==
+                                           rocprofvis_dm_get_property_as_uint64(
+                                               dm_flowtrace,
+                                               kRPVDMEndpointLevelUInt64Indexed, index,
+                                               &level)
                                         )
                                     {
                                         FlowControl* flow_control = new FlowControl(
-                                            id, timestamp, track_id,
+                                            id, timestamp, track_id, level,
                                             dm_event_id.bitfield.event_op ==
                                                 kRocProfVisDmOperationLaunch ? 0 : 1,
                                                 category, symbol);

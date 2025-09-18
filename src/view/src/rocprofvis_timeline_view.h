@@ -131,7 +131,7 @@ private:
     bool                               m_stop_user_interaction;
     float                              m_last_zoom;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
-    std::shared_ptr<AnnotationsManager>   m_annotations_view;
+    std::shared_ptr<AnnotationsManager>   m_annotations;
     struct
     {
         bool     handled;

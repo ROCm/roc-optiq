@@ -17,6 +17,9 @@ on:
       - '!doc/**'
       - '!*.md'
 
+env:
+  VISUALIZER_FILE_NAME: "rocprof-visualizer"
+
 jobs:
   ubuntu:
     name: Ubuntu ${{ matrix.os-release }} • Build Visualizer
@@ -36,10 +39,9 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt install -y \
-            cmake build-essential \
-            libwayland-bin \
-            libwayland-dev libxkbcommon-dev wayland-protocols \
-            pkg-config
+            cmake build-essential pkg-config \
+            libwayland-bin libwayland-dev \ 
+            libxkbcommon-dev wayland-protocols
           echo "✅ Dependencies Installed!"
       
       - name: Install Vulkan SDK
@@ -47,8 +49,7 @@ jobs:
           wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${{ matrix.os-name }}.list http://packages.lunarg.com/vulkan/lunarg-vulkan-${{ matrix.os-name }}.list
           sudo apt update
-          sudo apt install -y vulkan-sdk
-          sudo apt install -y xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+          sudo apt install -y vulkan-sdk xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
           echo "✅ Vulkan SDK Installed!"
 
       - name: Build, Make, and Verify Installation
@@ -57,9 +58,9 @@ jobs:
           cd build
           cmake ..
           make
-          if [ -e "rocprof-visualizer" ]; then
-            echo "✅ rocprof-visualizer has been successfully built!"
+          if [ -e ${{ env.VISUALIZER_FILE_NAME }} ]; then
+            echo "✅ {{ env.VISUALIZER_FILE_NAME }} has been successfully built!"
           else
-            echo "❌ rocprof-visualizer was not built!"
+            echo "❌ {{ env.VISUALIZER_FILE_NAME }} was not built!"
             exit 1
           fi

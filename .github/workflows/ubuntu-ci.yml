@@ -38,6 +38,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          sudo apt-get update
           sudo apt install -y cmake \
             build-essential pkg-config \
             libwayland-bin libwayland-dev \ 

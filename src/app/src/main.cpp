@@ -13,10 +13,10 @@
 #include <stdlib.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
- 
-#include "widgets/rocprofvis_debug_window.h"
 #include <utility>
- 
+
+std::vector<std::string> g_DroppedFilePaths;
+bool g_FileWasDropped = false;
 
 std::pair<GLFWimage, unsigned char*>
 glfw_create_icon()
@@ -41,6 +41,17 @@ glfw_create_icon()
     }
 }
 
+void
+drop_callback(GLFWwindow* window, int count, const char* paths[])
+{
+    g_DroppedFilePaths.clear();
+    for(int i = 0; i < count; i++)
+    {
+        g_DroppedFilePaths.push_back(paths[i]);
+    }
+    g_FileWasDropped = true;
+}
+
 static void
 glfw_error_callback(int error, const char* description)
 {
@@ -54,7 +65,6 @@ main(int, char**)
 
     rocprofvis_core_enable_log();
 
-    // Load image from memory.
     glfwSetErrorCallback(glfw_error_callback);
 
     if(glfwInit())
@@ -63,6 +73,8 @@ main(int, char**)
         GLFWwindow* window =
             glfwCreateWindow(1280, 720, "ROCm Visualizer", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
+
+        glfwSetDropCallback(window, drop_callback);
 
         if(window && rocprofvis_imgui_backend_setup(&backend, window))
         {
@@ -99,6 +111,12 @@ main(int, char**)
                     float xscale, yscale;
                     glfwGetWindowContentScale(window, &xscale, &yscale);
 
+                    // handle dropped file signal flag from callback
+                    if (g_FileWasDropped)
+                    {
+                        rocprofvis_view_open_files(g_DroppedFilePaths);
+                        g_FileWasDropped = false;
+                    }                    
                     rocprofvis_view_set_dpi(xscale);
 
                     glfwPollEvents();

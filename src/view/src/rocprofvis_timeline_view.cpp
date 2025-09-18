@@ -1024,7 +1024,7 @@ TimelineView::RenderGraphView()
                                                      m_min_x, m_max_x, m_pixels_per_ns,
                                                      m_scroll_position_y);
 
-                    m_resize_activity |= track_item.chart->GetResizeStatus();
+                    m_resize_activity |= track_item.chart->TrackHeightChanged();
 
                     if(is_reordering)
                     {

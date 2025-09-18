@@ -51,13 +51,16 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 }
 
 void
-FlameTrackItem::RenderMetaDataAreaExpand()
+FlameTrackItem::RenderMetaAreaExpand()
 {
-    ImVec2 window_size = ImGui::GetWindowSize();
-    ImVec2 button_size = ImVec2(28.0f, 28.0f);
-    ImVec2 pos = ImVec2(window_size.x - button_size.x, window_size.y - button_size.y);
-
-    ImGui::SetCursorPos(pos);
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::SetCursorPos(
+        ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
+               ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight())));
 
     int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
 
@@ -66,6 +69,7 @@ FlameTrackItem::RenderMetaDataAreaExpand()
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
             m_track_height = m_max_level * m_level_height + m_level_height + 2.0f;
+            m_track_height_changed = true;
         }
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to see all events");
     }
@@ -76,9 +80,11 @@ FlameTrackItem::RenderMetaDataAreaExpand()
         {
             m_track_height =
                 m_track_default_height;  // Default track height defined in parent class.
+            m_track_height_changed = true;
         }
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to default height");
     }
+    ImGui::PopStyleColor(3);
 }
 FlameTrackItem::~FlameTrackItem()
 {

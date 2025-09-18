@@ -31,7 +31,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_metadata_padding(ImVec2(4.0f, 4.0f))
 , m_resize_grip_thickness(4.0f)
 , m_request_state(TrackDataRequestState::kIdle)
-, m_is_resize(false)
+, m_track_height_changed(false)
 , m_meta_area_clicked(false)
 , m_meta_area_scale_width(0.0f)
 , m_settings(SettingsManager::GetInstance())
@@ -49,9 +49,11 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 }
 
 bool
-TrackItem::GetResizeStatus()
+TrackItem::TrackHeightChanged()
 {
-    return m_is_resize;
+    bool height_changed    = m_track_height_changed;
+    m_track_height_changed = false;
+    return height_changed;
 }
 float
 TrackItem::GetTrackHeight()
@@ -167,7 +169,7 @@ TrackItem::GetReorderGripWidth()
 }
 
 void
-TrackItem::RenderMetaDataAreaExpand()
+TrackItem::RenderMetaAreaExpand()
 {
     // no-op
 }
@@ -299,7 +301,7 @@ TrackItem::RenderMetaArea()
         }
         ImGui::PopStyleVar();
         RenderMetaAreaScale();
-        RenderMetaDataAreaExpand();
+        RenderMetaAreaExpand();
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();
@@ -317,8 +319,6 @@ TrackItem::RenderMetaArea()
 void
 TrackItem::RenderResizeBar(const ImVec2& parent_size)
 {
-    m_is_resize = false;
-
     ImGui::SetCursorPos(ImVec2(0, parent_size.y - m_resize_grip_thickness));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, m_resize_grip_thickness),
@@ -343,7 +343,7 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
-        m_is_resize = true;
+        m_track_height_changed = true;
     }
     if(ImGui::BeginDragDropTarget())
     {

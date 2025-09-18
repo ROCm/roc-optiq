@@ -55,7 +55,7 @@ class TimelineView : public RocWidget
 
 public:
     TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
-                 std::shared_ptr<AnnotationsView> annotations);
+                 std::shared_ptr<AnnotationsManager> annotations);
     ~TimelineView();
     virtual void                     Render();
     void                             Update();
@@ -81,7 +81,6 @@ public:
     ViewCoords     GetViewCoords() const;
     void           SetViewCoords(const ViewCoords& coords);
     void           ShowTimelineContextMenu(const ImVec2& window_position);
-    void           RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position);
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
 
@@ -132,7 +131,7 @@ private:
     bool                               m_stop_user_interaction;
     float                              m_last_zoom;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
-    std::shared_ptr<AnnotationsView>   m_annotations_view;
+    std::shared_ptr<AnnotationsManager>   m_annotations_view;
     struct
     {
         bool     handled;

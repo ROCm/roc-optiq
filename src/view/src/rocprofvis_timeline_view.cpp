@@ -24,7 +24,7 @@ constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 
 TimelineView::TimelineView(DataProvider&                      dp,
                            std::shared_ptr<TimelineSelection> timeline_selection,
-                           std::shared_ptr<AnnotationsView> annotations)
+                           std::shared_ptr<AnnotationsManager>   annotations)
 : m_data_provider(dp)
 , m_zoom(1.0f)
 , m_view_time_offset_ns(0.0f)
@@ -148,7 +148,7 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
     m_arrow_layer.Render(draw_list, m_v_min_x, m_pixels_per_ns, window_position,
                          m_track_height_total);
 
-    RenderStickyNotes(draw_list, window_position);
+    RenderAnnotations(draw_list, window_position);
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
@@ -185,25 +185,23 @@ TimelineView::ShowTimelineContextMenu(const ImVec2& window_position)
     }
 }
 
-
-void 
+void
 TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 {
     bool movement_drag   = false;
     bool movement_resize = false;
-    //m_visible_center     = current_center;
+    // m_visible_center     = current_center;
 
-   if(m_annotations_view->IsVisibile())
-    { 
+    if(m_annotations_view->IsVisibile())
+    {
         // Interaction --> top-most gets priority
-    for(int i = static_cast<int>(m_annotations_view->GetStickyNotes().size()) - 1; i >= 0;
-        --i)
+        for(int i = static_cast<int>(m_annotations_view->GetStickyNotes().size()) - 1;
+            i >= 0; --i)
         {
-        movement_drag |=
-            m_annotations_view->GetStickyNotes()[i].HandleDrag(
+            movement_drag |= m_annotations_view->GetStickyNotes()[i].HandleDrag(
                 window_position, m_v_min_x, m_pixels_per_ns, m_dragged_sticky_id);
             movement_resize |= m_annotations_view->GetStickyNotes()[i].HandleResize(
-            window_position, m_v_min_x, m_pixels_per_ns);
+                window_position, m_v_min_x, m_pixels_per_ns);
         }
 
         // Rendering --> based on added order (old bottom new on top)
@@ -212,24 +210,20 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
             m_annotations_view->GetStickyNotes()[i].Render(draw_list, window_position,
                                                            m_v_min_x, m_pixels_per_ns);
         }
-  }
-        m_stop_user_interaction |= movement_drag || movement_resize;
-}
+    }
+    m_stop_user_interaction |= movement_drag || movement_resize;
+    double center_time_ns  = m_v_min_x + (m_v_max_x - m_v_min_x) * 0.5;
+    float  center_y_offset = m_graph_size.y * 0.5f;
+    m_annotations_view->SetCenter(ImVec2(center_time_ns, center_y_offset));
 
-void
-TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
-{
-    RenderTimelineViewOptionsMenu(window_position); 
+    RenderTimelineViewOptionsMenu(window_position);
     m_annotations_view->ShowStickyNotePopup();
     m_annotations_view->ShowStickyNoteEditPopup();
-
-   double center_time_ns = m_v_min_x + (m_v_max_x - m_v_min_x) * 0.5;
-    float  center_y_offset = m_graph_size.y * 0.5f;
-    
-    RenderAnnotations(draw_list, window_position);  
 }
 
-void 
+ 
+
+void
 TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 {
     ImVec2 mouse_pos = ImGui::GetMousePos();
@@ -1256,7 +1250,6 @@ TimelineView::RenderGraphView()
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
- 
 
 void
 TimelineView::DestroyGraphs()

@@ -95,7 +95,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
         ("StickyNoteChild##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
         sticky_size, false,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-            ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
+            ImGuiWindowFlags_NoBackground );
 
     // Get the child window's draw list and position
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
@@ -142,6 +142,8 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     {
         EventManager::GetInstance()->AddEvent(
             std::make_shared<StickyNoteEvent>(m_id, m_project_id));
+        std::cout << "Edit Sticky Note ID: " << m_id << " Title: " << m_title
+                  << std::endl;
     }
 
     // Draw edit button graphics over the button

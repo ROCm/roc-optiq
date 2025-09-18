@@ -89,7 +89,7 @@ private:
 
     std::unordered_map<int, ViewCoords> m_bookmarks;
 
-    std::shared_ptr<AnnotationsView> m_annotations;
+    std::shared_ptr<AnnotationsManager> m_annotations;
 
     EventManager::SubscriptionToken m_tabselected_event_token;
     EventManager::SubscriptionToken m_event_selection_changed_event_token;

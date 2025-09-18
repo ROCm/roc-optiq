@@ -13,35 +13,35 @@ namespace RocProfVis
 {
 namespace View
 {
-class AnnotationsView;
+class AnnotationsManager;
 
-class AnnotationsViewProjectSettings : public ProjectSetting
+class AnnotationsManagerProjectSettings : public ProjectSetting
 {
 public:
-    AnnotationsViewProjectSettings(const std::string& project_id,
-                                   AnnotationsView&   annotations_view);
-    ~AnnotationsViewProjectSettings() override;
+    AnnotationsManagerProjectSettings(const std::string& project_id,
+                                   AnnotationsManager&   annotations_view);
+    ~AnnotationsManagerProjectSettings() override;
 
     void ToJson() override;
     void FromJson();
     bool Valid() const override;
 
 private:
-    AnnotationsView& m_annotations_view;
+    AnnotationsManager& m_annotations_view;
 };
 
-class AnnotationsViewProjectSettings;
+class AnnotationsManagerProjectSettings;
 
-class AnnotationsView
+class AnnotationsManager
 {
 public:
-    AnnotationsView(const std::string& project_id);
-    ~AnnotationsView();
+    AnnotationsManager(const std::string& project_id);
+    ~AnnotationsManager();
 
     bool IsVisibile();
     void SetVisible(bool visible);
     void Clear();
-
+    void SetCenter(const ImVec2& center);
     void AddSticky(double time_ns, float y_offset, const ImVec2& size,
                    const std::string& text, const std::string& title);
     void SetStickyPopup(double time_ns, float y_offset, const char* title = "",
@@ -65,7 +65,7 @@ private:
     bool                            m_show_annotations;
     ImVec2                          m_visible_center;
     std::string                     m_project_id;
-    AnnotationsViewProjectSettings  m_project_settings;
+    AnnotationsManagerProjectSettings  m_project_settings;
     int m_dragged_sticky_id;  // ID of the sticky note currently being dragged
 };
 

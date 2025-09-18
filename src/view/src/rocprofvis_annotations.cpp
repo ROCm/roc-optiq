@@ -9,17 +9,17 @@ namespace RocProfVis
 {
 namespace View
 {
-AnnotationsViewProjectSettings::AnnotationsViewProjectSettings(
-    const std::string& project_id, AnnotationsView& annotations_view)
+AnnotationsManagerProjectSettings::AnnotationsManagerProjectSettings(
+    const std::string& project_id, AnnotationsManager& annotations_view)
 : ProjectSetting(project_id)
 , m_annotations_view(annotations_view)
 
 {}
 
-AnnotationsViewProjectSettings::~AnnotationsViewProjectSettings() {}
+AnnotationsManagerProjectSettings::~AnnotationsManagerProjectSettings() {}
 
 void
-AnnotationsViewProjectSettings::FromJson()
+AnnotationsManagerProjectSettings::FromJson()
 {
     m_annotations_view.Clear();
     std::vector<jt::Json>& annotation_vec =
@@ -43,7 +43,7 @@ AnnotationsViewProjectSettings::FromJson()
 }
 
 void
-AnnotationsViewProjectSettings::ToJson()
+AnnotationsManagerProjectSettings::ToJson()
 {
     const std::vector<StickyNote>& notes  = m_annotations_view.GetStickyNotes();
     m_settings_json[JSON_KEY_ANNOTATIONS] = jt::Json();
@@ -64,7 +64,7 @@ AnnotationsViewProjectSettings::ToJson()
 }
 
 bool
-AnnotationsViewProjectSettings::Valid() const
+AnnotationsManagerProjectSettings::Valid() const
 {
     // Check that "annotations" exists and is an array
     if(!m_settings_json.contains(JSON_KEY_ANNOTATIONS) ||
@@ -97,7 +97,7 @@ AnnotationsViewProjectSettings::Valid() const
     return true;
 }
 
-AnnotationsView::AnnotationsView(const std::string& project_id)
+AnnotationsManager::AnnotationsManager(const std::string& project_id)
 : m_project_settings(project_id, *this)
 , m_project_id(project_id)
 , m_show_annotations(true)
@@ -136,20 +136,20 @@ AnnotationsView::AnnotationsView(const std::string& project_id)
     m_edit_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kStickyNoteEdited), sticky_note_handler);
 }
-AnnotationsView::~AnnotationsView()
+AnnotationsManager::~AnnotationsManager()
 {
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kStickyNoteEdited), m_edit_token);
 }
 
 void
-AnnotationsView::Clear()
+AnnotationsManager::Clear()
 {
     m_sticky_notes.clear();
 }
 
 void
-AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
+AnnotationsManager::AddSticky(double time_ns, float y_offset, const ImVec2& size,
                            const std::string& text, const std::string& title)
 {
     m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id);
@@ -157,12 +157,12 @@ AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
 
  
 bool
-AnnotationsView::IsVisibile()
+AnnotationsManager::IsVisibile()
 {
     return m_show_annotations;
 }
 void
-AnnotationsView::SetStickyPopup(double time_ns, float y_offset, const char* title,
+AnnotationsManager::SetStickyPopup(double time_ns, float y_offset, const char* title,
                                 const char* text)
 {
     m_sticky_time_ns  = time_ns;
@@ -175,15 +175,19 @@ AnnotationsView::SetStickyPopup(double time_ns, float y_offset, const char* titl
 }
 
 void
-AnnotationsView::SetVisible(bool SetVisible)
+AnnotationsManager::SetVisible(bool SetVisible)
 {
     m_show_annotations = SetVisible;
 }
 
  
-
+void 
+AnnotationsManager::SetCenter(const ImVec2& center)
+{
+    m_visible_center = center;
+}   
 void
-AnnotationsView::ShowStickyNoteEditPopup()
+AnnotationsManager::ShowStickyNoteEditPopup()
 {
     if(!m_show_sticky_edit_popup) return;
 
@@ -297,7 +301,7 @@ AnnotationsView::ShowStickyNoteEditPopup()
 }
 
 void
-AnnotationsView::ShowStickyNotePopup()
+AnnotationsManager::ShowStickyNotePopup()
 {
     if(!m_show_sticky_popup) return;
 
@@ -401,7 +405,7 @@ AnnotationsView::ShowStickyNotePopup()
 }
 
 void
-AnnotationsView::OpenStickyNotePopup(double time_ns /* = -1.0 */,
+AnnotationsManager::OpenStickyNotePopup(double time_ns /* = -1.0 */,
                                      float  y_offset /* = -1.0f */)
 {
     // If both are not present (sentinel values), do something else
@@ -421,7 +425,7 @@ AnnotationsView::OpenStickyNotePopup(double time_ns /* = -1.0 */,
 }
 
 std::vector<StickyNote>&
-AnnotationsView::GetStickyNotes()
+AnnotationsManager::GetStickyNotes()
 {
     return m_sticky_notes;
 }

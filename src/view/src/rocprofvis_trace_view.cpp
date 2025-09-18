@@ -184,7 +184,8 @@ TraceView::Update()
 void
 TraceView::CreateView()
 {
-    m_annotations        = std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
+    m_annotations =
+        std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
     m_timeline_selection = std::make_shared<TimelineSelection>(m_data_provider);
     m_track_topology     = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view      = std::make_shared<TimelineView>(m_data_provider,
@@ -570,7 +571,7 @@ TraceView::RenderAnnotationControls()
     ImGui::PushID("add_new_sticky");
     if(ImGui::Button(ICON_ADD_NOTE))
     {
-        m_annotations->OpenStickyNotePopup(-1.0f, -1.0f);
+        m_annotations->OpenStickyNotePopup(INVALID_TIME_NS, INVALID_OFFSET_PX);
         m_annotations->ShowStickyNotePopup();
     }
     if(ImGui::IsItemHovered())

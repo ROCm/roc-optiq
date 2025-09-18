@@ -13,13 +13,17 @@ namespace RocProfVis
 {
 namespace View
 {
+
+constexpr double INVALID_TIME_NS   = std::numeric_limits<double>::lowest();
+constexpr float  INVALID_OFFSET_PX = std::numeric_limits<float>::lowest();
+
 class AnnotationsManager;
 
 class AnnotationsManagerProjectSettings : public ProjectSetting
 {
 public:
-    AnnotationsManagerProjectSettings(const std::string& project_id,
-                                   AnnotationsManager&   annotations_view);
+    AnnotationsManagerProjectSettings(const std::string&  project_id,
+                                      AnnotationsManager& annotations_view);
     ~AnnotationsManagerProjectSettings() override;
 
     void ToJson() override;
@@ -46,26 +50,26 @@ public:
                    const std::string& text, const std::string& title);
     void SetStickyPopup(double time_ns, float y_offset, const char* title = "",
                         const char* text = "");
- 
-    void ShowStickyNotePopup();
-    void ShowStickyNoteEditPopup();
+
+    void                     ShowStickyNotePopup();
+    void                     ShowStickyNoteEditPopup();
     std::vector<StickyNote>& GetStickyNotes();
-    void OpenStickyNotePopup(double time_ns /* = -1.0 */, float y_offset /* = -1.0f */);
+    void                     OpenStickyNotePopup(double time_ns, float y_offset);
 
 private:
-    std::vector<StickyNote>         m_sticky_notes;
-    bool                            m_show_sticky_popup      = false;
-    bool                            m_show_sticky_edit_popup = false;
-    double                          m_sticky_time_ns         = 0.0;
-    float                           m_sticky_y_offset        = 0.0f;
-    char                            m_sticky_title[128]      = { 0 };
-    char                            m_sticky_text[512]       = { 0 };
-    int                             m_edit_sticky_id         = -1;
-    EventManager::SubscriptionToken m_edit_token;
-    bool                            m_show_annotations;
-    ImVec2                          m_visible_center;
-    std::string                     m_project_id;
-    AnnotationsManagerProjectSettings  m_project_settings;
+    std::vector<StickyNote>           m_sticky_notes;
+    bool                              m_show_sticky_popup      = false;
+    bool                              m_show_sticky_edit_popup = false;
+    double                            m_sticky_time_ns         = 0.0;
+    float                             m_sticky_y_offset        = 0.0f;
+    char                              m_sticky_title[128]      = { 0 };
+    char                              m_sticky_text[512]       = { 0 };
+    int                               m_edit_sticky_id         = -1;
+    EventManager::SubscriptionToken   m_edit_token;
+    bool                              m_show_annotations;
+    ImVec2                            m_visible_center;
+    std::string                       m_project_id;
+    AnnotationsManagerProjectSettings m_project_settings;
     int m_dragged_sticky_id;  // ID of the sticky note currently being dragged
 };
 

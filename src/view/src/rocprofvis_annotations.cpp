@@ -150,12 +150,11 @@ AnnotationsManager::Clear()
 
 void
 AnnotationsManager::AddSticky(double time_ns, float y_offset, const ImVec2& size,
-                           const std::string& text, const std::string& title)
+                              const std::string& text, const std::string& title)
 {
     m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id);
 }
 
- 
 bool
 AnnotationsManager::IsVisibile()
 {
@@ -163,7 +162,7 @@ AnnotationsManager::IsVisibile()
 }
 void
 AnnotationsManager::SetStickyPopup(double time_ns, float y_offset, const char* title,
-                                const char* text)
+                                   const char* text)
 {
     m_sticky_time_ns  = time_ns;
     m_sticky_y_offset = y_offset;
@@ -180,12 +179,11 @@ AnnotationsManager::SetVisible(bool SetVisible)
     m_show_annotations = SetVisible;
 }
 
- 
-void 
+void
 AnnotationsManager::SetCenter(const ImVec2& center)
 {
     m_visible_center = center;
-}   
+}
 void
 AnnotationsManager::ShowStickyNoteEditPopup()
 {
@@ -405,11 +403,9 @@ AnnotationsManager::ShowStickyNotePopup()
 }
 
 void
-AnnotationsManager::OpenStickyNotePopup(double time_ns /* = -1.0 */,
-                                     float  y_offset /* = -1.0f */)
+AnnotationsManager::OpenStickyNotePopup(double time_ns, float y_offset)
 {
-    // If both are not present (sentinel values), do something else
-    if(time_ns == -1.0 && y_offset == -1.0f)
+    if(time_ns == INVALID_TIME_NS && y_offset == INVALID_OFFSET_PX)
     {
         m_sticky_time_ns  = m_visible_center.x;
         m_sticky_y_offset = m_visible_center.y;

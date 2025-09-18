@@ -38,11 +38,11 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          sudo apt-get update
-          sudo apt install -y cmake \
-            build-essential pkg-config \
-            libwayland-bin libwayland-dev \ 
-            libxkbcommon-dev wayland-protocols
+          sudo apt install -y \
+            cmake build-essential \
+            libwayland-bin \
+            libwayland-dev libxkbcommon-dev wayland-protocols \
+            pkg-config
           echo "✅ Dependencies Installed!"
       
       - name: Install Vulkan SDK

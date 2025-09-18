@@ -57,9 +57,9 @@ jobs:
           cd build
           cmake ..
           make
-          if [ -e "/build/rocprofiler-visualizer" ]; then
-            echo "✅ rocprofiler-visualizer has been successfully built!"
+          if [ -e "rocprof-visualizer" ]; then
+            echo "✅ rocprof-visualizer has been successfully built!"
           else
-            echo "❌ rocprofiler-visualizer was not built!"
+            echo "❌ rocprof-visualizer was not built!"
             exit 1
           fi

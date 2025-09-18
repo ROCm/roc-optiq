@@ -40,15 +40,13 @@ public:
 
     bool IsVisibile();
     void SetVisible(bool visible);
-
     void Clear();
 
     void AddSticky(double time_ns, float y_offset, const ImVec2& size,
                    const std::string& text, const std::string& title);
-    bool Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
-                double pixels_per_ns, ImVec2 current_center);
-    void ShowStickyNoteMenu(const ImVec2& window_position, const ImVec2& graph_size,
-                            double v_min_x, double v_max_x, float scroll_y);
+    void SetStickyPopup(double time_ns, float y_offset, const char* title = "",
+                        const char* text = "");
+ 
     void ShowStickyNotePopup();
     void ShowStickyNoteEditPopup();
     std::vector<StickyNote>& GetStickyNotes();

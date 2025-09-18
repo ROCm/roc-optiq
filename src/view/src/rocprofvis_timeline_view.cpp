@@ -72,7 +72,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_timeline_selection(timeline_selection)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_annotations_view(annotations)
-
+, m_dragged_sticky_id(-1)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -185,19 +185,81 @@ TimelineView::ShowTimelineContextMenu(const ImVec2& window_position)
     }
 }
 
+
+void 
+TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
+{
+    bool movement_drag   = false;
+    bool movement_resize = false;
+    //m_visible_center     = current_center;
+
+   if(m_annotations_view->IsVisibile())
+    { 
+        // Interaction --> top-most gets priority
+    for(int i = static_cast<int>(m_annotations_view->GetStickyNotes().size()) - 1; i >= 0;
+        --i)
+        {
+        movement_drag |=
+            m_annotations_view->GetStickyNotes()[i].HandleDrag(
+                window_position, m_v_min_x, m_pixels_per_ns, m_dragged_sticky_id);
+            movement_resize |= m_annotations_view->GetStickyNotes()[i].HandleResize(
+            window_position, m_v_min_x, m_pixels_per_ns);
+        }
+
+        // Rendering --> based on added order (old bottom new on top)
+        for(size_t i = 0; i < m_annotations_view->GetStickyNotes().size(); ++i)
+        {
+            m_annotations_view->GetStickyNotes()[i].Render(draw_list, window_position,
+                                                           m_v_min_x, m_pixels_per_ns);
+        }
+  }
+        m_stop_user_interaction |= movement_drag || movement_resize;
+}
+
 void
 TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
 {
-    m_annotations_view->ShowStickyNoteMenu(window_position, m_graph_size, m_v_min_x,
-                                          m_v_max_x, m_scroll_position_y);
+    RenderTimelineViewOptionsMenu(window_position); 
     m_annotations_view->ShowStickyNotePopup();
     m_annotations_view->ShowStickyNoteEditPopup();
 
    double center_time_ns = m_v_min_x + (m_v_max_x - m_v_min_x) * 0.5;
     float  center_y_offset = m_graph_size.y * 0.5f;
     
-    m_stop_user_interaction |=
-        m_annotations_view->Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns, ImVec2(center_time_ns, center_y_offset));
+    RenderAnnotations(draw_list, window_position);  
+}
+
+void 
+TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
+{
+    ImVec2 mouse_pos = ImGui::GetMousePos();
+    // Mouse position relative without adjusting for user scroll.
+    ImVec2 rel_mouse_pos =
+        ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
+
+    // Use the visible area for hover detection adjusted for user scroll.
+    ImVec2 win_min = window_position;
+    ImVec2 win_max = ImVec2(window_position.x + m_graph_size.x,
+                            window_position.y + m_graph_size.y + m_scroll_position_y);
+
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
+       ImGui::IsMouseHoveringRect(win_min, win_max))
+    {
+        ImGui::OpenPopup("StickyNoteContextMenu");
+    }
+
+    if(ImGui::BeginPopup("StickyNoteContextMenu"))
+    {
+        if(ImGui::MenuItem("Add Sticky"))
+        {
+            float x_in_chart = rel_mouse_pos.x;
+            m_annotations_view->SetStickyPopup(m_v_min_x + (x_in_chart / m_graph_size.x) *
+                                                               (m_v_max_x - m_v_min_x),
+                                               rel_mouse_pos.y);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void

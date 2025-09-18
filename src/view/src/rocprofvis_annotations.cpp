@@ -155,38 +155,23 @@ AnnotationsView::AddSticky(double time_ns, float y_offset, const ImVec2& size,
     m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id);
 }
 
-bool
-AnnotationsView::Render(ImDrawList* draw_list, const ImVec2& window_position,
-                        double v_min_x, double pixels_per_ns, ImVec2 current_center)
-{
-    bool movement_drag   = false;
-    bool movement_resize = false;
-    m_visible_center     = current_center;
-
-    if(m_show_annotations)
-    {
-        // Interaction --> top-most gets priority
-        for(int i = static_cast<int>(m_sticky_notes.size()) - 1; i >= 0; --i)
-        {
-            movement_drag |= m_sticky_notes[i].HandleDrag(
-                window_position, v_min_x, pixels_per_ns, m_dragged_sticky_id);
-            movement_resize |=
-                m_sticky_notes[i].HandleResize(window_position, v_min_x, pixels_per_ns);
-        }
-
-        // Rendering --> based on added order (old bottom new on top)
-        for(size_t i = 0; i < m_sticky_notes.size(); ++i)
-        {
-            m_sticky_notes[i].Render(draw_list, window_position, v_min_x, pixels_per_ns);
-        }
-    }
-    return movement_drag || movement_resize;
-}
-
+ 
 bool
 AnnotationsView::IsVisibile()
 {
     return m_show_annotations;
+}
+void
+AnnotationsView::SetStickyPopup(double time_ns, float y_offset, const char* title,
+                                const char* text)
+{
+    m_sticky_time_ns  = time_ns;
+    m_sticky_y_offset = y_offset;
+    std::strncpy(m_sticky_title, title, sizeof(m_sticky_title) - 1);
+    m_sticky_title[sizeof(m_sticky_title) - 1] = '\0';
+    std::strncpy(m_sticky_text, text, sizeof(m_sticky_text) - 1);
+    m_sticky_text[sizeof(m_sticky_text) - 1] = '\0';
+    m_show_sticky_popup                      = true;
 }
 
 void
@@ -195,43 +180,7 @@ AnnotationsView::SetVisible(bool SetVisible)
     m_show_annotations = SetVisible;
 }
 
-void
-AnnotationsView::ShowStickyNoteMenu(const ImVec2& window_position,
-                                    const ImVec2& graph_size, double v_min_x,
-                                    double v_max_x, float scroll_y)
-{
-    ImVec2 mouse_pos = ImGui::GetMousePos();
-    // Mouse position relative without adjusting for user scroll.
-    ImVec2 rel_mouse_pos =
-        ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
-
-    // Use the visible area for hover detection adjusted for user scroll.
-    ImVec2 win_min = window_position;
-    ImVec2 win_max = ImVec2(window_position.x + graph_size.x,
-                            window_position.y + graph_size.y + scroll_y);
-
-    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
-       ImGui::IsMouseHoveringRect(win_min, win_max))
-    {
-        ImGui::OpenPopup("StickyNoteContextMenu");
-    }
-
-    if(ImGui::BeginPopup("StickyNoteContextMenu"))
-    {
-        if(ImGui::MenuItem("Add Sticky"))
-        {
-            float x_in_chart = rel_mouse_pos.x;
-            m_sticky_time_ns =
-                v_min_x + (x_in_chart / graph_size.x) * (v_max_x - v_min_x);
-            m_sticky_y_offset   = rel_mouse_pos.y;
-            m_sticky_title[0]   = '\0';
-            m_sticky_text[0]    = '\0';
-            m_show_sticky_popup = true;
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-}
+ 
 
 void
 AnnotationsView::ShowStickyNoteEditPopup()

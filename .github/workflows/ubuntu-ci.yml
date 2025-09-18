@@ -38,8 +38,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          sudo apt install -y \
-            cmake build-essential pkg-config \
+          sudo apt install -y cmake \
+            build-essential pkg-config \
             libwayland-bin libwayland-dev \ 
             libxkbcommon-dev wayland-protocols
           echo "✅ Dependencies Installed!"

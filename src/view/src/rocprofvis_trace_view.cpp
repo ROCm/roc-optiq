@@ -2,6 +2,7 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_analysis_view.h"
+#include "rocprofvis_annotations.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -33,6 +34,7 @@ TraceView::TraceView()
 , m_event_selection_changed_event_token(-1)
 , m_save_notification_id("")
 , m_project_settings(nullptr)
+, m_annotations(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -182,10 +184,12 @@ TraceView::Update()
 void
 TraceView::CreateView()
 {
+    m_annotations        = std::make_shared<AnnotationsView>(m_data_provider.GetTraceFilePath());
     m_timeline_selection = std::make_shared<TimelineSelection>(m_data_provider);
     m_track_topology     = std::make_shared<TrackTopology>(m_data_provider);
-    m_timeline_view =
-        std::make_shared<TimelineView>(m_data_provider, m_timeline_selection);
+    m_timeline_view      = std::make_shared<TimelineView>(m_data_provider,
+                                                          m_timeline_selection, m_annotations);
+
     m_sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
                                            m_timeline_view->GetGraphs(), m_data_provider);
     m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
@@ -503,14 +507,14 @@ TraceView::RenderToolbar()
 void
 TraceView::RenderAnnotationControls()
 {
+    if(m_annotations == nullptr) return;
     ImGuiStyle& style = ImGui::GetStyle();
     ImFont*     icon_font =
         SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
     ImGui::PushFont(icon_font);
     ImGui::BeginGroup();
 
-    AnnotationsView& view              = m_timeline_view->GetAnnotationsView();
-    bool             is_sticky_visible = view.IsVisibile();
+    bool is_sticky_visible = m_annotations->IsVisibile();
 
     // Show All Stickies
     ImGui::PushID("show_all_stickies");
@@ -522,7 +526,7 @@ TraceView::RenderAnnotationControls()
     }
     if(ImGui::Button(ICON_EYE))
     {
-        view.SetVisible(true);
+        m_annotations->SetVisible(true);
     }
     if(is_sticky_visible)
     {
@@ -547,7 +551,7 @@ TraceView::RenderAnnotationControls()
     }
     if(ImGui::Button(ICON_EYE_THIN))
     {
-        view.SetVisible(false);
+        m_annotations->SetVisible(false);
     }
     if(!is_sticky_visible)
     {
@@ -566,8 +570,8 @@ TraceView::RenderAnnotationControls()
     ImGui::PushID("add_new_sticky");
     if(ImGui::Button(ICON_ADD_NOTE))
     {
-        view.OpenStickyNotePopup(-1.0f, -1.0f);
-        view.ShowStickyNotePopup();
+        m_annotations->OpenStickyNotePopup(-1.0f, -1.0f);
+        m_annotations->ShowStickyNotePopup();
     }
     if(ImGui::IsItemHovered())
     {

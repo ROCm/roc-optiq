@@ -54,7 +54,8 @@ class TimelineView : public RocWidget
     friend TimelineViewProjectSettings;
 
 public:
-    TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
+    TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
+                 std::shared_ptr<AnnotationsView> annotations);
     ~TimelineView();
     virtual void                     Render();
     void                             Update();
@@ -78,16 +79,15 @@ public:
     void                             CalculateGridInterval();
     ViewCoords                       GetViewCoords() const;
     void                             SetViewCoords(const ViewCoords& coords);
-    void ShowTimelineContextMenu(const ImVec2& window_position);
-    void RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position);
-    TimelineArrow &GetArrowLayer();
-    AnnotationsView& GetAnnotationsView();
+    void           ShowTimelineContextMenu(const ImVec2& window_position);
+    void           RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position);
+    TimelineArrow& GetArrowLayer();
 
 private:
-    EventManager::SubscriptionToken    m_scroll_to_track_token;
-    EventManager::SubscriptionToken    m_new_track_token;
-    EventManager::SubscriptionToken    m_font_changed_token;
-    EventManager::SubscriptionToken    m_set_view_range_token;
+    EventManager::SubscriptionToken m_scroll_to_track_token;
+    EventManager::SubscriptionToken m_new_track_token;
+    EventManager::SubscriptionToken m_font_changed_token;
+    EventManager::SubscriptionToken m_set_view_range_token;
 
     std::vector<rocprofvis_graph_t>    m_graphs;
     int                                m_ruler_height;
@@ -109,7 +109,7 @@ private:
     double                             m_previous_scroll_position;
     bool                               m_meta_map_made;
     bool                               m_resize_activity;
-    double                             m_scroll_position_x;   
+    double                             m_scroll_position_x;
     double                             m_last_data_req_v_width;
     double                             m_scrollbar_location_as_percentage;
     bool                               m_artifical_scrollbar_active;
@@ -117,7 +117,7 @@ private:
     double                             m_range_x;
     DataProvider&                      m_data_provider;
     std::pair<double, double>          m_highlighted_region;
-    SettingsManager&                   m_settings;    
+    SettingsManager&                   m_settings;
     double                             m_last_data_req_view_time_offset_ns;
     int                                m_artificial_scrollbar_height;
     ImVec2                             m_graph_size;
@@ -130,14 +130,14 @@ private:
     bool                               m_stop_user_interaction;
     float                              m_last_zoom;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
-    AnnotationsView                    m_annotations_view;
+    std::shared_ptr<AnnotationsView>   m_annotations_view;
     struct
     {
         bool     handled;
         uint64_t track_id;
         int      new_index;
-    }                                  m_reorder_request;
-    TimelineViewProjectSettings        m_project_settings;
+    } m_reorder_request;
+    TimelineViewProjectSettings m_project_settings;
 };
 
 }  // namespace View

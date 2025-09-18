@@ -23,7 +23,8 @@ namespace View
 constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 
 TimelineView::TimelineView(DataProvider&                      dp,
-                           std::shared_ptr<TimelineSelection> timeline_selection)
+                           std::shared_ptr<TimelineSelection> timeline_selection,
+                           std::shared_ptr<AnnotationsView> annotations)
 : m_data_provider(dp)
 , m_zoom(1.0f)
 , m_view_time_offset_ns(0.0f)
@@ -70,7 +71,7 @@ TimelineView::TimelineView(DataProvider&                      dp,
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
-, m_annotations_view(dp.GetTraceFilePath())
+, m_annotations_view(annotations)
 
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -177,7 +178,7 @@ TimelineView::ShowTimelineContextMenu(const ImVec2& window_position)
             double time_ns =
                 m_v_min_x + (x_in_chart / m_graph_size.x) * (m_v_max_x - m_v_min_x);
             float y_offset = rel_mouse_pos.y;
-            m_annotations_view.OpenStickyNotePopup(time_ns, y_offset);
+            m_annotations_view->OpenStickyNotePopup(time_ns, y_offset);
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -187,16 +188,16 @@ TimelineView::ShowTimelineContextMenu(const ImVec2& window_position)
 void
 TimelineView::RenderStickyNotes(ImDrawList* draw_list, ImVec2 window_position)
 {
-    m_annotations_view.ShowStickyNoteMenu(window_position, m_graph_size, m_v_min_x,
+    m_annotations_view->ShowStickyNoteMenu(window_position, m_graph_size, m_v_min_x,
                                           m_v_max_x, m_scroll_position_y);
-    m_annotations_view.ShowStickyNotePopup();
-    m_annotations_view.ShowStickyNoteEditPopup();
+    m_annotations_view->ShowStickyNotePopup();
+    m_annotations_view->ShowStickyNoteEditPopup();
 
    double center_time_ns = m_v_min_x + (m_v_max_x - m_v_min_x) * 0.5;
     float  center_y_offset = m_graph_size.y * 0.5f;
     
     m_stop_user_interaction |=
-        m_annotations_view.Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns, ImVec2(center_time_ns, center_y_offset));
+        m_annotations_view->Render(draw_list, window_position, m_v_min_x, m_pixels_per_ns, ImVec2(center_time_ns, center_y_offset));
 }
 
 void
@@ -1193,11 +1194,7 @@ TimelineView::RenderGraphView()
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
-AnnotationsView&
-TimelineView::GetAnnotationsView()
-{
-    return m_annotations_view;
-}
+ 
 
 void
 TimelineView::DestroyGraphs()

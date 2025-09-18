@@ -1,4 +1,5 @@
 #pragma once
+#include "rocprofvis_annotations.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_project.h"
@@ -52,12 +53,12 @@ public:
 
     bool HasTrimActiveTrimSelection() const;
     bool IsTrimSaveAllowed() const;
-    
+
     bool SaveSelection(const std::string& file_path);
 
     std::shared_ptr<TimelineSelection> GetTimelineSelection() const;
-    std::shared_ptr<RocWidget> GetToolbar() override;
-    void RenderEditMenuOptions() override;
+    std::shared_ptr<RocWidget>         GetToolbar() override;
+    void                               RenderEditMenuOptions() override;
 
 private:
     void HandleHotKeys();
@@ -65,7 +66,6 @@ private:
     void RenderFlowControls();
     void RenderAnnotationControls();
 
-    
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<SideBar>           m_sidebar;
     std::shared_ptr<HSplitContainer>   m_container;
@@ -78,22 +78,26 @@ private:
     bool         m_view_created;
     bool         m_open_loading_popup;
 
-    typedef struct popup_info_t{
-        bool show_popup;
+    typedef struct popup_info_t
+    {
+        bool        show_popup;
         std::string title;
         std::string message;
     } popup_info_t;
-    
+
     popup_info_t m_popup_info;
 
-    std::unordered_map<int,ViewCoords> m_bookmarks;
+    std::unordered_map<int, ViewCoords> m_bookmarks;
 
-    EventManager::SubscriptionToken       m_tabselected_event_token;
-    EventManager::SubscriptionToken       m_event_selection_changed_event_token;
+    std::shared_ptr<AnnotationsView> m_annotations;
+
+    EventManager::SubscriptionToken m_tabselected_event_token;
+    EventManager::SubscriptionToken m_event_selection_changed_event_token;
 
     std::string m_save_notification_id;
 
     std::unique_ptr<SystemTraceProjectSettings> m_project_settings;
+     
 };
 
 }  // namespace View

@@ -18,6 +18,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 option(JSON_SUPPORT "Build with support for JSON traces" ON)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
+option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" ON)
 
 # Add third-party libraries, core, and model BEFORE controller
 add_subdirectory(thirdparty)
@@ -36,7 +37,9 @@ endif(COMPUTE_UI_SUPPORT)
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
 endif(ROCPROFVIS_DEVELOPER_MODE)
-
+if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
+endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 

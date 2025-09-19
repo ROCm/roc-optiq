@@ -10,10 +10,11 @@ namespace Controller
 
 typedef Reference<rocprofvis_controller_flow_control_t, FlowControl, kRPVControllerObjectTypeFlowControl> FlowControlRef;
 
-FlowControl::FlowControl(uint64_t id, uint64_t timestamp, uint32_t track_id, uint32_t direction,const char* category, const char* symbol)
+FlowControl::FlowControl(uint64_t id, uint64_t timestamp, uint32_t track_id, uint32_t level, uint32_t direction,const char* category, const char* symbol)
 : m_id(id)
 , m_timestamp(timestamp)
 , m_track_id(track_id)
+, m_level(level)
 , m_direction(direction)
 , m_category(category)
 , m_symbol(symbol)
@@ -68,6 +69,12 @@ rocprofvis_result_t FlowControl::GetUInt64(rocprofvis_property_t property, uint6
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerFlowControlLevel:
+            {
+                *value = m_level;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             default:
             {
                 result = kRocProfVisResultInvalidEnum;
@@ -89,6 +96,7 @@ rocprofvis_result_t FlowControl::GetDouble(rocprofvis_property_t property, uint6
             case kRPVControllerFlowControlTimestamp:
             case kRPVControllerFlowControlTrackId:
             case kRPVControllerFlowControlDirection:
+            case kRPVControllerFlowControlLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -114,6 +122,7 @@ rocprofvis_result_t FlowControl::GetObject(rocprofvis_property_t property, uint6
             case kRPVControllerFlowControlTimestamp:
             case kRPVControllerFlowControlTrackId:
             case kRPVControllerFlowControlDirection:
+            case kRPVControllerFlowControlLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -162,6 +171,7 @@ rocprofvis_result_t FlowControl::GetString(rocprofvis_property_t property, uint6
         case kRPVControllerFlowControlTimestamp:
         case kRPVControllerFlowControlTrackId:
         case kRPVControllerFlowControlDirection:
+        case kRPVControllerFlowControlLevel:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -185,6 +195,7 @@ rocprofvis_result_t FlowControl::SetUInt64(rocprofvis_property_t property, uint6
         case kRPVControllerFlowControlTimestamp:
         case kRPVControllerFlowControlTrackId:
         case kRPVControllerFlowControlDirection:
+        case kRPVControllerFlowControlLevel:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -207,6 +218,7 @@ rocprofvis_result_t FlowControl::SetDouble(rocprofvis_property_t property, uint6
         case kRPVControllerFlowControlTimestamp:
         case kRPVControllerFlowControlTrackId:
         case kRPVControllerFlowControlDirection:
+        case kRPVControllerFlowControlLevel:
         {
             result = kRocProfVisResultInvalidType;
             break;
@@ -231,6 +243,7 @@ rocprofvis_result_t FlowControl::SetObject(rocprofvis_property_t property, uint6
             case kRPVControllerFlowControlTimestamp:
             case kRPVControllerFlowControlTrackId:
             case kRPVControllerFlowControlDirection:
+            case kRPVControllerFlowControlLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;
@@ -256,6 +269,7 @@ rocprofvis_result_t FlowControl::SetString(rocprofvis_property_t property, uint6
             case kRPVControllerFlowControlTimestamp:
             case kRPVControllerFlowControlTrackId:
             case kRPVControllerFlowControlDirection:
+            case kRPVControllerFlowControlLevel:
             {
                 result = kRocProfVisResultInvalidType;
                 break;

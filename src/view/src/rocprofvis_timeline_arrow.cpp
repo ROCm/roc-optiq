@@ -5,6 +5,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_track_item.h"
 #include "spdlog/spdlog.h"
 
 namespace RocProfVis
@@ -25,13 +26,16 @@ TimelineArrow::GetFlowDisplayMode() const
 }
 
 void
-TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_ns,
-                      ImVec2 window, std::map<uint64_t, float>& track_height_total)
+TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
+                      const double pixels_per_ns, const ImVec2 window,
+                      const std::unordered_map<uint64_t, float>& track_position_y,
+                      const std::vector<rocprofvis_graph_t>&     graphs) const
 {
-    ImU32 color     = SettingsManager::GetInstance().GetColor(Colors::kArrowColor);
-    float thickness = 2.0f;
-    float head_size = 8.0f;
-    float scroll_y  = ImGui::GetScrollY();
+    SettingsManager& settings     = SettingsManager::GetInstance();
+    ImU32            color        = settings.GetColor(Colors::kArrowColor);
+    float            thickness    = 2.0f;
+    float            head_size    = 8.0f;
+    float            level_height = settings.GetEventLevelHeight();
     for(const event_info_t* event : m_selected_event_data)
     {
         if(event)
@@ -39,60 +43,74 @@ TimelineArrow::Render(ImDrawList* draw_list, double v_min_x, double pixels_per_n
             int stride  = 1;
             int starter = 0;
 
-            if(m_flow_display_mode == FlowDisplayMode::kHide)
+            switch(m_flow_display_mode)
             {
-                starter = event->flow_info.size();
+                case FlowDisplayMode::kShowAll:
+                {
+                    stride  = 1;  // Show all flows
+                    starter = 0;  // Start from the first flow
+                    break;
+                }
+                case FlowDisplayMode::kShowFirstAndLast:
+                {
+                    if(event->flow_info.size() > 1)
+                    {
+                        stride  = event->flow_info.size() - 1;  // Jump from first to last
+                        starter = 0;
+                    }
+                    else
+                    {
+                        stride  = 1;  // Only one element, just draw it once
+                        starter = 0;
+                    }
+                    break;
+                }
+                default:
+                {
+                    continue;
+                }
             }
 
-            if(m_flow_display_mode == FlowDisplayMode::kShowAll)
+            const rocprofvis_graph_t& start_track =
+                graphs[m_data_provider.GetTrackInfo(event->track_id)->index];
+            if(!start_track.display)
             {
-                stride  = 1;  // Show all flows
-                starter = 0;  // Start from the first flow
+                continue;
             }
-            else if(m_flow_display_mode == FlowDisplayMode::kShowFirstAndLast)
-            {
-                if(event->flow_info.size() > 1)
-                {
-                    stride  = event->flow_info.size() - 1;  // Jump from first to last
-                    starter = 0;
-                }
-                else
-                {
-                    stride  = 1;  // Only one element, just draw it once
-                    starter = 0;
-                }
-            }
-
             for(int i = starter; i < event->flow_info.size(); i += stride)
             {
-                const event_flow_data_t& flow      = event->flow_info[i];
-                const uint64_t&          direction = flow.direction;
-
-                double start_time_ns;
-                if(direction == 1)
-                    start_time_ns =
-                        event->basic_info.m_start_ts;  // Use start of event for outflow
-                else
-                    start_time_ns =
-                        event->basic_info.m_start_ts +
-                        event->basic_info.m_duration;  // Use end of event for inflow
-
-                const uint64_t& end_time_ns    = flow.timestamp;
-                const uint64_t& start_track_id = event->track_id;
-                const uint64_t& end_track_id   = flow.track_id;
+                const event_flow_data_t&  flow = event->flow_info[i];
+                const rocprofvis_graph_t& end_track =
+                    graphs[m_data_provider.GetTrackInfo(flow.track_id)->index];
+                if(!end_track.display)
+                {
+                    continue;
+                }
+                const uint64_t& direction = flow.direction;
+                const double    start_time_ns =
+                    (flow.direction == 1)
+                           ? event->basic_info.m_start_ts  // Use start of event for outflow
+                           : event->basic_info.m_start_ts +
+                              event->basic_info
+                                  .m_duration;  // Use end of event for inflow
+                const uint64_t& end_time_ns = flow.timestamp;
 
                 float start_x_ns = (start_time_ns - v_min_x) * pixels_per_ns;
                 float end_x_ns   = (end_time_ns - v_min_x) * pixels_per_ns;
+                float start_y_px = track_position_y.at(event->track_id) +
+                                   std::min(level_height * event->basic_info.m_level,
+                                            start_track.chart->GetTrackHeight());
+                float end_y_px = track_position_y.at(flow.track_id) +
+                                 std::min(level_height * flow.level,
+                                          end_track.chart->GetTrackHeight());
 
-                float start_y_px = track_height_total[start_track_id];
-                float end_y_px   = track_height_total[end_track_id];
+                ImVec2 p_start = ImVec2(window.x + start_x_ns, window.y + start_y_px);
+                ImVec2 p_end   = ImVec2(window.x + end_x_ns, window.y + end_y_px);
 
-                ImVec2 p_start =
-                    ImVec2(window.x + start_x_ns, window.y + start_y_px - scroll_y);
-                ImVec2 p_end =
-                    ImVec2(window.x + end_x_ns, window.y + end_y_px - scroll_y);
-
-                if(p_start.x == p_end.x && p_start.y == p_end.y) continue;
+                if(p_start.x == p_end.x && p_start.y == p_end.y)
+                {
+                    continue;
+                }
 
                 // Calculate control points for a smooth cubic Bezier curve
                 float  curve_offset = 0.25f * (p_end.x - p_start.x);

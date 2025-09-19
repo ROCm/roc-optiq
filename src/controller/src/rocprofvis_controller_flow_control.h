@@ -15,7 +15,7 @@ namespace Controller
 class FlowControl : public Handle
 {
 public:
-    FlowControl(uint64_t id, uint64_t timestamp, uint32_t track_id, uint32_t direction, const char* category, const char* symbol);
+    FlowControl(uint64_t id, uint64_t timestamp, uint32_t track_id, uint32_t level, uint32_t direction, const char* category, const char* symbol);
 
     virtual ~FlowControl();
 
@@ -43,7 +43,8 @@ public:
 private:
     uint64_t m_id;
     uint64_t m_timestamp;
-    uint32_t m_track_id; 
+    uint32_t m_track_id;
+    uint32_t m_level;
     uint32_t m_direction;
     Data     m_symbol;
     Data     m_category;

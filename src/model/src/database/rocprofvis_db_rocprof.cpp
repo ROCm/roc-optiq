@@ -754,7 +754,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
             },
                     &CallBackAddTrack)) break;
-        
+
         // PMC schema is not fully defined yet
         ShowProgress(5, "Adding performance counters tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,   
@@ -818,6 +818,74 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid"),
                          Builder::InnerJoin("rocpd_kernel_dispatch", "K", "K.event_id = PMC_E.event_id AND K.guid = PMC_E.guid")
                         } })),
+
+            },
+                    &CallBackAddTrack)) break;                    
+        // PMC schema is not fully defined yet
+        ShowProgress(5, "Adding performance smi counters tracks", kRPVDbBusy, future );
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,   
+            {
+                    // Track query by agent/queue
+                     Builder::Select(rocprofvis_db_sqlite_track_query_format(
+                     { { Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
+                         Builder::QParamCategory(kRocProfVisDmPmcTrack) },
+                       { Builder::From("rocpd_pmc_event", "PMC_E"),
+                         Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid"),
+                         Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id AND S.guid = PMC_E.guid"),
+                         } })),
+                    // Track query by stream
+                    "",
+                    // Level query, for COUNT only
+                    Builder::Select(rocprofvis_db_sqlite_level_query_format(
+                     { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                         Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
+                         Builder::SpaceSaver(0), 
+                         Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
+                         Builder::SpaceSaver(0)
+                       },
+                       { Builder::From("rocpd_pmc_event", "PMC_E"),
+                         Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid"),
+                         Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id AND S.guid = PMC_E.guid"),
+                        } })),                    
+                    // Slice query by queue
+                    Builder::Select(rocprofvis_db_sqlite_slice_query_format(
+                     { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                         Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("PMC_E.value", Builder::COUNTER_VALUE_SERVICE_NAME),
+                         Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
+                         Builder::SpaceSaver(0),
+                         Builder::SpaceSaver(0),
+                         Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_E.value", "level"),                        
+                       },
+                       { Builder::From("rocpd_pmc_event", "PMC_E"),
+                         Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid"),
+                         Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id AND S.guid = PMC_E.guid"),
+                       } })),
+
+                    // Slice query by stream                        
+                     "",
+                    // Table query
+                    Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
+                     { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                         Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
+                         Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_E.value", Builder::COUNTER_VALUE_SERVICE_NAME)
+                       },
+                       { Builder::From("rocpd_pmc_event", "PMC_E"),
+                         Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid"),
+                         Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id AND S.guid = PMC_E.guid"),
+                       } })),
 
             },
                     &CallBackAddTrack)) break;

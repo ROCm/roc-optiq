@@ -95,7 +95,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
         ("StickyNoteChild##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
         sticky_size, false,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-            ImGuiWindowFlags_NoBackground);
+            ImGuiWindowFlags_NoBackground );
 
     // Get the child window's draw list and position
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
@@ -140,7 +140,10 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
            ("EditSticky##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
            ImVec2(edit_btn_size, edit_btn_size)))
     {
-        EventManager::GetInstance()->AddEvent(std::make_shared<StickyNoteEvent>(m_id, m_project_id));
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<StickyNoteEvent>(m_id, m_project_id));
+        std::cout << "Edit Sticky Note ID: " << m_id << " Title: " << m_title
+                  << std::endl;
     }
 
     // Draw edit button graphics over the button
@@ -175,9 +178,8 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
 
 bool
 StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
-                       double pixels_per_ns)
+                       double pixels_per_ns, int& dragged_id)
 {
-    // Only allow drag if not resizing
     if(m_resizing) return false;
 
     float  x          = static_cast<float>((m_time_ns - v_min_x) * pixels_per_ns);
@@ -185,24 +187,25 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
     ImVec2 sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);
 
-    // --- Resize handle region ---
     const float handle_size = 12.0f;
     ImVec2 handle_pos = ImVec2(sticky_max.x - handle_size, sticky_max.y - handle_size);
     ImVec2 handle_max = ImVec2(sticky_max.x, sticky_max.y);
 
     ImVec2 mouse_pos = ImGui::GetMousePos();
 
-    // If mouse is over resize handle, do not start drag
     if(ImGui::IsMouseHoveringRect(handle_pos, handle_max)) return false;
 
     bool mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     bool mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
-    if(!m_dragging && ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) &&
+    // Only allow drag if no other note is being dragged or this is the one
+    if((dragged_id == -1 || dragged_id == m_id) && !m_dragging &&
+       ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) &&
        ImGui::IsMouseClicked(ImGuiMouseButton_Left))
     {
         m_dragging    = true;
         m_drag_offset = ImVec2(mouse_pos.x - sticky_pos.x, mouse_pos.y - sticky_pos.y);
+        dragged_id    = m_id;
     }
 
     if(m_dragging && mouse_down)
@@ -217,6 +220,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
     if(m_dragging && mouse_released)
     {
         m_dragging = false;
+        dragged_id = -1;
     }
 
     return m_dragging;

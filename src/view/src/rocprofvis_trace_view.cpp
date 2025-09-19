@@ -1,6 +1,8 @@
 #include "rocprofvis_trace_view.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_analysis_view.h"
+#include "rocprofvis_annotations.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -12,7 +14,6 @@
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "icons/rocprovfis_icon_defines.h"
 
 namespace RocProfVis
 {
@@ -33,6 +34,7 @@ TraceView::TraceView()
 , m_event_selection_changed_event_token(-1)
 , m_save_notification_id("")
 , m_project_settings(nullptr)
+, m_annotations(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -45,7 +47,7 @@ TraceView::TraceView()
         auto ets = std::dynamic_pointer_cast<TabEvent>(e);
         if(ets)
         {
-            // Only handle the event if the tab source is the main tab source
+            // Only handle the event if the tab source is the main tab source.
             if(ets->GetSourceId() == AppWindow::GetInstance()->GetMainTabSourceName())
             {
                 m_data_provider.SetSelectedState(ets->GetTabId());
@@ -86,7 +88,7 @@ TraceView::TraceView()
         {
             m_popup_info.message = "Failed to save the trimmed trace.";
         }
-        //clear the save notification
+        // clear the save notification
         NotificationManager::GetInstance().Hide(m_save_notification_id);
         m_save_notification_id = "";
     });
@@ -98,8 +100,7 @@ TraceView::TraceView()
         {
             if(event->EventSelected())
             {
-                m_data_provider.FetchEvent(event->GetEventTrackID(),
-                                               event->GetEventID());
+                m_data_provider.FetchEvent(event->GetEventTrackID(), event->GetEventID());
             }
             else if(event->IsBatch())
             {
@@ -183,10 +184,13 @@ TraceView::Update()
 void
 TraceView::CreateView()
 {
+    m_annotations =
+        std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
     m_timeline_selection = std::make_shared<TimelineSelection>(m_data_provider);
     m_track_topology     = std::make_shared<TrackTopology>(m_data_provider);
-    m_timeline_view =
-        std::make_shared<TimelineView>(m_data_provider, m_timeline_selection);
+    m_timeline_view      = std::make_shared<TimelineView>(m_data_provider,
+                                                          m_timeline_selection, m_annotations);
+
     m_sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
                                            m_timeline_view->GetGraphs(), m_data_provider);
     m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
@@ -253,7 +257,8 @@ TraceView::Render()
     if(m_popup_info.show_popup)
     {
         m_popup_info.show_popup = false;
-        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title, m_popup_info.message);
+        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
+                                                    m_popup_info.message);
     }
 
     if(m_data_provider.GetState() == ProviderState::kLoading)
@@ -287,8 +292,8 @@ TraceView::Render()
             ImVec2 pos             = ImGui::GetCursorScreenPos();
             ImVec2 center_pos      = ImVec2(
                 pos.x + (available_space.x - label_size.x) * 0.5f,
-                       pos.y + (available_space.y - (label_size.y + dot_size.y +
-                                                     progress_label_size.y + item_spacing)) *
+                pos.y + (available_space.y - (label_size.y + dot_size.y +
+                                              progress_label_size.y + item_spacing)) *
                             0.5f);
             ImGui::SetCursorScreenPos(center_pos);
 
@@ -319,15 +324,17 @@ TraceView::Render()
 void
 TraceView::HandleHotKeys()
 {
-    //TODO: handling hot keys here for now.. this should be reworked to use a hotkey manager in the future
+    // TODO: handling hot keys here for now.. this should be reworked to use a hotkey
+    // manager in the future
     const ImGuiIO& io = ImGui::GetIO();
 
-    // Don’t process global hotkeys if ImGui wants the keyboard (e.g., typing in InputText)
+    // Don’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
+    // InputText)
     if(io.WantTextInput || ImGui::IsAnyItemActive())
     {
         return;
     }
-    
+
     // handle numeric hotkeys 0-9
     // Press Ctrl + [0-9] to save a bookmark, press [0-9] to recall it
     for(int i = 0; i <= 9; ++i)
@@ -337,14 +344,17 @@ TraceView::HandleHotKeys()
         {
             if(io.KeyCtrl)
             {
-                if(m_timeline_view) {
+                if(m_timeline_view)
+                {
                     auto coords    = m_timeline_view->GetViewCoords();
                     m_bookmarks[i] = coords;
-                    spdlog::info(
-                        "Bookmark {} saved at time offset: {}, scroll position: {}, zoom: {}",
-                        i, coords.time_offset_ns, coords.y_scroll_position, coords.zoom);
+                    spdlog::info("Bookmark {} saved at time offset: {}, scroll position: "
+                                 "{}, zoom: {}",
+                                 i, coords.time_offset_ns, coords.y_scroll_position,
+                                 coords.zoom);
                     NotificationManager::GetInstance().Show(
-                        "Bookmark " + std::to_string(i) + " saved.", NotificationLevel::Info);
+                        "Bookmark " + std::to_string(i) + " saved.",
+                        NotificationLevel::Info);
                 }
             }
             else
@@ -352,7 +362,8 @@ TraceView::HandleHotKeys()
                 auto it = m_bookmarks.find(i);
                 if(it != m_bookmarks.end())
                 {
-                    if(m_timeline_view) {
+                    if(m_timeline_view)
+                    {
                         m_timeline_view->SetViewCoords(it->second);
                         NotificationManager::GetInstance().Show(
                             "Bookmark " + std::to_string(i) + " restored.",
@@ -411,11 +422,12 @@ TraceView::SaveSelection(const std::string& file_path)
 
         m_data_provider.SaveTrimmedTrace(file_path, start_ns, end_ns);
 
-        //create notification
-        m_save_notification_id = "save_trace_" + std::to_string(std::hash<std::string>()(file_path));
+        // create notification
+        m_save_notification_id =
+            "save_trace_" + std::to_string(std::hash<std::string>()(file_path));
         NotificationManager::GetInstance().ShowPersistent(m_save_notification_id,
-            "Saving Trace: " + file_path,
-            NotificationLevel::Info);
+                                                          "Saving Trace: " + file_path,
+                                                          NotificationLevel::Info);
 
         return true;
     }
@@ -426,7 +438,8 @@ TraceView::SaveSelection(const std::string& file_path)
     return false;
 }
 
-std::shared_ptr<TimelineSelection> TraceView::GetTimelineSelection() const
+std::shared_ptr<TimelineSelection>
+TraceView::GetTimelineSelection() const
 {
     return m_timeline_selection;
 }
@@ -445,8 +458,9 @@ TraceView::RenderEditMenuOptions()
     {
         if(m_timeline_selection)
         {
-            std::vector<rocprofvis_graph_t> *graphs = m_timeline_view->GetGraphs();
-            if(graphs) {
+            std::vector<rocprofvis_graph_t>* graphs = m_timeline_view->GetGraphs();
+            if(graphs)
+            {
                 m_timeline_selection->UnselectAllTracks(*graphs);
             }
         }
@@ -465,9 +479,9 @@ TraceView::RenderEditMenuOptions()
 void
 TraceView::RenderToolbar()
 {
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImVec2 frame_padding = style.FramePadding;
-    float frame_rounding = style.FrameRounding;
+    ImGuiStyle& style          = ImGui::GetStyle();
+    ImVec2      frame_padding  = style.FramePadding;
+    float       frame_rounding = style.FrameRounding;
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
@@ -478,18 +492,106 @@ TraceView::RenderToolbar()
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, frame_rounding);
     ImGui::AlignTextToFramePadding();
 
-    //Toolbar Controls
+    // Toolbar Controls
     RenderFlowControls();
-
-    //pop content style
-    ImGui::PopStyleVar(2); 
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(10, 0));
+    ImGui::SameLine();
+    RenderAnnotationControls();
+    // pop content style
+    ImGui::PopStyleVar(2);
     ImGui::EndChild();
-    //pop child window style
+    // pop child window style
     ImGui::PopStyleVar(2);
 }
 
 void
-TraceView::RenderFlowControls() {
+TraceView::RenderAnnotationControls()
+{
+    if(m_annotations == nullptr) return;
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImFont*     icon_font =
+        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+    ImGui::PushFont(icon_font);
+    ImGui::BeginGroup();
+
+    bool is_sticky_visible = m_annotations->IsVisibile();
+
+    // Show All Stickies
+    ImGui::PushID("show_all_stickies");
+    if(is_sticky_visible)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonActive]);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              style.Colors[ImGuiCol_ButtonActive]);
+    }
+    if(ImGui::Button(ICON_EYE))
+    {
+        m_annotations->SetVisible(true);
+    }
+    if(is_sticky_visible)
+    {
+        ImGui::PopStyleColor(2);
+    }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::PopFont();
+        ImGui::SetTooltip("Show All Stickies");
+        ImGui::PushFont(icon_font);
+    }
+    ImGui::PopID();
+    ImGui::SameLine();
+
+    // Hide All Stickies
+    ImGui::PushID("hide_all_stickies");
+    if(!is_sticky_visible)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonActive]);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              style.Colors[ImGuiCol_ButtonActive]);
+    }
+    if(ImGui::Button(ICON_EYE_THIN))
+    {
+        m_annotations->SetVisible(false);
+    }
+    if(!is_sticky_visible)
+    {
+        ImGui::PopStyleColor(2);
+    }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::PopFont();
+        ImGui::SetTooltip("Hide All Stickies");
+        ImGui::PushFont(icon_font);
+    }
+    ImGui::PopID();
+    ImGui::SameLine();
+
+    // Add New Sticky
+    ImGui::PushID("add_new_sticky");
+    if(ImGui::Button(ICON_ADD_NOTE))
+    {
+        m_annotations->OpenStickyNotePopup(INVALID_TIME_NS, INVALID_OFFSET_PX);
+        m_annotations->ShowStickyNotePopup();
+    }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::PopFont();
+        ImGui::SetTooltip("Add New Sticky");
+        ImGui::PushFont(icon_font);
+    }
+    ImGui::PopID();
+
+    ImGui::EndGroup();
+    ImGui::PopFont();
+
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Annotations");
+}
+
+void
+TraceView::RenderFlowControls()
+{
     ImGuiStyle& style = ImGui::GetStyle();
 
     static const char* flow_labels[]    = { ICON_EYE, ICON_EYE_THIN, ICON_EYE_SLASH };
@@ -503,7 +605,7 @@ TraceView::RenderFlowControls() {
     ImFont* icon_font =
         SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
     ImGui::PushFont(icon_font);
-    
+
     ImGui::BeginGroup();
     for(int i = 0; i <= static_cast<int>(FlowDisplayMode::__kLastMode); ++i)
     {
@@ -529,7 +631,8 @@ TraceView::RenderFlowControls() {
             ImGui::PushFont(icon_font);
         }
 
-        if(selected) {
+        if(selected)
+        {
             ImGui::PopStyleColor(2);
         }
         ImGui::PopID();

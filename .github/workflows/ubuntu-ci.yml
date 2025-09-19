@@ -8,12 +8,10 @@ on:
     branches: 
       - main
     paths:
-      - '.github/workflows/ubuntu-ci.yml'
       - '!doc/**'
       - '!*.md'
   pull_request:
     paths:
-      - '.github/workflows/ubuntu-ci.yml'
       - '!doc/**'
       - '!*.md'
 

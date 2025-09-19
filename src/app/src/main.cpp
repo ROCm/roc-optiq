@@ -41,7 +41,7 @@ glfw_create_icon()
     }
 }
 
-void
+static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
 {
     g_DroppedFilePaths.clear();
@@ -50,6 +50,15 @@ drop_callback(GLFWwindow* window, int count, const char* paths[])
         g_DroppedFilePaths.push_back(paths[i]);
     }
     g_FileWasDropped = true;
+}
+
+static void
+content_scale_callback(GLFWwindow* window, float xscale, float yscale)
+{
+    // Unused parameters
+    (void) window;
+    (void) yscale;
+    rocprofvis_view_set_dpi(xscale);
 }
 
 static void
@@ -70,11 +79,23 @@ main(int, char**)
     if(glfwInit())
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+#if defined(GLFW_SCALE_TO_MONITOR) // GLFW 3.3+
+        glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+#endif        
         GLFWwindow* window =
             glfwCreateWindow(1280, 720, "ROCm Visualizer", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
+        // Drop file callback
         glfwSetDropCallback(window, drop_callback);
+        // DPI scaling callback
+        glfwSetWindowContentScaleCallback(window, content_scale_callback);
+        // Initialize once (callback may not fire immediately on some platforms)
+        {
+            float xs, ys;
+            glfwGetWindowContentScale(window, &xs, &ys);
+            content_scale_callback(window, xs, ys);
+        }
 
         if(window && rocprofvis_imgui_backend_setup(&backend, window))
         {
@@ -108,16 +129,12 @@ main(int, char**)
 
                 while(!glfwWindowShouldClose(window))
                 {
-                    float xscale, yscale;
-                    glfwGetWindowContentScale(window, &xscale, &yscale);
-
                     // handle dropped file signal flag from callback
                     if (g_FileWasDropped)
                     {
                         rocprofvis_view_open_files(g_DroppedFilePaths);
                         g_FileWasDropped = false;
                     }                    
-                    rocprofvis_view_set_dpi(xscale);
 
                     glfwPollEvents();
 
@@ -158,8 +175,6 @@ main(int, char**)
             }
 
             glfwDestroyWindow(window);
-
-            // Free the GLFW image pixels
         }
         else
         {

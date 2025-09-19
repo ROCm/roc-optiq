@@ -31,7 +31,7 @@ public:
     bool Valid() const override;
 
 private:
-    AnnotationsManager& m_annotations_view;
+    AnnotationsManager& m_annotations_manager;
 };
 
 class AnnotationsManagerProjectSettings;

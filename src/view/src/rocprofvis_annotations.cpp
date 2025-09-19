@@ -12,7 +12,7 @@ namespace View
 AnnotationsManagerProjectSettings::AnnotationsManagerProjectSettings(
     const std::string& project_id, AnnotationsManager& annotations_view)
 : ProjectSetting(project_id)
-, m_annotations_view(annotations_view)
+, m_annotations_manager(annotations_view)
 
 {}
 
@@ -21,7 +21,7 @@ AnnotationsManagerProjectSettings::~AnnotationsManagerProjectSettings() {}
 void
 AnnotationsManagerProjectSettings::FromJson()
 {
-    m_annotations_view.Clear();
+    m_annotations_manager.Clear();
     std::vector<jt::Json>& annotation_vec =
         m_settings_json[JSON_KEY_ANNOTATIONS].getArray();
 
@@ -38,14 +38,14 @@ AnnotationsManagerProjectSettings::FromJson()
         std::string title = note_json[JSON_KEY_ANNOTATION_TITLE].getString();
 
         ImVec2 size(size_x, size_y);
-        m_annotations_view.AddSticky(time_ns, y_offset, size, text, title);
+        m_annotations_manager.AddSticky(time_ns, y_offset, size, text, title);
     }
 }
 
 void
 AnnotationsManagerProjectSettings::ToJson()
 {
-    const std::vector<StickyNote>& notes  = m_annotations_view.GetStickyNotes();
+    const std::vector<StickyNote>& notes  = m_annotations_manager.GetStickyNotes();
     m_settings_json[JSON_KEY_ANNOTATIONS] = jt::Json();
 
     for(size_t i = 0; i < notes.size(); ++i)

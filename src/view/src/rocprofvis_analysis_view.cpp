@@ -1,14 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_analysis_view.h"
+#include "rocprofvis_annotation_view.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_track_details.h"
 #include "spdlog/spdlog.h"
-
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
+#include "rocprofvis_annotations.h"
 
 namespace RocProfVis
 {
@@ -16,12 +17,14 @@ namespace View
 {
 
 AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
-                           std::shared_ptr<TimelineSelection> timeline_selection)
+                           std::shared_ptr<TimelineSelection> timeline_selection,
+                           std::shared_ptr<AnnotationsManager> annotation_manager)
 : m_data_provider(dp)
 , m_event_table(std::make_shared<InfiniteScrollTable>(dp, TableType::kEventTable))
 , m_sample_table(std::make_shared<InfiniteScrollTable>(dp, TableType::kSampleTable))
 , m_events_view(std::make_shared<EventsView>(dp, timeline_selection))
 , m_track_details(std::make_shared<TrackDetails>(dp, topology))
+, m_annotation_view(std::make_shared<AnnotationView>(annotation_manager))
 {
     m_widget_name = GenUniqueName("Analysis View");
 
@@ -51,6 +54,13 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     tab_item.m_id        = "track_details";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_track_details;
+    m_tab_container->AddTab(tab_item);
+
+    // Add Annotation View Tab
+    tab_item.m_label     = "Annotation View";
+    tab_item.m_id        = "annotation_view";
+    tab_item.m_can_close = false;
+    tab_item.m_widget    = m_annotation_view;
     m_tab_container->AddTab(tab_item);
 
     m_tab_container->SetAllowToolTips(false);

@@ -19,6 +19,7 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 , m_title(title)
 , m_project_id(project_id)
 , m_id(s_unique_id_counter)
+, m_is_visible(true)
 {
     s_unique_id_counter = s_unique_id_counter + 1;
 }
@@ -53,6 +54,18 @@ const std::string&
 StickyNote::GetTitle() const
 {
     return m_title;
+}
+
+void
+StickyNote::SetVisibility(bool visible)
+{
+    m_is_visible = visible;
+}
+
+bool
+StickyNote::IsVisible() const
+{
+    return m_is_visible;
 }
 
 void
@@ -95,7 +108,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
         ("StickyNoteChild##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
         sticky_size, false,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-            ImGuiWindowFlags_NoBackground );
+            ImGuiWindowFlags_NoBackground);
 
     // Get the child window's draw list and position
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();

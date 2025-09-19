@@ -44,6 +44,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp 
     src/view/src/rocprofvis_appwindow.h 
+    src/view/src/rocprofvis_annotation_view.cpp
     src/view/src/rocprofvis_track_item.cpp 
     src/view/src/rocprofvis_flame_track_item.cpp 
     src/view/src/rocprofvis_timeline_arrow.cpp 

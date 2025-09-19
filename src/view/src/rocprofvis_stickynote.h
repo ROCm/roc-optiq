@@ -30,10 +30,11 @@ public:
     ImVec2             GetSize() const;
     const std::string& GetText() const;
     const std::string& GetTitle() const;
-
-    int  GetID() const;
-    void SetTimeNs(double t) { m_time_ns = t; }
-    void SetYOffset(float y) { m_y_offset = y; }
+    void               SetVisibility(bool visible);
+    bool               IsVisible() const;
+    int                GetID() const;
+    void               SetTimeNs(double t) { m_time_ns = t; }
+    void               SetYOffset(float y) { m_y_offset = y; }
 
 private:
     double      m_time_ns;
@@ -46,6 +47,7 @@ private:
     bool        m_dragging      = false;
     ImVec2      m_drag_offset   = ImVec2(0, 0);
     ImVec2      m_resize_offset = ImVec2(0, 0);
+    bool        m_is_visible;
 
     bool m_resizing = false;
 };

@@ -1,9 +1,11 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
+#include "rocprofvis_annotation_view.h"
+#include "rocprofvis_annotations.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
-
+ 
 namespace RocProfVis
 {
 namespace View
@@ -20,7 +22,8 @@ class AnalysisView : public RocWidget
 {
 public:
     AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
-                 std::shared_ptr<TimelineSelection> selection);
+                 std::shared_ptr<TimelineSelection> timeline_selection,
+                 std::shared_ptr<AnnotationsManager> annotation_manager);
     ~AnalysisView();
     void Render() override;
     void Update() override;
@@ -34,9 +37,10 @@ private:
     std::shared_ptr<InfiniteScrollTable> m_event_table;
     std::shared_ptr<InfiniteScrollTable> m_sample_table;
 
-    std::shared_ptr<TabContainer> m_tab_container;
-    std::shared_ptr<EventsView>   m_events_view;
-    std::shared_ptr<TrackDetails> m_track_details;
+    std::shared_ptr<TabContainer>   m_tab_container;
+    std::shared_ptr<EventsView>     m_events_view;
+    std::shared_ptr<TrackDetails>   m_track_details;
+    std::shared_ptr<AnnotationView> m_annotation_view;
 
     EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;

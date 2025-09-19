@@ -198,6 +198,8 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         for(int i = static_cast<int>(m_annotations->GetStickyNotes().size()) - 1;
             i >= 0; --i)
         {
+            if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
+
             movement_drag |= m_annotations->GetStickyNotes()[i].HandleDrag(
                 window_position, m_v_min_x, m_pixels_per_ns, m_dragged_sticky_id);
             movement_resize |= m_annotations->GetStickyNotes()[i].HandleResize(
@@ -207,6 +209,8 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         // Rendering --> based on added order (old bottom new on top)
         for(size_t i = 0; i < m_annotations->GetStickyNotes().size(); ++i)
         {
+            if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
+
             m_annotations->GetStickyNotes()[i].Render(draw_list, window_position,
                                                            m_v_min_x, m_pixels_per_ns);
         }

@@ -18,10 +18,12 @@ namespace View
 AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
                            std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
-, m_event_table(std::make_shared<InfiniteScrollTable>(dp, TableType::kEventTable))
-, m_sample_table(std::make_shared<InfiniteScrollTable>(dp, TableType::kSampleTable))
+, m_event_table(std::make_shared<InfiniteScrollTable>(dp, timeline_selection,
+                                                      TableType::kEventTable))
+, m_sample_table(std::make_shared<InfiniteScrollTable>(dp, timeline_selection,
+                                                       TableType::kSampleTable))
 , m_events_view(std::make_shared<EventsView>(dp, timeline_selection))
-, m_track_details(std::make_shared<TrackDetails>(dp, topology))
+, m_track_details(std::make_shared<TrackDetails>(dp, topology, timeline_selection))
 {
     m_widget_name = GenUniqueName("Analysis View");
 
@@ -102,27 +104,28 @@ AnalysisView::Render()
 void
 AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
 {
-    if(e)
+    if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
     {
         RocEventType event_type = e->GetType();
         if(event_type == RocEventType::kTimelineTrackSelectionChangedEvent)
         {
             std::shared_ptr<TrackSelectionChangedEvent> selection_changed_event =
                 std::static_pointer_cast<TrackSelectionChangedEvent>(e);
-            if(selection_changed_event && selection_changed_event->GetSourceId() ==
-                                              m_data_provider.GetTraceFilePath())
+            if(selection_changed_event)
             {
                 if(m_event_table)
                 {
-                    m_event_table->HandleTrackSelectionChanged(selection_changed_event);
+                    m_event_table->HandleTrackSelectionChanged();
                 }
                 if(m_sample_table)
                 {
-                    m_sample_table->HandleTrackSelectionChanged(selection_changed_event);
+                    m_sample_table->HandleTrackSelectionChanged();
                 }
                 if(m_track_details)
                 {
-                    m_track_details->HandleTrackSelectionChanged(selection_changed_event);
+                    m_track_details->HandleTrackSelectionChanged(
+                        selection_changed_event->GetTrackID(),
+                        selection_changed_event->TrackSelected());
                 }
             }
         }
@@ -130,12 +133,13 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
         {
             std::shared_ptr<EventSelectionChangedEvent> selection_changed_event =
                 std::static_pointer_cast<EventSelectionChangedEvent>(e);
-            if(selection_changed_event && selection_changed_event->GetSourceId() ==
-                                              m_data_provider.GetTraceFilePath())
+            if(selection_changed_event)
             {
                 if(m_events_view)
                 {
-                    m_events_view->HandleEventSelectionChanged();
+                    m_events_view->HandleEventSelectionChanged(
+                        selection_changed_event->GetEventID(),
+                        selection_changed_event->EventSelected());
                 }
             }
         }

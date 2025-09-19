@@ -175,10 +175,6 @@ TraceView::Update()
     {
         m_analysis->Update();
     }
-    if(m_timeline_selection)
-    {
-        m_timeline_selection->Update();
-    }
 }
 
 void

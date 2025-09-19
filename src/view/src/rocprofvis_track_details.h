@@ -2,7 +2,7 @@
 
 #pragma once
 #include "widgets/rocprofvis_widget.h"
-#include <vector>
+#include <list>
 
 namespace RocProfVis
 {
@@ -29,18 +29,25 @@ public:
     virtual void Render() override;
     virtual void Update() override;
 
-    void HandleTrackSelectionChanged();
+    void HandleTrackSelectionChanged(const uint64_t track_id, const bool selected);
 
 private:
-    struct Details
+    struct DetailItem
     {
-        const std::string& track_name;
-        NodeModel&         node;
-        ProcessModel&      process;
+        const int          id;
+        const uint64_t     track_id;
+        const std::string* track_name;
+        NodeModel*         node;
+        ProcessModel*      process;
         QueueModel*        queue;
         ThreadModel*       thread;
         CounterModel*      counter;
         StreamModel*       stream;
+
+        bool operator==(const DetailItem& other) const
+        {
+            return track_id == other.track_id;
+        }
     };
 
     void RenderTable(InfoTable& table);
@@ -49,7 +56,8 @@ private:
     DataProvider&                      m_data_provider;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     bool                               m_selection_dirty;
-    std::vector<Details>               m_track_details;
+    std::list<DetailItem>              m_track_details;
+    int                                m_detail_item_id;
 };
 
 }  // namespace View

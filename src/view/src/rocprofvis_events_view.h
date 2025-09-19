@@ -2,7 +2,7 @@
 #pragma once
 #include "widgets/rocprofvis_widget.h"
 #include <string>
-#include <vector>
+#include <list>
 
 namespace RocProfVis
 {
@@ -21,15 +21,22 @@ public:
     ~EventsView();
     void Render() override;
 
-    void HandleEventSelectionChanged();
+    void HandleEventSelectionChanged(const uint64_t event_id, const bool selected);
 
 private:
     struct EventItem
     {
+        int                              id;
+        uint64_t                         event_id; // Info is deleted upon deselection so this must be cached seperately.
         std::string                      header;
         std::unique_ptr<HSplitContainer> contents;
         const event_info_t*              info;
         float                            height;
+
+        bool operator==(const EventItem& other) const
+        {
+            return event_id == other.event_id;
+        }
     };
 
     void RenderBasicData(const event_info_t* event_data);
@@ -41,10 +48,8 @@ private:
     DataProvider&                      m_data_provider;
     SettingsManager&                   m_settings;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
-    std::vector<EventItem>             m_event_items;
-    float                              m_standard_eventcard_height;
-    bool                               m_table_expanded;
-    bool                               m_table_was_expanded;
+    std::list<EventItem>               m_event_items;
+    int                                m_event_item_id;
 };
 
 }  // namespace View

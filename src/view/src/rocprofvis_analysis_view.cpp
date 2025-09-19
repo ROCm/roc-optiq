@@ -123,7 +123,9 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
                 }
                 if(m_track_details)
                 {
-                    m_track_details->HandleTrackSelectionChanged();
+                    m_track_details->HandleTrackSelectionChanged(
+                        selection_changed_event->GetTrackID(),
+                        selection_changed_event->TrackSelected());
                 }
             }
         }
@@ -135,7 +137,9 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
             {
                 if(m_events_view)
                 {
-                    m_events_view->HandleEventSelectionChanged();
+                    m_events_view->HandleEventSelectionChanged(
+                        selection_changed_event->GetEventID(),
+                        selection_changed_event->EventSelected());
                 }
             }
         }

@@ -49,7 +49,6 @@ public:
     virtual void       Render(float width);
     virtual void       Update();
     const std::string& GetName();
-    virtual void       RenderMetaDataAreaExpand();
     virtual void       UpdateMovement(float zoom, double time_offset_ns, double& min_x,
                                       double& max_x, double scale_x, float m_scroll_position);
 
@@ -64,7 +63,7 @@ public:
 
     virtual std::tuple<double, double> GetMinMax();
 
-    bool        GetResizeStatus();
+    bool        TrackHeightChanged();
     static void SetSidebarSize(int sidebar_size);
 
     virtual bool HasData();
@@ -83,28 +82,29 @@ protected:
     virtual void RenderMetaArea();
     virtual void RenderMetaAreaScale()          = 0;
     virtual void RenderMetaAreaOptions()        = 0;
+    virtual void RenderMetaAreaExpand();
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
     virtual bool ExtractPointsFromData() = 0;
 
     void FetchHelper();
 
-    float    m_zoom;
-    double   m_time_offset_ns;
-    double   m_min_x;
-    double   m_max_x;
-    double   m_scale_x;
-    uint64_t m_id;
-    float    m_track_height;
-    float    m_track_content_height;
-    float    m_track_default_height;
+    float                 m_zoom;
+    double                m_time_offset_ns;
+    double                m_min_x;
+    double                m_max_x;
+    double                m_scale_x;
+    uint64_t              m_id;
+    float                 m_track_height;
+    float                 m_track_content_height;
+    float                 m_track_default_height;
     float                 m_min_track_height;
+    bool                  m_track_height_changed;
     bool                  m_is_in_view_vertical;
     float                 m_distance_to_view_y;
     std::string           m_name;
     ImVec2                m_metadata_padding;
     float                 m_resize_grip_thickness;
-    bool                  m_is_resize;
     DataProvider&         m_data_provider;
     TrackDataRequestState m_request_state;
     SettingsManager&      m_settings;

@@ -117,6 +117,7 @@ const std::vector<ImU32> FLAME_COLORS = {
 };
 constexpr char*  SETTINGS_FILE_NAME = "settings_application.json";
 constexpr size_t RECENT_FILES_LIMIT = 5;
+constexpr float  EVENT_LEVEL_HEIGHT = 40.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -466,7 +467,7 @@ SettingsManager::InitStyling()
     style.ScrollbarRounding = 8.0f;
     style.FramePadding      = ImVec2(10, 6);
     style.ItemSpacing       = ImVec2(10, 8);
-    style.WindowPadding     = ImVec2(14, 10);
+    style.WindowPadding     = ImVec2(4, 4);
 
     m_default_style = style; // Store the our customized style
 }
@@ -555,6 +556,12 @@ SettingsManager::DeserializeUnitSettings(jt::Json& json)
         m_usersettings.unit_settings.time_format =
             static_cast<TimeFormat>(us[JSON_KEY_SETTINGS_UNITS_TIME_FORMAT].getLong());
     }
+}
+
+const float
+SettingsManager::GetEventLevelHeight() const
+{
+    return EVENT_LEVEL_HEIGHT;
 }
 
 }  // namespace View

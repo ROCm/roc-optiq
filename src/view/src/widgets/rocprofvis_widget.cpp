@@ -11,7 +11,45 @@
 #include <iostream>
 #include <sstream>
 
-using namespace RocProfVis::View;
+namespace RocProfVis
+{
+namespace View
+{
+
+void
+WithPadding(float left, float right, float top, float bottom,
+            const std::function<void()>& content)
+{
+    if(top > 0.0f) ImGui::Dummy(ImVec2(0, top));
+
+    // No border flags for invisible borders
+    if(ImGui::BeginTable("##padding_table", 3, ImGuiTableFlags_SizingFixedFit))
+    {
+        ImGui::TableSetupColumn("LeftPad", ImGuiTableColumnFlags_WidthFixed, left);
+        ImGui::TableSetupColumn("Content", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("RightPad", ImGuiTableColumnFlags_WidthFixed, right);
+
+        ImGui::TableNextRow();
+
+        // Left padding
+        ImGui::TableSetColumnIndex(0);
+        if(left > 0.0f) ImGui::Dummy(ImVec2(left, 0));
+
+        // Content
+        ImGui::TableSetColumnIndex(1);
+        ImGui::BeginGroup();
+        content();
+        ImGui::EndGroup();
+
+        // Right padding
+        ImGui::TableSetColumnIndex(2);
+        if(right > 0.0f) ImGui::Dummy(ImVec2(right, 0));
+
+        ImGui::EndTable();
+    }
+
+    if(bottom > 0.0f) ImGui::Dummy(ImVec2(0, bottom));
+}
 
 LayoutItem::LayoutItem()
 : m_width(0)
@@ -157,6 +195,7 @@ HSplitContainer::HSplitContainer(const LayoutItem& l, const LayoutItem& r)
 , m_left_min_width(100.0f)
 , m_right_min_width(100.0f)
 , m_split_ratio(0.25)  // Initial split ratio
+, m_optimal_height(0.0f)
 {
     m_widget_name = GenUniqueName("HSplitContainer");
     m_left_name   = GenUniqueName("LeftColumn");
@@ -194,6 +233,12 @@ HSplitContainer::SetSplit(float ratio)
     m_split_ratio = ratio;
 }
 
+float 
+HSplitContainer::GetOptimalHeight() const
+{
+    return m_optimal_height;
+}
+
 void
 HSplitContainer::Render()
 {
@@ -211,9 +256,8 @@ HSplitContainer::Render()
     // Start Left Column
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_left.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_left.m_window_padding);
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          SettingsManager::GetInstance().GetColor(Colors::kFillerColor));
+ 
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,m_left.m_bg_color);
     ImGui::BeginChild(m_left_name.c_str(), ImVec2(left_col_width, col_height),
                       m_left.m_child_flags, m_left.m_window_flags);
     if(m_left.m_item)
@@ -221,8 +265,9 @@ HSplitContainer::Render()
         m_left.m_item->Render();
     }
     ImGui::EndChild();
-    ImGui::PopStyleColor();
+    m_optimal_height = ImGui::GetItemRectSize().y;
 
+    ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
 
     ImGui::SameLine();
@@ -261,8 +306,7 @@ HSplitContainer::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_right.m_item_spacing);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_right.m_window_padding);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          SettingsManager::GetInstance().GetColor(Colors::kFillerColor));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_right.m_bg_color);
     ImGui::BeginChild(m_right_name.c_str(), ImVec2(-1, col_height), m_right.m_child_flags,
                       m_right.m_window_flags);
     if(m_right.m_item)
@@ -270,6 +314,8 @@ HSplitContainer::Render()
         m_right.m_item->Render();
     }
     ImGui::EndChild();
+    m_optimal_height = std::max(m_optimal_height, ImGui::GetItemRectSize().y);
+
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
 }
@@ -406,11 +452,15 @@ TabContainer::TabContainer()
 
 TabContainer::~TabContainer() { m_tabs.clear(); }
 
-void TabContainer::SetEventSourceName(const std::string& source_name) {
+void
+TabContainer::SetEventSourceName(const std::string& source_name)
+{
     m_event_source_name = source_name;
 }
 
-const std::string& TabContainer::GetEventSourceName() const {
+const std::string&
+TabContainer::GetEventSourceName() const
+{
     return m_event_source_name;
 }
 
@@ -525,7 +575,7 @@ TabContainer::Render()
             {
                 // If the active tab was closed, reset to -1
                 m_active_tab_index = -1;
-            }   
+            }
         }
     }
     ImGui::EndChild();
@@ -545,7 +595,8 @@ TabContainer::RemoveTab(const std::string& id)
                              [&id](const TabItem& tab) { return tab.m_id == id; });
     if(it != m_tabs.end())
     {
-        if(m_enable_send_close_event) {
+        if(m_enable_send_close_event)
+        {
             // notify the event manager of the tab removal
             std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
                 static_cast<int>(RocEvents::kTabClosed), it->m_id,
@@ -608,7 +659,8 @@ TabContainer::SetTabLabel(const std::string& label, const std::string& id)
     }
 }
 
-const TabItem* TabContainer::GetActiveTab() const
+const TabItem*
+TabContainer::GetActiveTab() const
 {
     if(m_active_tab_index >= 0 && m_active_tab_index < static_cast<int>(m_tabs.size()))
     {
@@ -640,4 +692,7 @@ TabContainer::GetTabs()
         tabs.push_back(t);
     }
     return tabs;
+}
+
+}
 }

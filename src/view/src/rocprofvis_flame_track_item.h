@@ -50,12 +50,12 @@ public:
     ~FlameTrackItem();
 
     bool ReleaseData() override;
-    void RenderMetaDataAreaExpand() override;
 
 protected:
     void RenderChart(float graph_width) override;
     void RenderMetaAreaScale() override;
     void RenderMetaAreaOptions() override;
+    void RenderMetaAreaExpand() override;
 
 private:
     // Local cache of selection state packed with event data for each event.

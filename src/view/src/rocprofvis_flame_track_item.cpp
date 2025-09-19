@@ -27,8 +27,8 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                double scale_x, float level_min, float level_max)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_event_color_mode(EventColorMode::kByEventName)
-, m_text_padding(ImVec2(4.0f, 2.0f))
-, m_level_height(40.0f)
+, m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
+, m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
 , m_timeline_selection(timeline_selection)
 , m_min_level(level_min)
 , m_max_level(level_max)
@@ -51,13 +51,16 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 }
 
 void
-FlameTrackItem::RenderMetaDataAreaExpand()
+FlameTrackItem::RenderMetaAreaExpand()
 {
-    ImVec2 window_size = ImGui::GetWindowSize();
-    ImVec2 button_size = ImVec2(28.0f, 28.0f);
-    ImVec2 pos = ImVec2(window_size.x - button_size.x, window_size.y - button_size.y);
-
-    ImGui::SetCursorPos(pos);
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::SetCursorPos(
+        ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
+               ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight())));
 
     int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
 
@@ -66,6 +69,7 @@ FlameTrackItem::RenderMetaDataAreaExpand()
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
             m_track_height = m_max_level * m_level_height + m_level_height + 2.0f;
+            m_track_height_changed = true;
         }
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to see all events");
     }
@@ -76,9 +80,11 @@ FlameTrackItem::RenderMetaDataAreaExpand()
         {
             m_track_height =
                 m_track_default_height;  // Default track height defined in parent class.
+            m_track_height_changed = true;
         }
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to default height");
     }
+    ImGui::PopStyleColor(3);
 }
 FlameTrackItem::~FlameTrackItem()
 {
@@ -199,6 +205,8 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         draw_list->PushClipRect(rectMin, rectMax, true);
         ImVec2 textPos =
             ImVec2(rectMin.x + m_text_padding.x, rectMin.y + m_text_padding.y);
+
+
         draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
                            chart_item.event.m_name.c_str());
         draw_list->PopClipRect();

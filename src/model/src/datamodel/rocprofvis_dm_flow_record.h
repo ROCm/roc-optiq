@@ -34,9 +34,10 @@ class FlowRecord
                    const rocprofvis_dm_event_id_t  event_id,
                    const rocprofvis_dm_track_id_t  track_id,
                    const rocprofvis_dm_index_t     category_id,
-                   const rocprofvis_dm_index_t     symbol_id)
+                   const rocprofvis_dm_index_t     symbol_id,
+                   const rocprofvis_dm_event_level_t level)
         :
-            m_timestamp(timestamp), m_event_id(event_id), m_track_id(track_id), m_category_id(category_id),m_symbol_id(symbol_id) {};
+            m_timestamp(timestamp), m_event_id(event_id), m_track_id(track_id), m_category_id(category_id),m_symbol_id(symbol_id),m_level(level) {};
         // Returns endpoint timestamp
         rocprofvis_dm_timestamp_t       Timestamp() {return m_timestamp;}
         // Returns endpoint event id (60-bit event id and 4-bit operation type)
@@ -47,6 +48,8 @@ class FlowRecord
         rocprofvis_dm_index_t           CategoryId() { return m_category_id; }
         // Returns endpoint category id
         rocprofvis_dm_index_t           SymbolId() { return m_symbol_id; }
+        // Returns endpoint level in track
+        rocprofvis_dm_event_level_t     Level() { return m_level; }
     private:
         // endpoint timestamp
         rocprofvis_dm_timestamp_t           m_timestamp;
@@ -58,5 +61,7 @@ class FlowRecord
         rocprofvis_dm_index_t               m_category_id;
         // name id
         rocprofvis_dm_index_t               m_symbol_id;
+        // endpoint level in track
+        rocprofvis_dm_event_level_t         m_level;
 };
 

@@ -34,8 +34,8 @@ rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
                                                     rocprofvis_dm_op_t operation,
                                                     rocprofvis_dm_track_id_t& track_id) {
     
-    auto it_op = find_track_map.find(
-        TranslateOperationToTrackCategory((rocprofvis_dm_event_operation_t) operation));
+    auto it_op = find_track_map.find(GetTrackSearchId(
+        TranslateOperationToTrackCategory((rocprofvis_dm_event_operation_t) operation)));
     if(it_op != find_track_map.end())
     {
         auto it_node = it_op->second.find(node);
@@ -97,7 +97,7 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
     db->UpdateQueryForTrack(it, track_params, callback_params->query);
     if(it == db->TrackPropertiesEnd())
     {
-        db->find_track_map[track_params.process.category]
+        db->find_track_map[GetTrackSearchId(track_params.process.category)]
                           [track_params.process.id[TRACK_ID_NODE]]
                           [track_params.process.id[TRACK_ID_PID_OR_AGENT]]
                           [track_params.process.id[TRACK_ID_TID_OR_QUEUE]] =

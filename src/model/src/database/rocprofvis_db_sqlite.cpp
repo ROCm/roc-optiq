@@ -241,6 +241,27 @@ SqliteDatabase::TranslateOperationToTrackCategory(rocprofvis_dm_event_operation_
     return kRocProfVisDmNotATrack;
 }
 
+const rocprofvis_dm_track_search_id_t
+SqliteDatabase::GetTrackSearchId(rocprofvis_dm_track_category_t category)
+{
+    switch (category)
+    {
+        case kRocProfVisDmPmcTrack:
+            return kRPVTrackSearchIdCounters;
+        case kRocProfVisDmRegionTrack:
+        case kRocProfVisDmRegionMainTrack:
+            return kRPVTrackSearchIdThreads;
+        case kRocProfVisDmRegionSampleTrack:
+            return kRPVTrackSearchIdThreadSamples;
+        case kRocProfVisDmKernelDispatchTrack:
+        case kRocProfVisDmMemoryAllocationTrack:
+        case kRocProfVisDmMemoryCopyTrack:
+        case kRocProfVisDmStreamTrack: 
+            return kRPVTrackSearchIdDispatches;
+    }
+    return kRPVTrackSearchIdUnknown;
+}
+
 void
 SqliteDatabase::CollectTrackServiceData(
     SqliteDatabase* db,

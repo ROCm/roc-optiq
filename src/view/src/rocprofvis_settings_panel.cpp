@@ -257,7 +257,14 @@ SettingsPanel::RenderUnitOptions()
                             2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
-    if(ImGui::Combo("##time_format", &time_format_index, "Timecode\0Nanoseconds\0\0"))
+    //Options must match TimeFormat enum
+    if(ImGui::Combo("##time_format", &time_format_index, 
+        "Timecode\0"
+        "Condensed Timecode\0"
+        "Seconds\0"
+        "Milliseconds\0"
+        "Microseconds\0"
+        "Nanoseconds\0\0"))
     {
         m_usersettings.unit_settings.time_format =
             static_cast<TimeFormat>(time_format_index);

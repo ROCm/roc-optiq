@@ -6,6 +6,7 @@
 #include "rocprofvis_core.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_panel.h"
+#include "rocprofvis_utils.h"
 #include <cstdlib>
 #include <fstream>
 

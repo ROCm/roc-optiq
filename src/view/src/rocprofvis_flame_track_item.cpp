@@ -6,6 +6,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include <cmath>
 #include <limits>
@@ -226,13 +227,16 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
 
         if(!m_has_drawn_tool_tip)
         {
+            const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
             rocprofvis_trace_event_t_id_t event_id{};
             event_id.id = chart_item.event.m_id;
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
             ImGui::BeginTooltip();
             ImGui::Text("%s", chart_item.event.m_name.c_str());
-            ImGui::Text("Start: %.2f", chart_item.event.m_start_ts - m_min_x);
-            ImGui::Text("Duration: %.2f", chart_item.event.m_duration);
+            std::string label = nanosecond_to_formatted_str(chart_item.event.m_start_ts - m_min_x, time_format);
+            ImGui::Text("Start: %s", label.c_str());
+            label = nanosecond_to_formatted_str(chart_item.event.m_duration, time_format);
+            ImGui::Text("Duration: %s", label.c_str());
             ImGui::Text("Id: %llu", chart_item.event.m_id);
             ImGui::Text("DB Id: %llu", event_id.bitfield.db_event_id);
             ImGui::EndTooltip();

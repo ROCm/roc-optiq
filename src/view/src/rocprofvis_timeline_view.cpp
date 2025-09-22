@@ -632,9 +632,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         double scrubber_position =
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
-        char text[20];
-        snprintf(text, 20, "%17.0f", scrubber_position);
-        ImVec2 label_size = ImGui::CalcTextSize(text);
+        std::string label = nanosecond_to_formatted_str(scrubber_position, m_settings.GetUserSettings().unit_settings.time_format);
+
+        // char text[20];
+        // snprintf(text, 20, "%17.0f", scrubber_position);
+        ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
         constexpr float label_padding = 4.0f;
         ImVec2 rect_pos1 = ImVec2(mouse_position.x, screen_pos.y + container_size.y -
@@ -645,7 +647,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
                                  m_settings.GetColor(Colors::kScrubberNumberColor));
-        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), text);
+        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), label.c_str());
         draw_list->AddLine(
             ImVec2(mouse_position.x, screen_pos.y),
             ImVec2(mouse_position.x, screen_pos.y + container_size.y - m_ruler_padding),
@@ -693,16 +695,7 @@ void
 TimelineView::CalculateGridInterval()
 {
     // measure the size of the label to determine the step size
-    std::string label;
-    switch(m_settings.GetUserSettings().unit_settings.time_format)
-    {
-        // use the largest time point to determine the label size
-        case TimeFormat::kTimecode:
-            label = nanosecond_to_timecode_str(m_max_x - m_min_x) + "gap";
-            break;
-        case TimeFormat::kNanoseconds:
-        default: label = nanosecond_to_str(m_max_x - m_min_x) + "gap";
-    }
+    std::string label = nanosecond_to_formatted_str(m_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format) + "gap";
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
@@ -795,15 +788,7 @@ TimelineView::RenderGridAlt()
                        cursor_position.y + content_size.y + tick_height - m_ruler_height),
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
-            switch(m_settings.GetUserSettings().unit_settings.time_format)
-            {
-                // use the largest time point to determine the step size
-                case TimeFormat::kTimecode:
-                    label = nanosecond_to_timecode_str(grid_line_ns);
-                    break;
-                case TimeFormat::kNanoseconds:
-                default: label = nanosecond_to_str(grid_line_ns);
-            }
+            label = nanosecond_to_formatted_str(grid_line_ns, m_settings.GetUserSettings().unit_settings.time_format);
 
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
             ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,

@@ -1,10 +1,10 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
-#include <iostream>
-#include <deque>
-#include <string>  
 #include <cstdint>
+#include <deque>
+#include <iostream>
+#include <string>
 
 namespace RocProfVis
 {
@@ -27,71 +27,64 @@ clamp(T value, T minVal, T maxVal)
 }
 
 template <typename T>
-class CircularBuffer {
+class CircularBuffer
+{
 public:
-    CircularBuffer(size_t capacity) : m_max_capacity(capacity) {}
+    CircularBuffer(size_t capacity)
+    : m_max_capacity(capacity)
+    {}
 
-    void Clear() {
-        m_buffer.clear();
-    }
-    
-    void Push(const T& item) {
-        if (m_buffer.size() == m_max_capacity) {
-            m_buffer.pop_front(); // Remove the oldest item
+    void Clear() { m_buffer.clear(); }
+
+    void Push(const T& item)
+    {
+        if(m_buffer.size() == m_max_capacity)
+        {
+            m_buffer.pop_front();  // Remove the oldest item
         }
         m_buffer.push_back(item);
     }
 
-    void Pop() {
-        if (m_buffer.empty()) {
-           // Do nothing if empty
-           return;
+    void Pop()
+    {
+        if(m_buffer.empty())
+        {
+            // Do nothing if empty
+            return;
         }
         m_buffer.pop_front();
     }
 
-    bool IsFull() const {
-        return m_buffer.size() == m_max_capacity;
-    }
+    bool IsFull() const { return m_buffer.size() == m_max_capacity; }
 
-    bool IsEmpty() const {
-        return m_buffer.empty();
-    }
+    bool IsEmpty() const { return m_buffer.empty(); }
 
     // Resize the buffer
-    void Resize(size_t new_capacity) {
+    void Resize(size_t new_capacity)
+    {
         m_max_capacity = new_capacity;
 
         // If the new capacity is smaller, remove the oldest items
-        while (m_buffer.size() > m_max_capacity) {
+        while(m_buffer.size() > m_max_capacity)
+        {
             m_buffer.pop_front();
         }
-    }    
-
-    const std::deque<T> & GetContainer() {
-        return m_buffer;
     }
+
+    const std::deque<T>& GetContainer() { return m_buffer; }
 
     // Methods to get iterators
-    typename std::deque<T>::iterator begin() {
-        return m_buffer.begin();
-    }
+    typename std::deque<T>::iterator begin() { return m_buffer.begin(); }
 
-    typename std::deque<T>::iterator end() {
-        return m_buffer.end();
-    }
+    typename std::deque<T>::iterator end() { return m_buffer.end(); }
 
-    typename std::deque<T>::const_iterator begin() const {
-        return m_buffer.begin();
-    }
+    typename std::deque<T>::const_iterator begin() const { return m_buffer.begin(); }
 
-    typename std::deque<T>::const_iterator end() const {
-        return m_buffer.end();
-    }
+    typename std::deque<T>::const_iterator end() const { return m_buffer.end(); }
 
 private:
     std::deque<T> m_buffer;
-    size_t m_max_capacity;
+    size_t        m_max_capacity;
 };
 
 /**
@@ -99,6 +92,7 @@ private:
  * negative), into a human-readable [+-]HH:MM:SS.nanoseconds string.
  *
  * @param time_point_ns The time point in nanoseconds, stored as a double.
+ * @param condensed If true, omits leading hours or minutes if they are zero.
  * @param round_before_cast If true, std::round will be applied to the absolute value
  *                          before casting to integer nanoseconds. Otherwise, it
  * truncates.
@@ -106,7 +100,38 @@ private:
  * values. Also handles NaN and Inf.
  */
 std::string
-nanosecond_to_timecode_str(double time_point_ns, bool round_before_cast = false);
+nanosecond_to_timecode_str(double time_point_ns, bool condensed = true,
+                           bool round_before_cast = false);
+
+/**
+ * @brief Converts a double representing nanoseconds into a string representation in
+ * microseconds.
+ *
+ * @param time_point_ns The duration in nanoseconds as a double.
+ * @return std::string The formatted duration string in microseconds.
+ */
+std::string
+nanosecond_to_us_str(double time_point_ns);
+
+/**
+ * @brief Converts a double representing nanoseconds into a string representation in
+ * milliseconds.
+ *
+ * @param time_point_ns The duration in nanoseconds as a double.
+ * @return std::string The formatted duration string in milliseconds.
+ */
+std::string
+nanosecond_to_ms_str(double time_point_ns);
+
+/**
+ * @brief Converts a double representing nanoseconds into a string representation in
+ * seconds.
+ *
+ * @param time_point_ns The duration in nanoseconds as a double.
+ * @return std::string The formatted duration string in seconds.
+ */
+std::string
+nanosecond_to_s_str(double time_point_ns);
 
 /**
  * @brief Converts a double representing nanoseconds into a string representation.
@@ -116,6 +141,27 @@ nanosecond_to_timecode_str(double time_point_ns, bool round_before_cast = false)
  */
 std::string
 nanosecond_to_str(double time_point_ns);
+
+enum class TimeFormat
+{
+    kTimecode,
+    kTimecodeCondensed,
+    kSeconds,
+    kMilliseconds,
+    kMicroseconds,
+    kNanoseconds
+};
+
+/**
+ * @brief Converts a double representing nanoseconds into a string representation
+ * based on the specified TimeFormat.
+ *
+ * @param time_point_ns The duration in nanoseconds as a double.
+ * @param format The desired TimeFormat for the output string.
+ * @return std::string The formatted duration string.
+ */
+std::string
+nanosecond_to_formatted_str(double time_point_ns, TimeFormat format);
 
 /**
  * @brief Calculates a "nice" grid interval for a timeline.
@@ -154,5 +200,5 @@ constexpr uint64_t minute_in_s  = 60;
 constexpr uint64_t minute_in_ns = minute_in_s * ns_per_s;
 }  // namespace TimeConstants
 
-} // namespace View
-} // namespace RocProfVis
+}  // namespace View
+}  // namespace RocProfVis

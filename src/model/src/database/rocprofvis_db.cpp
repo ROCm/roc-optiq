@@ -267,7 +267,7 @@ const char* Database::ProcessNameSuffixFor(rocprofvis_dm_track_category_t catego
             return "Sample PID:";
         case kRocProfVisDmRegionTrack:
         case kRocProfVisDmRegionMainTrack:
-            return "Main thread PID:";
+            return "Thread PID:";
         case kRocProfVisDmStreamTrack: 
             return "STREAM:";
     }

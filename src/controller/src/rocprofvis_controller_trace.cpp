@@ -403,10 +403,10 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                 rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Trace::ProgressCallback, this);
                 if(nullptr != object2wait)
                 {
-                    std::map<uint64_t, Track*> queue_to_track;
-                    std::map<uint64_t, Track*> stream_to_track;
-                    std::map<uint64_t, Track*> thread_to_track;
-                    std::map<uint64_t, Track*> counter_to_track;
+                    std::map<uint64_t, std::vector<Track*>> queue_to_track;
+                    std::map<uint64_t, std::vector<Track*>> stream_to_track;
+                    std::map<uint64_t, std::vector<Track*>> thread_to_track;
+                    std::map<uint64_t, std::vector<Track*>> counter_to_track;
                     
                     if(kRocProfVisDmResultSuccess ==
                        rocprofvis_db_read_metadata_async(db, object2wait))
@@ -557,21 +557,21 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 char*    end = nullptr;
                                                 uint64_t val = std::strtoull(
                                                     value.c_str(), &end, 10);
-                                                queue_to_track[val] = track;
+                                                queue_to_track[val].push_back(track);
                                             }
                                             else if(category == "Stream" && name == "id")
                                             {
                                                 char*    end = nullptr;
                                                 uint64_t val = std::strtoull(
                                                     value.c_str(), &end, 10);
-                                                stream_to_track[val] = track;
+                                                stream_to_track[val].push_back(track);
                                             }
                                             else if(category == "Thread" && name == "id")
                                             {
                                                 char*    end = nullptr;
                                                 uint64_t val = std::strtoull(
                                                     value.c_str(), &end, 10);
-                                                thread_to_track[val] = track;
+                                                thread_to_track[val].push_back(track);
                                             }
                                             else if(category == "PMC")
                                             {
@@ -580,7 +580,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                     char*    end = nullptr;
                                                     uint64_t val = std::strtoull(
                                                         value.c_str(), &end, 10);
-                                                    counter_to_track[val] = track;
+                                                    counter_to_track[val].push_back(track);
                                                 }
                                             }
 
@@ -1760,13 +1760,15 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                    kRPVControllerThreadId)
                                                                 {
                                                                     auto it = thread_to_track.find(val);
-                                                                    if(it != thread_to_track.end() &&it->second != nullptr)
+                                                                    if(it != thread_to_track.end() &&it->second.size() > 0)
                                                                     {
-                                                                        Track* t = it->second;
-                                                                        t->SetObject(kRPVControllerTrackThread,
-                                                                            0, (rocprofvis_handle_t*)thread);
-                                                                        thread->SetObject(kRPVControllerThreadTrack,
-                                                                            0, (rocprofvis_handle_t*)t);
+                                                                        for(auto t : it->second)
+                                                                        {
+                                                                            t->SetObject(kRPVControllerTrackThread,
+                                                                                0, (rocprofvis_handle_t*)thread);
+                                                                            thread->SetObject(kRPVControllerThreadTrack,
+                                                                                0, (rocprofvis_handle_t*)t);
+                                                                        }
                                                                     }
                                                                     else
                                                                     {
@@ -2071,13 +2073,15 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                     }
 
                                                                     auto it_q = queue_to_track.find(val);
-                                                                    if(it_q != queue_to_track.end() && it_q->second != nullptr)
+                                                                    if(it_q != queue_to_track.end() && it_q->second.size() > 0)
                                                                     {
-                                                                        Track* t = it_q->second;
-                                                                        t->SetObject(kRPVControllerTrackQueue,
-                                                                            0, (rocprofvis_handle_t*)queue);
-                                                                        queue->SetObject(kRPVControllerQueueTrack,
-                                                                            0, (rocprofvis_handle_t*)t);
+                                                                        for (auto t : it_q->second)
+                                                                        {
+                                                                            t->SetObject(kRPVControllerTrackQueue,
+                                                                                0, (rocprofvis_handle_t*)queue);
+                                                                            queue->SetObject(kRPVControllerQueueTrack,
+                                                                                0, (rocprofvis_handle_t*)t);
+                                                                        }
                                                                     }
                                                                     else
                                                                     {
@@ -2334,13 +2338,15 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                                 q);
                                                                     }
                                                                     auto it_q = stream_to_track.find(val);
-                                                                    if(it_q != stream_to_track.end() && it_q->second != nullptr)
+                                                                    if(it_q != stream_to_track.end() && it_q->second.size() > 0)
                                                                     {
-                                                                        Track* t = it_q->second;
-                                                                        t->SetObject(kRPVControllerTrackStream,
-                                                                            0, (rocprofvis_handle_t*)stream);
-                                                                        stream->SetObject(kRPVControllerStreamTrack,
-                                                                            0, (rocprofvis_handle_t*)t);
+                                                                        for (auto t : it_q->second)
+                                                                        {
+                                                                            t->SetObject(kRPVControllerTrackStream,
+                                                                                0, (rocprofvis_handle_t*)stream);
+                                                                            stream->SetObject(kRPVControllerStreamTrack,
+                                                                                0, (rocprofvis_handle_t*)t);
+                                                                        }
                                                                     }
                                                                     else
                                                                     {
@@ -2588,14 +2594,16 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                    kRPVControllerCounterId)
                                                                 {
                                                                     auto it = counter_to_track.find(val);
-                                                                    if(it != counter_to_track.end() && it->second)
+                                                                    if(it != counter_to_track.end() && it->second.size() > 0)
                                                                     {
-                                                                        Track* t = it->second;
-                                                                        counter->SetObject(kRPVControllerCounterTrack,
-                                                                            0, (rocprofvis_handle_t*)t);
+                                                                        for (auto t : it->second)
+                                                                        {
+                                                                            counter->SetObject(kRPVControllerCounterTrack,
+                                                                                0, (rocprofvis_handle_t*)t);
 
-                                                                        t->SetObject(kRPVControllerTrackCounter,
-                                                                            0, (rocprofvis_handle_t*)counter);
+                                                                            t->SetObject(kRPVControllerTrackCounter,
+                                                                                0, (rocprofvis_handle_t*)counter);
+                                                                        }
                                                                     } else {
                                                                         spdlog::warn("Counter ID {} not found in counter_to_track map", val);
                                                                     }

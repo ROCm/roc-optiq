@@ -170,7 +170,7 @@ rocprofvis_dm_charptr_t  Track::CategoryString(){
     {
         case kRocProfVisDmPmcTrack: return "Counter";
         case kRocProfVisDmRegionTrack: return "CPU Thread";
-        case kRocProfVisDmRegionMainTrack: return "Main Thread";
+        case kRocProfVisDmRegionMainTrack: return "Thread";
         case kRocProfVisDmRegionSampleTrack: return "Sample Thread";
         case kRocProfVisDmKernelDispatchTrack: return "GPU Queue";
         case kRocProfVisDmMemoryAllocationTrack: return "Memory allocation";

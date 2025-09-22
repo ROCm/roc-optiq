@@ -263,8 +263,11 @@ const char* Database::ProcessNameSuffixFor(rocprofvis_dm_track_category_t catego
         case kRocProfVisDmMemoryAllocationTrack:
         case kRocProfVisDmMemoryCopyTrack:
             return "GPU:";
+        case kRocProfVisDmRegionSampleTrack: 
+            return "Sample PID:";
         case kRocProfVisDmRegionTrack:
-            return "PID:";
+        case kRocProfVisDmRegionMainTrack:
+            return "Main thread PID:";
         case kRocProfVisDmStreamTrack: 
             return "STREAM:";
     }
@@ -279,6 +282,8 @@ const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t cat
         case kRocProfVisDmMemoryCopyTrack:
             return "Queue:";
         case kRocProfVisDmRegionTrack:
+        case kRocProfVisDmRegionMainTrack:
+        case kRocProfVisDmRegionSampleTrack:
             return "TID:";
     }
     return "";

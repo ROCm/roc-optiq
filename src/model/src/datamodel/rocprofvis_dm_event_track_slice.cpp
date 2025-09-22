@@ -93,6 +93,9 @@ rocprofvis_dm_result_t EventTrackSlice::GetRecordOperationStringAt(const rocprof
         case kRocProfVisDmOperationLaunch: 
             op = "Launch";
             break;
+        case kRocProfVisDmOperationLaunchSample: 
+            op = "LaunchSample";
+            break;
         case kRocProfVisDmOperationDispatch: 
             op = "Dispatch";
             break;

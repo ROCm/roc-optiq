@@ -439,6 +439,8 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                         dm_track_handle, kRPVDMTrackCategoryEnumUInt64,
                                         0);
                                 if(dm_track_type == kRocProfVisDmRegionTrack ||
+                                   dm_track_type == kRocProfVisDmRegionMainTrack ||
+                                   dm_track_type == kRocProfVisDmRegionSampleTrack ||
                                    dm_track_type == kRocProfVisDmKernelDispatchTrack ||
                                    dm_track_type == kRocProfVisDmMemoryAllocationTrack ||
                                    dm_track_type == kRocProfVisDmMemoryCopyTrack ||

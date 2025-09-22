@@ -152,6 +152,10 @@ private:
     {
         return &s_null_data_exceptions_skip;
     }
+    const rocprofvis_dm_track_category_t GetRegionTrackCategory() override 
+    {
+        return kRocProfVisDmRegionTrack;
+    }
     private:
         rocprofvis_dm_result_t CreateIndexes();
 

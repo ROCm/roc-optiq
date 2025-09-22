@@ -31,6 +31,11 @@ namespace DataModel
         return BuildQuery("SELECT DISTINCT", params.NUM_PARAMS, params.parameters,
                           params.from, ";");
     }
+    std::string Builder::Select(rocprofvis_db_sqlite_region_track_query_format params)
+    {
+        return BuildQuery("SELECT DISTINCT", params.NUM_PARAMS, params.parameters,
+                          params.from, params.where, ";");
+    }
     std::string Builder::Select(rocprofvis_db_sqlite_level_query_format params)
     {
         return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,

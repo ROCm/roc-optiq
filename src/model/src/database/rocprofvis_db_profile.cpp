@@ -294,32 +294,40 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
     int               size = TrackPropertiesAt(index)->query[type].size();
     ROCPROFVIS_ASSERT_MSG_RETURN(size, "Error! SQL query cannot be empty!", kRocProfVisDmResultUnknownError);
     ss << query << " FROM (";
-    for (int i=0; i < size; i++){
-        if (i > 0) ss << " UNION ALL ";
+    for(int i = 0; i < size; i++)
+    {
+        if(i > 0) ss << " UNION ALL ";
         ss << TrackPropertiesAt(index)->query[type][i];
-    } 
-    ss << ") where ";
-    int count = 0;
-    for (int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++) {
-        if(TrackPropertiesAt(index)->process.tag[i] == "const")
+
+        ss << " where ";
+        if(TrackPropertiesAt(index)->process.category == kRocProfVisDmRegionMainTrack)
         {
-            continue;
+            ss << "SAMPLE.id IS NULL and ";
         }
-        if(count > 0)
+        int count = 0;
+        for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++)
         {
-            ss << " and ";
+            if(TrackPropertiesAt(index)->process.tag[i] == "const")
+            {
+                continue;
+            }
+            if(count > 0)
+            {
+                ss << " and ";
+            }
+            ss << TrackPropertiesAt(index)->process.tag[i] << "==";
+            if(TrackPropertiesAt(index)->process.is_numeric[i])
+            {
+                ss << TrackPropertiesAt(index)->process.id[i];
+            }
+            else
+            {
+                ss << "'" << TrackPropertiesAt(index)->process.name[i] << "'";
+            }
+            count++;
         }
-        ss << TrackPropertiesAt(index)->process.tag[i] << "=="; 
-        if(TrackPropertiesAt(index)->process.is_numeric[i])
-        {
-            ss << TrackPropertiesAt(index)->process.id[i];
-        }
-        else
-        {
-            ss << "'" << TrackPropertiesAt(index)->process.name[i] << "'";
-        }
-        count++;
     }
+    ss << ")";
     query = ss.str();
     return kRocProfVisDmResultSuccess;
 }
@@ -413,6 +421,10 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
             }
             tuple += ")";
             q += " where ";
+            if (props->process.category == kRocProfVisDmRegionMainTrack)
+            {
+                q += "SAMPLE.id IS NULL and ";
+            }
             q += tuple;
             q += " IN (";
             tuple = "(";
@@ -484,6 +496,10 @@ ProfileDatabase::BuildTableQuery(
             }
             tuple += ")";
             q += " where ";
+            if(props->process.category == kRocProfVisDmRegionMainTrack)
+            {
+                q += "SAMPLE.id IS NULL and ";
+            }
             q += tuple;
             q += " IN (";
             tuple = "(";

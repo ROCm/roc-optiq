@@ -248,6 +248,7 @@ class SqliteDatabase : public Database
         static void FindTrackIDs(
             SqliteDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
             int& trackId, int & streamTrackId);
+        rocprofvis_dm_track_category_t TranslateOperationToTrackCategory(rocprofvis_dm_event_operation_t op);
     
     protected:
         char* Sqlite3ColumnText(void* func, sqlite3_stmt* stmt, char** azColName, int index);
@@ -260,6 +261,7 @@ class SqliteDatabase : public Database
         virtual const rocprofvis_null_data_exceptions_int* GetNullDataExceptionsInt() = 0;
         virtual const rocprofvis_null_data_exceptions_string* GetNullDataExceptionsString() = 0;
         virtual const rocprofvis_null_data_exceptions_skip* GetNullDataExceptionsSkip() = 0;
+        virtual const rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
     private:     
 
         std::set<sqlite3*> m_available_connections;

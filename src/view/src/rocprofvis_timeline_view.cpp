@@ -173,9 +173,10 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
             if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
 
             movement_drag |= m_annotations->GetStickyNotes()[i].HandleDrag(
-                window_position, m_v_min_x, m_v_max_x, m_pixels_per_ns, m_dragged_sticky_id);
+                window_position, m_v_min_x, m_v_max_x, m_pixels_per_ns,
+                m_dragged_sticky_id);
             movement_resize |= m_annotations->GetStickyNotes()[i].HandleResize(
-                window_position, m_v_min_x,m_v_max_x, m_pixels_per_ns);
+                window_position, m_v_min_x, m_v_max_x, m_pixels_per_ns);
         }
 
         // Rendering --> based on added order (old bottom new on top)
@@ -188,7 +189,7 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         }
     }
     m_stop_user_interaction |= movement_drag || movement_resize;
-     
+
     RenderTimelineViewOptionsMenu(window_position);
     m_annotations->ShowStickyNotePopup();
     m_annotations->ShowStickyNoteEditPopup();
@@ -197,7 +198,7 @@ ImVec2
 TimelineView::GetGraphSize()
 {
     return m_graph_size;
-}   
+}
 void
 TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 {
@@ -225,7 +226,8 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
             double time_ns =
                 m_v_min_x + (x_in_chart / m_graph_size.x) * (m_v_max_x - m_v_min_x);
             float y_offset = rel_mouse_pos.y;
-            m_annotations->OpenStickyNotePopup(time_ns, y_offset, m_v_min_x, m_v_max_x, m_graph_size);
+            m_annotations->OpenStickyNotePopup(time_ns, y_offset, m_v_min_x, m_v_max_x,
+                                               m_graph_size);
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -256,9 +258,10 @@ TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
         m_view_time_offset_ns = time_pos_ns;
     }
 }
-float 
-TimelineView::GetScrollPosition() {
-    return m_scroll_position_y;     
+float
+TimelineView::GetScrollPosition()
+{
+    return m_scroll_position_y;
 }
 
 void
@@ -268,10 +271,7 @@ TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position)
     Use this funtion for all future navigation requests that do not need to scroll to a
     particular track. Ex) Annotation and Bookmarks.
     */
-    std::cout << "Moving to position " << start_ns << ", " << end_ns << ", " << y_position
-              << std::endl;
-    std::cout << "Current view " << m_v_min_x << ", " << m_v_max_x << ", "
-              << m_scroll_position_y << std::endl;
+
     SetViewableRangeNS(start_ns, end_ns);
     m_scroll_position_y = clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f,
                                 0.0f, m_content_max_y_scroll);
@@ -494,7 +494,6 @@ TimelineView::Render()
     m_last_zoom       = m_zoom;
     m_last_graph_size = m_graph_size;
 }
- 
 
 void
 TimelineView::RenderSplitter(ImVec2 screen_pos)

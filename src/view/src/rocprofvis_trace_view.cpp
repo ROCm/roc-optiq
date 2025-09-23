@@ -367,9 +367,6 @@ TraceView::HandleHotKeys()
                     {
                         m_timeline_view->MoveToPosition(it->second.v_min_x,
                                                         it->second.v_max_x, it->second.y);
-                        std::cout << "Moving to bookmark " << it->second.v_min_x << ", "
-                                  << it->second.v_max_x << ", " << it->second.y
-                                  << std::endl;
 
                         NotificationManager::GetInstance().Show(
                             "Bookmark " + std::to_string(i) + " restored.",

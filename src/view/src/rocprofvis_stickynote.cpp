@@ -168,8 +168,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     {
         EventManager::GetInstance()->AddEvent(
             std::make_shared<StickyNoteEvent>(m_id, m_project_id));
-        std::cout << "Edit Sticky Note ID: " << m_id << " Title: " << m_title
-                  << std::endl;
+         
     }
 
     // Draw edit button graphics over the button

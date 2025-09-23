@@ -28,7 +28,6 @@ jobs:
           submodules: true
       
       - name: Install Vulkan SDK
-        shell: powershell
         run: |
           curl -O https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe?Human=true
           ./vulkan_sdk.exe /S

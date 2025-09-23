@@ -28,9 +28,11 @@ class TimelineView;
 
 typedef struct ViewCoords
 {
-    double time_offset_ns;
-    double y_scroll_position;
-    float  zoom;
+    double y;
+    float  z;
+    double v_min_x;
+    double v_max_x;
+
 } ViewCoords;
 
 class TimelineViewProjectSettings : public ProjectSetting
@@ -67,19 +69,19 @@ public:
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             SetViewableRangeNS(double start_ns, double end_ns);
-    void                             RenderGraphPoints();
-    void                             RenderGridAlt();
-    void                             RenderGrid();
-    void                             RenderScrubber(ImVec2 screen_pos);
-    void                             RenderSplitter(ImVec2 screen_pos);
-    void                             RenderGraphView();
-    void                             HandleTopSurfaceTouch();
-    void                             CalibratePosition();
-    void                             HandleNewTrackData(std::shared_ptr<RocEvent> e);
-    void                             CalculateGridInterval();
+    void           MoveToPosition(double start_ns, double end_ns, double y_position);
+    void           RenderGraphPoints();
+    void           RenderGridAlt();
+    void           RenderGrid();
+    void           RenderScrubber(ImVec2 screen_pos);
+    void           RenderSplitter(ImVec2 screen_pos);
+    void           RenderGraphView();
+    void           HandleTopSurfaceTouch();
+    void           CalibratePosition();
+    void           HandleNewTrackData(std::shared_ptr<RocEvent> e);
+    void           CalculateGridInterval();
     void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords     GetViewCoords() const;
-    void           SetViewCoords(const ViewCoords& coords);
     void           ShowTimelineContextMenu(const ImVec2& window_position);
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();

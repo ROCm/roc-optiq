@@ -35,6 +35,7 @@ TraceView::TraceView()
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
+, m_current_bookmark(-1)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -350,11 +351,11 @@ TraceView::HandleHotKeys()
                     m_bookmarks[i] = coords;
                     spdlog::info("Bookmark {} saved at time offset: {}, scroll position: "
                                  "{}, zoom: {}",
-                                 i, coords.time_offset_ns, coords.y_scroll_position,
-                                 coords.zoom);
+                                 i, coords.v_min_x, coords.y, coords.z);
                     NotificationManager::GetInstance().Show(
                         "Bookmark " + std::to_string(i) + " saved.",
                         NotificationLevel::Info);
+                    m_current_bookmark = i;
                 }
             }
             else
@@ -364,7 +365,12 @@ TraceView::HandleHotKeys()
                 {
                     if(m_timeline_view)
                     {
-                        m_timeline_view->SetViewCoords(it->second);
+                        m_timeline_view->MoveToPosition(it->second.v_min_x,
+                                                        it->second.v_max_x, it->second.y);
+                        std::cout << "Moving to bookmark " << it->second.v_min_x << ", "
+                                  << it->second.v_max_x << ", " << it->second.y
+                                  << std::endl;
+
                         NotificationManager::GetInstance().Show(
                             "Bookmark " + std::to_string(i) + " restored.",
                             NotificationLevel::Info);
@@ -495,9 +501,13 @@ TraceView::RenderToolbar()
     // Toolbar Controls
     RenderFlowControls();
     ImGui::SameLine();
-    ImGui::Dummy(ImVec2(10, 0));
+    ImGui::Dummy(ImVec2(15, 0));
     ImGui::SameLine();
     RenderAnnotationControls();
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(15, 0));
+    ImGui::SameLine();
+    RenderBookmarkControls();
     // pop content style
     ImGui::PopStyleVar(2);
     ImGui::EndChild();
@@ -509,6 +519,10 @@ void
 TraceView::RenderAnnotationControls()
 {
     if(m_annotations == nullptr) return;
+
+    ImGui::TextUnformatted("Annotations");
+    ImGui::SameLine();
+
     ImGuiStyle& style = ImGui::GetStyle();
     ImFont*     icon_font =
         SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
@@ -584,14 +598,158 @@ TraceView::RenderAnnotationControls()
 
     ImGui::EndGroup();
     ImGui::PopFont();
+}
 
+void
+TraceView::RenderBookmarkControls()
+{
+    if(m_current_bookmark == -1)
+    {
+        // This is used on initialization to set the bookmark to the first one if it
+        // exists
+        if(m_bookmarks.size() > 0)
+        {
+            m_current_bookmark = 0;
+        }
+    }
+
+    ImGui::BeginGroup();
+
+    ImGui::PushID("bookmark_toggle_dropdown");
+
+    static int selected_slot = -1;
+    if(ImGui::BeginCombo("", "Manage Bookmarks"))
+    {
+        for(int i = 0; i <= 9; ++i)
+        {
+            bool        used  = m_bookmarks.count(i) > 0;
+            std::string label = std::to_string(i);
+            if(used)
+                label += " (remove)";
+            else
+                label += " (add)";
+
+            bool is_selected = (selected_slot == i);
+            ImGui::PushID(i);
+
+            ImGui::PushStyleColor(ImGuiCol_Text, used ? ImVec4(0.8f, 0.5f, 0.5f, 1.0f)
+                                                      : ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+            if(ImGui::Selectable(label.c_str(), is_selected))
+            {
+                if(used)
+                {
+                    // Remove bookmark
+                    m_bookmarks.erase(i);
+                    NotificationManager::GetInstance().Show(
+                        "Bookmark " + std::to_string(i) + " removed.",
+                        NotificationLevel::Info);
+                    if(m_current_bookmark == i)
+                    {
+                        // Move to next/previous or revert to empty state
+                        if(FindNextBookmark(i) != -1)
+                            m_current_bookmark = FindNextBookmark(i);
+                        else if(FindPreviousBookmark(i) != -1)
+                            m_current_bookmark = FindPreviousBookmark(i);
+                        else
+                            m_current_bookmark = -1;
+                    }
+                }
+                else if(m_timeline_view)
+                {
+                    // Add bookmark
+                    m_bookmarks[i]     = m_timeline_view->GetViewCoords();
+                    m_current_bookmark = i;
+                    NotificationManager::GetInstance().Show(
+                        "Bookmark " + std::to_string(i) + " created.",
+                        NotificationLevel::Info);
+                }
+                selected_slot = -1;
+            }
+
+            ImGui::PopStyleColor();
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::PopID();
     ImGui::SameLine();
-    ImGui::TextUnformatted("Annotations");
+    if(m_current_bookmark != -1)
+    {
+        // Previous Bookmark
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
+            FontType::kDefault);
+        ImGui::PushFont(icon_font);
+        ImGui::PushID("bookmark_prev");
+        if(ImGui::Button(ICON_LEFT_ARROW))
+        {
+            int bookmark = FindPreviousBookmark(m_current_bookmark);
+            if(bookmark != -1)
+            {
+                m_current_bookmark = bookmark;
+                auto it            = m_bookmarks.find(m_current_bookmark);
+                if(it != m_bookmarks.end() && m_timeline_view)
+                    m_timeline_view->MoveToPosition(it->second.v_min_x,
+                                                    it->second.v_max_x, it->second.y);
+            }
+        }
+        ImGui::PopFont();
+        ImGui::PopID();
+        ImGui::SameLine();
+        ImGui::Text(std::to_string(m_current_bookmark).c_str());
+        ImGui::SameLine();
+
+        // Next Bookmark
+        ImGui::PushID("bookmark_next");
+
+        ImGui::PushFont(icon_font);
+        if(ImGui::Button(ICON_RIGHT_ARROW))
+        {
+            int bookmark = FindNextBookmark(m_current_bookmark);
+            if(bookmark != -1)
+            {
+                m_current_bookmark = bookmark;
+                auto it            = m_bookmarks.find(m_current_bookmark);
+                if(it != m_bookmarks.end() && m_timeline_view)
+                    m_timeline_view->MoveToPosition(it->second.v_min_x,
+                                                    it->second.v_max_x, it->second.y);
+            }
+        }
+        ImGui::PopFont();
+        ImGui::PopID();
+        ImGui::SameLine();
+    }
+
+    ImGui::EndGroup();
+}
+int
+TraceView::FindNextBookmark(int current_index)
+{
+    for(int i = current_index + 1; i <= 9; ++i)
+    {
+        if(m_bookmarks.count(i) > 0) return i;
+    }
+    NotificationManager::GetInstance().Show("You do not have any more bookmarks");
+    return -1;
+}
+
+int
+TraceView::FindPreviousBookmark(int current_index)
+{
+    for(int i = current_index - 1; i >= 0; --i)
+    {
+        if(m_bookmarks.count(i) > 0) return i;
+    }
+    NotificationManager::GetInstance().Show("You do not have any more bookmarks");
+    return -1;
 }
 
 void
 TraceView::RenderFlowControls()
 {
+    ImGui::TextUnformatted("Flow");
+    ImGui::SameLine();
+
     ImGuiStyle& style = ImGui::GetStyle();
 
     static const char* flow_labels[]    = { ICON_EYE, ICON_EYE_THIN, ICON_EYE_SLASH };
@@ -641,9 +799,6 @@ TraceView::RenderFlowControls()
     ImGui::EndGroup();
     ImGui::PopFont();
 
-    ImGui::SameLine();
-    ImGui::TextUnformatted("Flow");
-
     // Update the mode if changed
     if(mode != current_mode) arrow_layer.SetFlowDisplayMode(mode);
 }
@@ -664,10 +819,11 @@ SystemTraceProjectSettings::ToJson()
     {
         jt::Json& bookmark =
             m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK][i];
-        bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY] = it.first;
-        bookmark[JSON_KEY_TIMELINE_BOOKMARK_X]   = it.second.time_offset_ns;
-        bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y]   = it.second.y_scroll_position;
-        bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z]   = it.second.zoom;
+        bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY]     = it.first;
+        bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X] = it.second.v_min_x;
+        bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X] = it.second.v_max_x;
+        bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y]       = it.second.y;
+        bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z]       = it.second.z;
         i++;
     }
 }
@@ -684,7 +840,8 @@ SystemTraceProjectSettings::Valid() const
                 .getArray())
         {
             if(bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].isLong() &&
-               bookmark[JSON_KEY_TIMELINE_BOOKMARK_X].isNumber() &&
+               bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X].isNumber() &&
+               bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X].isNumber() &&
                bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y].isNumber() &&
                bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z].isNumber())
             {
@@ -711,9 +868,10 @@ SystemTraceProjectSettings::Bookmarks()
         m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK].getArray())
     {
         bookmarks[bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].getNumber()] = ViewCoords{
-            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_X].getNumber()),
             static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y].getNumber()),
-            static_cast<float>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z].getNumber())
+            static_cast<float>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z].getNumber()),
+            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X].getNumber()),
+            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X].getNumber())
         };
     }
     return bookmarks;

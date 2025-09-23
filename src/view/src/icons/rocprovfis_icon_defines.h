@@ -4,18 +4,20 @@ namespace RocProfVis
 {
 namespace View
 {
-	constexpr ImWchar icon_ranges[] = { 
-		0xF128, 0xF128,
-		0xF133, 0xF133, 
-		0xF13D,0xF13D, 
-		0xF267, 0xF267, 
-		0xF306, 0xF306,
-		0xF35C, 0xF35C,
-		0xF3A8, 0xF3A8, 
-		0xF424, 0xF424, 
-		0xF218, 0xF218, 
-		0
-	};
+constexpr ImWchar icon_ranges[] = { 
+    0xF128, 0xF128,
+    0xF133, 0xF133, 
+    0xF13D, 0xF13D, 
+    0xF267, 0xF267, 
+    0xF306, 0xF306,
+    0xF35C, 0xF35C,
+    0xF3A8, 0xF3A8, 
+    0xF424, 0xF424, 
+    0xF218, 0xF218, 
+    0xF2CA, 0xF2CA,
+    0xF30F, 0xF30F,
+    0
+};
 
 	constexpr char* ICON_X_CIRCLED     = u8"\uF128";
 	constexpr char* ICON_EYE           = u8"\uF133";
@@ -26,6 +28,10 @@ namespace View
 	constexpr char* ICON_ARROWS_CYCLE  = u8"\uF3A8";
 	constexpr char* ICON_EYE_THIN      = u8"\uF424";
 	constexpr char* ICON_ADD_NOTE      = u8"\uF218";
+    constexpr char* ICON_LEFT_ARROW    = u8"\uF2CA";
+    constexpr char* ICON_RIGHT_ARROW    = u8"\uF30F";
+
+
 
 }  // namespace View
 }  // namespace RocProfVis

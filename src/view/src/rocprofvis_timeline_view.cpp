@@ -280,6 +280,18 @@ TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
 }
 
 void
+TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position)
+{
+    /*
+    Use this funtion for all future navigation requests that do not need to scroll to a particular track. Ex) Annotation and Bookmarks.
+    */
+    SetViewableRangeNS(start_ns, end_ns);
+    m_scroll_position_y = static_cast<float>(y_position);
+    ImGui::SetScrollY(m_scroll_position_y);
+}
+
+
+void
 TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
 {
     // Configure the timeline view so that the visible horizontal range is
@@ -1597,17 +1609,10 @@ TimelineView::HandleTopSurfaceTouch()
 ViewCoords
 TimelineView::GetViewCoords() const
 {
-    return { m_view_time_offset_ns, m_scroll_position_y, m_zoom };
+    return {m_scroll_position_y, m_zoom, m_v_min_x, m_v_max_x };
 }
 
-void
-TimelineView::SetViewCoords(const ViewCoords& coords)
-{
-    m_view_time_offset_ns = coords.time_offset_ns;
-    m_scroll_position_y   = coords.y_scroll_position;
-    m_zoom                = coords.zoom;
-}
-
+ 
 TimelineArrow&
 TimelineView::GetArrowLayer()
 {

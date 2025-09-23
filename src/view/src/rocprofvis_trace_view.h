@@ -54,8 +54,8 @@ public:
     bool HasTrimActiveTrimSelection() const;
     bool IsTrimSaveAllowed() const;
 
-    bool SaveSelection(const std::string& file_path);
-
+    bool                               SaveSelection(const std::string& file_path);
+    void                               RenderBookmarkControls();
     std::shared_ptr<TimelineSelection> GetTimelineSelection() const;
     std::shared_ptr<RocWidget>         GetToolbar() override;
     void                               RenderEditMenuOptions() override;
@@ -64,7 +64,10 @@ private:
     void HandleHotKeys();
     void RenderToolbar();
     void RenderFlowControls();
-    void RenderAnnotationControls();
+     void RenderAnnotationControls();
+    int FindNextBookmark(int current_index );
+     int FindPreviousBookmark(int current_index);
+
 
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<SideBar>           m_sidebar;
@@ -85,8 +88,8 @@ private:
         std::string message;
     } popup_info_t;
 
-    popup_info_t m_popup_info;
-
+    popup_info_t                        m_popup_info;
+    int                                 m_current_bookmark;
     std::unordered_map<int, ViewCoords> m_bookmarks;
 
     std::shared_ptr<AnnotationsManager> m_annotations;
@@ -97,7 +100,6 @@ private:
     std::string m_save_notification_id;
 
     std::unique_ptr<SystemTraceProjectSettings> m_project_settings;
-     
 };
 
 }  // namespace View

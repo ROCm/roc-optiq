@@ -31,7 +31,6 @@ jobs:
         run: |
           curl -O https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe?Human=true
           ./vulkan_sdk.exe /S
-          rm -f vulkan_sdk.exe
           
       - name: Build, Make, and Verify Installation
         run: |

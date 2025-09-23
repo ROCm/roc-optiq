@@ -69,9 +69,9 @@ private:
     ImVec2                            m_visible_center;
     std::string                       m_project_id;
     AnnotationsManagerProjectSettings m_project_settings;
-    double                            m_v_min_x;  // Current view minimum x (time)    
-    double                            m_v_max_x;  // Current view maximum x (time)    
-    int m_dragged_sticky_id;  // ID of the sticky note currently being dragged
+    double                            m_v_min_x;  
+    double                            m_v_max_x;  
+    int m_dragged_sticky_id; 
 };
 
 }  // namespace View

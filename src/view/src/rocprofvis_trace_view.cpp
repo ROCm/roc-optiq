@@ -657,7 +657,7 @@ TraceView::RenderBookmarkControls()
                             m_timeline_view->MoveToPosition(
                                 it->second.v_min_x, it->second.v_max_x, it->second.y);
                     }
-                    else if(m_timeline_view)
+                    else
                     {
                         m_bookmarks[i]     = m_timeline_view->GetViewCoords();
                         m_current_bookmark = i;

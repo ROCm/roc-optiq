@@ -24,6 +24,7 @@ enum class RocEvents
     kStickyNoteEdited,
     kFontSizeChanged,
     kSetViewRange,
+    kGoToTimelineSpot,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeDataDirty,
     kComputeBlockNavigationChanged,
@@ -42,6 +43,7 @@ enum class RocEventType
     kScrollToTrackEvent,
     kStickyNoteEvent,
     kRangeEvent,
+    kNavigationEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
 #endif
@@ -114,6 +116,22 @@ protected:
 
 private:
     bool m_allow_propagate;
+};
+
+
+class NavigationEvent : public RocEvent
+{
+public:
+    NavigationEvent(int event_id,double v_min, double v_max, double y_position);
+
+    double GetVMin() const;
+    double GetVMax() const;
+    double GetYPosition() const;
+
+private:
+    double m_v_min;
+    double m_v_max;
+    double m_y_position;
 };
 
 class TrackDataEvent : public RocEvent

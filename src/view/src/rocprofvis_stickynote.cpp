@@ -203,7 +203,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
 }
 
 bool
-StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
+StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_max_x,
                        double pixels_per_ns, int& dragged_id)
 {
     if(m_resizing) return false;
@@ -240,6 +240,8 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
         float new_y = mouse_pos.y - window_position.y - m_drag_offset.y;
         m_time_ns   = v_min_x + (new_x / pixels_per_ns);
         m_y_offset  = new_y;
+        m_v_max_x   = v_max_x;
+        m_v_min_x   = v_min_x;
         return true;
     }
 
@@ -253,7 +255,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
 }
 
 bool
-StickyNote::HandleResize(const ImVec2& window_position, double v_min_x,
+StickyNote::HandleResize(const ImVec2& window_position, double v_min_x, double v_max_x,
                          double pixels_per_ns)
 {
     // Only allow resize if not dragging
@@ -291,6 +293,8 @@ StickyNote::HandleResize(const ImVec2& window_position, double v_min_x,
         float new_height = mouse_pos.y - sticky_pos.y - m_resize_offset.y;
         m_size.x         = std::max(new_width, 60.0f);
         m_size.y         = std::max(new_height, 40.0f);
+        m_v_max_x        = v_max_x;
+        m_v_min_x        = v_min_x;
         return true;
     }
 

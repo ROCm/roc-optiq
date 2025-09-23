@@ -175,18 +175,6 @@ AnnotationsManager::IsVisibile()
 {
     return m_show_annotations;
 }
-void
-AnnotationsManager::SetStickyPopup(double time_ns, float y_offset, const char* title,
-                                   const char* text)
-{
-    m_sticky_time_ns  = time_ns;
-    m_sticky_y_offset = y_offset;
-    std::strncpy(m_sticky_title, title, sizeof(m_sticky_title) - 1);
-    m_sticky_title[sizeof(m_sticky_title) - 1] = '\0';
-    std::strncpy(m_sticky_text, text, sizeof(m_sticky_text) - 1);
-    m_sticky_text[sizeof(m_sticky_text) - 1] = '\0';
-    m_show_sticky_popup                      = true;
-}
 
 void
 AnnotationsManager::SetVisible(bool SetVisible)
@@ -194,11 +182,6 @@ AnnotationsManager::SetVisible(bool SetVisible)
     m_show_annotations = SetVisible;
 }
 
-void
-AnnotationsManager::SetCenter(const ImVec2& center)
-{
-    m_visible_center = center;
-}
 void
 AnnotationsManager::ShowStickyNoteEditPopup()
 {
@@ -420,18 +403,21 @@ AnnotationsManager::ShowStickyNotePopup()
 
 void
 AnnotationsManager::OpenStickyNotePopup(double time_ns, float y_offset, double v_min,
-                                        double v_max)
+                                        double v_max, ImVec2 graph_size)
 {
-    if(time_ns == INVALID_TIME_NS && y_offset == INVALID_OFFSET_PX)
+    if(time_ns == INVALID_TIME_NS)
     {
-        m_sticky_time_ns  = m_visible_center.x;
-        m_sticky_y_offset = m_visible_center.y;
+        double center_time_ns  = v_min + (v_max - v_min) * 0.5;
+        float  center_y_offset = y_offset + graph_size.y * 0.5f;
+        m_sticky_time_ns       = center_time_ns;
+        m_sticky_y_offset      = center_y_offset;
     }
     else
     {
         m_sticky_time_ns  = time_ns;
         m_sticky_y_offset = y_offset;
     }
+
     m_sticky_title[0]   = '\0';
     m_sticky_text[0]    = '\0';
     m_show_sticky_popup = true;

@@ -585,8 +585,10 @@ TraceView::RenderAnnotationControls()
     ImGui::PushID("add_new_sticky");
     if(ImGui::Button(ICON_ADD_NOTE))
     {
-        std::pair<double, double> vminmax = m_timeline_view->GetVMinMax();
-        m_annotations->OpenStickyNotePopup(INVALID_TIME_NS, INVALID_OFFSET_PX, vminmax.first, vminmax.first);
+        ViewCoords coords = m_timeline_view->GetViewCoords();
+        m_annotations->OpenStickyNotePopup(
+            INVALID_TIME_NS, m_timeline_view->GetScrollPosition(), coords.v_min_x,
+            coords.v_max_x, m_timeline_view->GetGraphSize());
         m_annotations->ShowStickyNotePopup();
     }
     if(ImGui::IsItemHovered())
@@ -621,59 +623,94 @@ TraceView::RenderBookmarkControls()
     static int selected_slot = -1;
     if(ImGui::BeginCombo("", "Manage Bookmarks"))
     {
-        for(int i = 0; i <= 9; ++i)
+        if(ImGui::BeginTable("BookmarkTable", 2, ImGuiTableFlags_SizingStretchProp))
         {
-            bool        used  = m_bookmarks.count(i) > 0;
-            std::string label = std::to_string(i);
-            if(used)
-                label += " (remove)";
-            else
-                label += " (add)";
+            ImGui::TableSetupColumn(nullptr, ImGuiTableColumnFlags_WidthStretch);
+            float button_width = 10.0f;
+            ImGui::TableSetupColumn(nullptr, ImGuiTableColumnFlags_WidthFixed,
+                                    button_width);
 
-            bool is_selected = (selected_slot == i);
-            ImGui::PushID(i);
-
-            ImU32 used_color = SettingsManager::GetInstance().GetColor(Colors::kTextDim);
-            ImU32 add_color  = SettingsManager::GetInstance().GetColor(Colors::kTextMain);
-            ImGui::PushStyleColor(ImGuiCol_Text, used ? used_color : add_color);
-
-            if(ImGui::Selectable(label.c_str(), is_selected))
+            for(int i = 0; i <= 9; ++i)
             {
+                bool        used  = m_bookmarks.count(i) > 0;
+                std::string label = std::to_string(i);
+                if(used)
+                    label += " (go to)";
+                else
+                    label += " (add)";
+
+                bool is_selected = (selected_slot == i);
+                ImGui::PushID(i);
+
+                ImU32 used_color =
+                    SettingsManager::GetInstance().GetColor(Colors::kTextDim);
+                ImU32 add_color =
+                    SettingsManager::GetInstance().GetColor(Colors::kTextMain);
+
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::PushStyleColor(ImGuiCol_Text, used ? used_color : add_color);
+                if(ImGui::Selectable(label.c_str(), is_selected))
+                {
+                    if(used)
+                    {
+                        auto it = m_bookmarks.find(i);
+                        if(it != m_bookmarks.end() && m_timeline_view)
+                            m_timeline_view->MoveToPosition(
+                                it->second.v_min_x, it->second.v_max_x, it->second.y);
+                    }
+                    else if(m_timeline_view)
+                    {
+                        m_bookmarks[i]     = m_timeline_view->GetViewCoords();
+                        m_current_bookmark = i;
+                        NotificationManager::GetInstance().Show(
+                            "Bookmark " + std::to_string(i) + " created.",
+                            NotificationLevel::Info);
+                    }
+                    selected_slot = -1;
+                }
+                ImGui::PopStyleColor();
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+                ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(0, 0, 0, 0));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(0, 0, 0, 0));
+                ImFont* icon_font =
+                    SettingsManager::GetInstance().GetFontManager().GetIconFont(
+                        FontType::kDefault);
+                ImGui::PushFont(icon_font);
                 if(used)
                 {
-                    // Remove bookmark
-                    m_bookmarks.erase(i);
-                    NotificationManager::GetInstance().Show(
-                        "Bookmark " + std::to_string(i) + " removed.",
-                        NotificationLevel::Info);
-                    if(m_current_bookmark == i)
+                    if(ImGui::Button(ICON_DELETE))
                     {
-                        // Move to next/previous or revert to empty state
-                        if(FindNextBookmark(i) != -1)
-                            m_current_bookmark = FindNextBookmark(i);
-                        else if(FindPreviousBookmark(i) != -1)
-                            m_current_bookmark = FindPreviousBookmark(i);
-                        else
-                            m_current_bookmark = -1;
+                        m_bookmarks.erase(i);
+                        NotificationManager::GetInstance().Show(
+                            "Bookmark " + std::to_string(i) + " removed.",
+                            NotificationLevel::Info);
+                        if(m_current_bookmark == i)
+                        {
+                            if(FindNextBookmark(i) != -1)
+                                m_current_bookmark = FindNextBookmark(i);
+                            else if(FindPreviousBookmark(i) != -1)
+                                m_current_bookmark = FindPreviousBookmark(i);
+                            else
+                                m_current_bookmark = -1;
+                        }
                     }
                 }
-                else if(m_timeline_view)
-                {
-                    // Add bookmark
-                    m_bookmarks[i]     = m_timeline_view->GetViewCoords();
-                    m_current_bookmark = i;
-                    NotificationManager::GetInstance().Show(
-                        "Bookmark " + std::to_string(i) + " created.",
-                        NotificationLevel::Info);
-                }
-                selected_slot = -1;
+                ImGui::PopFont();
+                ImGui::PopStyleColor(3);
+                ImGui::PopStyleVar(2);
+                ImGui::PopID();
             }
-
-            ImGui::PopStyleColor();
-            ImGui::PopID();
+            ImGui::EndTable();
         }
         ImGui::EndCombo();
     }
+
     ImGui::PopID();
     ImGui::SameLine();
     if(m_current_bookmark != -1)
@@ -826,7 +863,7 @@ SystemTraceProjectSettings::ToJson()
         bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X] = it.second.v_max_x;
         bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y]       = it.second.y;
         bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z]       = it.second.z;
-        
+
         i++;
     }
 }

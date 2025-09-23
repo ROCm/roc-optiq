@@ -15,8 +15,7 @@ namespace View
 {
 
 constexpr double INVALID_TIME_NS   = std::numeric_limits<double>::lowest();
-constexpr float  INVALID_OFFSET_PX = std::numeric_limits<float>::lowest();
-
+ 
 class AnnotationsManager;
 
 class AnnotationsManagerProjectSettings : public ProjectSetting
@@ -49,13 +48,12 @@ public:
     void AddSticky(double time_ns, float y_offset, const ImVec2& size,
                    const std::string& text, const std::string& title, double v_min,
                    double v_max);
-    void SetStickyPopup(double time_ns, float y_offset, const char* title = "",
-                        const char* text = "");
+    
 
     void                     ShowStickyNotePopup();
     void                     ShowStickyNoteEditPopup();
     std::vector<StickyNote>& GetStickyNotes();
-    void OpenStickyNotePopup(double time_ns, float y_offset, double v_min, double v_max);
+    void OpenStickyNotePopup(double time_ns, float y_offset, double v_min, double v_max, ImVec2 graph_size);
 
 private:
     std::vector<StickyNote>           m_sticky_notes;

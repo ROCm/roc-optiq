@@ -16,11 +16,11 @@ public:
 
     void Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
                 double pixels_per_ns);
-    bool HandleResize(const ImVec2& window_position, double v_min_x,
+    bool HandleResize(const ImVec2& window_position, double v_min_x, double v_max_x,
                       double pixels_per_ns);
 
     // Drag interaction
-    bool HandleDrag(const ImVec2& window_position, double v_min_x, double pixels_per_ns,
+    bool HandleDrag(const ImVec2& window_position, double v_min_x, double v_max_x, double pixels_per_ns,
                     int& dragged_id);
     void SetTitle(std::string title);
     void SetText(std::string title);
@@ -36,7 +36,7 @@ public:
     void               SetTimeNs(double t) { m_time_ns = t; }
     void               SetYOffset(float y) { m_y_offset = y; }
     double             GetVMinX() const;
-    double             GetVMaxX() const;    
+    double             GetVMaxX() const;
 
 private:
     double      m_time_ns;
@@ -52,7 +52,7 @@ private:
     bool        m_is_visible;
     double      m_v_min_x;
     double      m_v_max_x;
-    bool m_resizing = false;
+    bool        m_resizing = false;
 };
 
 }  // namespace View

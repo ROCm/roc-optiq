@@ -48,6 +48,14 @@ typedef struct rocprofvis_db_sqlite_track_query_format
     std::vector<std::string>    from;
 } rocprofvis_db_sqlite_track_query_format;
 
+typedef struct rocprofvis_db_sqlite_region_track_query_format
+{
+    static constexpr const int NUM_PARAMS = 4;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+    std::vector<std::string>   where;
+} rocprofvis_db_sqlite_region_track_query_format;
+
 typedef struct rocprofvis_db_sqlite_level_query_format
 {
     static constexpr const int NUM_PARAMS = 8;
@@ -124,10 +132,11 @@ class Builder
         static constexpr const char* START_SERVICE_NAME     = "startTs";
         static constexpr const char* END_SERVICE_NAME       = "endTs";
 
-        static constexpr const int  LEVEL_CALCULATION_VERSION  = 2;
+        static constexpr const int  LEVEL_CALCULATION_VERSION  = 3;
 
     public:
         static std::string Select(rocprofvis_db_sqlite_track_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_region_track_query_format params);
         static std::string Select(rocprofvis_db_sqlite_level_query_format params);
         static std::string Select(rocprofvis_db_sqlite_slice_query_format params);
         static std::string Select(rocprofvis_db_sqlite_table_query_format params);

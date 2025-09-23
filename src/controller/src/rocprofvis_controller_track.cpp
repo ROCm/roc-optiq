@@ -277,6 +277,8 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                     switch(dm_track_type)
                     {
                         case kRocProfVisDmRegionTrack:
+                        case kRocProfVisDmRegionMainTrack:
+                        case kRocProfVisDmRegionSampleTrack:
                         case kRocProfVisDmKernelDispatchTrack:
                         case kRocProfVisDmMemoryAllocationTrack:
                         case kRocProfVisDmMemoryCopyTrack:

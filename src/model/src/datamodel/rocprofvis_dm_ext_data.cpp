@@ -57,9 +57,7 @@ rocprofvis_dm_result_t ExtData::GetRecordDataAt(const rocprofvis_dm_property_ind
     }
     else
     {
-        rocprofvis_dm_id_t id = 0;
-        const char* str = m_extdata_records[index].Data();
-        for (int i=0; i < 4 && *str; i++,str++) ((char*)&id)[i]=*str;
+        rocprofvis_dm_id_t id  = std::stoll(m_extdata_records[index].Data());
         return m_ctx->BindingInfo()->FuncFindCachedTableValue(m_ctx->Database(), m_extdata_records[index].Category(), id, m_extdata_records[index].Name(), &data);
     }
 }

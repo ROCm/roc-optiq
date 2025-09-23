@@ -63,8 +63,24 @@ AnnotationView::Render()
             ImGui::TableNextColumn();
             bool        is_selected      = (note.GetID() == m_selected_note_id);
             std::string selectable_label = std::to_string(note.GetID());
+
+
+            if(is_selected)
+            {
+                // This is only here to prevent the imguism that causes the selected cell
+                // to not be fully highlighted.
+                ImGui::PushStyleColor(ImGuiCol_Header,
+                                      ImGui::GetStyleColorVec4(ImGuiCol_TableRowBg));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                                      ImGui::GetStyleColorVec4(ImGuiCol_TableRowBg));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                                      ImGui::GetStyleColorVec4(ImGuiCol_TableRowBg));
+            }
+
+
             if(ImGui::Selectable(selectable_label.c_str(), is_selected,
-                                 ImGuiSelectableFlags_SpanAllColumns,
+                                 ImGuiSelectableFlags_SpanAllColumns |
+                                     ImGuiSelectableFlags_AllowItemOverlap,
                                  ImVec2(0, max_row_height)))
             {
                 m_selected_note_id = note.GetID();
@@ -74,6 +90,11 @@ AnnotationView::Render()
                 EventManager::GetInstance()->AddEvent(event);
             }
 
+            if(is_selected)
+            {
+                ImGui::PopStyleColor(3);
+            }
+            m_selected_note_id = -1;
             ImGui::TableNextColumn();
             ImGui::TextWrapped("%s", note.GetTitle().c_str());
             ImGui::TableNextColumn();

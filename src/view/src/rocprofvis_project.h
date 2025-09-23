@@ -135,8 +135,8 @@ constexpr char* JSON_KEY_GENERAL_TRACE_PATH = "trace_path";
 
 constexpr char* JSON_KEY_TIMELINE_BOOKMARK         = "bookmarks";
 constexpr char* JSON_KEY_TIMELINE_BOOKMARK_KEY     = "key";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X = "m_v_min_x";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X = "m_v_max_x";
+constexpr char* JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X = "view_start_ns ";
+constexpr char* JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X = "view_end_ns";
 constexpr char* JSON_KEY_TIMELINE_BOOKMARK_Y       = "y";
 constexpr char* JSON_KEY_TIMELINE_BOOKMARK_Z       = "z";
 
@@ -157,8 +157,8 @@ constexpr const char* JSON_KEY_ANNOTATION_SIZE_Y           = "size_y";
 constexpr const char* JSON_KEY_ANNOTATION_TEXT             = "text";
 constexpr const char* JSON_KEY_ANNOTATION_TITLE            = "title";
 constexpr const char* JSON_KEY_ANNOTATION_ID               = "id";
-constexpr char*       JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "m_v_min_x";
-constexpr char*       JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "m_v_max_x";
+constexpr char*       JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
+constexpr char*       JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
 
 class ProjectSetting
 {

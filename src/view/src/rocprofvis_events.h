@@ -205,16 +205,13 @@ private:
 class TrackSelectionChangedEvent : public RocEvent
 {
 public:
-    TrackSelectionChangedEvent(std::vector<uint64_t> selected_tracks, double start_ns,
-                               double end_ns, const std::string& source_id);
-    const std::vector<uint64_t>& GetSelectedTracks() const;
-    double                       GetStartNs() const;
-    double                       GetEndNs() const;
+    TrackSelectionChangedEvent(uint64_t track_id, bool selected, const std::string& source_id);
+    uint64_t GetTrackID() const;
+    bool     TrackSelected() const;
 
 private:
-    std::vector<uint64_t> m_selected_tracks;  // IDs of selected tracks
-    double                m_start_ns;         // start time in nanoseconds
-    double                m_end_ns;           // end time in nanoseconds
+    uint64_t m_track_id;
+    bool     m_selected;
 };
 
 class EventSelectionChangedEvent : public RocEvent

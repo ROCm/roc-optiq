@@ -3,6 +3,7 @@
 #include "rocprofvis_track_details.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_track_topology.h"
 #include "widgets/rocprofvis_widget.h"
 
@@ -11,10 +12,13 @@ namespace RocProfVis
 namespace View
 {
 
-TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology)
+TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
+                           std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
 , m_track_topology(topology)
+, m_timeline_selection(timeline_selection)
 , m_selection_dirty(false)
+, m_detail_item_id(0)
 {}
 
 TrackDetails::~TrackDetails() {}
@@ -31,19 +35,20 @@ TrackDetails::Render()
         }
         else
         {
-            for(Details& detail : m_track_details)
+            for(DetailItem& detail : m_track_details)
             {
-                if(ImGui::CollapsingHeader(detail.track_name.c_str(),
+                ImGui::PushID(detail.id);
+                if(ImGui::CollapsingHeader(detail.track_name->c_str(),
                                            ImGuiTreeNodeFlags_DefaultOpen))
                 {
                     ImGui::TextUnformatted("Node: ");
                     ImGui::SameLine();
-                    ImGui::TextUnformatted(detail.node.info->host_name.c_str());
-                    RenderTable(detail.node.info_table);
+                    ImGui::TextUnformatted(detail.node->info->host_name.c_str());
+                    RenderTable(detail.node->info_table);
                     ImGui::TextUnformatted("Process: ");
                     ImGui::SameLine();
-                    ImGui::TextUnformatted(detail.process.header.c_str());
-                    RenderTable(detail.process.info_table);
+                    ImGui::TextUnformatted(detail.process->header.c_str());
+                    RenderTable(detail.process->info_table);
                     if(detail.queue)
                     {
                         ImGui::TextUnformatted("Queue: ");
@@ -73,6 +78,7 @@ TrackDetails::Render()
                         RenderTable(detail.stream->info_table);
                     }
                 }
+                ImGui::PopID();
             }
         }
         ImGui::EndChild();
@@ -84,32 +90,33 @@ TrackDetails::Update()
 {
     if(m_selection_dirty && !m_track_topology->Dirty())
     {
-        m_track_details.clear();
-        const TopologyModel& topology = m_track_topology->GetTopology();
-        for(const uint64_t& track_id : m_selected_track_ids)
+        const TopologyModel&  topology = m_track_topology->GetTopology();
+        std::list<DetailItem> uncategorized_tracks;
+        for(DetailItem& item : m_track_details)
         {
-            const track_info_t* metadata = m_data_provider.GetTrackInfo(track_id);
+            const track_info_t* metadata = m_data_provider.GetTrackInfo(item.track_id);
             if(metadata && metadata->topology.type != track_info_t::Topology::Unknown)
             {
+                item.track_name = &metadata->name;
+
                 const uint64_t& node_id    = metadata->topology.node_id;
                 const uint64_t& process_id = metadata->topology.process_id;
                 const uint64_t& type_id    = metadata->topology.id;
                 if(topology.node_lut.count(node_id) > 0)
                 {
                     NodeModel& node = *topology.node_lut.at(node_id);
+                    item.node       = &node;
                     if(node.process_lut.count(process_id) > 0)
                     {
                         ProcessModel& process = *node.process_lut.at(process_id);
+                        item.process          = &process;
                         switch(metadata->topology.type)
                         {
                             case track_info_t::Topology::Queue:
                             {
                                 if(process.queue_lut.count(type_id) > 0)
                                 {
-                                    m_track_details.push_back(
-                                        std::move(Details{ metadata->name, node, process,
-                                                           process.queue_lut.at(type_id),
-                                                           nullptr, nullptr, nullptr }));
+                                    item.queue = process.queue_lut.at(type_id);
                                 }
                                 break;
                             }
@@ -117,10 +124,7 @@ TrackDetails::Update()
                             {
                                 if(process.thread_lut.count(type_id) > 0)
                                 {
-                                    m_track_details.push_back(std::move(
-                                        Details{ metadata->name, node, process, nullptr,
-                                                 process.thread_lut.at(type_id), nullptr,
-                                                 nullptr }));
+                                    item.thread = process.thread_lut.at(type_id);
                                 }
                                 break;
                             }
@@ -128,9 +132,7 @@ TrackDetails::Update()
                             {
                                 if(process.counter_lut.count(type_id) > 0)
                                 {
-                                    m_track_details.push_back(std::move(Details{
-                                        metadata->name, node, process, nullptr, nullptr,
-                                        process.counter_lut.at(type_id), nullptr }));
+                                    item.counter = process.counter_lut.at(type_id);
                                 }
                                 break;
                             }
@@ -138,9 +140,7 @@ TrackDetails::Update()
                             {
                                 if(process.stream_lut.count(type_id) > 0)
                                 {
-                                    m_track_details.push_back(std::move(Details{
-                                        metadata->name, node, process, nullptr, nullptr,
-                                        nullptr, process.stream_lut.at(type_id) }));
+                                    item.stream = process.stream_lut.at(type_id);
                                 }
                                 break;
                             }
@@ -148,6 +148,14 @@ TrackDetails::Update()
                     }
                 }
             }
+            else
+            {
+                uncategorized_tracks.push_back(item);
+            }
+        }
+        for(DetailItem& item : uncategorized_tracks)
+        {
+            m_track_details.remove(item);
         }
         m_selection_dirty = false;
     }
@@ -240,14 +248,24 @@ TrackDetails::RenderTable(InfoTable& table)
 }
 
 void
-TrackDetails::HandleTrackSelectionChanged(
-    std::shared_ptr<TrackSelectionChangedEvent> event)
+TrackDetails::HandleTrackSelectionChanged(const uint64_t track_id, const bool selected)
 {
-    if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
+    if(selected)
     {
-        m_selected_track_ids = event->GetSelectedTracks();
-        m_selection_dirty    = true;
+        m_track_details.emplace_front(DetailItem{ m_detail_item_id++, track_id, nullptr,
+                                                  nullptr, nullptr, nullptr, nullptr,
+                                                  nullptr, nullptr });
     }
+    else if(track_id == TimelineSelection::INVALID_SELECTION_ID)
+    {
+        m_track_details.clear();
+    }
+    else
+    {
+        m_track_details.remove(DetailItem{ 0, track_id, nullptr, nullptr, nullptr,
+                                           nullptr, nullptr, nullptr, nullptr });
+    }
+    m_selection_dirty = true;
 }
 
 }  // namespace View

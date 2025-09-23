@@ -34,15 +34,22 @@ rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
                                                     rocprofvis_dm_op_t operation,
                                                     rocprofvis_dm_track_id_t& track_id) {
     
-
-    auto it_node = find_track_map.find(node);
-    if (it_node!=find_track_map.end()){
-        auto it_process = it_node->second.find(process);
-        if (it_process!=it_node->second.end()){
-            auto it_subprocess = it_process->second.find(std::atol(subprocess));
-            if (it_subprocess!=it_process->second.end()){
-                track_id = it_subprocess->second;
-                return kRocProfVisDmResultSuccess;
+    auto it_op = find_track_map.find(GetTrackSearchId(
+        TranslateOperationToTrackCategory((rocprofvis_dm_event_operation_t) operation)));
+    if(it_op != find_track_map.end())
+    {
+        auto it_node = it_op->second.find(node);
+        if(it_node != it_op->second.end())
+        {
+            auto it_process = it_node->second.find(process);
+            if(it_process != it_node->second.end())
+            {
+                auto it_subprocess = it_process->second.find(std::atol(subprocess));
+                if(it_subprocess != it_process->second.end())
+                {
+                    track_id = it_subprocess->second;
+                    return kRocProfVisDmResultSuccess;
+                }
             }
         }
     }
@@ -90,8 +97,14 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
     db->UpdateQueryForTrack(it, track_params, callback_params->query);
     if(it == db->TrackPropertiesEnd())
     {
-        db->find_track_map[track_params.process.id[TRACK_ID_NODE]][track_params.process.id[TRACK_ID_PID_OR_AGENT]][track_params.process.id[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
-        if (track_params.process.category == kRocProfVisDmRegionTrack) {
+        db->find_track_map[GetTrackSearchId(track_params.process.category)]
+                          [track_params.process.id[TRACK_ID_NODE]]
+                          [track_params.process.id[TRACK_ID_PID_OR_AGENT]]
+                          [track_params.process.id[TRACK_ID_TID_OR_QUEUE]] =
+            track_params.track_id;
+        if(track_params.process.category == kRocProfVisDmRegionMainTrack ||
+           track_params.process.category == kRocProfVisDmRegionSampleTrack)
+        {
 
             track_params.process.name[TRACK_ID_PID] = db->CachedTables()->GetTableCell("Process", track_params.process.id[TRACK_ID_PID], "command");
             track_params.process.name[TRACK_ID_PID] += "(";
@@ -130,7 +143,8 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
         if (kRocProfVisDmResultSuccess != db->AddTrackProperties(track_params)) return 1;
         if (db->BindObject()->FuncAddTrack(db->BindObject()->trace_object, db->TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1;  
         if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Node", track_params.process.id[TRACK_ID_NODE]) != kRocProfVisDmResultSuccess) return 1;
-        if(track_params.process.category == kRocProfVisDmRegionTrack)
+        if(track_params.process.category == kRocProfVisDmRegionMainTrack ||
+           track_params.process.category == kRocProfVisDmRegionSampleTrack)
         {
             if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Process", track_params.process.id[TRACK_ID_PID]) != kRocProfVisDmResultSuccess) return 1;
             if (db->CachedTables()->PopulateTrackExtendedDataTemplate(db, "Thread", track_params.process.id[TRACK_ID_TID]) != kRocProfVisDmResultSuccess) return 1;
@@ -255,6 +269,10 @@ RocprofDatabase::CreateIndexes()
                  " ON rocpd_memory_copy_" + GuidList()[i] + "(nid,dst_agent_id,queue_id,start);");
         vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_stream_idx_") + GuidList()[i] +
                  " ON rocpd_memory_copy_" + GuidList()[i] + "(nid,stream_id,start);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_event_idx_") + GuidList()[i] +
+                 " ON rocpd_region_" + GuidList()[i] + "(event_id);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_sample_event_idx_") + GuidList()[i] +
+                 " ON rocpd_sample_" + GuidList()[i] + "(event_id);");
     }
 
     return ExecuteTransaction(vec);
@@ -310,12 +328,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,
             { 
                 // Track query by agent/queue
-                 Builder::Select(rocprofvis_db_sqlite_track_query_format(
+                 Builder::Select(rocprofvis_db_sqlite_region_track_query_format(
                      { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                          Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                          Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
-                         Builder::QParamCategory(kRocProfVisDmRegionTrack) },
-                       { Builder::From("rocpd_region") } })),
+                         Builder::QParamCategory(kRocProfVisDmRegionMainTrack) },
+                       { Builder::From("rocpd_region", "R"),
+                         Builder::LeftJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id AND SAMPLE.guid = R.guid") },
+                       { Builder::Where("SAMPLE.id", " IS ", "NULL") },
+                     })),
                  // Track query by stream
                  "",
                  // Level query
@@ -323,12 +344,14 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                      { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                          Builder::QParam("start", Builder::START_SERVICE_NAME), 
                          Builder::QParam("end", Builder::END_SERVICE_NAME),
-                         Builder::QParam("id"),
+                         Builder::QParam("R.id"),
                          Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                          Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                          Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
                          Builder::SpaceSaver(0) },
-                       { Builder::From("rocpd_region") } })),
+                       { Builder::From("rocpd_region", "R"),
+                         Builder::LeftJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id AND SAMPLE.guid = R.guid") 
+                       } })),
                  // Slice query by queue
                  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
@@ -343,6 +366,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("L.level") },
                        { Builder::From("rocpd_region", "R"),
                          Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id AND E.guid = R.guid"),
+                         Builder::LeftJoin("rocpd_sample", "SAMPLE",
+                                              "SAMPLE.event_id = R.event_id AND SAMPLE.guid = R.guid"),
                          Builder::LeftJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") } })),
                  // Slice query by Stream
                  "",
@@ -394,6 +419,109 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                          Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
                          Builder::QParam("-1", Builder::STREAM_ID_SERVICE_NAME) },
                        { Builder::From("rocpd_region", "R"),
+                         Builder::LeftJoin("rocpd_sample", "SAMPLE",
+                                              "SAMPLE.event_id = R.event_id AND SAMPLE.guid = R.guid"),
+                         Builder::InnerJoin("rocpd_string", "S", "S.id = R.name_id AND S.guid = R.guid"),
+                         Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id AND E.guid = R.guid"),
+                         Builder::InnerJoin("rocpd_info_process", "P", "P.id = R.pid AND P.guid = R.guid"),
+                         Builder::InnerJoin("rocpd_info_thread", "T", "T.id = R.tid AND T.guid = R.guid") } })),
+            },
+                    &CallBackAddTrack)) break;
+
+        ShowProgress(5, "Adding HIP API Sample tracks", kRPVDbBusy, future );
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,
+            { 
+                // Track query by agent/queue
+                 Builder::Select(rocprofvis_db_sqlite_track_query_format(
+                     { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
+                         Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
+                         Builder::QParamCategory(kRocProfVisDmRegionSampleTrack) },
+                       { Builder::From("rocpd_region", "R"),
+                         Builder::InnerJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id AND SAMPLE.guid = R.guid") } })),
+                 // Track query by stream
+                 "",
+                 // Level query
+                 Builder::Select(rocprofvis_db_sqlite_level_query_format(
+                     { { Builder::QParamOperation(kRocProfVisDmOperationLaunchSample),
+                         Builder::QParam("start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("end", Builder::END_SERVICE_NAME),
+                         Builder::QParam("R.id"),
+                         Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
+                         Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
+                         Builder::SpaceSaver(0) },
+                       { Builder::From("rocpd_region", "R"),
+                         Builder::InnerJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id AND SAMPLE.guid = R.guid") } })),
+                 // Slice query by queue
+                 Builder::Select(rocprofvis_db_sqlite_slice_query_format(
+                     { { Builder::QParamOperation(kRocProfVisDmOperationLaunchSample),
+                         Builder::QParam("R.start", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("R.end", Builder::END_SERVICE_NAME),
+                         Builder::QParam("E.category_id"),
+                         Builder::QParam("R.name_id"), 
+                         Builder::QParam("R.id"),
+                         Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                         Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
+                         Builder::QParam("L.level") },
+                       { Builder::From("rocpd_region", "R"),
+                         Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id AND E.guid = R.guid"),
+                         Builder::InnerJoin("rocpd_sample", "SAMPLE",
+                                              "SAMPLE.event_id = R.event_id AND SAMPLE.guid = R.guid"),
+                         Builder::LeftJoin(Builder::LevelTable("launch_sample"), "L", "R.id = L.eid") } })),
+                 // Slice query by Stream
+                 "",
+                 // Table query
+                 Builder::Select(rocprofvis_db_sqlite_table_query_format(
+                     { this,
+                         { Builder::QParamOperation(kRocProfVisDmOperationLaunchSample),
+                         Builder::QParam("R.id"),
+                         Builder::QParam("( SELECT string FROM `rocpd_string` RS WHERE "
+                                         "RS.id = E.category_id AND RS.guid = E.guid)",
+                                         "category"),
+                         Builder::QParam("S.string", "name"),
+                         Builder::QParamBlank("stream"),
+                         Builder::QParamBlank("queue"),
+                         Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("P.pid", Builder::PROCESS_ID_PUBLIC_NAME),
+                         Builder::QParam("T.tid", Builder::THREAD_ID_PUBLIC_NAME),
+                         Builder::QParamBlank("device_index"),
+                         Builder::QParamBlank("device"),
+                         Builder::QParamBlank("device_name"),
+                         Builder::QParam("R.start", Builder::START_SERVICE_NAME),
+                         Builder::QParam("R.end", Builder::END_SERVICE_NAME),
+                         Builder::QParam("(R.end-R.start)", "duration"),
+
+                         Builder::QParamBlank("GridSizeX"),
+                         Builder::QParamBlank("GridSizeY"),
+                         Builder::QParamBlank("GridSizeZ"),
+
+                         Builder::QParamBlank("WGSizeX"),
+                         Builder::QParamBlank("WGSizeY"),
+                         Builder::QParamBlank("WGSizeZ"),
+
+                         Builder::QParamBlank("LDSSize"),
+                         Builder::QParamBlank("ScratchSize"),
+
+                         Builder::QParamBlank("StaticLDSSize"),
+                         Builder::QParamBlank("StaticScratchSize"),
+
+                         Builder::QParamBlank("size"),
+                         Builder::QParamBlank("address"),
+                         Builder::QParamBlank("level"),
+
+                         Builder::QParamBlank("SrcIndex"),
+                         Builder::QParamBlank("SrcDevice"),
+                         Builder::QParamBlank("SrcName"),
+                         Builder::QParamBlank("SrcAddr"),
+
+                         Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                         Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
+                         Builder::QParam("-1", Builder::STREAM_ID_SERVICE_NAME) },
+                       { Builder::From("rocpd_region", "R"),
+                         Builder::InnerJoin( "rocpd_sample", "SAMPLE",
+                               "SAMPLE.event_id = R.event_id AND SAMPLE.guid = R.guid"),
                          Builder::InnerJoin("rocpd_string", "S", "S.id = R.name_id AND S.guid = R.guid"),
                          Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id AND E.guid = R.guid"),
                          Builder::InnerJoin("rocpd_info_process", "P", "P.id = R.pid AND P.guid = R.guid"),
@@ -754,7 +882,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
             },
                     &CallBackAddTrack)) break;
-        
+
         // PMC schema is not fully defined yet
         ShowProgress(5, "Adding performance counters tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,   
@@ -820,6 +948,74 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                         } })),
 
             },
+                    &CallBackAddTrack)) break;                    
+        // PMC schema is not fully defined yet
+        ShowProgress(5, "Adding performance smi counters tracks", kRPVDbBusy, future );
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,   
+            {
+                    // Track query by agent/queue
+                     Builder::Select(rocprofvis_db_sqlite_track_query_format(
+                     { { Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
+                         Builder::QParamCategory(kRocProfVisDmPmcTrack) },
+                       { Builder::From("rocpd_pmc_event", "PMC_E"),
+                         Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid"),
+                         Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id AND S.guid = PMC_E.guid"),
+                         } })),
+                    // Track query by stream
+                    "",
+                    // Level query, for COUNT only
+                    Builder::Select(rocprofvis_db_sqlite_level_query_format(
+                     { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                         Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
+                         Builder::SpaceSaver(0), 
+                         Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
+                         Builder::SpaceSaver(0)
+                       },
+                       { Builder::From("rocpd_pmc_event", "PMC_E"),
+                         Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid"),
+                         Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id AND S.guid = PMC_E.guid"),
+                        } })),                    
+                    // Slice query by queue
+                    Builder::Select(rocprofvis_db_sqlite_slice_query_format(
+                     { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                         Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("PMC_E.value", Builder::COUNTER_VALUE_SERVICE_NAME),
+                         Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
+                         Builder::SpaceSaver(0),
+                         Builder::SpaceSaver(0),
+                         Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_E.value", "level"),                        
+                       },
+                       { Builder::From("rocpd_pmc_event", "PMC_E"),
+                         Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid"),
+                         Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id AND S.guid = PMC_E.guid"),
+                       } })),
+
+                    // Slice query by stream                        
+                     "",
+                    // Table query
+                    Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
+                     { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                         Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME), 
+                         Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
+                         Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
+                         Builder::QParam("PMC_E.value", Builder::COUNTER_VALUE_SERVICE_NAME)
+                       },
+                       { Builder::From("rocpd_pmc_event", "PMC_E"),
+                         Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id AND PMC_I.guid = PMC_E.guid"),
+                         Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id AND S.guid = PMC_E.guid"),
+                       } })),
+
+            },
                     &CallBackAddTrack)) break;
                                                                     
 
@@ -835,6 +1031,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationMemoryAllocate] = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationMemoryCopy]     = 0;
+        TraceProperties()->events_count[kRocProfVisDmOperationLaunchSample]   = 0;
 
         if(kRocProfVisDmResultSuccess !=
            ExecuteQueryForAllTracksAsync(
@@ -849,6 +1046,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         std::vector<std::string> to_drop = Builder::OldLevelTables("launch");
         for (auto table : to_drop)
+        {
+            DropSQLTable(table.c_str());
+        }
+        to_drop = Builder::OldLevelTables("launch_sample");
+        for(auto table : to_drop)
         {
             DropSQLTable(table.c_str());
         }
@@ -870,12 +1072,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
 
         if(SQLITE_OK != DetectTable(GetServiceConnection(), Builder::LevelTable("launch").c_str(), false) ||
+           SQLITE_OK != DetectTable(GetServiceConnection(), Builder::LevelTable("launch_sample").c_str(), false) ||
            SQLITE_OK != DetectTable(GetServiceConnection(), Builder::LevelTable("dispatch").c_str(), false) ||
            SQLITE_OK != DetectTable(GetServiceConnection(), Builder::LevelTable("mem_alloc").c_str(), false) ||
            SQLITE_OK != DetectTable(GetServiceConnection(), Builder::LevelTable("mem_copy").c_str(), false))
         {
             m_event_levels[kRocProfVisDmOperationLaunch].reserve(
                 TraceProperties()->events_count[kRocProfVisDmOperationLaunch]);
+            m_event_levels[kRocProfVisDmOperationLaunchSample].reserve(
+                TraceProperties()->events_count[kRocProfVisDmOperationLaunchSample]);
             m_event_levels[kRocProfVisDmOperationDispatch].reserve(
                 TraceProperties()->events_count[kRocProfVisDmOperationDispatch]);
             m_event_levels[kRocProfVisDmOperationMemoryAllocate].reserve(
@@ -923,6 +1128,19 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 });
             m_event_levels[kRocProfVisDmOperationLaunch].clear();
             m_event_levels_id_to_index[kRocProfVisDmOperationLaunch].clear();
+            CreateSQLTable(
+                Builder::LevelTable("launch_sample").c_str(), params, 3,
+                m_event_levels[kRocProfVisDmOperationLaunchSample].size(),
+                [&](sqlite3_stmt* stmt, int index) {
+                    sqlite3_bind_int64(
+                        stmt, 1, m_event_levels[kRocProfVisDmOperationLaunchSample][index].id);
+                    sqlite3_bind_int(stmt, 2,
+                                     m_event_levels[kRocProfVisDmOperationLaunchSample][index]
+                                         .level_for_queue);
+                    sqlite3_bind_int(stmt, 3, 0);
+                });
+            m_event_levels[kRocProfVisDmOperationLaunchSample].clear();
+            m_event_levels_id_to_index[kRocProfVisDmOperationLaunchSample].clear();
             CreateSQLTable(
                 Builder::LevelTable("dispatch").c_str(), params, 3,
                 m_event_levels[kRocProfVisDmOperationDispatch].size(),
@@ -1011,7 +1229,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         rocprofvis_dm_flowtrace_t flowtrace = BindObject()->FuncAddFlowTrace(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(flowtrace, ERROR_FLOW_TRACE_CANNOT_BE_NULL);
         std::string query;
-        if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
+        if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
+           event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
         {
             query = Builder::SelectAll(
             Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
@@ -1037,7 +1256,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
                     Builder::InnerJoin(Builder::LevelTable("launch"), "L", 
                                        "R2.id = L.eid") },
                   { Builder::Where(
-                      "R1.id", "==", std::to_string(event_id.bitfield.event_id)) } })) + 
+                      "R1.id", "==", std::to_string(event_id.bitfield.event_id))
+                  } })) + 
             Builder::Union() +
             Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                 { {
@@ -1484,7 +1704,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(
             BindObject()->FuncAddStackTrace(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(stacktrace, ERROR_EXT_DATA_CANNOT_BE_NULL);
         std::stringstream query;
-        if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
+        if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
+           event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
         {
             query << "select call_stack, line_info from regions where id == ";
             query << event_id.bitfield.event_id << ";";
@@ -1525,7 +1746,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
         rocprofvis_dm_extdata_t extdata = BindObject()->FuncAddExtData(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(extdata, ERROR_EXT_DATA_CANNOT_BE_NULL);
         std::string query;
-        if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
+        if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
+           event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
         {
             query = "select * from regions where id == ";
             query += std::to_string(event_id.bitfield.event_id);

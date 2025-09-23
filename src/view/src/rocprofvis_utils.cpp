@@ -15,8 +15,45 @@ RocProfVis::View::nanosecond_to_str(double time_point_ns) {
 }
 
 std::string
+RocProfVis::View::nanosecond_to_us_str(double ns)
+{
+    if(!std::isfinite(ns)) return "NaN";
+    uint64_t           ns_uint = static_cast<uint64_t>(ns);
+    uint64_t           us_uint = ns_uint / TimeConstants::ns_per_us;
+    uint64_t           ns_rem  = ns_uint % TimeConstants::ns_per_us;
+    std::ostringstream oss;
+    oss << us_uint << '.' << std::setw(3) << std::setfill('0') << ns_rem << " us";
+    return oss.str();
+}
+
+std::string
+RocProfVis::View::nanosecond_to_ms_str(double ns)
+{
+    if(!std::isfinite(ns)) return "NaN";
+    uint64_t           ns_uint = static_cast<uint64_t>(ns);
+    uint64_t           ms_uint = ns_uint / TimeConstants::ns_per_ms;
+    uint64_t           ns_rem  = ns_uint % TimeConstants::ns_per_ms;
+    std::ostringstream oss;
+    oss << ms_uint << '.' << std::setw(6) << std::setfill('0') << ns_rem << " ms";
+    return oss.str();
+}
+
+std::string
+RocProfVis::View::nanosecond_to_s_str(double ns)
+{
+    if(!std::isfinite(ns)) return "NaN";
+    uint64_t           ns_uint = static_cast<uint64_t>(ns);
+    uint64_t           s_uint  = ns_uint / TimeConstants::ns_per_s;
+    uint64_t           ns_rem  = ns_uint % TimeConstants::ns_per_s;
+    std::ostringstream oss;
+    oss << s_uint << '.' << std::setw(9) << std::setfill('0') << ns_rem << " s";
+    return oss.str();
+}
+
+std::string
 RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
-                                              bool   round_before_cast /*= false*/)
+                                             bool   condensed /*= true*/,
+                                             bool   round_before_cast /*= false*/)
 {
     // Handle non-finite cases first
     if(!std::isfinite(time_point_ns))
@@ -59,7 +96,10 @@ RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
     // it's always displayed as positive zero, regardless of original sign.
     if(ns_duration_magnitude == 0)
     {
-        return "00:00.000000000";
+        if(condensed)
+            return "0.000000000";
+        else
+            return "00:00.000000000";
     }
 
     std::string sign_prefix = "";
@@ -79,12 +119,12 @@ RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
     std::ostringstream oss;
     oss << sign_prefix;
     // Do not display hours if they are zero
-    if(display_hours > 0)
+    if(!condensed || display_hours > 0)
     {
         oss << std::setw(2) << std::setfill('0') << display_hours << ":";
     }
     // Display minutes only if hours are displayed or minutes are non-zero
-    if(display_hours > 0 || display_minutes > 0)
+    if(!condensed || display_hours > 0 || display_minutes > 0)
     {
         oss << std::setw(2) << std::setfill('0') << static_cast<int>(display_minutes)
             << ":";
@@ -95,11 +135,32 @@ RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
     return oss.str();
 }
 
+std::string
+RocProfVis::View::nanosecond_to_formatted_str(double time_point_ns, TimeFormat format)
+{
+    switch(format)
+    {
+        case TimeFormat::kTimecode:
+            return RocProfVis::View::nanosecond_to_timecode_str(time_point_ns, false);
+        case TimeFormat::kTimecodeCondensed:
+            return RocProfVis::View::nanosecond_to_timecode_str(time_point_ns, true);
+        case TimeFormat::kSeconds:
+            return RocProfVis::View::nanosecond_to_s_str(time_point_ns);
+        case TimeFormat::kMilliseconds:
+            return RocProfVis::View::nanosecond_to_ms_str(time_point_ns);
+        case TimeFormat::kMicroseconds:
+            return RocProfVis::View::nanosecond_to_us_str(time_point_ns);
+        case TimeFormat::kNanoseconds:
+        default: return RocProfVis::View::nanosecond_to_str(time_point_ns);
+    }
+}
+
 double 
 RocProfVis::View::calculate_nice_interval(double view_range, int target_divisions) 
 {
-    if (view_range <= 0.0) {
-        return 1.0; // Avoid division by zero or log of non-positive
+    if(view_range <= 0.0)
+    {
+        return 1.0;  // Avoid division by zero or log of non-positive
     }
 
     //Calculate the ideal, but possibly "ugly" interval
@@ -113,15 +174,24 @@ RocProfVis::View::calculate_nice_interval(double view_range, int target_division
     double normalized_interval = ideal_interval / scale;
     
     double nice_multiplier;
-    if (normalized_interval < 1.5) {
+    if(normalized_interval < 1.5)
+    {
         nice_multiplier = 1;
-    } else if (normalized_interval < 3.0) {
+    }
+    else if(normalized_interval < 3.0)
+    {
         nice_multiplier = 2;
-    } else if (normalized_interval < 4.5) {
-        nice_multiplier = 4;        
-    } else if (normalized_interval < 7.0) {
+    }
+    else if(normalized_interval < 4.5)
+    {
+        nice_multiplier = 4;
+    }
+    else if(normalized_interval < 7.0)
+    {
         nice_multiplier = 5;
-    } else {
+    }
+    else
+    {
         nice_multiplier = 10;
     }
 

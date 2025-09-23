@@ -1427,7 +1427,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
         else
         {
             // request for item already exists
-            spdlog::debug("Request for this table, tyoe {}, is already pending",
+            spdlog::debug("Request for this table, type {}, is already pending",
                           static_cast<uint64_t>(table_params.m_table_type));
             return false;
         }

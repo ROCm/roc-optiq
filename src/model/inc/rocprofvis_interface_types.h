@@ -108,6 +108,10 @@ typedef enum rocprofvis_dm_track_category_t {
     kRocProfVisDmMemoryCopyTrack = 7,
     // Object is stream track
     kRocProfVisDmStreamTrack = 8,
+    // Object is region sample track
+    kRocProfVisDmRegionMainTrack = 9,
+    // Object is region sample track
+    kRocProfVisDmRegionSampleTrack = 10,
 } rocprofvis_dm_track_category_t;
 
 //Event operation
@@ -122,8 +126,10 @@ typedef enum rocprofvis_dm_event_operation_t {
     kRocProfVisDmOperationMemoryAllocate = 3,
     // Memory copy event
     kRocProfVisDmOperationMemoryCopy = 4,
+    // Memory copy event
+    kRocProfVisDmOperationLaunchSample = 5,
     // Number of operations
-    kRocProfVisDmNumOperation = kRocProfVisDmOperationMemoryCopy+1
+    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1
 } rocprofvis_dm_event_operation_t;
 
 // Database type

@@ -22,13 +22,15 @@ constexpr uint64_t INVALID_UINT64_INDEX = std::numeric_limits<uint64_t>::max();
 
 const std::string TRACK_ID_COLUMN_NAME = "__trackId";
 const std::string STREAM_ID_COLUMN_NAME = "__streamTrackId";
-const std::string ID_COLUMN_NAME = "id";
-const std::string NAME_COLUMN_NAME = "name";
-const std::string START_TS_COLUMN_NAME = "startTs";
-const std::string END_TS_COLUMN_NAME = "endTs";
-const std::string DURATION_COLUMN_NAME = "duration";
+const std::string ID_COLUMN_NAME        = "id";
+const std::string NAME_COLUMN_NAME      = "name";
+const std::string START_TS_COLUMN_NAME  = "startTs";
+const std::string END_TS_COLUMN_NAME    = "endTs";
+const std::string DURATION_COLUMN_NAME  = "duration";
 
-InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
+InfiniteScrollTable::InfiniteScrollTable(
+    DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
+    TableType table_type)
 : m_data_provider(dp)
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
@@ -37,7 +39,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_fetch_pad_items(30)        // Number of items to pad the fetch range
 , m_fetch_threshold_items(10)  // Number of items from the edge to trigger a fetch
 , m_last_table_size(0, 0)
-, m_track_selection_event_to_handle(nullptr)
+, m_defer_track_selection_changed(false)
 , m_settings(SettingsManager::GetInstance())
 , m_req_table_type(table_type == TableType::kEventTable ? kRPVControllerTableTypeEvents
                                                         : kRPVControllerTableTypeSamples)
@@ -45,6 +47,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_pending_filter_options({ 0, "", "" })
 , m_data_changed(true)
 , m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
+, m_timeline_selection(timeline_selection)
 {
     m_widget_name = (table_type == TableType::kEventTable)
                         ? GenUniqueName("Event Table")
@@ -52,86 +55,85 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 }
 
 void
-InfiniteScrollTable::HandleTrackSelectionChanged(
-    std::shared_ptr<TrackSelectionChangedEvent> e)
+InfiniteScrollTable::HandleTrackSelectionChanged()
 {
-    if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
+    std::vector<uint64_t> tracks;
+    double                start_ns;
+    double                end_ns;
+    m_timeline_selection->GetSelectedTracks(tracks);
+
+    // If no valid time range is provided, use the full trace range
+    if(m_timeline_selection->HasValidTimeRangeSelection())
     {
-        const std::vector<uint64_t>& tracks   = e->GetSelectedTracks();
-        double                       start_ns = e->GetStartNs();
-        double                       end_ns   = e->GetEndNs();
+        m_timeline_selection->GetSelectedTimeRange(start_ns, end_ns);
+    }
+    else
+    {
+        start_ns = m_data_provider.GetStartTime();
+        end_ns   = m_data_provider.GetEndTime();
+    }
 
-        // If no valid time range is provided, use the full trace range
-        if(start_ns == TimelineSelection::INVALID_SELECTION_TIME ||
-           end_ns == TimelineSelection::INVALID_SELECTION_TIME)
+    // loop trough tracks and filter out ones that don't match the table type
+    std::vector<uint64_t> filtered_tracks;
+    for(uint64_t track_id : tracks)
+    {
+        const track_info_t* track_info = m_data_provider.GetTrackInfo(track_id);
+        if(track_info)
         {
-            start_ns = m_data_provider.GetStartTime();
-            end_ns   = m_data_provider.GetEndTime();
-        }
-
-        // loop trough tracks and filter out ones that don't match the table type
-        std::vector<uint64_t> filtered_tracks;
-        for(uint64_t track_id : tracks)
-        {
-            const track_info_t* track_info = m_data_provider.GetTrackInfo(track_id);
-            if(track_info)
+            if((track_info->track_type == kRPVControllerTrackTypeSamples &&
+                m_table_type == TableType::kSampleTable) ||
+               (track_info->track_type == kRPVControllerTrackTypeEvents &&
+                m_table_type == TableType::kEventTable))
             {
-                if((track_info->track_type == kRPVControllerTrackTypeSamples &&
-                    m_table_type == TableType::kSampleTable) ||
-                   (track_info->track_type == kRPVControllerTrackTypeEvents &&
-                    m_table_type == TableType::kEventTable))
-                {
-                    filtered_tracks.push_back(track_id);
-                }
+                filtered_tracks.push_back(track_id);
             }
         }
-
-        bool fetch_result = false;
-
-        uint64_t request_id = (m_table_type == TableType::kEventTable)
-                                  ? DataProvider::EVENT_TABLE_REQUEST_ID
-                                  : DataProvider::SAMPLE_TABLE_REQUEST_ID;
-        // Cancel pending requests.
-        if(m_data_provider.IsRequestPending(request_id))
-        {
-            m_data_provider.CancelRequest(request_id);
-        }
-        // if no tracks match the table type, clear the table
-        if(filtered_tracks.empty())
-        {
-            m_data_provider.ClearTable(m_table_type);
-            fetch_result = true;
-        }
-        else
-        {
-            // Fetch table data for the selected tracks
-            TableRequestParams event_table_params(
-                m_req_table_type, filtered_tracks, start_ns, end_ns,
-                m_filter_options.filter,
-                (m_filter_options.column_index == 0)
-                    ? ""
-                    : m_column_names_ptr[m_filter_options.column_index],
-                m_filter_options.group_columns, 0, m_fetch_chunk_size);
-
-            fetch_result = m_data_provider.FetchMultiTrackTable(event_table_params);
-        }
-
-        if(!fetch_result)
-        {
-            spdlog::error("Failed to queue table request for tracks: {}",
-                          filtered_tracks.size());
-            // save this selection event to reprocess it later (it's ok to replace the
-            // previous one as the new one reflects the current selection)
-            m_track_selection_event_to_handle = e;
-        }
-        else
-        {
-            // clear any pending track selection event
-            m_track_selection_event_to_handle = nullptr;
-        }
-        // Update the selected tracks for this table type
-        m_selected_tracks = std::move(filtered_tracks);
     }
+
+    bool fetch_result = false;
+
+    uint64_t request_id = (m_table_type == TableType::kEventTable)
+                              ? DataProvider::EVENT_TABLE_REQUEST_ID
+                              : DataProvider::SAMPLE_TABLE_REQUEST_ID;
+    // Cancel pending requests.
+    if(m_data_provider.IsRequestPending(request_id))
+    {
+        m_data_provider.CancelRequest(request_id);
+    }
+    // if no tracks match the table type, clear the table
+    if(filtered_tracks.empty())
+    {
+        m_data_provider.ClearTable(m_table_type);
+        fetch_result = true;
+    }
+    else
+    {
+        // Fetch table data for the selected tracks
+        TableRequestParams event_table_params(
+            m_req_table_type, filtered_tracks, start_ns, end_ns, m_filter_options.filter,
+            (m_filter_options.column_index == 0)
+                ? ""
+                : m_column_names_ptr[m_filter_options.column_index],
+            m_filter_options.group_columns, 0, m_fetch_chunk_size);
+
+        fetch_result = m_data_provider.FetchMultiTrackTable(event_table_params);
+    }
+
+    if(!fetch_result)
+    {
+        spdlog::error("Failed to queue table request for tracks: {}",
+                      filtered_tracks.size());
+        // save this selection event to reprocess it later (it's ok to replace the
+        // previous one as the new one reflects the current selection)
+        m_defer_track_selection_changed = true;
+    }
+    else
+    {
+        // clear any pending track selection event
+        m_defer_track_selection_changed = false;
+    }
+    // Update the selected tracks for this table type
+    m_selected_tracks = std::move(filtered_tracks);
 }
 
 void
@@ -147,7 +149,7 @@ void
 InfiniteScrollTable::Update()
 {
     // Handle track selection changed event
-    if(m_track_selection_event_to_handle)
+    if(m_defer_track_selection_changed)
     {
         if(!m_data_provider.IsRequestPending(m_table_type == TableType::kEventTable
                                                  ? DataProvider::EVENT_TABLE_REQUEST_ID
@@ -157,7 +159,7 @@ InfiniteScrollTable::Update()
             spdlog::debug(
                 "Reprocessing deferred track selection changed event for table type: {}",
                 m_table_type == TableType::kEventTable ? "Event Table" : "Sample Table");
-            HandleTrackSelectionChanged(m_track_selection_event_to_handle);
+            HandleTrackSelectionChanged();
         }
     }
     if(m_data_changed)

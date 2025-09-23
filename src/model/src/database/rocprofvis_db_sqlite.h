@@ -55,6 +55,15 @@ typedef enum rocprofvis_db_sqlite_query_type_t
     kRPVNumSourceQueryTypes = 6
 } rocprofvis_db_sqlite_query_type_t;
 
+typedef enum rocprofvis_dm_track_search_id_t
+{
+    kRPVTrackSearchIdThreads,
+    kRPVTrackSearchIdThreadSamples,
+    kRPVTrackSearchIdDispatches,
+    kRPVTrackSearchIdCounters,
+    kRPVTrackSearchIdUnknown,
+} rocprofvis_dm_track_search_id_t;
+
 // structure to pass parameters to sqlite3_exec callbacks
 typedef struct{
     // pointer tp Database object
@@ -248,6 +257,8 @@ class SqliteDatabase : public Database
         static void FindTrackIDs(
             SqliteDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
             int& trackId, int & streamTrackId);
+        rocprofvis_dm_track_category_t TranslateOperationToTrackCategory(rocprofvis_dm_event_operation_t op);
+        static const rocprofvis_dm_track_search_id_t GetTrackSearchId(rocprofvis_dm_track_category_t category);
     
     protected:
         char* Sqlite3ColumnText(void* func, sqlite3_stmt* stmt, char** azColName, int index);
@@ -260,6 +271,7 @@ class SqliteDatabase : public Database
         virtual const rocprofvis_null_data_exceptions_int* GetNullDataExceptionsInt() = 0;
         virtual const rocprofvis_null_data_exceptions_string* GetNullDataExceptionsString() = 0;
         virtual const rocprofvis_null_data_exceptions_skip* GetNullDataExceptionsSkip() = 0;
+        virtual const rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
     private:     
 
         std::set<sqlite3*> m_available_connections;

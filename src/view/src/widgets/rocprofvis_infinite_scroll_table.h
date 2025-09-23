@@ -15,21 +15,23 @@ namespace View
 {
 
 class SettingsManager;
+class TimelineSelection;
 
 class InfiniteScrollTable : public RocWidget
 {
 public:
-    InfiniteScrollTable(DataProvider& dp, TableType table_type = TableType::kEventTable);
+    InfiniteScrollTable(DataProvider&                      dp,
+                        std::shared_ptr<TimelineSelection> timeline_selection,
+                        TableType table_type = TableType::kEventTable);
 
     void Update() override;
     void Render() override;
     void SetTableType(TableType type) { m_table_type = type; }
 
-    void HandleTrackSelectionChanged(std::shared_ptr<TrackSelectionChangedEvent> e);
+    void HandleTrackSelectionChanged();
     void HandleNewTableData(std::shared_ptr<TableDataEvent> e);
 
 private:
-
     // Important columns in the table
     enum ImportantColumns
     {
@@ -64,8 +66,9 @@ private:
     TableType m_table_type;  // Type of table (e.g., EventTable, SampleTable)
     rocprofvis_controller_table_type_t m_req_table_type;
 
-    DataProvider&    m_data_provider;
-    SettingsManager& m_settings;
+    DataProvider&                      m_data_provider;
+    SettingsManager&                   m_settings;
+    std::shared_ptr<TimelineSelection> m_timeline_selection;
 
     int m_fetch_chunk_size;
     int m_fetch_pad_items;
@@ -75,11 +78,11 @@ private:
     bool     m_skip_data_fetch;
     uint64_t m_last_total_row_count;
     bool     m_data_changed;
+    bool     m_defer_track_selection_changed;
 
     // Track the selected row for context menu actions
-    int                                         m_selected_row = -1;
-    ImVec2                                      m_last_table_size;
-    std::shared_ptr<TrackSelectionChangedEvent> m_track_selection_event_to_handle;
+    int    m_selected_row = -1;
+    ImVec2 m_last_table_size;
 
     // Keep track of currently selected tracks for this table type
     std::vector<uint64_t> m_selected_tracks;

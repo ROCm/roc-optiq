@@ -585,7 +585,8 @@ TraceView::RenderAnnotationControls()
     ImGui::PushID("add_new_sticky");
     if(ImGui::Button(ICON_ADD_NOTE))
     {
-        m_annotations->OpenStickyNotePopup(INVALID_TIME_NS, INVALID_OFFSET_PX);
+        std::pair<double, double> vminmax = m_timeline_view->GetVMinMax();
+        m_annotations->OpenStickyNotePopup(INVALID_TIME_NS, INVALID_OFFSET_PX, vminmax.first, vminmax.first);
         m_annotations->ShowStickyNotePopup();
     }
     if(ImGui::IsItemHovered())
@@ -632,8 +633,9 @@ TraceView::RenderBookmarkControls()
             bool is_selected = (selected_slot == i);
             ImGui::PushID(i);
 
-            ImGui::PushStyleColor(ImGuiCol_Text, used ? ImVec4(0.8f, 0.5f, 0.5f, 1.0f)
-                                                      : ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImU32 used_color = SettingsManager::GetInstance().GetColor(Colors::kTextDim);
+            ImU32 add_color  = SettingsManager::GetInstance().GetColor(Colors::kTextMain);
+            ImGui::PushStyleColor(ImGuiCol_Text, used ? used_color : add_color);
 
             if(ImGui::Selectable(label.c_str(), is_selected))
             {
@@ -824,6 +826,7 @@ SystemTraceProjectSettings::ToJson()
         bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X] = it.second.v_max_x;
         bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y]       = it.second.y;
         bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z]       = it.second.z;
+        
         i++;
     }
 }

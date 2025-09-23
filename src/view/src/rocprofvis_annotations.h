@@ -47,14 +47,15 @@ public:
     void Clear();
     void SetCenter(const ImVec2& center);
     void AddSticky(double time_ns, float y_offset, const ImVec2& size,
-                   const std::string& text, const std::string& title);
+                   const std::string& text, const std::string& title, double v_min,
+                   double v_max);
     void SetStickyPopup(double time_ns, float y_offset, const char* title = "",
                         const char* text = "");
 
     void                     ShowStickyNotePopup();
     void                     ShowStickyNoteEditPopup();
     std::vector<StickyNote>& GetStickyNotes();
-    void                     OpenStickyNotePopup(double time_ns, float y_offset);
+    void OpenStickyNotePopup(double time_ns, float y_offset, double v_min, double v_max);
 
 private:
     std::vector<StickyNote>           m_sticky_notes;
@@ -70,6 +71,8 @@ private:
     ImVec2                            m_visible_center;
     std::string                       m_project_id;
     AnnotationsManagerProjectSettings m_project_settings;
+    double                            m_v_min_x;  // Current view minimum x (time)    
+    double                            m_v_max_x;  // Current view maximum x (time)    
     int m_dragged_sticky_id;  // ID of the sticky note currently being dragged
 };
 

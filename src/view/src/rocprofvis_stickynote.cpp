@@ -11,7 +11,7 @@ namespace View
 static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
                        const std::string& text, const std::string& title,
-                       const std::string& project_id)
+                       const std::string& project_id, double v_min, double v_max)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
 , m_size(size)
@@ -20,6 +20,8 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 , m_project_id(project_id)
 , m_id(s_unique_id_counter)
 , m_is_visible(true)
+, m_v_min_x(v_min)
+, m_v_max_x(v_max)
 {
     s_unique_id_counter = s_unique_id_counter + 1;
 }
@@ -34,6 +36,17 @@ StickyNote::GetYOffset() const
 {
     return m_y_offset;
 }
+double
+StickyNote::GetVMinX() const
+{
+    return m_v_min_x;
+}
+double
+StickyNote::GetVMaxX() const
+{
+    return m_v_max_x;
+}
+
 ImVec2
 StickyNote::GetSize() const
 {
@@ -108,7 +121,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
         ("StickyNoteChild##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
         sticky_size, false,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-            ImGuiWindowFlags_NoBackground );
+            ImGuiWindowFlags_NoBackground);
 
     // Get the child window's draw list and position
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();

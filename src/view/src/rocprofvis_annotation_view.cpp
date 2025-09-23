@@ -30,15 +30,14 @@ AnnotationView::Render()
     {
         ImGui::Text("No notes");
     }
-    else if(ImGui::BeginTable("StickyNotesTable", 7,
+    else if(ImGui::BeginTable("StickyNotesTable", 5,
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
     {
         ImGui::TableSetupColumn("ID");
         ImGui::TableSetupColumn("Title");
         ImGui::TableSetupColumn("Text");
         ImGui::TableSetupColumn("Time (ns)");
-        ImGui::TableSetupColumn("Y Offset");
-        ImGui::TableSetupColumn("Size (WxH)");
+     
         ImGui::TableSetupColumn("Visibility");
         ImGui::TableHeadersRow();
 
@@ -65,10 +64,7 @@ AnnotationView::Render()
             ImGui::Text("%s", note.GetText().c_str());
             ImGui::TableNextColumn();
             ImGui::Text("%.2f", note.GetTimeNs());
-            ImGui::TableNextColumn();
-            ImGui::Text("%.2f", note.GetYOffset());
-            ImGui::TableNextColumn();
-            ImGui::Text("%.2f", note.GetYOffset());
+         
             ImGui::TableNextColumn();
             bool        visible     = note.IsVisible();
             std::string checkbox_id = "##visible_" + std::to_string(note.GetID());

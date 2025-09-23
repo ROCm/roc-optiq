@@ -22,9 +22,9 @@ namespace View
 // 20% top and bottom of the window size
 constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 
-TimelineView::TimelineView(DataProvider&                      dp,
-                           std::shared_ptr<TimelineSelection> timeline_selection,
-                           std::shared_ptr<AnnotationsManager>   annotations)
+TimelineView::TimelineView(DataProvider&                       dp,
+                           std::shared_ptr<TimelineSelection>  timeline_selection,
+                           std::shared_ptr<AnnotationsManager> annotations)
 : m_data_provider(dp)
 , m_zoom(1.0f)
 , m_view_time_offset_ns(0.0f)
@@ -172,7 +172,7 @@ TimelineView::ShowTimelineContextMenu(const ImVec2& window_position)
             double time_ns =
                 m_v_min_x + (x_in_chart / m_graph_size.x) * (m_v_max_x - m_v_min_x);
             float y_offset = rel_mouse_pos.y;
-            m_annotations->OpenStickyNotePopup(time_ns, y_offset);
+            m_annotations->OpenStickyNotePopup(time_ns, y_offset, m_v_min_x, m_v_max_x);
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -189,8 +189,8 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
     if(m_annotations->IsVisibile())
     {
         // Interaction --> top-most gets priority
-        for(int i = static_cast<int>(m_annotations->GetStickyNotes().size()) - 1;
-            i >= 0; --i)
+        for(int i = static_cast<int>(m_annotations->GetStickyNotes().size()) - 1; i >= 0;
+            --i)
         {
             if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
 
@@ -206,7 +206,7 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
             if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
 
             m_annotations->GetStickyNotes()[i].Render(draw_list, window_position,
-                                                           m_v_min_x, m_pixels_per_ns);
+                                                      m_v_min_x, m_pixels_per_ns);
         }
     }
     m_stop_user_interaction |= movement_drag || movement_resize;
@@ -218,8 +218,6 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
     m_annotations->ShowStickyNotePopup();
     m_annotations->ShowStickyNoteEditPopup();
 }
-
- 
 
 void
 TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
@@ -246,8 +244,8 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         {
             float x_in_chart = rel_mouse_pos.x;
             m_annotations->SetStickyPopup(m_v_min_x + (x_in_chart / m_graph_size.x) *
-                                                               (m_v_max_x - m_v_min_x),
-                                               rel_mouse_pos.y);
+                                                          (m_v_max_x - m_v_min_x),
+                                          rel_mouse_pos.y);
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -283,13 +281,13 @@ void
 TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position)
 {
     /*
-    Use this funtion for all future navigation requests that do not need to scroll to a particular track. Ex) Annotation and Bookmarks.
+    Use this funtion for all future navigation requests that do not need to scroll to a
+    particular track. Ex) Annotation and Bookmarks.
     */
     SetViewableRangeNS(start_ns, end_ns);
     m_scroll_position_y = static_cast<float>(y_position);
     ImGui::SetScrollY(m_scroll_position_y);
 }
-
 
 void
 TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
@@ -504,6 +502,11 @@ TimelineView::Render()
 
     m_last_zoom       = m_zoom;
     m_last_graph_size = m_graph_size;
+}
+std::pair<double, double>
+TimelineView::GetVMinMax()
+{
+    return { m_v_min_x, m_v_max_x };
 }
 
 void
@@ -1609,10 +1612,9 @@ TimelineView::HandleTopSurfaceTouch()
 ViewCoords
 TimelineView::GetViewCoords() const
 {
-    return {m_scroll_position_y, m_zoom, m_v_min_x, m_v_max_x };
+    return { m_scroll_position_y, m_zoom, m_v_min_x, m_v_max_x };
 }
 
- 
 TimelineArrow&
 TimelineView::GetArrowLayer()
 {

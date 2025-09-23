@@ -36,9 +36,14 @@ AnnotationsManagerProjectSettings::FromJson()
             static_cast<float>(note_json[JSON_KEY_ANNOTATION_SIZE_Y].getNumber());
         std::string text  = note_json[JSON_KEY_ANNOTATION_TEXT].getString();
         std::string title = note_json[JSON_KEY_ANNOTATION_TITLE].getString();
+        double      v_min = static_cast<double>(
+            note_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X].getNumber());
+        double v_max = static_cast<double>(
+            note_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X].getNumber());
 
         ImVec2 size(size_x, size_y);
-        m_annotations_manager.AddSticky(time_ns, y_offset, size, text, title);
+        m_annotations_manager.AddSticky(time_ns, y_offset, size, text, title, v_min,
+                                        v_max);
     }
 }
 
@@ -51,13 +56,15 @@ AnnotationsManagerProjectSettings::ToJson()
     for(size_t i = 0; i < notes.size(); ++i)
     {
         jt::Json sticky_json;
-        sticky_json[JSON_KEY_ANNOTATION_TIME_NS]  = notes[i].GetTimeNs();
-        sticky_json[JSON_KEY_ANNOTATION_Y_OFFSET] = notes[i].GetYOffset();
-        sticky_json[JSON_KEY_ANNOTATION_SIZE_X]   = notes[i].GetSize().x;
-        sticky_json[JSON_KEY_ANNOTATION_SIZE_Y]   = notes[i].GetSize().y;
-        sticky_json[JSON_KEY_ANNOTATION_TEXT]     = notes[i].GetText();
-        sticky_json[JSON_KEY_ANNOTATION_TITLE]    = notes[i].GetTitle();
-        sticky_json[JSON_KEY_ANNOTATION_ID]       = notes[i].GetID();
+        sticky_json[JSON_KEY_ANNOTATION_TIME_NS]          = notes[i].GetTimeNs();
+        sticky_json[JSON_KEY_ANNOTATION_Y_OFFSET]         = notes[i].GetYOffset();
+        sticky_json[JSON_KEY_ANNOTATION_SIZE_X]           = notes[i].GetSize().x;
+        sticky_json[JSON_KEY_ANNOTATION_SIZE_Y]           = notes[i].GetSize().y;
+        sticky_json[JSON_KEY_ANNOTATION_TEXT]             = notes[i].GetText();
+        sticky_json[JSON_KEY_ANNOTATION_TITLE]            = notes[i].GetTitle();
+        sticky_json[JSON_KEY_ANNOTATION_ID]               = notes[i].GetID();
+        sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X] = notes[i].GetVMinX();
+        sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X] = notes[i].GetVMaxX();
 
         m_settings_json[JSON_KEY_ANNOTATIONS][i] = sticky_json;
     }
@@ -92,6 +99,12 @@ AnnotationsManagerProjectSettings::Valid() const
             return false;
         if(!note_json.contains(JSON_KEY_ANNOTATION_TITLE) ||
            !note_json[JSON_KEY_ANNOTATION_TITLE].isString())
+            return false;
+        if(!note_json.contains(JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X) ||
+           !note_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X].isNumber())
+            return false;
+        if(!note_json.contains(JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X) ||
+           !note_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X].isNumber())
             return false;
     }
     return true;
@@ -150,9 +163,11 @@ AnnotationsManager::Clear()
 
 void
 AnnotationsManager::AddSticky(double time_ns, float y_offset, const ImVec2& size,
-                              const std::string& text, const std::string& title)
+                              const std::string& text, const std::string& title,
+                              double v_min, double v_max)
 {
-    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id);
+    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id, v_min,
+                                v_max);
 }
 
 bool
@@ -383,7 +398,8 @@ AnnotationsManager::ShowStickyNotePopup()
         if(save_clicked)
         {
             AddSticky(m_sticky_time_ns, m_sticky_y_offset, ImVec2(180, 80),
-                      std::string(m_sticky_text), std::string(m_sticky_title));
+                      std::string(m_sticky_text), std::string(m_sticky_title), m_v_min_x,
+                      m_v_max_x);
             m_show_sticky_popup = false;
             ImGui::CloseCurrentPopup();
         }
@@ -403,7 +419,8 @@ AnnotationsManager::ShowStickyNotePopup()
 }
 
 void
-AnnotationsManager::OpenStickyNotePopup(double time_ns, float y_offset)
+AnnotationsManager::OpenStickyNotePopup(double time_ns, float y_offset, double v_min,
+                                        double v_max)
 {
     if(time_ns == INVALID_TIME_NS && y_offset == INVALID_OFFSET_PX)
     {
@@ -418,6 +435,8 @@ AnnotationsManager::OpenStickyNotePopup(double time_ns, float y_offset)
     m_sticky_title[0]   = '\0';
     m_sticky_text[0]    = '\0';
     m_show_sticky_popup = true;
+    m_v_min_x           = v_min;
+    m_v_max_x           = v_max;
 }
 
 std::vector<StickyNote>&

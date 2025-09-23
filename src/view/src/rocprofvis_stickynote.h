@@ -12,7 +12,7 @@ class StickyNote
 public:
     StickyNote(double time_ns, float y_offset, const ImVec2& size,
                const std::string& text, const std::string& title,
-               const std::string& project_id);
+               const std::string& project_id, double v_min, double v_max);
 
     void Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
                 double pixels_per_ns);
@@ -35,6 +35,8 @@ public:
     int                GetID() const;
     void               SetTimeNs(double t) { m_time_ns = t; }
     void               SetYOffset(float y) { m_y_offset = y; }
+    double             GetVMinX() const;
+    double             GetVMaxX() const;    
 
 private:
     double      m_time_ns;
@@ -48,7 +50,8 @@ private:
     ImVec2      m_drag_offset   = ImVec2(0, 0);
     ImVec2      m_resize_offset = ImVec2(0, 0);
     bool        m_is_visible;
-
+    double      m_v_min_x;
+    double      m_v_max_x;
     bool m_resizing = false;
 };
 

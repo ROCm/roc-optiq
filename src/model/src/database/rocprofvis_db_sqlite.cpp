@@ -253,11 +253,15 @@ SqliteDatabase::GetTrackSearchId(rocprofvis_dm_track_category_t category)
             return kRPVTrackSearchIdThreads;
         case kRocProfVisDmRegionSampleTrack:
             return kRPVTrackSearchIdThreadSamples;
-        case kRocProfVisDmKernelDispatchTrack:
-        case kRocProfVisDmMemoryAllocationTrack:
-        case kRocProfVisDmMemoryCopyTrack:
-        case kRocProfVisDmStreamTrack: 
+        case kRocProfVisDmKernelDispatchTrack: 
             return kRPVTrackSearchIdDispatches;
+        case kRocProfVisDmMemoryAllocationTrack: 
+            return kRPVTrackSearchIdMemAllocs;
+        case kRocProfVisDmMemoryCopyTrack: 
+            return kRPVTrackSearchIdMemCopies;
+        case kRocProfVisDmStreamTrack: 
+            return kRPVTrackSearchIdStreams;
+            
     }
     return kRPVTrackSearchIdUnknown;
 }

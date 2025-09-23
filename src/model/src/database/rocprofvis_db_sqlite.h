@@ -60,7 +60,10 @@ typedef enum rocprofvis_dm_track_search_id_t
     kRPVTrackSearchIdThreads,
     kRPVTrackSearchIdThreadSamples,
     kRPVTrackSearchIdDispatches,
+    kRPVTrackSearchIdMemAllocs,
+    kRPVTrackSearchIdMemCopies,
     kRPVTrackSearchIdCounters,
+    kRPVTrackSearchIdStreams,
     kRPVTrackSearchIdUnknown,
 } rocprofvis_dm_track_search_id_t;
 

@@ -34,8 +34,8 @@ rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
                                                     rocprofvis_dm_op_t operation,
                                                     rocprofvis_dm_track_id_t& track_id) {
     
-    auto it_op = find_track_map.find(GetTrackSearchId(
-        TranslateOperationToTrackCategory((rocprofvis_dm_event_operation_t) operation)));
+    auto it_op = find_track_map.find(strcmp(subprocess, "-1") == 0 ? kRPVTrackSearchIdStreams : 
+        GetTrackSearchId(TranslateOperationToTrackCategory((rocprofvis_dm_event_operation_t) operation)));
     if(it_op != find_track_map.end())
     {
         auto it_node = it_op->second.find(node);

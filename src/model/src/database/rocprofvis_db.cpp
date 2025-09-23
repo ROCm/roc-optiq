@@ -290,14 +290,13 @@ const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t cat
 }
 
 rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(Database * db, const char* table_name, uint64_t instance_id ){
-    uint64_t id_to_str_conv_array[2] = { 0 };
-    id_to_str_conv_array[0] = instance_id;
     rocprofvis_dm_track_params_t* track_properties = db->TrackPropertiesLast();
     auto m = references[table_name][instance_id];
+    std::string str_id = std::to_string(instance_id);
     for(std::map<std::string,std::string>::iterator it = m.begin(); it != m.end(); ++it) {
         rocprofvis_db_ext_data_t record;
         record.name = it->first.c_str();
-        record.data = (rocprofvis_dm_charptr_t)id_to_str_conv_array;
+        record.data     = str_id.c_str();
         record.category = table_name;
         record.type  = kRPVDataTypeString;
         rocprofvis_dm_result_t result = db->BindObject()->FuncAddExtDataRecord(track_properties->extdata, record);

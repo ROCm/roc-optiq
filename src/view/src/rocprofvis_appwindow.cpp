@@ -342,6 +342,15 @@ AppWindow::RenderFileDialogs()
 void
 AppWindow::OpenFile(std::string file_path)
 {
+    // Check if the file exists.
+    if(!std::filesystem::exists(file_path))
+    {
+        spdlog::warn("File does not exist: {}", file_path);
+        ShowMessageDialog("File Not Found",
+                          "The selected file has been deleted or moved:\n" + file_path);
+        return;
+    }
+
     spdlog::info("Opening file: {}", file_path);
 
     std::unique_ptr<Project> project = std::make_unique<Project>();

@@ -246,8 +246,7 @@ TraceView::Render()
 {
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
-        if(m_analysis->IsVisible()) // TODO Dirty stub we need to reset right Item and dont recreate it
-                                           // Put this if to separate function          
+        if(m_is_analysis_bar_visible)    
         {
             m_trace_area.m_item = m_split_container;
             m_container->setRight(m_trace_area);
@@ -486,9 +485,9 @@ TraceView::RenderEditMenuOptions()
 }
 
 void
-TraceView::DisableAnalysisView()
+TraceView::SetAnalysisViewVisibility(bool visibility)
 {
-    m_analysis->ResetVisibility();
+    m_is_analysis_bar_visible = visibility;        
 }
 
 void

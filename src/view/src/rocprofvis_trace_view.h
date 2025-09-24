@@ -59,7 +59,7 @@ public:
     std::shared_ptr<TimelineSelection> GetTimelineSelection() const;
     std::shared_ptr<RocWidget>         GetToolbar() override;
     void                               RenderEditMenuOptions() override;
-    void                               DisableAnalysisView();   
+    void                               SetAnalysisViewVisibility( bool visibility);   
 
 private:
     void HandleHotKeys();
@@ -99,6 +99,8 @@ private:
     std::string m_save_notification_id;
 
     std::unique_ptr<SystemTraceProjectSettings> m_project_settings;
+    bool                                        m_is_analysis_bar_visible;
+     
 };
 
 }  // namespace View

@@ -1035,7 +1035,7 @@ TimelineView::RenderGraphView()
 
             track_item.chart->SetInViewVertical(is_visible);
 
-            if(is_visible)
+            if(is_visible || track_item.chart->GetDistanceToView() <= m_unload_track_distance) 
             {
                 // Request data for the chart if it doesn't have data.
                 if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
@@ -1051,6 +1051,10 @@ TimelineView::RenderGraphView()
                         (m_view_time_offset_ns + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
                 }
+            }
+
+            if(is_visible)
+            {
                 ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
                 if(track_item.selected)
                 {

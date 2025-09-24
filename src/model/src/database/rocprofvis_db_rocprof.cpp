@@ -273,6 +273,8 @@ RocprofDatabase::CreateIndexes()
                  " ON rocpd_region_" + GuidList()[i] + "(event_id);");
         vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_sample_event_idx_") + GuidList()[i] +
                  " ON rocpd_sample_" + GuidList()[i] + "(event_id);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_stack_idx_") + GuidList()[i] +
+                 " ON rocpd_event_" + GuidList()[i] + "(stack_id);");
     }
 
     return ExecuteTransaction(vec);

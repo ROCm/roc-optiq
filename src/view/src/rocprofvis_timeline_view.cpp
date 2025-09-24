@@ -218,10 +218,17 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     {
         ImGui::OpenPopup("StickyNoteContextMenu");
     }
-
+    
+    if(!ImGui::IsPopupOpen("StickyNoteContextMenu")) 
+    {
+        return;
+    }
+    auto style =  m_settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);    
     if(ImGui::BeginPopup("StickyNoteContextMenu"))
     {
-        if(ImGui::MenuItem("Add Sticky"))
+        if(ImGui::MenuItem("Add Annotation"))
         {
             float  x_in_chart = rel_mouse_pos.x;
             double time_ns =
@@ -233,6 +240,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         }
         ImGui::EndPopup();
     }
+    ImGui::PopStyleVar(2);
 }
 
 void

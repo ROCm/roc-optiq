@@ -7,9 +7,16 @@ Currently the application is deployed as a single executable.  No installation n
 ## Usage Instructions
 
 ### Open a Trace
-Use the `File` -> `Open` menu to open a trace file.
+Use the `File` -> `Open` menu to open a trace or project file.
 
-Supported formats are *.db* and *.rpd* trace files.
+Supported trace formats are *.db* and *.rpd* trace files. Project files have the extension *.rpv*.
+
+Files can also be opened by dragging and dropping them onto the application window.
+
+### Projects
+Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project. Upon opening a project file, the associated trace file and previous customizations will be recalled.
+
+Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwrite the currently opened project.
 
 ### UI Layout
 ![UI Layout](doc/ui_sections.png)

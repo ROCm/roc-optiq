@@ -1,9 +1,78 @@
+## 0.1.6
+
+### Features and Improvements
+
+- **Projects**
+  - Projects can now be saved and opened (.rpv files).
+  - A project will save: 
+    - The track layout (order, sizes, coloring options, etc).
+    - Bookmark information.
+    - User annotations.
+
+- **Annotations**
+  - Annotations can be placed on the timeline.
+  - Support for editing / moving / deleting annotation notes. 
+  - Annotation list view added to bottom pane.
+
+- **Toolbar**
+  - Toolbar control added.
+  - Annotation controls (show, hide, add) added to toolbar.
+  - Flow visibility controls added to toolbar.
+  - Bookmark controls added to toolbars.
+
+- **Files**
+  - Recently opened files list added to file menu for convenience.
+  - Drag and drop file support added. Multiple traces can be dropped and opened at the same time.
+
+- **Settings**
+  - Improvement to layout and functionality of settings dialog.
+  - Time formatting section added.
+  - Time format setting applied to items in timeline view.
+
+- **Event/Sample Tables**
+  - Fixed "group by" query behaviour.
+  - Improved query interface.
+  - Added right click menu option to jump to highlighted event in timeline
+  - Improved responsiveness. (Allow outdated data requests to be cancelled).
+
+- **Timeline**
+  - Improved event coloring options.
+  - Events now colored by name by default.
+  - Added Menu option to unselect all track or events.
+  - Added indicator to track description area that shows if track should be expanded to vertically to show hidden stacked events.
+
+- **Misc UI**
+  - Show progress messages on loading popup.
+  - Added banner indicating build is for internal users only.
+
+### Fixes
+
+- Rocpd (.db) file processing improvements:
+  - Sample counter tracks now loaded.
+  - Flow events now rendered.
+  - Thread tracks separated into thread and sampled thread tracks.
+- UI:
+  - Fixed flow rendering issues.
+  - Improved event details layout.
+- Event Table view:
+  - Fixed "group by" query behaviour.
+- Fixed topology mis-categorization issues.
+- Fixed sidebar control id collisions.
+- Fixed crash on exit.
+- Fixed zoom related crash.
+- Fixed track data not being requested occasionally when scrolling vertically.
+
+### Known Issues
+
+- Stream tracks may overlap events incorrectly.
+- Time formatting not applied to all fields that display time data.
+
 ## 0.1.4
 
 ### Features and Improvements
 
 - **Event Details**
-  - Event names added to event flow table
+  - Event names added to event flow table.
   - Option added to show and hide flow arrows. Press F3 to show flow control panel.
 
 ### Fixes

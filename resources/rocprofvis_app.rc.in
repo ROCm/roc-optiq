@@ -24,11 +24,11 @@ BEGIN
         BLOCK "040904B0" // Language and codepage: U.S. English, Unicode
         BEGIN
             VALUE "CompanyName", "AMD\0"
-            VALUE "FileDescription", "Rocprof Visualizer\0"
+            VALUE "FileDescription", "ROCm Visualizer Beta\0"
             VALUE "FileVersion", STR(FILEVERSION_MAJOR) "." STR(FILEVERSION_MINOR) "." STR(FILEVERSION_PATCH) "." STR(FILEVERSION_BUILD) "\0"
             VALUE "ProductVersion", STR(FILEVERSION_MAJOR) "." STR(FILEVERSION_MINOR) "." STR(FILEVERSION_PATCH) "." STR(FILEVERSION_BUILD) "\0"
-            VALUE "InternalName", "Rocprof Visualizer\0"
-            VALUE "ProductName", "Rocprof Visualizer\0"
+            VALUE "InternalName", "ROCm Visualizer\0"
+            VALUE "ProductName", "ROCm Visualizer\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 AMD\0"
         END
     END

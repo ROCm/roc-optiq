@@ -542,7 +542,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Show All Stickies");
+        ImGui::SetTooltip("Show Annotation Layer");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -567,7 +567,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Hide All Stickies");
+        ImGui::SetTooltip("Hide Annotation Layer");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -586,7 +586,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Add New Sticky");
+        ImGui::SetTooltip("Add New Annotation");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();

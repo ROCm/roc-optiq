@@ -198,7 +198,7 @@ AnnotationsManager::ShowStickyNoteEditPopup()
     ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
     ImGui::PushStyleColor(ImGuiCol_Border, border_color);
 
-    ImGui::OpenPopup("Edit Sticky Note");
+    ImGui::OpenPopup("Edit Annotation");
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
     ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
@@ -207,9 +207,9 @@ AnnotationsManager::ShowStickyNoteEditPopup()
 
     ImGui::SetNextWindowSize(ImVec2(390, 420),
                              ImGuiCond_Once);  // Initial size, user can resize
-    if(ImGui::BeginPopupModal("Edit Sticky Note", nullptr, ImGuiWindowFlags_NoCollapse))
+    if(ImGui::BeginPopupModal("Edit Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
     {
-        ImGui::Text("Edit Sticky Note");
+        ImGui::Text("Edit Annotation");
         ImGui::Separator();
         ImGui::Spacing();
 
@@ -339,7 +339,7 @@ AnnotationsManager::ShowStickyNotePopup()
                              ImGuiCond_Once);  // Initial size, user can resize
     if(ImGui::BeginPopupModal("Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
     {
-        ImGui::Text("Add Sticky Note");
+        ImGui::Text("Add Annotation");
         ImGui::Separator();
         ImGui::Spacing();
 

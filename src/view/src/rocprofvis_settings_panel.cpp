@@ -126,7 +126,7 @@ SettingsPanel::Render()
                 ImGui::CalcTextSize("Cancel").x + 2 * ImGui::GetStyle().FramePadding.x;
             ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
                                  ImGui::GetStyle().ItemSpacing.x - 2 * button_width);
-            if(ImGui::Button("Ok", ImVec2(button_width, 0)))
+            if(ImGui::Button("OK", ImVec2(button_width, 0)))
             {
                 m_usersettings.display_settings.dpi_based_scaling =
                     m_font_settings.dpi_scaling;

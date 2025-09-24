@@ -2642,19 +2642,19 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
                 result = LoadRocpd(filepath.c_str());
             }
 #ifdef COMPUTE_UI_SUPPORT
-            else if(filepath.find(".csv", filepath.size() - 4 != std::string::npos))
+            else if(filepath.find(".csv", filepath.size() - 4) != std::string::npos)
             {
                 m_compute_trace = new ComputeTrace();
                 ROCPROFVIS_ASSERT(m_compute_trace);
                 result = m_compute_trace->Load(filepath.c_str());
             }
 #endif
-#ifdef JSON_SUPPORT
-            else if(filepath.find(".json", filepath.size() - 5) != std::string::npos)
-            {
-                result = LoadJson(filepath.c_str());
-            }
-#endif
+// #ifdef JSON_SUPPORT
+//             else if(filepath.find(".json", filepath.size() - 5) != std::string::npos)
+//             {
+//                 result = LoadJson(filepath.c_str());
+//             }
+// #endif
             else
             {
                 result = kRocProfVisResultInvalidArgument;

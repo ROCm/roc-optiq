@@ -7,6 +7,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#include "rocprofvis_trace_view.h"
 
 #include <iostream>
 #include <sstream>
@@ -474,6 +475,17 @@ void
 TabContainer::EnableSendChangeEvent(bool enable)
 {
     m_enable_send_change_event = enable;
+}
+
+void
+TabContainer::ResetAnalysisBar()
+{
+    for (const auto& tab : m_tabs)
+    {
+        auto trace_view_tab = std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab.m_widget);
+        trace_view_tab->DisableAnalysisView();
+    }
+    m_analysis_bar_visible = !m_analysis_bar_visible;
 }
 
 void

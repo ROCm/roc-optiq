@@ -499,8 +499,13 @@ AppWindow::RenderViewMenu(Project* project)
             {
                 tool_bar_item->m_visible = !tool_bar_item->m_visible;
             }
+            if(ImGui::MenuItem("Show Analysis Bar", nullptr, m_tab_container->IsAnalysisBarVisible()))
+            {
+                m_tab_container->ResetAnalysisBar();
+            }
         }
         ImGui::EndMenu();
+
     }
 }
 

@@ -378,15 +378,18 @@ AppWindow::RenderFileMenu(Project* project)
         {
             IGFD::FileDialogConfig config;
             config.path                      = ".";
-            std::string supported_extensions = ".rpv,.db,.rpd,";
-#ifdef JSON_SUPPORT
-            supported_extensions += ",.json";
-#endif
-#ifdef COMPUTE_UI_SUPPORT
-            supported_extensions += ",.csv";
-#endif
+
+            std::string filters = "All (.rpv,.db,.rpd){.rpv,.db,.rpd";
+            #ifdef JSON_SUPPORT
+            filters += ",.json";
+            #endif
+            #ifdef COMPUTE_UI_SUPPORT
+            filters += ",.csv";
+            #endif
+            filters += "},Projects (.rpv){.rpv},Traces (.db,.rpd){.db,.rpd}";
+
             ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, "Choose File",
-                                                    supported_extensions.c_str(), config);
+                                                    filters.c_str(), config);
         }
         if(ImGui::MenuItem("Save", nullptr, false, project && project->IsProject()))
         {

@@ -381,7 +381,7 @@ AppWindow::RenderFileMenu(Project* project)
 
             std::string filters = "All (.rpv,.db,.rpd){.rpv,.db,.rpd";
             #ifdef JSON_SUPPORT
-            filters += ",.json";
+            // filters += ",.json";
             #endif
             #ifdef COMPUTE_UI_SUPPORT
             filters += ",.csv";

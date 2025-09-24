@@ -35,7 +35,7 @@ TraceView::TraceView()
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
-, m_current_bookmark(-1)
+
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -351,7 +351,6 @@ TraceView::HandleHotKeys()
                     NotificationManager::GetInstance().Show(
                         "Bookmark " + std::to_string(i) + " saved.",
                         NotificationLevel::Info);
-                    m_current_bookmark = i;
                 }
             }
             else
@@ -361,8 +360,8 @@ TraceView::HandleHotKeys()
                 {
                     if(m_timeline_view)
                     {
-                        m_timeline_view->MoveToPosition(it->second.v_min_x,
-                                                        it->second.v_max_x, it->second.y, false);
+                        m_timeline_view->MoveToPosition(
+                            it->second.v_min_x, it->second.v_max_x, it->second.y, false);
 
                         NotificationManager::GetInstance().Show(
                             "Bookmark " + std::to_string(i) + " restored.",
@@ -599,22 +598,12 @@ TraceView::RenderAnnotationControls()
 void
 TraceView::RenderBookmarkControls()
 {
-    if(m_current_bookmark == -1)
-    {
-        // This is used on initialization to set the bookmark to the first one if it
-        // exists
-        if(m_bookmarks.size() > 0)
-        {
-            m_current_bookmark = 0;
-        }
-    }
-
     ImGui::BeginGroup();
 
     ImGui::PushID("bookmark_toggle_dropdown");
 
     static int selected_slot = -1;
-    if(ImGui::BeginCombo("", "Manage Bookmarks"))
+    if(ImGui::BeginCombo("", "Bookmarks"))
     {
         if(ImGui::BeginTable("BookmarkTable", 2, ImGuiTableFlags_SizingStretchProp))
         {
@@ -646,8 +635,9 @@ TraceView::RenderBookmarkControls()
                     {
                         auto it = m_bookmarks.find(i);
                         if(it != m_bookmarks.end() && m_timeline_view)
-                            m_timeline_view->MoveToPosition(
-                                it->second.v_min_x, it->second.v_max_x, it->second.y, false);
+                            m_timeline_view->MoveToPosition(it->second.v_min_x,
+                                                            it->second.v_max_x,
+                                                            it->second.y, false);
                     }
 
                     selected_slot = -1;
@@ -672,30 +662,21 @@ TraceView::RenderBookmarkControls()
                         NotificationManager::GetInstance().Show(
                             "Bookmark " + std::to_string(i) + " removed.",
                             NotificationLevel::Info);
-                        if(m_current_bookmark == i)
-                        {
-                            if(FindNextBookmark(i) != -1)
-                                m_current_bookmark = FindNextBookmark(i);
-                            else if(FindPreviousBookmark(i) != -1)
-                                m_current_bookmark = FindPreviousBookmark(i);
-                            else
-                                m_current_bookmark = -1;
-                        }
                     }
                 }
                 else
                 {
                     ImGui::PushFont(icon_font);
+                    ImGui::PushFont(icon_font);
                     if(ImGui::Button(ICON_ADD_NOTE))
                     {
-                        m_bookmarks[i]     = m_timeline_view->GetViewCoords();
-                        m_current_bookmark = i;
+                        m_bookmarks[i] = m_timeline_view->GetViewCoords();
                         NotificationManager::GetInstance().Show(
                             "Bookmark " + std::to_string(i) + " created.",
                             NotificationLevel::Info);
                     }
                     ImGui::PopFont();
-
+                    ImGui::PopFont();
                 }
                 ImGui::PopFont();
                 ImGui::PopStyleColor(3);
@@ -711,28 +692,6 @@ TraceView::RenderBookmarkControls()
     ImGui::SameLine();
 
     ImGui::EndGroup();
-}
-
-int
-TraceView::FindNextBookmark(int current_index)
-{
-    for(int i = current_index + 1; i <= 9; ++i)
-    {
-        if(m_bookmarks.count(i) > 0) return i;
-    }
-    NotificationManager::GetInstance().Show("You do not have any more bookmarks");
-    return -1;
-}
-
-int
-TraceView::FindPreviousBookmark(int current_index)
-{
-    for(int i = current_index - 1; i >= 0; --i)
-    {
-        if(m_bookmarks.count(i) > 0) return i;
-    }
-    NotificationManager::GetInstance().Show("You do not have any more bookmarks");
-    return -1;
 }
 
 void

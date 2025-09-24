@@ -30,10 +30,9 @@ AnnotationView::Render()
     {
         ImGui::Text("No notes");
     }
-    else if(ImGui::BeginTable("StickyNotesTable", 5,
+    else if(ImGui::BeginTable("StickyNotesTable", 4,
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
     {
-        ImGui::TableSetupColumn("ID");
         ImGui::TableSetupColumn("Title");
         ImGui::TableSetupColumn("Text");
         ImGui::TableSetupColumn("Time (ns)");
@@ -60,15 +59,14 @@ AnnotationView::Render()
             max_row_height       = std::max(max_row_height, time_height);
             max_row_height       = std::max(max_row_height, checkbox_height);
 
+            // Title column with selection logic
             ImGui::TableNextColumn();
-            bool        is_selected      = (note.GetID() == m_selected_note_id);
-            std::string selectable_label = std::to_string(note.GetID());
-
+            bool is_selected = (note.GetID() == m_selected_note_id);
+            // Title + ID for unique label
+      
 
             if(is_selected)
             {
-                // This is only here to prevent the imguism that causes the selected cell
-                // to not be fully highlighted.
                 ImGui::PushStyleColor(ImGuiCol_Header,
                                       ImGui::GetStyleColorVec4(ImGuiCol_TableRowBg));
                 ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
@@ -77,8 +75,7 @@ AnnotationView::Render()
                                       ImGui::GetStyleColorVec4(ImGuiCol_TableRowBg));
             }
 
-
-            if(ImGui::Selectable(selectable_label.c_str(), is_selected,
+            if(ImGui::Selectable(note.GetTitle().c_str(), is_selected,
                                  ImGuiSelectableFlags_SpanAllColumns |
                                      ImGuiSelectableFlags_AllowItemOverlap,
                                  ImVec2(0, max_row_height)))
@@ -94,13 +91,16 @@ AnnotationView::Render()
             {
                 ImGui::PopStyleColor(3);
             }
-            m_selected_note_id = -1;
-            ImGui::TableNextColumn();
-            ImGui::TextWrapped("%s", note.GetTitle().c_str());
+
+            // Text column
             ImGui::TableNextColumn();
             ImGui::TextWrapped("%s", note.GetText().c_str());
+
+            // Time column
             ImGui::TableNextColumn();
-            ImGui::Text("%.2f", note.GetTimeNs());
+            ImGui::Text("%.0f", note.GetTimeNs());
+
+            // Visibility column
             ImGui::TableNextColumn();
             bool        visible     = note.IsVisible();
             std::string checkbox_id = "##visible_" + std::to_string(note.GetID());

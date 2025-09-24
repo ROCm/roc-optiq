@@ -64,10 +64,7 @@ private:
     void HandleHotKeys();
     void RenderToolbar();
     void RenderFlowControls();
-     void RenderAnnotationControls();
-    int FindNextBookmark(int current_index );
-     int FindPreviousBookmark(int current_index);
-
+    void RenderAnnotationControls();
 
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<SideBar>           m_sidebar;
@@ -89,7 +86,6 @@ private:
     } popup_info_t;
 
     popup_info_t                        m_popup_info;
-    int                                 m_current_bookmark;
     std::unordered_map<int, ViewCoords> m_bookmarks;
 
     std::shared_ptr<AnnotationsManager> m_annotations;

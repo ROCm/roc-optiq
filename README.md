@@ -32,20 +32,22 @@ Supported formats are *.db* and *.rpd* trace files.
     - When hovering over the *Graph* area the scroll wheel will zoom the view.
     - When hovering over the *Description* area of the track the scroll wheel will scroll the track list.
     - Display options for each track can be accessed by clicking the gear icon in track's *Description* area.
-    - Clicking the *Description* area will select or deselect the track.  When selected, the track details will be displayed in the *Event Details* or *Sample Details* tabs in the *Advanced Details Area", depending on the track type.
-    - Clicking on an *Event* in the *Graph* area will select or deselect an event. When selected details for the event can be seen in the *Events View* tab of the *Advanced Details Area*.
+    - Clicking the *Description* area will select or deselect the track.  When selected, the track details will be displayed in the *Track Details* pane. Additonally, depending on the track type, the *Event Table* or *Sample Table* tabs in the *Advanced Details Area" will be populated by the contents of the track. 
+    - Clicking on an *Event* in the *Graph* area will select or deselect an event. When selected, details for the event can be seen in the *Event Details* tab of the *Advanced Details Area*.
     - Double clicking on the *Graph* will start a *Time Range Filter* selection.  Double click again to finish the selection.  Double click again to clear the selection.
     - Tracks can be resized by hovering over and dragging the separator lines between tracks.
     - Tracks can be reordered by clicking and dragging the grip on left side of the *Description* area.
-    - When there is an active *Time Range Filter* the trace can be trimmed using the `File->Save Selection` menu option.  This will create a new trace file containing only the events in the selection zone.
+    - When there is an active *Time Range Filter* the trace can be trimmed using the `Edit->Save Trace Selection` menu option.  This will create a new trace file containing only the events in the selection zone.
     - The current view (scroll and zoom position) can be saved to a bookmark for quick navigation.  Use `ctrl` + keys `0`- `9` to create a view bookmark and keys `0` - `9` to restore the view to a stored bookmark. 
+    - Bookmarks can also be set and recalled using the Bookmark dropdown on the main toolbar.
+    - Annotations can be managed (add/show/hide) from the main toolbar Annotations panel.
 
 3. Advanced Details Area
     - Use the tabs to see different detailed information events and tracks
     - The *Event Details* and *Sample Details* tabs provide a list (table) of the events or samples contained the selected track or tracks.
     - Right click on the column headers to show / hide columns.
-    - In the *Event Details* tab there is a drop down box that allows the events grouped by a column to display aggregated metrics.
-    - Both the *Event Details* and *Sample Details* provide a text input box that can be used to filter the data.  Ex: `min_duration > 2000` will filter all events shorter than 2000 ns.
+    - In the *Event Table* tab there is a drop down box that allows the events grouped by a column to display aggregated metrics.
+    - Both the *Event Table* and *Sample Table* provide a text input box that can be used to filter the data.  Ex: `min_duration > 2000` will filter all events shorter than 2000 ns.
     - Setting a *Time Range Filter* using the timeline view will filter the rows displayed in the table to be contained within the selected time range.
-    - The *Events View* tab shows detailed information about currently selected event in the timeline view.
+    - The *Event Details* tab shows detailed information about currently selected events in the timeline view.
     - The *Track Details* tab shows additional information about the currently selected tracks.

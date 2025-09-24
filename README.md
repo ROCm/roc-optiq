@@ -55,6 +55,10 @@ Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwri
     - Right click on the column headers to show / hide columns.
     - In the *Event Table* tab there is a drop down box that allows the events grouped by a column to display aggregated metrics.
     - Both the *Event Table* and *Sample Table* provide a text input box that can be used to filter the data.  Ex: `min_duration > 2000` will filter all events shorter than 2000 ns.
+    - Right click on a table row and select `Go to event` to navigate the timeline view to the highlighted event.
     - Setting a *Time Range Filter* using the timeline view will filter the rows displayed in the table to be contained within the selected time range.
     - The *Event Details* tab shows detailed information about currently selected events in the timeline view.
     - The *Track Details* tab shows additional information about the currently selected tracks.
+    - The *Annotations* tab shows a list of user created annotations.
+        - Annotations can be individually hidden and shown using this interface.
+        - Clicking on a row will bring the associated annotation into view.

@@ -284,13 +284,13 @@ TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position,
     if(center)
     {
         m_scroll_position_y =
-            clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f, 0.0f,
+            std::clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f, 0.0f,
                   m_content_max_y_scroll);
     }
     else
     {
         m_scroll_position_y =
-            clamp(static_cast<float>(y_position), 0.0f, m_content_max_y_scroll);
+            std::clamp(static_cast<float>(y_position), 0.0f, m_content_max_y_scroll);
     }
 
     ImGui::SetScrollY(m_scroll_position_y);
@@ -520,7 +520,7 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_sidebar_size    = clamp(m_sidebar_size + drag_delta.x, 100.0f, 600.0f);
+        m_sidebar_size    = std::clamp(m_sidebar_size + drag_delta.x, 100.0f, 600.0f);
         m_view_time_offset_ns -=
             (drag_delta.x / display_size.x) *
             m_v_width;  // Prevents chart from moving in unexpected way.
@@ -1288,7 +1288,7 @@ TimelineView::RenderGraphPoints()
         float available_width = subcomponent_size_main.x - m_sidebar_size;
 
         ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
-                            clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
+                            std::clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
                                   (available_width * 0.05f), (available_width * 0.90f)));
         ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3.0f);
 
@@ -1362,7 +1362,7 @@ TimelineView::HandleTopSurfaceTouch()
         {
             // Adjust scroll speed as needed (here, 40.0f per scroll step)
             float scroll_speed  = 100.0f;
-            m_scroll_position_y = clamp(m_scroll_position_y - scroll_wheel * scroll_speed,
+            m_scroll_position_y = std::clamp(m_scroll_position_y - scroll_wheel * scroll_speed,
                                         0.0f, m_content_max_y_scroll);
         }
     }
@@ -1514,7 +1514,7 @@ TimelineView::HandleTopSurfaceTouch()
     {
         float drag_y = io.MouseDelta.y;
         m_scroll_position_y =
-            clamp(m_scroll_position_y - drag_y, 0.0f, m_content_max_y_scroll);
+            std::clamp(m_scroll_position_y - drag_y, 0.0f, m_content_max_y_scroll);
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 

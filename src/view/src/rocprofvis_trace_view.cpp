@@ -22,11 +22,9 @@ namespace View
 
 TraceView::TraceView()
 : m_timeline_view(nullptr)
-, m_sidebar(nullptr)
-, m_container(nullptr)
+, m_horizontal_split_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
-, m_analysis(nullptr)
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
@@ -172,9 +170,9 @@ TraceView::Update()
     {
         m_track_topology->Update();
     }
-    if(m_analysis)
+    if(m_analysis_item->m_item)
     {
-        m_analysis->Update();
+        m_analysis_item->m_item->Update();
     }
 }
 
@@ -188,40 +186,40 @@ TraceView::CreateView()
     m_timeline_view      = std::make_shared<TimelineView>(m_data_provider,
                                                           m_timeline_selection, m_annotations);
 
-    m_sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
+    auto sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
                                            m_timeline_view->GetGraphs(), m_data_provider);
-    m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+    auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                 m_timeline_selection, m_annotations);
 
-    LayoutItem left;
-    left.m_item         = m_sidebar;
-    left.m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
+    m_sidebar_item                 = LayoutItem::CreateFromWidget(sidebar);
+    m_sidebar_item->m_visible      = m_is_sidebar_visible;
+    m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
-    LayoutItem top;
-    top.m_item = m_timeline_view;
+    m_analysis_item                = LayoutItem::CreateFromWidget(analysis);
+    m_analysis_item->m_visible     = m_is_analysis_visible;
 
-    LayoutItem bottom;
-    bottom.m_item = m_analysis;
+    m_timeline_item = LayoutItem::CreateFromWidget(m_timeline_view);
+    m_vertical_split_container = std::make_shared<VSplitContainer>(m_timeline_item, m_analysis_item);
+    m_vertical_split_container->SetSplit(0.75);
 
-    LayoutItem traceArea;
-    auto       split_container = std::make_shared<VSplitContainer>(top, bottom);
-    split_container->SetSplit(0.75);
-    traceArea.m_item     = split_container;
-    traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
+    auto trace_area        = std::make_shared<LayoutItem>();
+    trace_area->m_item     = m_vertical_split_container;
+    trace_area->m_bg_color = IM_COL32(255, 255, 255, 255);
 
-    m_container = std::make_shared<HSplitContainer>(left, traceArea);
-    m_container->SetSplit(0.2f);
-    m_container->SetMinRightWidth(400);
+    m_horizontal_split_container =
+        std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);
+    m_horizontal_split_container->SetSplit(0.2f);
+    m_horizontal_split_container->SetMinRightWidth(400);
 }
 
 void
 TraceView::DestroyView()
 {
-    m_timeline_view = nullptr;
-    m_sidebar       = nullptr;
-    m_container     = nullptr;
-    m_analysis      = nullptr;
-    m_view_created  = false;
+    m_timeline_view              = nullptr;
+    m_sidebar_item->m_item       = nullptr;
+    m_horizontal_split_container = nullptr;
+    m_analysis_item->m_item      = nullptr;
+    m_view_created               = false;
 }
 
 bool
@@ -244,10 +242,9 @@ TraceView::OpenFile(const std::string& file_path)
 void
 TraceView::Render()
 {
-    if(m_container && m_data_provider.GetState() == ProviderState::kReady)
-    {
-        m_container->Render();
-
+    if(m_horizontal_split_container && m_data_provider.GetState() == ProviderState::kReady)
+    {        
+        m_horizontal_split_container->Render();
         HandleHotKeys();
     }
 
@@ -472,6 +469,22 @@ TraceView::RenderEditMenuOptions()
         }
     }
     ImGui::Separator();
+}
+
+void
+TraceView::SetAnalysisViewVisibility(bool visibility)
+{
+    m_is_analysis_visible = visibility;
+    if(m_analysis_item)
+        m_analysis_item->m_visible = m_is_analysis_visible;
+}
+
+void
+TraceView::SetSidebarViewVisibility(bool visibility)
+{
+    m_is_sidebar_visible = visibility;
+    if(m_sidebar_item)
+        m_sidebar_item->m_visible  = visibility;
 }
 
 void

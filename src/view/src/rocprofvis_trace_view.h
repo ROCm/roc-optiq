@@ -59,6 +59,7 @@ public:
     std::shared_ptr<TimelineSelection> GetTimelineSelection() const;
     std::shared_ptr<RocWidget>         GetToolbar() override;
     void                               RenderEditMenuOptions() override;
+    void                               DisableAnalysisView();   
 
 private:
     void HandleHotKeys();

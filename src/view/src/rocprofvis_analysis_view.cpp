@@ -35,21 +35,21 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     m_tab_container = std::make_shared<TabContainer>();
 
     TabItem tab_item;
-    tab_item.m_label     = "Event Details";
-    tab_item.m_id        = "event_details";
+    tab_item.m_label     = "Event Table";
+    tab_item.m_id        = "event_table";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_event_table;
     m_tab_container->AddTab(tab_item);
 
-    tab_item.m_label     = "Sample Details";
-    tab_item.m_id        = "sample_details";
+    tab_item.m_label     = "Sample Table";
+    tab_item.m_id        = "sample_table";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_sample_table;
     m_tab_container->AddTab(tab_item);
 
     // Add EventsView tab
-    tab_item.m_label     = "Events View";
-    tab_item.m_id        = "events_view";
+    tab_item.m_label     = "Events Details";
+    tab_item.m_id        = "events_details";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_events_view;
     m_tab_container->AddTab(tab_item);
@@ -61,7 +61,7 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     m_tab_container->AddTab(tab_item);
 
     // Add Annotation View Tab
-    tab_item.m_label     = "Annotation View";
+    tab_item.m_label     = "Annotations";
     tab_item.m_id        = "annotation_view";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_annotation_view;

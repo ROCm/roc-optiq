@@ -48,8 +48,8 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     m_tab_container->AddTab(tab_item);
 
     // Add EventsView tab
-    tab_item.m_label     = "Events Details";
-    tab_item.m_id        = "events_details";
+    tab_item.m_label     = "Event Details";
+    tab_item.m_id        = "event_details";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_events_view;
     m_tab_container->AddTab(tab_item);

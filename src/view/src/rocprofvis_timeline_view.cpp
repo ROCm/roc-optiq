@@ -1440,7 +1440,7 @@ TimelineView::RenderGraphPoints()
         ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
 
         ImGui::SliderFloat("##scrollbar", &current_pos, 0.0f,
-                           subcomponent_size_main.x * m_zoom, "%.5f");
+                           subcomponent_size_main.x * m_zoom, " ");
 
         ImGui::PopStyleColor(5);  // Pop the colors we pushed above
         ImGui::PopStyleVar(2);    // Pop both style variables

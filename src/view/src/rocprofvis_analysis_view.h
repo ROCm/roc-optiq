@@ -27,7 +27,8 @@ public:
     ~AnalysisView();
     void Render() override;
     void Update() override;
-    bool m_visible = true;  // TODO: temp stub
+    bool IsVisible() { return m_visible; };
+    void ResetVisibility() { m_visible = !m_visible; };
 
 private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
@@ -46,6 +47,7 @@ private:
     EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
     EventManager::SubscriptionToken m_new_table_data_token;
+    bool                            m_visible = true;
     
 };
 

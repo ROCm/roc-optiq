@@ -74,6 +74,8 @@ private:
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::shared_ptr<TrackTopology>     m_track_topology;
     std::shared_ptr<RocCustomWidget>   m_tool_bar;
+    std::shared_ptr<VSplitContainer>   m_split_container;
+    LayoutItem                         m_trace_area;
 
     DataProvider m_data_provider;
     bool         m_view_created;

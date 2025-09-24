@@ -203,14 +203,13 @@ TraceView::CreateView()
     LayoutItem bottom;
     bottom.m_item = m_analysis;
 
-    LayoutItem traceArea;
-    auto       split_container = std::make_shared<VSplitContainer>(top, bottom);
-    split_container->SetSplit(0.75);
-    traceArea.m_item     = split_container;
-    //traceArea.m_item     = top.m_item;
-    traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
+    
+    m_split_container = std::make_shared<VSplitContainer>(top, bottom);
+    m_split_container->SetSplit(0.75);
+    m_trace_area.m_item     = m_split_container;
+    m_trace_area.m_bg_color = IM_COL32(255, 255, 255, 255);
 
-    m_container = std::make_shared<HSplitContainer>(left, traceArea);
+    m_container = std::make_shared<HSplitContainer>(left, m_trace_area);
     m_container->SetSplit(0.2f);
     m_container->SetMinRightWidth(400);
 }
@@ -247,41 +246,16 @@ TraceView::Render()
 {
     if(m_container && m_data_provider.GetState() == ProviderState::kReady)
     {
-        if(m_analysis->m_visible == false) // TODO Dirty stub we need to reset right Item and dont recreate it
+        if(m_analysis->IsVisible()) // TODO Dirty stub we need to reset right Item and dont recreate it
+                                           // Put this if to separate function          
         {
-            LayoutItem left;
-            left.m_item         = m_sidebar;
-            left.m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
-
-            LayoutItem traceArea;
-            traceArea.m_item     = m_timeline_view;
-            traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
-            m_container          = std::make_shared<HSplitContainer>(left, traceArea);
-            m_container->SetSplit(0.2f);
-            m_container->SetMinRightWidth(400);
+            m_trace_area.m_item = m_split_container;
+            m_container->setRight(m_trace_area);
         }
-        else // TODO it can be moved to another function
+        else
         {
-            LayoutItem left;
-            left.m_item         = m_sidebar;
-            left.m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
-
-            LayoutItem top;
-            top.m_item = m_timeline_view;
-
-            LayoutItem bottom;
-            bottom.m_item = m_analysis;
-
-            LayoutItem traceArea;
-            auto       split_container = std::make_shared<VSplitContainer>(top, bottom);
-            split_container->SetSplit(0.75);
-            traceArea.m_item = split_container;
-            // traceArea.m_item     = top.m_item;
-            traceArea.m_bg_color = IM_COL32(255, 255, 255, 255);
-
-            m_container = std::make_shared<HSplitContainer>(left, traceArea);
-            m_container->SetSplit(0.2f);
-            m_container->SetMinRightWidth(400);
+            m_trace_area.m_item = m_timeline_view;
+            m_container->setRight(m_trace_area);
         }
         m_container->Render();
 
@@ -514,7 +488,7 @@ TraceView::RenderEditMenuOptions()
 void
 TraceView::DisableAnalysisView()
 {
-    m_analysis->m_visible = !m_analysis->m_visible; //TODO redo it by function
+    m_analysis->ResetVisibility();
 }
 
 void

@@ -69,7 +69,7 @@ public:
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             SetViewableRangeNS(double start_ns, double end_ns);
-    void           MoveToPosition(double start_ns, double end_ns, double y_position);
+    void           MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
     void           RenderGraphPoints();
     void           RenderGridAlt();
     void           RenderGrid();

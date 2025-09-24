@@ -362,7 +362,7 @@ TraceView::HandleHotKeys()
                     if(m_timeline_view)
                     {
                         m_timeline_view->MoveToPosition(it->second.v_min_x,
-                                                        it->second.v_max_x, it->second.y);
+                                                        it->second.v_max_x, it->second.y, false);
 
                         NotificationManager::GetInstance().Show(
                             "Bookmark " + std::to_string(i) + " restored.",
@@ -647,7 +647,7 @@ TraceView::RenderBookmarkControls()
                         auto it = m_bookmarks.find(i);
                         if(it != m_bookmarks.end() && m_timeline_view)
                             m_timeline_view->MoveToPosition(
-                                it->second.v_min_x, it->second.v_max_x, it->second.y);
+                                it->second.v_min_x, it->second.v_max_x, it->second.y, false);
                     }
 
                     selected_slot = -1;

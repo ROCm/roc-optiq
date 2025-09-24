@@ -122,16 +122,18 @@ private:
 class NavigationEvent : public RocEvent
 {
 public:
-    NavigationEvent(int event_id,double v_min, double v_max, double y_position);
+    NavigationEvent(int event_id,double v_min, double v_max, double y_position, bool center);
 
     double GetVMin() const;
     double GetVMax() const;
     double GetYPosition() const;
+    bool   GetCenter() const;   
 
 private:
     double m_v_min;
     double m_v_max;
     double m_y_position;
+    bool m_center;
 };
 
 class TrackDataEvent : public RocEvent

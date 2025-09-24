@@ -118,7 +118,8 @@ TimelineView::TimelineView(DataProvider&                       dp,
     // This is used for navigation from other views like the annotation view.
     auto navigation_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<NavigationEvent>(e);
-        MoveToPosition(evt->GetVMin(), evt->GetVMax(), evt->GetYPosition());
+        MoveToPosition(evt->GetVMin(), evt->GetVMax(), evt->GetYPosition(),
+                       evt->GetCenter());
     };
     m_navigation_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
@@ -265,7 +266,8 @@ TimelineView::GetScrollPosition()
 }
 
 void
-TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position)
+TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position,
+                             bool center)
 {
     /*
     Use this funtion for all future navigation requests that do not need to scroll to a
@@ -273,8 +275,19 @@ TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position)
     */
 
     SetViewableRangeNS(start_ns, end_ns);
-    m_scroll_position_y = clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f,
-                                0.0f, m_content_max_y_scroll);
+
+    if(center)
+    {
+        m_scroll_position_y =
+            clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f, 0.0f,
+                  m_content_max_y_scroll);
+    }
+    else
+    {
+        m_scroll_position_y =
+            clamp(static_cast<float>(y_position), 0.0f, m_content_max_y_scroll);
+    }
+
     ImGui::SetScrollY(m_scroll_position_y);
 }
 
@@ -637,7 +650,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         double scrubber_position =
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
-        std::string label = nanosecond_to_formatted_str(scrubber_position, m_settings.GetUserSettings().unit_settings.time_format);
+        std::string label = nanosecond_to_formatted_str(
+            scrubber_position, m_settings.GetUserSettings().unit_settings.time_format);
 
         // char text[20];
         // snprintf(text, 20, "%17.0f", scrubber_position);
@@ -652,7 +666,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
                                  m_settings.GetColor(Colors::kScrubberNumberColor));
-        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), label.c_str());
+        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor),
+                           label.c_str());
         draw_list->AddLine(
             ImVec2(mouse_position.x, screen_pos.y),
             ImVec2(mouse_position.x, screen_pos.y + container_size.y - m_ruler_padding),
@@ -700,7 +715,10 @@ void
 TimelineView::CalculateGridInterval()
 {
     // measure the size of the label to determine the step size
-    std::string label = nanosecond_to_formatted_str(m_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format) + "gap";
+    std::string label =
+        nanosecond_to_formatted_str(
+            m_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format) +
+        "gap";
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
@@ -793,7 +811,8 @@ TimelineView::RenderGridAlt()
                        cursor_position.y + content_size.y + tick_height - m_ruler_height),
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
-            label = nanosecond_to_formatted_str(grid_line_ns, m_settings.GetUserSettings().unit_settings.time_format);
+            label = nanosecond_to_formatted_str(
+                grid_line_ns, m_settings.GetUserSettings().unit_settings.time_format);
 
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
             ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,

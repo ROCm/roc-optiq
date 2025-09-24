@@ -11,7 +11,7 @@ namespace View
 static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
                        const std::string& text, const std::string& title,
-                       const std::string& project_id)
+                       const std::string& project_id, double v_min, double v_max)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
 , m_size(size)
@@ -19,6 +19,9 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 , m_title(title)
 , m_project_id(project_id)
 , m_id(s_unique_id_counter)
+, m_is_visible(true)
+, m_v_min_x(v_min)
+, m_v_max_x(v_max)
 {
     s_unique_id_counter = s_unique_id_counter + 1;
 }
@@ -33,6 +36,17 @@ StickyNote::GetYOffset() const
 {
     return m_y_offset;
 }
+double
+StickyNote::GetVMinX() const
+{
+    return m_v_min_x;
+}
+double
+StickyNote::GetVMaxX() const
+{
+    return m_v_max_x;
+}
+
 ImVec2
 StickyNote::GetSize() const
 {
@@ -53,6 +67,18 @@ const std::string&
 StickyNote::GetTitle() const
 {
     return m_title;
+}
+
+void
+StickyNote::SetVisibility(bool visible)
+{
+    m_is_visible = visible;
+}
+
+bool
+StickyNote::IsVisible() const
+{
+    return m_is_visible;
 }
 
 void
@@ -95,7 +121,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
         ("StickyNoteChild##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
         sticky_size, false,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-            ImGuiWindowFlags_NoBackground );
+            ImGuiWindowFlags_NoBackground);
 
     // Get the child window's draw list and position
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
@@ -142,8 +168,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     {
         EventManager::GetInstance()->AddEvent(
             std::make_shared<StickyNoteEvent>(m_id, m_project_id));
-        std::cout << "Edit Sticky Note ID: " << m_id << " Title: " << m_title
-                  << std::endl;
+         
     }
 
     // Draw edit button graphics over the button
@@ -177,7 +202,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
 }
 
 bool
-StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
+StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_max_x,
                        double pixels_per_ns, int& dragged_id)
 {
     if(m_resizing) return false;
@@ -214,6 +239,8 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
         float new_y = mouse_pos.y - window_position.y - m_drag_offset.y;
         m_time_ns   = v_min_x + (new_x / pixels_per_ns);
         m_y_offset  = new_y;
+        m_v_max_x   = v_max_x;
+        m_v_min_x   = v_min_x;
         return true;
     }
 
@@ -227,7 +254,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x,
 }
 
 bool
-StickyNote::HandleResize(const ImVec2& window_position, double v_min_x,
+StickyNote::HandleResize(const ImVec2& window_position, double v_min_x, double v_max_x,
                          double pixels_per_ns)
 {
     // Only allow resize if not dragging
@@ -265,6 +292,8 @@ StickyNote::HandleResize(const ImVec2& window_position, double v_min_x,
         float new_height = mouse_pos.y - sticky_pos.y - m_resize_offset.y;
         m_size.x         = std::max(new_width, 60.0f);
         m_size.y         = std::max(new_height, 40.0f);
+        m_v_max_x        = v_max_x;
+        m_v_min_x        = v_min_x;
         return true;
     }
 

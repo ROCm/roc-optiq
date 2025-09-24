@@ -22,9 +22,9 @@ namespace View
 // 20% top and bottom of the window size
 constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 
-TimelineView::TimelineView(DataProvider&                      dp,
-                           std::shared_ptr<TimelineSelection> timeline_selection,
-                           std::shared_ptr<AnnotationsManager>   annotations)
+TimelineView::TimelineView(DataProvider&                       dp,
+                           std::shared_ptr<TimelineSelection>  timeline_selection,
+                           std::shared_ptr<AnnotationsManager> annotations)
 : m_data_provider(dp)
 , m_zoom(1.0f)
 , m_view_time_offset_ns(0.0f)
@@ -114,6 +114,15 @@ TimelineView::TimelineView(DataProvider&                      dp,
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+
+    // This is used for navigation from other views like the annotation view.
+    auto navigation_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<NavigationEvent>(e);
+        MoveToPosition(evt->GetVMin(), evt->GetVMax(), evt->GetYPosition(),
+                       evt->GetCenter());
+    };
+    m_navigation_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
 }
 
 void
@@ -150,36 +159,6 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
 }
 
 void
-TimelineView::ShowTimelineContextMenu(const ImVec2& window_position)
-{
-    ImVec2 mouse_pos = ImGui::GetMousePos();
-    ImVec2 rel_mouse_pos =
-        ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
-
-    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
-       ImGui::IsMouseHoveringRect(window_position,
-                                  ImVec2(window_position.x + m_graph_size.x,
-                                         window_position.y + m_graph_size.y)))
-    {
-        ImGui::OpenPopup("TimelineContextMenu");
-    }
-
-    if(ImGui::BeginPopup("TimelineContextMenu"))
-    {
-        if(ImGui::MenuItem("Add Sticky Note"))
-        {
-            float  x_in_chart = rel_mouse_pos.x;
-            double time_ns =
-                m_v_min_x + (x_in_chart / m_graph_size.x) * (m_v_max_x - m_v_min_x);
-            float y_offset = rel_mouse_pos.y;
-            m_annotations->OpenStickyNotePopup(time_ns, y_offset);
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-}
-
-void
 TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 {
     bool movement_drag   = false;
@@ -189,34 +168,38 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
     if(m_annotations->IsVisibile())
     {
         // Interaction --> top-most gets priority
-        for(int i = static_cast<int>(m_annotations->GetStickyNotes().size()) - 1;
-            i >= 0; --i)
+        for(int i = static_cast<int>(m_annotations->GetStickyNotes().size()) - 1; i >= 0;
+            --i)
         {
+            if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
+
             movement_drag |= m_annotations->GetStickyNotes()[i].HandleDrag(
-                window_position, m_v_min_x, m_pixels_per_ns, m_dragged_sticky_id);
+                window_position, m_v_min_x, m_v_max_x, m_pixels_per_ns,
+                m_dragged_sticky_id);
             movement_resize |= m_annotations->GetStickyNotes()[i].HandleResize(
-                window_position, m_v_min_x, m_pixels_per_ns);
+                window_position, m_v_min_x, m_v_max_x, m_pixels_per_ns);
         }
 
         // Rendering --> based on added order (old bottom new on top)
         for(size_t i = 0; i < m_annotations->GetStickyNotes().size(); ++i)
         {
+            if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
+
             m_annotations->GetStickyNotes()[i].Render(draw_list, window_position,
-                                                           m_v_min_x, m_pixels_per_ns);
+                                                      m_v_min_x, m_pixels_per_ns);
         }
     }
     m_stop_user_interaction |= movement_drag || movement_resize;
-    double center_time_ns  = m_v_min_x + (m_v_max_x - m_v_min_x) * 0.5;
-    float  center_y_offset = m_graph_size.y * 0.5f;
-    m_annotations->SetCenter(ImVec2(center_time_ns, center_y_offset));
 
     RenderTimelineViewOptionsMenu(window_position);
     m_annotations->ShowStickyNotePopup();
     m_annotations->ShowStickyNoteEditPopup();
 }
-
- 
-
+ImVec2
+TimelineView::GetGraphSize()
+{
+    return m_graph_size;
+}
 void
 TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 {
@@ -240,10 +223,12 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     {
         if(ImGui::MenuItem("Add Sticky"))
         {
-            float x_in_chart = rel_mouse_pos.x;
-            m_annotations->SetStickyPopup(m_v_min_x + (x_in_chart / m_graph_size.x) *
-                                                               (m_v_max_x - m_v_min_x),
-                                               rel_mouse_pos.y);
+            float  x_in_chart = rel_mouse_pos.x;
+            double time_ns =
+                m_v_min_x + (x_in_chart / m_graph_size.x) * (m_v_max_x - m_v_min_x);
+            float y_offset = rel_mouse_pos.y;
+            m_annotations->OpenStickyNotePopup(time_ns, y_offset, m_v_min_x, m_v_max_x,
+                                               m_graph_size);
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -273,6 +258,37 @@ TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
     {
         m_view_time_offset_ns = time_pos_ns;
     }
+}
+float
+TimelineView::GetScrollPosition()
+{
+    return m_scroll_position_y;
+}
+
+void
+TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position,
+                             bool center)
+{
+    /*
+    Use this funtion for all future navigation requests that do not need to scroll to a
+    particular track. Ex) Annotation and Bookmarks.
+    */
+
+    SetViewableRangeNS(start_ns, end_ns);
+
+    if(center)
+    {
+        m_scroll_position_y =
+            clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f, 0.0f,
+                  m_content_max_y_scroll);
+    }
+    else
+    {
+        m_scroll_position_y =
+            clamp(static_cast<float>(y_position), 0.0f, m_content_max_y_scroll);
+    }
+
+    ImGui::SetScrollY(m_scroll_position_y);
 }
 
 void
@@ -334,6 +350,8 @@ TimelineView::~TimelineView()
         static_cast<int>(RocEvents::kFontSizeChanged), m_new_track_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kSetViewRange),
                                              m_set_view_range_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kGoToTimelineSpot), m_navigation_token);
 }
 
 void
@@ -632,7 +650,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         double scrubber_position =
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
-        std::string label = nanosecond_to_formatted_str(scrubber_position, m_settings.GetUserSettings().unit_settings.time_format);
+        std::string label = nanosecond_to_formatted_str(
+            scrubber_position, m_settings.GetUserSettings().unit_settings.time_format);
 
         // char text[20];
         // snprintf(text, 20, "%17.0f", scrubber_position);
@@ -647,7 +666,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
                                  m_settings.GetColor(Colors::kScrubberNumberColor));
-        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), label.c_str());
+        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor),
+                           label.c_str());
         draw_list->AddLine(
             ImVec2(mouse_position.x, screen_pos.y),
             ImVec2(mouse_position.x, screen_pos.y + container_size.y - m_ruler_padding),
@@ -695,7 +715,10 @@ void
 TimelineView::CalculateGridInterval()
 {
     // measure the size of the label to determine the step size
-    std::string label = nanosecond_to_formatted_str(m_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format) + "gap";
+    std::string label =
+        nanosecond_to_formatted_str(
+            m_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format) +
+        "gap";
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
@@ -788,7 +811,8 @@ TimelineView::RenderGridAlt()
                        cursor_position.y + content_size.y + tick_height - m_ruler_height),
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
-            label = nanosecond_to_formatted_str(grid_line_ns, m_settings.GetUserSettings().unit_settings.time_format);
+            label = nanosecond_to_formatted_str(
+                grid_line_ns, m_settings.GetUserSettings().unit_settings.time_format);
 
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
             ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
@@ -1582,15 +1606,7 @@ TimelineView::HandleTopSurfaceTouch()
 ViewCoords
 TimelineView::GetViewCoords() const
 {
-    return { m_view_time_offset_ns, m_scroll_position_y, m_zoom };
-}
-
-void
-TimelineView::SetViewCoords(const ViewCoords& coords)
-{
-    m_view_time_offset_ns = coords.time_offset_ns;
-    m_scroll_position_y   = coords.y_scroll_position;
-    m_zoom                = coords.zoom;
+    return { m_scroll_position_y, m_zoom, m_v_min_x, m_v_max_x };
 }
 
 TimelineArrow&

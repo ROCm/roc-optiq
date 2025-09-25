@@ -71,7 +71,6 @@ public:
     void                             SetViewableRangeNS(double start_ns, double end_ns);
     void   MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
     void   RenderGraphPoints();
-    void   RenderGridAlt();
     void   RenderGrid();
     float  GetScrollPosition();
     void   RenderScrubber(ImVec2 screen_pos);

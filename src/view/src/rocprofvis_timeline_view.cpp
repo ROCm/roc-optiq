@@ -733,7 +733,7 @@ TimelineView::CalculateGridInterval()
 }
 
 void
-TimelineView::RenderGridAlt()
+TimelineView::RenderGrid()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
@@ -800,137 +800,27 @@ TimelineView::RenderGridAlt()
                 grid_line_ns, m_settings.GetUserSettings().unit_settings.time_format);
 
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
-            ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
-                                       cursor_position.y + content_size.y - label_size.y -
-                                           m_ruler_padding);
+
+            ImVec2 label_pos;
+            if(grid_line_start_ns == 0)
+            {
+                label_pos = ImVec2(normalized_start + ImGui::CalcTextSize("0").x,
+                                   cursor_position.y + content_size.y - label_size.y -
+                                       m_ruler_padding);
+            }
+            else
+            {
+                label_pos = ImVec2(normalized_start - label_size.x / 2,
+                                   cursor_position.y + content_size.y - label_size.y -
+                                       m_ruler_padding);
+            }
+
             draw_list->AddText(label_pos, m_settings.GetColor(Colors::kRulerTextColor),
                                label.c_str());
         }
     }
 
     ImGui::EndChild();
-}
-
-void
-TimelineView::RenderGrid()
-{
-    /*This section makes the grid for the charts*/
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                    ImGuiWindowFlags_NoScrollWithMouse;
-
-    ImVec2 container_pos =
-        ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
-
-    ImVec2 container_size = ImGui::GetWindowSize();
-    DebugWindow::GetInstance()->AddDebugMessage(
-        "TimelineView::RenderGrid: container_size: " + std::to_string(container_size.x) +
-        ", " + std::to_string(container_size.y));
-
-    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_size    = ImVec2(container_size.x - m_sidebar_size, container_size.y);
-
-    double range =
-        (m_v_max_x + m_view_time_offset_ns) - (m_v_min_x + m_view_time_offset_ns);
-
-    double stepSize = 0;
-    double steps    = 0;
-    {
-        std::string label;
-
-        switch(m_settings.GetUserSettings().unit_settings.time_format)
-        {
-            // use the largest time point to determine the step size
-            case TimeFormat::kTimecode:
-                label = nanosecond_to_timecode_str(m_max_x) + "gap";
-                break;
-            case TimeFormat::kNanoseconds:
-            default: label = nanosecond_to_str(m_max_x) + "gap";
-        }
-        ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
-        // amount the loop which generates the grid iterates by.
-        steps    = m_graph_size.x / label_size.x;
-        stepSize = label_size.x;
-    }
-
-    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
-
-    if(ImGui::BeginChild("Grid"), content_size, true, window_flags)
-    {
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImGui::SetCursorPos(ImVec2(0, 0));
-
-        ImVec2 child_win  = ImGui::GetWindowPos();
-        ImVec2 child_size = ImGui::GetWindowSize();
-
-        // Define the clipping rectangle to match the child window
-        ImVec2 clip_min = child_win;
-        ImVec2 clip_max =
-            ImVec2(child_win.x + content_size.x, child_win.y + content_size.y);
-
-        draw_list->PushClipRect(clip_min, clip_max, true);
-
-        // Background for the ruler area
-        draw_list->AddRectFilled(
-            ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
-            ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
-            m_settings.GetColor(Colors::kRulerBgColor));
-
-        // Detect right mouse click in the ruler area
-        if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
-           ImGui::IsMouseHoveringRect(
-               ImVec2(container_pos.x,
-                      cursor_position.y + content_size.y - m_ruler_height),
-               ImVec2(container_pos.x + m_graph_size.x,
-                      cursor_position.y + content_size.y)))
-        {
-            // Show context menu for time format selection
-            ImGui::OpenPopup("Time Format Selection");
-        }
-
-        // Draw the vertical lines for the grid
-        constexpr float tick_height = 10.0f;
-
-        double x_offset = (m_view_time_offset_ns / m_v_width) * m_graph_size.x;
-        x_offset        = (int) x_offset % (int) stepSize;
-
-        for(float i = 0; i < steps + 1; i++)
-        {
-            float linePos = stepSize * i;
-            linePos -= x_offset;
-            float cursor_screen_percentage = (linePos) / m_graph_size.x;
-
-            double normalized_start = container_pos.x + linePos;
-
-            draw_list->AddLine(
-                ImVec2(normalized_start, cursor_position.y),
-                ImVec2(normalized_start,
-                       cursor_position.y + content_size.y + tick_height - m_ruler_height),
-                m_settings.GetColor(Colors::kBoundBox), 0.5f);
-
-            std::string label;
-            double      time_point_ns =
-                m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
-            switch(m_settings.GetUserSettings().unit_settings.time_format)
-            {
-                // use the largest time point to determine the step size
-                case TimeFormat::kTimecode:
-                    label = nanosecond_to_timecode_str(time_point_ns);
-                    break;
-                case TimeFormat::kNanoseconds:
-                default: label = nanosecond_to_str(time_point_ns);
-            }
-
-            ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
-            ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
-                                       cursor_position.y + content_size.y - label_size.y -
-                                           m_ruler_padding);
-            draw_list->AddText(label_pos, m_settings.GetColor(Colors::kGridColor),
-                               label.c_str());
-        }
-
-        draw_list->PopClipRect();
-    }
-    ImGui::EndChild();  // End of Grid
 }
 
 void
@@ -1367,7 +1257,7 @@ TimelineView::RenderGraphPoints()
 
         m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
-        RenderGridAlt();
+        RenderGrid();
         RenderGraphView();
         RenderSplitter(screen_pos);
         RenderInteractiveUI(screen_pos);

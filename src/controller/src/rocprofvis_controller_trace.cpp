@@ -116,7 +116,7 @@ Trace::GetMemoryManager(){
 }
 
 
-#ifdef JSON_SUPPORT
+#ifdef JSON_TRACE_SUPPORT
 rocprofvis_result_t Trace::LoadJson(char const* const filename) {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
@@ -2649,12 +2649,12 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
                 result = m_compute_trace->Load(filepath.c_str());
             }
 #endif
-// #ifdef JSON_SUPPORT
-//             else if(filepath.find(".json", filepath.size() - 5) != std::string::npos)
-//             {
-//                 result = LoadJson(filepath.c_str());
-//             }
-// #endif
+#ifdef JSON_TRACE_SUPPORT
+            else if(filepath.find(".json", filepath.size() - 5) != std::string::npos)
+            {
+                result = LoadJson(filepath.c_str());
+            }
+#endif
             else
             {
                 result = kRocProfVisResultInvalidArgument;

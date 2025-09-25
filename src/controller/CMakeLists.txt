@@ -38,12 +38,12 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_mem_mgmt.cpp
 )
 
-if(JSON_SUPPORT) 
+if(JSON_TRACE_SUPPORT) 
 list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_json_trace.cpp
 )
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_SUPPORT")
-endif(JSON_SUPPORT)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_TRACE_SUPPORT")
+endif(JSON_TRACE_SUPPORT)
 if(COMPUTE_UI_SUPPORT) 
 list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_trace_compute.cpp
@@ -59,10 +59,10 @@ add_library(rocprof-visualizer-controller ${rocprofvis_controller_source_files})
 
 file(GLOB COMMON_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
-if(JSON_SUPPORT) 
-target_include_directories(rocprof-visualizer-controller PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
-target_link_libraries(rocprof-visualizer-controller PUBLIC json)
-endif(JSON_SUPPORT)
+if(JSON_TRACE_SUPPORT) 
+target_include_directories(rocprof-visualizer-controller PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
+target_link_libraries(rocprof-visualizer-controller PRIVATE json)
+endif(JSON_TRACE_SUPPORT)
 
 target_link_libraries(rocprof-visualizer-controller PUBLIC rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer-controller PUBLIC datamodel)

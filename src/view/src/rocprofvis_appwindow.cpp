@@ -377,17 +377,18 @@ AppWindow::RenderFileMenu(Project* project)
         if(ImGui::MenuItem("Open", nullptr))
         {
             IGFD::FileDialogConfig config;
-            config.path                      = ".";
+            config.path = ".";
 
-            std::string filters = "All (.rpv,.db,.rpd){.rpv,.db,.rpd";
-            #ifdef JSON_SUPPORT
-            // filters += ",.json";
-            #endif
-            #ifdef COMPUTE_UI_SUPPORT
-            filters += ",.csv";
-            #endif
-            filters += "},Projects (.rpv){.rpv},Traces (.db,.rpd){.db,.rpd}";
-
+            std::string trace_types = ".db,.rpd";
+#ifdef JSON_TRACE_SUPPORT
+            trace_types += ",.json";
+#endif
+#ifdef COMPUTE_UI_SUPPORT
+            trace_types += ",.csv";
+#endif
+            std::string filters = "All (.rpv," + trace_types + "){.rpv," + trace_types +
+                                  "},Projects (.rpv){.rpv},Traces (" + trace_types +
+                                  "){" + trace_types + "}";
             ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, "Choose File",
                                                     filters.c_str(), config);
         }
@@ -590,7 +591,7 @@ AppWindow::RenderDeveloperMenu()
             IGFD::FileDialogConfig config;
             config.path                      = ".";
             std::string supported_extensions = ".db,.rpd";
-#    ifdef JSON_SUPPORT
+#    ifdef JSON_TRACE_SUPPORT
             supported_extensions += ",.json";
 #    endif
             ImGuiFileDialog::Instance()->OpenDialog("DebugFile", "Choose File",

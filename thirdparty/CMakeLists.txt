@@ -34,7 +34,6 @@ target_compile_definitions(ImGuiFileDialog PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiFileDialog)
 
-if(JSON_SUPPORT) 
 # Add double-conversion library
 add_library(double-conversion STATIC
     jsoncpp/double-conversion/bignum.cc
@@ -46,14 +45,14 @@ add_library(double-conversion STATIC
     jsoncpp/double-conversion/string-to-double.cc
     jsoncpp/double-conversion/strtod.cc
 )
-target_include_directories(double-conversion PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp)
+target_include_directories(double-conversion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp/double-conversion)
 
 # Main JSON library
 add_library(json STATIC
     jsoncpp/json.cpp
 )
 target_link_libraries(json PRIVATE double-conversion)
-endif(JSON_SUPPORT) 
+target_include_directories(json PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp)
 
 add_executable(imgui_binary_to_compressed_c
 	imgui/misc/fonts/binary_to_compressed_c.cpp

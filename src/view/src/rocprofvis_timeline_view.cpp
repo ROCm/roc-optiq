@@ -1067,6 +1067,8 @@ TimelineView::RenderGraphView()
 
             track_item.chart->SetInViewVertical(is_visible);
 
+            m_resize_activity |= track_item.chart->TrackHeightChanged();
+
             if(is_visible || track_item.chart->GetDistanceToView() <= m_unload_track_distance) 
             {
                 // Request data for the chart if it doesn't have data.
@@ -1105,8 +1107,6 @@ TimelineView::RenderGraphView()
                     track_item.chart->UpdateMovement(m_zoom, m_view_time_offset_ns,
                                                      m_min_x, m_max_x, m_pixels_per_ns,
                                                      m_scroll_position_y);
-
-                    m_resize_activity |= track_item.chart->TrackHeightChanged();
 
                     if(is_reordering)
                     {

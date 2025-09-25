@@ -44,9 +44,6 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_unload_track_distance(1000.0f)
 , m_sidebar_size(400)
 , m_resize_activity(false)
-, m_scroll_position_x(0)
-, m_scrollbar_location_as_percentage(0)
-, m_artifical_scrollbar_active(false)
 , m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
                          TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(static_cast<uint64_t>(-1))
@@ -218,14 +215,14 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     {
         ImGui::OpenPopup("StickyNoteContextMenu");
     }
-    
-    if(!ImGui::IsPopupOpen("StickyNoteContextMenu")) 
+
+    if(!ImGui::IsPopupOpen("StickyNoteContextMenu"))
     {
         return;
     }
-    auto style =  m_settings.GetDefaultStyle();
+    auto style = m_settings.GetDefaultStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);    
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup("StickyNoteContextMenu"))
     {
         if(ImGui::MenuItem("Add Annotation"))
@@ -360,26 +357,6 @@ TimelineView::~TimelineView()
                                              m_set_view_range_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), m_navigation_token);
-}
-
-void
-TimelineView::CalibratePosition()
-{
-    m_scroll_position_x =
-        (m_view_time_offset_ns) / (m_range_x);  // Finds where the chart is at.
-    double scrollback = (m_range_x) *m_scroll_position_x;
-
-    if(m_artifical_scrollbar_active == true)
-    {
-        double value_to_begginging =
-            m_view_time_offset_ns - scrollback;  // how to get back to initial/first value
-                                                 // accounting for current movement.
-        m_view_time_offset_ns =
-            value_to_begginging +
-            ((m_range_x) *m_scrollbar_location_as_percentage);  // initial/first value +
-                                                                // position where
-                                                                // scrollbar is.
-    }
 }
 
 void
@@ -959,8 +936,6 @@ TimelineView::RenderGrid()
 void
 TimelineView::RenderGraphView()
 {
-    CalibratePosition();
-
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -1069,7 +1044,8 @@ TimelineView::RenderGraphView()
 
             m_resize_activity |= track_item.chart->TrackHeightChanged();
 
-            if(is_visible || track_item.chart->GetDistanceToView() <= m_unload_track_distance) 
+            if(is_visible ||
+               track_item.chart->GetDistanceToView() <= m_unload_track_distance)
             {
                 // Request data for the chart if it doesn't have data.
                 if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
@@ -1391,7 +1367,6 @@ TimelineView::RenderGraphPoints()
 
         m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
-        // RenderGrid();
         RenderGridAlt();
         RenderGraphView();
         RenderSplitter(screen_pos);
@@ -1420,7 +1395,6 @@ TimelineView::RenderGraphPoints()
         ImGui::Dummy(ImVec2(m_sidebar_size, 0));
         ImGui::SameLine();
 
-        float current_pos     = m_scroll_position_x * (subcomponent_size_main.x * m_zoom);
         float available_width = subcomponent_size_main.x - m_sidebar_size;
 
         ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
@@ -1439,24 +1413,24 @@ TimelineView::RenderGraphPoints()
 
         ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
 
-        ImGui::SliderFloat("##scrollbar", &current_pos, 0.0f,
-                           subcomponent_size_main.x * m_zoom, " ");
+        m_v_width = std::min(m_v_width,
+                             m_range_x);  // Ensure view width does not exceed total
+                                          // range. Prevents jitter and assertion errors.
+        float max_offset =
+            static_cast<float>((m_range_x - m_v_width) + m_v_width * 0.10f);
+        float min_offset  = 0.0f;
+        float view_offset = static_cast<float>(m_view_time_offset_ns);
+
+        ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, "%.5f");
+        m_view_time_offset_ns = static_cast<double>(view_offset);
+
+        // Clamp the view offset to prevent scrolling out of bounds
+        m_view_time_offset_ns = std::clamp(static_cast<double>(view_offset), 0.0,
+                                           (m_range_x - m_v_width) + m_v_width * 0.10);
 
         ImGui::PopStyleColor(5);  // Pop the colors we pushed above
         ImGui::PopStyleVar(2);    // Pop both style variables
         ImGui::PopItemWidth();
-
-        m_scrollbar_location_as_percentage =
-            current_pos / (subcomponent_size_main.x * m_zoom);
-
-        if(ImGui::IsItemActive())
-        {
-            m_artifical_scrollbar_active = true;
-        }
-        else
-        {
-            m_artifical_scrollbar_active = false;
-        }
 
         m_stop_user_interaction = false;
 

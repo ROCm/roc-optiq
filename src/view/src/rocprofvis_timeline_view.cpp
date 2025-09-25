@@ -22,9 +22,9 @@ namespace View
 // 20% top and bottom of the window size
 constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 
-TimelineView::TimelineView(DataProvider&                      dp,
-                           std::shared_ptr<TimelineSelection> timeline_selection,
-                           std::shared_ptr<AnnotationsManager>   annotations)
+TimelineView::TimelineView(DataProvider&                       dp,
+                           std::shared_ptr<TimelineSelection>  timeline_selection,
+                           std::shared_ptr<AnnotationsManager> annotations)
 : m_data_provider(dp)
 , m_zoom(1.0f)
 , m_view_time_offset_ns(0.0f)
@@ -189,8 +189,8 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
     if(m_annotations->IsVisibile())
     {
         // Interaction --> top-most gets priority
-        for(int i = static_cast<int>(m_annotations->GetStickyNotes().size()) - 1;
-            i >= 0; --i)
+        for(int i = static_cast<int>(m_annotations->GetStickyNotes().size()) - 1; i >= 0;
+            --i)
         {
             movement_drag |= m_annotations->GetStickyNotes()[i].HandleDrag(
                 window_position, m_v_min_x, m_pixels_per_ns, m_dragged_sticky_id);
@@ -202,7 +202,7 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         for(size_t i = 0; i < m_annotations->GetStickyNotes().size(); ++i)
         {
             m_annotations->GetStickyNotes()[i].Render(draw_list, window_position,
-                                                           m_v_min_x, m_pixels_per_ns);
+                                                      m_v_min_x, m_pixels_per_ns);
         }
     }
     m_stop_user_interaction |= movement_drag || movement_resize;
@@ -214,8 +214,6 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
     m_annotations->ShowStickyNotePopup();
     m_annotations->ShowStickyNoteEditPopup();
 }
-
- 
 
 void
 TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
@@ -242,8 +240,8 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         {
             float x_in_chart = rel_mouse_pos.x;
             m_annotations->SetStickyPopup(m_v_min_x + (x_in_chart / m_graph_size.x) *
-                                                               (m_v_max_x - m_v_min_x),
-                                               rel_mouse_pos.y);
+                                                          (m_v_max_x - m_v_min_x),
+                                          rel_mouse_pos.y);
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -1545,17 +1543,44 @@ TimelineView::HandleTopSurfaceTouch()
             m_v_min_x = m_min_x + m_view_time_offset_ns;
             m_v_max_x = m_v_min_x + m_v_width;
         }
-
-        if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
-        {
-            m_view_time_offset_ns -= (1 / m_graph_size.x) * m_v_width;
-        }
-        if(ImGui::IsKeyPressed(ImGuiKey_RightArrow))
-        {
-            m_view_time_offset_ns -= (-1 / m_graph_size.x) * m_v_width;
-        }
     }
 
+    // WASD and Arrow key panning
+    float pan_speed_sped_up =
+        m_settings.GetUserSettings().display_settings.m_wasd_arrow_pan_speed;
+    bool is_shift_down = ImGui::GetIO().KeyShift;
+
+    float pan_speed = is_shift_down ? pan_speed_sped_up : 1.0f;
+
+    float region_moved_per_click_x = 0.01 * m_graph_size.x;
+    float region_moved_per_click_y = 0.01 * m_content_max_y_scroll;
+
+    if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
+    {
+        m_view_time_offset_ns -=
+            pan_speed * ((region_moved_per_click_x / m_graph_size.x) * m_v_width);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_W) || ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+    {
+        m_scroll_position_y =
+            clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y, 0.0f,
+                  m_content_max_y_scroll);
+    }
+
+    if(ImGui::IsKeyPressed(ImGuiKey_S) || ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+    {
+        m_scroll_position_y =
+            clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y, 0.0f,
+                  m_content_max_y_scroll);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_D) || ImGui::IsKeyPressed(ImGuiKey_RightArrow))
+    {
+        m_view_time_offset_ns -=
+            pan_speed * ((-region_moved_per_click_x / m_graph_size.x) * m_v_width);
+    }
+
+
+    // Stop panning if mouse released
     if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
         m_can_drag_to_pan = false;

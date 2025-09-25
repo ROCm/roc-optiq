@@ -29,4 +29,5 @@ target_include_directories(sqlite3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(sqlite3 PRIVATE
     -O2          # Optimize for speed
     -DCPPBUILD
+    -fPIC
 )

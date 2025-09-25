@@ -155,10 +155,10 @@ set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
 set(PKG_MAINTAINER_NM  "ROCm Dev Support")
 set(PKG_MAINTAINER_EMAIL  "rocm-dev.support@amd.com")
 set(COMP_TYPE "RV_RUNTIME")
-set(PKG_DESCRIPTION "ROCPROFILER VISUALIZER Runtime software stack")
+set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")
 set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/copyright" CACHE PATH "Path to License File in source dir" )
 set(EXTENDED_PACKAGE_DESCRIPTION
-    "ROCPROF-Visualizer package provides `rocprof-visualizer` executable which is - A visualizer for the ROCm Profiler Tools.")
+    "ROCPROF-Visualizer package provides `rocprof-visualizer` which is - A visualizer for the ROCm Profiler Tools.")
 
 #CPACK Packaging Enabling
 include(GNUInstallDirs)
@@ -193,7 +193,7 @@ message(STATUS "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEAS
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(DEB_DEPENDS_STRING "")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
-set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/rocm-core")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/rocprofiler-visualizer")
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 

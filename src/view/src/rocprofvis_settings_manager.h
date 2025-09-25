@@ -22,8 +22,7 @@ typedef struct DisplaySettings
     bool  use_dark_mode;
     bool  dpi_based_scaling;
     int   font_size_index;
-    float m_wasd_arrow_pan_speed;
-
+ 
 } DisplaySettings;
 
 typedef struct UnitSettings
@@ -108,8 +107,7 @@ constexpr char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
-constexpr char* JSON_KEY_SETTINGS_DISPLAY_ARROW_PAN_SPEED = "wasd_arrow_pan_speed"; 
-
+ 
 constexpr char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
 constexpr char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";

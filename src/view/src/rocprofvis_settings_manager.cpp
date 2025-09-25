@@ -264,8 +264,6 @@ SettingsManager::SerializeDisplaySettings(jt::Json& json)
         m_usersettings.display_settings.dpi_based_scaling;
     ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE] =
         m_usersettings.display_settings.font_size_index;
-    ds[JSON_KEY_SETTINGS_DISPLAY_ARROW_PAN_SPEED] =
-        m_usersettings.display_settings.m_wasd_arrow_pan_speed;    
 }
 
 void
@@ -289,11 +287,6 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
             m_usersettings.display_settings.font_size_index =
                 static_cast<int>(ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE].getLong());
         }
-        if(ds[JSON_KEY_SETTINGS_DISPLAY_ARROW_PAN_SPEED].isNumber())
-        {
-            m_usersettings.display_settings.m_wasd_arrow_pan_speed =
-                ds[JSON_KEY_SETTINGS_DISPLAY_ARROW_PAN_SPEED].getFloat();
-        }   
     }
 }
 
@@ -408,7 +401,7 @@ SettingsManager::GetColorWheel()
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
-      { DisplaySettings{ false, true, 6, 2.0f }, UnitSettings{ TimeFormat::kTimecode } })
+      { DisplaySettings{ false, true, 6 }, UnitSettings{ TimeFormat::kTimecode } })
 , m_usersettings(m_usersettings_default)
 , m_display_dpi(1.5f)
 , m_json_path(GetStandardConfigPath())
@@ -452,8 +445,8 @@ SettingsManager::ApplyUserSettings(bool save_json)
 void
 SettingsManager::InitStyling()
 {
-    ImGuiStyle& style = ImGui::GetStyle();
-    m_default_imgui_style   = style;  // Store the default imgui style
+    ImGuiStyle& style     = ImGui::GetStyle();
+    m_default_imgui_style = style;  // Store the default imgui style
 
     // Set sizes and rounding
     style.CellPadding       = ImVec2(10, 6);
@@ -476,7 +469,7 @@ SettingsManager::InitStyling()
     style.ItemSpacing       = ImVec2(10, 8);
     style.WindowPadding     = ImVec2(4, 4);
 
-    m_default_style = style; // Store the our customized style
+    m_default_style = style;  // Store the our customized style
 }
 
 const ImGuiStyle&

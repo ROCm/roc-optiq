@@ -826,6 +826,8 @@ TimelineView::RenderGrid()
 void
 TimelineView::RenderGraphView()
 {
+
+
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -1239,14 +1241,16 @@ TimelineView::RenderGraphPoints()
         ImGuiStyle& style             = ImGui::GetStyle();
         float       fontHeight        = ImGui::GetFontSize();
         m_artificial_scrollbar_height = fontHeight + style.FramePadding.y * 2.0f;
+        int heatmap_size              = 200.0f;
 
         m_graph_size =
             ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
 
         ImGui::BeginChild(
             "Grid View 2",
-            ImVec2(subcomponent_size_main.x,
-                   subcomponent_size_main.y - m_artificial_scrollbar_height),
+            ImVec2(subcomponent_size_main.x, subcomponent_size_main.y -
+                                                 m_artificial_scrollbar_height -
+                                                 heatmap_size),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
         // Scale used in all graphs computed here
@@ -1278,7 +1282,8 @@ TimelineView::RenderGraphPoints()
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
 
         ImGui::BeginChild("scrollbar",
-                          ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_height),
+                          ImVec2(subcomponent_size_main.x,
+                                 m_artificial_scrollbar_height - heatmap_size),
                           true, ImGuiWindowFlags_NoScrollbar);
 
         // ImGui::SameLine();
@@ -1327,10 +1332,64 @@ TimelineView::RenderGraphPoints()
         ImGui::EndChild();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);
+
+
+
+          // Third child: histogram/heatmap area
+        ImGui::BeginChild("histogram_area",
+                          ImVec2(subcomponent_size_main.x, heatmap_size), false);
+
+        static bool show_histogram_popup = false;
+
+        if(ImGui::Button("Show Histogram"))
+        {
+            show_histogram_popup = true;
+        }
+
+        if(show_histogram_popup)
+        {
+            ImGui::OpenPopup("Event Density Histogram");
+            show_histogram_popup = false;
+        }
+
+        if(ImGui::BeginPopupModal("Event Density Histogram", nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            double duration_ms =
+                (m_data_provider.GetEndTime() - m_data_provider.GetStartTime()) / 1e6;
+            size_t num_bins  = 50;  // You can adjust the number of bins as needed
+            auto   histogram = m_data_provider.GetEventDensityHistogram(num_bins);
+
+            ImGui::Text("Histogram size: %zu", histogram.size());
+            ImGui::Separator();
+
+            // Optionally, show as a simple bar chart
+            float max_bin = 1.0f;
+            for(size_t i = 0; i < histogram.size(); ++i)
+                max_bin = std::max(max_bin, static_cast<float>(histogram[i]));
+
+            ImGui::Text("Bin   Count");
+            for(size_t i = 0; i < histogram.size(); ++i)
+            {
+                ImGui::Text("%2zu: %6llu", i, histogram[i]);
+                float frac = static_cast<float>(histogram[i]) / max_bin;
+                ImGui::SameLine();
+                ImGui::ProgressBar(frac, ImVec2(200, 0));
+            }
+
+            if(ImGui::Button("Close"))
+            {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        ImGui::EndChild();  // End of histogram_area
     }
 
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
+
 }
 
 void

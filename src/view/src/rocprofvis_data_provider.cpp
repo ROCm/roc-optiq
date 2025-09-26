@@ -40,6 +40,31 @@ DataProvider::DataProvider()
 , m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
 {}
 
+
+std::vector<uint64_t>
+DataProvider::GetEventDensityHistogram(size_t num_bins)
+{
+    std::vector<uint64_t> bins(num_bins, 0);
+
+    if(m_state != ProviderState::kReady || !m_trace_controller || num_bins == 0)
+        return bins;
+
+    rocprofvis_result_t result = rocprofvis_controller_get_event_density_histogram(
+        m_trace_controller, m_min_ts, m_max_ts, num_bins, bins.data());
+
+    if(result != kRocProfVisResultSuccess)
+    {
+        spdlog::error("Failed to fetch event density histogram, result: {}",
+                      static_cast<int>(result));
+        bins.clear();
+    }
+
+    return bins;
+}
+
+
+
+
 DataProvider::~DataProvider() { CloseController(); }
 
 const event_info_t*
@@ -412,7 +437,7 @@ DataProvider::FetchTrace(const std::string& file_path)
                       static_cast<int>(m_state),
                       reinterpret_cast<unsigned long long>(m_trace_controller));
     }
-
+    
     return true;
 }
 

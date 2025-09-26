@@ -158,6 +158,23 @@ rocprofvis_controller_t* rocprofvis_controller_alloc()
     }
     return controller;
 }
+
+
+rocprofvis_result_t rocprofvis_controller_get_event_density_histogram(
+    rocprofvis_controller_t* controller, double start_time, double end_time,
+    size_t num_bins, uint64_t* out_bins)
+{
+    if(!controller || !out_bins || num_bins == 0) return kRocProfVisResultInvalidArgument;
+
+    RocProfVis::Controller::TraceRef trace(controller);
+    if(!trace.IsValid()) return kRocProfVisResultInvalidArgument;
+
+    auto bins = trace->BuildEventDensityHistogram(start_time, end_time, num_bins);
+    std::copy(bins.begin(), bins.end(), out_bins);
+    return kRocProfVisResultSuccess;
+}
+
+
 rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_future_t* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -171,6 +188,7 @@ rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* co
 
     return result;
 }
+
 rocprofvis_controller_future_t* rocprofvis_controller_future_alloc(void)
 {
     rocprofvis_controller_future_t* future = (rocprofvis_controller_future_t*)new RocProfVis::Controller::Future();

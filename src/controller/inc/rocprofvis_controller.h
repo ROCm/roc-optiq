@@ -10,6 +10,14 @@ extern "C"
 {
 #endif
 
+
+
+rocprofvis_result_t rocprofvis_controller_get_event_density_histogram(
+        rocprofvis_controller_t* controller, double start_time, double end_time,
+        size_t num_bins, uint64_t* out_bins);
+
+
+
 /*
 * Create a controller for a given trace file.
 * Future iterations may need a different mechanism, but for now we shall just assume everything is running on the same machine.

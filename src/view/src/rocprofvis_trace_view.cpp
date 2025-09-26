@@ -591,6 +591,16 @@ TraceView::RenderAnnotationControls()
     }
     ImGui::PopID();
 
+    if (ImGui::Button("kjsgnfxdkjsg")) {
+        double duration_ms =
+            (m_data_provider.GetEndTime() - m_data_provider.GetStartTime()) / 1e6;
+        auto histogram = m_data_provider.GetEventDensityHistogram(duration_ms);
+        std::cout << "Histogram size: " << histogram.size() << std::endl;
+        for(size_t i = 0; i < histogram.size(); ++i)
+        {
+            std::cout << "Bin " << i << ": " << histogram[i] << std::endl;
+        } 
+    }
     ImGui::EndGroup();
     ImGui::PopFont();
 }

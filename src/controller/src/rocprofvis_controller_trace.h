@@ -39,6 +39,9 @@ public:
 
     virtual ~Trace();
 
+    std::vector<uint64_t> BuildEventDensityHistogram(double start_time, double end_time,
+                                                     size_t num_bins);
+
     rocprofvis_result_t Init();
 
     rocprofvis_result_t Load(char const* const filename, Future& future);

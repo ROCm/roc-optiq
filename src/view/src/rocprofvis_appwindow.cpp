@@ -515,6 +515,19 @@ AppWindow::RenderViewMenu(Project* project)
                     trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
                 }
             }
+            if(ImGui::MenuItem("Show Side Bar", nullptr, m_sidebar_visible))
+            {
+                m_sidebar_visible = !m_sidebar_visible;
+                for(const auto& tab : m_tab_container->GetTabs())
+                {
+                    auto trace_view_tab =
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
+                            tab->m_widget);  // TODO: think about caching this cast or
+                                             // avoid casting
+                    trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
+                    trace_view_tab->m_is_sidebar_visible = m_sidebar_visible;
+                }
+            }
         }
         ImGui::EndMenu();
 

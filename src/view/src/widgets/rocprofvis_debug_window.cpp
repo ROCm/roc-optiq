@@ -37,23 +37,23 @@ DebugWindow::DebugWindow()
     std::shared_ptr<RocWidget> rt =
         std::make_shared<RocCustomWidget>([this]() { this->RenderTransient(); });
 
-    LayoutItem top;
-    top.m_item           = rp;
-    top.m_window_padding = ImVec2(4, 4);
-    LayoutItem bottom;
-    bottom.m_item           = rt;
-    bottom.m_window_padding = ImVec2(4, 4);
+    LayoutItemPtr top    = std::make_shared<LayoutItem>();
+    top->m_item           = rp;
+    top->m_window_padding = ImVec2(4, 4);
+    LayoutItemPtr bottom  = std::make_shared<LayoutItem>();
+    bottom->m_item           = rt;
+    bottom->m_window_padding = ImVec2(4, 4);
 
     m_v_spilt_container = std::make_shared<VSplitContainer>(top, bottom);
     m_v_spilt_container->SetMinTopHeight(10.0f);
     m_v_spilt_container->SetMinBottomHeight(10.0f);
 
-    LayoutItem left;
-    left.m_item           = rt;
-    left.m_window_padding = ImVec2(4, 4);
-    LayoutItem right;
-    right.m_item           = rp;
-    right.m_window_padding = ImVec2(4, 4);
+    LayoutItemPtr left     = std::make_shared<LayoutItem>();
+    left->m_item           = rt;
+    left->m_window_padding = ImVec2(4, 4);
+    LayoutItemPtr right     = std::make_shared<LayoutItem>();
+    right->m_item           = rp;
+    right->m_window_padding = ImVec2(4, 4);
 
     m_h_spilt_container = std::make_shared<HSplitContainer>(left, right);
     m_h_spilt_container->SetMinLeftWidth(10.0f);

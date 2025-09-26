@@ -46,6 +46,7 @@ public:
     ImGuiChildFlags  m_child_flags;
     ImGuiWindowFlags m_window_flags;
 };
+using LayoutItemPtr = std::shared_ptr<LayoutItem>;
 
 class RocCustomWidget : public RocWidget
 {
@@ -82,11 +83,11 @@ protected:
 class HSplitContainer : public RocWidget
 {
 public:
-    HSplitContainer(const LayoutItem& l, const LayoutItem& r);
+    HSplitContainer(LayoutItemPtr left, LayoutItemPtr right);
 
     virtual void Render();
-    void         SetLeft(const LayoutItem& l);
-    void         setRight(const LayoutItem& r);
+    void         SetLeft(LayoutItemPtr left);
+    void         setRight(LayoutItemPtr right);
 
     void SetSplit(float ratio);
     void SetMinLeftWidth(float width);
@@ -98,8 +99,8 @@ private:
     float m_left_min_width;
     float m_right_min_width;
 
-    LayoutItem m_left;
-    LayoutItem m_right;
+    LayoutItemPtr m_left;
+    LayoutItemPtr m_right;
     float      m_resize_grip_size;
 
     std::string m_left_name;
@@ -113,12 +114,12 @@ private:
 class VSplitContainer : public RocWidget
 {
 public:
-    VSplitContainer(const LayoutItem& t, const LayoutItem& b);
+    VSplitContainer(LayoutItemPtr top, LayoutItemPtr bottom);
 
     virtual void Render();
 
-    void SetTop(const LayoutItem& t);
-    void SetBottom(const LayoutItem& b);
+    void SetTop(LayoutItemPtr top);
+    void SetBottom(LayoutItemPtr bottom);
 
     void SetSplit(float ratio);
     void SetMinTopHeight(float height);
@@ -128,8 +129,8 @@ private:
     float m_top_min_height;
     float m_bottom_min_height;
 
-    LayoutItem m_top;
-    LayoutItem m_bottom;
+    std::shared_ptr<LayoutItem> m_top;
+    std::shared_ptr<LayoutItem> m_bottom;
     float      m_resize_grip_size;
 
     std::string m_top_name;
@@ -157,7 +158,7 @@ public:
     virtual void Update();
 
     void AddTab(const TabItem& tab);
-    void AddTab(const TabItem&& tab);
+    void AddTab(TabItem&& tab);
     void RemoveTab(const std::string& id);
     void RemoveTab(int index);
 

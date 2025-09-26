@@ -23,7 +23,7 @@ namespace View
 TraceView::TraceView()
 : m_timeline_view(nullptr)
 , m_sidebar(nullptr)
-, m_container(nullptr)
+, m_horizontal_split_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
 , m_analysis(nullptr)
@@ -186,32 +186,41 @@ TraceView::CreateView()
     m_timeline_selection = std::make_shared<TimelineSelection>(m_data_provider);
     m_track_topology     = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view      = std::make_shared<TimelineView>(m_data_provider,
-                                                          m_timeline_selection, m_annotations);
+                                                          m_timeline_selection, m_annotations);//TODO: rewrite to store Layoute Items, but not 
 
     m_sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                           m_timeline_view->GetGraphs(), m_data_provider);
+                                           m_timeline_view->GetGraphs(), m_data_provider);//TODO: rewrite to store Layoute Items, but not 
     m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
-                                                m_timeline_selection, m_annotations);
+                                                m_timeline_selection); //TODO: rewrite to store Layoute Items, but not 
 
-    LayoutItem left;
-    left.m_item         = m_sidebar;
-    left.m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
-    LayoutItem top;
-    top.m_item = m_timeline_view;
 
-    LayoutItem bottom;
-    bottom.m_item = m_analysis;
+
+    m_sidebar_item = std::make_shared<LayoutItem>();  // TODO it looks like we need factory method for LayoutItem
+    m_sidebar_item->m_item = m_sidebar;
+    m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
+
+    m_timeline_item = std::make_shared<LayoutItem>();
+    m_timeline_item->m_item       = m_timeline_view;
+
+    m_analysis_item = std::make_shared<LayoutItem>();
+    m_analysis_item->m_item =
+        m_analysis;  // TODO: we need to save each part of UI to get access to it later
+
+
 
     
-    m_split_container = std::make_shared<VSplitContainer>(top, bottom);
-    m_split_container->SetSplit(0.75);
-    m_trace_area.m_item     = m_split_container;
-    m_trace_area.m_bg_color = IM_COL32(255, 255, 255, 255);
+    m_vertical_split_container =
+        std::make_shared<VSplitContainer>(m_timeline_item, m_analysis_item);
+    m_vertical_split_container->SetSplit(0.75);
+    m_trace_area             = std::make_shared<LayoutItem>();
+    m_trace_area->m_item     = m_vertical_split_container;
+    m_trace_area->m_bg_color = IM_COL32(255, 255, 255, 255);
 
-    m_container = std::make_shared<HSplitContainer>(left, m_trace_area);
-    m_container->SetSplit(0.2f);
-    m_container->SetMinRightWidth(400);
+    m_horizontal_split_container =
+        std::make_shared<HSplitContainer>(m_sidebar_item, m_trace_area);
+    m_horizontal_split_container->SetSplit(0.2f);
+    m_horizontal_split_container->SetMinRightWidth(400);
 }
 
 void
@@ -219,7 +228,7 @@ TraceView::DestroyView()
 {
     m_timeline_view = nullptr;
     m_sidebar       = nullptr;
-    m_container     = nullptr;
+    m_horizontal_split_container     = nullptr;
     m_analysis      = nullptr;
     m_view_created  = false;
 }
@@ -244,19 +253,28 @@ TraceView::OpenFile(const std::string& file_path)
 void
 TraceView::Render()
 {
-    if(m_container && m_data_provider.GetState() == ProviderState::kReady)
+    if(m_horizontal_split_container && m_data_provider.GetState() == ProviderState::kReady)
     {
-        if(m_is_analysis_bar_visible)    
+        if(m_is_analysis_bar_visible)     //TODO: Move it from Render
         {
-            m_trace_area.m_item = m_split_container;
-            m_container->setRight(m_trace_area);
+            LayoutItemPtr bottom = std::make_shared<LayoutItem>(); //TODO: we dont need to recreate it each time
+            bottom->m_item       = m_analysis;
+            m_vertical_split_container->SetBottom(bottom);
         }
         else
         {
-            m_trace_area.m_item = m_timeline_view;
-            m_container->setRight(m_trace_area);
+            m_vertical_split_container->SetBottom(nullptr);
         }
-        m_container->Render();
+
+        if(m_is_sidebar_visible)
+        {
+            m_horizontal_split_container->SetLeft(m_sidebar_item);
+        }
+        else
+        {
+            m_horizontal_split_container->SetLeft(nullptr);
+        }
+        m_horizontal_split_container->Render();
 
         HandleHotKeys();
     }

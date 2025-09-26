@@ -309,24 +309,24 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
         if(event_data)
         {
             auto       default_style = m_settings.GetDefaultStyle();
-            LayoutItem left;
-            left.m_item = std::make_shared<RocCustomWidget>([this, event_data]() {
+            LayoutItemPtr left          = std::make_shared<LayoutItem>();
+            left->m_item = std::make_shared<RocCustomWidget>([this, event_data]() {
                 this->RenderBasicData(event_data);
                 ImGui::NewLine();
                 this->RenderEventExtData(event_data);
             });
-            left.m_window_padding = default_style.WindowPadding;
-            left.m_child_flags =
+            left->m_window_padding = default_style.WindowPadding;
+            left->m_child_flags =
                 ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding;
 
-            LayoutItem right;
-            right.m_item = std::make_shared<RocCustomWidget>([this, event_data]() {
+            LayoutItemPtr right = std::make_shared<LayoutItem>();
+            right->m_item = std::make_shared<RocCustomWidget>([this, event_data]() {
                 this->RenderEventFlowInfo(event_data);
                 ImGui::NewLine();
                 this->RenderCallStackData(event_data);
             });
-            right.m_window_padding = default_style.WindowPadding;
-            right.m_child_flags =
+            right->m_window_padding = default_style.WindowPadding;
+            right->m_child_flags =
                 ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding;
 
             std::unique_ptr<HSplitContainer> container =

@@ -25,6 +25,8 @@ public:
     static void       DestroyInstance();
 
     bool Init();
+    void SetNotificationCallback(std::function<void(int)> callback);
+
     void Render() override;
     void Update() override;
 
@@ -39,6 +41,8 @@ public:
     Project* GetCurrentProject();
 
     void OpenFile(std::string file_path);
+    
+    void ShowCloseConfirm();
 
 private:
     AppWindow();
@@ -54,7 +58,7 @@ private:
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
-
+    
     static AppWindow* s_instance;
 
     std::shared_ptr<VFixedContainer> m_main_view;
@@ -84,6 +88,7 @@ private:
     std::unique_ptr<SettingsPanel>      m_settings_panel;
 
     size_t m_tool_bar_index;
+    std::function<void(int)> m_notification_callback;
 };
 
 }  // namespace View

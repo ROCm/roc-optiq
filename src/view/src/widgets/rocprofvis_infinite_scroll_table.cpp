@@ -650,6 +650,13 @@ InfiniteScrollTable::Render()
                     (filter.column_index == 0) ? "" : m_column_names[filter.column_index];
                 event_table_params->m_group_columns = filter.group_columns;
 
+                // if filtering changed reset the start row as current row
+                // may be beyond result length causing an assertion in controller
+                if(filter_requested) 
+                {
+                    event_table_params->m_start_row = 0;
+                }
+
                 spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
                 // Fetch the event table with the updated params

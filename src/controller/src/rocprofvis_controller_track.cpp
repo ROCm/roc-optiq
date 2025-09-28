@@ -12,7 +12,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_controller_future.h"
-
+#include <iostream>
 #include <algorithm>
 #include <cfloat>
 #include <cstring>
@@ -258,6 +258,13 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
         }
     }
 
+
+    const size_t        num_bins  = 10;
+    double              min_time  = m_start_timestamp;
+    double              max_time  = m_end_timestamp;
+    double              bin_width = (max_time - min_time) / num_bins;
+    std::vector<size_t> bins(num_bins, 0);
+
     for(int i = 0; i < futures.size(); i++)
     {  
         if(future->IsCancelled()) break;
@@ -285,6 +292,30 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                         case kRocProfVisDmStreamTrack:
                         {
                             uint64_t index = 0;
+
+
+                            for(int i = 0; i < num_records; i++)
+                            {
+                                double event_start =
+                                    (double) rocprofvis_dm_get_property_as_uint64(
+                                        slice, kRPVDMTimestampUInt64Indexed, i);
+                                double event_duration =
+                                    (double) rocprofvis_dm_get_property_as_int64(
+                                        slice, kRPVDMEventDurationInt64Indexed, i);
+                                if(event_duration < 0) continue;
+                                double event_end = event_start + event_duration;
+
+                                for(size_t bin_idx = 0; bin_idx < num_bins; ++bin_idx)
+                                {
+                                    double bin_start = min_time + bin_idx * bin_width;
+                                    double bin_end   = bin_start + bin_width;
+                                    if(event_start < bin_end && event_end > bin_start)
+                                    {
+                                        bins[bin_idx]++;
+                                    }
+                                }
+                            }
+
 
                             for(int i = 0; i < num_records; i++)
                             {
@@ -339,6 +370,14 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                     result = kRocProfVisResultMemoryAllocError;
                                     break;
                                 }
+
+
+                          
+                       
+
+
+
+
                             }
 
                             break;
@@ -363,9 +402,25 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                         kRPVControllerSampleValue, 0,
                                         rocprofvis_dm_get_property_as_double(
                                             slice, kRPVDMPmcValueDoubleIndexed, i));
+
+
+
+
+
+
+
+
+                                    
+
+
+
+
+
+
+
                                     SetObject(
                                         kRPVControllerTrackEntry, index++,
-                                        (rocprofvis_handle_t*) new_sample);
+                                        (rocprofvis_handle_t*) new_sample);//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                                 }
                                 else
                                 {
@@ -373,6 +428,9 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                     break;
                                 }
                             }
+
+                           
+
 
                             break;
                         }
@@ -408,6 +466,17 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
         future->RemoveDependentFuture(futures[i]);
         rocprofvis_db_future_free(futures[i]);
     }
+
+
+    if(!m_histogram) m_histogram = new Array();
+    m_histogram->SetContext(this);
+    m_histogram->SetUInt64(kRPVControllerArrayNumEntries, 0, num_bins);
+    for(size_t bin_idx = 0; bin_idx < num_bins; ++bin_idx)
+    {
+        m_histogram->SetDouble(kRPVControllerArrayEntryIndexed, bin_idx,
+                               static_cast<double>(bins[bin_idx]));
+    }
+
     s_data_model_load--;
 
 
@@ -580,6 +649,14 @@ rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultNotSupported;
                 break;
             }
+            case kRPVControllerTrackHistogram:
+            {
+                std::cout << "============================================dgfgfdg========================================================="<<std::endl;
+                *value = (rocprofvis_handle_t*) m_histogram;
+                result = kRocProfVisResultSuccess;
+
+            }
+
             case kRPVControllerTrackThread:
             {
                 *value = (rocprofvis_handle_t*)m_thread;

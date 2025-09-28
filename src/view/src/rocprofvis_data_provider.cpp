@@ -806,6 +806,19 @@ DataProvider::HandleLoadTrackMetaData()
         {
             track_info_t track_info;
 
+
+
+            rocprofvis_handle_t* histogram_handle = nullptr;
+            result = rocprofvis_controller_get_object(track, kRPVControllerTrackHistogram,
+                                                      0, &histogram_handle);
+            if(result == kRocProfVisResultSuccess && histogram_handle)
+            {
+           
+                std::cout << "Found histogram track, id: "; 
+            }
+
+
+
             track_info.graph_handle = graph;
 
             track_info.index = i;

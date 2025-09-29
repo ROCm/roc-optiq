@@ -90,6 +90,114 @@ protected:
     std::vector<LayoutItem> m_children;
 };
 
+class SplitContainerBase : public RocWidget
+{
+public:
+    SplitContainerBase(LayoutItem::Ptr first, LayoutItem::Ptr second, float grip_size,
+                       float first_min_size, float second_min_size, float split_ratio)
+    : m_first(first)
+    , m_second(second)
+    , m_resize_grip_size (grip_size)
+    , m_first_min_size(first_min_size)
+    , m_second_min_size(second_min_size)
+    , m_split_ratio(split_ratio)
+    {};
+    virtual ~SplitContainerBase() = default;
+    virtual void Render() override;
+
+    void SetSplit(float ratio) { m_split_ratio = ratio; };
+
+protected:
+    virtual float GetAvailableSize(const ImVec2& total_size) = 0;
+    virtual void  SetCursor()                                = 0;
+    virtual ImVec2 GetFirstChildSize(float available_width) = 0;
+    virtual ImVec2 GetSecondChildSize() = 0;
+    virtual void DrawSplitter(const ImVec2& splitter_min, const ImVec2& splitter_max) = 0;
+    virtual void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+                                  float available_size)                               = 0;
+    virtual ImVec2 GetSplitterSize(const ImVec2& total_size) = 0;
+
+    void SetFirst(LayoutItem::Ptr first) { m_first = first; };
+    void SetSecond(LayoutItem::Ptr second) { m_second = second; };
+
+    void SetMinFirstSize(float size) { m_first_min_size = size; };
+    void SetMinSecondSize(float size) { m_second_min_size = size; };
+
+    LayoutItem::Ptr m_first;
+    LayoutItem::Ptr m_second;
+
+    float m_first_min_size;
+    float m_second_min_size;
+
+    float m_split_ratio;
+    float m_resize_grip_size;
+
+    std::string m_first_name;
+    std::string m_second_name;
+    std::string m_handle_name;
+};
+
+class NewHSplitContainer : public SplitContainerBase
+{
+public:
+    NewHSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
+        : SplitContainerBase(left, right, 4.0f, 100.0f, 100.0f, 0.25f)
+        , m_optimal_height(0.0f)
+    {
+        m_widget_name = GenUniqueName("HSplitContainer");
+        m_first_name  = GenUniqueName("LeftColumn");
+        m_handle_name = GenUniqueName("##ResizeHandle");
+        m_second_name = GenUniqueName("RightColumn");
+    };
+    void SetLeft(LayoutItem::Ptr left) { SetFirst(left); };
+    void SetRight(LayoutItem::Ptr right) { SetSecond(right); };
+
+    void  SetMinLeftWidth(float width) { SetMinFirstSize(width); };
+    void  SetMinRightWidth(float width) { SetMinSecondSize(width); };
+    float GetOptimalHeight() const { return m_optimal_height; };
+
+private:
+    float GetAvailableSize(const ImVec2& total_size) override;
+    void SetCursor() override;
+    ImVec2 GetFirstChildSize(float available_width) override;
+    ImVec2 GetSecondChildSize() override;
+    void DrawSplitter(const ImVec2& splitter_min, const ImVec2& splitter_max) override;
+    void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+                          float available_width) override;
+    ImVec2 GetSplitterSize(const ImVec2& total_size) override;
+
+    float m_optimal_height;
+};
+
+class NewVSplitContainer : public SplitContainerBase
+{
+public:
+    NewVSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
+        : SplitContainerBase(top, bottom, 4.0f, 200.0f, 100.0f, 0.6f)
+    {
+        m_widget_name = GenUniqueName("VSplitContainer");
+        m_first_name  = GenUniqueName("TopRow");
+        m_handle_name = GenUniqueName("##ResizeHandle");
+        m_second_name = GenUniqueName("BottomRow");
+    };
+
+    void SetTop(LayoutItem::Ptr top) { SetFirst(top); };
+    void SetBottom(LayoutItem::Ptr bottom) { SetSecond(bottom); };
+
+    void SetMinTopHeight(float height) { SetMinFirstSize(height); };
+    void SetMinBottomHeight(float height) { SetMinSecondSize(height); };
+private:
+    float GetAvailableSize(const ImVec2& total_size) override;
+    void  SetCursor() override;
+    ImVec2 GetFirstChildSize(float available_width) override;
+    ImVec2 GetSecondChildSize() override;
+    void DrawSplitter(const ImVec2& splitter_min, const ImVec2& splitter_max) override;
+    void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+                          float available_height) override;
+
+    ImVec2 GetSplitterSize(const ImVec2& total_size) override;
+};
+
 class HSplitContainer : public RocWidget
 {
 public:
@@ -139,8 +247,8 @@ private:
     float m_top_min_height;
     float m_bottom_min_height;
 
-    std::shared_ptr<LayoutItem> m_top;
-    std::shared_ptr<LayoutItem> m_bottom;
+    LayoutItem::Ptr m_top;
+    LayoutItem::Ptr m_bottom;
     float      m_resize_grip_size;
 
     std::string m_top_name;

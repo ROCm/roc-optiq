@@ -59,7 +59,7 @@ public:
     std::shared_ptr<TimelineSelection> GetTimelineSelection() const;
     std::shared_ptr<RocWidget>         GetToolbar() override;
     void                               RenderEditMenuOptions() override;
-    void                               SetAnalysisViewVisibility( bool visibility); 
+    void                               SetAnalysisViewVisibility(bool visibility); 
     void                               SetSidebarViewVisibility(bool visibility);
 
 
@@ -74,8 +74,8 @@ private:
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::shared_ptr<TrackTopology>     m_track_topology;
     std::shared_ptr<RocCustomWidget>   m_tool_bar;
-    std::shared_ptr<HSplitContainer>   m_horizontal_split_container;
-    std::shared_ptr<VSplitContainer>   m_vertical_split_container;
+    std::shared_ptr<NewHSplitContainer>   m_horizontal_split_container;
+    std::shared_ptr<NewVSplitContainer>   m_vertical_split_container;
 
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_timeline_item;

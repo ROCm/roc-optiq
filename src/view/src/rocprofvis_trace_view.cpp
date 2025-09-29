@@ -203,14 +203,14 @@ TraceView::CreateView()
     m_timeline_item = LayoutItem::CreateFromWidget(m_timeline_view);
     
     m_vertical_split_container =
-        std::make_shared<VSplitContainer>(m_timeline_item, m_analysis_item);
+        std::make_shared<NewVSplitContainer>(m_timeline_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
     m_trace_area             = std::make_shared<LayoutItem>();
     m_trace_area->m_item     = m_vertical_split_container;
     m_trace_area->m_bg_color = IM_COL32(255, 255, 255, 255);
 
     m_horizontal_split_container =
-        std::make_shared<HSplitContainer>(m_sidebar_item, m_trace_area);
+        std::make_shared<NewHSplitContainer>(m_sidebar_item, m_trace_area);
     m_horizontal_split_container->SetSplit(0.2f);
     m_horizontal_split_container->SetMinRightWidth(400);
 }

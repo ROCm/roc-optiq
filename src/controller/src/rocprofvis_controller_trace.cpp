@@ -27,6 +27,7 @@
 #ifdef COMPUTE_UI_SUPPORT
 #include "rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_controller_plot.h"
+#include <filesystem>
 #endif
 
 #include <cfloat>
@@ -2341,7 +2342,8 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
             {
                 m_compute_trace = new ComputeTrace();
                 ROCPROFVIS_ASSERT(m_compute_trace);
-                result = m_compute_trace->Load(filepath.c_str());
+                std::string folder_path = std::filesystem::path(filepath).parent_path().string();
+                result = m_compute_trace->Load(folder_path.c_str());
             }
 #endif
 #ifdef JSON_TRACE_SUPPORT

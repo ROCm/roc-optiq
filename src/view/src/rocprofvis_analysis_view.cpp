@@ -1,14 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_analysis_view.h"
+#include "rocprofvis_annotation_view.h"
+#include "rocprofvis_annotations.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events_view.h"
+#include "rocprofvis_multi_track_table.h"
 #include "rocprofvis_track_details.h"
 #include "spdlog/spdlog.h"
-
 #include "widgets/rocprofvis_debug_window.h"
-#include "widgets/rocprofvis_infinite_scroll_table.h"
 
 namespace RocProfVis
 {
@@ -16,35 +17,39 @@ namespace View
 {
 
 AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
-                           std::shared_ptr<TimelineSelection> timeline_selection)
+                           std::shared_ptr<TimelineSelection>  timeline_selection,
+                           std::shared_ptr<AnnotationsManager> annotation_manager)
 : m_data_provider(dp)
-, m_event_table(std::make_shared<InfiniteScrollTable>(dp, timeline_selection,
-                                                      TableType::kEventTable))
-, m_sample_table(std::make_shared<InfiniteScrollTable>(dp, timeline_selection,
-                                                       TableType::kSampleTable))
+, m_event_table(
+      std::make_shared<MultiTrackTable>(dp, timeline_selection, TableType::kEventTable))
+, m_sample_table(
+      std::make_shared<MultiTrackTable>(dp, timeline_selection, TableType::kSampleTable))
 , m_events_view(std::make_shared<EventsView>(dp, timeline_selection))
+
+, m_annotation_view(std::make_shared<AnnotationView>(annotation_manager))
 , m_track_details(std::make_shared<TrackDetails>(dp, topology, timeline_selection))
+
 {
     m_widget_name = GenUniqueName("Analysis View");
 
     m_tab_container = std::make_shared<TabContainer>();
 
     TabItem tab_item;
-    tab_item.m_label     = "Event Details";
-    tab_item.m_id        = "event_details";
+    tab_item.m_label     = "Event Table";
+    tab_item.m_id        = "event_table";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_event_table;
     m_tab_container->AddTab(tab_item);
 
-    tab_item.m_label     = "Sample Details";
-    tab_item.m_id        = "sample_details";
+    tab_item.m_label     = "Sample Table";
+    tab_item.m_id        = "sample_table";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_sample_table;
     m_tab_container->AddTab(tab_item);
 
     // Add EventsView tab
-    tab_item.m_label     = "Events View";
-    tab_item.m_id        = "events_view";
+    tab_item.m_label     = "Event Details";
+    tab_item.m_id        = "event_details";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_events_view;
     m_tab_container->AddTab(tab_item);
@@ -53,6 +58,13 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     tab_item.m_id        = "track_details";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_track_details;
+    m_tab_container->AddTab(tab_item);
+
+    // Add Annotation View Tab
+    tab_item.m_label     = "Annotations";
+    tab_item.m_id        = "annotation_view";
+    tab_item.m_can_close = false;
+    tab_item.m_widget    = m_annotation_view;
     m_tab_container->AddTab(tab_item);
 
     m_tab_container->SetAllowToolTips(false);

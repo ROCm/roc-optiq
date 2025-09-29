@@ -44,9 +44,6 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_unload_track_distance(1000.0f)
 , m_sidebar_size(400)
 , m_resize_activity(false)
-, m_scroll_position_x(0)
-, m_scrollbar_location_as_percentage(0)
-, m_artifical_scrollbar_active(false)
 , m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
                          TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(static_cast<uint64_t>(-1))
@@ -114,6 +111,15 @@ TimelineView::TimelineView(DataProvider&                       dp,
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+
+    // This is used for navigation from other views like the annotation view.
+    auto navigation_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<NavigationEvent>(e);
+        MoveToPosition(evt->GetVMin(), evt->GetVMax(), evt->GetYPosition(),
+                       evt->GetCenter());
+    };
+    m_navigation_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
 }
 
 void
@@ -150,36 +156,6 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
 }
 
 void
-TimelineView::ShowTimelineContextMenu(const ImVec2& window_position)
-{
-    ImVec2 mouse_pos = ImGui::GetMousePos();
-    ImVec2 rel_mouse_pos =
-        ImVec2(mouse_pos.x - window_position.x, mouse_pos.y - window_position.y);
-
-    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
-       ImGui::IsMouseHoveringRect(window_position,
-                                  ImVec2(window_position.x + m_graph_size.x,
-                                         window_position.y + m_graph_size.y)))
-    {
-        ImGui::OpenPopup("TimelineContextMenu");
-    }
-
-    if(ImGui::BeginPopup("TimelineContextMenu"))
-    {
-        if(ImGui::MenuItem("Add Sticky Note"))
-        {
-            float  x_in_chart = rel_mouse_pos.x;
-            double time_ns =
-                m_v_min_x + (x_in_chart / m_graph_size.x) * (m_v_max_x - m_v_min_x);
-            float y_offset = rel_mouse_pos.y;
-            m_annotations->OpenStickyNotePopup(time_ns, y_offset);
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-}
-
-void
 TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 {
     bool movement_drag   = false;
@@ -192,29 +168,35 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         for(int i = static_cast<int>(m_annotations->GetStickyNotes().size()) - 1; i >= 0;
             --i)
         {
+            if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
+
             movement_drag |= m_annotations->GetStickyNotes()[i].HandleDrag(
-                window_position, m_v_min_x, m_pixels_per_ns, m_dragged_sticky_id);
+                window_position, m_v_min_x, m_v_max_x, m_pixels_per_ns,
+                m_dragged_sticky_id);
             movement_resize |= m_annotations->GetStickyNotes()[i].HandleResize(
-                window_position, m_v_min_x, m_pixels_per_ns);
+                window_position, m_v_min_x, m_v_max_x, m_pixels_per_ns);
         }
 
         // Rendering --> based on added order (old bottom new on top)
         for(size_t i = 0; i < m_annotations->GetStickyNotes().size(); ++i)
         {
+            if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
+
             m_annotations->GetStickyNotes()[i].Render(draw_list, window_position,
                                                       m_v_min_x, m_pixels_per_ns);
         }
     }
     m_stop_user_interaction |= movement_drag || movement_resize;
-    double center_time_ns  = m_v_min_x + (m_v_max_x - m_v_min_x) * 0.5;
-    float  center_y_offset = m_graph_size.y * 0.5f;
-    m_annotations->SetCenter(ImVec2(center_time_ns, center_y_offset));
 
     RenderTimelineViewOptionsMenu(window_position);
     m_annotations->ShowStickyNotePopup();
     m_annotations->ShowStickyNoteEditPopup();
 }
-
+ImVec2
+TimelineView::GetGraphSize()
+{
+    return m_graph_size;
+}
 void
 TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 {
@@ -234,18 +216,28 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         ImGui::OpenPopup("StickyNoteContextMenu");
     }
 
+    if(!ImGui::IsPopupOpen("StickyNoteContextMenu"))
+    {
+        return;
+    }
+    auto style = m_settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup("StickyNoteContextMenu"))
     {
-        if(ImGui::MenuItem("Add Sticky"))
+        if(ImGui::MenuItem("Add Annotation"))
         {
-            float x_in_chart = rel_mouse_pos.x;
-            m_annotations->SetStickyPopup(m_v_min_x + (x_in_chart / m_graph_size.x) *
-                                                          (m_v_max_x - m_v_min_x),
-                                          rel_mouse_pos.y);
+            float  x_in_chart = rel_mouse_pos.x;
+            double time_ns =
+                m_v_min_x + (x_in_chart / m_graph_size.x) * (m_v_max_x - m_v_min_x);
+            float y_offset = rel_mouse_pos.y;
+            m_annotations->OpenStickyNotePopup(time_ns, y_offset, m_v_min_x, m_v_max_x,
+                                               m_graph_size);
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }
+    ImGui::PopStyleVar(2);
 }
 
 void
@@ -271,6 +263,37 @@ TimelineView::SetViewTimePosition(double time_pos_ns, bool center)
     {
         m_view_time_offset_ns = time_pos_ns;
     }
+}
+float
+TimelineView::GetScrollPosition()
+{
+    return m_scroll_position_y;
+}
+
+void
+TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position,
+                             bool center)
+{
+    /*
+    Use this funtion for all future navigation requests that do not need to scroll to a
+    particular track. Ex) Annotation and Bookmarks.
+    */
+
+    SetViewableRangeNS(start_ns, end_ns);
+
+    if(center)
+    {
+        m_scroll_position_y =
+            clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f, 0.0f,
+                  m_content_max_y_scroll);
+    }
+    else
+    {
+        m_scroll_position_y =
+            clamp(static_cast<float>(y_position), 0.0f, m_content_max_y_scroll);
+    }
+
+    ImGui::SetScrollY(m_scroll_position_y);
 }
 
 void
@@ -332,26 +355,8 @@ TimelineView::~TimelineView()
         static_cast<int>(RocEvents::kFontSizeChanged), m_new_track_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kSetViewRange),
                                              m_set_view_range_token);
-}
-
-void
-TimelineView::CalibratePosition()
-{
-    m_scroll_position_x =
-        (m_view_time_offset_ns) / (m_range_x);  // Finds where the chart is at.
-    double scrollback = (m_range_x) *m_scroll_position_x;
-
-    if(m_artifical_scrollbar_active == true)
-    {
-        double value_to_begginging =
-            m_view_time_offset_ns - scrollback;  // how to get back to initial/first value
-                                                 // accounting for current movement.
-        m_view_time_offset_ns =
-            value_to_begginging +
-            ((m_range_x) *m_scrollbar_location_as_percentage);  // initial/first value +
-                                                                // position where
-                                                                // scrollbar is.
-    }
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kGoToTimelineSpot), m_navigation_token);
 }
 
 void
@@ -630,9 +635,12 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         double scrubber_position =
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
-        char text[20];
-        snprintf(text, 20, "%17.0f", scrubber_position);
-        ImVec2 label_size = ImGui::CalcTextSize(text);
+        std::string label = nanosecond_to_formatted_str(
+            scrubber_position, m_settings.GetUserSettings().unit_settings.time_format);
+
+        // char text[20];
+        // snprintf(text, 20, "%17.0f", scrubber_position);
+        ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
         constexpr float label_padding = 4.0f;
         ImVec2 rect_pos1 = ImVec2(mouse_position.x, screen_pos.y + container_size.y -
@@ -643,7 +651,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
                                  m_settings.GetColor(Colors::kScrubberNumberColor));
-        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor), text);
+        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kFillerColor),
+                           label.c_str());
         draw_list->AddLine(
             ImVec2(mouse_position.x, screen_pos.y),
             ImVec2(mouse_position.x, screen_pos.y + container_size.y - m_ruler_padding),
@@ -691,16 +700,10 @@ void
 TimelineView::CalculateGridInterval()
 {
     // measure the size of the label to determine the step size
-    std::string label;
-    switch(m_settings.GetUserSettings().unit_settings.time_format)
-    {
-        // use the largest time point to determine the label size
-        case TimeFormat::kTimecode:
-            label = nanosecond_to_timecode_str(m_max_x - m_min_x) + "gap";
-            break;
-        case TimeFormat::kNanoseconds:
-        default: label = nanosecond_to_str(m_max_x - m_min_x) + "gap";
-    }
+    std::string label =
+        nanosecond_to_formatted_str(
+            m_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format) +
+        "gap";
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
@@ -730,7 +733,7 @@ TimelineView::CalculateGridInterval()
 }
 
 void
-TimelineView::RenderGridAlt()
+TimelineView::RenderGrid()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
@@ -793,20 +796,25 @@ TimelineView::RenderGridAlt()
                        cursor_position.y + content_size.y + tick_height - m_ruler_height),
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
-            switch(m_settings.GetUserSettings().unit_settings.time_format)
-            {
-                // use the largest time point to determine the step size
-                case TimeFormat::kTimecode:
-                    label = nanosecond_to_timecode_str(grid_line_ns);
-                    break;
-                case TimeFormat::kNanoseconds:
-                default: label = nanosecond_to_str(grid_line_ns);
-            }
+            label = nanosecond_to_formatted_str(
+                grid_line_ns, m_settings.GetUserSettings().unit_settings.time_format);
 
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
-            ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
-                                       cursor_position.y + content_size.y - label_size.y -
-                                           m_ruler_padding);
+
+            ImVec2 label_pos;
+            if(grid_line_start_ns == 0)
+            {
+                label_pos = ImVec2(normalized_start + ImGui::CalcTextSize("0").x,
+                                   cursor_position.y + content_size.y - label_size.y -
+                                       m_ruler_padding);
+            }
+            else
+            {
+                label_pos = ImVec2(normalized_start - label_size.x / 2,
+                                   cursor_position.y + content_size.y - label_size.y -
+                                       m_ruler_padding);
+            }
+
             draw_list->AddText(label_pos, m_settings.GetColor(Colors::kRulerTextColor),
                                label.c_str());
         }
@@ -816,132 +824,8 @@ TimelineView::RenderGridAlt()
 }
 
 void
-TimelineView::RenderGrid()
-{
-    /*This section makes the grid for the charts*/
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                    ImGuiWindowFlags_NoScrollWithMouse;
-
-    ImVec2 container_pos =
-        ImVec2(ImGui::GetWindowPos().x + m_sidebar_size, ImGui::GetWindowPos().y);
-
-    ImVec2 container_size = ImGui::GetWindowSize();
-    DebugWindow::GetInstance()->AddDebugMessage(
-        "TimelineView::RenderGrid: container_size: " + std::to_string(container_size.x) +
-        ", " + std::to_string(container_size.y));
-
-    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_size    = ImVec2(container_size.x - m_sidebar_size, container_size.y);
-
-    double range =
-        (m_v_max_x + m_view_time_offset_ns) - (m_v_min_x + m_view_time_offset_ns);
-
-    double stepSize = 0;
-    double steps    = 0;
-    {
-        std::string label;
-
-        switch(m_settings.GetUserSettings().unit_settings.time_format)
-        {
-            // use the largest time point to determine the step size
-            case TimeFormat::kTimecode:
-                label = nanosecond_to_timecode_str(m_max_x) + "gap";
-                break;
-            case TimeFormat::kNanoseconds:
-            default: label = nanosecond_to_str(m_max_x) + "gap";
-        }
-        ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
-        // amount the loop which generates the grid iterates by.
-        steps    = m_graph_size.x / label_size.x;
-        stepSize = label_size.x;
-    }
-
-    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
-
-    if(ImGui::BeginChild("Grid"), content_size, true, window_flags)
-    {
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImGui::SetCursorPos(ImVec2(0, 0));
-
-        ImVec2 child_win  = ImGui::GetWindowPos();
-        ImVec2 child_size = ImGui::GetWindowSize();
-
-        // Define the clipping rectangle to match the child window
-        ImVec2 clip_min = child_win;
-        ImVec2 clip_max =
-            ImVec2(child_win.x + content_size.x, child_win.y + content_size.y);
-
-        draw_list->PushClipRect(clip_min, clip_max, true);
-
-        // Background for the ruler area
-        draw_list->AddRectFilled(
-            ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
-            ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
-            m_settings.GetColor(Colors::kRulerBgColor));
-
-        // Detect right mouse click in the ruler area
-        if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
-           ImGui::IsMouseHoveringRect(
-               ImVec2(container_pos.x,
-                      cursor_position.y + content_size.y - m_ruler_height),
-               ImVec2(container_pos.x + m_graph_size.x,
-                      cursor_position.y + content_size.y)))
-        {
-            // Show context menu for time format selection
-            ImGui::OpenPopup("Time Format Selection");
-        }
-
-        // Draw the vertical lines for the grid
-        constexpr float tick_height = 10.0f;
-
-        double x_offset = (m_view_time_offset_ns / m_v_width) * m_graph_size.x;
-        x_offset        = (int) x_offset % (int) stepSize;
-
-        for(float i = 0; i < steps + 1; i++)
-        {
-            float linePos = stepSize * i;
-            linePos -= x_offset;
-            float cursor_screen_percentage = (linePos) / m_graph_size.x;
-
-            double normalized_start = container_pos.x + linePos;
-
-            draw_list->AddLine(
-                ImVec2(normalized_start, cursor_position.y),
-                ImVec2(normalized_start,
-                       cursor_position.y + content_size.y + tick_height - m_ruler_height),
-                m_settings.GetColor(Colors::kBoundBox), 0.5f);
-
-            std::string label;
-            double      time_point_ns =
-                m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
-            switch(m_settings.GetUserSettings().unit_settings.time_format)
-            {
-                // use the largest time point to determine the step size
-                case TimeFormat::kTimecode:
-                    label = nanosecond_to_timecode_str(time_point_ns);
-                    break;
-                case TimeFormat::kNanoseconds:
-                default: label = nanosecond_to_str(time_point_ns);
-            }
-
-            ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
-            ImVec2 label_pos  = ImVec2(normalized_start - label_size.x / 2,
-                                       cursor_position.y + content_size.y - label_size.y -
-                                           m_ruler_padding);
-            draw_list->AddText(label_pos, m_settings.GetColor(Colors::kGridColor),
-                               label.c_str());
-        }
-
-        draw_list->PopClipRect();
-    }
-    ImGui::EndChild();  // End of Grid
-}
-
-void
 TimelineView::RenderGraphView()
 {
-    CalibratePosition();
-
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -1048,7 +932,10 @@ TimelineView::RenderGraphView()
 
             track_item.chart->SetInViewVertical(is_visible);
 
-            if(is_visible)
+            m_resize_activity |= track_item.chart->TrackHeightChanged();
+
+            if(is_visible ||
+               track_item.chart->GetDistanceToView() <= m_unload_track_distance)
             {
                 // Request data for the chart if it doesn't have data.
                 if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
@@ -1064,6 +951,10 @@ TimelineView::RenderGraphView()
                         (m_view_time_offset_ns + m_v_width + buffer_distance) + m_min_x,
                         m_graph_size.x * 3);
                 }
+            }
+
+            if(is_visible)
+            {
                 ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
                 if(track_item.selected)
                 {
@@ -1082,8 +973,6 @@ TimelineView::RenderGraphView()
                     track_item.chart->UpdateMovement(m_zoom, m_view_time_offset_ns,
                                                      m_min_x, m_max_x, m_pixels_per_ns,
                                                      m_scroll_position_y);
-
-                    m_resize_activity |= track_item.chart->TrackHeightChanged();
 
                     if(is_reordering)
                     {
@@ -1368,8 +1257,7 @@ TimelineView::RenderGraphPoints()
 
         m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
-        // RenderGrid();
-        RenderGridAlt();
+        RenderGrid();
         RenderGraphView();
         RenderSplitter(screen_pos);
         RenderInteractiveUI(screen_pos);
@@ -1397,7 +1285,6 @@ TimelineView::RenderGraphPoints()
         ImGui::Dummy(ImVec2(m_sidebar_size, 0));
         ImGui::SameLine();
 
-        float current_pos     = m_scroll_position_x * (subcomponent_size_main.x * m_zoom);
         float available_width = subcomponent_size_main.x - m_sidebar_size;
 
         ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
@@ -1416,24 +1303,24 @@ TimelineView::RenderGraphPoints()
 
         ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
 
-        ImGui::SliderFloat("##scrollbar", &current_pos, 0.0f,
-                           subcomponent_size_main.x * m_zoom, "%.5f");
+        m_v_width = std::min(m_v_width,
+                             m_range_x);  // Ensure view width does not exceed total
+                                          // range. Prevents jitter and assertion errors.
+        float max_offset =
+            static_cast<float>((m_range_x - m_v_width) + m_v_width * 0.10f);
+        float min_offset  = 0.0f;
+        float view_offset = static_cast<float>(m_view_time_offset_ns);
+
+        ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, "%.5f");
+        m_view_time_offset_ns = static_cast<double>(view_offset);
+
+        // Clamp the view offset to prevent scrolling out of bounds
+        m_view_time_offset_ns = std::clamp(static_cast<double>(view_offset), 0.0,
+                                           (m_range_x - m_v_width) + m_v_width * 0.10);
 
         ImGui::PopStyleColor(5);  // Pop the colors we pushed above
         ImGui::PopStyleVar(2);    // Pop both style variables
         ImGui::PopItemWidth();
-
-        m_scrollbar_location_as_percentage =
-            current_pos / (subcomponent_size_main.x * m_zoom);
-
-        if(ImGui::IsItemActive())
-        {
-            m_artifical_scrollbar_active = true;
-        }
-        else
-        {
-            m_artifical_scrollbar_active = false;
-        }
 
         m_stop_user_interaction = false;
 
@@ -1653,15 +1540,7 @@ TimelineView::HandleTopSurfaceTouch()
 ViewCoords
 TimelineView::GetViewCoords() const
 {
-    return { m_view_time_offset_ns, m_scroll_position_y, m_zoom };
-}
-
-void
-TimelineView::SetViewCoords(const ViewCoords& coords)
-{
-    m_view_time_offset_ns = coords.time_offset_ns;
-    m_scroll_position_y   = coords.y_scroll_position;
-    m_zoom                = coords.zoom;
+    return { m_scroll_position_y, m_zoom, m_v_min_x, m_v_max_x };
 }
 
 TimelineArrow&

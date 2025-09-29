@@ -4,7 +4,7 @@ project(rocprof-visualizer)
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 1)
-set(PROJECT_VERSION_PATCH 4)
+set(PROJECT_VERSION_PATCH 6)
 set(PROJECT_VERSION_BUILD 0)
 
 # Name and path of the icon font header
@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
-option(JSON_SUPPORT "Build with support for JSON traces" ON)
+option(JSON_TRACE_SUPPORT "Build with support for JSON traces" OFF)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" ON)
@@ -28,9 +28,9 @@ add_subdirectory(src/model)
 add_subdirectory(src/controller)
 
 set(rocprofvis_source_files)
-if(JSON_SUPPORT) 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_SUPPORT")
-endif(JSON_SUPPORT)
+if(JSON_TRACE_SUPPORT) 
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_TRACE_SUPPORT")
+endif(JSON_TRACE_SUPPORT)
 if(COMPUTE_UI_SUPPORT) 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)
@@ -47,6 +47,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp 
     src/view/src/rocprofvis_appwindow.h 
+    src/view/src/rocprofvis_annotation_view.cpp
     src/view/src/rocprofvis_track_item.cpp 
     src/view/src/rocprofvis_flame_track_item.cpp 
     src/view/src/rocprofvis_timeline_arrow.cpp 
@@ -71,6 +72,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_track_topology.cpp
     src/view/src/rocprofvis_track_details.cpp
     src/view/src/rocprofvis_project.cpp
+	src/view/src/rocprofvis_multi_track_table.cpp
     src/view/src/widgets/rocprofvis_widget.cpp	
     src/view/src/widgets/rocprofvis_debug_window.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
@@ -138,6 +140,7 @@ target_link_libraries(rocprof-visualizer PRIVATE datamodel)
 target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer PRIVATE spdlog)
 target_link_libraries(rocprof-visualizer PRIVATE sqlite3)
+target_link_libraries(rocprof-visualizer PRIVATE json)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
 

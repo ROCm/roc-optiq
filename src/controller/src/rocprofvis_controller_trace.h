@@ -100,7 +100,7 @@ private:
 #endif
 
 private:
-#ifdef JSON_SUPPORT
+#ifdef JSON_TRACE_SUPPORT
     rocprofvis_result_t LoadJson(char const* const filename);
 #endif
     rocprofvis_result_t LoadRocpd(char const* const filename);

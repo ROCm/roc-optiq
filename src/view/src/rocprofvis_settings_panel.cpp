@@ -126,7 +126,7 @@ SettingsPanel::Render()
                 ImGui::CalcTextSize("Cancel").x + 2 * ImGui::GetStyle().FramePadding.x;
             ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
                                  ImGui::GetStyle().ItemSpacing.x - 2 * button_width);
-            if(ImGui::Button("Ok", ImVec2(button_width, 0)))
+            if(ImGui::Button("OK", ImVec2(button_width, 0)))
             {
                 m_usersettings.display_settings.dpi_based_scaling =
                     m_font_settings.dpi_scaling;
@@ -257,7 +257,14 @@ SettingsPanel::RenderUnitOptions()
                             2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
-    if(ImGui::Combo("##time_format", &time_format_index, "Timecode\0Nanoseconds\0\0"))
+    //Options must match TimeFormat enum
+    if(ImGui::Combo("##time_format", &time_format_index, 
+        "Timecode\0"
+        "Condensed Timecode\0"
+        "Seconds\0"
+        "Milliseconds\0"
+        "Microseconds\0"
+        "Nanoseconds\0\0"))
     {
         m_usersettings.unit_settings.time_format =
             static_cast<TimeFormat>(time_format_index);

@@ -9,19 +9,30 @@
 using namespace RocProfVis::View;
 
 bool
-rocprofvis_view_init()
+rocprofvis_view_init(std::function<void(int)> notification_callback)
 {
-    bool result = AppWindow::GetInstance()->Init();
+    auto app = AppWindow::GetInstance();
+    bool result = app->Init();
     if(!result)
     {
         spdlog::error("Failed initializing the Application Window");
     }
+    else 
+    {
+        app->SetNotificationCallback(notification_callback);
+    }
     return result;
+
 }
 
 void
-rocprofvis_view_render()
+rocprofvis_view_render(const rocprofvis_view_render_options_t& render_options)
 {
+    if(render_options ==
+       rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit)
+    {
+        AppWindow::GetInstance()->ShowCloseConfirm();
+    }
     AppWindow::GetInstance()->Render();
 }
 

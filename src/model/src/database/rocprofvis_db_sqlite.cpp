@@ -186,7 +186,9 @@ SqliteDatabase::FindTrackIDs(
     if(service_data.category == kRocProfVisDmKernelDispatchTrack ||
             service_data.category == kRocProfVisDmMemoryAllocationTrack ||
             service_data.category == kRocProfVisDmMemoryCopyTrack ||
-            service_data.category == kRocProfVisDmRegionTrack)
+            service_data.category == kRocProfVisDmRegionTrack ||
+            service_data.category == kRocProfVisDmRegionMainTrack ||
+            service_data.category == kRocProfVisDmRegionSampleTrack)
     {
         process.id[TRACK_ID_NODE]         = service_data.nid;
         process.id[TRACK_ID_PID_OR_AGENT] = service_data.process;
@@ -224,6 +226,46 @@ SqliteDatabase::FindTrackIDs(
     }
 }
 
+rocprofvis_dm_track_category_t
+SqliteDatabase::TranslateOperationToTrackCategory(rocprofvis_dm_event_operation_t op) {
+    switch (op)
+    {
+        case kRocProfVisDmOperationLaunch: return GetRegionTrackCategory();
+        case kRocProfVisDmOperationLaunchSample: return kRocProfVisDmRegionSampleTrack;
+        case kRocProfVisDmOperationDispatch: return kRocProfVisDmKernelDispatchTrack;
+        case kRocProfVisDmOperationMemoryAllocate: return kRocProfVisDmMemoryAllocationTrack;
+        case kRocProfVisDmOperationMemoryCopy: return kRocProfVisDmMemoryCopyTrack;
+        case kRocProfVisDmOperationNoOp: return kRocProfVisDmPmcTrack;
+
+    }
+    return kRocProfVisDmNotATrack;
+}
+
+const rocprofvis_dm_track_search_id_t
+SqliteDatabase::GetTrackSearchId(rocprofvis_dm_track_category_t category)
+{
+    switch (category)
+    {
+        case kRocProfVisDmPmcTrack:
+            return kRPVTrackSearchIdCounters;
+        case kRocProfVisDmRegionTrack:
+        case kRocProfVisDmRegionMainTrack:
+            return kRPVTrackSearchIdThreads;
+        case kRocProfVisDmRegionSampleTrack:
+            return kRPVTrackSearchIdThreadSamples;
+        case kRocProfVisDmKernelDispatchTrack: 
+            return kRPVTrackSearchIdDispatches;
+        case kRocProfVisDmMemoryAllocationTrack: 
+            return kRPVTrackSearchIdMemAllocs;
+        case kRocProfVisDmMemoryCopyTrack: 
+            return kRPVTrackSearchIdMemCopies;
+        case kRocProfVisDmStreamTrack: 
+            return kRPVTrackSearchIdStreams;
+            
+    }
+    return kRPVTrackSearchIdUnknown;
+}
+
 void
 SqliteDatabase::CollectTrackServiceData(
     SqliteDatabase* db,
@@ -236,26 +278,7 @@ SqliteDatabase::CollectTrackServiceData(
     {
 
         service_data.op = (rocprofvis_dm_event_operation_t)db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
-        if(service_data.op == kRocProfVisDmOperationLaunch)
-        {
-            service_data.category = kRocProfVisDmRegionTrack;
-        }
-        else if(service_data.op == kRocProfVisDmOperationDispatch)
-        {
-            service_data.category = kRocProfVisDmKernelDispatchTrack;
-        }
-        else if(service_data.op == kRocProfVisDmOperationMemoryAllocate)
-        {
-            service_data.category = kRocProfVisDmMemoryAllocationTrack;
-        }
-        else if(service_data.op == kRocProfVisDmOperationMemoryCopy)
-        {
-            service_data.category = kRocProfVisDmMemoryCopyTrack;
-        }
-        else if(service_data.op == kRocProfVisDmOperationNoOp)
-        {
-            service_data.category = kRocProfVisDmPmcTrack;
-        }
+        service_data.category = db->TranslateOperationToTrackCategory(service_data.op);
     }
     else if(column_name == Builder::NODE_ID_SERVICE_NAME)
     {
@@ -353,7 +376,9 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
                 if(service_data.category == kRocProfVisDmKernelDispatchTrack ||
                    service_data.category == kRocProfVisDmMemoryAllocationTrack ||
                    service_data.category == kRocProfVisDmMemoryCopyTrack || 
-                    service_data.category == kRocProfVisDmRegionTrack)
+                    service_data.category == kRocProfVisDmRegionTrack || 
+                    service_data.category == kRocProfVisDmRegionMainTrack ||
+                   service_data.category == kRocProfVisDmRegionSampleTrack)
                 {
                     if(kRocProfVisDmResultSuccess !=
                        db->BindObject()->FuncAddTableColumn(

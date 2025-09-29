@@ -28,9 +28,11 @@ class TimelineView;
 
 typedef struct ViewCoords
 {
-    double time_offset_ns;
-    double y_scroll_position;
-    float  zoom;
+    double y;
+    float  z;
+    double v_min_x;
+    double v_max_x;
+
 } ViewCoords;
 
 class TimelineViewProjectSettings : public ProjectSetting
@@ -67,25 +69,26 @@ public:
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             SetViewableRangeNS(double start_ns, double end_ns);
-    void                             RenderGraphPoints();
-    void                             RenderGridAlt();
-    void                             RenderGrid();
-    void                             RenderScrubber(ImVec2 screen_pos);
-    void                             RenderSplitter(ImVec2 screen_pos);
-    void                             RenderGraphView();
-    void                             HandleTopSurfaceTouch();
-    void                             CalibratePosition();
-    void                             HandleNewTrackData(std::shared_ptr<RocEvent> e);
-    void                             CalculateGridInterval();
-    void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
+    void   MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
+    void   RenderGraphPoints();
+    void   RenderGrid();
+    float  GetScrollPosition();
+    void   RenderScrubber(ImVec2 screen_pos);
+    void   RenderSplitter(ImVec2 screen_pos);
+    void   RenderGraphView();
+    void   HandleTopSurfaceTouch();
+    void   HandleNewTrackData(std::shared_ptr<RocEvent> e);
+    void   CalculateGridInterval();
+    ImVec2 GetGraphSize();
+    void   RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords     GetViewCoords() const;
-    void           SetViewCoords(const ViewCoords& coords);
-    void           ShowTimelineContextMenu(const ImVec2& window_position);
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
 
 private:
-    EventManager::SubscriptionToken     m_scroll_to_track_token;
+    EventManager::SubscriptionToken m_scroll_to_track_token;
+    EventManager::SubscriptionToken m_navigation_token;
+
     EventManager::SubscriptionToken     m_new_track_token;
     EventManager::SubscriptionToken     m_font_changed_token;
     EventManager::SubscriptionToken     m_set_view_range_token;
@@ -110,10 +113,7 @@ private:
     double                              m_previous_scroll_position;
     bool                                m_meta_map_made;
     bool                                m_resize_activity;
-    double                              m_scroll_position_x;
     double                              m_last_data_req_v_width;
-    double                              m_scrollbar_location_as_percentage;
-    bool                                m_artifical_scrollbar_active;
     float                               m_unload_track_distance;
     double                              m_range_x;
     DataProvider&                       m_data_provider;

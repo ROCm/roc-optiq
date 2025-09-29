@@ -91,12 +91,6 @@ enum class Colors
     __kLastColor
 };
 
-enum class TimeFormat
-{
-    kTimecode,
-    kNanoseconds,
-};
-
 constexpr char* JSON_KEY_VERSION = "version";
 
 constexpr char* JSON_KEY_GROUP_SETTINGS             = "settings";

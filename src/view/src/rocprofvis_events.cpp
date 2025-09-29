@@ -260,3 +260,35 @@ RangeEvent::GetEndNs() const
 {
     return m_end_ns;
 }
+NavigationEvent::NavigationEvent(int event_id, double v_min, double v_max, double y_position, bool center )
+: RocEvent(static_cast<int>(RocEvents::kGoToTimelineSpot))
+, m_v_min(v_min)
+, m_v_max(v_max)
+, m_y_position(y_position)
+, m_center(center)
+{
+    SetType(RocEventType::kNavigationEvent);
+}
+
+double
+NavigationEvent::GetVMin() const
+{
+    return m_v_min;
+}
+
+double
+NavigationEvent::GetVMax() const
+{
+    return m_v_max;
+}
+
+double
+NavigationEvent::GetYPosition() const
+{
+    return m_y_position;
+}
+bool
+NavigationEvent::GetCenter() const
+{
+    return m_center;
+}

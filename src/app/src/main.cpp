@@ -15,8 +15,11 @@
 #include "stb-image/stb_image.h"
 #include <utility>
 
-std::vector<std::string> g_DroppedFilePaths;
-bool g_FileWasDropped = false;
+// globals shared with callbacks
+static std::vector<std::string> g_dropped_file_paths;
+static bool g_file_was_dropped = false;
+static rocprofvis_view_render_options_t g_render_options =
+    rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
 
 std::pair<GLFWimage, unsigned char*>
 glfw_create_icon()
@@ -44,12 +47,13 @@ glfw_create_icon()
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
 {
-    g_DroppedFilePaths.clear();
+    (void) window; // Unused parameter
+    g_dropped_file_paths.clear();
     for(int i = 0; i < count; i++)
     {
-        g_DroppedFilePaths.push_back(paths[i]);
+        g_dropped_file_paths.push_back(paths[i]);
     }
-    g_FileWasDropped = true;
+    g_file_was_dropped = true;
 }
 
 static void
@@ -59,6 +63,22 @@ content_scale_callback(GLFWwindow* window, float xscale, float yscale)
     (void) window;
     (void) yscale;
     rocprofvis_view_set_dpi(xscale);
+}
+
+static void
+close_callback(GLFWwindow* window)
+{
+    g_render_options = rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit;
+    glfwSetWindowShouldClose(window, GLFW_FALSE);
+}
+
+static void
+app_notification_callback(GLFWwindow* window, int notification)
+{
+    if(notification == static_cast<int>(rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App))
+    {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
 }
 
 static void
@@ -83,7 +103,7 @@ main(int, char**)
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 #endif        
         GLFWwindow* window =
-            glfwCreateWindow(1280, 720, "ROCm Visualizer", nullptr, nullptr);
+            glfwCreateWindow(1280, 720, "ROCm Visualizer Beta", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
         // Drop file callback
@@ -96,6 +116,8 @@ main(int, char**)
             glfwGetWindowContentScale(window, &xs, &ys);
             content_scale_callback(window, xs, ys);
         }
+        // Window close callback
+        glfwSetWindowCloseCallback(window, close_callback);
 
         if(window && rocprofvis_imgui_backend_setup(&backend, window))
         {
@@ -110,7 +132,9 @@ main(int, char**)
 
                 ImGui::StyleColorsLight();
 
-                rocprofvis_view_init();
+                rocprofvis_view_init([window](int notification) -> void {
+                    app_notification_callback(window, notification);
+                });
 
                 backend.m_config(&backend, window);
 
@@ -130,10 +154,10 @@ main(int, char**)
                 while(!glfwWindowShouldClose(window))
                 {
                     // handle dropped file signal flag from callback
-                    if (g_FileWasDropped)
+                    if (g_file_was_dropped)
                     {
-                        rocprofvis_view_open_files(g_DroppedFilePaths);
-                        g_FileWasDropped = false;
+                        rocprofvis_view_open_files(g_dropped_file_paths);
+                        g_file_was_dropped = false;
                     }                    
 
                     glfwPollEvents();
@@ -152,7 +176,9 @@ main(int, char**)
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
 
-                    rocprofvis_view_render();
+                    rocprofvis_view_render(g_render_options);
+                    g_render_options = rocprofvis_view_render_options_t::
+                        kRocProfVisViewRenderOption_None;
 
                     ImGui::Render();
                     ImDrawData* draw_data    = ImGui::GetDrawData();

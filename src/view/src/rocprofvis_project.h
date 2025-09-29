@@ -94,7 +94,6 @@ public:
     void TrimSaveOverwrite(const std::string& file_path_str);
 
 private:
-
     /*
      * Opens a project + attached trace file and returns Success/Duplicate/Failed.
      * @param file_path: The path of the file to open. If Duplicate is returned, this will
@@ -134,11 +133,12 @@ constexpr char* JSON_KEY_GROUP_TIMELINE = "timeline";
 constexpr char* JSON_KEY_GENERAL_VERSION    = "version";
 constexpr char* JSON_KEY_GENERAL_TRACE_PATH = "trace_path";
 
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK     = "bookmarks";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_KEY = "key";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_X   = "x";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_Y   = "y";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_Z   = "z";
+constexpr char* JSON_KEY_TIMELINE_BOOKMARK         = "bookmarks";
+constexpr char* JSON_KEY_TIMELINE_BOOKMARK_KEY     = "key";
+constexpr char* JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X = "view_start_ns ";
+constexpr char* JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X = "view_end_ns";
+constexpr char* JSON_KEY_TIMELINE_BOOKMARK_Y       = "y";
+constexpr char* JSON_KEY_TIMELINE_BOOKMARK_Z       = "z";
 
 constexpr char* JSON_KEY_TIMELINE_TRACK                 = "tracks";
 constexpr char* JSON_KEY_TIMELINE_TRACK_ORDER           = "order";
@@ -149,15 +149,16 @@ constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN = "color_min";
 constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX = "color_max";
 constexpr char* JSON_KEY_TIMELINE_TRACK_BOX_PLOT        = "box_plot";
 
-constexpr const char* JSON_KEY_ANNOTATIONS         = "annotations";
-constexpr const char* JSON_KEY_ANNOTATION_TIME_NS  = "time_ns";
-constexpr const char* JSON_KEY_ANNOTATION_Y_OFFSET = "y_offset";
-constexpr const char* JSON_KEY_ANNOTATION_SIZE_X   = "size_x";
-constexpr const char* JSON_KEY_ANNOTATION_SIZE_Y   = "size_y";
-constexpr const char* JSON_KEY_ANNOTATION_TEXT     = "text";
-constexpr const char* JSON_KEY_ANNOTATION_TITLE    = "title";
-constexpr const char* JSON_KEY_ANNOTATION_ID       = "id";
-
+constexpr const char* JSON_KEY_ANNOTATIONS                 = "annotations";
+constexpr const char* JSON_KEY_ANNOTATION_TIME_NS          = "time_ns";
+constexpr const char* JSON_KEY_ANNOTATION_Y_OFFSET         = "y_offset";
+constexpr const char* JSON_KEY_ANNOTATION_SIZE_X           = "size_x";
+constexpr const char* JSON_KEY_ANNOTATION_SIZE_Y           = "size_y";
+constexpr const char* JSON_KEY_ANNOTATION_TEXT             = "text";
+constexpr const char* JSON_KEY_ANNOTATION_TITLE            = "title";
+constexpr const char* JSON_KEY_ANNOTATION_ID               = "id";
+constexpr char*       JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
+constexpr char*       JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
 
 class ProjectSetting
 {

@@ -5,7 +5,7 @@
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
- 
+
 namespace RocProfVis
 {
 namespace View
@@ -13,7 +13,7 @@ namespace View
 
 class DataProvider;
 class EventsView;
-class InfiniteScrollTable;
+class MultiTrackTable;
 class TrackTopology;
 class TrackDetails;
 class TimelineSelection;
@@ -22,7 +22,7 @@ class AnalysisView : public RocWidget
 {
 public:
     AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
-                 std::shared_ptr<TimelineSelection> timeline_selection,
+                 std::shared_ptr<TimelineSelection>  timeline_selection,
                  std::shared_ptr<AnnotationsManager> annotation_manager);
     ~AnalysisView();
     void Render() override;
@@ -34,8 +34,8 @@ private:
 
     DataProvider& m_data_provider;
 
-    std::shared_ptr<InfiniteScrollTable> m_event_table;
-    std::shared_ptr<InfiniteScrollTable> m_sample_table;
+    std::shared_ptr<MultiTrackTable> m_event_table;
+    std::shared_ptr<MultiTrackTable> m_sample_table;
 
     std::shared_ptr<TabContainer>   m_tab_container;
     std::shared_ptr<EventsView>     m_events_view;

@@ -6,10 +6,10 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events_view.h"
+#include "rocprofvis_multi_track_table.h"
 #include "rocprofvis_track_details.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
-#include "widgets/rocprofvis_infinite_scroll_table.h"
 
 namespace RocProfVis
 {
@@ -20,10 +20,10 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotation_manager)
 : m_data_provider(dp)
-, m_event_table(std::make_shared<InfiniteScrollTable>(dp, timeline_selection,
-                                                      TableType::kEventTable))
-, m_sample_table(std::make_shared<InfiniteScrollTable>(dp, timeline_selection,
-                                                       TableType::kSampleTable))
+, m_event_table(
+      std::make_shared<MultiTrackTable>(dp, timeline_selection, TableType::kEventTable))
+, m_sample_table(
+      std::make_shared<MultiTrackTable>(dp, timeline_selection, TableType::kSampleTable))
 , m_events_view(std::make_shared<EventsView>(dp, timeline_selection))
 
 , m_annotation_view(std::make_shared<AnnotationView>(annotation_manager))

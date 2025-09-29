@@ -22,11 +22,9 @@ namespace View
 
 TraceView::TraceView()
 : m_timeline_view(nullptr)
-, m_sidebar(nullptr)
 , m_horizontal_split_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
-, m_analysis(nullptr)
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
@@ -172,9 +170,9 @@ TraceView::Update()
     {
         m_track_topology->Update();
     }
-    if(m_analysis)
+    if(m_analysis_item->m_item)
     {
-        m_analysis->Update();
+        m_analysis_item->m_item->Update();
     }
 }
 
@@ -185,30 +183,24 @@ TraceView::CreateView()
         std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
     m_timeline_selection = std::make_shared<TimelineSelection>(m_data_provider);
     m_track_topology     = std::make_shared<TrackTopology>(m_data_provider);
+
     m_timeline_view      = std::make_shared<TimelineView>(m_data_provider,
-                                                          m_timeline_selection, m_annotations);//TODO: rewrite to store Layoute Items, but not 
+                                                          m_timeline_selection, m_annotations); //Always visible
 
-    m_sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                           m_timeline_view->GetGraphs(), m_data_provider);//TODO: rewrite to store Layoute Items, but not 
-    m_analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
-                                                m_timeline_selection); //TODO: rewrite to store Layoute Items, but not 
-
-
+    auto sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
+                                           m_timeline_view->GetGraphs(), m_data_provider);
+    auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+                                                m_timeline_selection);
 
 
-    m_sidebar_item = std::make_shared<LayoutItem>();  // TODO it looks like we need factory method for LayoutItem
-    m_sidebar_item->m_item = m_sidebar;
+    m_sidebar_item                 = LayoutItem::CreateFromWidget(sidebar);
+    m_sidebar_item->m_visible      = m_is_sidebar_visible;
     m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
-    m_timeline_item = std::make_shared<LayoutItem>();
-    m_timeline_item->m_item       = m_timeline_view;
+    m_analysis_item                = LayoutItem::CreateFromWidget(analysis);
+    m_analysis_item->m_visible     = m_is_analysis_visible;
 
-    m_analysis_item = std::make_shared<LayoutItem>();
-    m_analysis_item->m_item =
-        m_analysis;  // TODO: we need to save each part of UI to get access to it later
-
-
-
+    m_timeline_item = LayoutItem::CreateFromWidget(m_timeline_view);
     
     m_vertical_split_container =
         std::make_shared<VSplitContainer>(m_timeline_item, m_analysis_item);
@@ -226,11 +218,11 @@ TraceView::CreateView()
 void
 TraceView::DestroyView()
 {
-    m_timeline_view = nullptr;
-    m_sidebar       = nullptr;
-    m_horizontal_split_container     = nullptr;
-    m_analysis      = nullptr;
-    m_view_created  = false;
+    m_timeline_view              = nullptr;
+    m_sidebar_item->m_item       = nullptr;
+    m_horizontal_split_container = nullptr;
+    m_analysis_item->m_item      = nullptr;
+    m_view_created               = false;
 }
 
 bool
@@ -255,25 +247,7 @@ TraceView::Render()
 {
     if(m_horizontal_split_container && m_data_provider.GetState() == ProviderState::kReady)
     {
-        if(m_is_analysis_bar_visible)     //TODO: Move it from Render
-        {
-            LayoutItemPtr bottom = std::make_shared<LayoutItem>(); //TODO: we dont need to recreate it each time
-            bottom->m_item       = m_analysis;
-            m_vertical_split_container->SetBottom(bottom);
-        }
-        else
-        {
-            m_vertical_split_container->SetBottom(nullptr);
-        }
-
-        if(m_is_sidebar_visible)
-        {
-            m_horizontal_split_container->SetLeft(m_sidebar_item);
-        }
-        else
-        {
-            m_horizontal_split_container->SetLeft(nullptr);
-        }
+        
         m_horizontal_split_container->Render();
 
         HandleHotKeys();
@@ -505,7 +479,17 @@ TraceView::RenderEditMenuOptions()
 void
 TraceView::SetAnalysisViewVisibility(bool visibility)
 {
-    m_is_analysis_bar_visible = visibility;        
+    m_is_analysis_visible = visibility;
+    if(m_analysis_item)
+        m_analysis_item->m_visible = m_is_analysis_visible;
+}
+
+void
+TraceView::SetSidebarViewVisibility(bool visibility)
+{
+    m_is_sidebar_visible = visibility;
+    if(m_sidebar_item)
+        m_sidebar_item->m_visible  = visibility;
 }
 
 void

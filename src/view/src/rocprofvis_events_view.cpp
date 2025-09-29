@@ -309,7 +309,7 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
         if(event_data)
         {
             auto       default_style = m_settings.GetDefaultStyle();
-            LayoutItemPtr left          = std::make_shared<LayoutItem>();
+            LayoutItem::Ptr left          = std::make_shared<LayoutItem>();
             left->m_item = std::make_shared<RocCustomWidget>([this, event_data]() {
                 this->RenderBasicData(event_data);
                 ImGui::NewLine();
@@ -319,7 +319,7 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             left->m_child_flags =
                 ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding;
 
-            LayoutItemPtr right = std::make_shared<LayoutItem>();
+            LayoutItem::Ptr right = std::make_shared<LayoutItem>();
             right->m_item = std::make_shared<RocCustomWidget>([this, event_data]() {
                 this->RenderEventFlowInfo(event_data);
                 ImGui::NewLine();

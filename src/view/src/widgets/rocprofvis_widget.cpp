@@ -51,30 +51,6 @@ WithPadding(float left, float right, float top, float bottom,
     if(bottom > 0.0f) ImGui::Dummy(ImVec2(0, bottom));
 }
 
-LayoutItem::LayoutItem()
-: m_width(0)
-, m_height(0)
-, m_bg_color(0)
-, m_item(nullptr)
-, m_item_spacing(ImVec2(0, 0))
-, m_window_padding(ImVec2(0, 0))
-, m_child_flags(ImGuiChildFlags_Borders)
-, m_window_flags(ImGuiWindowFlags_None)
-, m_visible(true)
-{}
-
-LayoutItem::LayoutItem(float w, float h)
-: m_width(w)
-, m_height(h)
-, m_bg_color(0)
-, m_item(nullptr)
-, m_item_spacing(ImVec2(0, 0))
-, m_window_padding(ImVec2(0, 0))
-, m_child_flags(ImGuiChildFlags_Borders)
-, m_window_flags(ImGuiWindowFlags_None)
-, m_visible(true)
-{}
-
 //------------------------------------------------------------------
 RocWidget::~RocWidget() { spdlog::info("RocWidget object destroyed"); }
 
@@ -188,7 +164,7 @@ VFixedContainer::Render()
 }
 
 //------------------------------------------------------------------
-HSplitContainer::HSplitContainer(LayoutItemPtr left, LayoutItemPtr right)
+HSplitContainer::HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
 : m_left(left)
 , m_right(right)
 , m_resize_grip_size(4.0f)
@@ -204,13 +180,13 @@ HSplitContainer::HSplitContainer(LayoutItemPtr left, LayoutItemPtr right)
 }
 
 void
-HSplitContainer::SetLeft(LayoutItemPtr left)
+HSplitContainer::SetLeft(LayoutItem::Ptr left)
 {
     m_left = left;
 }
 
 void
-HSplitContainer::setRight(LayoutItemPtr right)
+HSplitContainer::setRight(LayoutItem::Ptr right)
 {
     m_right = right;
 }
@@ -249,7 +225,7 @@ HSplitContainer::Render()
     float available_width = total_size.x - m_resize_grip_size;
     float left_col_width  = 0.0f;
 
-    if (m_right)
+    if(m_right->m_visible)
     {
         left_col_width = available_width * m_split_ratio;
         left_col_width       = clamp(left_col_width, m_left_min_width,
@@ -258,7 +234,7 @@ HSplitContainer::Render()
 
     float col_height = 0;  // expand to fill height
     // Start Left Column
-    if (m_left)
+    if(m_left->m_visible)
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_left->m_item_spacing);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_left->m_window_padding);
@@ -281,7 +257,7 @@ HSplitContainer::Render()
 
 
 
-    if (m_left && m_right)
+    if(m_left->m_visible && m_right->m_visible)
     {
         // Create a resize handle between columns
         ImGui::Selectable(m_handle_name.c_str(), false,
@@ -315,7 +291,7 @@ HSplitContainer::Render()
         ImGui::SameLine();
     }
     
-    if (m_right)
+    if(m_right->m_visible)
     {
         // Start Right Column (Fills Remaining Space)
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_right->m_item_spacing);
@@ -338,7 +314,7 @@ HSplitContainer::Render()
 }
 
 //------------------------------------------------------------------
-VSplitContainer::VSplitContainer(LayoutItemPtr top, LayoutItemPtr bottom)
+VSplitContainer::VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
 : m_top(top)
 , m_bottom(bottom)
 , m_resize_grip_size(4.0f)
@@ -353,13 +329,13 @@ VSplitContainer::VSplitContainer(LayoutItemPtr top, LayoutItemPtr bottom)
 }
 
 void
-VSplitContainer::SetTop(LayoutItemPtr top)
+VSplitContainer::SetTop(LayoutItem::Ptr top)
 {
     m_top = top;
 }
 
 void
-VSplitContainer::SetBottom(LayoutItemPtr bottom)
+VSplitContainer::SetBottom(LayoutItem::Ptr bottom)
 {
     m_bottom = bottom;
 }
@@ -392,7 +368,7 @@ VSplitContainer::Render()
     float col_width = 0.0f;  // expand to fill height
     float available_height = 0.0f;
     float top_row_height   = 0.0f;
-    if (m_bottom)
+    if (m_bottom->m_visible)
     {
         float available_height = total_size.y - m_resize_grip_size;
         top_row_height = available_height * m_split_ratio;
@@ -403,7 +379,7 @@ VSplitContainer::Render()
     
 
     // Start Top Row
-    if(m_top)
+    if(m_top->m_visible)
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_top->m_item_spacing);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_top->m_window_padding);
@@ -420,7 +396,7 @@ VSplitContainer::Render()
         ImGui::PopStyleVar(2);
     }
     
-    if (m_bottom && m_top) //TODO: to much ifs
+    if(m_bottom->m_visible && m_top->m_visible)  // TODO: to much ifs
     {
         // Create a resize handle between columns
         ImGui::Selectable(m_handle_name.c_str(), false,
@@ -453,7 +429,7 @@ VSplitContainer::Render()
     }    
 
     // Start Bottom Row (Fills Remaining Space)
-    if(m_bottom)  // think to redesign to avoid alot of ifs
+    if(m_bottom->m_visible)  // think to redesign to avoid alot of ifs
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_bottom->m_item_spacing);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_bottom->m_window_padding);

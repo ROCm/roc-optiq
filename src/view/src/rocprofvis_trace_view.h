@@ -60,7 +60,7 @@ public:
     std::shared_ptr<RocWidget>         GetToolbar() override;
     void                               RenderEditMenuOptions() override;
     void                               SetAnalysisViewVisibility( bool visibility); 
-    bool                               m_is_sidebar_visible = true; //STUB
+    void                               SetSidebarViewVisibility(bool visibility);
 
 
 private:
@@ -70,18 +70,17 @@ private:
     void RenderAnnotationControls();
 
     std::shared_ptr<TimelineView>      m_timeline_view;
-    std::shared_ptr<SideBar>           m_sidebar;
-    std::shared_ptr<HSplitContainer>   m_horizontal_split_container;
-    std::shared_ptr<AnalysisView>      m_analysis;
+
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::shared_ptr<TrackTopology>     m_track_topology;
     std::shared_ptr<RocCustomWidget>   m_tool_bar;
+    std::shared_ptr<HSplitContainer>   m_horizontal_split_container;
     std::shared_ptr<VSplitContainer>   m_vertical_split_container;
 
-    LayoutItemPtr m_sidebar_item;
-    LayoutItemPtr m_timeline_item;
-    LayoutItemPtr m_analysis_item;
-    LayoutItemPtr m_trace_area;
+    LayoutItem::Ptr m_sidebar_item;
+    LayoutItem::Ptr m_timeline_item;
+    LayoutItem::Ptr m_analysis_item;
+    LayoutItem::Ptr m_trace_area;
 
     DataProvider m_data_provider;
     bool         m_view_created;
@@ -105,8 +104,8 @@ private:
     std::string m_save_notification_id;
 
     std::unique_ptr<SystemTraceProjectSettings> m_project_settings;
-    bool                                        m_is_analysis_bar_visible;
-    //bool                                        m_is_sidebar_visible;
+    bool                                        m_is_analysis_visible = true;
+    bool                                        m_is_sidebar_visible = true;
      
 };
 

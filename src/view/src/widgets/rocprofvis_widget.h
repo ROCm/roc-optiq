@@ -30,23 +30,33 @@ protected:
 class LayoutItem
 {
 public:
-    LayoutItem();
-    LayoutItem(float w, float h);
+    using Ptr = std::shared_ptr<LayoutItem>;
+    LayoutItem() = default;
+    LayoutItem(float w, float h)
+    : m_width(w)
+    , m_height(h)
+    {};
 
-    std::shared_ptr<RocWidget> m_item;  // Widget that this item will render
-    float                      m_height;
-    float                      m_width;
-    bool                       m_visible;
+    static Ptr CreateFromWidget(std::shared_ptr<RocWidget> widget, float w = 0, float h = 0)
+    {
+        Ptr item = std::make_shared<LayoutItem>(w, h);
+        item->m_item = widget;
+        return item;
+    }
 
-    int32_t m_bg_color;
+    std::shared_ptr<RocWidget> m_item = nullptr;  // Widget that this item will render
+    float                      m_height = 0;
+    float                      m_width = 0;
+    bool                       m_visible = true;
 
-    ImVec2 m_item_spacing;
-    ImVec2 m_window_padding;
+    int32_t m_bg_color = 0;
 
-    ImGuiChildFlags  m_child_flags;
-    ImGuiWindowFlags m_window_flags;
+    ImVec2 m_item_spacing = ImVec2(0, 0);
+    ImVec2 m_window_padding = ImVec2(0, 0);
+
+    ImGuiChildFlags  m_child_flags = ImGuiChildFlags_Borders;
+    ImGuiWindowFlags m_window_flags = ImGuiWindowFlags_None;
 };
-using LayoutItemPtr = std::shared_ptr<LayoutItem>;
 
 class RocCustomWidget : public RocWidget
 {
@@ -83,11 +93,11 @@ protected:
 class HSplitContainer : public RocWidget
 {
 public:
-    HSplitContainer(LayoutItemPtr left, LayoutItemPtr right);
+    HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right);
 
     virtual void Render();
-    void         SetLeft(LayoutItemPtr left);
-    void         setRight(LayoutItemPtr right);
+    void         SetLeft(LayoutItem::Ptr left);
+    void         setRight(LayoutItem::Ptr right);
 
     void SetSplit(float ratio);
     void SetMinLeftWidth(float width);
@@ -99,8 +109,8 @@ private:
     float m_left_min_width;
     float m_right_min_width;
 
-    LayoutItemPtr m_left;
-    LayoutItemPtr m_right;
+    LayoutItem::Ptr m_left;
+    LayoutItem::Ptr m_right;
     float      m_resize_grip_size;
 
     std::string m_left_name;
@@ -114,12 +124,12 @@ private:
 class VSplitContainer : public RocWidget
 {
 public:
-    VSplitContainer(LayoutItemPtr top, LayoutItemPtr bottom);
+    VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom);
 
     virtual void Render();
 
-    void SetTop(LayoutItemPtr top);
-    void SetBottom(LayoutItemPtr bottom);
+    void SetTop(LayoutItem::Ptr top);
+    void SetBottom(LayoutItem::Ptr bottom);
 
     void SetSplit(float ratio);
     void SetMinTopHeight(float height);

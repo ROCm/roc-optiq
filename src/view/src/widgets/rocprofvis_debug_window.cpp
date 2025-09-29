@@ -37,10 +37,10 @@ DebugWindow::DebugWindow()
     std::shared_ptr<RocWidget> rt =
         std::make_shared<RocCustomWidget>([this]() { this->RenderTransient(); });
 
-    LayoutItemPtr top    = std::make_shared<LayoutItem>();
+    LayoutItem::Ptr top    = std::make_shared<LayoutItem>();
     top->m_item           = rp;
     top->m_window_padding = ImVec2(4, 4);
-    LayoutItemPtr bottom  = std::make_shared<LayoutItem>();
+    LayoutItem::Ptr bottom  = std::make_shared<LayoutItem>();
     bottom->m_item           = rt;
     bottom->m_window_padding = ImVec2(4, 4);
 
@@ -48,10 +48,10 @@ DebugWindow::DebugWindow()
     m_v_spilt_container->SetMinTopHeight(10.0f);
     m_v_spilt_container->SetMinBottomHeight(10.0f);
 
-    LayoutItemPtr left     = std::make_shared<LayoutItem>();
+    LayoutItem::Ptr left     = std::make_shared<LayoutItem>();
     left->m_item           = rt;
     left->m_window_padding = ImVec2(4, 4);
-    LayoutItemPtr right     = std::make_shared<LayoutItem>();
+    LayoutItem::Ptr right     = std::make_shared<LayoutItem>();
     right->m_item           = rp;
     right->m_window_padding = ImVec2(4, 4);
 

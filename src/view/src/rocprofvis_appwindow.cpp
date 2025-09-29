@@ -381,7 +381,9 @@ AppWindow::OpenFile(std::string file_path)
         {
             TabItem tab = TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
             auto trace_view_tab = std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab.m_widget);  // TODO: think about caching this cast or avoid casting
+            //Set initial visibility to save the same settings in different tabs
             trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
+            trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
 
             m_tab_container->AddTab(std::move(tab)); 
             m_projects[project->GetID()] = std::move(project);
@@ -524,8 +526,7 @@ AppWindow::RenderViewMenu(Project* project)
                         std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
                             tab->m_widget);  // TODO: think about caching this cast or
                                              // avoid casting
-                    trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
-                    trace_view_tab->m_is_sidebar_visible = m_sidebar_visible;
+                    trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
                 }
             }
         }

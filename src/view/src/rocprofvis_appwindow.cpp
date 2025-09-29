@@ -15,6 +15,7 @@
     #include "rocprofvis_navigation_manager.h"
 #endif
 #include "rocprofvis_root_view.h"
+#include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -149,6 +150,12 @@ AppWindow::Init()
     return result;
 }
 
+void
+AppWindow::SetNotificationCallback(std::function<void(int)> callback)
+{
+    m_notification_callback = std::move(callback);
+}
+
 const std::string&
 AppWindow::GetMainTabSourceName() const
 {
@@ -159,6 +166,28 @@ void
 AppWindow::SetTabLabel(const std::string& label, const std::string& id)
 {
     m_tab_container->SetTabLabel(label, id);
+}
+
+void
+AppWindow::ShowCloseConfirm()
+{
+    if(m_tab_container->GetTabs().size() == 0)
+    {
+        if(m_notification_callback)
+            m_notification_callback(
+                rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
+        return;
+    }
+
+    // Only show the dialog if there are open tabs
+    ShowConfirmationDialog(
+        "Confirm Close",
+        "Are you sure you want to close the application? Any unsaved data will be lost.",
+        [this]() {
+            if(m_notification_callback)
+                m_notification_callback(
+                    rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
+        });
 }
 
 void
@@ -414,6 +443,11 @@ AppWindow::RenderFileMenu(Project* project)
                 }
             }
             ImGui::EndMenu();
+        }
+        ImGui::Separator();
+        if(ImGui::MenuItem("Exit"))
+        {
+            ShowCloseConfirm();
         }
         ImGui::EndMenu();
     }

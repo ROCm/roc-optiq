@@ -181,7 +181,8 @@ void SplitContainerBase::Render()
         ImGui::BeginChild(m_first_name.c_str(),
                           GetFirstChildSize(available_size),
                           m_first->m_child_flags, m_first->m_window_flags);
-        if(m_first->m_item) m_first->m_item->Render();
+        if(m_first->m_item)
+            m_first->m_item->Render();
         ImGui::EndChild();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);
@@ -217,7 +218,8 @@ void SplitContainerBase::Render()
         ImGui::PushStyleColor(ImGuiCol_ChildBg, m_second->m_bg_color);
         ImGui::BeginChild(m_second_name.c_str(), GetSecondChildSize(),
                           m_second->m_child_flags, m_second->m_window_flags);
-        if(m_second->m_item) m_second->m_item->Render();
+        if(m_second->m_item)
+            m_second->m_item->Render();
         ImGui::EndChild();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);

@@ -136,10 +136,10 @@ protected:
     std::string m_handle_name;
 };
 
-class NewHSplitContainer : public SplitContainerBase
+class HSplitContainer : public SplitContainerBase
 {
 public:
-    NewHSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
+    HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
         : SplitContainerBase(left, right, 4.0f, 100.0f, 100.0f, 0.25f)
         , m_optimal_height(0.0f)
     {
@@ -168,10 +168,10 @@ private:
     float m_optimal_height;
 };
 
-class NewVSplitContainer : public SplitContainerBase
+class VSplitContainer : public SplitContainerBase
 {
 public:
-    NewVSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
+    VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
         : SplitContainerBase(top, bottom, 4.0f, 200.0f, 100.0f, 0.6f)
     {
         m_widget_name = GenUniqueName("VSplitContainer");
@@ -195,66 +195,6 @@ private:
 
     ImVec2 GetSplitterSize(const ImVec2& total_size) override;
     virtual void AddSameLine() override {};  // No same line for vertical split
-};
-
-class HSplitContainer : public RocWidget
-{
-public:
-    HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right);
-
-    virtual void Render();
-    void         SetLeft(LayoutItem::Ptr left);
-    void         setRight(LayoutItem::Ptr right);
-
-    void SetSplit(float ratio);
-    void SetMinLeftWidth(float width);
-    void SetMinRightWidth(float width);
-
-    float GetOptimalHeight() const;
-
-private:
-    float m_left_min_width;
-    float m_right_min_width;
-
-    LayoutItem::Ptr m_left;
-    LayoutItem::Ptr m_right;
-    float      m_resize_grip_size;
-
-    std::string m_left_name;
-    std::string m_right_name;
-    std::string m_handle_name;
-
-    float m_split_ratio;
-    float m_optimal_height;
-};
-
-class VSplitContainer : public RocWidget
-{
-public:
-    VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom);
-
-    virtual void Render();
-
-    void SetTop(LayoutItem::Ptr top);
-    void SetBottom(LayoutItem::Ptr bottom);
-
-    void SetSplit(float ratio);
-    void SetMinTopHeight(float height);
-    void SetMinBottomHeight(float height);
-
-private:
-    float m_top_min_height;
-    float m_bottom_min_height;
-
-    LayoutItem::Ptr m_top;
-    LayoutItem::Ptr m_bottom;
-    float      m_resize_grip_size;
-
-    std::string m_top_name;
-    std::string m_bottom_name;
-    std::string m_handle_name;
-
-    float m_split_ratio;
 };
 
 struct TabItem

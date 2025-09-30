@@ -227,19 +227,19 @@ void SplitContainerBase::Render()
 //------------------------------------------------------------------
 
 float
-NewHSplitContainer::GetAvailableSize(const ImVec2& total_size)
+HSplitContainer::GetAvailableSize(const ImVec2& total_size)
 {
     return total_size.x - m_resize_grip_size;
 };
 
 void
-NewHSplitContainer::SetCursor() 
+HSplitContainer::SetCursor() 
 {
     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
 };
 
 ImVec2
-NewHSplitContainer::GetFirstChildSize(float available_width)
+HSplitContainer::GetFirstChildSize(float available_width)
 {
     float left_col_width = 0.0f;
     if (m_first->m_visible)
@@ -252,13 +252,13 @@ NewHSplitContainer::GetFirstChildSize(float available_width)
 }
 
 ImVec2
-NewHSplitContainer::GetSecondChildSize()
+HSplitContainer::GetSecondChildSize()
 {
     return ImVec2(-1, 0);
 }
 
 void
-NewHSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+HSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
                  float available_width)
 {
     float mouse_x   = mouse_pos.x - window_pos.x;
@@ -269,7 +269,7 @@ NewHSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& wind
 }
 
 ImVec2
-NewHSplitContainer::GetSplitterSize(const ImVec2& total_size)
+HSplitContainer::GetSplitterSize(const ImVec2& total_size)
 {
     return ImVec2(m_resize_grip_size, total_size.y);
 }
@@ -277,18 +277,18 @@ NewHSplitContainer::GetSplitterSize(const ImVec2& total_size)
 //------------------------------------------------------------------
 
 float
-NewVSplitContainer::GetAvailableSize(const ImVec2& total_size)
+VSplitContainer::GetAvailableSize(const ImVec2& total_size)
 {
     return total_size.y - m_resize_grip_size;
 };
 void
-NewVSplitContainer::SetCursor()
+VSplitContainer::SetCursor()
 {
     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
 };
 
 ImVec2
-NewVSplitContainer::GetFirstChildSize(float available_width)
+VSplitContainer::GetFirstChildSize(float available_width)
 {
     float top_row_height = 0.0f;
     if (m_second->m_visible)
@@ -302,13 +302,13 @@ NewVSplitContainer::GetFirstChildSize(float available_width)
 }
 
 ImVec2
-NewVSplitContainer::GetSecondChildSize()
+VSplitContainer::GetSecondChildSize()
 {
     return ImVec2(0, 0);
 }
 
 void
-NewVSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+VSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
                  float available_height) 
 {
     float mouse_y   = mouse_pos.y - window_pos.y;
@@ -319,293 +319,9 @@ NewVSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& wind
 }
 
 ImVec2
-NewVSplitContainer::GetSplitterSize(const ImVec2& total_size) 
+VSplitContainer::GetSplitterSize(const ImVec2& total_size) 
 {
     return ImVec2(total_size.x, m_resize_grip_size);
-}
-
-//------------------------------------------------------------------
-
-HSplitContainer::HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
-: m_left(left)
-, m_right(right)
-, m_resize_grip_size(4.0f)
-, m_left_min_width(100.0f)
-, m_right_min_width(100.0f)
-, m_split_ratio(0.25)  // Initial split ratio
-, m_optimal_height(0.0f)
-{
-    m_widget_name = GenUniqueName("HSplitContainer");
-    m_left_name   = GenUniqueName("LeftColumn");
-    m_handle_name = GenUniqueName("##ResizeHandle");
-    m_right_name  = GenUniqueName("RightColumn");
-}
-
-void
-HSplitContainer::SetLeft(LayoutItem::Ptr left)
-{
-    m_left = left;
-}
-
-void
-HSplitContainer::setRight(LayoutItem::Ptr right)
-{
-    m_right = right;
-}
-
-void
-HSplitContainer::SetMinLeftWidth(float width)
-{
-    m_left_min_width = width;
-}
-
-void
-HSplitContainer::SetMinRightWidth(float width)
-{
-    m_right_min_width = width;
-}
-
-void
-HSplitContainer::SetSplit(float ratio)
-{
-    m_split_ratio = ratio;
-}
-
-float 
-HSplitContainer::GetOptimalHeight() const
-{
-    return m_optimal_height;
-}
-
-void
-HSplitContainer::Render()
-{
-    // Get available space
-    ImVec2 total_size = ImGui::GetContentRegionAvail();
-    ImVec2 window_pos = ImGui::GetWindowPos();
-
-    float available_width = total_size.x - m_resize_grip_size;
-    float left_col_width  = 0.0f;
-
-    if(m_right->m_visible)
-    {
-        left_col_width = available_width * m_split_ratio;
-        left_col_width       = clamp(left_col_width, m_left_min_width,
-                                     available_width - m_right_min_width);  // std::clamp?
-    }
-
-    float col_height = 0;  // expand to fill height
-    // Start Left Column
-    if(m_left->m_visible)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_left->m_item_spacing);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_left->m_window_padding);
-
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_left->m_bg_color);
-        ImGui::BeginChild(m_left_name.c_str(), ImVec2(left_col_width, col_height),
-                          m_left->m_child_flags, m_left->m_window_flags);
-        if(m_left->m_item)
-        {
-            m_left->m_item->Render();
-        }
-        ImGui::EndChild();
-        m_optimal_height = ImGui::GetItemRectSize().y;
-
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar(2);
-
-        ImGui::SameLine();
-    }
-
-
-    if(m_left->m_visible && m_right->m_visible)
-    {
-        // Create a resize handle between columns
-        ImGui::Selectable(m_handle_name.c_str(), false,
-                          ImGuiSelectableFlags_AllowDoubleClick,
-                          ImVec2(m_resize_grip_size, total_size.y));
-
-        // Draw a custom background for the splitter area
-        ImVec2 splitter_min = ImGui::GetItemRectMin();
-        ImVec2 splitter_max = ImGui::GetItemRectMax();
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            splitter_min, splitter_max,
-            SettingsManager::GetInstance().GetColor(Colors::kSplitterColor));
-
-        // Change cursor appearance when hovering over the resize handle
-        if(ImGui::IsItemHovered())
-        {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-        }
-
-        // Enable resizing by dragging (hold the mouse down)
-        if(ImGui::IsItemActive())
-        {
-            ImVec2 mouse_pos = ImGui::GetMousePos();
-            float  mouse_x   = mouse_pos.x - window_pos.x;
-            float  new_ratio = (mouse_x - (m_resize_grip_size / 2)) / available_width;
-            new_ratio        = clamp(new_ratio, m_left_min_width / available_width,
-                                     1.0f - m_right_min_width / available_width);
-            m_split_ratio    = new_ratio;
-        }
-
-        ImGui::SameLine();
-    }
-    
-    if(m_right->m_visible)
-    {
-        // Start Right Column (Fills Remaining Space)
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_right->m_item_spacing);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_right->m_window_padding);
-
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_right->m_bg_color);
-        ImGui::BeginChild(m_right_name.c_str(), ImVec2(-1, col_height),
-                          m_right->m_child_flags, m_right->m_window_flags);
-        if(m_right->m_item)
-        {
-            m_right->m_item->Render();
-        }
-        ImGui::EndChild();
-        m_optimal_height = std::max(m_optimal_height, ImGui::GetItemRectSize().y);
-
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar(2);
-    }    
-}
-
-//------------------------------------------------------------------
-VSplitContainer::VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
-: m_top(top)
-, m_bottom(bottom)
-, m_resize_grip_size(4.0f)
-, m_top_min_height(200.0f)
-, m_bottom_min_height(100.0f)
-, m_split_ratio(0.6f)  // Initial split ratio
-{
-    m_widget_name = GenUniqueName("VSplitContainer");
-    m_top_name    = GenUniqueName("TopRow");
-    m_handle_name = GenUniqueName("##ResizeHandle");
-    m_bottom_name = GenUniqueName("BottomRow");
-}
-
-void
-VSplitContainer::SetTop(LayoutItem::Ptr top)
-{
-    m_top = top;
-}
-
-void
-VSplitContainer::SetBottom(LayoutItem::Ptr bottom)
-{
-    m_bottom = bottom;
-}
-
-void
-VSplitContainer::SetMinTopHeight(float height)
-{
-    m_top_min_height = height;
-}
-
-void
-VSplitContainer::SetMinBottomHeight(float height)
-{
-    m_bottom_min_height = height;
-}
-
-void
-VSplitContainer::SetSplit(float ratio)
-{
-    m_split_ratio = ratio;
-}
-
-void
-VSplitContainer::Render()
-{
-    // Get available space
-    ImVec2 total_size = ImGui::GetContentRegionAvail();
-    ImVec2 window_pos = ImGui::GetWindowPos();
-
-    float col_width = 0.0f;  // expand to fill height
-    float available_height = 0.0f;
-    float top_row_height   = 0.0f;
-    if (m_bottom->m_visible)
-    {
-        float available_height = total_size.y - m_resize_grip_size;
-        top_row_height = available_height * m_split_ratio;
-        top_row_height = clamp(
-            top_row_height, m_top_min_height,
-            available_height - m_bottom_min_height);  //? Why we dont use here std::clamp? 
-    }
-    
-
-    // Start Top Row
-    if(m_top->m_visible)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_top->m_item_spacing);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_top->m_window_padding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, SettingsManager::GetInstance().GetColor(
-                                                    Colors::kFillerColor));
-        ImGui::BeginChild(m_top_name.c_str(), ImVec2(col_width, top_row_height),
-                          m_top->m_child_flags, m_top->m_window_flags);
-        if(m_top->m_item)
-        {
-            m_top->m_item->Render();
-        }
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar(2);
-    }
-    
-    if(m_bottom->m_visible && m_top->m_visible)  // TODO: to much ifs
-    {
-        // Create a resize handle between columns
-        ImGui::Selectable(m_handle_name.c_str(), false,
-                          ImGuiSelectableFlags_AllowDoubleClick,
-                          ImVec2(total_size.x, m_resize_grip_size));
-
-        // Draw a custom background for the splitter area
-        ImVec2 splitter_min = ImGui::GetItemRectMin();
-        ImVec2 splitter_max = ImGui::GetItemRectMax();
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            splitter_min, splitter_max,
-            SettingsManager::GetInstance().GetColor(Colors::kSplitterColor));
-
-        // Change cursor appearance when hovering over the resize handle
-        if(ImGui::IsItemHovered())
-        {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-        }
-
-        // Enable resizing by dragging (hold the mouse down)
-        if(ImGui::IsItemActive())
-        {
-            ImVec2 mouse_pos = ImGui::GetMousePos();
-            float  mouse_y   = mouse_pos.y - window_pos.y;
-            float  new_ratio = (mouse_y - (m_resize_grip_size / 2)) / available_height;
-            new_ratio        = clamp(new_ratio, m_top_min_height / available_height,
-                                     1.0f - m_bottom_min_height / available_height);
-            m_split_ratio    = new_ratio;
-        }
-    }    
-
-    // Start Bottom Row (Fills Remaining Space)
-    if(m_bottom->m_visible)  // think to redesign to avoid alot of ifs
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_bottom->m_item_spacing);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_bottom->m_window_padding);
-
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, SettingsManager::GetInstance().GetColor(
-                                                    Colors::kFillerColor));
-        ImGui::BeginChild(m_bottom_name.c_str(), ImVec2(col_width, 0),
-                          m_bottom->m_child_flags, m_bottom->m_window_flags);
-        if(m_bottom->m_item)
-        {
-            m_bottom->m_item->Render();
-        }
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar(2);
-    }    
 }
 
 //------------------------------------------------------------------

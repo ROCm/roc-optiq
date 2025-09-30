@@ -7,7 +7,6 @@
 #    include "rocprofvis_navigation_manager.h"
 #endif
 #include "widgets/rocprofvis_notification_manager.h"
-#include <filesystem>
 #include <fstream>
 
 namespace RocProfVis
@@ -188,8 +187,7 @@ Project::OpenTrace(std::string& file_path)
         if(file_ext == ".csv")
         {
             std::shared_ptr<ComputeRoot> compute_view = std::make_shared<ComputeRoot>();
-            trace_result                              = compute_view->OpenTrace(
-                std::filesystem::path(file_path).parent_path().string());
+            trace_result                              = compute_view->OpenTrace(file_path);
             trace_type = Compute;
             view       = compute_view;
             NavigationManager::GetInstance()->RefreshNavigationTree();

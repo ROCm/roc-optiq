@@ -11,6 +11,8 @@ namespace RocProfVis
 namespace View
 {
 
+const ImVec4 BLOCK_HIGHLIGHT_COLOR = ImVec4(0.9f, 0.4f, 0.4f, 0.5f);
+
 const std::array BLOCK_DEFINITIONS {
     BlockDefinition{BlockIDGPU, BlockLevelGPU | BlockLevelCache, "GPU", "GPU", "", "", {}, {}},
     BlockDefinition{BlockIDCP, BlockLevelGPU | BlockLevelCache, "CP", "Command Processor", "", COMPUTE_TABLE_COMMAND_PROCESSOR_URL, {}, {}},
@@ -325,6 +327,7 @@ void ComputeBlockView::RenderBlockDiagram()
     m_block_diagram_center = ImVec2(cursor_pos.x + content_region.x / 2, cursor_pos.y + content_region.y / 2);
     m_draw_list = ImGui::GetWindowDrawList();
 
+    ImGui::PushStyleColor(ImGuiCol_Button, BLOCK_HIGHLIGHT_COLOR);
     switch(m_navigation->Current().m_level)
     {
         case BlockLevelGPU: 
@@ -340,6 +343,7 @@ void ComputeBlockView::RenderBlockDiagram()
             RenderBlockDiagramCache();
             break;
     }
+    ImGui::PopStyleColor();
 }
 
 void ComputeBlockView::RenderBlockDiagramGPU()

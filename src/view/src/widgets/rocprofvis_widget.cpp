@@ -244,7 +244,7 @@ ImVec2
 HSplitContainer::GetFirstChildSize(float available_width)
 {
     float left_col_width = 0.0f;
-    if (m_first->m_visible)
+    if (m_first && m_first->m_visible)
     {
         left_col_width = available_width * m_split_ratio;
         left_col_width =

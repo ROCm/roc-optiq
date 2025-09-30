@@ -3,6 +3,7 @@
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_utils.h"
 #include <cmath>
+#include <algorithm>
 
 constexpr float PI = 3.14159265358979323846f;  // Define PI constant
 
@@ -41,7 +42,7 @@ RocProfVis::View::RenderLoadingIndicatorDots(float dot_radius, int num_dots,
         float alpha_multiplier = (sinf(phase) + 1.0f) * 0.5f;
 
         // Sharpen the pulse a bit
-        alpha_multiplier = clamp(alpha_multiplier * 1.5f - 0.25f, 0.0f, 1.0f);
+        alpha_multiplier = std::clamp(alpha_multiplier * 1.5f - 0.25f, 0.0f, 1.0f);
 
         ImU32        current_color = color;
         unsigned int alpha         = (current_color >> IM_COL32_A_SHIFT) & 0xFF;

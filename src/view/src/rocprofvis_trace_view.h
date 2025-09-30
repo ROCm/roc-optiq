@@ -80,7 +80,6 @@ private:
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_timeline_item;
     LayoutItem::Ptr m_analysis_item;
-    LayoutItem::Ptr m_trace_area;
 
     DataProvider m_data_provider;
     bool         m_view_created;
@@ -104,8 +103,10 @@ private:
     std::string m_save_notification_id;
 
     std::unique_ptr<SystemTraceProjectSettings> m_project_settings;
-    bool                                        m_is_analysis_visible = true;
-    bool                                        m_is_sidebar_visible = true;
+    // Unfortunately we should store it here because the tab appears before the view is
+    // created
+    bool m_is_analysis_visible = true;
+    bool m_is_sidebar_visible = true;
      
 };
 

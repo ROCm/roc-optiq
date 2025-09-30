@@ -183,15 +183,13 @@ TraceView::CreateView()
         std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
     m_timeline_selection = std::make_shared<TimelineSelection>(m_data_provider);
     m_track_topology     = std::make_shared<TrackTopology>(m_data_provider);
-
     m_timeline_view      = std::make_shared<TimelineView>(m_data_provider,
-                                                          m_timeline_selection, m_annotations); //Always visible
+                                                          m_timeline_selection, m_annotations);
 
     auto sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
                                            m_timeline_view->GetGraphs(), m_data_provider);
     auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                 m_timeline_selection);
-
 
     m_sidebar_item                 = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible      = m_is_sidebar_visible;
@@ -200,17 +198,16 @@ TraceView::CreateView()
     m_analysis_item                = LayoutItem::CreateFromWidget(analysis);
     m_analysis_item->m_visible     = m_is_analysis_visible;
 
-    m_timeline_item = LayoutItem::CreateFromWidget(m_timeline_view);
-    
-    m_vertical_split_container =
-        std::make_shared<VSplitContainer>(m_timeline_item, m_analysis_item);
+    m_timeline_item = LayoutItem::CreateFromWidget(m_timeline_view);    
+    m_vertical_split_container = std::make_shared<VSplitContainer>(m_timeline_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
-    m_trace_area             = std::make_shared<LayoutItem>(); //we don't need to store m_trace_area
-    m_trace_area->m_item     = m_vertical_split_container;
-    m_trace_area->m_bg_color = IM_COL32(255, 255, 255, 255);
+
+    auto trace_area        = std::make_shared<LayoutItem>();
+    trace_area->m_item     = m_vertical_split_container;
+    trace_area->m_bg_color = IM_COL32(255, 255, 255, 255);
 
     m_horizontal_split_container =
-        std::make_shared<HSplitContainer>(m_sidebar_item, m_trace_area);
+        std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);
     m_horizontal_split_container->SetSplit(0.2f);
     m_horizontal_split_container->SetMinRightWidth(400);
 }

@@ -380,10 +380,14 @@ AppWindow::OpenFile(std::string file_path)
         case Project::OpenResult::Success:
         {
             TabItem tab = TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
-            auto trace_view_tab = std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab.m_widget);  // TODO: think about caching this cast or avoid casting
-            //Set initial visibility to save the same settings in different tabs
-            trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
-            trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
+
+            // Set initial visibility to save the same settings in different tabs
+            auto trace_view_tab = std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab.m_widget);
+            if (trace_view_tab)
+            {
+                trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
+                trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
+            }
 
             m_tab_container->AddTab(std::move(tab)); 
             m_projects[project->GetID()] = std::move(project);
@@ -511,10 +515,9 @@ AppWindow::RenderViewMenu(Project* project)
                 for (const auto& tab : m_tab_container->GetTabs())
                 {
                     auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
-                            tab->m_widget);  // TODO: think about caching this cast or
-                                             // avoid casting
-                    trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                    if(trace_view_tab)
+                        trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
                 }
             }
             if(ImGui::MenuItem("Show Side Bar", nullptr, m_sidebar_visible))
@@ -523,10 +526,9 @@ AppWindow::RenderViewMenu(Project* project)
                 for(const auto& tab : m_tab_container->GetTabs())
                 {
                     auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
-                            tab->m_widget);  // TODO: think about caching this cast or
-                                             // avoid casting
-                    trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                    if(trace_view_tab)
+                        trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
                 }
             }
         }

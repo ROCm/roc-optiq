@@ -189,7 +189,7 @@ TraceView::CreateView()
     auto sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
                                            m_timeline_view->GetGraphs(), m_data_provider);
     auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
-                                                m_timeline_selection);
+                                                m_timeline_selection, m_annotations);
 
     m_sidebar_item                 = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible      = m_is_sidebar_visible;

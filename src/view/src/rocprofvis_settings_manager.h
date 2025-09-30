@@ -19,9 +19,10 @@ enum class TimeFormat;
 
 typedef struct DisplaySettings
 {
-    bool use_dark_mode;
-    bool dpi_based_scaling;
-    int  font_size_index;
+    bool  use_dark_mode;
+    bool  dpi_based_scaling;
+    int   font_size_index;
+ 
 } DisplaySettings;
 
 typedef struct UnitSettings
@@ -100,7 +101,7 @@ constexpr char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
 constexpr char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
-
+ 
 constexpr char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
 constexpr char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
@@ -168,11 +169,10 @@ private:
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
-    FontManager m_font_manager;
-    ImGuiStyle  m_default_imgui_style;
-    ImGuiStyle  m_default_style;
-    float       m_display_dpi;
-
+    FontManager        m_font_manager;
+    ImGuiStyle         m_default_imgui_style;
+    ImGuiStyle         m_default_style;
+    float              m_display_dpi;
     const UserSettings m_usersettings_default;
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;

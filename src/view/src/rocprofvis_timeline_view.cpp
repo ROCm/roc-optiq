@@ -1352,6 +1352,7 @@ TimelineView::HandleTopSurfaceTouch()
     bool is_mouse_in_graph   = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
 
     ImGuiIO& io = ImGui::GetIO();
+    const float zoom_speed = 0.1f;
 
     // Sidebar: scroll wheel pans vertically
     if(is_mouse_in_sidebar)
@@ -1378,8 +1379,8 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel_h = io.MouseWheelH;
         if(scroll_wheel_h != 0.0f)
         {
-            const float scroll_speed = 0.1f;
-            float       move_amount  = scroll_wheel_h * m_v_width * scroll_speed;
+          
+            float move_amount = scroll_wheel_h * m_v_width * zoom_speed;
             m_view_time_offset_ns -= move_amount;
 
             if(m_view_time_offset_ns < 0.0f) m_view_time_offset_ns = 0.0f;
@@ -1402,7 +1403,7 @@ TimelineView::HandleTopSurfaceTouch()
                 m_view_time_offset_ns + cursor_screen_percentage * m_v_width;
 
             // 3. Apply zoom
-            const float zoom_speed = 0.1f;
+             
             float       new_zoom   = m_zoom;
             if(scroll_wheel > 0)
             {
@@ -1430,17 +1431,78 @@ TimelineView::HandleTopSurfaceTouch()
             m_v_min_x = m_min_x + m_view_time_offset_ns;
             m_v_max_x = m_v_min_x + m_v_width;
         }
-
-        if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
-        {
-            m_view_time_offset_ns -= (1 / m_graph_size.x) * m_v_width;
-        }
-        if(ImGui::IsKeyPressed(ImGuiKey_RightArrow))
-        {
-            m_view_time_offset_ns -= (-1 / m_graph_size.x) * m_v_width;
-        }
     }
 
+    // WASD and Arrow key panning
+    float pan_speed_sped_up = 2;
+    bool  is_shift_down     = ImGui::GetIO().KeyShift;
+
+    float pan_speed = is_shift_down ? pan_speed_sped_up : 1.0f;
+
+    float region_moved_per_click_x = 0.01 * m_graph_size.x;
+    float region_moved_per_click_y = 0.01 * m_content_max_y_scroll;
+
+    //A, D, left arrow, right arrow go left and right 
+  if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
+    {
+        m_view_time_offset_ns -=
+            pan_speed * ((region_moved_per_click_x / m_graph_size.x) * m_v_width);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_D) || ImGui::IsKeyPressed(ImGuiKey_RightArrow))
+    {
+        m_view_time_offset_ns -=
+            pan_speed * ((-region_moved_per_click_x / m_graph_size.x) * m_v_width);
+    }
+
+    // W/S for zoom in/out
+    if(ImGui::IsKeyPressed(ImGuiKey_W))
+    {
+        // Zoom in
+ 
+        float       new_zoom   = m_zoom * (1.0f + zoom_speed * pan_speed);
+        new_zoom               = std::max(new_zoom, 0.9f);
+
+        // Center zoom at current view center
+        double center_ns      = m_view_time_offset_ns + m_v_width * 0.5;
+        double new_v_width    = m_range_x / new_zoom;
+        m_view_time_offset_ns = center_ns - new_v_width * 0.5;
+        m_zoom                = new_zoom;
+        m_v_width             = new_v_width;
+        m_v_min_x             = m_min_x + m_view_time_offset_ns;
+        m_v_max_x             = m_v_min_x + m_v_width;
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_S))
+    {
+        // Zoom out
+   
+        float       new_zoom   = m_zoom * (1.0f - zoom_speed * pan_speed);
+        new_zoom               = std::max(new_zoom, 0.9f);
+
+        // Center zoom at current view center
+        double center_ns      = m_view_time_offset_ns + m_v_width * 0.5;
+        double new_v_width    = m_range_x / new_zoom;
+        m_view_time_offset_ns = center_ns - new_v_width * 0.5;
+        m_zoom                = new_zoom;
+        m_v_width             = new_v_width;
+        m_v_min_x             = m_min_x + m_view_time_offset_ns;
+        m_v_max_x             = m_v_min_x + m_v_width;
+    }
+
+    // Up/Down arrows for vertical scroll
+    if(ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+    {
+        m_scroll_position_y =
+            clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y, 0.0f,
+                  m_content_max_y_scroll);
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+    {
+        m_scroll_position_y =
+            clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y, 0.0f,
+                  m_content_max_y_scroll);
+    }
+
+    // Stop panning if mouse released
     if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
         m_can_drag_to_pan = false;

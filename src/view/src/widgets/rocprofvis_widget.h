@@ -108,14 +108,13 @@ public:
     void SetSplit(float ratio) { m_split_ratio = ratio; };
 
 protected:
-    virtual float GetAvailableSize(const ImVec2& total_size) = 0;
-    virtual void  SetCursor()                                = 0;
+    virtual float  GetAvailableSize(const ImVec2& total_size) = 0;
+    virtual void   SetCursor()                                = 0;
     virtual ImVec2 GetFirstChildSize(float available_width) = 0;
     virtual ImVec2 GetSecondChildSize() = 0;
-    virtual void DrawSplitter(const ImVec2& splitter_min, const ImVec2& splitter_max) = 0;
-    virtual void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
-                                  float available_size)                               = 0;
+    virtual void   UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos, float available_size) = 0;
     virtual ImVec2 GetSplitterSize(const ImVec2& total_size) = 0;
+    virtual void   AddSameLine() = 0;
 
     void SetFirst(LayoutItem::Ptr first) { m_first = first; };
     void SetSecond(LayoutItem::Ptr second) { m_second = second; };
@@ -161,10 +160,10 @@ private:
     void SetCursor() override;
     ImVec2 GetFirstChildSize(float available_width) override;
     ImVec2 GetSecondChildSize() override;
-    void DrawSplitter(const ImVec2& splitter_min, const ImVec2& splitter_max) override;
     void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
                           float available_width) override;
     ImVec2 GetSplitterSize(const ImVec2& total_size) override;
+    virtual void AddSameLine() override { ImGui::SameLine(); };
 
     float m_optimal_height;
 };
@@ -191,11 +190,11 @@ private:
     void  SetCursor() override;
     ImVec2 GetFirstChildSize(float available_width) override;
     ImVec2 GetSecondChildSize() override;
-    void DrawSplitter(const ImVec2& splitter_min, const ImVec2& splitter_max) override;
     void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
                           float available_height) override;
 
     ImVec2 GetSplitterSize(const ImVec2& total_size) override;
+    virtual void AddSameLine() override {};  // No same line for vertical split
 };
 
 class HSplitContainer : public RocWidget

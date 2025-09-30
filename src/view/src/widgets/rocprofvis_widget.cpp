@@ -185,7 +185,7 @@ void SplitContainerBase::Render()
         ImGui::EndChild();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);
-        ImGui::SameLine();
+        AddSameLine();
     }
 
     // Render splitter
@@ -196,7 +196,9 @@ void SplitContainerBase::Render()
                           GetSplitterSize(total_size));
         ImVec2 splitter_min = ImGui::GetItemRectMin();
         ImVec2 splitter_max = ImGui::GetItemRectMax();
-        DrawSplitter(splitter_min, splitter_max);
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            splitter_min, splitter_max,
+            SettingsManager::GetInstance().GetColor(Colors::kSplitterColor));
 
         if(ImGui::IsItemHovered()) SetCursor();
         if(ImGui::IsItemActive())
@@ -204,7 +206,7 @@ void SplitContainerBase::Render()
             ImVec2 mouse_pos = ImGui::GetMousePos();
             UpdateSplitRatio(mouse_pos, window_pos, available_size);
         }
-        ImGui::SameLine();
+        AddSameLine();
     }
 
     // Render second child
@@ -256,15 +258,6 @@ NewHSplitContainer::GetSecondChildSize()
 }
 
 void
-NewHSplitContainer::DrawSplitter(const ImVec2& splitter_min,
-                                 const ImVec2& splitter_max)
-{
-    ImGui::GetWindowDrawList()->AddRectFilled(
-        splitter_min, splitter_max,
-        SettingsManager::GetInstance().GetColor(Colors::kSplitterColor));
-}
-
-void
 NewHSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
                  float available_width)
 {
@@ -298,7 +291,7 @@ ImVec2
 NewVSplitContainer::GetFirstChildSize(float available_width)
 {
     float top_row_height = 0.0f;
-    if (m_first->m_visible)
+    if (m_second->m_visible)
     {
         float available_height = available_width;
         top_row_height         = available_height * m_split_ratio;
@@ -312,15 +305,6 @@ ImVec2
 NewVSplitContainer::GetSecondChildSize()
 {
     return ImVec2(0, 0);
-}
-
-void
-NewVSplitContainer::DrawSplitter(const ImVec2& splitter_min,
-                                 const ImVec2& splitter_max)
-{
-    ImGui::GetWindowDrawList()->AddRectFilled(
-        splitter_min, splitter_max,
-        SettingsManager::GetInstance().GetColor(Colors::kSplitterColor));
 }
 
 void

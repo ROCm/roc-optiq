@@ -107,7 +107,6 @@ private:
     // created
     bool m_is_analysis_visible = true;
     bool m_is_sidebar_visible = true;
-     
 };
 
 }  // namespace View

@@ -198,7 +198,7 @@ TraceView::CreateView()
     m_analysis_item                = LayoutItem::CreateFromWidget(analysis);
     m_analysis_item->m_visible     = m_is_analysis_visible;
 
-    m_timeline_item = LayoutItem::CreateFromWidget(m_timeline_view);    
+    m_timeline_item = LayoutItem::CreateFromWidget(m_timeline_view);
     m_vertical_split_container = std::make_shared<VSplitContainer>(m_timeline_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
 
@@ -243,10 +243,8 @@ void
 TraceView::Render()
 {
     if(m_horizontal_split_container && m_data_provider.GetState() == ProviderState::kReady)
-    {
-        
+    {        
         m_horizontal_split_container->Render();
-
         HandleHotKeys();
     }
 

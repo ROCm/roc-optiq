@@ -284,13 +284,13 @@ TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position,
     if(center)
     {
         m_scroll_position_y =
-            clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f, 0.0f,
+            std::clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f, 0.0f,
                   m_content_max_y_scroll);
     }
     else
     {
         m_scroll_position_y =
-            clamp(static_cast<float>(y_position), 0.0f, m_content_max_y_scroll);
+            std::clamp(static_cast<float>(y_position), 0.0f, m_content_max_y_scroll);
     }
 
     ImGui::SetScrollY(m_scroll_position_y);

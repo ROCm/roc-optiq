@@ -14,6 +14,7 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr uint64_t FETCH_CHUNK_SIZE = 1000;
 constexpr uint64_t INVALID_UINT64_INDEX = std::numeric_limits<uint64_t>::max();
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
@@ -21,7 +22,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
 , m_last_total_row_count(0)
-, m_fetch_chunk_size(100)      // Number of items to fetch in one go
+, m_fetch_chunk_size(FETCH_CHUNK_SIZE)      // Number of items to fetch in one go
 , m_fetch_pad_items(30)        // Number of items to pad the fetch range
 , m_fetch_threshold_items(10)  // Number of items from the edge to trigger a fetch
 , m_last_table_size(0, 0)
@@ -187,7 +188,8 @@ InfiniteScrollTable::Render()
         {
             ImGui::SetNextItemAllowOverlap();
             ImGui::Combo("##group_by", &m_pending_filter_options.column_index,
-                         m_column_names_ptr.data(), m_column_names_ptr.size());
+                         m_column_names_ptr.data(),
+                         static_cast<int>(m_column_names_ptr.size()));
             if(m_pending_filter_options.column_index != 0)
             {
                 ImGui::SameLine();
@@ -245,8 +247,8 @@ InfiniteScrollTable::Render()
         {
             // If the outer size has changed, we need to recalulate the number of
             // items to fetch
-            int visible_rows   = outer_size.y / row_height;
-            m_fetch_chunk_size = std::max(visible_rows * 4, 100);
+            int visible_rows   = static_cast<int>(outer_size.y / row_height);
+            m_fetch_chunk_size = std::max(static_cast<uint64_t>(visible_rows * 4), FETCH_CHUNK_SIZE);
             m_fetch_pad_items  = clamp(visible_rows / 2, 10, 30);
             m_last_table_size  = outer_size;
 
@@ -257,7 +259,7 @@ InfiniteScrollTable::Render()
         }
 
         if(column_names.size() &&
-           ImGui::BeginTable("Event Data Table", column_names.size(), table_flags,
+           ImGui::BeginTable("Event Data Table", static_cast<int>(column_names.size()), table_flags,
                              outer_size))
         {
             if(m_skip_data_fetch && ImGui::GetScrollY() > 0.0f)
@@ -307,7 +309,7 @@ InfiniteScrollTable::Render()
 
             ImGuiListClipper clipper;
             // Clipper's item count is the size of our current data cache
-            clipper.Begin(table_data.size(), row_height);
+            clipper.Begin(static_cast<int>(table_data.size()), row_height);
             while(clipper.Step())
             {
                 for(int row_n = clipper.DisplayStart; row_n < clipper.DisplayEnd; ++row_n)
@@ -381,7 +383,7 @@ InfiniteScrollTable::Render()
                            start_row_position + m_fetch_threshold_items * row_height &&
                        start_row > 0)
                     {  // fetch data for the start row
-                        uint64_t new_start_pos = scroll_y / row_height;
+                        uint64_t new_start_pos = static_cast<uint64_t>(scroll_y / row_height);
                         // Ensure start position does not go below zero
                         if(m_fetch_pad_items > new_start_pos)
                         {
@@ -411,7 +413,7 @@ InfiniteScrollTable::Render()
                             (end_row != total_row_count - 1) && (scroll_max_y > 0.0f))
                     {
                         // fetch data for the end row
-                        uint64_t new_start_pos = (scroll_y) / row_height;
+                        uint64_t new_start_pos = static_cast<uint64_t>(scroll_y / row_height);
 
                         // Ensure start position does not go below zero
                         // (this can happen if the start_row is close to the beginning

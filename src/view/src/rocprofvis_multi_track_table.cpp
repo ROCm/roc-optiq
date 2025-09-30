@@ -236,7 +236,7 @@ MultiTrackTable::RenderContextMenu() const
     {
         const std::vector<std::vector<std::string>>& table_data =
             m_data_provider.GetTableData(m_table_type);
-        uint32_t target_track_id = GetTrackIdHelper(table_data);
+        uint64_t target_track_id = GetTrackIdHelper(table_data);
 
         if(ImGui::MenuItem("Copy Row Data", nullptr, false))
         {

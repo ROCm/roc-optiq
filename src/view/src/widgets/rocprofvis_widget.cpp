@@ -293,7 +293,7 @@ ImVec2
 VSplitContainer::GetFirstChildSize(float available_width)
 {
     float top_row_height = 0.0f;
-    if (m_second->m_visible)
+    if (m_second && m_second->m_visible)
     {
         float available_height = available_width;
         top_row_height         = available_height * m_split_ratio;

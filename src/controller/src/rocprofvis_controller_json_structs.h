@@ -6,24 +6,6 @@
 #include <map>
 #include <string>
 #include <vector>
-
-template <typename T>
-T clamp(const T& value, const T& lower, const T& upper)
-{
-    if(value < lower)
-    {
-        return lower;
-    }
-    else if(value > upper)
-    {
-        return upper;
-    }
-    else
-    {
-        return value;
-    }
-}
-
 typedef struct rocprofvis_controller_json_trace_event_t
 {
     std::string m_name;

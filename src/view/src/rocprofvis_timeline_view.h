@@ -59,8 +59,8 @@ public:
     TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
                  std::shared_ptr<AnnotationsManager> annotations);
     ~TimelineView();
-    virtual void                     Render();
-    void                             Update();
+    virtual void                     Render() override;
+    void                             Update() override;
     void                             MakeGraphView();
     void                             ResetView();
     void                             DestroyGraphs();

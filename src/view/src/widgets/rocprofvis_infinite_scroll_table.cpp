@@ -247,7 +247,7 @@ InfiniteScrollTable::Render()
             // items to fetch
             int visible_rows   = outer_size.y / row_height;
             m_fetch_chunk_size = std::max(visible_rows * 4, 100);
-            m_fetch_pad_items  = clamp(visible_rows / 2, 10, 30);
+            m_fetch_pad_items  = std::clamp(visible_rows / 2, 10, 30);
             m_last_table_size  = outer_size;
 
             spdlog::debug("Recalculated fetch chunk size: {}, fetch pad items: {}, "

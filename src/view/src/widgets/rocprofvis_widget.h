@@ -30,21 +30,28 @@ protected:
 class LayoutItem
 {
 public:
-    LayoutItem();
-    LayoutItem(float w, float h);
+    using Ptr = std::shared_ptr<LayoutItem>;
+    LayoutItem() = default;
+    LayoutItem(float w, float h)
+    : m_width(w)
+    , m_height(h)
+    {};
 
-    std::shared_ptr<RocWidget> m_item;  // Widget that this item will render
-    float                      m_height;
-    float                      m_width;
-    bool                       m_visible;
+    static Ptr CreateFromWidget(std::shared_ptr<RocWidget> widget, float w = 0,
+                                float h = 0);
 
-    int32_t m_bg_color;
+    std::shared_ptr<RocWidget> m_item = nullptr;  // Widget that this item will render
+    float                      m_height = 0;
+    float                      m_width = 0;
+    bool                       m_visible = true;
 
-    ImVec2 m_item_spacing;
-    ImVec2 m_window_padding;
+    int32_t m_bg_color = 0;
 
-    ImGuiChildFlags  m_child_flags;
-    ImGuiWindowFlags m_window_flags;
+    ImVec2 m_item_spacing = ImVec2(0, 0);
+    ImVec2 m_window_padding = ImVec2(0, 0);
+
+    ImGuiChildFlags  m_child_flags = ImGuiChildFlags_Borders;
+    ImGuiWindowFlags m_window_flags = ImGuiWindowFlags_None;
 };
 
 class RocCustomWidget : public RocWidget
@@ -79,64 +86,102 @@ protected:
     std::vector<LayoutItem> m_children;
 };
 
-class HSplitContainer : public RocWidget
+class SplitContainerBase : public RocWidget
 {
 public:
-    HSplitContainer(const LayoutItem& l, const LayoutItem& r);
+    SplitContainerBase(LayoutItem::Ptr first, LayoutItem::Ptr second, float grip_size,
+                       float first_min_size, float second_min_size, float split_ratio)
+    : m_first(first)
+    , m_second(second)
+    , m_resize_grip_size(grip_size)
+    , m_first_min_size(first_min_size)
+    , m_second_min_size(second_min_size)
+    , m_split_ratio(split_ratio)
+    {};
+    virtual ~SplitContainerBase() = default;
+    virtual void Render() override;
 
-    virtual void Render();
-    void         SetLeft(const LayoutItem& l);
-    void         setRight(const LayoutItem& r);
+    void SetSplit(float ratio) { m_split_ratio = ratio; };
 
-    void SetSplit(float ratio);
-    void SetMinLeftWidth(float width);
-    void SetMinRightWidth(float width);
+protected:
+    virtual float  GetAvailableSize(const ImVec2& total_size) = 0;
+    virtual void   SetCursor()                                = 0;
+    virtual ImVec2 GetFirstChildSize(float available_width)   = 0;
+    virtual ImVec2 GetSecondChildSize()                       = 0;
+    virtual void   UpdateSplitRatio(const ImVec2& mouse_pos,
+              const ImVec2& window_pos, float available_size) = 0;
+    virtual ImVec2 GetSplitterSize(const ImVec2& total_size)  = 0;
+    virtual void   AddSameLine()                              = 0;
+    virtual float  GetItemSize()                              = 0;
 
+    void SetFirst(LayoutItem::Ptr first);
+    void SetSecond(LayoutItem::Ptr second);
+
+    void SetMinFirstSize(float size);
+    void SetMinSecondSize(float size);
+
+    LayoutItem::Ptr m_first;
+    LayoutItem::Ptr m_second;
+
+    float m_first_min_size;
+    float m_second_min_size;
+
+    float m_split_ratio;
+    float m_resize_grip_size;
+
+    std::string m_first_name;
+    std::string m_second_name;
+    std::string m_handle_name;
+
+    float m_optimal_size = 0.0f;
+};
+
+class HSplitContainer : public SplitContainerBase
+{
+public:
+    HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right);
+    void SetLeft(LayoutItem::Ptr left);
+    void SetRight(LayoutItem::Ptr right);
+
+    void  SetMinLeftWidth(float width);
+    void  SetMinRightWidth(float width);
     float GetOptimalHeight() const;
 
 private:
-    float m_left_min_width;
-    float m_right_min_width;
-
-    LayoutItem m_left;
-    LayoutItem m_right;
-    float      m_resize_grip_size;
-
-    std::string m_left_name;
-    std::string m_right_name;
-    std::string m_handle_name;
-
-    float m_split_ratio;
-    float m_optimal_height;
+    float GetAvailableSize(const ImVec2& total_size) override;
+    void SetCursor() override;
+    ImVec2 GetFirstChildSize(float available_width) override;
+    ImVec2 GetSecondChildSize() override;
+    void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+                          float available_width) override;
+    ImVec2 GetSplitterSize(const ImVec2& total_size) override;
+    void AddSameLine() override;
+    float  GetItemSize() override;
 };
 
-class VSplitContainer : public RocWidget
+class VSplitContainer : public SplitContainerBase
 {
 public:
-    VSplitContainer(const LayoutItem& t, const LayoutItem& b);
+    VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom);
 
-    virtual void Render();
+    void SetTop(LayoutItem::Ptr top);
+    void SetBottom(LayoutItem::Ptr bottom);
 
-    void SetTop(const LayoutItem& t);
-    void SetBottom(const LayoutItem& b);
-
-    void SetSplit(float ratio);
     void SetMinTopHeight(float height);
     void SetMinBottomHeight(float height);
+    float GetOptimalWidth() const;
 
 private:
-    float m_top_min_height;
-    float m_bottom_min_height;
+    float GetAvailableSize(const ImVec2& total_size) override;
+    void  SetCursor() override;
+    ImVec2 GetFirstChildSize(float available_width) override;
+    ImVec2 GetSecondChildSize() override;
+    void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+                          float available_height) override;
 
-    LayoutItem m_top;
-    LayoutItem m_bottom;
-    float      m_resize_grip_size;
-
-    std::string m_top_name;
-    std::string m_bottom_name;
-    std::string m_handle_name;
-
-    float m_split_ratio;
+    ImVec2 GetSplitterSize(const ImVec2& total_size) override;
+    void AddSameLine() override {};  // No same line for vertical split
+    float  GetItemSize() override;
 };
 
 struct TabItem
@@ -157,6 +202,7 @@ public:
     virtual void Update();
 
     void AddTab(const TabItem& tab);
+    void AddTab(TabItem&& tab);
     void RemoveTab(const std::string& id);
     void RemoveTab(int index);
 

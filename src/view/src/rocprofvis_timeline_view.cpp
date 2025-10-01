@@ -1492,13 +1492,13 @@ TimelineView::HandleTopSurfaceTouch()
     if(ImGui::IsKeyPressed(ImGuiKey_UpArrow))
     {
         m_scroll_position_y =
-            clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y, 0.0f,
+            std::clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y, 0.0f,
                   m_content_max_y_scroll);
     }
     if(ImGui::IsKeyPressed(ImGuiKey_DownArrow))
     {
         m_scroll_position_y =
-            clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y, 0.0f,
+            std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y, 0.0f,
                   m_content_max_y_scroll);
     }
 

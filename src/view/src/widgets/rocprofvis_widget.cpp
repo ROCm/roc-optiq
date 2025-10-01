@@ -711,7 +711,7 @@ TabContainer::GetTabs()
 }
 
 LayoutItem::Ptr
-LayoutItem::CreateFromWidget(std::shared_ptr<RocWidget> widget, float w = 0, float h = 0)
+LayoutItem::CreateFromWidget(std::shared_ptr<RocWidget> widget, float w, float h)
 {
     Ptr item     = std::make_shared<LayoutItem>(w, h);
     item->m_item = widget;

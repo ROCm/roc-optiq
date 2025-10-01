@@ -192,21 +192,27 @@ void SplitContainerBase::Render()
     // Render splitter
     if(m_first && m_first->m_visible && m_second && m_second->m_visible)
     {
+        bool fill_active = false;
         ImGui::Selectable(m_handle_name.c_str(), false,
                           ImGuiSelectableFlags_AllowDoubleClick,
                           GetSplitterSize(total_size));
         ImVec2 splitter_min = ImGui::GetItemRectMin();
         ImVec2 splitter_max = ImGui::GetItemRectMax();
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            splitter_min, splitter_max,
-            SettingsManager::GetInstance().GetColor(Colors::kSplitterColor));
-
-        if(ImGui::IsItemHovered()) SetCursor();
+        if(ImGui::IsItemHovered())
+        { 
+            SetCursor();
+            fill_active = true;
+        }
         if(ImGui::IsItemActive())
         {
             ImVec2 mouse_pos = ImGui::GetMousePos();
             UpdateSplitRatio(mouse_pos, window_pos, available_size);
+            fill_active = true;
         }
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            splitter_min, splitter_max,
+            SettingsManager::GetInstance().GetColor(
+                fill_active ? Colors::kAccentRedActive : Colors::kSplitterColor));
         AddSameLine();
     }
 

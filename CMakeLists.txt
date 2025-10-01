@@ -158,7 +158,7 @@ set(PKG_MAINTAINER_NM  "ROCm Dev Support")
 set(PKG_MAINTAINER_EMAIL  "rocm-dev.support@amd.com")
 set(COMP_TYPE "RV_RUNTIME")
 set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")
-set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/copyright" CACHE PATH "Path to License File in source dir" )
+set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" CACHE PATH "Path to License File in source dir" )
 set(EXTENDED_PACKAGE_DESCRIPTION
 	"This package provides `rocprof-visualizer`which helps in post analysis of ROCm Systems profiling data.")
 

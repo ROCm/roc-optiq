@@ -36,10 +36,10 @@ ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<Com
         this->RenderRightColumn();
     });
 
-    LayoutItem left;
-    left.m_item = m_left_column;
-    LayoutItem right;
-    right.m_item = m_right_column;
+    LayoutItem::Ptr left = std::make_shared<LayoutItem>();
+    left->m_item = m_left_column;
+    LayoutItem::Ptr right = std::make_shared<LayoutItem>();
+    right->m_item = m_right_column;
     m_container = std::make_shared<HSplitContainer>(left, right);
     m_container->SetSplit(0.5f);
 }

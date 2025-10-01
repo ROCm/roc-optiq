@@ -146,6 +146,7 @@ class Builder
         static std::string Select(rocprofvis_db_sqlite_essential_data_query_format params);
         static std::string SelectAll(std::string query);
         static std::string QParam(std::string name, std::string public_name);
+        static std::string Blank();
         static std::string QParamBlank(std::string public_name);
         static std::string QParam(std::string name);
         static std::string QParamOperation(const rocprofvis_dm_event_operation_t op);

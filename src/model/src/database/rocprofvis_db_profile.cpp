@@ -130,10 +130,10 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
     record.event.id.bitfield.event_op = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
     if (callback_params->track_id == -1)
     {
-        if (db->FindTrackId((uint64_t)db->Sqlite3ColumnInt64(func, stmt, azColName, 6),
-            db->Sqlite3ColumnInt(func, stmt, azColName, 7),
-            (const char*)db->Sqlite3ColumnText(func, stmt, azColName, 8),
-            record.event.id.bitfield.event_op,
+        uint64_t node = db->Sqlite3ColumnInt64(func, stmt, azColName, 6);
+        uint64_t process = db->Sqlite3ColumnInt(func, stmt, azColName, 7);
+        std::string subprocess = db->Sqlite3ColumnText(func, stmt, azColName, 8);
+        if (db->FindTrackId(node, process, subprocess.c_str(), record.event.id.bitfield.event_op,
             callback_params->track_id) != kRocProfVisDmResultSuccess)
         {
             return 0;

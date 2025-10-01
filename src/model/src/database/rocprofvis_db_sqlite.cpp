@@ -783,14 +783,6 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
 
         while(sqlite3_step(stmt) == SQLITE_ROW)
         {
-            for(int i = 0; i < cols; ++i)
-            {
-                if(sqlite3_column_type(stmt, i) == SQLITE_NULL)
-                {
-                    
-                }
-            }
-
             bool skip_this_row = false;
 
             for(int i = 0; i < cols; ++i)

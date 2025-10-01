@@ -21,6 +21,7 @@
 #pragma once
 
 #include "rocprofvis_db_profile.h"
+#include "rocprofvis_db_query_factory.h"
 
 namespace RocProfVis
 {
@@ -30,14 +31,16 @@ namespace DataModel
 class RocprofDatabase : public ProfileDatabase
 {
     // map array for fast track ID search
-    typedef std::map<uint32_t, uint32_t> sub_process_map_t;
-    typedef std::map<uint32_t, sub_process_map_t> process_map_t;
-    typedef std::map<uint32_t, process_map_t> op_map_t;
+    typedef std::map<uint64_t, uint32_t> sub_process_map_t;
+    typedef std::map<uint64_t, sub_process_map_t> process_map_t;
+    typedef std::map<uint64_t, process_map_t> op_map_t;
     typedef std::map<uint32_t, op_map_t> track_find_map_t;
 
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
-        ProfileDatabase(path) {
+        ProfileDatabase(path),
+        m_query_factory(this)
+    {
     };
     // class destructor, not really required, unless declared as virtual
     ~RocprofDatabase()override{};
@@ -116,6 +119,16 @@ private:
     // @return SQLITE_OK if successful
     static int CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stmt,
                                        char** azColName);
+    // sqlite3_exec callback to parse metadata table of new schema rocprof database
+    // object to StackTrace container
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt,
+        char** azColName);
+    
     // method to remap string IDs. Main reason for remapping is having strings and kernel symbol names in one array 
     // @param record - event record structure
     // @return status of operation
@@ -155,10 +168,15 @@ private:
     {
         return kRocProfVisDmRegionMainTrack;
     }
+
+
     private:
         rocprofvis_dm_result_t CreateIndexes();
+        
     private:
         track_find_map_t find_track_map;
+        QueryFactory m_query_factory;
+        std::string db_version;
 
         inline static const rocprofvis_event_data_category_map_t
             s_rocprof_categorized_data = {

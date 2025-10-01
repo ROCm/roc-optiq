@@ -227,7 +227,69 @@ void SplitContainerBase::Render()
     }
 }
 
+void
+SplitContainerBase::SetFirst(LayoutItem::Ptr first)
+{
+    m_first = first;
+};
+
+void
+SplitContainerBase::SetSecond(LayoutItem::Ptr second)
+{
+    m_second = second;
+};
+
+void
+SplitContainerBase::SetMinFirstSize(float size)
+{
+    m_first_min_size = size;
+};
+
+void
+SplitContainerBase::SetMinSecondSize(float size)
+{
+    m_second_min_size = size;
+};
+
 //------------------------------------------------------------------
+HSplitContainer::HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
+: SplitContainerBase(left, right, 4.0f, 100.0f, 100.0f, 0.25f)
+{
+    m_widget_name = GenUniqueName("HSplitContainer");
+    m_first_name  = GenUniqueName("LeftColumn");
+    m_handle_name = GenUniqueName("##ResizeHandle");
+    m_second_name = GenUniqueName("RightColumn");
+};
+
+void
+HSplitContainer::SetLeft(LayoutItem::Ptr left)
+{
+    SetFirst(left);
+};
+
+void
+HSplitContainer::SetRight(LayoutItem::Ptr right)
+{
+    SetSecond(right);
+};
+
+void
+HSplitContainer::SetMinLeftWidth(float width)
+{
+    SetMinFirstSize(width);
+};
+
+void
+HSplitContainer::SetMinRightWidth(float width)
+{
+    SetMinSecondSize(width);
+};
+
+float
+HSplitContainer::GetOptimalHeight() const
+{
+    return m_optimal_size;
+};
 
 float
 HSplitContainer::GetAvailableSize(const ImVec2& total_size)
@@ -280,13 +342,64 @@ HSplitContainer::GetSplitterSize(const ImVec2& total_size)
     return ImVec2(m_resize_grip_size, total_size.y);
 }
 
+void
+HSplitContainer::AddSameLine()
+{
+    ImGui::SameLine();
+};
+
+float
+HSplitContainer::GetItemSize()
+{
+    return ImGui::GetItemRectSize().y;
+};
+
 //------------------------------------------------------------------
+VSplitContainer::VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
+: SplitContainerBase(top, bottom, 4.0f, 200.0f, 100.0f, 0.6f)
+{
+    m_widget_name = GenUniqueName("VSplitContainer");
+    m_first_name  = GenUniqueName("TopRow");
+    m_handle_name = GenUniqueName("##ResizeHandle");
+    m_second_name = GenUniqueName("BottomRow");
+};
+
+void
+VSplitContainer::SetTop(LayoutItem::Ptr top)
+{
+    SetFirst(top);
+};
+
+void
+VSplitContainer::SetBottom(LayoutItem::Ptr bottom)
+{
+    SetSecond(bottom);
+};
+
+void
+VSplitContainer::SetMinTopHeight(float height)
+{
+    SetMinFirstSize(height);
+};
+
+void
+VSplitContainer::SetMinBottomHeight(float height)
+{
+    SetMinSecondSize(height);
+};
+
+float
+VSplitContainer::GetOptimalWidth() const
+{
+    return m_optimal_size;
+};
 
 float
 VSplitContainer::GetAvailableSize(const ImVec2& total_size)
 {
     return total_size.y - m_resize_grip_size;
 };
+
 void
 VSplitContainer::SetCursor()
 {
@@ -329,6 +442,12 @@ VSplitContainer::GetSplitterSize(const ImVec2& total_size)
 {
     return ImVec2(total_size.x, m_resize_grip_size);
 }
+
+float
+VSplitContainer::GetItemSize()
+{
+    return ImGui::GetItemRectSize().x;
+};
 
 //------------------------------------------------------------------
 TabContainer::TabContainer()
@@ -591,5 +710,13 @@ TabContainer::GetTabs()
     return tabs;
 }
 
+LayoutItem::Ptr
+LayoutItem::CreateFromWidget(std::shared_ptr<RocWidget> widget, float w = 0, float h = 0)
+{
+    Ptr item     = std::make_shared<LayoutItem>(w, h);
+    item->m_item = widget;
+    return item;
 }
+
+}  // namespace View
 }

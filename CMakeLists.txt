@@ -150,41 +150,68 @@ if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
     target_link_options(rocprof-visualizer PRIVATE --coverage)
 endif()
 
-## Verbose output.
-set(CMAKE_VERBOSE_MAKEFILE on)
+#CPACK Packaging Enabling
 set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
-## packaging variables
-set(PKG_MAINTAINER_NM  "ROCm Dev Support")
-set(PKG_MAINTAINER_EMAIL  "rocm-dev.support@amd.com")
+if( NOT DEFINED BUILD_ID )
+  if( DEFINED ENV{BUILD_ID} )
+    set( BUILD_ID $ENV{BUILD_ID} )
+  else()
+    set( BUILD_ID "9999")
+  endif()
+endif()
+
+#TODO - Update Correct Maintainer NM, DL
+set(PKG_MAINTAINER_NM  "ROCPROF-Visualizer Dev Support")
+set(PKG_MAINTAINER_EMAIL  "ROCPROF-Visualizer-Support@amd.com")
+
 set(COMP_TYPE "RV_RUNTIME")
 set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")
-set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" CACHE PATH "Path to License File in source dir" )
 set(EXTENDED_PACKAGE_DESCRIPTION
 	"This package provides `rocprof-visualizer`which helps in post analysis of ROCm Systems profiling data.")
 
-#CPACK Packaging Enabling
 include(GNUInstallDirs)
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 set(CPACK_GENERATOR "TGZ;DEB;RPM" CACHE STRING "package types to be produced")
+
+#Default Value is 9999, setting it first
+set(ROCM_VERSION_FOR_PACKAGE "9999")
+if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
+  set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
+endif()
+if (NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
+  if (DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
+     set(CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
+  else()
+     set(CPACK_DEBIAN_PACKAGE_RELEASE "local.${BUILD_ID}")
+  endif()
+endif()
+
 
 ## Packaging directives
 set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
-set(CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
+set(CPACK_PACKAGE_VERSION
+	"${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${ROCM_VERSION_FOR_PACKAGE}")
 set(CPACK_PACKAGE_CONTACT "${PKG_MAINTAINER_NM} <${PKG_MAINTAINER_EMAIL}>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PKG_DESCRIPTION}")
-set(CPACK_RESOURCE_FILE_LICENSE "${LICENSE_FILE}")
 
+#TODO - License File is mandatory for packaging release
+#Once License file is available in the source path
+#Enable this Code for License File Packaging.
+#set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" CACHE PATH "Path to License File in source dir" )
+#set(CPACK_RESOURCE_FILE_LICENSE "${LICENSE_FILE}")
+#set(CPACK_PACKAGE_LICENSE "MIT")
+#set(CPACK_RPM_PACKAGE_LICENSE "MIT" )
+# License file
+# install(FILES ${LICENSE_FILE}
+#        DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
+#        COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
 install(PROGRAMS ${BUILD_DIR}/rocprof-visualizer
         DESTINATION ${CMAKE_INSTALL_BINDIR}
-        COMPONENT ${RUNTIME_COMP_TYPE} )
-# License file
-install(FILES ${LICENSE_FILE}
-        DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
         COMPONENT ${RUNTIME_COMP_TYPE} )
 
 ## Debian package specific variables
@@ -203,6 +230,14 @@ set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 ## RPM package specific variables
 set ( CPACK_RPM_COMPONENT_INSTALL ON )
 set ( CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}" )
+if( NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
+  if(DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE})
+    set(CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE})
+  else()
+    set(CPACK_RPM_PACKAGE_RELEASE "local.${BUILD_ID}")
+  endif()
+endif()
+
 ## 'dist' breaks manual builds on debian systems due to empty Provides
 execute_process( COMMAND rpm --eval %{?dist}
                  RESULT_VARIABLE PROC_RESULT
@@ -213,9 +248,11 @@ if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
 endif()
 message(STATUS "Using CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
-set(RPM_DEPENDS_STRING "")
+
+#TODO - To Review RPM Runtime package Dependencies for Vulkan, Others
+# Once Support is confirmed for non UB/Deb platforms
+set ( RPM_DEPENDS_STRING "")
 set ( CPACK_RPM_PACKAGE_REQUIRES ${RPM_DEPENDS_STRING} )
-#set ( CPACK_RPM_PACKAGE_LICENSE "MIT" )
 set ( CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}" )
 
 ## Include packaging

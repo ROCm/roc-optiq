@@ -156,6 +156,7 @@ if( NOT DEFINED BUILD_ID )
   if( DEFINED ENV{BUILD_ID} )
     set( BUILD_ID $ENV{BUILD_ID} )
   else()
+    # Default BUILD_ID for local or development builds when not explicitly set
     set( BUILD_ID "9999")
   endif()
 endif()
@@ -173,8 +174,9 @@ include(GNUInstallDirs)
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 set(CPACK_GENERATOR "TGZ;DEB;RPM" CACHE STRING "package types to be produced")
 
-#Default Value is 9999, setting it first
-set(ROCM_VERSION_FOR_PACKAGE "9999")
+#Default Value is 99999, this value will be used
+#When ROCM LibPatch Version when not explicitly set
+set(ROCM_VERSION_FOR_PACKAGE "99999")
 if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
   set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
 endif()
@@ -185,7 +187,6 @@ if (NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
      set(CPACK_DEBIAN_PACKAGE_RELEASE "local.${BUILD_ID}")
   endif()
 endif()
-
 
 ## Packaging directives
 set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")

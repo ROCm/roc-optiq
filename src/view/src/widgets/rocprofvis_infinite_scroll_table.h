@@ -50,7 +50,7 @@ protected:
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;
 
-    int m_fetch_chunk_size;
+    uint64_t m_fetch_chunk_size;
 
     bool m_data_changed;
 

@@ -160,14 +160,14 @@ if( NOT DEFINED BUILD_ID )
   endif()
 endif()
 
-#TODO - Update Correct Maintainer NM, DL
+#TODO - Update Correct Maintainer Name and Email
 set(PKG_MAINTAINER_NM  "ROCPROF-Visualizer Dev Support")
 set(PKG_MAINTAINER_EMAIL  "ROCPROF-Visualizer-Support@amd.com")
 
-set(COMP_TYPE "RV_RUNTIME")
+set(RUNTIME_COMP_TYPE "RV_RUNTIME")
 set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")
 set(EXTENDED_PACKAGE_DESCRIPTION
-	"This package provides `rocprof-visualizer`which helps in post analysis of ROCm Systems profiling data.")
+	"This package provides `rocprof-visualizer` which helps in post analysis of ROCm Systems profiling data.")
 
 include(GNUInstallDirs)
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")

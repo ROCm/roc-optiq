@@ -3,7 +3,10 @@
 #pragma once
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
+#include "rocprofvis_track_topology.h"
+
 #include <vector>
+#include <optional>
 
 namespace RocProfVis
 {
@@ -20,20 +23,57 @@ class SideBar : public RocWidget
 public:
     SideBar(std::shared_ptr<TrackTopology>     topology,
             std::shared_ptr<TimelineSelection> timeline_selection,
-            std::vector<rocprofvis_graph_t>*   graphs,
+            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
             DataProvider &dp);
     ~SideBar();
     virtual void Render() override;
     virtual void Update() override;
 
 private:
-    void RenderTrackItem(const int& index);
+    enum class EyeButtonState
+    {
+        kAllVisible,
+        kAllHidden,
+        kMixed
+    };
+    bool RenderTrackItem(const int& index);
+
+    bool IsAllSubItemsHidden(const std::vector<IterableModel>& container);
+    void HideAllSubItems(const std::vector<IterableModel>& container);
+    void HideAllUncategorizedItems(const std::vector<uint64_t>& indices);
+    void UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices);
+    void UnhideAllSubItems(const std::vector<IterableModel>& container);
+
+    EyeButtonState DrawTopology(const TopologyModel&          topology,
+                                EyeButtonState                parentEyeButtonState,
+                                bool                          show_eye_button = true);
+
+    EyeButtonState DrawNodes(const std::vector<NodeModel>& nodes,
+                             EyeButtonState                parentEyeButtonState,
+                             bool                          show_eye_button = true);
+    
+    EyeButtonState DrawNode(const NodeModel& node,
+                                       EyeButtonState parentEyeButtonState,
+                                       bool           show_eye_button = true);
+
+    EyeButtonState DrawProcesses(const std::vector<ProcessModel>& processes,
+                                 EyeButtonState                   parentEyeButtonState, 
+                                 bool show_eye_button = true);
+
+    EyeButtonState DrawCollapsable(const std::vector<IterableModel>& container,
+                                   const std::string&                collapsable_header,
+                                   EyeButtonState                    parentEyeButtonState);
+
+
+    EyeButtonState DrawEyeButton(EyeButtonState parentEyeButtonState);
+    bool IsEyeButtonVisible();
 
     SettingsManager&                   m_settings;
     std::shared_ptr<TrackTopology>     m_track_topology;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
-    std::vector<rocprofvis_graph_t>*   m_graphs;
+    std::shared_ptr<std::vector<rocprofvis_graph_t>>   m_graphs;
     DataProvider &                     m_data_provider;
+    EyeButtonState m_root_eye_button_state = EyeButtonState::kMixed;
 };
 
 }  // namespace View

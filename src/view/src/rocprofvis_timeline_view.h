@@ -64,7 +64,7 @@ public:
     void                             MakeGraphView();
     void                             ResetView();
     void                             DestroyGraphs();
-    std::vector<rocprofvis_graph_t>* GetGraphs();
+    std::shared_ptr<std::vector<rocprofvis_graph_t>> GetGraphs();
     void                             RenderInteractiveUI(ImVec2 screen_pos);
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);

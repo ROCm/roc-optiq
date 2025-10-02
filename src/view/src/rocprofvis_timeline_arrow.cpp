@@ -29,7 +29,7 @@ void
 TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                       const double pixels_per_ns, const ImVec2 window,
                       const std::unordered_map<uint64_t, float>& track_position_y,
-                      const std::vector<rocprofvis_graph_t>&     graphs) const
+                      const std::shared_ptr<std::vector<rocprofvis_graph_t>>     graphs) const
 {
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            color        = settings.GetColor(Colors::kArrowColor);
@@ -72,7 +72,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
             }
 
             const rocprofvis_graph_t& start_track =
-                graphs[m_data_provider.GetTrackInfo(event->track_id)->index];
+                (*graphs)[m_data_provider.GetTrackInfo(event->track_id)->index];
             if(!start_track.display)
             {
                 continue;
@@ -81,7 +81,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
             {
                 const event_flow_data_t&  flow = event->flow_info[i];
                 const rocprofvis_graph_t& end_track =
-                    graphs[m_data_provider.GetTrackInfo(flow.track_id)->index];
+                    (*graphs)[m_data_provider.GetTrackInfo(flow.track_id)->index];
                 if(!end_track.display)
                 {
                     continue;

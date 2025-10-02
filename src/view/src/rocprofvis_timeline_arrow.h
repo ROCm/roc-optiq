@@ -37,7 +37,7 @@ public:
     void Render(ImDrawList* draw_list, const double v_min_x, const double pixels_per_ns,
                 const ImVec2                               window,
                 const std::unordered_map<uint64_t, float>& track_position_y,
-                const std::vector<rocprofvis_graph_t>&     graphs) const;
+                const std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs) const;
 
 private:
     void HandleEventSelectionChanged(std::shared_ptr<RocEvent> e);

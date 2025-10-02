@@ -248,8 +248,11 @@ InfiniteScrollTable::Render()
             // If the outer size has changed, we need to recalulate the number of
             // items to fetch
             int visible_rows   = static_cast<int>(outer_size.y / row_height);
-            m_fetch_chunk_size = std::max(static_cast<uint64_t>(visible_rows * 4), FETCH_CHUNK_SIZE);
-            m_fetch_pad_items  = clamp(visible_rows / 2, 10, 30);
+            m_fetch_pad_items  = std::clamp(visible_rows / 2, 10, 30);
+            m_fetch_chunk_size = std::max(static_cast<uint64_t>(visible_rows * 4 +
+                                        m_fetch_threshold_items +
+                                        m_fetch_pad_items),
+                                        FETCH_CHUNK_SIZE);
             m_last_table_size  = outer_size;
 
             spdlog::debug("Recalculated fetch chunk size: {}, fetch pad items: {}, "
@@ -383,15 +386,20 @@ InfiniteScrollTable::Render()
                            start_row_position + m_fetch_threshold_items * row_height &&
                        start_row > 0)
                     {  // fetch data for the start row
-                        uint64_t new_start_pos = static_cast<uint64_t>(scroll_y / row_height);
+                        uint64_t new_start_pos =
+                            static_cast<uint64_t>(scroll_y / row_height);
+                        int visible_rows = static_cast<int>(outer_size.y / row_height);
+                        int offset =
+                            static_cast<int>(m_fetch_chunk_size - m_fetch_pad_items -
+                                             m_fetch_threshold_items - visible_rows);
                         // Ensure start position does not go below zero
-                        if(m_fetch_pad_items > new_start_pos)
+                        if(offset > new_start_pos)
                         {
                             new_start_pos = 0;
                         }
                         else
                         {
-                            new_start_pos -= m_fetch_pad_items;
+                            new_start_pos -= offset;
                         }
 
                         spdlog::debug("Fetching more data for start row, new start pos: "
@@ -419,13 +427,14 @@ InfiniteScrollTable::Render()
                         // (this can happen if the start_row is close to the beginning
                         // of the table if a previous fetch did not return enough
                         // rows)
-                        if(m_fetch_pad_items > new_start_pos)
+                        int offset = m_fetch_pad_items + m_fetch_threshold_items;
+                        if(offset > new_start_pos)
                         {
                             new_start_pos = 0;
                         }
                         else
                         {
-                            new_start_pos -= m_fetch_pad_items;
+                            new_start_pos -= offset;
                         }
 
                         spdlog::debug("Fetching more data for end row, new start pos: "

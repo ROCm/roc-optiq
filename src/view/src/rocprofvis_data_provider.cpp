@@ -304,6 +304,7 @@ DataProvider::ClearTable(TableType type)
     m_table_infos[static_cast<size_t>(type)].table_data.clear();
     m_table_infos[static_cast<size_t>(type)].total_row_count = 0;
     m_table_infos[static_cast<size_t>(type)].table_params.reset();
+    m_table_infos[static_cast<size_t>(type)].formatted_column_data.clear();
 }
 
 void
@@ -2385,36 +2386,21 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
             table_params = nullptr;
         }
 
-        if(table_type == kRPVControllerTableTypeEvents)
+        if(table_type == kRPVControllerTableTypeEvents ||
+           table_type == kRPVControllerTableTypeSamples)
         {
             table_info_t& table_info =
-                m_table_infos[static_cast<size_t>(TableType::kEventTable)];
+                table_type == kRPVControllerTableTypeEvents
+                    ? m_table_infos[static_cast<size_t>(TableType::kEventTable)]
+                    : m_table_infos[static_cast<size_t>(TableType::kSampleTable)];
             // store the event table data
             table_info.table_header    = std::move(column_names);
             table_info.table_data      = std::move(table_data);
             table_info.table_params    = table_params;
             table_info.total_row_count = total_num_rows;
             
-            // clear the formatted data
-            table_info.formatted_column_data.clear();
-            table_info.formatted_column_data.resize(table_info.table_header.size());
-            for(auto& col : table_info.formatted_column_data)
-            {
-                col.needs_formatting = false;
-                col.formatted_row_value = std::vector<std::string>();
-            }
-        }
-        else if(table_type == kRPVControllerTableTypeSamples)
-        {
-            // store the sample table data
-            table_info_t& table_info =
-                m_table_infos[static_cast<size_t>(TableType::kSampleTable)];
-            table_info.table_header    = std::move(column_names);
-            table_info.table_data      = std::move(table_data);
-            table_info.table_params    = table_params;
-            table_info.total_row_count = total_num_rows;
-
-            // clear the formatted data
+            // create a place holder for the formatted data, higher level consumers
+            // will format the data as needed
             table_info.formatted_column_data.clear();
             table_info.formatted_column_data.resize(table_info.table_header.size());
             for(auto& col : table_info.formatted_column_data)

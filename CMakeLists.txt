@@ -161,9 +161,9 @@ if( NOT DEFINED BUILD_ID )
   endif()
 endif()
 
-#TODO - Update Correct Maintainer Name and Email
-set(PKG_MAINTAINER_NM  "ROCPROF-Visualizer Dev Support")
-set(PKG_MAINTAINER_EMAIL  "ROCPROF-Visualizer-Support@amd.com")
+#Package Maintainer Name and Email
+set(PKG_MAINTAINER_NM  "ROCm Visualizer Support")
+set(PKG_MAINTAINER_EMAIL  "rocm-visualizer-support@amd.com")
 
 set(RUNTIME_COMP_TYPE "RV_RUNTIME")
 set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")

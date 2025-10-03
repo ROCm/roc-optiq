@@ -40,6 +40,7 @@ private:
         kNumImportantColumns
     };
 
+    void FormatData() override;
     void FetchData(const TableRequestParams& params) const override;
     void RenderContextMenu() const override;
 

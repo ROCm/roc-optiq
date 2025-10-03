@@ -36,6 +36,7 @@ protected:
         char filter[256];
     };
 
+    virtual void FormatData();
     virtual void FetchData(const TableRequestParams& params) const = 0;
     virtual void RenderContextMenu() const;
 

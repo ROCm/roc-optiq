@@ -267,6 +267,18 @@ DataProvider::GetTableData(TableType type)
     return m_table_infos[static_cast<size_t>(type)].table_data;
 }
 
+const std::vector<formatted_column_info_t>&
+DataProvider::GetFormattedTableData(TableType type)
+{
+    return m_table_infos[static_cast<size_t>(type)].formatted_column_data;
+}
+
+std::vector<formatted_column_info_t>&
+DataProvider::GetMutableFormattedTableData(TableType type)
+{
+    return m_table_infos[static_cast<size_t>(type)].formatted_column_data;
+}
+
 std::shared_ptr<TableRequestParams>
 DataProvider::GetTableParams(TableType type)
 {
@@ -2364,6 +2376,7 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
             table_data.push_back(std::move(row_data));
         }
 
+        
         std::shared_ptr<TableRequestParams> table_params =
             std::dynamic_pointer_cast<TableRequestParams>(req.custom_params);
         if(!table_params)
@@ -2381,6 +2394,15 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
             table_info.table_data      = std::move(table_data);
             table_info.table_params    = table_params;
             table_info.total_row_count = total_num_rows;
+            
+            // clear the formatted data
+            table_info.formatted_column_data.clear();
+            table_info.formatted_column_data.resize(table_info.table_header.size());
+            for(auto& col : table_info.formatted_column_data)
+            {
+                col.needs_formatting = false;
+                col.formatted_row_value = std::vector<std::string>();
+            }
         }
         else if(table_type == kRPVControllerTableTypeSamples)
         {
@@ -2391,6 +2413,15 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
             table_info.table_data      = std::move(table_data);
             table_info.table_params    = table_params;
             table_info.total_row_count = total_num_rows;
+
+            // clear the formatted data
+            table_info.formatted_column_data.clear();
+            table_info.formatted_column_data.resize(table_info.table_header.size());
+            for(auto& col : table_info.formatted_column_data)
+            {
+                col.needs_formatting = false;
+                col.formatted_row_value = std::vector<std::string>();
+            }
         }
         else
         {

@@ -184,6 +184,69 @@ MultiTrackTable::Update()
     InfiniteScrollTable::Update();
 }
 
+void
+MultiTrackTable::FormatData() 
+{
+    const std::vector<std::string>& column_names =
+    m_data_provider.GetTableHeader(m_table_type);
+    const std::vector<std::vector<std::string>>& table_data =
+    m_data_provider.GetTableData(m_table_type);
+    std::vector<formatted_column_info_t>& formatted_column_data =
+    m_data_provider.GetMutableFormattedTableData(m_table_type);
+    
+    SettingsManager& settings = SettingsManager::GetInstance();
+    auto time_format = settings.GetUserSettings().unit_settings.time_format;
+
+    double start_time = m_data_provider.GetStartTime();
+
+    for(size_t col_idx = 0; col_idx < column_names.size(); col_idx++)
+    {
+        // Check if this column needs formatting
+        bool needs_formatting = false;
+        if(col_idx == m_important_column_idxs[kTimeStartNs] ||
+           col_idx == m_important_column_idxs[kTimeEndNs] ||
+           col_idx == m_important_column_idxs[kDurationNs])
+        {
+            needs_formatting = true;
+        }
+
+        if(needs_formatting)
+        {
+            formatted_column_data[col_idx].needs_formatting = true;
+            formatted_column_data[col_idx].formatted_row_value.resize(table_data.size());
+            
+            for(size_t row_idx = 0; row_idx < table_data.size(); row_idx++)
+            {
+                const std::string& raw_value = table_data[row_idx][col_idx];
+
+                if(col_idx == m_important_column_idxs[kTimeStartNs] ||
+                   col_idx == m_important_column_idxs[kTimeEndNs] ||
+                   col_idx == m_important_column_idxs[kDurationNs])
+                {
+                    // Format time values
+                    try
+                    {
+                        double time_ns = static_cast<double>(std::stoull(raw_value));
+                        if(col_idx != m_important_column_idxs[kDurationNs])
+                        {
+                            // time is relative to the trace start time
+                            time_ns -= start_time;
+                        }
+                        formatted_column_data[col_idx].formatted_row_value[row_idx] =
+                            nanosecond_to_formatted_str(time_ns, time_format);
+                    } catch(const std::exception& e)
+                    {
+                        spdlog::warn("Failed to format time value '{}': {}", raw_value,
+                                     e.what());
+                        formatted_column_data[col_idx].formatted_row_value[row_idx] =
+                            raw_value;
+                    }
+                }
+            }
+        }
+    }
+}
+
 uint64_t
 MultiTrackTable::GetTrackIdHelper(
     const std::vector<std::vector<std::string>>& table_data) const

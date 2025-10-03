@@ -8,45 +8,61 @@
 #include <sstream>
 
 std::string
-RocProfVis::View::nanosecond_to_str(double time_point_ns) {
+RocProfVis::View::nanosecond_to_str(double time_point_ns, bool include_units) {
     std::ostringstream oss;
-    oss << static_cast<uint64_t>(time_point_ns) << " ns";
+    oss << static_cast<uint64_t>(time_point_ns);
+    if(include_units)
+    {
+        oss << " ns";
+    }
     return oss.str();
 }
 
 std::string
-RocProfVis::View::nanosecond_to_us_str(double ns)
+RocProfVis::View::nanosecond_to_us_str(double ns, bool include_units)
 {
     if(!std::isfinite(ns)) return "NaN";
     uint64_t           ns_uint = static_cast<uint64_t>(ns);
     uint64_t           us_uint = ns_uint / TimeConstants::ns_per_us;
     uint64_t           ns_rem  = ns_uint % TimeConstants::ns_per_us;
     std::ostringstream oss;
-    oss << us_uint << '.' << std::setw(3) << std::setfill('0') << ns_rem << " us";
+    oss << us_uint << '.' << std::setw(3) << std::setfill('0') << ns_rem;
+    if(include_units)
+    {
+        oss << " us";
+    }
     return oss.str();
 }
 
 std::string
-RocProfVis::View::nanosecond_to_ms_str(double ns)
+RocProfVis::View::nanosecond_to_ms_str(double ns, bool include_units)
 {
     if(!std::isfinite(ns)) return "NaN";
     uint64_t           ns_uint = static_cast<uint64_t>(ns);
     uint64_t           ms_uint = ns_uint / TimeConstants::ns_per_ms;
     uint64_t           ns_rem  = ns_uint % TimeConstants::ns_per_ms;
     std::ostringstream oss;
-    oss << ms_uint << '.' << std::setw(6) << std::setfill('0') << ns_rem << " ms";
+    oss << ms_uint << '.' << std::setw(6) << std::setfill('0') << ns_rem;
+    if(include_units)
+    {
+        oss << " ms";
+    }
     return oss.str();
 }
 
 std::string
-RocProfVis::View::nanosecond_to_s_str(double ns)
+RocProfVis::View::nanosecond_to_s_str(double ns, bool include_units)
 {
     if(!std::isfinite(ns)) return "NaN";
     uint64_t           ns_uint = static_cast<uint64_t>(ns);
     uint64_t           s_uint  = ns_uint / TimeConstants::ns_per_s;
     uint64_t           ns_rem  = ns_uint % TimeConstants::ns_per_s;
     std::ostringstream oss;
-    oss << s_uint << '.' << std::setw(9) << std::setfill('0') << ns_rem << " s";
+    oss << s_uint << '.' << std::setw(9) << std::setfill('0') << ns_rem;
+    if(include_units)
+    { 
+        oss << " s";
+    }
     return oss.str();
 }
 
@@ -136,7 +152,7 @@ RocProfVis::View::nanosecond_to_timecode_str(double time_point_ns,
 }
 
 std::string
-RocProfVis::View::nanosecond_to_formatted_str(double time_point_ns, TimeFormat format)
+RocProfVis::View::nanosecond_to_formatted_str(double time_point_ns, TimeFormat format, bool include_units)
 {
     switch(format)
     {
@@ -145,13 +161,13 @@ RocProfVis::View::nanosecond_to_formatted_str(double time_point_ns, TimeFormat f
         case TimeFormat::kTimecodeCondensed:
             return RocProfVis::View::nanosecond_to_timecode_str(time_point_ns, true);
         case TimeFormat::kSeconds:
-            return RocProfVis::View::nanosecond_to_s_str(time_point_ns);
+            return RocProfVis::View::nanosecond_to_s_str(time_point_ns, include_units);
         case TimeFormat::kMilliseconds:
-            return RocProfVis::View::nanosecond_to_ms_str(time_point_ns);
+            return RocProfVis::View::nanosecond_to_ms_str(time_point_ns, include_units);
         case TimeFormat::kMicroseconds:
-            return RocProfVis::View::nanosecond_to_us_str(time_point_ns);
+            return RocProfVis::View::nanosecond_to_us_str(time_point_ns, include_units);
         case TimeFormat::kNanoseconds:
-        default: return RocProfVis::View::nanosecond_to_str(time_point_ns);
+        default: return RocProfVis::View::nanosecond_to_str(time_point_ns, include_units);
     }
 }
 

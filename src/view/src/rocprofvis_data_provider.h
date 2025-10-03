@@ -276,13 +276,22 @@ typedef struct data_req_info_t
     uint64_t                           response_code;       // response code for the request
 } data_req_info_t;
 
+typedef struct formatted_column_data_t
+{
+    // this column needs formatting
+    bool needs_formatting;
+    //only populated if needs_formatting is true
+    std::vector<std::string> formatted_row_value;
+} formatted_column_info_t;
+
 typedef struct table_info_t
 {
     std::shared_ptr<TableRequestParams>   table_params;
     std::vector<std::string>              table_header;
     std::vector<std::vector<std::string>> table_data;
+    // formatted version of the table data but only for columns that need formatting
+    std::vector<formatted_column_info_t>  formatted_column_data;
     uint64_t                              total_row_count;
-
 } table_info_t;
 
 class DataProvider
@@ -514,6 +523,9 @@ public:
     std::shared_ptr<TableRequestParams>          GetTableParams(TableType type);
     uint64_t                                     GetTableTotalRowCount(TableType type);
     void                                         ClearTable(TableType type);
+    const std::vector<formatted_column_info_t>&  GetFormattedTableData(TableType type);
+    std::vector<formatted_column_info_t>&        GetMutableFormattedTableData(TableType type);
+
 
     const char*                                  GetProgressMessage();
 

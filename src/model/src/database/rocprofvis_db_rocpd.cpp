@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include "rocprofvis_db_rocpd.h"
+#include "rocprofvis_dm_trace.h"
 #include <sstream>
 #include <string.h>
 
@@ -74,8 +75,8 @@ rocprofvis_dm_result_t RocpdDatabase::RemapStringIds(rocprofvis_db_flow_data_t &
 
 const bool RocpdDatabase::RemapStringId(uint64_t & id)
 {
-    string_index_map_t::const_iterator pos = m_string_map.find(id);
-    if (pos == m_string_map.end()) return false;
+    string_index_map_t::const_iterator pos = m_string_index_map.find(id);
+    if (pos == m_string_index_map.end()) return false;
     id = pos->second;
     return true;
 }
@@ -83,8 +84,8 @@ const bool RocpdDatabase::RemapStringId(uint64_t & id)
 rocprofvis_dm_size_t RocpdDatabase::GetMemoryFootprint()
 {
     rocprofvis_dm_size_t size = sizeof(RocpdDatabase)+Database::GetMemoryFootprint();
-    size+=m_string_map.size()* (sizeof(uint64_t) + sizeof(uint32_t));
-    size+=m_string_map.size() * 3 * sizeof(void*);
+    size+=m_string_index_map.size()* (sizeof(uint64_t) + sizeof(uint32_t));
+    size+=m_string_index_map.size() * 3 * sizeof(void*);
     return size;
 }
 
@@ -166,7 +167,8 @@ int RocpdDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, c
     if (string_id == INVALID_INDEX) return 1;
     
     for (uint64_t id; ids >> id;) {   
-        db->m_string_map[id] = string_id;
+        db->m_string_index_map[id] = string_id;
+        db->m_string_id_map[string_id] = id;
         if (ids.peek() == ',') ids.ignore();
     }
     callback_params->future->CountThisRow();
@@ -253,17 +255,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Slice query by stream
                         "",
                         // Table query
-                     Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format(
-                       { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
-                           Builder::QParam("id"), 
-                           Builder::QParam("apiName", "category"),
-                           Builder::QParam("args", "name"), 
-                           Builder::QParam("start", Builder::START_SERVICE_NAME),
-                           Builder::QParam("end", Builder::END_SERVICE_NAME),
-                           Builder::QParam("(end-start)", "duration"),
-                           Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
-                           Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME) },
-                       { Builder::From("api") } })),
+                     GetEventOperationQuery(kRocProfVisDmOperationLaunch)
             },
                         &CallBackAddTrack)) break;
 
@@ -308,17 +300,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         // Slice query by stream
                         "",
                         // Table query
-                       Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format(
-                       { { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
-                           Builder::QParam("id"), 
-                           Builder::QParam("opType", "category"),
-                           Builder::QParam("description", "name"), 
-                           Builder::QParam("start", Builder::START_SERVICE_NAME),
-                           Builder::QParam("end", Builder::END_SERVICE_NAME),
-                           Builder::QParam("(end-start)", "duration"),
-                           Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
-                           Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME) },
-                         { Builder::From("op") } })),
+                     GetEventOperationQuery(kRocProfVisDmOperationDispatch)
             },
                         &CallBackAddTrack)) break;
 
@@ -361,15 +343,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                        { Builder::From("rocpd_monitor") } })),
                         // Slice query by stream
                         "",
-                     Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
-                       { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
-                           Builder::QParam("id"), 
-                           Builder::QParam("monitorType", Builder::COUNTER_NAME_SERVICE_NAME),
-                           Builder::QParam("CAST(value AS REAL)", "value"), 
-                           Builder::QParam("start", Builder::START_SERVICE_NAME),
-                           Builder::QParam("start", Builder::END_SERVICE_NAME),
-                           Builder::QParam("deviceId",  Builder::AGENT_ID_SERVICE_NAME)},
-                         { Builder::From("rocpd_monitor") } })),
+                     GetEventOperationQuery(kRocProfVisDmOperationNoOp)
             },
                         &CallBackAddTrack)) break;
 
@@ -657,6 +631,95 @@ rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t 
     delete internal_future;
 
     return future->SetPromise(result);
+}
+
+rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
+    rocprofvis_dm_string_table_filters_t     string_table_filters,
+    table_string_id_filter_map_t&            filter)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    if(num_string_table_filters > 0)
+    {
+        result = kRocProfVisDmResultUnknownError;
+        ROCPROFVIS_ASSERT_RETURN(BindObject()->trace_object, kRocProfVisDmResultInvalidParameter);
+        std::vector<rocprofvis_dm_index_t> string_indices;
+        result = ((Trace*)BindObject()->trace_object)->GetStringIndicesWithSubstring(num_string_table_filters, string_table_filters, string_indices);
+        ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
+        std::string string;
+        for(const rocprofvis_dm_index_t& index : string_indices)
+        {
+            string += string.empty() ? "\"" + std::string(((Trace*)BindObject()->trace_object)->GetStringAt(index)) + "\"" 
+                : ", \"" + std::string(((Trace*)BindObject()->trace_object)->GetStringAt(index)) + "\"";
+        }
+        if(!string.empty())
+        {
+            filter[kRocProfVisDmOperationLaunch] = " category IN (" + string + ") OR name IN (" + string;
+            filter[kRocProfVisDmOperationDispatch] = " category IN (" + string + ") OR name IN (" + string;
+        }
+    }   
+    return result;
+}
+
+rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm_event_operation_t operation)
+{
+    switch(operation)
+    {
+        case kRocProfVisDmOperationLaunch:
+        {
+            return Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                Builder::QParam("id"), 
+                Builder::QParam("apiName", "category"),
+                Builder::QParam("args", "name"), 
+                Builder::QParam("start", Builder::START_SERVICE_NAME),
+                Builder::QParam("end", Builder::END_SERVICE_NAME),
+                Builder::QParam("(end-start)", "duration"),
+                Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
+                Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME) },
+            { Builder::From("api") } }));
+        }
+        case kRocProfVisDmOperationDispatch:
+        {
+            return Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
+                Builder::QParam("id"), 
+                Builder::QParam("opType", "category"),
+                Builder::QParam("description", "name"), 
+                Builder::QParam("start", Builder::START_SERVICE_NAME),
+                Builder::QParam("end", Builder::END_SERVICE_NAME),
+                Builder::QParam("(end-start)", "duration"),
+                Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
+                Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME) },
+            { Builder::From("op") } }));
+        }
+        case kRocProfVisDmOperationNoOp:
+        {
+            return Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                Builder::QParam("id"), 
+                Builder::QParam("monitorType", Builder::COUNTER_NAME_SERVICE_NAME),
+                Builder::QParam("CAST(value AS REAL)", "value"), 
+                Builder::QParam("start", Builder::START_SERVICE_NAME),
+                Builder::QParam("start", Builder::END_SERVICE_NAME),
+                Builder::QParam("deviceId",  Builder::AGENT_ID_SERVICE_NAME)},
+            { Builder::From("rocpd_monitor") } }));
+        }
+        default:
+        {
+            return "";
+        }
+    }
+}
+
+rocprofvis_dm_result_t RocpdDatabase::StringIndexToId(rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+    if(m_string_id_map.count(index) > 0)
+    {
+        id = m_string_id_map.at(index);
+        result = kRocProfVisDmResultSuccess;
+    }
+    return result;
 }
 
 rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(

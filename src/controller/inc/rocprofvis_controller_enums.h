@@ -165,6 +165,8 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerGetDmMessage = 0x00000017,
     // Get last stored data-model progress in percent 
     kRPVControllerGetDmProgress = 0x00000018,
+    // Global event search table controller
+    kRPVControllerSearchResultsTable = 0x00000019,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {
@@ -738,12 +740,17 @@ typedef enum rocprofvis_controller_table_arguments_t
     kRPVControllerTableArgsFilter = 0xE0000009,
     kRPVControllerTableArgsGroup = 0xE000000A,
     kRPVControllerTableArgsGroupColumns = 0xE000000B,
+    kRPVControllerTableArgsNumOpTypes = 0xE000000C,
+    kRPVControllerTableArgsOpTypesIndexed = 0xE000000D,
+    kRPVControllerTableNumStringTableFilters = 0xE000000E,
+    kRPVControllerTableStringTableFiltersIndexed = 0xE000000F,
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t
 {
     kRPVControllerTableTypeEvents = 0xF0000000,
     kRPVControllerTableTypeSamples = 0xF0000001,
+    kRPVControllerTableTypeSearchResults = 0xF0000002,
 } rocprofvis_controller_table_type_t;
 
 /*

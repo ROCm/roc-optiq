@@ -21,7 +21,7 @@ public:
     MultiTrackTable(DataProvider&                      dp,
                     std::shared_ptr<TimelineSelection> timeline_selection,
                     TableType table_type = TableType::kEventTable);
-
+    void Render() override;
     void Update() override;
 
     void HandleTrackSelectionChanged();
@@ -40,7 +40,7 @@ private:
         kNumImportantColumns
     };
 
-    void FetchData(const TableRequestParams& params) const override;
+    bool XButton(const char* id) const;
     void RenderContextMenu() const override;
 
     uint64_t GetTrackIdHelper(

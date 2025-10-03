@@ -34,6 +34,7 @@ class RocpdDatabase : public ProfileDatabase
 {
     // type of map array for string indexes remapping
     typedef std::unordered_map<uint64_t, uint32_t> string_index_map_t;
+    typedef std::unordered_map<rocprofvis_dm_index_t, rocprofvis_dm_id_t> string_id_map_t;
 
     // map array for fast non-PMC track ID search
     typedef std::map<uint32_t, uint32_t> sub_process_map_t;
@@ -85,6 +86,17 @@ public:
                                            rocprofvis_dm_timestamp_t end,
                                            rocprofvis_dm_charptr_t new_db_path,
                                            Future* future) override;
+
+    rocprofvis_dm_result_t BuildTableStringIdFilter(
+                                    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+                                    rocprofvis_dm_string_table_filters_t string_table_filters,
+                                    table_string_id_filter_map_t& filter) override;
+
+    rocprofvis_dm_string_t GetEventOperationQuery(
+                                        const rocprofvis_dm_event_operation_t operation) override;
+
+    rocprofvis_dm_result_t StringIndexToId(
+                                        rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id) override;
     
 private:
     // sqlite3_exec callback to process track information query and add track object to Trace container
@@ -110,7 +122,8 @@ private:
     static int CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
 
     // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
-    string_index_map_t m_string_map;
+    string_index_map_t m_string_index_map; // id to index
+    string_id_map_t m_string_id_map; // index to id
 
     // method to remap string IDs. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     // @param record - event record structure

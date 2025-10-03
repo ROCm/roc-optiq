@@ -2,7 +2,6 @@
 
 #include "rocprofvis_multi_track_table.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -36,6 +35,21 @@ MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
     m_widget_name = (table_type == TableType::kEventTable)
                         ? GenUniqueName("Event Table")
                         : GenUniqueName("Sample Table");
+
+    //subscribe to time format changed event
+    auto format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        // Reformat time columns
+        FormatData();
+    };
+
+    m_format_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), format_changed_handler);
+}
+
+MultiTrackTable::~MultiTrackTable()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), m_format_changed_token);
 }
 
 void
@@ -186,14 +200,18 @@ MultiTrackTable::Update()
 
 void
 MultiTrackTable::FormatData() 
-{
+{    
     const std::vector<std::string>& column_names =
     m_data_provider.GetTableHeader(m_table_type);
     const std::vector<std::vector<std::string>>& table_data =
     m_data_provider.GetTableData(m_table_type);
     std::vector<formatted_column_info_t>& formatted_column_data =
     m_data_provider.GetMutableFormattedTableData(m_table_type);
-    
+ 
+    // clear previous formatting info
+    formatted_column_data.clear();
+    formatted_column_data.resize(column_names.size());
+
     SettingsManager& settings = SettingsManager::GetInstance();
     auto time_format = settings.GetUserSettings().unit_settings.time_format;
 

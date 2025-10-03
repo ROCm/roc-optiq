@@ -136,7 +136,7 @@ public:
     // User settings
     UserSettings&       GetUserSettings();
     const UserSettings& GetDefaultUserSettings() const;
-    void                ApplyUserSettings(bool save_json = false);
+    void ApplyUserSettings(const UserSettings& old_settings, bool save_json = false);
 
     // Internal settings
     InternalSettings& GetInternalSettings();
@@ -159,10 +159,11 @@ private:
 
     void SerializeDisplaySettings(jt::Json& json);
     void DeserializeDisplaySettings(jt::Json& json);
-    void ApplyUserDisplaySettings();
+    void ApplyUserDisplaySettings(const UserSettings& old_settings);
 
     void SerializeUnitSettings(jt::Json& json);
     void DeserializeUnitSettings(jt::Json& json);
+    void ApplyUserUnitSettings(const UserSettings& old_settings);
 
     void SerializeInternalSettings(jt::Json& json);
     void DeserializeInternalSettings(jt::Json& json);

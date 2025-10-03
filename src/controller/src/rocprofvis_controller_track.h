@@ -59,6 +59,7 @@ private:
     double m_end_timestamp;
     double m_min_value;
     double m_max_value;
+    uint64_t                           m_histogram_bins;
     std::string m_name;
     rocprofvis_dm_track_t m_dm_handle;
     Thread* m_thread;
@@ -66,6 +67,7 @@ private:
     Stream* m_stream;
     Counter* m_counter;
     Trace* m_ctx;
+
     std::condition_variable_any  m_cv;
 
 

@@ -193,7 +193,16 @@ class ProfileDatabase : public SqliteDatabase
        // @return SQLITE_OK if successful
         static int CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt* stmt,
                                                 char** azColName);
-        static int CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
+        // sqlite3_exec callback to collect histogram bin timestamps and counts
+        // value/level
+        // @param data - pointer to callback caller argument
+        // @param argc - number of columns in the query
+        // @param argv - pointer to row values
+        // @param azColName - pointer to column names
+        // @return SQLITE_OK if successful
+         static int CallbackTraceHistogram(void* data, int argc, sqlite3_stmt* stmt,
+                                              char** azColName);
+         static int CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
                                           char** azColName);
         static rocprofvis_event_data_category_enum_t GetColumnDataCategory(
             const rocprofvis_event_data_category_map_t category_map,

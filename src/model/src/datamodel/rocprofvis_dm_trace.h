@@ -26,6 +26,7 @@
 #include "rocprofvis_dm_ext_data.h"
 #include "rocprofvis_dm_track.h"
 #include "rocprofvis_dm_table.h"
+#include "rocprofvis_dm_histogram.h"    
 #include <vector> 
 #include <memory> 
 #include <map>
@@ -50,6 +51,8 @@ class Trace : public DmBase{
         ~Trace(){}
         // Returns trace start time, as uint64_t timestamp
         rocprofvis_dm_timestamp_t                       StartTime() {return m_parameters.start_time;}
+        //Returns histogram bin count
+        uint64_t                                        HistogramBinCount() { return m_parameters.global_histogram->size(); }
         // Returns trace end time, as uint64_t timestamp
         rocprofvis_dm_timestamp_t                       EndTime() {return m_parameters.end_time;}
         // Return number of track objects
@@ -64,6 +67,8 @@ class Trace : public DmBase{
         std::shared_mutex*                              Mutex() override { return &m_lock; }
 
         std::shared_mutex*                              EventPropertyMutex(rocprofvis_dm_event_property_type_t type){ return &m_event_property_lock[type];}
+
+ 
 
         // Method to bind database object
         // @param db - pointer to database
@@ -144,6 +149,11 @@ class Trace : public DmBase{
         // @param extinfo - reference to extended info handle
         // @return status of operation  
         rocprofvis_dm_result_t                          GetExtInfoHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_extdata_t & extinfo);
+        // Method to get histogram info handle for specified event id
+        // @param event_id - 60-bit event id and 4-bit operation type
+        // @param extinfo - reference to extended info handle
+        // @return status of operation  
+        rocprofvis_dm_result_t GetHistogramHandle(rocprofvis_dm_histogram_t& histogram);
         // Method to get queried table handle at specified index  
         // @param id - id of queried table
         // @param extinfo - reference to table handle
@@ -210,6 +220,19 @@ class Trace : public DmBase{
         // @param description - pointer to table description string
         // @return status of operation           
         static rocprofvis_dm_table_t                    AddTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description);
+
+        // Static method to add new histogram. Used by database component via binding
+        // interface
+        // @param object - trace object handle to add table object to.
+        // @param query - pointer to table query string
+        // @param description - pointer to table description string
+        // @return status of operation
+        static rocprofvis_dm_histogram_t AddHistogram(
+            const rocprofvis_dm_trace_t object,
+                                              rocprofvis_dm_charptr_t     query,
+                                              rocprofvis_dm_charptr_t     description);
+
+
         // Static method to add new empty row to table object. Used by database component via binding interface
         // @param object - table object handle to add new row to.
         // @return status of operation  
@@ -253,6 +276,8 @@ class Trace : public DmBase{
         std::vector<std::shared_ptr<ExtData>>           m_ext_data;
         // vector array of Table objects
         std::vector<std::shared_ptr<Table>>             m_tables;
+        // Histogram Object
+        std::shared_ptr<Histogram>                          m_histogram;
         // vector array of strings
         std::vector<std::string>                        m_strings;
         // map of every event level in graph

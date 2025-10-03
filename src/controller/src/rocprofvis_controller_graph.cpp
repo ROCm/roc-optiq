@@ -643,6 +643,13 @@ Graph::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerGraphHistogramBins:
+            {
+                result =
+                    m_track->GetUInt64(kRPVControllerTrackHistogramBins, index, value);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerCommonMemoryUsageExclusive:
             {
                 *value = sizeof(Graph);

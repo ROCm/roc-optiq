@@ -21,6 +21,7 @@
 #include "rocprofvis_db_rocprof.h"
 #include <sstream>
 #include <string.h>
+#include "rocprofvis_dm_histogram.h" 
 
 namespace RocProfVis
 {
@@ -642,6 +643,54 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         {
             break;
         }
+
+
+        //Histogram Code 
+        const rocprofvis_dm_timestamp_t start_time = TraceProperties()->start_time;
+        const rocprofvis_dm_timestamp_t end_time   = TraceProperties()->end_time;
+        constexpr int                   num_bins   = 100;
+
+        // Allocate and fill histogram bins on the heap
+        auto* bin_timestamps = new std::vector<rocprofvis_dm_timestamp_t>(num_bins + 1);
+        rocprofvis_dm_timestamp_t bin_size =
+            (end_time > start_time) ? (end_time - start_time) / num_bins : 1;
+        for(int bin = 0; bin <= num_bins; ++bin)
+        {
+            (*bin_timestamps)[bin] = start_time + bin * bin_size;
+        }
+        TraceProperties()->histogram_timestamps = bin_timestamps;
+
+        // Allocate and resize global histogram
+        TraceProperties()->global_histogram = new std::vector<uint64_t>(num_bins + 1);
+
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_region;",
+                           &CallbackTraceHistogram))
+            break;
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_kernel_dispatch;",
+                           &CallbackTraceHistogram))
+            break;
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_memory_copy;",
+                           &CallbackTraceHistogram))
+            break;
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_memory_allocate;",
+                           &CallbackTraceHistogram))
+            break;
+
+        // Create the histogram object in the Trace data model
+        rocprofvis_dm_histogram_t histogram = BindObject()->FuncAddHistogram(
+            BindObject()->trace_object, nullptr,
+                                       "Global Timeline Histogram");
+        if(histogram && TraceProperties()->global_histogram)
+        {
+            // Cast to your Histogram class if needed
+            auto* histogram_obj = static_cast<Histogram*>(histogram);
+            histogram_obj->SetBins(*TraceProperties()->global_histogram);
+        }
+          
 
         TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );

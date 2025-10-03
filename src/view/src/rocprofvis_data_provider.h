@@ -406,6 +406,7 @@ public:
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
+
     /*
      * Fetches a table from the controller for a single track.
      * @param table_params: The parameters for the table request
@@ -567,6 +568,7 @@ private:
     rocprofvis_controller_t*          m_trace_controller;
     rocprofvis_controller_timeline_t* m_trace_timeline;
 
+
     ProviderState m_state;
 
     uint64_t    m_num_graphs;       // number of graphs contained in the trace
@@ -605,6 +607,7 @@ private:
     std::string  m_progress_mesage;
     // Current loading status progress in percents
     uint64_t    m_progress_percent;
+    std::vector<uint64_t> m_histogram_bins;
 };
 
 }  // namespace View

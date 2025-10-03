@@ -55,6 +55,7 @@ private:
     std::vector<Graph*> m_graphs;
     double m_min_ts;
     double m_max_ts;
+    uint64_t m_histogram_bins;
 };
 
 }

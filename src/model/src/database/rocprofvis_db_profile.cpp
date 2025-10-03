@@ -95,6 +95,60 @@ ProfileDatabase::CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt
     return 0;
 }
 
+
+int
+ProfileDatabase::CallbackTraceHistogram(void* data, int argc, sqlite3_stmt* stmt,
+                                      char** azColName)
+{
+    auto* callback_params = static_cast<rocprofvis_db_sqlite_callback_parameters*>(data);
+    auto* db              = static_cast<ProfileDatabase*>(callback_params->db);
+
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
+
+    // Get histogram bins and values
+    const auto& histogram_bin =
+        *db->TraceProperties()
+             ->histogram_timestamps;  // vector<rocprofvis_dm_timestamp_t>
+    auto* histogram_values = db->TraceProperties()->global_histogram;  // vector<int>*
+
+    uint64_t start = sqlite3_column_int64(stmt, 0);
+    uint64_t end   = sqlite3_column_int64(stmt, 1);
+
+    // Find the first bin the event overlaps
+    size_t first_bin = 0;
+    size_t last_bin  = 0;
+    size_t num_bins  = histogram_bin.size() - 1;
+
+    // Find the first bin where start < bin_end
+    for(size_t bin = 0; bin < num_bins; ++bin)
+    {
+        if(start < histogram_bin[bin + 1])
+        {
+            first_bin = bin;
+            break;
+        }
+    }
+
+    // Find the last bin where end > bin_start
+    for(size_t bin = first_bin; bin < num_bins; ++bin)
+    {
+        if(end <= histogram_bin[bin + 1])
+        {
+            last_bin = bin;
+            break;
+        }
+        last_bin = bin;
+    }
+
+    // Increment all bins in the range [first_bin, last_bin]
+    for(size_t bin = first_bin; bin <= last_bin && bin < num_bins; ++bin)
+    {
+        (*histogram_values)[bin]++;
+    }
+
+    return SQLITE_OK;
+}
+
 int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_stmt* stmt,
                                             char** azColName)
 {

@@ -145,6 +145,14 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerTrackIndexed = 0x00000008,
     // Global sample table controller
     kRPVControllerSampleTable = 0x00000009,
+    //Histogram object
+    kRPVControllerHistogram = 0x0000000A,
+    // Histogram bins
+    kRPVControllerHistogramBins = 0x0000000B,   
+    // Histogram data
+    kRPVControllerHistogramBinValue = 0x0000000C,
+    //Histogram bin count 
+    kRPVControllerTrackHistogramBinCount = 0x0000000D,
 #ifdef COMPUTE_UI_SUPPORT
     // Compute trace controller
     kRPVControllerComputeTrace = 0x00000010,
@@ -195,6 +203,11 @@ typedef enum rocprofvis_controller_timeline_properties_t
     kRPVControllerTimelineGraphIndexed = 0x10000004,
     // Graphs by Id
     kRPVControllerTimelineGraphById = 0x10000005,
+    //Histogram Bins
+    kRPVControllerTimelineHistogramBins = 0x10000006,
+    //Histogram Object
+    kRPVControllerTimelineHistogram = 0x10000007,
+
 } rocprofvis_controller_timeline_properties_t;
 /* JSON: RPVTimeline
 {
@@ -454,7 +467,10 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackCounter = 0x30000012,
     // The CPU stream that the track represents - can be NULL
     kRPVControllerTrackStream   = 0x30000013,
-} rocprofvis_controller_track_properties_t;
+    // Histogram Bins
+    kRPVControllerTrackHistogramBins = 0x30000014,
+ 
+ } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {
     track_type: rocprofvis_controller_track_type_t,
@@ -660,6 +676,8 @@ typedef enum rocprofvis_controller_graph_properties_t
     // Notionally indexed entries in the graph
     // Actually loaded via an async. API to prepare for RPC.
     kRPVControllerGraphEntryIndexed = 0x80000006,
+    // Histogram Bins
+    kRPVControllerGraphHistogramBins = 0x80000007,  
 } rocprofvis_controller_graph_properties_t;
 /* JSON: RPVGraph
 {

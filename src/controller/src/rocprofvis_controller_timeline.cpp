@@ -24,6 +24,7 @@ Timeline::Timeline(uint64_t id)
 : m_id(id)
 , m_min_ts(DBL_MAX)
 , m_max_ts(DBL_MIN)
+, m_histogram_bins()
 {
 }
 
@@ -92,6 +93,12 @@ rocprofvis_result_t Timeline::GetUInt64(rocprofvis_property_t property, uint64_t
     {
         switch(property)
         {
+            case kRPVControllerTimelineHistogramBins:
+            {
+                *value = m_histogram_bins;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerCommonMemoryUsageInclusive:
             {
                 *value = sizeof(Timeline);
@@ -371,6 +378,14 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
                             is_replace = true;
                             break;
                         }
+                    }
+
+                    uint64_t histogram_bins = 0;
+                    if((graph.Get()->GetUInt64(kRPVControllerGraphHistogramBins, 0,
+                                               &histogram_bins) ==
+                        kRocProfVisResultSuccess))
+                    {
+                        m_histogram_bins = histogram_bins;
                     }
 
                     double min_ts = 0;

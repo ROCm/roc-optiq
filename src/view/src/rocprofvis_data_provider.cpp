@@ -460,12 +460,25 @@ DataProvider::HandleLoadTrace()
             // Load the system topology
             HandleLoadSystemTopology();
 
-            result = rocprofvis_controller_get_object(
+           
+
+          result = rocprofvis_controller_get_object(
                 m_trace_controller, kRPVControllerTimeline, 0, &m_trace_timeline);
 
+            rocprofvis_handle_t* histogram = nullptr;
+            result                         = rocprofvis_controller_get_object(
+                m_trace_controller, kRPVControllerHistogram, 0, &histogram);
+
+   
             // store timeline meta data
             if(result == kRocProfVisResultSuccess && m_trace_timeline)
             {
+
+
+                uint64_t bins = 0;
+                result = rocprofvis_controller_get_uint64(
+                    m_trace_timeline, kRPVControllerTimelineHistogramBins, 0, &bins);
+                bins;
                 m_num_graphs = 0;
                 result       = rocprofvis_controller_get_uint64(
                     m_trace_timeline, kRPVControllerTimelineNumGraphs, 0, &m_num_graphs);

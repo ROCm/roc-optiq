@@ -51,6 +51,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddStackFrame = AddStackFrame;
     m_binding_info.FuncAddExtData = AddExtData;
     m_binding_info.FuncAddExtDataRecord = AddExtDataRecord;
+    m_binding_info.FuncAddHistogram             = AddHistogram;  // AddHistogram;    
     m_binding_info.FuncAddTable = AddTable;
     m_binding_info.FuncAddTableRow = AddTableRow;
     m_binding_info.FuncAddTableColumn = AddTableColumn;
@@ -403,6 +404,20 @@ rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t ob
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_histogram_t Trace::AddHistogram(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t /*query*/, rocprofvis_dm_charptr_t description)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
+    Trace* trace = (Trace*)object;
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
+    try {
+        trace->m_histogram = std::make_shared<Histogram>(trace, description);
+    }
+    catch (std::exception& ex) {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failure allocating histogram object", nullptr);
+    }
+    return trace->m_histogram.get();
+}
+
 
 rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
@@ -588,6 +603,11 @@ rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t prop
         case kRPVDMStartTimeUInt64:
             *value = StartTime();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMHistogramBins:
+            *value = HistogramBinCount();
+            return kRocProfVisDmResultSuccess;
+ 
+            return kRocProfVisDmResultSuccess;
         case kRPVDMEndTimeUInt64:
             *value = EndTime();
             return kRocProfVisDmResultSuccess;
@@ -606,6 +626,7 @@ rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t prop
 
 }
 
+ 
 
 rocprofvis_dm_result_t    Trace::GetPropertyAsHandle(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
@@ -618,6 +639,8 @@ rocprofvis_dm_result_t    Trace::GetPropertyAsHandle(rocprofvis_dm_property_t pr
             return kRocProfVisDmResultSuccess;
         case kRPVDMFlowTraceHandleByEventID:
             return GetFlowTraceHandle(*(rocprofvis_dm_event_id_t*)&index, *value);
+        case kRPVDMHistogramHandle: 
+             return GetHistogramHandle(*value);
         case kRPVDMStackTraceHandleByEventID:
             return GetStackTraceHandle(*(rocprofvis_dm_event_id_t*)&index, *value);
         case kRPVDMExtInfoHandleByEventID:
@@ -661,6 +684,17 @@ const char*  Trace::GetPropertySymbol(rocprofvis_dm_property_t property) {
 }
 #endif
 
+rocprofvis_dm_result_t
+Trace::GetHistogramHandle(rocprofvis_dm_histogram_t& histogram)
+{
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+    if(m_histogram)
+    {
+        histogram = m_histogram.get();
+        return kRocProfVisDmResultSuccess;
+    }
+    return kRocProfVisDmResultNotLoaded;
+}
 
 rocprofvis_dm_result_t Trace::GetExtInfoHandle(rocprofvis_dm_event_id_t event_id, rocprofvis_dm_extdata_t & extinfo){
     

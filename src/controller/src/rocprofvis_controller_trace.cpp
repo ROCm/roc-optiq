@@ -59,6 +59,7 @@ Trace::Trace()
 , m_sample_table(nullptr)
 , m_dm_handle(nullptr)
 , m_mem_mgmt(nullptr)
+, m_histogram(nullptr)
 , m_dm_progress_percent(0)
 #ifdef COMPUTE_UI_SUPPORT
 , m_compute_trace(nullptr)
@@ -418,9 +419,22 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                             rocprofvis_dm_timestamp_t     start_time;
                             rocprofvis_dm_timestamp_t     end_time;
                             rocprofvis_db_num_of_tracks_t num_tracks;
+                            uint64_t                      histogram_bins;
 
                             start_time = rocprofvis_dm_get_property_as_uint64(
                                 m_dm_handle, kRPVDMStartTimeUInt64, 0);
+                            histogram_bins = rocprofvis_dm_get_property_as_uint64(
+                                m_dm_handle, kRPVDMHistogramBins, 0);
+  
+                            rocprofvis_dm_handle_t histogram_handle = nullptr;
+                            rocprofvis_dm_result_t status =
+                                rocprofvis_dm_get_property_as_handle(
+                                    m_dm_handle, kRPVDMHistogramHandle, 0,
+                                    &histogram_handle);
+                            m_histogram = &histogram_handle;
+ 
+                            
+
                             end_time = rocprofvis_dm_get_property_as_uint64(
                                 m_dm_handle, kRPVDMEndTimeUInt64, 0);
                             num_tracks = (rocprofvis_db_num_of_tracks_t)
@@ -486,6 +500,11 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                         track->SetUInt64(
                                             kRPVControllerTrackNumberOfEntries, 0,
                                             num_records);
+
+                                        track->SetUInt64(kRPVControllerTrackHistogramBins,
+                                                         0, histogram_bins);
+
+
                                         double min_ts =
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
@@ -516,6 +535,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                          0, max_value);
                                         track->SetUInt64(kRPVControllerTrackNode, 0,
                                                          node);
+
 
                                         uint64_t num_ext_data = 0;
                                         track->GetUInt64(
@@ -2639,6 +2659,21 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerHistogramBinValue:
+            {
+                rocprofvis_dm_result_t status = rocprofvis_dm_get_property_as_uint64(
+                    m_histogram, kRPVDMHistogramBinValue, index, value);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTrackHistogramBinCount:
+            {
+               
+                rocprofvis_dm_result_t status = rocprofvis_dm_get_property_as_uint64(
+                    m_histogram, kRPVDMHistogramBinCount, index, value);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerId:
             {
                 *value = m_id;
@@ -2737,6 +2772,12 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
     {
         switch (property)
         {
+            case kRPVControllerHistogram:
+            {
+                *value = (rocprofvis_handle_t*) m_histogram;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerTimeline:
             {
                 *value = (rocprofvis_handle_t*)m_timeline;

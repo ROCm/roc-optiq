@@ -36,6 +36,7 @@ typedef     rocprofvis_dm_handle_t        rocprofvis_dm_flowtrace_t;            
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_stacktrace_t;                   // Stack trace object handle
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_extdata_t;                      // External data object handle
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_table_t;                        // Table object handle
+typedef     rocprofvis_dm_handle_t        rocprofvis_dm_histogram_t;                    // Histogram object handle
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_table_row_t;                    // Table row object handle
 typedef     uint32_t                      rocprofvis_dm_index_t;                        // Any data model array index, assuming array sizes will not exceed 32-bit value
 typedef     uint64_t                      rocprofvis_dm_timestamp_t;                    // Timestamp
@@ -182,7 +183,16 @@ typedef enum  rocprofvis_dm_trace_property_t {
     // Handle of a SQL query result table, by specified index  
     kRPVDMTableHandleByID,
     // Database handle
-	kRPVDMDatabaseHandle
+	kRPVDMDatabaseHandle,
+    //Histogram bins
+    kRPVDMHistogramBins,
+    // Histogram handle
+    kRPVDMHistogramHandle,
+    //Histogram bin total
+    kRPVDMHistogramBinValue,
+    // Histogram bin count
+    kRPVDMHistogramBinCount,
+   
 } rocprofvis_dm_trace_property_t;
 
 // Track properties

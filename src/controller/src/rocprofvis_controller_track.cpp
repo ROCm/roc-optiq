@@ -423,7 +423,7 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
-    {
+    { 
         switch(property)
         {
             case kRPVControllerCommonMemoryUsageInclusive:
@@ -444,6 +444,12 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                         break;
                     }
                 }
+                break;
+            }
+            case kRPVControllerTrackHistogramBins:
+            {
+                *value = m_histogram_bins;
+                result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerCommonMemoryUsageExclusive:
@@ -518,6 +524,7 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
+        
             case kRPVControllerTrackMinTimestamp:
             {
                 *value = m_start_timestamp;
@@ -695,6 +702,12 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
             result = kRocProfVisResultReadOnlyError;
             break;
         }
+        case kRPVControllerTrackHistogramBins:
+        {
+            m_histogram_bins = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
         case kRPVControllerTrackType:
         {
             m_type = (rocprofvis_controller_track_type_t)value;
@@ -748,6 +761,7 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
             result = kRocProfVisResultSuccess;
             break;
         }
+
         case kRPVControllerTrackMaxTimestamp:
         {
             m_end_timestamp = value;

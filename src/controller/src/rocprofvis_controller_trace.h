@@ -87,6 +87,7 @@ private:
     std::vector<Node*> m_nodes;
     uint64_t              m_id;
     Timeline*             m_timeline;
+    rocprofvis_dm_handle_t* m_histogram;
     SystemTable*          m_event_table;
     SystemTable*          m_sample_table;
     rocprofvis_dm_trace_t m_dm_handle;

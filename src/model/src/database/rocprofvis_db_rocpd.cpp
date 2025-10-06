@@ -465,9 +465,50 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             break;
         }
 
+         // Histogram Code
+        const rocprofvis_dm_timestamp_t start_time = TraceProperties()->start_time;
+        const rocprofvis_dm_timestamp_t end_time   = TraceProperties()->end_time;
+        constexpr int                   num_bins   = 400;
+
+             // Allocate and fill histogram bins on the heap
+        auto* bin_timestamps = new std::vector<rocprofvis_dm_timestamp_t>(num_bins + 1);
+        rocprofvis_dm_timestamp_t bin_size =
+            (end_time > start_time) ? (end_time - start_time) / num_bins : 1;
+        for(int bin = 0; bin <= num_bins; ++bin)
+        {
+            (*bin_timestamps)[bin] = start_time + bin * bin_size;
+        }
+        TraceProperties()->histogram_timestamps = bin_timestamps;
 
 
-     
+
+
+
+      TraceProperties()->global_histogram = new std::vector<uint64_t>(num_bins + 1);
+
+        // Collect histogram data from each table directly
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_api;",
+                           &CallbackTraceHistogram))
+            break;
+        if(kRocProfVisDmResultSuccess !=
+           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_op;",
+                           &CallbackTraceHistogram))
+            break;
+    
+        std::vector<uint64_t>  ssss = *TraceProperties() -> global_histogram;
+
+        // Create the histogram object in the Trace data model
+        rocprofvis_dm_histogram_t histogram = BindObject()->FuncAddHistogram(
+            BindObject()->trace_object, nullptr, "Global Timeline Histogram");
+        if(histogram && TraceProperties()->global_histogram)
+        {
+            auto* histogram_obj = static_cast<Histogram*>(histogram);
+            histogram_obj->SetBins(*TraceProperties()->global_histogram);
+        }
+
+
+
 
         TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );

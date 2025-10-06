@@ -424,9 +424,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
 
                             start_time = rocprofvis_dm_get_property_as_uint64(
                                 m_dm_handle, kRPVDMStartTimeUInt64, 0);
-                            histogram_bins = rocprofvis_dm_get_property_as_uint64(
-                                m_dm_handle, kRPVDMHistogramBins, 0);
-  
+                     
                             rocprofvis_dm_handle_t histogram_handle = nullptr;
                             rocprofvis_dm_result_t status =
                                 rocprofvis_dm_get_property_as_handle(
@@ -2697,14 +2695,7 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerTrackHistogramBinCount:
-            {
-               
-                rocprofvis_dm_result_t status = rocprofvis_dm_get_property_as_uint64(
-                    m_histogram, kRPVDMHistogramBins, index, value);
-                result = kRocProfVisResultSuccess;
-                break;
-            }
+            
             case kRPVControllerId:
             {
                 *value = m_id;

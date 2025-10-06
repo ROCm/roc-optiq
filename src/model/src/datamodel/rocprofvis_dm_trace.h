@@ -51,8 +51,6 @@ class Trace : public DmBase{
         ~Trace(){}
         // Returns trace start time, as uint64_t timestamp
         rocprofvis_dm_timestamp_t                       StartTime() {return m_parameters.start_time;}
-        //Returns histogram bin count
-        uint64_t                                        HistogramBinCount() { return m_parameters.global_histogram->size(); }
         // Returns trace end time, as uint64_t timestamp
         rocprofvis_dm_timestamp_t                       EndTime() {return m_parameters.end_time;}
         // Return number of track objects

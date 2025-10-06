@@ -604,11 +604,6 @@ rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t prop
         case kRPVDMStartTimeUInt64:
             *value = StartTime();
             return kRocProfVisDmResultSuccess;
-        case kRPVDMHistogramBins:
-            *value = HistogramBinCount();
-            return kRocProfVisDmResultSuccess;
- 
-            return kRocProfVisDmResultSuccess;
         case kRPVDMEndTimeUInt64:
             *value = EndTime();
             return kRocProfVisDmResultSuccess;

@@ -154,6 +154,7 @@ int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_st
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(argc == 5, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+ 
     void *func = (void*)&CallbackGetTrackProperties;
     rocprofvis_db_sqlite_callback_parameters* callback_params =
         (rocprofvis_db_sqlite_callback_parameters*) data;

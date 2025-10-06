@@ -648,9 +648,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         //Histogram Code 
         const rocprofvis_dm_timestamp_t start_time = TraceProperties()->start_time;
         const rocprofvis_dm_timestamp_t end_time   = TraceProperties()->end_time;
-        constexpr int                   num_bins   = 10000;
+        constexpr int                   num_bins   = 300;
 
-        spdlog::debug("HISTOGRAM START");  
 
         // Allocate and fill histogram bins on the heap
         auto* bin_timestamps = new std::vector<rocprofvis_dm_timestamp_t>(num_bins + 1);
@@ -692,8 +691,6 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             histogram_obj->SetBins(*TraceProperties()->global_histogram);
         }
           
-        spdlog::debug("HISTOGRAM DONE");  
-
         TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
         return future->SetPromise(kRocProfVisDmResultSuccess);

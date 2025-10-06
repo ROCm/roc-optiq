@@ -188,6 +188,10 @@ TrackDetails::RenderTable(InfoTable& table)
                     ImGui::PushID(c);
                     ImGui::TableSetColumnIndex(c);
                     const char* data             = table.cells[r][c].data.c_str();
+                    if(table.cells[r][c].needs_format) {
+                        data = table.cells[r][c].formatted.c_str();
+                    }
+                    
                     bool&       expand           = table.cells[r][c].expand;
                     ImVec2      cursor_pos_local = ImGui::GetCursorPos();
                     ImVec2      cursor_pos_abs   = ImGui::GetCursorScreenPos();

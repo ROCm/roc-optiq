@@ -32,6 +32,7 @@ Trace::Trace()
     m_parameters.start_time=0;
     m_parameters.end_time=0;
     m_parameters.metadata_loaded=false;
+    m_parameters.global_histogram = {};
 }
 
 rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* & bind_data)
@@ -404,7 +405,7 @@ rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t ob
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_histogram_t Trace::AddHistogram(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t /*query*/, rocprofvis_dm_charptr_t description)
+rocprofvis_dm_histogram_t Trace::AddHistogram(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t, rocprofvis_dm_charptr_t description)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;

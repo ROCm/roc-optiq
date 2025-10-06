@@ -67,7 +67,7 @@ private:
     std::string           m_description;
     std::vector<uint64_t> m_bins;
     uint64_t              m_id;
-};
+ };
 
 }  // namespace DataModel
 }  // namespace RocProfVis

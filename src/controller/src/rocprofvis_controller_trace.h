@@ -5,12 +5,14 @@
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
+#include "rocprofvis_controller_histogram.h"
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller_mem_mgmt.h"
 #include "rocprofvis_controller_data.h"
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace RocProfVis
 {
@@ -42,6 +44,8 @@ public:
     rocprofvis_result_t Init();
 
     rocprofvis_result_t Load(char const* const filename, Future& future);
+
+    rocprofvis_result_t FetchHistogram();
 
     rocprofvis_result_t SaveTrimmedTrace(Future& future, double start, double end, char const* path);
 
@@ -86,6 +90,7 @@ private:
     std::vector<Track*>   m_tracks;
     std::vector<Node*> m_nodes;
     uint64_t              m_id;
+    std::shared_ptr<HistogramController>    m_histogram_controller;
     Timeline*             m_timeline;
     rocprofvis_dm_handle_t* m_histogram;
     SystemTable*          m_event_table;

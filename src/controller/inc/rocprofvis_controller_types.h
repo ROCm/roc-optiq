@@ -12,6 +12,7 @@ typedef rocprofvis_handle_t rocprofvis_controller_view_t;
 typedef rocprofvis_handle_t rocprofvis_controller_track_t;
 typedef rocprofvis_handle_t rocprofvis_controller_graph_t;
 typedef rocprofvis_handle_t rocprofvis_controller_table_t;
+typedef rocprofvis_handle_t rocprofvis_controller_histogram_t;
 typedef rocprofvis_handle_t rocprofvis_controller_sample_t;
 typedef rocprofvis_handle_t rocprofvis_controller_event_t;
 typedef rocprofvis_handle_t rocprofvis_controller_flow_control_t;

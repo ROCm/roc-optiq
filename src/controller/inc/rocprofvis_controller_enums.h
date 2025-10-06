@@ -85,6 +85,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeProcessor = 14,
     // Extended data object
     kRPVControllerObjectTypeExtData = 15,
+    // Histogram object
+    kRPVControllerObjectTypeHistogram = 16,
 #ifdef COMPUTE_UI_SUPPORT
     // Compute trace object
     kRPVControllerObjectTypeComputeTrace = 16,
@@ -203,10 +205,6 @@ typedef enum rocprofvis_controller_timeline_properties_t
     kRPVControllerTimelineGraphIndexed = 0x10000004,
     // Graphs by Id
     kRPVControllerTimelineGraphById = 0x10000005,
-    //Histogram Bins
-    kRPVControllerTimelineHistogramBins = 0x10000006,
-    //Histogram Object
-    kRPVControllerTimelineHistogram = 0x10000007,
 
 } rocprofvis_controller_timeline_properties_t;
 /* JSON: RPVTimeline
@@ -467,8 +465,6 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackCounter = 0x30000012,
     // The CPU stream that the track represents - can be NULL
     kRPVControllerTrackStream   = 0x30000013,
-    // Histogram Bins
-    kRPVControllerTrackHistogramBins = 0x30000014,
  
  } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
@@ -554,6 +550,8 @@ typedef enum rocprofvis_controller_flow_control_properties_t
     // Level of target in track
     kRPVControllerFlowControlLevel     = 0x50000005,
 } rocprofvis_controller_flow_control_properties_t;
+
+
 /* JSON: RPVFlowControl
 {
     id: UInt64,
@@ -676,8 +674,6 @@ typedef enum rocprofvis_controller_graph_properties_t
     // Notionally indexed entries in the graph
     // Actually loaded via an async. API to prepare for RPC.
     kRPVControllerGraphEntryIndexed = 0x80000006,
-    // Histogram Bins
-    kRPVControllerGraphHistogramBins = 0x80000007,  
 } rocprofvis_controller_graph_properties_t;
 /* JSON: RPVGraph
 {
@@ -813,6 +809,15 @@ typedef enum rocprofvis_controller_extdata_properties_t
     value: String,
 }
 */
+
+typedef enum rocprofvis_controller_histogram_properties_t
+{
+    // Bin size 
+    kRPVControllerHistogramBinCount = 0xE0000000,
+    //Bin Value
+    kRPVControllerHistogramBinNumber = 0xE0000001,
+  
+} rocprofvis_controller_histogram_properties_t;
 
 typedef enum rocprofvis_controller_sort_order_t
 {

@@ -446,12 +446,6 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
-            case kRPVControllerTrackHistogramBins:
-            {
-                *value = m_histogram_bins;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
             case kRPVControllerCommonMemoryUsageExclusive:
             {
                 *value = sizeof(Track);
@@ -702,12 +696,7 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
             result = kRocProfVisResultReadOnlyError;
             break;
         }
-        case kRPVControllerTrackHistogramBins:
-        {
-            m_histogram_bins = value;
-            result = kRocProfVisResultSuccess;
-            break;
-        }
+
         case kRPVControllerTrackType:
         {
             m_type = (rocprofvis_controller_track_type_t)value;

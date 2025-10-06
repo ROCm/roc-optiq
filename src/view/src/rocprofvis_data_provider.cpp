@@ -37,6 +37,7 @@ DataProvider::DataProvider()
 , m_max_ts(0)
 , m_trace_file_path("")
 , m_progress_percent(0)
+, m_histogram({})
 , m_table_infos(static_cast<size_t>(TableType::__kTableTypeCount))
 {}
 
@@ -460,25 +461,40 @@ DataProvider::HandleLoadTrace()
             // Load the system topology
             HandleLoadSystemTopology();
 
+
            
 
           result = rocprofvis_controller_get_object(
                 m_trace_controller, kRPVControllerTimeline, 0, &m_trace_timeline);
 
-            rocprofvis_handle_t* histogram = nullptr;
-            result                         = rocprofvis_controller_get_object(
-                m_trace_controller, kRPVControllerHistogram, 0, &histogram);
 
-   
+
+          // fetch histogram data
+          rocprofvis_handle_t* histogram = nullptr;
+          result                         = rocprofvis_controller_get_object(
+              m_trace_controller, kRPVControllerHistogram, 0, &histogram);
+
+          if (result == kRocProfVisResultSuccess && histogram != nullptr) {
+              uint64_t histogram_size = 0;
+              result                  = rocprofvis_controller_get_uint64(
+                  histogram, kRPVControllerHistogramBinCount, 0, &histogram_size);
+
+
+
+              std::vector<uint64_t> bins(histogram_size);
+              for(uint64_t i = 0; i < histogram_size; i++)
+              {
+                  result = rocprofvis_controller_get_uint64(
+                      histogram, kRPVControllerHistogramBinNumber, i, &bins[i]);
+                  ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+              }
+              m_histogram = bins;
+           }
+     
+
             // store timeline meta data
             if(result == kRocProfVisResultSuccess && m_trace_timeline)
             {
-
-
-                uint64_t bins = 0;
-                result = rocprofvis_controller_get_uint64(
-                    m_trace_timeline, kRPVControllerTimelineHistogramBins, 0, &bins);
-                bins;
                 m_num_graphs = 0;
                 result       = rocprofvis_controller_get_uint64(
                     m_trace_timeline, kRPVControllerTimelineNumGraphs, 0, &m_num_graphs);

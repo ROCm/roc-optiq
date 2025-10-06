@@ -588,6 +588,8 @@ private:
     std::unordered_map<uint64_t, stream_info_t>  m_stream_infos;
     std::unordered_map<uint64_t, counter_info_t> m_counter_infos;
 
+    std::vector<uint64_t> m_histogram;
+
     // Store table_info_t for each TableType in a vector
     std::vector<table_info_t> m_table_infos;
 

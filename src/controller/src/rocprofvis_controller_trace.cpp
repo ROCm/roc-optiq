@@ -60,6 +60,7 @@ Trace::Trace()
 , m_dm_handle(nullptr)
 , m_mem_mgmt(nullptr)
 , m_histogram(nullptr)
+, m_histogram_controller(nullptr)   
 , m_dm_progress_percent(0)
 #ifdef COMPUTE_UI_SUPPORT
 , m_compute_trace(nullptr)
@@ -433,7 +434,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                     &histogram_handle);
                             m_histogram = &histogram_handle;
  
-                            
 
                             end_time = rocprofvis_dm_get_property_as_uint64(
                                 m_dm_handle, kRPVDMEndTimeUInt64, 0);
@@ -500,10 +500,6 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                         track->SetUInt64(
                                             kRPVControllerTrackNumberOfEntries, 0,
                                             num_records);
-
-                                        track->SetUInt64(kRPVControllerTrackHistogramBins,
-                                                         0, histogram_bins);
-
 
                                         double min_ts =
                                             rocprofvis_dm_get_property_as_uint64(
@@ -2342,6 +2338,30 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
     }
     return result;
 }
+rocprofvis_result_t
+Trace::FetchHistogram()
+{
+    if (m_dm_handle != nullptr) {
+        rocprofvis_dm_handle_t histogram_handle = nullptr;
+        rocprofvis_dm_result_t status           = rocprofvis_dm_get_property_as_handle(
+            m_dm_handle, kRPVDMHistogramHandle, 0, &histogram_handle);
+        uint64_t bins;
+        rocprofvis_dm_get_property_as_uint64(*m_histogram, kRPVDMHistogramBinCount, 0,
+                                             &bins);
+        std::vector<uint64_t> histogram_counts;
+        for(int bin = 0; bin < bins; bin++)
+        {
+            uint64_t count = 0;
+            rocprofvis_dm_get_property_as_uint64(*m_histogram, kRPVDMHistogramBinValue,
+                                                 bin, &count);
+            histogram_counts.push_back(count);
+        }
+        m_histogram_controller = std::make_shared<HistogramController>(histogram_counts);
+
+        return kRocProfVisResultSuccess;
+    }
+     return kRocProfVisResultUnknownError;
+}
 
 rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controller::Future& future)
 {
@@ -2356,6 +2376,11 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
                 filepath.find(".db", filepath.size() - 3) != std::string::npos)
             {
                 result = LoadRocpd(filepath.c_str());
+
+            if(result == kRocProfVisResultSuccess)
+                {
+                    result = FetchHistogram();
+                }
             }
 #ifdef COMPUTE_UI_SUPPORT
             else if(filepath.find(".csv", filepath.size() - 4) != std::string::npos)
@@ -2626,6 +2651,12 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
     {
         switch (property)
         {
+            case kRPVControllerHistogramBins:
+            {
+                *value = 6;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerCommonMemoryUsageInclusive:
             {
                 *value = sizeof(Trace);
@@ -2670,7 +2701,7 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             {
                
                 rocprofvis_dm_result_t status = rocprofvis_dm_get_property_as_uint64(
-                    m_histogram, kRPVDMHistogramBinCount, index, value);
+                    m_histogram, kRPVDMHistogramBins, index, value);
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -2774,7 +2805,7 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerHistogram:
             {
-                *value = (rocprofvis_handle_t*) m_histogram;
+                *value = (rocprofvis_handle_t*) m_histogram_controller.get();
                 result = kRocProfVisResultSuccess;
                 break;
             }

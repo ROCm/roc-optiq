@@ -21,6 +21,7 @@
 #include "rocprofvis_db_rocpd.h"
 #include <sstream>
 #include <string.h>
+#include "rocprofvis_dm_histogram.h" 
 
 namespace RocProfVis
 {
@@ -463,6 +464,10 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         {
             break;
         }
+
+
+
+     
 
         TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );

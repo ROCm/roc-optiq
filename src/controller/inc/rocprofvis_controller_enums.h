@@ -149,8 +149,6 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerSampleTable = 0x00000009,
     //Histogram object
     kRPVControllerHistogram = 0x0000000A,
-    // Histogram bins
-    kRPVControllerHistogramBins = 0x0000000B,   
     // Histogram data
     kRPVControllerHistogramBinValue = 0x0000000C,
     //Histogram bin count 

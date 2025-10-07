@@ -2649,12 +2649,6 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
     {
         switch (property)
         {
-            case kRPVControllerHistogramBins:
-            {
-                *value = 6;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
             case kRPVControllerCommonMemoryUsageInclusive:
             {
                 *value = sizeof(Trace);

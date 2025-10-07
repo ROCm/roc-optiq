@@ -53,9 +53,9 @@ public:
 private:
     uint64_t            m_id;
     std::vector<Graph*> m_graphs;
-    double m_min_ts;
-    double m_max_ts;
- };
+    double              m_min_ts;
+    double              m_max_ts;
+};
 
-}
-}
+}  // namespace Controller
+}  // namespace RocProfVis

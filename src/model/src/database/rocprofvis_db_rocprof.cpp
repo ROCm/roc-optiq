@@ -644,42 +644,45 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             break;
         }
 
-
-        //Histogram Code 
-        const rocprofvis_dm_timestamp_t start_time = TraceProperties()->start_time;
-        const rocprofvis_dm_timestamp_t end_time   = TraceProperties()->end_time;
+         //Histogram Code 
+        const rocprofvis_dm_timestamp_t start_time =
+            TraceProperties()->start_time / 1000000; //Convert to MS
+        const rocprofvis_dm_timestamp_t end_time = TraceProperties()->end_time / 1000000; //Convert to MS
         constexpr int                   num_bins   = 300;
 
 
-        // Allocate and fill histogram bins on the heap
-        auto* bin_timestamps = new std::vector<rocprofvis_dm_timestamp_t>(num_bins + 1);
+        auto bin_timestamps =  std::vector<rocprofvis_dm_timestamp_t>(num_bins);
         rocprofvis_dm_timestamp_t bin_size =
             (end_time > start_time) ? (end_time - start_time) / num_bins : 1;
-        for(int bin = 0; bin <= num_bins; ++bin)
+        for(int bin = 0; bin < num_bins; ++bin)
         {
-            (*bin_timestamps)[bin] = start_time + bin * bin_size;
+            bin_timestamps[bin] = start_time + bin * bin_size;
         }
-        TraceProperties()->histogram_timestamps = bin_timestamps;
+        TraceProperties()->histogram_timestamps = &bin_timestamps;
 
-        // Allocate and resize global histogram
-        TraceProperties()->global_histogram = new std::vector<uint64_t>(num_bins + 1);
+        TraceProperties()->global_histogram = new std::vector<uint64_t>(num_bins);
 
         if(kRocProfVisDmResultSuccess !=
-           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_region;",
+               ExecuteSQLQuery(future,
+                               "SELECT start_millisec, SUM(cnt) AS total_count FROM ("
+                               "  SELECT start/1000000 AS start_millisec, COUNT(*) AS cnt "
+                               "FROM rocpd_region GROUP BY start_millisec"
+                               "  UNION ALL "
+                               "  SELECT start/1000000 AS start_millisec, COUNT(*) AS cnt "
+                               "FROM rocpd_kernel_dispatch GROUP BY start_millisec"
+                               "  UNION ALL "
+                               "  SELECT start/1000000 AS start_millisec, COUNT(*) AS cnt "
+                               "FROM rocpd_memory_copy GROUP BY start_millisec"
+                               "  UNION ALL "
+                               "  SELECT start/1000000 AS start_millisec, COUNT(*) AS cnt "
+                               "FROM rocpd_memory_allocate GROUP BY start_millisec"
+                               ") GROUP BY start_millisec ORDER BY start_millisec;",
                            &CallbackTraceHistogram))
+        {
             break;
-        if(kRocProfVisDmResultSuccess !=
-           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_kernel_dispatch;",
-                           &CallbackTraceHistogram))
-            break;
-        if(kRocProfVisDmResultSuccess !=
-           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_memory_copy;",
-                           &CallbackTraceHistogram))
-            break;
-        if(kRocProfVisDmResultSuccess !=
-           ExecuteSQLQuery(future, "SELECT start, end FROM rocpd_memory_allocate;",
-                           &CallbackTraceHistogram))
-            break;
+
+        }
+ 
 
         // Create the histogram object in the Trace data model
         rocprofvis_dm_histogram_t histogram = BindObject()->FuncAddHistogram(

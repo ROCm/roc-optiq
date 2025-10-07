@@ -77,7 +77,17 @@ public:
                                            rocprofvis_dm_charptr_t new_db_path,
                                            Future* future) override;
 
+    rocprofvis_dm_result_t BuildTableStringIdFilter( 
+                                        rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+                                        rocprofvis_dm_string_table_filters_t string_table_filters,
+                                        table_string_id_filter_map_t& filters) override;
 
+    rocprofvis_dm_string_t GetEventOperationQuery(
+                                        const rocprofvis_dm_event_operation_t operation) override;
+
+    
+    rocprofvis_dm_result_t StringIndexToId(
+                                        rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id) override;
 
 private:
     // sqlite3_exec callback to process track information query and add track object to Trace container

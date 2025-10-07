@@ -84,11 +84,12 @@ public:
 
 private:
     std::vector<Track*>   m_tracks;
-    std::vector<Node*> m_nodes;
+    std::vector<Node*>    m_nodes;
     uint64_t              m_id;
     Timeline*             m_timeline;
     SystemTable*          m_event_table;
     SystemTable*          m_sample_table;
+    SystemTable*          m_search_table;
     rocprofvis_dm_trace_t m_dm_handle;
     MemoryManager*        m_mem_mgmt;
     Data                  m_dm_message;

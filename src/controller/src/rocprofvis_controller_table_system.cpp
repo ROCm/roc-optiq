@@ -16,6 +16,7 @@ typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectType
 
 SystemTable::SystemTable(uint64_t id)
 : Table(id)
+, m_track_type(kRPVControllerTrackTypeEvents)
 {
 }
 
@@ -36,6 +37,8 @@ void SystemTable::Reset()
     m_filter.clear();
     m_group.clear();
     m_group_cols.clear();
+    m_string_table_filters.clear();
+    m_string_table_filters_ptr.clear();
 }
 
 rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future)
@@ -52,8 +55,8 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
         char* fetch_query = nullptr;
         rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
             db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), sort_column,
-            (rocprofvis_dm_sort_order_t)m_sort_order, count,
-            index, false, &fetch_query);
+            (rocprofvis_dm_sort_order_t)m_sort_order, m_string_table_filters_ptr.size(), m_string_table_filters_ptr.data(), 
+            count, index, false, &fetch_query);
         rocprofvis_dm_table_id_t table_id = 0;
         if(dm_result == kRocProfVisDmResultSuccess)
         {
@@ -205,11 +208,15 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
     uint64_t start_index = 0;
     uint64_t start_count = 0;
     uint64_t num_tracks = 0;
+    uint64_t num_op_types = 0;
     double   end_ts     = 0;
     double   start_ts   = 0;
     std::string filter;
     std::string group;
     std::string group_cols;
+    uint64_t num_string_table_filters = 0;
+    std::vector<std::string> string_table_filters;
+    std::vector<const char*> string_table_filters_ptr;
     rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeSamples;
     uint64_t table_type = kRPVControllerTableTypeEvents;
     result = future->IsCancelled() ? kRocProfVisResultCancelled : args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
@@ -218,6 +225,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
         switch (table_type)
         {
             case kRPVControllerTableTypeEvents:
+            case kRPVControllerTableTypeSearchResults:
             {
                 track_type = kRPVControllerTrackTypeEvents;
 
@@ -239,13 +247,9 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
 
     if(result == kRocProfVisResultSuccess &&
        (table_type == kRPVControllerTableTypeEvents ||
-        table_type == kRPVControllerTableTypeSamples))
+        table_type == kRPVControllerTableTypeSamples ||
+        table_type == kRPVControllerTableTypeSearchResults))
     {
-        if(result == kRocProfVisResultSuccess)
-        {
-            result = args.GetUInt64(kRPVControllerTableArgsNumTracks, 0, &num_tracks);
-        }
-        
         if(result == kRocProfVisResultSuccess)
         {
             result = args.GetDouble(kRPVControllerTableArgsStartTime, 0, &start_ts);
@@ -255,36 +259,59 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
         {
             result = args.GetDouble(kRPVControllerTableArgsEndTime, 0, &end_ts);
         }
-
-        if (result == kRocProfVisResultSuccess && num_tracks > 0)
+        
+        if(result == kRocProfVisResultSuccess)
         {
-            for (uint32_t i = 0; i < num_tracks && (result == kRocProfVisResultSuccess); i++)
+            result = args.GetUInt64(kRPVControllerTableArgsNumOpTypes, 0, &num_op_types);
+        }
+        
+        if(result == kRocProfVisResultSuccess && num_op_types == 0)
+        {
+            result = args.GetUInt64(kRPVControllerTableArgsNumTracks, 0, &num_tracks);
+
+            if (result == kRocProfVisResultSuccess && num_tracks > 0)
             {
-                TrackRef track_ref;
-                result = args.GetObject(kRPVControllerTableArgsTracksIndexed, i, track_ref.GetHandleAddress());
-                if (track_ref.IsValid())
+                for (uint32_t i = 0; i < num_tracks && (result == kRocProfVisResultSuccess); i++)
                 {
-                    uint64_t test_type = 0;
-                    result = track_ref->GetUInt64(kRPVControllerTrackType, 0, &test_type);
-                    if (test_type == track_type)
+                    TrackRef track_ref;
+                    result = args.GetObject(kRPVControllerTableArgsTracksIndexed, i, track_ref.GetHandleAddress());
+                    if (track_ref.IsValid())
                     {
-                        uint64_t track_id = 0;
-                        result = track_ref->GetUInt64(kRPVControllerTrackId, 0, &track_id);
-                        if(result == kRocProfVisResultSuccess)
+                        uint64_t test_type = 0;
+                        result = track_ref->GetUInt64(kRPVControllerTrackType, 0, &test_type);
+                        if (test_type == track_type)
                         {
-                            ROCPROFVIS_ASSERT(track_id <= UINT32_MAX);
-                            tracks.push_back((uint32_t)track_id);
+                            uint64_t track_id = 0;
+                            result = track_ref->GetUInt64(kRPVControllerTrackId, 0, &track_id);
+                            if(result == kRocProfVisResultSuccess)
+                            {
+                                ROCPROFVIS_ASSERT(track_id <= UINT32_MAX);
+                                tracks.push_back((uint32_t)track_id);
+                            }
+                        }
+                        else
+                        {
+                            result = kRocProfVisResultInvalidType;
                         }
                     }
                     else
                     {
-                        result = kRocProfVisResultInvalidType;
+                        result = kRocProfVisResultInvalidArgument;
                     }
                 }
-                else
+            }
+        }
+        else
+        {
+            for (uint32_t i = 0; i < num_op_types && (result == kRocProfVisResultSuccess); i++)
+            {
+                uint64_t op_type_uint64 = kRocProfVisDmOperationNoOp;
+                result = args.GetUInt64(kRPVControllerTableArgsOpTypesIndexed, i, &op_type_uint64);
+                if(result == kRocProfVisResultSuccess)
                 {
-                    result = kRocProfVisResultInvalidArgument;
-                }
+                    ROCPROFVIS_ASSERT(op_type_uint64 < kRocProfVisDmNumOperation);
+                    tracks.push_back(TABLE_QUERY_PACK_OP_TYPE(op_type_uint64));
+                }                
             }
         }
     }
@@ -327,6 +354,28 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
             result = args.GetString(kRPVControllerTableArgsGroupColumns, 0, group_cols.data(), &length);
         }
     }
+    if(num_op_types > 0 && result == kRocProfVisResultSuccess)
+    {
+        result = args.GetUInt64(kRPVControllerTableNumStringTableFilters, 0, &num_string_table_filters);
+        if(result == kRocProfVisResultSuccess)
+        {
+            for (uint32_t i = 0; i < num_string_table_filters && (result == kRocProfVisResultSuccess); i++)
+            {
+                uint32_t length = 0;
+                result = args.GetString(kRPVControllerTableStringTableFiltersIndexed, i, nullptr, &length);
+                if(result == kRocProfVisResultSuccess && length > 0)
+                {
+                    std::string filter;
+                    filter.resize(length);
+                    result = args.GetString(kRPVControllerTableStringTableFiltersIndexed, i, filter.data(), &length);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        string_table_filters.push_back(filter);
+                    }
+                }
+            }
+        }
+    }
 
     if (result == kRocProfVisResultSuccess)
     {
@@ -334,7 +383,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
         m_sort_order  = (rocprofvis_controller_sort_order_t) sort_order;
         if(m_tracks.size() == tracks.size() && m_start_ts == start_ts &&
            m_end_ts == end_ts && m_filter == filter && m_group == group &&
-           m_group_cols == group_cols)
+           m_group_cols == group_cols && m_string_table_filters == string_table_filters)
         {
             bool tracks_all_same = true;
             for (int i = 0; i < tracks.size(); i++)
@@ -360,6 +409,11 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
         m_filter      = filter;
         m_group       = group;
         m_group_cols  = group_cols;
+        m_string_table_filters = string_table_filters;
+        for (const std::string& filter : m_string_table_filters)
+        {
+            m_string_table_filters_ptr.push_back(filter.c_str());
+        }
 
         if(result == kRocProfVisResultSuccess)
         {
@@ -373,8 +427,8 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
             char*                  count_query = nullptr;
             rocprofvis_dm_result_t dm_result   = rocprofvis_db_build_table_query(
                 db, start_ts, end_ts, tracks.size(), tracks.data(), filter.c_str(), group.c_str(), m_group_cols.c_str(), nullptr,
-                (rocprofvis_dm_sort_order_t) m_sort_order, 0, 0, true,
-                &count_query);
+                (rocprofvis_dm_sort_order_t) m_sort_order, m_string_table_filters_ptr.size(), m_string_table_filters_ptr.data(), 
+                0, 0, true, &count_query);
             rocprofvis_dm_table_id_t table_id = 0;
             if(dm_result == kRocProfVisDmResultSuccess)
             {

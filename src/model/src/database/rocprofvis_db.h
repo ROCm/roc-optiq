@@ -23,6 +23,7 @@
 #include "rocprofvis_db_future.h"
 #include <vector>
 #include <map>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -40,6 +41,8 @@ typedef std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator roc
 typedef std::map<std::string, std::string> slice_query_t;
 // type of map array for storing slice handlers for multi-track request
 typedef std::map<uint32_t, rocprofvis_dm_slice_t> slice_array_t;
+// type of map array for storing string id filters for op table queries 
+typedef std::unordered_map<rocprofvis_dm_event_operation_t, std::string> table_string_id_filter_map_t;
 
 class Database;
 
@@ -149,11 +152,23 @@ class Database
                                                                 rocprofvis_dm_charptr_t group,
                                                                 rocprofvis_dm_charptr_t group_cols, 
                                                                 rocprofvis_dm_charptr_t sort_column, 
-                                                                rocprofvis_dm_sort_order_t sort_order, 
+                                                                rocprofvis_dm_sort_order_t sort_order,
+                                                                rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+                                                                rocprofvis_dm_string_table_filters_t string_table_filters,
                                                                 uint64_t max_count, 
                                                                 uint64_t offset,
                                                                 bool count_only, 
                                                                 rocprofvis_dm_string_t& query) = 0;
+
+        // Searches for strings containing the passed in list of filter strings and builds a WHERE IN clause for the table query.
+        // @param num_string_table_filters - number of filter strings
+        // @param string_table_filters - array of filter strings
+        // @param filter - output string containing WHERE clause
+        // @return status of operation
+       virtual rocprofvis_dm_result_t BuildTableStringIdFilter(
+                                                                rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+                                                                rocprofvis_dm_string_table_filters_t string_table_filters,
+                                                                table_string_id_filter_map_t& filter) = 0;
 
        virtual rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t start,
                                                       rocprofvis_dm_timestamp_t end,
@@ -370,6 +385,9 @@ class Database
                                                                 rocprofvis_db_record_data_t & record) {return kRocProfVisDmResultSuccess;};
         virtual rocprofvis_dm_result_t RemapStringIds(
                                                                 rocprofvis_db_flow_data_t& record) {return kRocProfVisDmResultSuccess;};
+        virtual rocprofvis_dm_result_t  StringIndexToId(        
+                                                                rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id) {return kRocProfVisDmResultSuccess;};
+
         // return suffix to process name for provided track category ('PID', 'Agent')
         // @param category - track category
         // @return track process name suffix  ('PID', 'Agent')      
@@ -396,6 +414,9 @@ class Database
                                                                 const char* subprocess,
                                                                 rocprofvis_dm_op_t operation,
                                                                 rocprofvis_dm_track_id_t& track_id)=0;
+
+        virtual rocprofvis_dm_string_t GetEventOperationQuery(
+                                                                const rocprofvis_dm_event_operation_t operation) = 0;
 
     public:
         // declare DatabaseCache as friend class, for having access to protected members

@@ -12,7 +12,6 @@ Table::Table(uint64_t id)
 , m_id(id)
 , m_sort_column(0)
 , m_sort_order(kRPVControllerSortOrderAscending)
-, m_track_type(kRPVControllerTrackTypeEvents)
 {
 }
 

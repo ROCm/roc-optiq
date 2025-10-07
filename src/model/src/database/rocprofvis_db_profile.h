@@ -134,6 +134,8 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_charptr_t group_cols, 
                             rocprofvis_dm_charptr_t sort_column, 
                             rocprofvis_dm_sort_order_t sort_order,
+                            rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+                            rocprofvis_dm_string_table_filters_t string_table_filters,
                             uint64_t max_count, 
                             uint64_t offset,
                             bool count_only, 

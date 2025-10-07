@@ -90,9 +90,7 @@ MultiTrackTable::HandleTrackSelectionChanged()
 
     bool fetch_result = false;
 
-    uint64_t request_id = (m_table_type == TableType::kEventTable)
-                              ? DataProvider::EVENT_TABLE_REQUEST_ID
-                              : DataProvider::SAMPLE_TABLE_REQUEST_ID;
+    uint64_t request_id = GetRequestID();
     // Cancel pending requests.
     if(m_data_provider.IsRequestPending(request_id))
     {
@@ -107,14 +105,15 @@ MultiTrackTable::HandleTrackSelectionChanged()
     else
     {
         // Fetch table data for the selected tracks
-        TableRequestParams event_table_params(
-            m_req_table_type, filtered_tracks, start_ns, end_ns, m_filter_options.filter,
+        TableRequestParams table_params(
+            m_req_table_type, filtered_tracks, {}, start_ns, end_ns,
+            m_filter_options.filter,
             (m_filter_options.column_index == 0)
                 ? ""
                 : m_column_names_ptr[m_filter_options.column_index],
-            m_filter_options.group_columns, 0, m_fetch_chunk_size);
+            m_filter_options.group_columns, {}, 0, m_fetch_chunk_size);
 
-        fetch_result = m_data_provider.FetchMultiTrackTable(event_table_params);
+        fetch_result = m_data_provider.FetchTable(table_params);
     }
 
     if(!fetch_result)
@@ -135,14 +134,99 @@ MultiTrackTable::HandleTrackSelectionChanged()
 }
 
 void
+MultiTrackTable::Render()
+{
+    auto table_params = m_data_provider.GetTableParams(m_table_type);
+    if(table_params)
+    {
+        ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks",
+                    table_params->m_start_row,
+                    table_params->m_start_row + table_params->m_req_row_count,
+                    m_data_provider.GetTableTotalRowCount(m_table_type),
+                    table_params->m_track_ids.size());
+    }
+
+    ImGui::BeginGroup();
+    if(m_table_type == TableType::kEventTable)
+    {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Group By");
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Group Columns");
+    }
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Filter");
+    ImGui::EndGroup();
+
+    ImGui::SameLine();
+
+    ImGui::BeginGroup();
+    if(m_table_type == TableType::kEventTable)
+    {
+        ImGui::SetNextItemAllowOverlap();
+        ImGui::Combo("##group_by", &m_pending_filter_options.column_index,
+                     m_column_names_ptr.data(), m_column_names_ptr.size());
+        if(m_pending_filter_options.column_index != 0)
+        {
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() -
+                                 ImGui::GetFrameHeightWithSpacing() -
+                                 ImGui::GetFontSize());
+            if(XButton("clear_group"))
+            {
+                m_pending_filter_options.column_index = 0;
+            }
+        }
+
+        ImGui::SetNextItemAllowOverlap();
+        ImGui::BeginDisabled(m_filter_options.column_index == 0);
+        ImGui::InputTextWithHint(
+            "##group_columns",
+            "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+            "MIN(duration) as min_duration, MAX(duration) as max_duration",
+            m_pending_filter_options.group_columns,
+            IM_ARRAYSIZE(m_pending_filter_options.group_columns));
+        if(strlen(m_pending_filter_options.group_columns) > 0)
+        {
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
+            if(XButton("clear_group_columns"))
+            {
+                m_pending_filter_options.group_columns[0] = '\0';
+            }
+        }
+        ImGui::EndDisabled();
+    }
+
+    ImGui::SetNextItemAllowOverlap();
+    ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
+                             m_pending_filter_options.filter,
+                             IM_ARRAYSIZE(m_pending_filter_options.filter));
+    if(strlen(m_pending_filter_options.filter) > 0)
+    {
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
+        if(XButton("clear_filters"))
+        {
+            m_pending_filter_options.filter[0] = '\0';
+        }
+    }
+    ImGui::EndGroup();
+    ImGui::SameLine();
+    if(ImGui::Button("Submit", ImVec2(0, ImGui::GetItemRectSize().y)))
+    {
+        m_filter_requested = true;
+    }
+    InfiniteScrollTable::Render();
+}
+
+void
 MultiTrackTable::Update()
 {
     // Handle track selection changed event
     if(m_defer_track_selection_changed)
     {
-        if(!m_data_provider.IsRequestPending(m_table_type == TableType::kEventTable
-                                                 ? DataProvider::EVENT_TABLE_REQUEST_ID
-                                                 : DataProvider::SAMPLE_TABLE_REQUEST_ID))
+        if(!m_data_provider.IsRequestPending(GetRequestID()))
         {
             // try to repocess the deferred track selection event
             spdlog::debug(
@@ -299,10 +383,32 @@ MultiTrackTable::GetTrackIdHelper(
     return target_track_id;
 }
 
-void
-MultiTrackTable::FetchData(const TableRequestParams& params) const
+bool
+MultiTrackTable::XButton(const char* id) const
 {
-    m_data_provider.FetchMultiTrackTable(params);
+    bool clicked = false;
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushID(id);
+    clicked = ImGui::SmallButton(ICON_X_CIRCLED);
+    ImGui::PopID();
+    ImGui::PopFont();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultIMGUIStyle().WindowPadding);
+    if(ImGui::BeginItemTooltip())
+    {
+        ImGui::TextUnformatted("Clear");
+        ImGui::EndTooltip();
+    }
+    ImGui::PopStyleVar();
+    return clicked;
 }
 
 void

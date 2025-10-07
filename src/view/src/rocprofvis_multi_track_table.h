@@ -25,6 +25,7 @@ public:
 
     ~MultiTrackTable();
     
+    void Render() override;
     void Update() override;
 
     void HandleTrackSelectionChanged();
@@ -44,7 +45,8 @@ private:
     };
 
     void FormatData() override;
-    void FetchData(const TableRequestParams& params) const override;
+    //void FetchData(const TableRequestParams& params) const override;
+    bool XButton(const char* id) const;
     void RenderContextMenu() const override;
 
     uint64_t GetTrackIdHelper(

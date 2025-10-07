@@ -39,7 +39,8 @@ protected:
     };
 
     virtual void FormatData();
-    virtual void FetchData(const TableRequestParams& params) const = 0;
+    //virtual void FetchData(const TableRequestParams& params) const = 0;
+    uint64_t     GetRequestID() const;
     virtual void RenderContextMenu() const;
 
     std::vector<std::string> m_column_names;
@@ -56,13 +57,13 @@ protected:
     uint64_t m_fetch_chunk_size;
 
     bool m_data_changed;
+    bool m_filter_requested;
 
     // Track the selected row for context menu actions
     int m_selected_row = -1;
 
 private:
     void RenderLoadingIndicator() const;
-    bool XButton(const char* id) const;
 
     int m_fetch_pad_items;
     int m_fetch_threshold_items;

@@ -104,6 +104,13 @@ class Trace : public DmBase{
         // @return pointer to a string 
         rocprofvis_dm_charptr_t                         GetStringAt(rocprofvis_dm_index_t index);
 
+        // Method to get the string ids of strings inside string table that contain all of the passed in substrings
+        // @param num - number of substrings strings to search for
+        // @param substrings - array of substrings to search for
+        // @param indices - output array of string table indices 
+        // @return status of operation 
+        rocprofvis_dm_result_t                          GetStringIndicesWithSubstring(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices);
+
         // Method to read Trace object property as uint64
         // @param property - property enumeration rocprofvis_dm_trace_property_t
         // @param index - index of any indexed property

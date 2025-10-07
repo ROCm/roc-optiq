@@ -3,6 +3,7 @@
 
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
+#include "rocprofvis_interface_types.h"
 #include "rocprofvis_raw_track_data.h"
 
 #include <chrono>
@@ -31,6 +32,7 @@ enum class RequestType
     kFetchGraph,
     kFetchTrackEventTable,
     kFetchTrackSampleTable,
+    kFetchEventSearchTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
     kFetchEventCallStack,
@@ -41,6 +43,7 @@ enum class TableType
 {
     kSampleTable,
     kEventTable,
+    kEventSearchTable,
     __kTableTypeCount
 };
 
@@ -214,6 +217,7 @@ class TableRequestParams : public RequestParamsBase
 public:
     rocprofvis_controller_table_type_t m_table_type;  // type of the table
     std::vector<uint64_t>              m_track_ids;   // ids of the tracks in the table
+    std::vector<rocprofvis_dm_event_operation_t> m_op_types;  // op types in the table
     double   m_start_ts;           // starting time stamp of the data in the table
     double   m_end_ts;             // ending time stamp of the data in the table
     uint64_t m_start_row;          // starting row of the data in the table
@@ -221,6 +225,7 @@ public:
     uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
     std::string                        m_filter;
+    std::vector<std::string>           m_string_table_filters; // strings to use for string table filtering.
     std::string                        m_group;
     std::string                        m_group_columns;
 
@@ -228,14 +233,16 @@ public:
     TableRequestParams& operator=(const TableRequestParams& table_params) = default;
 
     TableRequestParams(
-        rocprofvis_controller_table_type_t table_type,
-        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
-        char const* filter, char const* group, char const* group_cols,
-        uint64_t start_row = -1, uint64_t req_row_count = -1,
-        uint64_t                           sort_column_index = 0,
+        rocprofvis_controller_table_type_t                  table_type,
+        const std::vector<uint64_t>&                        track_ids,
+        const std::vector<rocprofvis_dm_event_operation_t>& op_types, double start_ts,
+        double end_ts, char const* filter, char const* group, char const* group_cols,
+        const std::vector<std::string> string_table_filters = {}, uint64_t start_row = -1,
+        uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending)
     : m_table_type(table_type)
     , m_track_ids(track_ids)
+    , m_op_types(op_types)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
     , m_start_row(start_row)
@@ -245,6 +252,7 @@ public:
     , m_filter(filter)
     , m_group(group)
     , m_group_columns(group_cols)
+    , m_string_table_filters(string_table_filters)
     {}
 };
 
@@ -315,6 +323,7 @@ public:
     
     static const uint64_t EVENT_TABLE_REQUEST_ID;
     static const uint64_t SAMPLE_TABLE_REQUEST_ID;
+    static const uint64_t EVENT_SEARCH_REQUEST_ID;
     static const uint64_t EVENT_EXTENDED_DATA_REQUEST_ID;
     static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
     static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
@@ -434,7 +443,7 @@ public:
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    bool FetchMultiTrackTable(const TableRequestParams& table_params);
+    bool FetchTable(const TableRequestParams& table_params);
 
     bool IsRequestPending(uint64_t request_id) const;
 

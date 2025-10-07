@@ -48,7 +48,6 @@ protected:
     uint64_t m_id;
     uint64_t m_sort_column;
     rocprofvis_controller_sort_order_t m_sort_order;
-    rocprofvis_controller_track_type_t m_track_type;
 };
 
 }

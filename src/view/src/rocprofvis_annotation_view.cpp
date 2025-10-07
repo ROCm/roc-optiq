@@ -4,14 +4,16 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 #include <imgui.h>
 #include <iostream>
 namespace RocProfVis
 {
 namespace View
 {
-AnnotationView::AnnotationView(std::shared_ptr<AnnotationsManager> annotation_manager)
+AnnotationView::AnnotationView(DataProvider& data_provider, std::shared_ptr<AnnotationsManager> annotation_manager)
 : m_annotations(annotation_manager)
+, m_data_provider(data_provider)
 , m_selected_note_id(-1)
 {}
 
@@ -40,6 +42,11 @@ AnnotationView::Render()
         ImGui::TableSetupColumn("Visibility");
         ImGui::TableHeadersRow();
 
+        double      trace_start_time = m_data_provider.GetStartTime();
+        const auto& time_format =
+            SettingsManager::GetInstance().GetUserSettings().unit_settings.time_format;
+        std::string time_label;
+
         for(auto& note : m_annotations->GetStickyNotes())
         {
             ImGui::TableNextRow();
@@ -62,9 +69,7 @@ AnnotationView::Render()
             // Title column with selection logic
             ImGui::TableNextColumn();
             bool is_selected = (note.GetID() == m_selected_note_id);
-            // Title + ID for unique label
       
-
             if(is_selected)
             {
                 ImGui::PushStyleColor(ImGuiCol_Header,
@@ -98,7 +103,9 @@ AnnotationView::Render()
 
             // Time column
             ImGui::TableNextColumn();
-            ImGui::Text("%.0f", note.GetTimeNs());
+            time_label = nanosecond_to_formatted_str(note.GetTimeNs() - trace_start_time, time_format,
+                                        true);
+            ImGui::TextUnformatted(time_label.c_str());
 
             // Visibility column
             ImGui::TableNextColumn();

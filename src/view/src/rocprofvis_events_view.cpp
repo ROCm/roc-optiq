@@ -6,6 +6,7 @@
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_utils.h"
 
 namespace RocProfVis
 {
@@ -108,13 +109,19 @@ EventsView::RenderBasicData(const event_info_t* event_data)
     ImGui::SameLine(160);
     ImGui::TextUnformatted(info.m_name.c_str());
 
+    double      trace_start_time = m_data_provider.GetStartTime();
+    const auto& time_format      = m_settings.GetUserSettings().unit_settings.time_format;
+
     ImGui::TextUnformatted("Start Time");
     ImGui::SameLine(160);
-    ImGui::Text("%.3f", info.m_start_ts);
+    std::string label = nanosecond_to_formatted_str(info.m_start_ts - trace_start_time,
+                                                    time_format, true);
+    ImGui::TextUnformatted(label.c_str());
 
     ImGui::TextUnformatted("Duration");
     ImGui::SameLine(160);
-    ImGui::Text("%.3f", info.m_duration);
+    label = nanosecond_to_formatted_str(info.m_duration, time_format, true);
+    ImGui::TextUnformatted(label.c_str());
 
     ImGui::TextUnformatted("Level");
     ImGui::SameLine(160);
@@ -191,6 +198,10 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                 ImGui::TableSetupColumn("Direction");
                 ImGui::TableHeadersRow();
 
+                double      trace_start_time = m_data_provider.GetStartTime();
+                const auto& time_format =
+                    m_settings.GetUserSettings().unit_settings.time_format;
+
                 ImGuiListClipper clipper;
                 clipper.Begin(event_data->flow_info.size());
                 while(clipper.Step())
@@ -204,8 +215,10 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                         ImGui::TableSetColumnIndex(1);
                         ImGui::TextUnformatted(event_data->flow_info[i].name.c_str());
                         ImGui::TableSetColumnIndex(2);
-                        ImGui::TextUnformatted(
-                            std::to_string(event_data->flow_info[i].timestamp).c_str());
+                        std::string timestamp_label = nanosecond_to_formatted_str(
+                            event_data->flow_info[i].timestamp - trace_start_time,
+                            time_format, true);
+                        ImGui::TextUnformatted(timestamp_label.c_str());
                         ImGui::TableSetColumnIndex(3);
                         ImGui::TextUnformatted(
                             std::to_string(event_data->flow_info[i].track_id).c_str());

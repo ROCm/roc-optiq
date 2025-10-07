@@ -22,8 +22,10 @@ class InfiniteScrollTable : public RocWidget
 {
 public:
     InfiniteScrollTable(DataProvider& dp, TableType table_type = TableType::kEventTable);
-    void Update() override;
-    void Render() override;
+    virtual ~InfiniteScrollTable() {};
+
+    virtual void Update() override;
+    virtual void Render() override;
     void SetTableType(TableType type) { m_table_type = type; }
 
     void HandleNewTableData(std::shared_ptr<TableDataEvent> e);
@@ -36,6 +38,8 @@ protected:
         char filter[256];
     };
 
+    virtual void FormatData();
+    //virtual void FetchData(const TableRequestParams& params) const = 0;
     uint64_t     GetRequestID() const;
     virtual void RenderContextMenu() const;
 

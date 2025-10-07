@@ -106,8 +106,13 @@ InfiniteScrollTable::Update()
             }
         }
 
+        FormatData();
         m_data_changed = false;
     }
+}
+
+void InfiniteScrollTable::FormatData() {
+    // default implementation does nothing
 }
 
 void
@@ -143,6 +148,9 @@ InfiniteScrollTable::Render()
         m_data_provider.GetTableHeader(m_table_type);
     auto     table_params    = m_data_provider.GetTableParams(m_table_type);
     uint64_t total_row_count = m_data_provider.GetTableTotalRowCount(m_table_type);
+
+    const std::vector<formatted_column_info_t>& formatted_table_data =
+        m_data_provider.GetFormattedTableData(m_table_type);
 
     // Skip data fetch for this render cycle if total row count has changed
     // This is so we can recalulate the table size with the new total row count
@@ -271,12 +279,24 @@ InfiniteScrollTable::Render()
                     for(const auto& col : table_data[row_n])
                     {
                         ImGui::TableSetColumnIndex(column);
+                        const std::string *display_value = &col;
+                        // Check if this column needs formatting
+                        if(column < formatted_table_data.size())
+                        {
+                            const auto& col_format_info = formatted_table_data[column];
+                            if(col_format_info.needs_formatting &&
+                               row_n < col_format_info.formatted_row_value.size())
+                            {
+                                display_value =
+                                    &col_format_info.formatted_row_value[row_n];
+                            }
+                        }
 
                         if(column == 0)
                         {
                             // Handle row selection and click events
                             std::string selectable_label =
-                                col + "##" + std::to_string(row_n);
+                                *display_value + "##" + std::to_string(row_n);
 
                             bool is_selected = false;
                             // The Selectable spans all columns.
@@ -300,7 +320,7 @@ InfiniteScrollTable::Render()
                         }
                         else
                         {
-                            ImGui::Text(col.c_str());
+                            ImGui::Text(display_value->c_str());
                         }
                         column++;
                     }

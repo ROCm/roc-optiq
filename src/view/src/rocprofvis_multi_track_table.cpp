@@ -2,7 +2,6 @@
 
 #include "rocprofvis_multi_track_table.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -36,6 +35,21 @@ MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
     m_widget_name = (table_type == TableType::kEventTable)
                         ? GenUniqueName("Event Table")
                         : GenUniqueName("Sample Table");
+
+    //subscribe to time format changed event
+    auto format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        // Reformat time columns
+        FormatData();
+    };
+
+    m_format_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), format_changed_handler);
+}
+
+MultiTrackTable::~MultiTrackTable()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), m_format_changed_token);
 }
 
 void
@@ -266,6 +280,73 @@ MultiTrackTable::Update()
         }
     }
     InfiniteScrollTable::Update();
+}
+
+void
+MultiTrackTable::FormatData() 
+{    
+    const std::vector<std::string>& column_names =
+    m_data_provider.GetTableHeader(m_table_type);
+    const std::vector<std::vector<std::string>>& table_data =
+    m_data_provider.GetTableData(m_table_type);
+    std::vector<formatted_column_info_t>& formatted_column_data =
+    m_data_provider.GetMutableFormattedTableData(m_table_type);
+ 
+    // clear previous formatting info
+    formatted_column_data.clear();
+    formatted_column_data.resize(column_names.size());
+
+    SettingsManager& settings = SettingsManager::GetInstance();
+    auto time_format = settings.GetUserSettings().unit_settings.time_format;
+
+    double start_time = m_data_provider.GetStartTime();
+
+    for(size_t col_idx = 0; col_idx < column_names.size(); col_idx++)
+    {
+        // Check if this column needs formatting
+        bool needs_formatting = false;
+        if(col_idx == m_important_column_idxs[kTimeStartNs] ||
+           col_idx == m_important_column_idxs[kTimeEndNs] ||
+           col_idx == m_important_column_idxs[kDurationNs])
+        {
+            needs_formatting = true;
+        }
+
+        if(needs_formatting)
+        {
+            formatted_column_data[col_idx].needs_formatting = true;
+            formatted_column_data[col_idx].formatted_row_value.resize(table_data.size());
+            
+            for(size_t row_idx = 0; row_idx < table_data.size(); row_idx++)
+            {
+                const std::string& raw_value = table_data[row_idx][col_idx];
+
+                if(col_idx == m_important_column_idxs[kTimeStartNs] ||
+                   col_idx == m_important_column_idxs[kTimeEndNs] ||
+                   col_idx == m_important_column_idxs[kDurationNs])
+                {
+                    // Format time values
+                    try
+                    {
+                        double time_ns = static_cast<double>(std::stoull(raw_value));
+                        if(col_idx != m_important_column_idxs[kDurationNs])
+                        {
+                            // time is relative to the trace start time
+                            time_ns -= start_time;
+                        }
+                        formatted_column_data[col_idx].formatted_row_value[row_idx] =
+                            nanosecond_to_formatted_str(time_ns, time_format);
+                    } catch(const std::exception& e)
+                    {
+                        spdlog::warn("Failed to format time value '{}': {}", raw_value,
+                                     e.what());
+                        formatted_column_data[col_idx].formatted_row_value[row_idx] =
+                            raw_value;
+                    }
+                }
+            }
+        }
+    }
 }
 
 uint64_t

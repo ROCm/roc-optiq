@@ -25,6 +25,7 @@ enum class RocEvents
     kFontSizeChanged,
     kSetViewRange,
     kGoToTimelineSpot,
+    kTimeFormatChanged,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeDataDirty,
     kComputeBlockNavigationChanged,

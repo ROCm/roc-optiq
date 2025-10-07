@@ -2491,6 +2491,17 @@ Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
                                                                     m_dm_handle);
                     break;
                 }
+                case kRPVControllerBucketDataValueIndexed:
+                {
+                    size_t buckets_num = 0;
+                    result = GetUInt64(kRPVControllerGetHistogramBucketsNumber, 0, &buckets_num);
+                    if (result == kRocProfVisResultSuccess)
+                    {
+                        result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, buckets_num);
+                    }
+                    result = m_tracks[index]->GetBucketValues(buckets_num, array);
+                    break;
+                }
                 default:
                 {
                     result = kRocProfVisResultInvalidArgument;
@@ -2671,6 +2682,19 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerGetHistogramBucketsNumber:
+            {
+                *value = rocprofvis_dm_get_property_as_uint64(
+                    m_dm_handle, kRPVDMHistogramNumBuckets, 0);
+                break;
+            }
+            case kRPVControllerGetHistogramBucketSize:
+            {
+                *value = rocprofvis_dm_get_property_as_uint64(
+                    m_dm_handle, kRPVDMHistogramBucketSize, 0);
+                break;
+                break;
+            }
             case kRPVControllerNodeIndexed:
             case kRPVControllerTimeline:
             case kRPVControllerTrackIndexed:
@@ -2715,6 +2739,8 @@ rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerNotifySelected:
         case kRPVControllerGetDmProgress:
         case kRPVControllerGetDmMessage:
+        case kRPVControllerGetHistogramBucketsNumber:
+        case kRPVControllerGetHistogramBucketSize:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif
@@ -2812,6 +2838,8 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
+            case kRPVControllerGetHistogramBucketsNumber:
+            case kRPVControllerGetHistogramBucketSize:
             case kRPVControllerNumTracks:
             case kRPVControllerId:
             case kRPVControllerNumAnalysisView:
@@ -2855,6 +2883,8 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerNotifySelected:
         case kRPVControllerGetDmProgress:
+        case kRPVControllerGetHistogramBucketsNumber:
+        case kRPVControllerGetHistogramBucketSize:
 #ifdef COMPUTE_UI_SUPPORT
         case kRPVControllerComputeTrace:
 #endif

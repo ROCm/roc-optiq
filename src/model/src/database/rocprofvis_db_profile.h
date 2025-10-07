@@ -195,6 +195,8 @@ class ProfileDatabase : public SqliteDatabase
                                                 char** azColName);
         static int CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
                                           char** azColName);
+        static int CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_stmt* stmt,
+            char** azColName);
         static rocprofvis_event_data_category_enum_t GetColumnDataCategory(
             const rocprofvis_event_data_category_map_t category_map,
             rocprofvis_dm_event_operation_t op, std::string column);

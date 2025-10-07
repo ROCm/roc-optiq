@@ -66,6 +66,18 @@ Track::GetSegments()
     return &m_segments;
 }
 
+rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
+
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    for (int i = 0; i < buckets_num; i++)
+    {
+        uint64_t value = rocprofvis_dm_get_property_as_uint64(
+            m_dm_handle, kRPVDMTrackHistogramEventDensityUInt64Indexed, 0);
+        result = array.SetUInt64(kRPVControllerArrayEntryIndexed, i, value);
+    }
+    return result;
+}
+
 rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;

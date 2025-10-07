@@ -65,6 +65,9 @@ class Trace : public DmBase{
 
         std::shared_mutex*                              EventPropertyMutex(rocprofvis_dm_event_property_type_t type){ return &m_event_property_lock[type];}
 
+        rocprofvis_dm_size_t                            NumberOfHistogramBuckets() {return m_parameters.histogram_bucket_count;}
+        rocprofvis_dm_size_t                            HistogramBucketsSize() {return m_parameters.histogram_bucket_size;}
+
         // Method to bind database object
         // @param db - pointer to database
         // @param bind_data - reference to pointer to bind data structure

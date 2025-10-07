@@ -55,6 +55,23 @@ ProfileDatabase::GetColumnDataCategory( const rocprofvis_event_data_category_map
 }
 
 
+int ProfileDatabase::CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_stmt* stmt,
+    char** azColName) {
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 3, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void *func = (void*)&CallbackMakeHistogramPerTrack;
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
+    uint32_t index                             = db->Sqlite3ColumnInt(func, stmt, azColName, 2);
+    uint32_t bucket_number = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
+    uint32_t events_count = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
+    db->TrackPropertiesAt(index)->histogram[bucket_number] = events_count;
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
 int
 ProfileDatabase::CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt* stmt,
                                             char** azColName)

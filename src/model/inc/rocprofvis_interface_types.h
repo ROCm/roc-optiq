@@ -149,6 +149,13 @@ typedef enum rocprofvis_db_status_t {
     kRPVDbBusy = 2
 } rocprofvis_db_status_t;
 
+typedef enum rocprofvis_time_bucket_size {
+    kRPVDbMicrosecond = 1000,
+    kRPVDbMillisecond = 1000000,
+    kRPVDbSecond = 1000000000,
+    kRPVDb1000Seconds = 1000000000000,
+} rocprofvis_time_bucket_size;
+
 typedef enum rocprofvis_db_data_type_t
 {
     kRPVDataTypeDefault = 0,
@@ -182,7 +189,11 @@ typedef enum  rocprofvis_dm_trace_property_t {
     // Handle of a SQL query result table, by specified index  
     kRPVDMTableHandleByID,
     // Database handle
-	kRPVDMDatabaseHandle
+	kRPVDMDatabaseHandle,
+    // Number of buckets
+    kRPVDMHistogramNumBuckets,
+    // Size of histogram bucket
+    kRPVDMHistogramBucketSize
 } rocprofvis_dm_trace_property_t;
 
 // Track properties
@@ -231,6 +242,8 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackMinimumValueDouble,
     // Track maximum level or value
     kRPVDMTrackMaximumValueDouble,
+    // Histogram bucket value
+    kRPVDMTrackHistogramEventDensityUInt64Indexed,
 } rocprofvis_dm_track_property_t;
 
 // Slice properties

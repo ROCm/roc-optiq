@@ -498,6 +498,10 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+           
+            {
+
+            }
             case kRPVControllerTrackMinTimestamp:
             case kRPVControllerTrackMaxTimestamp:
             case kRPVControllerTrackEntry:
@@ -554,6 +558,13 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerTrackHistogramBucketValueIndexed:
+            {
+                *value = rocprofvis_dm_get_property_as_uint64(
+                    m_dm_handle, kRPVDMTrackHistogramEventDensityUInt64Indexed, index);
+                result = kRocProfVisResultSuccess;
+                break;
+            }   
             case kRPVControllerTrackId:
             case kRPVControllerTrackType:
             case kRPVControllerTrackNumberOfEntries:

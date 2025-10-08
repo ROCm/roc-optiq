@@ -2335,7 +2335,9 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
             if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos || 
                 filepath.find(".db", filepath.size() - 3) != std::string::npos)
             {
+
                 result = LoadRocpd(filepath.c_str());
+
             }
 #ifdef COMPUTE_UI_SUPPORT
             else if(filepath.find(".csv", filepath.size() - 4) != std::string::npos)
@@ -2686,13 +2688,14 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
                     m_dm_handle, kRPVDMHistogramNumBuckets, 0);
+                result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerGetHistogramBucketSize:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
                     m_dm_handle, kRPVDMHistogramBucketSize, 0);
-                break;
+                result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerNodeIndexed:

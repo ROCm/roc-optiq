@@ -577,7 +577,7 @@ private:
     std::unordered_map<uint64_t, track_info_t>  m_track_metadata;
     std::unordered_map<uint64_t, RawTrackData*> m_raw_trackdata;
     std::unordered_map<uint64_t, event_info_t>  m_event_data;
-
+   
     std::unordered_map<uint64_t, node_info_t>    m_node_infos;
     std::unordered_map<uint64_t, device_info_t>  m_device_infos;
     std::unordered_map<uint64_t, process_info_t> m_process_infos;
@@ -590,6 +590,10 @@ private:
     std::vector<table_info_t> m_table_infos;
 
     std::unordered_map<int64_t, data_req_info_t> m_requests;
+
+    //Histogram Vector 
+    std::vector<double> m_histogram;
+    std::map<int, std::vector<double>> m_histogram_map;
 
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;

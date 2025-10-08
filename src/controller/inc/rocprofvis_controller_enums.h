@@ -460,6 +460,8 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackCounter = 0x30000012,
     // The CPU stream that the track represents - can be NULL
     kRPVControllerTrackStream   = 0x30000013,
+    //Get histogram bucket value
+    kRPVControllerTrackHistogramBucketValueIndexed = 0x30000014,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {

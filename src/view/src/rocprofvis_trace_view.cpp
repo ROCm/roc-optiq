@@ -517,6 +517,10 @@ TraceView::RenderToolbar()
                                             m_data_provider.GetEndTime(), 0.0, false);
         }
     }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Reset view to default zoom and pan");
+    }
 
     // pop content style
     ImGui::PopStyleVar(2);
@@ -537,7 +541,7 @@ TraceView::RenderSeparator()
     float       height    = ImGui::GetFrameHeight();
     ImVec2      p         = ImGui::GetCursorScreenPos();
     draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + height),
-                       m_settings_manager.GetColor(Colors::kSplitterColor),
+                       m_settings_manager.GetColor(Colors::kMetaDataSeparator),
                        2.0f);
     ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
     ImGui::SameLine();

@@ -1232,14 +1232,6 @@ TimelineView::RenderGraphPoints()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
     ImGuiChildFlags flags = ImGuiChildFlags_None;
-    bool            pushed_color = false;
-    if(m_pseudo_focus)
-    {
-        flags |= ImGuiChildFlags_Border;
-        ImGui::PushStyleColor(ImGuiCol_Border,
-                              m_settings.GetColor(Colors::kSelectionBorder));
-        pushed_color = true;
-    }
 
     if(ImGui::BeginChild("Main Trace", ImVec2(0, 0), flags))
     {
@@ -1340,11 +1332,7 @@ TimelineView::RenderGraphPoints()
     }
 
     ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    if(pushed_color)
-    {
-        ImGui::PopStyleColor();
-    } 
+    ImGui::PopStyleVar(2); 
 }
 
 void

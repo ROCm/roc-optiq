@@ -204,7 +204,7 @@ TraceView::CreateView()
 
     auto trace_area        = std::make_shared<LayoutItem>();
     trace_area->m_item     = m_vertical_split_container;
-    trace_area->m_bg_color = IM_COL32(255, 255, 255, 255);
+    //trace_area->m_bg_color = IM_COL32(255, 255, 255, 255);
 
     m_horizontal_split_container =
         std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);

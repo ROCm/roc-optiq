@@ -323,8 +323,8 @@ TraceView::HandleHotKeys()
     const ImGuiIO& io = ImGui::GetIO();
 
     // Don’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
-    // InputText)
-    if(io.WantTextInput || ImGui::IsAnyItemActive())
+    // InputText) or a pop up is open
+    if(io.WantTextInput || ImGui::IsAnyItemActive() || ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
     {
         return;
     }

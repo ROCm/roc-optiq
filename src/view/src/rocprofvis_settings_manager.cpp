@@ -19,7 +19,7 @@ namespace View
 constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(35, 35, 35, 255),     // Colors::kMetaDataColor
     IM_COL32(28, 28, 28, 255),     // Colors::kMetaDataColorSelected
-    IM_COL32(40, 40, 40, 255),     // Colors::kMetaDataSeparator
+    IM_COL32(70, 70, 70, 255),     // Colors::kMetaDataSeparator
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(220, 38, 38, 255),    // Colors::kTextError
     IM_COL32(0, 255, 0, 255),      // Colors::kTextSuccess

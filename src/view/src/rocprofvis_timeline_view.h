@@ -134,6 +134,7 @@ private:
     float                               m_track_height_sum;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     std::shared_ptr<AnnotationsManager> m_annotations;
+    bool                                m_pseudo_focus;
     struct
     {
         bool     handled;

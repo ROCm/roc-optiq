@@ -35,7 +35,7 @@ jobs:
             dnf groupinstall -y "Development Tools"
             dnf install -y epel-release && crb enable
             dnf install -y cmake libxkbcommon-devel ninja-build wayland-devel wget
-            dnf install -y libX11-devel libXi-devel libXinerama-devel libXrandr-devel xcb-util-cursor-devel
+            dnf install -y libX11-devel libXi-devel libXinerama-devel libXrandr-devel libXcursor-devel
             echo "✅ Dependencies Installed!"
 
       - name: Install Vulkan SDK

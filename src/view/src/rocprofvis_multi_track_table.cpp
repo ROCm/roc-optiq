@@ -2,7 +2,6 @@
 
 #include "rocprofvis_multi_track_table.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -36,6 +35,21 @@ MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
     m_widget_name = (table_type == TableType::kEventTable)
                         ? GenUniqueName("Event Table")
                         : GenUniqueName("Sample Table");
+
+    //subscribe to time format changed event
+    auto format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        // Reformat time columns
+        FormatData();
+    };
+
+    m_format_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), format_changed_handler);
+}
+
+MultiTrackTable::~MultiTrackTable()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), m_format_changed_token);
 }
 
 void
@@ -76,9 +90,7 @@ MultiTrackTable::HandleTrackSelectionChanged()
 
     bool fetch_result = false;
 
-    uint64_t request_id = (m_table_type == TableType::kEventTable)
-                              ? DataProvider::EVENT_TABLE_REQUEST_ID
-                              : DataProvider::SAMPLE_TABLE_REQUEST_ID;
+    uint64_t request_id = GetRequestID();
     // Cancel pending requests.
     if(m_data_provider.IsRequestPending(request_id))
     {
@@ -93,14 +105,15 @@ MultiTrackTable::HandleTrackSelectionChanged()
     else
     {
         // Fetch table data for the selected tracks
-        TableRequestParams event_table_params(
-            m_req_table_type, filtered_tracks, start_ns, end_ns, m_filter_options.filter,
+        TableRequestParams table_params(
+            m_req_table_type, filtered_tracks, {}, start_ns, end_ns,
+            m_filter_options.filter,
             (m_filter_options.column_index == 0)
                 ? ""
                 : m_column_names_ptr[m_filter_options.column_index],
-            m_filter_options.group_columns, 0, m_fetch_chunk_size);
+            m_filter_options.group_columns, {}, 0, m_fetch_chunk_size);
 
-        fetch_result = m_data_provider.FetchMultiTrackTable(event_table_params);
+        fetch_result = m_data_provider.FetchTable(table_params);
     }
 
     if(!fetch_result)
@@ -121,14 +134,99 @@ MultiTrackTable::HandleTrackSelectionChanged()
 }
 
 void
+MultiTrackTable::Render()
+{
+    auto table_params = m_data_provider.GetTableParams(m_table_type);
+    if(table_params)
+    {
+        ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks",
+                    table_params->m_start_row,
+                    table_params->m_start_row + table_params->m_req_row_count,
+                    m_data_provider.GetTableTotalRowCount(m_table_type),
+                    table_params->m_track_ids.size());
+    }
+
+    ImGui::BeginGroup();
+    if(m_table_type == TableType::kEventTable)
+    {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Group By");
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Group Columns");
+    }
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Filter");
+    ImGui::EndGroup();
+
+    ImGui::SameLine();
+
+    ImGui::BeginGroup();
+    if(m_table_type == TableType::kEventTable)
+    {
+        ImGui::SetNextItemAllowOverlap();
+        ImGui::Combo("##group_by", &m_pending_filter_options.column_index,
+                     m_column_names_ptr.data(), m_column_names_ptr.size());
+        if(m_pending_filter_options.column_index != 0)
+        {
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() -
+                                 ImGui::GetFrameHeightWithSpacing() -
+                                 ImGui::GetFontSize());
+            if(XButton("clear_group"))
+            {
+                m_pending_filter_options.column_index = 0;
+            }
+        }
+
+        ImGui::SetNextItemAllowOverlap();
+        ImGui::BeginDisabled(m_filter_options.column_index == 0);
+        ImGui::InputTextWithHint(
+            "##group_columns",
+            "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+            "MIN(duration) as min_duration, MAX(duration) as max_duration",
+            m_pending_filter_options.group_columns,
+            IM_ARRAYSIZE(m_pending_filter_options.group_columns));
+        if(strlen(m_pending_filter_options.group_columns) > 0)
+        {
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
+            if(XButton("clear_group_columns"))
+            {
+                m_pending_filter_options.group_columns[0] = '\0';
+            }
+        }
+        ImGui::EndDisabled();
+    }
+
+    ImGui::SetNextItemAllowOverlap();
+    ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
+                             m_pending_filter_options.filter,
+                             IM_ARRAYSIZE(m_pending_filter_options.filter));
+    if(strlen(m_pending_filter_options.filter) > 0)
+    {
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
+        if(XButton("clear_filters"))
+        {
+            m_pending_filter_options.filter[0] = '\0';
+        }
+    }
+    ImGui::EndGroup();
+    ImGui::SameLine();
+    if(ImGui::Button("Submit", ImVec2(0, ImGui::GetItemRectSize().y)))
+    {
+        m_filter_requested = true;
+    }
+    InfiniteScrollTable::Render();
+}
+
+void
 MultiTrackTable::Update()
 {
     // Handle track selection changed event
     if(m_defer_track_selection_changed)
     {
-        if(!m_data_provider.IsRequestPending(m_table_type == TableType::kEventTable
-                                                 ? DataProvider::EVENT_TABLE_REQUEST_ID
-                                                 : DataProvider::SAMPLE_TABLE_REQUEST_ID))
+        if(!m_data_provider.IsRequestPending(GetRequestID()))
         {
             // try to repocess the deferred track selection event
             spdlog::debug(
@@ -184,6 +282,73 @@ MultiTrackTable::Update()
     InfiniteScrollTable::Update();
 }
 
+void
+MultiTrackTable::FormatData() 
+{    
+    const std::vector<std::string>& column_names =
+    m_data_provider.GetTableHeader(m_table_type);
+    const std::vector<std::vector<std::string>>& table_data =
+    m_data_provider.GetTableData(m_table_type);
+    std::vector<formatted_column_info_t>& formatted_column_data =
+    m_data_provider.GetMutableFormattedTableData(m_table_type);
+ 
+    // clear previous formatting info
+    formatted_column_data.clear();
+    formatted_column_data.resize(column_names.size());
+
+    SettingsManager& settings = SettingsManager::GetInstance();
+    auto time_format = settings.GetUserSettings().unit_settings.time_format;
+
+    double start_time = m_data_provider.GetStartTime();
+
+    for(size_t col_idx = 0; col_idx < column_names.size(); col_idx++)
+    {
+        // Check if this column needs formatting
+        bool needs_formatting = false;
+        if(col_idx == m_important_column_idxs[kTimeStartNs] ||
+           col_idx == m_important_column_idxs[kTimeEndNs] ||
+           col_idx == m_important_column_idxs[kDurationNs])
+        {
+            needs_formatting = true;
+        }
+
+        if(needs_formatting)
+        {
+            formatted_column_data[col_idx].needs_formatting = true;
+            formatted_column_data[col_idx].formatted_row_value.resize(table_data.size());
+            
+            for(size_t row_idx = 0; row_idx < table_data.size(); row_idx++)
+            {
+                const std::string& raw_value = table_data[row_idx][col_idx];
+
+                if(col_idx == m_important_column_idxs[kTimeStartNs] ||
+                   col_idx == m_important_column_idxs[kTimeEndNs] ||
+                   col_idx == m_important_column_idxs[kDurationNs])
+                {
+                    // Format time values
+                    try
+                    {
+                        double time_ns = static_cast<double>(std::stoull(raw_value));
+                        if(col_idx != m_important_column_idxs[kDurationNs])
+                        {
+                            // time is relative to the trace start time
+                            time_ns -= start_time;
+                        }
+                        formatted_column_data[col_idx].formatted_row_value[row_idx] =
+                            nanosecond_to_formatted_str(time_ns, time_format);
+                    } catch(const std::exception& e)
+                    {
+                        spdlog::warn("Failed to format time value '{}': {}", raw_value,
+                                     e.what());
+                        formatted_column_data[col_idx].formatted_row_value[row_idx] =
+                            raw_value;
+                    }
+                }
+            }
+        }
+    }
+}
+
 uint64_t
 MultiTrackTable::GetTrackIdHelper(
     const std::vector<std::vector<std::string>>& table_data) const
@@ -218,10 +383,32 @@ MultiTrackTable::GetTrackIdHelper(
     return target_track_id;
 }
 
-void
-MultiTrackTable::FetchData(const TableRequestParams& params) const
+bool
+MultiTrackTable::XButton(const char* id) const
 {
-    m_data_provider.FetchMultiTrackTable(params);
+    bool clicked = false;
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushID(id);
+    clicked = ImGui::SmallButton(ICON_X_CIRCLED);
+    ImGui::PopID();
+    ImGui::PopFont();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultIMGUIStyle().WindowPadding);
+    if(ImGui::BeginItemTooltip())
+    {
+        ImGui::TextUnformatted("Clear");
+        ImGui::EndTooltip();
+    }
+    ImGui::PopStyleVar();
+    return clicked;
 }
 
 void

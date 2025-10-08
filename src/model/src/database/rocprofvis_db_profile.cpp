@@ -476,44 +476,56 @@ ProfileDatabase::BuildTableQuery(
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t filter,
     rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, rocprofvis_dm_charptr_t sort_column,
-    rocprofvis_dm_sort_order_t sort_order,
+    rocprofvis_dm_sort_order_t sort_order, rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
     uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
 {
     slice_query_t slice_query_map;
+    table_string_id_filter_map_t string_id_filter_map;
+    rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, string_id_filter_map);
     for (int i = 0; i < num; i++){
-        rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
-        for(int j = 0; j < props->query[kRPVQueryTable].size(); j++)
+        rocprofvis_dm_index_t track = tracks[i];
+        if(TABLE_QUERY_UNPACK_OP_TYPE(track) == 0)
         {
-            std::string q     = props->query[kRPVQueryTable][j]; 
-            std::string tuple = "(";
-            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process.tag[k] != "const") {
-                    if (tuple.length() > 1) tuple += ",";
-                    //if(props->process.is_numeric[k]) tuple += "coalesce(";
-                    tuple += props->process.tag[k];
-                    //if(props->process.is_numeric[k]) tuple += ",0)";
-                }
-            }
-            tuple += ")";
-            q += " where ";
-            if(props->process.category == kRocProfVisDmRegionMainTrack)
+            track = TABLE_QUERY_UNPACK_TRACK_ID(track);
+            rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track);
+            for(int j = 0; j < props->query[kRPVQueryTable].size(); j++)
             {
-                q += "SAMPLE.id IS NULL and ";
-            }
-            q += tuple;
-            q += " IN (";
-            tuple = "(";
-            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process.tag[k] != "const") {
-                    if (tuple.length() > 1) tuple += ",";
-                    std::string id = props->process.is_numeric[k] ? std::to_string(props->process.id[k]) : std::string("'") + props->process.name[k] + "'";
-                    tuple += id;
-                      
+                std::string q     = props->query[kRPVQueryTable][j]; 
+                std::string tuple = "(";
+                for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+                    if (props->process.tag[k] != "const") {
+                        if (tuple.length() > 1) tuple += ",";
+                        //if(props->process.is_numeric[k]) tuple += "coalesce(";
+                        tuple += props->process.tag[k];
+                        //if(props->process.is_numeric[k]) tuple += ",0)";
+                    }
                 }
+                tuple += ")";
+                q += " where ";
+                if(props->process.category == kRocProfVisDmRegionMainTrack)
+                {
+                    q += "SAMPLE.id IS NULL and ";
+                }
+                q += tuple;
+                q += " IN (";
+                tuple = "(";
+                for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+                    if (props->process.tag[k] != "const") {
+                        if (tuple.length() > 1) tuple += ",";
+                        std::string id = props->process.is_numeric[k] ? std::to_string(props->process.id[k]) : std::string("'") + props->process.name[k] + "'";
+                        tuple += id;
+                      
+                    }
+                }
+                tuple += ")";
+                if (slice_query_map[q].length() > 0) slice_query_map[q] += ", ";
+                slice_query_map[q] += tuple ;
             }
-            tuple += ")";
-            if (slice_query_map[q].length() > 0) slice_query_map[q] += ", ";
-            slice_query_map[q] += tuple ;
+        }
+        else if(string_filter_result == kRocProfVisDmResultSuccess && string_id_filter_map.count((rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(track)) > 0)
+        {
+            track = TABLE_QUERY_UNPACK_OP_TYPE(track);
+            slice_query_map[GetEventOperationQuery((rocprofvis_dm_event_operation_t)track)] = " WHERE " + string_id_filter_map.at((rocprofvis_dm_event_operation_t)track);
         }
     }
     query = "WITH all_rows AS (";

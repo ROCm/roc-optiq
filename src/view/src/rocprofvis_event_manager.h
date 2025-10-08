@@ -20,6 +20,7 @@ class EventManager
 public:
     using EventHandler      = std::function<void(std::shared_ptr<RocEvent>)>;
     using SubscriptionToken = size_t;
+    static const SubscriptionToken InvalidSubscriptionToken = static_cast<SubscriptionToken>(-1);
 
     static EventManager* GetInstance();
     static void          DestroyInstance();

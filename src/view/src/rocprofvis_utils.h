@@ -93,39 +93,43 @@ nanosecond_to_timecode_str(double time_point_ns, bool condensed = true,
  * microseconds.
  *
  * @param time_point_ns The duration in nanoseconds as a double.
+ * @param include_units If true, appends the appropriate time unit suffix to the string.
  * @return std::string The formatted duration string in microseconds.
  */
 std::string
-nanosecond_to_us_str(double time_point_ns);
+nanosecond_to_us_str(double time_point_ns, bool include_units = false);
 
 /**
  * @brief Converts a double representing nanoseconds into a string representation in
  * milliseconds.
  *
  * @param time_point_ns The duration in nanoseconds as a double.
+ * @param include_units If true, appends the appropriate time unit suffix to the string.
  * @return std::string The formatted duration string in milliseconds.
  */
 std::string
-nanosecond_to_ms_str(double time_point_ns);
+nanosecond_to_ms_str(double time_point_ns, bool include_units = false);
 
 /**
  * @brief Converts a double representing nanoseconds into a string representation in
  * seconds.
  *
  * @param time_point_ns The duration in nanoseconds as a double.
+ * @param include_units If true, appends the appropriate time unit suffix to the string.
  * @return std::string The formatted duration string in seconds.
  */
 std::string
-nanosecond_to_s_str(double time_point_ns);
+nanosecond_to_s_str(double time_point_ns, bool include_units = false);
 
 /**
  * @brief Converts a double representing nanoseconds into a string representation.
  *
  * @param time_point_ns The duration in nanoseconds as a double.
+ * @param include_units If true, appends the appropriate time unit suffix to the string.
  * @return std::string The formatted duration string in nanoseconds.
  */
 std::string
-nanosecond_to_str(double time_point_ns);
+nanosecond_to_str(double time_point_ns, bool include_units = false);
 
 enum class TimeFormat
 {
@@ -143,10 +147,11 @@ enum class TimeFormat
  *
  * @param time_point_ns The duration in nanoseconds as a double.
  * @param format The desired TimeFormat for the output string.
+ * @param include_units If true, appends the appropriate time unit suffix to the string.
  * @return std::string The formatted duration string.
  */
 std::string
-nanosecond_to_formatted_str(double time_point_ns, TimeFormat format);
+nanosecond_to_formatted_str(double time_point_ns, TimeFormat format, bool include_units = false);
 
 /**
  * @brief Calculates a "nice" grid interval for a timeline.

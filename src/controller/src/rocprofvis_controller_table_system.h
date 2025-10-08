@@ -46,6 +46,9 @@ public:
 
 private:
     std::vector<uint32_t> m_tracks;
+    rocprofvis_controller_track_type_t m_track_type;
+    std::vector<std::string> m_string_table_filters;
+    std::vector<const char*> m_string_table_filters_ptr;
     double m_start_ts;
     double m_end_ts;
 };

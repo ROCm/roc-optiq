@@ -636,10 +636,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             m_view_time_offset_ns + (cursor_screen_percentage * m_v_width);
 
         std::string label = nanosecond_to_formatted_str(
-            scrubber_position, m_settings.GetUserSettings().unit_settings.time_format);
+            scrubber_position, m_settings.GetUserSettings().unit_settings.time_format,
+            true);
 
-        // char text[20];
-        // snprintf(text, 20, "%17.0f", scrubber_position);
         ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
         constexpr float label_padding = 4.0f;
@@ -702,7 +701,8 @@ TimelineView::CalculateGridInterval()
     // measure the size of the label to determine the step size
     std::string label =
         nanosecond_to_formatted_str(
-            m_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format) +
+            m_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format,
+            true) +
         "gap";
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
@@ -797,7 +797,8 @@ TimelineView::RenderGrid()
                 m_settings.GetColor(Colors::kBoundBox), 0.5f);
 
             label = nanosecond_to_formatted_str(
-                grid_line_ns, m_settings.GetUserSettings().unit_settings.time_format);
+                grid_line_ns, m_settings.GetUserSettings().unit_settings.time_format,
+                true);
 
             ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 

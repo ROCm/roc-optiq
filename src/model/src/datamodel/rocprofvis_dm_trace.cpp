@@ -581,6 +581,38 @@ rocprofvis_dm_charptr_t Trace::GetStringAt(rocprofvis_dm_index_t index){
     return m_strings[index].c_str();
 }
 
+rocprofvis_dm_result_t Trace::GetStringIndicesWithSubstring(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, kRocProfVisDmResultNotLoaded);
+    for(int i = 0; i < num; i ++)
+    {
+        ROCPROFVIS_ASSERT_RETURN(substrings[i], kRocProfVisDmResultInvalidParameter);
+    }
+    for(int i = 0; i < m_strings.size(); i ++)
+    {
+        std::string_view sv = m_strings[i];
+        bool match = true;
+        for(int j = 0; j < num; j ++)
+        {
+            std::string_view sub_sv = substrings[j];
+            auto it = std::search(sv.begin(), sv.end(), sub_sv.begin(), sub_sv.end(),
+                        [](unsigned char c1, unsigned char c2) {
+                            return std::tolower(c1) == std::tolower(c2);
+                        });
+            if (it == sv.end())
+            {
+                match = false;
+                break;
+            }
+        }
+        if(match)
+        {
+            indices.push_back(i);
+        }
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)

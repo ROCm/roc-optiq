@@ -26,15 +26,14 @@ jobs:
     name: RockyLinux ${{ matrix.os-release }} • Build Visualizer
     strategy:
       matrix:
-        include:
-          - os-release: [8, 9]
-    steps:
+          os-release: [ 8, 9 ]
 
+    steps:
       - name: Install Dependencies
         run: |
             dnf groupinstall -y "Development Tools"
             dnf install -y epel-release && crb enable
-            dnf install -y cmake ninja-build wayland-devel wget
+            dnf install -y cmake libxkbcommon-devel ninja-build wayland-devel wget
             dnf install -y xinput libXinerama xcb-util-cursor
             echo "✅ Dependencies Installed!"
 

@@ -33,7 +33,7 @@ jobs:
         run: |
             dnf groupinstall -y "Development Tools"
             dnf install -y epel-release && crb enable
-            dnf install -y cmake libxkbcommon-devel libX11-devel ninja-build wayland-devel wget
+            dnf install -y cmake libX11-devel libxkbcommon-devel libXrandr-devel ninja-build wayland-devel wget
             dnf install -y xinput libXinerama xcb-util-cursor
             echo "✅ Dependencies Installed!"
 

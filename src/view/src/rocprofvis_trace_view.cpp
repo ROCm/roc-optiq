@@ -508,6 +508,16 @@ TraceView::RenderToolbar()
     RenderAnnotationControls();
     RenderSeparator();
     RenderBookmarkControls();
+    RenderSeparator();
+    if(ImGui::Button("Reset View"))
+    {
+        if(m_timeline_view)
+        {
+            m_timeline_view->MoveToPosition(m_data_provider.GetStartTime(),
+                                            m_data_provider.GetEndTime(), 0.0, false);
+        }
+    }
+
     // pop content style
     ImGui::PopStyleVar(2);
     ImGui::EndChild();

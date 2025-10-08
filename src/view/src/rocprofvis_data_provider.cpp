@@ -331,6 +331,10 @@ DataProvider::SetTraceLoadedCallback(
 {
     m_trace_data_ready_callback = callback;
 }
+std::vector<double>*
+DataProvider::GetHistogram() {
+    return &m_histogram;
+}
 
 void
 DataProvider::SetSaveTraceCallback(const std::function<void(bool)>& callback)
@@ -490,12 +494,15 @@ DataProvider::HandleLoadTrace()
                     m_trace_timeline, kRPVControllerTimelineNumGraphs, 0, &m_num_graphs);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+                m_histogram.assign(num_buckets, 0.0);
+                std::map<int, std::vector<double>> histogram_minimap;
+
                 for(int graphs = 0; graphs < m_num_graphs; graphs++)
                 {
                     rocprofvis_handle_t* track;
                     result = rocprofvis_controller_get_object(
                         m_trace_controller, kRPVControllerTrackIndexed, graphs, &track);
-                    std::vector<double> histogram_track(num_buckets, 0);
+                    std::vector<double> histogram_track(num_buckets, 0.0);
 
                     for(int bin_num = 0; bin_num < num_buckets; bin_num++)
                     {
@@ -503,27 +510,13 @@ DataProvider::HandleLoadTrace()
                         result = rocprofvis_controller_get_double(
                             track, kRPVControllerTrackHistogramBucketValueIndexed,
                             bin_num, &binval);
-                        histogram_track[bin_num] += binval;
+                        histogram_track[bin_num] = binval;
+                        m_histogram[bin_num] += binval;
                     }
-                    std::vector<double> histogram_reduced(target_bins, 0.0);
-                    int                 bins_per_target = num_buckets / target_bins;
-                    int                 remainder       = num_buckets % target_bins;
-
-                    int src_idx = 0;
-                    for(int i = 0; i < target_bins; ++i)
-                    {
-                        int bins_in_this_target =
-                            bins_per_target + (i == target_bins - 1 ? remainder : 0);
-                        for(int j = 0; j < bins_in_this_target && src_idx < num_buckets;
-                            ++j, ++src_idx)
-                        {
-                            histogram_reduced[i] += histogram_track[src_idx];
-                            m_histogram[i] += histogram_track[src_idx];
-                        }
-                    }
-                    histogram_minimap[graphs] = histogram_reduced;
+                    histogram_minimap[graphs] = histogram_track;
                 }
                 m_mini_map = histogram_minimap;
+
            
                 m_min_ts = 0;
                 result   = rocprofvis_controller_get_double(

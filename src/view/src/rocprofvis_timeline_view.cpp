@@ -70,6 +70,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_annotations(annotations)
 , m_dragged_sticky_id(-1)
+, m_histogram(nullptr)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -285,7 +286,7 @@ TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position,
     {
         m_scroll_position_y =
             std::clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f, 0.0f,
-                  m_content_max_y_scroll);
+                       m_content_max_y_scroll);
     }
     else
     {
@@ -1222,6 +1223,7 @@ TimelineView::MakeGraphView()
             m_graphs[track_info->index] = std::move(graph);
         }
     }
+    m_histogram       = m_data_provider.GetHistogram();
     m_meta_map_made   = true;
     m_resize_activity = true;
 }
@@ -1240,13 +1242,78 @@ TimelineView::RenderGraphPoints()
         float       fontHeight        = ImGui::GetFontSize();
         m_artificial_scrollbar_height = fontHeight + style.FramePadding.y * 2.0f;
 
+        int histogram_size = 0;
+
+        if(m_histogram != nullptr)
+        {
+            histogram_size = 100;
+            ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                                  m_settings.GetColor(Colors::kGridColor));
+            ImGui::BeginChild(
+                "Histogram", ImVec2(subcomponent_size_main.x, histogram_size), false,
+                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+            // Draw the histogram bars
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            ImVec2      hist_pos  = ImGui::GetCursorScreenPos();
+            float       width     = subcomponent_size_main.x;
+            float       height    = histogram_size;
+            size_t      bin_count = m_histogram->size();
+            if(bin_count > 0)
+            {
+                uint64_t max_value =
+                    *std::max_element(m_histogram->begin(), m_histogram->end());
+                float bin_width = width / static_cast<float>(bin_count);
+
+                for(size_t i = 0; i < bin_count; ++i)
+                {
+                    float x0 = hist_pos.x + i * bin_width;
+                    float x1 = x0 + bin_width;
+                    float y0 = hist_pos.y;
+                    float bar_height =
+                        (max_value > 0)
+                            ? (static_cast<float>((*m_histogram)[i]) / max_value) * height
+                            : 0.0f;
+                    float y1 = y0 + bar_height;
+
+                    draw_list->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1),
+                                             m_settings.GetColor(Colors::kAccentRed));
+                }
+            }
+
+            float view_start_frac = (m_view_time_offset_ns) / m_range_x;
+            float view_end_frac   = (m_view_time_offset_ns + m_v_width) / m_range_x;
+
+            view_start_frac = std::clamp(view_start_frac, 0.0f, 1.0f);
+            view_end_frac   = std::clamp(view_end_frac, 0.0f, 1.0f);
+
+            float x0 = hist_pos.x + view_start_frac * width;
+            float x1 = hist_pos.x + view_end_frac * width;
+            float y0 = hist_pos.y;
+            float y1 = hist_pos.y + height;
+
+            ImU32 box_color = IM_COL32(255, 255, 255, 60);  // white, semi-transparent
+            draw_list->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), box_color);
+            draw_list->AddRect(ImVec2(x0, y0), ImVec2(x1, y1),
+                               m_settings.GetColor(Colors::kAccentRed), 0.0f, 0, 2.0f);
+
+            if(!m_resize_activity && !m_stop_user_interaction)
+            {
+                // Funtion enables user interactions to be captured
+                HandleHistogramTouch();
+            }
+
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+        }
+
         m_graph_size =
             ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
 
         ImGui::BeginChild(
             "Grid View 2",
-            ImVec2(subcomponent_size_main.x,
-                   subcomponent_size_main.y - m_artificial_scrollbar_height),
+            ImVec2(subcomponent_size_main.x, subcomponent_size_main.y -
+                                                 m_artificial_scrollbar_height -
+                                                 histogram_size),
             false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
         // Scale used in all graphs computed here
@@ -1289,7 +1356,8 @@ TimelineView::RenderGraphPoints()
 
         ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
                             std::clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
-                                  (available_width * 0.05f), (available_width * 0.90f)));
+                                       (available_width * 0.05f),
+                                       (available_width * 0.90f)));
         ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3.0f);
 
         ImU32 scroll_color = m_settings.GetColor(Colors::kFillerColor);
@@ -1334,6 +1402,66 @@ TimelineView::RenderGraphPoints()
 }
 
 void
+TimelineView::HandleHistogramTouch()
+{
+    ImVec2 container_pos  = ImGui::GetWindowPos();
+    ImVec2 container_size = ImGui::GetWindowSize();
+
+    ImVec2 graph_area_min = ImVec2(container_pos.x, container_pos.y);
+    ImVec2 graph_area_max =
+        ImVec2(container_pos.x + m_sidebar_size + m_graph_size.x, container_pos.y + 100);
+
+    bool is_mouse_in_graph = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Graph area: allow full interaction
+    if(is_mouse_in_graph)
+    {
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_can_drag_to_pan = true;
+        }
+    }
+    if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    {
+        m_can_drag_to_pan = false;
+    }
+
+    // Handle Panning (but only if in graph area)
+    if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
+       is_mouse_in_graph)
+    {
+        float drag_y = io.MouseDelta.y;
+        m_scroll_position_y =
+            std::clamp(m_scroll_position_y - drag_y, 0.0f, m_content_max_y_scroll);
+        float  drag       = io.MouseDelta.x;
+        double view_width = (m_range_x) / m_zoom;
+
+        float user_requested_move = (drag / m_graph_size.x) * m_range_x;
+
+        if(user_requested_move <= 0)
+        {
+            if(m_view_time_offset_ns <= (m_range_x))
+            {
+                m_view_time_offset_ns += user_requested_move;
+            }
+        }
+        else
+        {
+            if(m_view_time_offset_ns >= 0)
+            {
+                m_view_time_offset_ns += user_requested_move;
+            }
+        }
+        double max_offset =
+            std::max(0.0, m_range_x - view_width);  // If zoomed out too much can trigger
+                                                    // failure without this line.
+        m_view_time_offset_ns = std::clamp(m_view_time_offset_ns, 0.0, max_offset);
+    }
+}
+
+void
 TimelineView::HandleTopSurfaceTouch()
 {
     ImVec2 container_pos  = ImGui::GetWindowPos();
@@ -1351,7 +1479,7 @@ TimelineView::HandleTopSurfaceTouch()
     bool is_mouse_in_sidebar = ImGui::IsMouseHoveringRect(sidebar_min, sidebar_max);
     bool is_mouse_in_graph   = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
 
-    ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO&    io         = ImGui::GetIO();
     const float zoom_speed = 0.1f;
 
     // Sidebar: scroll wheel pans vertically
@@ -1361,9 +1489,10 @@ TimelineView::HandleTopSurfaceTouch()
         if(scroll_wheel != 0.0f)
         {
             // Adjust scroll speed as needed (here, 40.0f per scroll step)
-            float scroll_speed  = 100.0f;
-            m_scroll_position_y = std::clamp(m_scroll_position_y - scroll_wheel * scroll_speed,
-                                        0.0f, m_content_max_y_scroll);
+            float scroll_speed = 100.0f;
+            m_scroll_position_y =
+                std::clamp(m_scroll_position_y - scroll_wheel * scroll_speed, 0.0f,
+                           m_content_max_y_scroll);
         }
     }
 
@@ -1379,7 +1508,6 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel_h = io.MouseWheelH;
         if(scroll_wheel_h != 0.0f)
         {
-          
             float move_amount = scroll_wheel_h * m_v_width * zoom_speed;
             m_view_time_offset_ns -= move_amount;
 
@@ -1403,8 +1531,8 @@ TimelineView::HandleTopSurfaceTouch()
                 m_view_time_offset_ns + cursor_screen_percentage * m_v_width;
 
             // 3. Apply zoom
-             
-            float       new_zoom   = m_zoom;
+
+            float new_zoom = m_zoom;
             if(scroll_wheel > 0)
             {
                 if(m_pixels_per_ns < 1.0)
@@ -1442,8 +1570,8 @@ TimelineView::HandleTopSurfaceTouch()
     float region_moved_per_click_x = 0.01 * m_graph_size.x;
     float region_moved_per_click_y = 0.01 * m_content_max_y_scroll;
 
-    //A, D, left arrow, right arrow go left and right 
-  if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
+    // A, D, left arrow, right arrow go left and right
+    if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
     {
         m_view_time_offset_ns -=
             pan_speed * ((region_moved_per_click_x / m_graph_size.x) * m_v_width);
@@ -1458,9 +1586,9 @@ TimelineView::HandleTopSurfaceTouch()
     if(ImGui::IsKeyPressed(ImGuiKey_W))
     {
         // Zoom in
- 
-        float       new_zoom   = m_zoom * (1.0f + zoom_speed * pan_speed);
-        new_zoom               = std::max(new_zoom, 0.9f);
+
+        float new_zoom = m_zoom * (1.0f + zoom_speed * pan_speed);
+        new_zoom       = std::max(new_zoom, 0.9f);
 
         // Center zoom at current view center
         double center_ns      = m_view_time_offset_ns + m_v_width * 0.5;
@@ -1474,9 +1602,9 @@ TimelineView::HandleTopSurfaceTouch()
     if(ImGui::IsKeyPressed(ImGuiKey_S))
     {
         // Zoom out
-   
-        float       new_zoom   = m_zoom * (1.0f - zoom_speed * pan_speed);
-        new_zoom               = std::max(new_zoom, 0.9f);
+
+        float new_zoom = m_zoom * (1.0f - zoom_speed * pan_speed);
+        new_zoom       = std::max(new_zoom, 0.9f);
 
         // Center zoom at current view center
         double center_ns      = m_view_time_offset_ns + m_v_width * 0.5;
@@ -1493,13 +1621,13 @@ TimelineView::HandleTopSurfaceTouch()
     {
         m_scroll_position_y =
             std::clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y, 0.0f,
-                  m_content_max_y_scroll);
+                       m_content_max_y_scroll);
     }
     if(ImGui::IsKeyPressed(ImGuiKey_DownArrow))
     {
         m_scroll_position_y =
             std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y, 0.0f,
-                  m_content_max_y_scroll);
+                       m_content_max_y_scroll);
     }
 
     // Stop panning if mouse released

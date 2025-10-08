@@ -646,10 +646,21 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(5, "Collecting track histogram",
             kRPVDbBusy, future);
-        uint64_t trace_length = TraceProperties()->end_time - TraceProperties()->start_time;
-        uint64_t bucket_size = kRPVDbMicrosecond;
-        if (trace_length >= kRPVDbSecond) bucket_size = kRPVDbMillisecond;
-        if (trace_length >= kRPVDb1000Seconds) bucket_size = kRPVDbSecond;
+
+
+        constexpr uint64_t desired_bins = 300;
+        uint64_t           trace_length =
+            TraceProperties()->end_time - TraceProperties()->start_time;
+
+
+        uint64_t bucket_size = (trace_length + desired_bins ) / desired_bins;
+        if(bucket_size == 0) bucket_size = 1;  
+
+
+        uint64_t bucket_count = (trace_length + bucket_size ) / bucket_size;
+        if(bucket_count == 0) bucket_count = 1;
+
+
         TraceProperties()->histogram_bucket_size = bucket_size;
         TraceProperties()->histogram_bucket_count = (trace_length+bucket_size)/bucket_size;
 

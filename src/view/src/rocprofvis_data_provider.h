@@ -463,10 +463,15 @@ public:
      */
     bool DumpTrack(uint64_t track_id);
 
+
     void DumpTable(TableType type);
 
     void DumpTable(const std::vector<std::string>&              header,
                    const std::vector<std::vector<std::string>>& data);
+    /*
+    Gets a histogram of all tracks in the controller.
+    */
+    std::vector<double>* GetHistogram();
 
     /*
      * Performs all data processing.  Call this from the "game loop".
@@ -593,7 +598,7 @@ private:
 
     //Histogram Vector 
     std::vector<double> m_histogram;
-    std::map<int, std::vector<double>> m_histogram_map;
+    std::map<int, std::vector<double>> m_mini_map;
 
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;

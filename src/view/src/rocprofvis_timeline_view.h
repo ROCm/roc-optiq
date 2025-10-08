@@ -77,6 +77,7 @@ public:
     void   RenderSplitter(ImVec2 screen_pos);
     void   RenderGraphView();
     void   HandleTopSurfaceTouch();
+    void   HandleHistogramTouch();
     void   HandleNewTrackData(std::shared_ptr<RocEvent> e);
     void   CalculateGridInterval();
     ImVec2 GetGraphSize();
@@ -93,6 +94,7 @@ private:
     EventManager::SubscriptionToken     m_font_changed_token;
     EventManager::SubscriptionToken     m_set_view_range_token;
     int                                 m_dragged_sticky_id;
+    std::vector<double>*                m_histogram;
     std::vector<rocprofvis_graph_t>     m_graphs;
     int                                 m_ruler_height;
     float                               m_ruler_padding;

@@ -128,8 +128,6 @@ typedef struct {
     rocprofvis_dm_timestamp_t max_ts;
     // list array to keep current events stack
     std::list<rocprofvis_event_timing_params_t> m_active_events;
-    // track query builing string, keep here for debugging purposes
-    std::string async_query;
     // minimum level or value
     rocprofvis_dm_value_t min_value;
     // maximum level or value

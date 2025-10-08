@@ -1407,15 +1407,15 @@ TimelineView::HandleHistogramTouch()
     ImVec2 container_pos  = ImGui::GetWindowPos();
     ImVec2 container_size = ImGui::GetWindowSize();
 
-    ImVec2 graph_area_min = ImVec2(container_pos.x, container_pos.y);
-    ImVec2 graph_area_max =
+    ImVec2 histogram_area_min = ImVec2(container_pos.x, container_pos.y);
+    ImVec2 histogram_area_max =
         ImVec2(container_pos.x + m_sidebar_size + m_graph_size.x, container_pos.y + 100);
 
-    bool is_mouse_in_graph = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
+    bool is_mouse_in_graph = ImGui::IsMouseHoveringRect(histogram_area_min, histogram_area_max);
 
     ImGuiIO& io = ImGui::GetIO();
 
-    // Graph area: allow full interaction
+    // Histogram area: allow full interaction
     if(is_mouse_in_graph)
     {
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -1428,13 +1428,10 @@ TimelineView::HandleHistogramTouch()
         m_can_drag_to_pan = false;
     }
 
-    // Handle Panning (but only if in graph area)
+    // Handle Panning (but only if in Histogram area)
     if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
        is_mouse_in_graph)
     {
-        float drag_y = io.MouseDelta.y;
-        m_scroll_position_y =
-            std::clamp(m_scroll_position_y - drag_y, 0.0f, m_content_max_y_scroll);
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 

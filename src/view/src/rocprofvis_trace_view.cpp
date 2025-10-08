@@ -181,25 +181,39 @@ TraceView::CreateView()
 {
     m_annotations =
         std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
-    m_timeline_selection = std::make_shared<TimelineSelection>(m_data_provider);
-    m_track_topology     = std::make_shared<TrackTopology>(m_data_provider);
-    m_timeline_view      = std::make_shared<TimelineView>(m_data_provider,
-                                                          m_timeline_selection, m_annotations);
+    m_timeline_selection    = std::make_shared<TimelineSelection>(m_data_provider);
+    m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
+    m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
+                                                             m_timeline_selection, m_annotations);
+    auto m_histogram_widget = std::make_shared<RocCustomWidget>(
+        [this]() { m_timeline_view->RenderHistogram(); });
 
-    auto sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                           m_timeline_view->GetGraphs(), m_data_provider);
+    auto sidebar =
+        std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
+                                  m_timeline_view->GetGraphs(), m_data_provider);
     auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
-                                                m_timeline_selection, m_annotations);
+                                                   m_timeline_selection, m_annotations);
 
     m_sidebar_item                 = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible      = m_is_sidebar_visible;
     m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
-    m_analysis_item                = LayoutItem::CreateFromWidget(analysis);
-    m_analysis_item->m_visible     = m_is_analysis_visible;
+    m_analysis_item            = LayoutItem::CreateFromWidget(analysis);
+    m_analysis_item->m_visible = m_is_analysis_visible;
 
-    m_timeline_item = LayoutItem::CreateFromWidget(m_timeline_view);
-    m_vertical_split_container = std::make_shared<VSplitContainer>(m_timeline_item, m_analysis_item);
+    LayoutItem m_histogram_item(0, 150);
+    m_histogram_item.m_item = m_histogram_widget;
+    LayoutItem timeline_item(0, 0);
+    timeline_item.m_item = m_timeline_view;
+
+    std::vector<LayoutItem> layout_items;
+    layout_items.push_back(m_histogram_item);
+    layout_items.push_back(timeline_item);
+    auto m_timeline_container     = std::make_shared<VFixedContainer>(layout_items);
+    auto m_timeline_continer_item = LayoutItem::CreateFromWidget(m_timeline_container);
+
+    m_vertical_split_container =
+        std::make_shared<VSplitContainer>(m_timeline_continer_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
 
     auto trace_area        = std::make_shared<LayoutItem>();
@@ -242,8 +256,9 @@ TraceView::OpenFile(const std::string& file_path)
 void
 TraceView::Render()
 {
-    if(m_horizontal_split_container && m_data_provider.GetState() == ProviderState::kReady)
-    {        
+    if(m_horizontal_split_container &&
+       m_data_provider.GetState() == ProviderState::kReady)
+    {
         m_horizontal_split_container->Render();
         HandleHotKeys();
     }
@@ -475,16 +490,33 @@ void
 TraceView::SetAnalysisViewVisibility(bool visibility)
 {
     m_is_analysis_visible = visibility;
-    if(m_analysis_item)
-        m_analysis_item->m_visible = m_is_analysis_visible;
+    if(m_analysis_item) m_analysis_item->m_visible = m_is_analysis_visible;
 }
 
 void
 TraceView::SetSidebarViewVisibility(bool visibility)
 {
     m_is_sidebar_visible = visibility;
-    if(m_sidebar_item)
-        m_sidebar_item->m_visible  = visibility;
+    if(m_sidebar_item) m_sidebar_item->m_visible = visibility;
+}
+
+std::vector<double>
+BinTo50(const std::vector<double>& input)
+{
+    const size_t target_bins = 50;
+    size_t       n           = input.size();
+    if(n == 0) return std::vector<double>(target_bins, 0.0);
+
+    std::vector<double> output(target_bins, 0.0);
+    double              bins_per_target = static_cast<double>(n) / target_bins;
+
+    for(size_t i = 0; i < n; ++i)
+    {
+        size_t bin = static_cast<size_t>(i / bins_per_target);
+        if(bin >= target_bins) bin = target_bins - 1;
+        output[bin] += input[i];
+    }
+    return output;
 }
 
 void
@@ -513,6 +545,9 @@ TraceView::RenderToolbar()
     ImGui::Dummy(ImVec2(15, 0));
     ImGui::SameLine();
     RenderBookmarkControls();
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(15, 0));
+    ImGui::SameLine();
     // pop content style
     ImGui::PopStyleVar(2);
     ImGui::EndChild();

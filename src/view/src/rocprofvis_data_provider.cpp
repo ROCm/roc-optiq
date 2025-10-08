@@ -336,6 +336,12 @@ DataProvider::GetHistogram() {
     return &m_histogram;
 }
 
+std::map<int, std::vector<double>>*
+DataProvider::GetMiniMap()
+{
+    return &m_mini_map;
+}
+
 void
 DataProvider::SetSaveTraceCallback(const std::function<void(bool)>& callback)
 {

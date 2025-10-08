@@ -1,14 +1,14 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_controller_timeline.h"
-#include "rocprofvis_controller_future.h"
-#include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_event.h"
-#include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_graph.h"
-#include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_id.h"
 #include "rocprofvis_controller_json_trace.h"
+#include "rocprofvis_controller_reference.h"
+#include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_track.h"
 #include "rocprofvis_core_assert.h"
 
 #include <cfloat>
@@ -18,14 +18,14 @@ namespace RocProfVis
 namespace Controller
 {
 
-typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectTypeGraph> GraphRef;
+typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectTypeGraph>
+    GraphRef;
 
 Timeline::Timeline(uint64_t id)
 : m_id(id)
 , m_min_ts(DBL_MAX)
 , m_max_ts(DBL_MIN)
-{
-}
+{}
 
 Timeline::~Timeline()
 {
@@ -35,20 +35,23 @@ Timeline::~Timeline()
     }
 }
 
-rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& array,
-                                double start, double end, uint32_t pixels)
+rocprofvis_result_t
+Timeline::AsyncFetch(Graph& graph, Future& future, Array& array, double start, double end,
+                     uint32_t pixels)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
-    future.Set(JobSystem::Get().IssueJob([&graph, &array, start, end, pixels](Future* future) -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob(
+        [&graph, &array, start, end, pixels](Future* future) -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
-            result                     = graph.Fetch(pixels, start, end, array, index, future);
+            result = graph.Fetch(pixels, start, end, array, index, future);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
                               result == kRocProfVisResultOutOfRange ||
                               result == kRocProfVisResultCancelled);
             return result;
-        }, &future));
+        },
+        &future));
 
     if(future.IsValid())
     {
@@ -59,17 +62,19 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
     return error;
 }
 
-rocprofvis_result_t Timeline::AsyncFetch(Track& track, Future& future, Array& array,
-                                double start, double end)
+rocprofvis_result_t
+Timeline::AsyncFetch(Track& track, Future& future, Array& array, double start, double end)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
-    future.Set(JobSystem::Get().IssueJob([&track, &array, start, end](Future* future) -> rocprofvis_result_t {
+    future.Set(JobSystem::Get().IssueJob(
+        [&track, &array, start, end](Future* future) -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
-            result = track.Fetch(start, end, array, index, future);
+            result                     = track.Fetch(start, end, array, index, future);
             return result;
-        }, &future));
+        },
+        &future));
 
     if(future.IsValid())
     {
@@ -79,13 +84,14 @@ rocprofvis_result_t Timeline::AsyncFetch(Track& track, Future& future, Array& ar
     return error;
 }
 
-rocprofvis_controller_object_type_t Timeline::GetType(void) 
+rocprofvis_controller_object_type_t
+Timeline::GetType(void)
 {
     return kRPVControllerObjectTypeTimeline;
 }
 
-rocprofvis_result_t Timeline::GetUInt64(rocprofvis_property_t property, uint64_t index,
-                                uint64_t* value) 
+rocprofvis_result_t
+Timeline::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
@@ -97,11 +103,11 @@ rocprofvis_result_t Timeline::GetUInt64(rocprofvis_property_t property, uint64_t
                 *value = sizeof(Timeline);
                 *value += m_graphs.size() * sizeof(Graph*);
                 result = kRocProfVisResultSuccess;
-                for (auto& graph : m_graphs)
+                for(auto& graph : m_graphs)
                 {
                     uint64_t entry_size = 0;
-                    result = graph->GetUInt64(property, 0, &entry_size);
-                    if (result == kRocProfVisResultSuccess)
+                    result              = graph->GetUInt64(property, 0, &entry_size);
+                    if(result == kRocProfVisResultSuccess)
                     {
                         *value += entry_size;
                     }
@@ -148,8 +154,8 @@ rocprofvis_result_t Timeline::GetUInt64(rocprofvis_property_t property, uint64_t
     }
     return result;
 }
-rocprofvis_result_t Timeline::GetDouble(rocprofvis_property_t property, uint64_t index,
-                                double* value) 
+rocprofvis_result_t
+Timeline::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
@@ -199,8 +205,9 @@ rocprofvis_result_t Timeline::GetDouble(rocprofvis_property_t property, uint64_t
     }
     return result;
 }
-rocprofvis_result_t Timeline::GetObject(rocprofvis_property_t property, uint64_t index,
-                                rocprofvis_handle_t** value) 
+rocprofvis_result_t
+Timeline::GetObject(rocprofvis_property_t property, uint64_t index,
+                    rocprofvis_handle_t** value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
@@ -210,12 +217,14 @@ rocprofvis_result_t Timeline::GetObject(rocprofvis_property_t property, uint64_t
             case kRPVControllerTimelineGraphById:
             {
                 result = kRocProfVisResultOutOfRange;
-                for (auto* graph : m_graphs)
+                for(auto* graph : m_graphs)
                 {
                     uint64_t graph_id = 0;
-                    if (graph->GetUInt64(kRPVControllerGraphId, 0, &graph_id) == kRocProfVisResultSuccess && graph_id == index)
+                    if(graph->GetUInt64(kRPVControllerGraphId, 0, &graph_id) ==
+                           kRocProfVisResultSuccess &&
+                       graph_id == index)
                     {
-                        *value = (rocprofvis_handle_t*)graph;
+                        *value = (rocprofvis_handle_t*) graph;
                         result = kRocProfVisResultSuccess;
                         break;
                     }
@@ -252,8 +261,9 @@ rocprofvis_result_t Timeline::GetObject(rocprofvis_property_t property, uint64_t
     }
     return result;
 }
-rocprofvis_result_t Timeline::GetString(rocprofvis_property_t property, uint64_t index,
-                                char* value, uint32_t* length) 
+rocprofvis_result_t
+Timeline::GetString(rocprofvis_property_t property, uint64_t index, char* value,
+                    uint32_t* length)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
@@ -280,8 +290,8 @@ rocprofvis_result_t Timeline::GetString(rocprofvis_property_t property, uint64_t
     return result;
 }
 
-rocprofvis_result_t Timeline::SetUInt64(rocprofvis_property_t property, uint64_t index,
-                                uint64_t value) 
+rocprofvis_result_t
+Timeline::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
@@ -295,13 +305,14 @@ rocprofvis_result_t Timeline::SetUInt64(rocprofvis_property_t property, uint64_t
         {
             if(m_graphs.size() != value)
             {
-                for (uint32_t i = value; i < m_graphs.size(); i++)
+                for(uint32_t i = value; i < m_graphs.size(); i++)
                 {
                     delete m_graphs[i];
                     m_graphs[i] = nullptr;
                 }
                 m_graphs.resize(value);
-                result = (m_graphs.size() == value) ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
+                result = (m_graphs.size() == value) ? kRocProfVisResultSuccess
+                                                    : kRocProfVisResultMemoryAllocError;
             }
             else
             {
@@ -325,8 +336,8 @@ rocprofvis_result_t Timeline::SetUInt64(rocprofvis_property_t property, uint64_t
     }
     return result;
 }
-rocprofvis_result_t Timeline::SetDouble(rocprofvis_property_t property, uint64_t index,
-                                double value) 
+rocprofvis_result_t
+Timeline::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
@@ -349,8 +360,9 @@ rocprofvis_result_t Timeline::SetDouble(rocprofvis_property_t property, uint64_t
     }
     return result;
 }
-rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t index,
-                                rocprofvis_handle_t* value) 
+rocprofvis_result_t
+Timeline::SetObject(rocprofvis_property_t property, uint64_t index,
+                    rocprofvis_handle_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
@@ -363,9 +375,9 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
                 if(index < m_graphs.size())
                 {
                     bool is_replace = false;
-                    for (uint32_t i = 0; i < m_graphs.size(); i++)
+                    for(uint32_t i = 0; i < m_graphs.size(); i++)
                     {
-                        if (m_graphs[i] == graph.Get())
+                        if(m_graphs[i] == graph.Get())
                         {
                             m_graphs.erase(m_graphs.begin() + i);
                             is_replace = true;
@@ -390,7 +402,7 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
                         {
                             m_graphs[index] = graph.Get();
                         }
-                        result          = kRocProfVisResultSuccess;
+                        result = kRocProfVisResultSuccess;
                     }
                 }
             }
@@ -417,8 +429,9 @@ rocprofvis_result_t Timeline::SetObject(rocprofvis_property_t property, uint64_t
     }
     return result;
 }
-rocprofvis_result_t Timeline::SetString(rocprofvis_property_t property, uint64_t index,
-                                char const* value, uint32_t length) 
+rocprofvis_result_t
+Timeline::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
+                    uint32_t length)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
@@ -442,5 +455,5 @@ rocprofvis_result_t Timeline::SetString(rocprofvis_property_t property, uint64_t
     return result;
 }
 
-}
-}
+}  // namespace Controller
+}  // namespace RocProfVis

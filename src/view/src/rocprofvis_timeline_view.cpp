@@ -1229,6 +1229,255 @@ TimelineView::MakeGraphView()
 }
 
 void
+TimelineView::RenderHistogram()
+{
+    constexpr int kHistogramTotalHeight = 150;
+    constexpr int kRulerHeight          = 34;
+    constexpr int kHistogramBarHeight   = kHistogramTotalHeight - kRulerHeight;
+
+    ImVec2      window_size       = ImGui::GetWindowSize();
+    ImGuiStyle& style             = ImGui::GetStyle();
+    float       font_height       = ImGui::GetFontSize();
+    m_artificial_scrollbar_height = font_height + style.FramePadding.y * 2.0f;
+
+    if(m_histogram == nullptr) return;
+
+    // Outer container
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
+    ImGui::BeginChild("Histogram", ImVec2(window_size.x, kHistogramTotalHeight), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    // Histogram bars area
+    ImGui::BeginChild("Histogram Bars", ImVec2(window_size.x, kHistogramBarHeight), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    ImDrawList* draw_list   = ImGui::GetWindowDrawList();
+    ImVec2      bars_pos    = ImGui::GetCursorScreenPos();
+    float       bars_width  = window_size.x;
+    float       bars_height = kHistogramBarHeight;
+    size_t      bin_count   = m_histogram->size();
+
+    // Draw histogram bars
+    if(bin_count > 0)
+    {
+        uint64_t max_bin_value =
+            *std::max_element(m_histogram->begin(), m_histogram->end());
+        float bin_width = bars_width / static_cast<float>(bin_count);
+
+        for(size_t i = 0; i < bin_count; ++i)
+        {
+            float x0 = bars_pos.x + i * bin_width;
+            float x1 = x0 + bin_width;
+            float y0 = bars_pos.y;
+            float y1 = y0 + bars_height;
+            float bar_height =
+                (max_bin_value > 0)
+                    ? (static_cast<float>((*m_histogram)[i]) / max_bin_value) *
+                          bars_height
+                    : 0.0f;
+            float y_bar = y1 - bar_height;
+            draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
+                                     m_settings.GetColor(Colors::kAccentRed));
+        }
+    }
+
+    // Draw view range overlays and labels
+    float view_start_frac = m_view_time_offset_ns / m_range_x;
+    float view_end_frac   = (m_view_time_offset_ns + m_v_width) / m_range_x;
+    view_start_frac       = std::clamp(view_start_frac, 0.0f, 1.0f);
+    view_end_frac         = std::clamp(view_end_frac, 0.0f, 1.0f);
+
+    float x_view_start = bars_pos.x + view_start_frac * bars_width;
+    float x_view_end   = bars_pos.x + view_end_frac * bars_width;
+    float y0           = bars_pos.y;
+    float y1           = bars_pos.y + bars_height;
+
+    // Left overlay
+    if(x_view_start > bars_pos.x)
+    {
+        draw_list->AddRectFilled(ImVec2(bars_pos.x, y0), ImVec2(x_view_start, y1),
+                                 m_settings.GetColor(Colors::kGridColor));
+        std::string vmin_label = nanosecond_to_formatted_str(
+            m_v_min_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format);
+        ImVec2 vmin_label_size = ImGui::CalcTextSize(vmin_label.c_str());
+        float  vmin_label_x =
+            std::max(x_view_start - vmin_label_size.x - 6, bars_pos.x + 2);
+        ImVec2 vmin_label_pos(vmin_label_x, y0);
+        draw_list->AddText(vmin_label_pos, m_settings.GetColor(Colors::kRulerTextColor),
+                           vmin_label.c_str());
+    }
+
+    // Right overlay
+    if(x_view_end < bars_pos.x + bars_width)
+    {
+        draw_list->AddRectFilled(ImVec2(x_view_end, y0),
+                                 ImVec2(bars_pos.x + bars_width, y1),
+                                 m_settings.GetColor(Colors::kGridColor));
+        std::string vmax_label = nanosecond_to_formatted_str(
+            m_v_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format);
+        ImVec2 vmax_label_size = ImGui::CalcTextSize(vmax_label.c_str());
+        float  vmax_label_x =
+            std::min(x_view_end + 6, bars_pos.x + bars_width - vmax_label_size.x - 2);
+        ImVec2 vmax_label_pos(vmax_label_x, y0 + (bars_height - vmax_label_size.y));
+        draw_list->AddText(vmax_label_pos, m_settings.GetColor(Colors::kRulerTextColor),
+                           vmax_label.c_str());
+    }
+
+    if(!m_resize_activity && !m_stop_user_interaction) HandleHistogramTouch();
+
+    ImGui::EndChild();  // Histogram Bars
+
+    // Ruler area
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kRulerBgColor));
+    ImGui::BeginChild("Histogram Ruler", ImVec2(window_size.x, kRulerHeight), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    ImDrawList* draw_list_ruler = ImGui::GetWindowDrawList();
+    ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
+    float       ruler_width     = window_size.x;
+    float       tick_top        = ruler_pos.y + 2.0f;
+    float       tick_bottom     = ruler_pos.y + 7.0f;
+    float       label_font_size = ImGui::GetFontSize() * 0.75f;
+    ImFont*     font            = ImGui::GetFont();
+
+    // Draw 7 ticks and labels
+    const int num_ticks = 7;
+    double    ns_range  = m_max_x - m_min_x;
+    for(int i = 0; i < num_ticks; ++i)
+    {
+        double tick_ns = ns_range * (static_cast<double>(i) / (num_ticks - 1));
+        float  tick_x =
+            ruler_pos.x + ruler_width * (static_cast<float>(i) / (num_ticks - 1));
+        draw_list_ruler->AddLine(ImVec2(tick_x, tick_top), ImVec2(tick_x, tick_bottom),
+                                 m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
+
+        std::string tick_label = nanosecond_to_formatted_str(
+            tick_ns, m_settings.GetUserSettings().unit_settings.time_format);
+        ImVec2 label_size = ImGui::CalcTextSize(tick_label.c_str());
+
+        float label_x;
+        if(i == 0)
+        {
+            label_x = ruler_pos.x + 2.0f;
+        }
+        else if(i == num_ticks - 1)
+        {
+            label_x = ruler_pos.x + ruler_width - label_size.x - 2.0f;
+        }
+        else
+        {
+            label_x = tick_x - label_size.x * 0.5f;
+        }
+
+        ImVec2 label_pos(label_x, tick_bottom + 1.0f);
+
+        draw_list_ruler->AddText(font, label_font_size, label_pos,
+                                 m_settings.GetColor(Colors::kRulerTextColor),
+                                 tick_label.c_str());
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+void
+TimelineView::RenderTraceView()
+{
+    ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
+    ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
+
+    ImGuiStyle& style             = ImGui::GetStyle();
+    float       fontHeight        = ImGui::GetFontSize();
+    m_artificial_scrollbar_height = fontHeight + style.FramePadding.y * 2.0f;
+    m_graph_size =
+        ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
+
+    ImGui::BeginChild("Grid View 2",
+                      ImVec2(subcomponent_size_main.x,
+                             subcomponent_size_main.y - m_artificial_scrollbar_height),
+                      false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    // Scale used in all graphs computed here
+    m_v_width       = (m_range_x) / m_zoom;
+    m_v_min_x       = m_min_x + m_view_time_offset_ns;
+    m_v_max_x       = m_v_min_x + m_v_width;
+    m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
+
+    m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
+
+    RenderGrid();
+    RenderGraphView();
+    RenderSplitter(screen_pos);
+    RenderInteractiveUI(screen_pos);
+
+    RenderScrubber(screen_pos);
+
+    if(!m_resize_activity && !m_stop_user_interaction)
+    {
+        // Funtion enables user interactions to be captured
+        HandleTopSurfaceTouch();
+    }
+
+    ImGui::EndChild();  // End of Grid View 2
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+
+    ImGui::BeginChild("scrollbar",
+                      ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_height),
+                      true, ImGuiWindowFlags_NoScrollbar);
+
+    // ImGui::SameLine();
+    ImGui::Dummy(ImVec2(m_sidebar_size, 0));
+    ImGui::SameLine();
+
+    float available_width = subcomponent_size_main.x - m_sidebar_size;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
+                        std::clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
+                                   (available_width * 0.05f), (available_width * 0.90f)));
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3.0f);
+
+    ImU32 scroll_color = m_settings.GetColor(Colors::kFillerColor);
+    ImU32 grab_color   = m_settings.GetColor(Colors::kScrollBarColor);
+
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, grab_color);
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, grab_color);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, scroll_color);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, scroll_color);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, scroll_color);
+
+    ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
+
+    m_v_width = std::min(m_v_width,
+                         m_range_x);  // Ensure view width does not exceed total
+                                      // range. Prevents jitter and assertion errors.
+    float max_offset  = static_cast<float>((m_range_x - m_v_width) + m_v_width * 0.10f);
+    float min_offset  = 0.0f;
+    float view_offset = static_cast<float>(m_view_time_offset_ns);
+
+    ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, "%.5f");
+    m_view_time_offset_ns = static_cast<double>(view_offset);
+
+    // Clamp the view offset to prevent scrolling out of bounds
+    m_view_time_offset_ns = std::clamp(static_cast<double>(view_offset), 0.0,
+                                       (m_range_x - m_v_width) + m_v_width * 0.10);
+
+    ImGui::PopStyleColor(5);  // Pop the colors we pushed above
+    ImGui::PopStyleVar(2);    // Pop both style variables
+    ImGui::PopItemWidth();
+
+    m_stop_user_interaction = false;
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+}
+void
 TimelineView::RenderGraphPoints()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -1242,159 +1491,7 @@ TimelineView::RenderGraphPoints()
         float       fontHeight        = ImGui::GetFontSize();
         m_artificial_scrollbar_height = fontHeight + style.FramePadding.y * 2.0f;
 
-        int histogram_size = 0;
-
-        if(m_histogram != nullptr)
-        {
-            histogram_size = 100;
-            ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                                  m_settings.GetColor(Colors::kGridColor));
-            ImGui::BeginChild(
-                "Histogram", ImVec2(subcomponent_size_main.x, histogram_size), false,
-                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-            // Draw the histogram bars
-            ImDrawList* draw_list = ImGui::GetWindowDrawList();
-            ImVec2      hist_pos  = ImGui::GetCursorScreenPos();
-            float       width     = subcomponent_size_main.x;
-            float       height    = histogram_size;
-            size_t      bin_count = m_histogram->size();
-            if(bin_count > 0)
-            {
-                uint64_t max_value =
-                    *std::max_element(m_histogram->begin(), m_histogram->end());
-                float bin_width = width / static_cast<float>(bin_count);
-
-                for(size_t i = 0; i < bin_count; ++i)
-                {
-                    float x0 = hist_pos.x + i * bin_width;
-                    float x1 = x0 + bin_width;
-                    float y0 = hist_pos.y;
-                    float bar_height =
-                        (max_value > 0)
-                            ? (static_cast<float>((*m_histogram)[i]) / max_value) * height
-                            : 0.0f;
-                    float y1 = y0 + bar_height;
-
-                    draw_list->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1),
-                                             m_settings.GetColor(Colors::kAccentRed));
-                }
-            }
-
-            float view_start_frac = (m_view_time_offset_ns) / m_range_x;
-            float view_end_frac   = (m_view_time_offset_ns + m_v_width) / m_range_x;
-
-            view_start_frac = std::clamp(view_start_frac, 0.0f, 1.0f);
-            view_end_frac   = std::clamp(view_end_frac, 0.0f, 1.0f);
-
-            float x0 = hist_pos.x + view_start_frac * width;
-            float x1 = hist_pos.x + view_end_frac * width;
-            float y0 = hist_pos.y;
-            float y1 = hist_pos.y + height;
-
-            ImU32 box_color = IM_COL32(255, 255, 255, 60);  // white, semi-transparent
-            draw_list->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), box_color);
-            draw_list->AddRect(ImVec2(x0, y0), ImVec2(x1, y1),
-                               m_settings.GetColor(Colors::kAccentRed), 0.0f, 0, 2.0f);
-
-            if(!m_resize_activity && !m_stop_user_interaction)
-            {
-                // Funtion enables user interactions to be captured
-                HandleHistogramTouch();
-            }
-
-            ImGui::EndChild();
-            ImGui::PopStyleColor();
-        }
-
-        m_graph_size =
-            ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
-
-        ImGui::BeginChild(
-            "Grid View 2",
-            ImVec2(subcomponent_size_main.x, subcomponent_size_main.y -
-                                                 m_artificial_scrollbar_height -
-                                                 histogram_size),
-            false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-        // Scale used in all graphs computed here
-        m_v_width       = (m_range_x) / m_zoom;
-        m_v_min_x       = m_min_x + m_view_time_offset_ns;
-        m_v_max_x       = m_v_min_x + m_v_width;
-        m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
-
-        m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
-
-        RenderGrid();
-        RenderGraphView();
-        RenderSplitter(screen_pos);
-        RenderInteractiveUI(screen_pos);
-
-        RenderScrubber(screen_pos);
-
-        if(!m_resize_activity && !m_stop_user_interaction)
-        {
-            // Funtion enables user interactions to be captured
-            HandleTopSurfaceTouch();
-        }
-
-        ImGui::EndChild();  // End of Grid View 2
-
-        ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                              m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
-
-        ImGui::BeginChild("scrollbar",
-                          ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_height),
-                          true, ImGuiWindowFlags_NoScrollbar);
-
-        // ImGui::SameLine();
-        ImGui::Dummy(ImVec2(m_sidebar_size, 0));
-        ImGui::SameLine();
-
-        float available_width = subcomponent_size_main.x - m_sidebar_size;
-
-        ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
-                            std::clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
-                                       (available_width * 0.05f),
-                                       (available_width * 0.90f)));
-        ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3.0f);
-
-        ImU32 scroll_color = m_settings.GetColor(Colors::kFillerColor);
-        ImU32 grab_color   = m_settings.GetColor(Colors::kScrollBarColor);
-
-        ImGui::PushStyleColor(ImGuiCol_SliderGrab, grab_color);
-        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, grab_color);
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, scroll_color);
-        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, scroll_color);
-        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, scroll_color);
-
-        ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
-
-        m_v_width = std::min(m_v_width,
-                             m_range_x);  // Ensure view width does not exceed total
-                                          // range. Prevents jitter and assertion errors.
-        float max_offset =
-            static_cast<float>((m_range_x - m_v_width) + m_v_width * 0.10f);
-        float min_offset  = 0.0f;
-        float view_offset = static_cast<float>(m_view_time_offset_ns);
-
-        ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, "%.5f");
-        m_view_time_offset_ns = static_cast<double>(view_offset);
-
-        // Clamp the view offset to prevent scrolling out of bounds
-        m_view_time_offset_ns = std::clamp(static_cast<double>(view_offset), 0.0,
-                                           (m_range_x - m_v_width) + m_v_width * 0.10);
-
-        ImGui::PopStyleColor(5);  // Pop the colors we pushed above
-        ImGui::PopStyleVar(2);    // Pop both style variables
-        ImGui::PopItemWidth();
-
-        m_stop_user_interaction = false;
-
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar(2);
+        RenderTraceView();
     }
 
     ImGui::EndChild();
@@ -1411,7 +1508,8 @@ TimelineView::HandleHistogramTouch()
     ImVec2 histogram_area_max =
         ImVec2(container_pos.x + m_sidebar_size + m_graph_size.x, container_pos.y + 100);
 
-    bool is_mouse_in_graph = ImGui::IsMouseHoveringRect(histogram_area_min, histogram_area_max);
+    bool is_mouse_in_graph =
+        ImGui::IsMouseHoveringRect(histogram_area_min, histogram_area_max);
 
     ImGuiIO& io = ImGui::GetIO();
 

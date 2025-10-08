@@ -78,7 +78,7 @@ private:
     std::shared_ptr<VSplitContainer>   m_vertical_split_container;
 
     LayoutItem::Ptr m_sidebar_item;
-    LayoutItem::Ptr m_timeline_item;
+    //LayoutItem::Ptr m_timeline_item;
     LayoutItem::Ptr m_analysis_item;
 
     DataProvider m_data_provider;

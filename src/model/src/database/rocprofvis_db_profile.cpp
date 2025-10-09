@@ -398,15 +398,18 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
         if ((flags & kRocProfVisDmTrySplitTrack) && TrackPropertiesAt(i)->record_count > SINGLE_THREAD_RECORDS_COUNT_LIMIT)
         {
             size_t total_event_count = 0;
-            for (int i = kRocProfVisDmOperationLaunch; i < kRocProfVisDmNumOperation; i++)
+            for (int j = kRocProfVisDmOperationLaunch; j < kRocProfVisDmNumOperation; j++)
             {
-                total_event_count += TraceProperties()->events_count[i];
+                total_event_count += TraceProperties()->events_count[j];
             }
             split_count = (TrackPropertiesAt(i)->record_count * 10) / total_event_count;
 
             if (split_count == 0)
             {
                 split_count = 1;
+            } else if ((TrackPropertiesAt(i)->record_count / split_count) < SINGLE_THREAD_RECORDS_COUNT_LIMIT)
+            {
+                split_count = (TrackPropertiesAt(i)->record_count + SINGLE_THREAD_RECORDS_COUNT_LIMIT) / SINGLE_THREAD_RECORDS_COUNT_LIMIT;
             }
 
         }

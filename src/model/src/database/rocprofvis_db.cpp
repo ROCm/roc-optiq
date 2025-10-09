@@ -24,6 +24,7 @@
 #include <fstream> 
 #include <sstream>
 #include <cstring>
+#include <cfloat>
 
 namespace RocProfVis
 {

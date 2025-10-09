@@ -39,9 +39,9 @@ jobs:
           cd build
           cmake ..
           make
-          if [ -e ${{ env.VISUALIZER_FILE_NAME }} ]; then
-            echo "✅ {{ env.VISUALIZER_FILE_NAME }} has been successfully built!"
-          else
-            echo "❌ {{ env.VISUALIZER_FILE_NAME }} was not built!"
+          if (Test-Path "${env:VISUALIZER_FILE_NAME}") {
+            Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
+          } else {
+            Write-Host "❌ $env:VISUALIZER_FILE_NAME was not built!"
             exit 1
-          fi
+          }

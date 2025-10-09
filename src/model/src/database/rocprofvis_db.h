@@ -304,7 +304,9 @@ class Database
         virtual rocprofvis_dm_result_t  BuildTrackQuery(           
                                                                 rocprofvis_dm_index_t index, 
                                                                 rocprofvis_dm_index_t type,
-                                                                rocprofvis_dm_string_t & query) = 0;
+                                                                rocprofvis_dm_string_t & query,
+                                                                uint32_t split_count,
+                                                                uint32_t split_index) = 0;
 
         // method to build a query to read time slice of records for all tracks in one shot 
         // @param start - start timestamp of time slice 

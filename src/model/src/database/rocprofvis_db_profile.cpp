@@ -123,10 +123,10 @@ int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_st
     ProfileDatabase*            db = (ProfileDatabase*) callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     uint32_t index = db->Sqlite3ColumnInt(func, stmt, azColName, 4);
-    db->TrackPropertiesAt(index)->min_ts       = db->Sqlite3ColumnInt64(func, stmt, azColName, 0);
-    db->TrackPropertiesAt(index)->max_ts       = db->Sqlite3ColumnInt64(func, stmt, azColName, 1);
-    db->TrackPropertiesAt(index)->min_value    = db->Sqlite3ColumnDouble(func, stmt, azColName, 2);
-    db->TrackPropertiesAt(index)->max_value    = db->Sqlite3ColumnDouble(func, stmt, azColName, 3);
+    db->TrackPropertiesAt(index)->min_ts       = std::min((rocprofvis_dm_timestamp_t)db->Sqlite3ColumnInt64(func, stmt, azColName, 0),db->TrackPropertiesAt(index)->min_ts);
+    db->TrackPropertiesAt(index)->max_ts       = std::max((rocprofvis_dm_timestamp_t)db->Sqlite3ColumnInt64(func, stmt, azColName, 1),db->TrackPropertiesAt(index)->max_ts);
+    db->TrackPropertiesAt(index)->min_value    = std::min((rocprofvis_dm_value_t)db->Sqlite3ColumnDouble(func, stmt, azColName, 2),db->TrackPropertiesAt(index)->min_value);
+    db->TrackPropertiesAt(index)->max_value    = std::max((rocprofvis_dm_value_t)db->Sqlite3ColumnDouble(func, stmt, azColName, 3),db->TrackPropertiesAt(index)->max_value);
 
     db->TraceProperties()->start_time = std::min(db->TraceProperties()->start_time,db->TrackPropertiesAt(index)->min_ts);
     db->TraceProperties()->end_time  = std::max(db->TraceProperties()->end_time,db->TrackPropertiesAt(index)->max_ts);
@@ -305,7 +305,9 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
 rocprofvis_dm_result_t
 ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
                                  rocprofvis_dm_index_t type,
-                                 rocprofvis_dm_string_t& query)
+                                 rocprofvis_dm_string_t& query,
+                                 uint32_t split_count,
+                                 uint32_t split_index)
 {
     std::stringstream ss;
     int               size = TrackPropertiesAt(index)->query[type].size();
@@ -343,8 +345,18 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
             }
             count++;
         }
+        if (split_count > 1)
+        {
+            uint64_t trace_time = TraceProperties()->end_time - TraceProperties()->start_time;
+            if (trace_time > 0)
+            {
+                uint64_t time_bucket_size = trace_time / split_count;
+                ss << " and " << Builder::START_SERVICE_NAME << " BETWEEN " << TraceProperties()->start_time + (time_bucket_size * split_index);
+                ss << " and " << TraceProperties()->start_time + (time_bucket_size * (split_index+1));
+            }
+        }
     }
-    ss << ")";
+    ss << ") ";
     query = ss.str();
     return kRocProfVisDmResultSuccess;
 }
@@ -362,7 +374,7 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
     std::vector<Future*> futures;
     rocprofvis_dm_index_t  qtype  = query_type;
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    futures.resize(NumTracks());
+    futures.reserve(NumTracks());
     for(int i = 0; i < NumTracks(); i++)
     {
         if(TrackPropertiesAt(i)->process.category == kRocProfVisDmPmcTrack && (flags & kRocProfVisDmIncludePmcTracks) == 0)
@@ -381,28 +393,56 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
                 qtype = kRPVQuerySliceByStream; 
             }
         }
-        TrackPropertiesAt(i)->async_query = prefix;
-        TrackPropertiesAt(i)->async_query += std::to_string(i);
-        if(BuildTrackQuery(i, qtype, TrackPropertiesAt(i)->async_query) !=
-           kRocProfVisDmResultSuccess)
+
+        uint32_t split_count = 1;
+        if ((flags & kRocProfVisDmTrySplitTrack) && TrackPropertiesAt(i)->record_count > SINGLE_THREAD_RECORDS_COUNT_LIMIT)
         {
-            continue;
+            size_t total_event_count = 0;
+            for (int j = kRocProfVisDmOperationLaunch; j < kRocProfVisDmNumOperation; j++)
+            {
+                total_event_count += TraceProperties()->events_count[j];
+            }
+            split_count = (TrackPropertiesAt(i)->record_count * 10) / total_event_count;
+
+            if (split_count == 0)
+            {
+                split_count = 1;
+            } else if ((TrackPropertiesAt(i)->record_count / split_count) < SINGLE_THREAD_RECORDS_COUNT_LIMIT)
+            {
+                split_count = (TrackPropertiesAt(i)->record_count + SINGLE_THREAD_RECORDS_COUNT_LIMIT) / SINGLE_THREAD_RECORDS_COUNT_LIMIT;
+            }
+
         }
-        TrackPropertiesAt(i)->async_query += suffix;
-        futures[i]     = (Future*)rocprofvis_db_future_alloc(nullptr);
-        try
+
+        for (int j = 0; j < split_count; j++)
         {
-            futures[i]->SetWorker(std::move(
-                std::thread(SqliteDatabase::ExecuteSQLQueryStatic, this,
-                            futures[i],
-                            TrackPropertiesAt(i)->async_query.c_str(), callback)));
-        } catch(std::exception ex)
-        {
-            result = kRocProfVisDmResultUnknownError;
-            ROCPROFVIS_ASSERT_MSG_BREAK(false, ex.what());
-        }       
+            futures.push_back((Future*)rocprofvis_db_future_alloc(nullptr));
+            std::string async_query = prefix;
+            async_query += std::to_string(i);
+
+            if (BuildTrackQuery(i, qtype, async_query, split_count, j) !=
+                kRocProfVisDmResultSuccess)
+            {
+                continue;
+            }
+            async_query += suffix;
+            futures.back()->SetAsyncQuery(async_query);
+            
+            try
+            {
+                futures.back()->SetWorker(std::move(
+                    std::thread(SqliteDatabase::ExecuteSQLQueryStatic, this,
+                        futures.back(),
+                        futures.back()->GetAsyncQueryPtr(), callback)));
+            }
+            catch (std::exception ex)
+            {
+                result = kRocProfVisDmResultUnknownError;
+                ROCPROFVIS_ASSERT_MSG_BREAK(false, ex.what());
+            }
+        }
     }
-    for(int i = 0; i < NumTracks(); i++)
+    for(int i = 0; i < futures.size(); i++)
     {
         if(futures[i] != nullptr)
         {
@@ -413,6 +453,10 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
             }
             rocprofvis_db_future_free(futures[i]);
         }
+        
+    }
+    for (int i = 0; i < NumTracks(); i++)
+    {
         func_clear(TrackPropertiesAt(i));
     }
     return result;

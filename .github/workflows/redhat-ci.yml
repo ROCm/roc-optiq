@@ -46,9 +46,8 @@ jobs:
       - name: Install Vulkan SDK
         run: |
             mkdir -p /opt/vulkan
-            wget -q https://sdk.lunarg.com/sdk/download/${{ matrix.vulkan-sdk }}/linux/vulkansdk-linux-x86_64-${{ matrix.vulkan-sdk }}.tar.xz -O /opt/vulkan/vulkansdk.tar.xz
-            cd /opt/vulkan
-            tar xf vulkansdk.tar.xz
+            wget -q https://sdk.lunarg.com/sdk/download/${{ matrix.vulkan-sdk }}/linux/vulkansdk-linux-x86_64-${{ matrix.vulkan-sdk }}.tar.xz -O /tmp/vulkansdk.tar.xz
+            tar -xf /tmp/vulkansdk.tar.xz -C /opt/vulkan
             echo "✅ Vulkan SDK Installed!"
 
       - uses: actions/checkout@v5
@@ -60,7 +59,6 @@ jobs:
           source /opt/vulkan/${{ matrix.vulkan-sdk }}/setup-env.sh
           cmake -B build
           cmake --build build --parallel 4
-          cmake --build build --target package
           if [ -e build/${{ env.VISUALIZER_FILE_NAME }} ]; then
             echo "✅ {{ env.VISUALIZER_FILE_NAME }} has been successfully built!"
           else

@@ -331,15 +331,15 @@ DataProvider::SetTraceLoadedCallback(
 {
     m_trace_data_ready_callback = callback;
 }
-std::vector<double>*
+std::vector<double>&
 DataProvider::GetHistogram() {
-    return &m_histogram;
+    return m_histogram;
 }
 
-std::map<int, std::vector<double>>*
+std::map<int, std::vector<double>>&
 DataProvider::GetMiniMap()
 {
-    return &m_mini_map;
+    return m_mini_map;
 }
 
 void

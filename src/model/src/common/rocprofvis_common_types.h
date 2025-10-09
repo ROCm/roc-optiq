@@ -134,6 +134,7 @@ typedef struct {
     rocprofvis_dm_value_t min_value;
     // maximum level or value
     rocprofvis_dm_value_t max_value;
+    //histogram of events.
     std::map<uint32_t,uint32_t> histogram;
 } rocprofvis_dm_track_params_t;
 

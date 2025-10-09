@@ -479,9 +479,11 @@ public:
     /*
     Gets a histogram of all tracks in the controller.
     */
-    std::vector<double>* GetHistogram();
-
-    std::map<int, std::vector<double>>* GetMiniMap();
+    std::vector<double>& GetHistogram();
+    /*
+     Gets a Minimap of all tracks individually in the controller.
+     */
+    std::map<int, std::vector<double>>& GetMiniMap();
 
     /*
      * Performs all data processing.  Call this from the "game loop".
@@ -607,8 +609,9 @@ private:
 
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 
-    // Histogram Vector
-    std::vector<double>                m_histogram;
+    // Global Histogram Vector
+    std::vector<double> m_histogram;
+    // Minimap per track.
     std::map<int, std::vector<double>> m_mini_map;
 
     // Called when track metadata has changed

@@ -13,7 +13,7 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include <GLFW/glfw3.h>
-
+#include "rocprofvis_font_manager.h"
 namespace RocProfVis
 {
 namespace View
@@ -70,7 +70,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_annotations(annotations)
 , m_dragged_sticky_id(-1)
-, m_histogram(nullptr)
+, m_histogram({})
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -1240,7 +1240,7 @@ TimelineView::RenderHistogram()
     float       font_height       = ImGui::GetFontSize();
     m_artificial_scrollbar_height = font_height + style.FramePadding.y * 2.0f;
 
-    if(m_histogram == nullptr) return;
+    if(m_histogram.empty()) return;
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
@@ -1255,13 +1255,13 @@ TimelineView::RenderHistogram()
     ImVec2      bars_pos    = ImGui::GetCursorScreenPos();
     float       bars_width  = window_size.x;
     float       bars_height = kHistogramBarHeight;
-    size_t      bin_count   = m_histogram->size();
+    size_t      bin_count   = m_histogram.size();
 
     // Draw histogram bars
     if(bin_count > 0)
     {
         uint64_t max_bin_value =
-            *std::max_element(m_histogram->begin(), m_histogram->end());
+            *std::max_element(m_histogram.begin(), m_histogram.end());
         float bin_width = bars_width / static_cast<float>(bin_count);
 
         for(size_t i = 0; i < bin_count; ++i)
@@ -1272,7 +1272,7 @@ TimelineView::RenderHistogram()
             float y1 = y0 + bars_height;
             float bar_height =
                 (max_bin_value > 0)
-                    ? (static_cast<float>((*m_histogram)[i]) / max_bin_value) *
+                    ? (static_cast<float>(m_histogram[i]) / max_bin_value) *
                           bars_height
                     : 0.0f;
             float y_bar = y1 - bar_height;
@@ -1337,8 +1337,8 @@ TimelineView::RenderHistogram()
     float       ruler_width     = window_size.x;
     float       tick_top        = ruler_pos.y + 2.0f;
     float       tick_bottom     = ruler_pos.y + 7.0f;
-    float       label_font_size = ImGui::GetFontSize() * 0.75f;
-    ImFont*     font            = ImGui::GetFont();
+    ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
+    float       label_font_size = font->FontSize;
 
     // Draw 7 ticks and labels
     const int num_ticks = 7;

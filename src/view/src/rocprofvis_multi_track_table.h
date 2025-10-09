@@ -4,6 +4,7 @@
 
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include <string>
 #include <vector>
@@ -22,6 +23,9 @@ public:
                     std::shared_ptr<TimelineSelection> timeline_selection,
                     TableType table_type = TableType::kEventTable);
 
+    ~MultiTrackTable();
+    
+    void Render() override;
     void Update() override;
 
     void HandleTrackSelectionChanged();
@@ -40,7 +44,9 @@ private:
         kNumImportantColumns
     };
 
-    void FetchData(const TableRequestParams& params) const override;
+    void FormatData() override;
+    //void FetchData(const TableRequestParams& params) const override;
+    bool XButton(const char* id) const;
     void RenderContextMenu() const override;
 
     uint64_t GetTrackIdHelper(
@@ -53,6 +59,7 @@ private:
     std::vector<uint64_t> m_selected_tracks;
 
     std::vector<size_t> m_important_column_idxs;
+    EventManager::SubscriptionToken m_format_changed_token;
 };
 
 }  // namespace View

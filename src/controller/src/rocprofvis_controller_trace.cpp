@@ -57,6 +57,7 @@ Trace::Trace()
 , m_timeline(nullptr)
 , m_event_table(nullptr)
 , m_sample_table(nullptr)
+, m_search_table(nullptr)
 , m_dm_handle(nullptr)
 , m_mem_mgmt(nullptr)
 , m_dm_progress_percent(0)
@@ -75,6 +76,8 @@ rocprofvis_result_t Trace::Init()
         m_event_table = new SystemTable(0);
 
         m_sample_table = new SystemTable(1);
+
+        m_search_table = new SystemTable(2);
 
         m_mem_mgmt = new MemoryManager(m_id);
 
@@ -95,6 +98,7 @@ Trace::~Trace()
     delete m_timeline;
     delete m_event_table;
     delete m_sample_table;
+    delete m_search_table;
     for (Track* track : m_tracks)
     {
         delete track;
@@ -2704,6 +2708,7 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackById:
             case kRPVControllerEventTable:
             case kRPVControllerSampleTable:
+            case kRPVControllerSearchResultsTable:
             case kRPVControllerAnalysisViewIndexed:
             case kRPVControllerNotifySelected:
             case kRPVControllerGetDmMessage:
@@ -2738,6 +2743,7 @@ rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackById:
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
+        case kRPVControllerSearchResultsTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerNotifySelected:
         case kRPVControllerGetDmProgress:
@@ -2781,6 +2787,12 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerSampleTable:
             {
                 *value = (rocprofvis_handle_t*)m_sample_table;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerSearchResultsTable:
+            {
+                *value = (rocprofvis_handle_t*)m_search_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -2883,6 +2895,7 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackById:
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
+        case kRPVControllerSearchResultsTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerNotifySelected:
         case kRPVControllerGetDmProgress:
@@ -2966,6 +2979,7 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTimeline:
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
+        case kRPVControllerSearchResultsTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerTrackIndexed:
         case kRPVControllerTrackById:
@@ -3002,6 +3016,7 @@ rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackById:
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
+        case kRPVControllerSearchResultsTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerNotifySelected:
         case kRPVControllerGetDmProgress:
@@ -3055,6 +3070,16 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
                 if(table.IsValid())
                 {
                     m_sample_table = table.Get();
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerSearchResultsTable:
+            {
+                SystemTableRef table(value);
+                if(table.IsValid())
+                {
+                    m_search_table = table.Get();
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -3138,6 +3163,7 @@ rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackById:
         case kRPVControllerEventTable:
         case kRPVControllerSampleTable:
+        case kRPVControllerSearchResultsTable:
         case kRPVControllerAnalysisViewIndexed:
         case kRPVControllerNotifySelected:
         case kRPVControllerGetDmProgress:

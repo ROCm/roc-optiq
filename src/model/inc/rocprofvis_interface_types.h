@@ -24,6 +24,9 @@
 */
 
 #define INVALID_INDEX 0xFFFFFFFF
+#define TABLE_QUERY_PACK_OP_TYPE(rocprofvis_dm_event_operation_t_op_type) (rocprofvis_dm_event_operation_t_op_type << 28)
+#define TABLE_QUERY_UNPACK_OP_TYPE(rocprofvis_dm_track_id_t_track_id) (rocprofvis_dm_track_id_t_track_id >> 28)
+#define TABLE_QUERY_UNPACK_TRACK_ID(rocprofvis_dm_track_id_t_track_id) (rocprofvis_dm_track_id_t_track_id & 0x0FFFFFFF)
 
 /*******************************Types******************************/
 
@@ -56,7 +59,8 @@ typedef     uint64_t                      rocprofvis_db_timeout_sec_t;          
 typedef     const char*                   rocprofvis_dm_charptr_t;                      // pointer to string
 typedef     uint64_t                      rocprofvis_dm_size_t;                         // size of array
 typedef     uint8_t                       rocprofvis_dm_event_level_t;                  // event level, for stacking events
-
+typedef     uint16_t                      rocprofvis_dm_num_string_table_filters_t;     // number of string table filters for table query
+typedef     const char**                  rocprofvis_dm_string_table_filters_t;         // string table filters for table query
 
 
 /*******************************Enumerations******************************/

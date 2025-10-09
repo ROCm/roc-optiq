@@ -141,7 +141,9 @@ SettingsPanel::Render()
             ImGui::SameLine();
             if(ImGui::Button("Cancel", ImVec2(button_width, 0)))
             {
-                m_usersettings     = m_usersettings_initial;
+                auto temp_currentsettings = m_usersettings;
+                m_usersettings            = m_usersettings_initial;
+                m_settings.ApplyUserSettings(temp_currentsettings, false);
                 m_settings_changed = true;
                 m_should_open      = false;
                 ImGui::CloseCurrentPopup();
@@ -152,7 +154,7 @@ SettingsPanel::Render()
 
         if(m_settings_changed)
         {
-            m_settings.ApplyUserSettings(m_settings_confirmed);
+            m_settings.ApplyUserSettings(m_usersettings_initial, m_settings_confirmed);
             m_settings_changed   = false;
             m_settings_confirmed = false;
         }

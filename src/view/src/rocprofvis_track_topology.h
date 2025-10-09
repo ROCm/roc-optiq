@@ -17,7 +17,10 @@ struct InfoTable
     struct Cell
     {
         std::string data;
-        bool        expand;
+        bool        expand = false;
+        bool        needs_format = false;
+        std::function<bool(const std::string& raw, std::string& formatted_out)> formatter{};
+        std::string formatted{};
     };
     std::vector<std::vector<Cell>> cells;
 };
@@ -88,6 +91,7 @@ public:
 
     bool                 Dirty();
     const TopologyModel& GetTopology() const;
+    void FormatCells();
 
 private:
     /*
@@ -101,10 +105,14 @@ private:
      */
     void UpdateGraphs();
 
+ 
+    bool FormatTimeCell(const std::string& raw, std::string& formatted_out);
+
     DataProvider&                   m_data_provider;
     bool                            m_topology_dirty;
     bool                            m_graphs_dirty;
     EventManager::SubscriptionToken m_metadata_changed_event_token;
+    EventManager::SubscriptionToken m_format_changed_token;
 
     TopologyModel m_topology;
 };

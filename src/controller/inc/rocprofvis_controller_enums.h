@@ -170,7 +170,9 @@ typedef enum rocprofvis_controller_properties_t
     // Get histogram bucket size
     kRPVControllerGetHistogramBucketSize = 0x0000001A,
     // Get histogram bucket values
-    kRPVControllerBucketDataValueIndexed = 0x0000001B
+    kRPVControllerBucketDataValueIndexed = 0x0000001B,
+    // Global event search table controller
+    kRPVControllerSearchResultsTable = 0x0000001C,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {
@@ -746,12 +748,17 @@ typedef enum rocprofvis_controller_table_arguments_t
     kRPVControllerTableArgsFilter = 0xE0000009,
     kRPVControllerTableArgsGroup = 0xE000000A,
     kRPVControllerTableArgsGroupColumns = 0xE000000B,
+    kRPVControllerTableArgsNumOpTypes = 0xE000000C,
+    kRPVControllerTableArgsOpTypesIndexed = 0xE000000D,
+    kRPVControllerTableNumStringTableFilters = 0xE000000E,
+    kRPVControllerTableStringTableFiltersIndexed = 0xE000000F,
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t
 {
     kRPVControllerTableTypeEvents = 0xF0000000,
     kRPVControllerTableTypeSamples = 0xF0000001,
+    kRPVControllerTableTypeSearchResults = 0xF0000002,
 } rocprofvis_controller_table_type_t;
 
 /*

@@ -33,7 +33,7 @@ TraceView::TraceView()
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
-
+, m_settings_manager(SettingsManager::GetInstance())
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -216,8 +216,8 @@ TraceView::CreateView()
         std::make_shared<VSplitContainer>(timeline_container_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
 
-    auto trace_area    = std::make_shared<LayoutItem>();
-    trace_area->m_item = m_vertical_split_container;
+    auto trace_area        = std::make_shared<LayoutItem>();
+    trace_area->m_item     = m_vertical_split_container;
 
     m_horizontal_split_container =
         std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);
@@ -337,8 +337,8 @@ TraceView::HandleHotKeys()
     const ImGuiIO& io = ImGui::GetIO();
 
     // Don’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
-    // InputText)
-    if(io.WantTextInput || ImGui::IsAnyItemActive())
+    // InputText) or a pop up is open
+    if(io.WantTextInput || ImGui::IsAnyItemActive() || ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
     {
         return;
     }
@@ -530,17 +530,24 @@ TraceView::RenderToolbar()
 
     // Toolbar Controls
     RenderFlowControls();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(15, 0));
-    ImGui::SameLine();
+    RenderSeparator();
     RenderAnnotationControls();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(15, 0));
-    ImGui::SameLine();
+    RenderSeparator();
     RenderBookmarkControls();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(15, 0));
-    ImGui::SameLine();
+    RenderSeparator();
+    if(ImGui::Button("Reset View"))
+    {
+        if(m_timeline_view)
+        {
+            m_timeline_view->MoveToPosition(m_data_provider.GetStartTime(),
+                                            m_data_provider.GetEndTime(), 0.0, false);
+        }
+    }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Reset view to default zoom and pan");
+    }
+
     // pop content style
     ImGui::PopStyleVar(2);
     ImGui::EndChild();
@@ -549,16 +556,37 @@ TraceView::RenderToolbar()
 }
 
 void
+TraceView::RenderSeparator()
+{
+    auto style = m_settings_manager.GetDefaultStyle();
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
+    ImGui::SameLine();
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    float       height    = ImGui::GetFrameHeight();
+    ImVec2      p         = ImGui::GetCursorScreenPos();
+    draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + height),
+                       m_settings_manager.GetColor(Colors::kMetaDataSeparator),
+                       2.0f);
+    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
+    ImGui::SameLine();
+}
+
+void
 TraceView::RenderAnnotationControls()
 {
     if(m_annotations == nullptr) return;
 
     ImGui::TextUnformatted("Annotations");
+    auto default_style = m_settings_manager.GetDefaultStyle();
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x, 0));
     ImGui::SameLine();
 
     ImGuiStyle& style = ImGui::GetStyle();
     ImFont*     icon_font =
-        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
     ImGui::PushFont(icon_font);
     ImGui::BeginGroup();
 
@@ -661,10 +689,8 @@ TraceView::RenderBookmarkControls()
                 bool is_selected = (selected_slot == i);
                 ImGui::PushID(i);
 
-                ImU32 add_color =
-                    SettingsManager::GetInstance().GetColor(Colors::kTextDim);
-                ImU32 used_color =
-                    SettingsManager::GetInstance().GetColor(Colors::kTextMain);
+                ImU32 add_color  = m_settings_manager.GetColor(Colors::kTextDim);
+                ImU32 used_color = m_settings_manager.GetColor(Colors::kTextMain);
 
                 ImGui::TableNextRow();
 
@@ -692,8 +718,7 @@ TraceView::RenderBookmarkControls()
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(0, 0, 0, 0));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(0, 0, 0, 0));
                 ImFont* icon_font =
-                    SettingsManager::GetInstance().GetFontManager().GetIconFont(
-                        FontType::kDefault);
+                    m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
                 ImGui::PushFont(icon_font);
                 if(used)
                 {
@@ -739,6 +764,9 @@ void
 TraceView::RenderFlowControls()
 {
     ImGui::TextUnformatted("Flow");
+    auto default_style = m_settings_manager.GetDefaultStyle();
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x, 0));
     ImGui::SameLine();
 
     ImGuiStyle& style = ImGui::GetStyle();
@@ -752,7 +780,7 @@ TraceView::RenderFlowControls()
     FlowDisplayMode mode = current_mode;
 
     ImFont* icon_font =
-        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
     ImGui::PushFont(icon_font);
 
     ImGui::BeginGroup();

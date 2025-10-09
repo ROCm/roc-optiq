@@ -26,7 +26,7 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
       std::make_shared<MultiTrackTable>(dp, timeline_selection, TableType::kSampleTable))
 , m_events_view(std::make_shared<EventsView>(dp, timeline_selection))
 
-, m_annotation_view(std::make_shared<AnnotationView>(annotation_manager))
+, m_annotation_view(std::make_shared<AnnotationView>(dp, annotation_manager))
 , m_track_details(std::make_shared<TrackDetails>(dp, topology, timeline_selection))
 
 {

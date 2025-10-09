@@ -4,6 +4,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "rocprofvis_core.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_utils.h"
@@ -18,7 +19,7 @@ namespace View
 constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(35, 35, 35, 255),     // Colors::kMetaDataColor
     IM_COL32(28, 28, 28, 255),     // Colors::kMetaDataColorSelected
-    IM_COL32(40, 40, 40, 255),     // Colors::kMetaDataSeparator
+    IM_COL32(70, 70, 70, 255),     // Colors::kMetaDataSeparator
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(220, 38, 38, 255),    // Colors::kTextError
     IM_COL32(0, 255, 0, 255),      // Colors::kTextSuccess
@@ -366,7 +367,7 @@ SettingsManager ::GetDPI()
 }
 
 void
-SettingsManager::ApplyUserDisplaySettings()
+SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
 {
     if(m_usersettings.display_settings.use_dark_mode)
     {
@@ -385,6 +386,18 @@ SettingsManager::ApplyUserDisplaySettings()
     GetFontManager().SetFontSize((m_usersettings.display_settings.dpi_based_scaling)
                                      ? GetFontManager().GetDPIScaledFontIndex()
                                      : m_usersettings.display_settings.font_size_index);
+}
+
+void
+SettingsManager::ApplyUserUnitSettings(const UserSettings& old_settings)
+{
+    // notify that time format has changed
+    if(old_settings.unit_settings.time_format !=
+       m_usersettings.unit_settings.time_format)
+    {
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTimeFormatChanged)));
+    }
 }
 
 ImU32
@@ -417,7 +430,7 @@ SettingsManager::Init()
     InitStyling();
     result = m_font_manager.Init();
     LoadSettingsJson();
-    ApplyUserSettings();
+    ApplyUserSettings(m_usersettings_default);
     return result;
 }
 
@@ -434,9 +447,10 @@ SettingsManager::GetDefaultUserSettings() const
 }
 
 void
-SettingsManager::ApplyUserSettings(bool save_json)
+SettingsManager::ApplyUserSettings(const UserSettings& old_settings, bool save_json)
 {
-    ApplyUserDisplaySettings();
+    ApplyUserDisplaySettings(old_settings);
+    ApplyUserUnitSettings(old_settings);
     if(save_json)
     {
         SaveSettingsJson();

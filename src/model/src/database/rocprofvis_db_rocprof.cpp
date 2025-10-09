@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include "rocprofvis_db_rocprof.h"
+#include "rocprofvis_dm_trace.h"
 #include <sstream>
 #include <string.h>
 
@@ -922,6 +923,87 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
     delete internal_future;
 
     return future->SetPromise(result);
+}
+
+rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+    rocprofvis_dm_string_table_filters_t string_table_filters, table_string_id_filter_map_t& filter)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    if(num_string_table_filters > 0)
+    {
+        result = kRocProfVisDmResultUnknownError;
+        ROCPROFVIS_ASSERT_RETURN(BindObject()->trace_object, kRocProfVisDmResultInvalidParameter);
+        std::vector<rocprofvis_dm_index_t> string_indices;
+        result = ((Trace*)BindObject()->trace_object)->GetStringIndicesWithSubstring(num_string_table_filters, string_table_filters, string_indices);
+        ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
+        std::string string_ids;
+        std::string kernel_ids;
+        for(const rocprofvis_dm_index_t& index : string_indices)
+        {
+            rocprofvis_dm_id_t string_id;
+            result = StringIndexToId(index, string_id);
+            ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
+            if(index > m_symbols_offset)
+            {
+                kernel_ids += kernel_ids.empty() ? std::to_string(string_id) : ", " + std::to_string(string_id);
+            }
+            else
+            {
+                string_ids += string_ids.empty() ? std::to_string(string_id) : ", " + std::to_string(string_id);
+            }
+        }
+        if(!string_ids.empty())
+        {
+            filter[kRocProfVisDmOperationLaunch] = " R.name_id IN (" + string_ids;
+            filter[kRocProfVisDmOperationDispatch] = " K.region_name_id IN (" + string_ids;
+            if(!kernel_ids.empty())
+            {
+                filter[kRocProfVisDmOperationDispatch] += ") OR K.kernel_id IN (" + kernel_ids;
+            }
+        }
+        else if(!kernel_ids.empty())
+        {
+            filter[kRocProfVisDmOperationDispatch] = " K.kernel_id IN (" + kernel_ids;
+        }
+    }
+    return result;
+}
+
+rocprofvis_dm_string_t RocprofDatabase::GetEventOperationQuery(const rocprofvis_dm_event_operation_t operation)
+{
+    switch(operation)
+    {
+        case kRocProfVisDmOperationLaunch:
+        {
+            return m_query_factory.GetRocprofRegionTableQuery(false);
+        }
+        case kRocProfVisDmOperationDispatch:
+        {
+            return m_query_factory.GetRocprofKernelDispatchTableQuery();
+        }
+        case kRocProfVisDmOperationMemoryAllocate:
+        {
+            return m_query_factory.GetRocprofMemoryAllocTableQuery();
+        }
+        case kRocProfVisDmOperationMemoryCopy:
+        {
+            return m_query_factory.GetRocprofMemoryCopyTableQuery();
+        }
+        case kRocProfVisDmOperationLaunchSample:
+        {
+            return m_query_factory.GetRocprofRegionTableQuery(true);
+        }
+        default:
+        {
+            return "";
+        }
+    }
+}
+
+rocprofvis_dm_result_t RocprofDatabase::StringIndexToId(rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id)
+{
+    id = (index >= m_symbols_offset) ? index - m_symbols_offset : index;
+    return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(

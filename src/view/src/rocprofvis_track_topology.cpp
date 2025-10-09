@@ -3,6 +3,8 @@
 #include "rocprofvis_track_topology.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_utils.h"
+#include "rocprofvis_settings_manager.h"
 
 namespace RocProfVis
 {
@@ -13,7 +15,8 @@ TrackTopology::TrackTopology(DataProvider& dp)
 : m_data_provider(dp)
 , m_topology_dirty(true)
 , m_graphs_dirty(true)
-, m_metadata_changed_event_token(-1)
+, m_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
+, m_format_changed_token(EventManager::InvalidSubscriptionToken)
 {
     auto metadata_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
         m_graphs_dirty = true;
@@ -21,6 +24,15 @@ TrackTopology::TrackTopology(DataProvider& dp)
     m_metadata_changed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTrackMetadataChanged),
         metadata_changed_event_handler);
+
+    //subscribe to time format changed event
+    auto format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        // Reformat time columns
+        FormatCells();
+    };
+
+    m_format_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), format_changed_handler);    
 }
 
 TrackTopology::~TrackTopology()
@@ -28,6 +40,9 @@ TrackTopology::~TrackTopology()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTrackMetadataChanged),
         m_metadata_changed_event_token);
+
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), m_format_changed_token);
 }
 
 void
@@ -104,10 +119,18 @@ TrackTopology::UpdateTopology()
                         m_topology.nodes[i].processes[j].info_table = InfoTable{
                             { { InfoTable::Cell{ "Start Time", false },
                                 InfoTable::Cell{
-                                    std::to_string(process_info->start_time) } },
-                              { InfoTable::Cell{ "End time", false },
+                                    std::to_string(process_info->start_time), false, true,
+                                    [this](const std::string& raw,
+                                           std::string&       formatted_out) {
+                                        return FormatTimeCell(raw, formatted_out);
+                                    } } },
+                              { InfoTable::Cell{ "End Time", false },
                                 InfoTable::Cell{
-                                    std::to_string(process_info->end_time) } },
+                                    std::to_string(process_info->end_time), false, true,
+                                    [this](const std::string& raw,
+                                           std::string&       formatted_out) {
+                                        return FormatTimeCell(raw, formatted_out);
+                                    } } },
                               { InfoTable::Cell{ "Command", false },
                                 InfoTable::Cell{ process_info->command, false } },
                               { InfoTable::Cell{ "Environment", false },
@@ -148,7 +171,7 @@ TrackTopology::UpdateTopology()
                                 }
                             }
                         }
-                        
+
                         const std::vector<uint64_t>& stream_ids = process_info->stream_ids;
                         m_topology.nodes[i].processes[j].streams.resize(stream_ids.size());
                         m_topology.nodes[i].processes[j].stream_header =
@@ -204,11 +227,15 @@ TrackTopology::UpdateTopology()
                                         { InfoTable::Cell{ "Start Time", false },
                                           InfoTable::Cell{
                                               std::to_string(thread_info->start_time),
-                                              false } },
-                                        { InfoTable::Cell{ "End time", false },
+                                              false, true, [this](const std::string& raw, std::string& formatted_out) {
+                                                  return FormatTimeCell(raw, formatted_out);
+                                              } } },
+                                        { InfoTable::Cell{ "End Time", false },
                                           InfoTable::Cell{
                                               std::to_string(thread_info->end_time),
-                                              false } },
+                                              false, true, [this](const std::string& raw, std::string& formatted_out) {
+                                                  return FormatTimeCell(raw, formatted_out);
+                                              } } },                               
                                     } };
                             }
                         }
@@ -263,8 +290,94 @@ TrackTopology::UpdateTopology()
                 }
             }
         }
+        FormatCells();
         m_topology_dirty = false;
     }
+}
+
+void
+TrackTopology::FormatCells()
+{
+    for(auto& node : m_topology.nodes)
+    {
+        for(auto& process : node.processes)
+        {
+            // Format process table
+            for(auto& row : process.info_table.cells)
+            {
+                for(auto& cell : row)
+                {
+                    if(cell.needs_format && cell.formatter)
+                    {
+                        cell.formatter(cell.data, cell.formatted);
+                    }
+                }
+            }
+            // Format child tables
+            for(auto& t : process.threads)
+            {
+                for(auto& row : t.info_table.cells)
+                {
+                    for(auto& cell : row)
+                    {
+                        if(cell.needs_format && cell.formatter)
+                        {
+                            cell.formatter(cell.data, cell.formatted);
+                        }
+                    }
+                }
+            }
+            for(auto& s : process.streams)
+            {
+                for(auto& row : s.info_table.cells)
+                {
+                    for(auto& cell : row)
+                    {
+                        if(cell.needs_format && cell.formatter)
+                        {
+                            cell.formatter(cell.data, cell.formatted);
+                        }
+                    }
+                }
+            }
+            for(auto& q : process.queues)
+            {
+                for(auto& row : q.info_table.cells)
+                {
+                    for(auto& cell : row)
+                    {
+                        if(cell.needs_format && cell.formatter)
+                        {
+                            cell.formatter(cell.data, cell.formatted);
+                        }
+                    }
+                }
+            }
+            for(auto& c : process.counters)
+            {
+                for(auto& row : c.info_table.cells)
+                {
+                    for(auto& cell : row)
+                    {
+                        if(cell.needs_format && cell.formatter)
+                        {
+                            cell.formatter(cell.data, cell.formatted);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+bool
+TrackTopology::FormatTimeCell(const std::string& raw, std::string& formatted_out)
+{
+    SettingsManager& settings    = SettingsManager::GetInstance();
+    auto             time_format = settings.GetUserSettings().unit_settings.time_format;
+
+    formatted_out = nanosecond_to_formatted_str(std::stod(raw), time_format, true);
+    return true;
 }
 
 void

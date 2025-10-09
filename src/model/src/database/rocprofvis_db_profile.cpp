@@ -395,7 +395,7 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
         }
 
         uint32_t split_count = 1;
-        if ((flags & kRocProfVisDmTrySplitTrack) && TrackPropertiesAt(i)->record_count > 0)
+        if ((flags & kRocProfVisDmTrySplitTrack) && TrackPropertiesAt(i)->record_count > SINGLE_THREAD_RECORDS_COUNT_LIMIT)
         {
             size_t total_event_count = 0;
             for (int i = kRocProfVisDmOperationLaunch; i < kRocProfVisDmNumOperation; i++)
@@ -450,6 +450,10 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
             }
             rocprofvis_db_future_free(futures[i]);
         }
+        
+    }
+    for (int i = 0; i < NumTracks(); i++)
+    {
         func_clear(TrackPropertiesAt(i));
     }
     return result;

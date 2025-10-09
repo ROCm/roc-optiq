@@ -27,6 +27,8 @@ namespace RocProfVis
 namespace DataModel
 {
 
+#define SINGLE_THREAD_RECORDS_COUNT_LIMIT 50000
+
 typedef enum rocprofvis_db_async_tracks_flags_t
 {
     kRocProfVisDmIncludePmcTracks = 1,

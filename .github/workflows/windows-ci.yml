@@ -32,6 +32,14 @@ jobs:
         run: |
           curl -O https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe?Human=true
           ./vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
+      - name: Set Vulkan SDK environment variables
+        shell: pwsh
+        run: |
+          $vulkanRoot = Get-ChildItem -Directory "C:\VulkanSDK" | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $vulkanRoot) { Write-Host "Vulkan SDK not found!"; exit 1 }
+          echo "VULKAN_SDK=$($vulkanRoot.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "PATH=$($vulkanRoot.FullName)\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
           
       - name: Build, Make, and Verify Installation
         run: |

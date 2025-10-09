@@ -84,6 +84,7 @@ private:
     // Used to enforce one selection change per render cycle.
     bool                            m_selection_changed;
     bool                            m_has_drawn_tool_tip;
+    std::vector<ChartItem>          m_selected_chart_items;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
 };
 

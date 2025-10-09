@@ -460,7 +460,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 
         if(kRocProfVisDmResultSuccess !=
             ExecuteQueryForAllTracksAsync(
-                kRocProfVisDmIncludePmcTracks, kRPVQuerySliceByTrackSliceQuery,
+                kRocProfVisDmTrySplitTrack, kRPVQuerySliceByTrackSliceQuery,
                 histogram_query.c_str(),
                 "GROUP BY bucket", &CallbackMakeHistogramPerTrack,
                 [](rocprofvis_dm_track_params_t* params) {}))

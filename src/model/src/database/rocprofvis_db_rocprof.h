@@ -240,7 +240,13 @@ private:
                 { (void*)&CallBackAddTrack,
                   { 
                         Builder::AGENT_ID_SERVICE_NAME, 
-                        Builder::QUEUE_ID_SERVICE_NAME 
+                        Builder::QUEUE_ID_SERVICE_NAME,
+                  }
+                },
+                { (void*)&CallbackGetTrackProperties,
+                  { 
+                        "MIN(startTs)",
+                        "MAX(endTs)"
                   }
                 } 
         };

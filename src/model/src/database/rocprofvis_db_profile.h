@@ -27,10 +27,13 @@ namespace RocProfVis
 namespace DataModel
 {
 
+#define SINGLE_THREAD_RECORDS_COUNT_LIMIT 50000
+
 typedef enum rocprofvis_db_async_tracks_flags_t
 {
     kRocProfVisDmIncludePmcTracks = 1,
-    kRocProfVisDmIncludeStreamTracks = 2
+    kRocProfVisDmIncludeStreamTracks = 2,
+    kRocProfVisDmTrySplitTrack = 4
 } rocprofvis_db_async_tracks_flags_t;
 
 typedef struct rocprofvis_db_event_level_t
@@ -107,7 +110,9 @@ class ProfileDatabase : public SqliteDatabase
         rocprofvis_dm_result_t BuildTrackQuery(
                             rocprofvis_dm_index_t index,
                             rocprofvis_dm_index_t   type,
-                            rocprofvis_dm_string_t& query) override;
+                            rocprofvis_dm_string_t& query,
+                            uint32_t split_count,
+                            uint32_t split_index) override;
     // method to build a query to read time slice of records for all tracks in one shot 
     // @param start - start timestamp of time slice 
     // @param end - end timestamp of time slice 

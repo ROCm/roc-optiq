@@ -318,6 +318,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
     {
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
         std::string value;
+        uint64_t process_id;
 
         ShowProgress(2, "Detect Nodes", kRPVDbBusy, future);
         ExecuteSQLQuery(future,
@@ -360,6 +361,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ExecuteSQLQuery(future,"SELECT id, guid, nid, pid, agent_id, target_arch, COALESCE(event_code,0) as event_code, COALESCE(instance_id,0) as instance_id, name, symbol, description, long_description, component, units, value_type, block, expression, is_constant, is_derived, extdata from rocpd_info_pmc;", "PMC", (rocprofvis_dm_handle_t)CachedTables(), &CallbackCacheTable);
 
         CachedTables()->AddTableCell("PMC", -1, "name", "MALLOC");
+
+
+        if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,"select distinct id from rocpd_info_process;", &CallbackGetValue, process_id)) break;
                 
         ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future,
@@ -631,12 +635,22 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(5, "Collecting track properties",
                      kRPVDbBusy, future);
-        TraceProperties()->start_time = UINT64_MAX;
-        TraceProperties()->end_time   = 0;
+        TraceProperties()->start_time = std::atoll(CachedTables()->GetTableCell("Process", process_id, "start"));
+        TraceProperties()->end_time = std::atoll(CachedTables()->GetTableCell("Process", process_id, "end"));
+        uint32_t split_flag = 0;
+        if (TraceProperties()->start_time > 0 && TraceProperties()->end_time > 0)
+        {
+            split_flag = kRocProfVisDmTrySplitTrack;
+        }
+        else
+        {
+            TraceProperties()->start_time = UINT64_MAX;
+            TraceProperties()->end_time = 0;
+        }
 
         if(kRocProfVisDmResultSuccess !=
            ExecuteQueryForAllTracksAsync(
-               kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
+               kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks | split_flag , kRPVQuerySliceByTrackSliceQuery,
                "SELECT MIN(startTs), MAX(endTs), MIN(level), MAX(level), ",
                "", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {}))
@@ -669,7 +683,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         if(kRocProfVisDmResultSuccess !=
             ExecuteQueryForAllTracksAsync(
-                kRocProfVisDmIncludePmcTracks, kRPVQuerySliceByTrackSliceQuery,
+                kRocProfVisDmTrySplitTrack, kRPVQuerySliceByTrackSliceQuery,
                 histogram_query.c_str(),
                 "GROUP BY bucket", &CallbackMakeHistogramPerTrack,
                 [](rocprofvis_dm_track_params_t* params) {}))

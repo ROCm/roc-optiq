@@ -24,7 +24,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(220, 38, 38, 255),    // Colors::kTextError
     IM_COL32(0, 255, 0, 255),      // Colors::kTextSuccess
     IM_COL32(160, 160, 160, 255),  // Colors::kFlameChartColor
-    IM_COL32(255, 255, 255, 255),  // Colors::kGridColor
+    IM_COL32(200, 200, 200, 60),   // Colors::kGridColor
     IM_COL32(220, 38, 38, 255),    // Colors::kGridRed
     IM_COL32(255, 71, 87, 255),    // Colors::kSelectionBorder
     IM_COL32(220, 38, 38, 80),     // Colors::kSelection

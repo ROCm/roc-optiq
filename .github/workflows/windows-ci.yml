@@ -30,7 +30,7 @@ jobs:
       - name: Install Vulkan SDK
         run: |
           curl -O https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe?Human=true
-          ./vulkan_sdk.exe /S
+          vulkan_sdk.exe /S
           
       - name: Build, Make, and Verify Installation
         run: |

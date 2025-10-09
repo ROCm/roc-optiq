@@ -64,8 +64,8 @@ jobs:
           cmake -B build --install-prefix /opt/rocprofiler-visualizer
           cmake --build build --parallel 4
           if [ -e build/${{ env.VISUALIZER_FILE_NAME }} ]; then
-            echo "✅ {{ env.VISUALIZER_FILE_NAME }} has been successfully built!"
+            echo "✅ $VISUALIZER_FILE_NAME has been successfully built!"
           else
-            echo "❌ {{ env.VISUALIZER_FILE_NAME }} was not built!"
+            echo "❌ $VISUALIZER_FILE_NAME was not built!"
             exit 1
           fi

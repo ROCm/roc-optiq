@@ -1,5 +1,5 @@
 name: Redhat Continuous Integration
-run-name: rocprofiler-visualizer-redhad-ci
+run-name: rocprofiler-visualizer-redhat-ci
 
 on:
   schedule:

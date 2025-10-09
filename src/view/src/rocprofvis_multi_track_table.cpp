@@ -14,43 +14,30 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr uint64_t INVALID_UINT64_INDEX = std::numeric_limits<uint64_t>::max();
+constexpr const char* ROWCONTEXTMENU_POPUP_NAME = "RowContextMenu";
+constexpr const char* NO_DATA_TEXT =
+    "No data available for the selected tracks or filters.";
 
 const std::string TRACK_ID_COLUMN_NAME  = "__trackId";
 const std::string STREAM_ID_COLUMN_NAME = "__streamTrackId";
 const std::string ID_COLUMN_NAME        = "id";
 const std::string NAME_COLUMN_NAME      = "name";
-const std::string START_TS_COLUMN_NAME  = "startTs";
-const std::string END_TS_COLUMN_NAME    = "endTs";
-const std::string DURATION_COLUMN_NAME  = "duration";
 
 MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
                                  std::shared_ptr<TimelineSelection> timeline_selection,
                                  TableType                          table_type)
-: InfiniteScrollTable(dp, table_type)
+: InfiniteScrollTable(dp, table_type, NO_DATA_TEXT)
 , m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
 , m_timeline_selection(timeline_selection)
 , m_defer_track_selection_changed(false)
+, m_open_context_menu(false)
 {
     m_widget_name = (table_type == TableType::kEventTable)
                         ? GenUniqueName("Event Table")
                         : GenUniqueName("Sample Table");
-
-    //subscribe to time format changed event
-    auto format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        // Reformat time columns
-        FormatData();
-    };
-
-    m_format_changed_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kTimeFormatChanged), format_changed_handler);
 }
 
-MultiTrackTable::~MultiTrackTable()
-{
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kTimeFormatChanged), m_format_changed_token);
-}
+MultiTrackTable::~MultiTrackTable() {}
 
 void
 MultiTrackTable::HandleTrackSelectionChanged()
@@ -218,6 +205,7 @@ MultiTrackTable::Render()
         m_filter_requested = true;
     }
     InfiniteScrollTable::Render();
+    RenderContextMenu();
 }
 
 void
@@ -235,152 +223,63 @@ MultiTrackTable::Update()
             HandleTrackSelectionChanged();
         }
     }
-    if(m_data_changed)
-    {
-        const std::vector<std::string>& column_names =
-            m_data_provider.GetTableHeader(m_table_type);
-
-        // remember column index positions
-        m_important_column_idxs =
-            std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
-        for(size_t i = 0; i < column_names.size(); i++)
-        {
-            const auto& col = column_names[i];
-            if(!col.empty())
-            {
-                if(col == TRACK_ID_COLUMN_NAME)
-                {
-                    m_important_column_idxs[kTrackId] = i;
-                }
-                else if(col == STREAM_ID_COLUMN_NAME)
-                {
-                    m_important_column_idxs[kStreamId] = i;
-                }
-                else if(col == ID_COLUMN_NAME)
-                {
-                    m_important_column_idxs[kId] = i;
-                }
-                else if(col == NAME_COLUMN_NAME)
-                {
-                    m_important_column_idxs[kName] = i;
-                }
-                else if(col == START_TS_COLUMN_NAME)
-                {
-                    m_important_column_idxs[kTimeStartNs] = i;
-                }
-                else if(col == END_TS_COLUMN_NAME)
-                {
-                    m_important_column_idxs[kTimeEndNs] = i;
-                }
-                else if(col == DURATION_COLUMN_NAME)
-                {
-                    m_important_column_idxs[kDurationNs] = i;
-                }
-            }
-        }
-    }
     InfiniteScrollTable::Update();
 }
 
 void
-MultiTrackTable::FormatData() 
-{    
-    const std::vector<std::string>& column_names =
-    m_data_provider.GetTableHeader(m_table_type);
-    const std::vector<std::vector<std::string>>& table_data =
-    m_data_provider.GetTableData(m_table_type);
+MultiTrackTable::FormatData()
+{
     std::vector<formatted_column_info_t>& formatted_column_data =
-    m_data_provider.GetMutableFormattedTableData(m_table_type);
- 
+        m_data_provider.GetMutableFormattedTableData(m_table_type);
+
     // clear previous formatting info
     formatted_column_data.clear();
-    formatted_column_data.resize(column_names.size());
+    formatted_column_data.resize(m_data_provider.GetTableHeader(m_table_type).size());
+    InfiniteScrollTable::FormatTimeColumns();
+}
 
-    SettingsManager& settings = SettingsManager::GetInstance();
-    auto time_format = settings.GetUserSettings().unit_settings.time_format;
-
-    double start_time = m_data_provider.GetStartTime();
-
-    for(size_t col_idx = 0; col_idx < column_names.size(); col_idx++)
+void
+MultiTrackTable::IndexColumns()
+{
+    const std::vector<std::string>& column_names =
+        m_data_provider.GetTableHeader(m_table_type);
+    // remember column index positions
+    m_important_column_idxs =
+        std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
+    for(size_t i = 0; i < column_names.size(); i++)
     {
-        // Check if this column needs formatting
-        bool needs_formatting = false;
-        if(col_idx == m_important_column_idxs[kTimeStartNs] ||
-           col_idx == m_important_column_idxs[kTimeEndNs] ||
-           col_idx == m_important_column_idxs[kDurationNs])
+        const auto& col = column_names[i];
+        if(!col.empty())
         {
-            needs_formatting = true;
-        }
-
-        if(needs_formatting)
-        {
-            formatted_column_data[col_idx].needs_formatting = true;
-            formatted_column_data[col_idx].formatted_row_value.resize(table_data.size());
-            
-            for(size_t row_idx = 0; row_idx < table_data.size(); row_idx++)
+            if(col == TRACK_ID_COLUMN_NAME)
             {
-                const std::string& raw_value = table_data[row_idx][col_idx];
-
-                if(col_idx == m_important_column_idxs[kTimeStartNs] ||
-                   col_idx == m_important_column_idxs[kTimeEndNs] ||
-                   col_idx == m_important_column_idxs[kDurationNs])
-                {
-                    // Format time values
-                    try
-                    {
-                        double time_ns = static_cast<double>(std::stoull(raw_value));
-                        if(col_idx != m_important_column_idxs[kDurationNs])
-                        {
-                            // time is relative to the trace start time
-                            time_ns -= start_time;
-                        }
-                        formatted_column_data[col_idx].formatted_row_value[row_idx] =
-                            nanosecond_to_formatted_str(time_ns, time_format);
-                    } catch(const std::exception& e)
-                    {
-                        spdlog::warn("Failed to format time value '{}': {}", raw_value,
-                                     e.what());
-                        formatted_column_data[col_idx].formatted_row_value[row_idx] =
-                            raw_value;
-                    }
-                }
+                m_important_column_idxs[kTrackId] = i;
+            }
+            else if(col == STREAM_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kStreamId] = i;
+            }
+            else if(col == ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kId] = i;
+            }
+            else if(col == NAME_COLUMN_NAME)
+            {
+                m_important_column_idxs[kName] = i;
             }
         }
     }
+    InfiniteScrollTable::IndexColumns();
 }
 
-uint64_t
-MultiTrackTable::GetTrackIdHelper(
-    const std::vector<std::vector<std::string>>& table_data) const
+void
+MultiTrackTable::RowSelected(const ImGuiMouseButton mouse_button)
 {
-    uint64_t track_id  = INVALID_UINT64_INDEX;
-    uint64_t stream_id = INVALID_UINT64_INDEX;
-
-    // get track id or stream id
-    if(m_important_column_idxs[kTrackId] != INVALID_UINT64_INDEX &&
-       m_important_column_idxs[kTrackId] < table_data[m_selected_row].size())
+    if(mouse_button == ImGuiMouseButton_Right)
     {
-        track_id =
-            std::stoull(table_data[m_selected_row][m_important_column_idxs[kTrackId]]);
+        m_open_context_menu = true;
     }
-    else if(m_important_column_idxs[kStreamId] != INVALID_UINT64_INDEX &&
-            m_important_column_idxs[kStreamId] < table_data[m_selected_row].size())
-    {
-        stream_id =
-            std::stoull(table_data[m_selected_row][m_important_column_idxs[kStreamId]]);
-    }
-
-    uint64_t target_track_id = INVALID_UINT64_INDEX;
-    if(track_id != INVALID_UINT64_INDEX)
-    {
-        target_track_id = track_id;
-    }
-    else if(stream_id != INVALID_UINT64_INDEX)
-    {
-        target_track_id = stream_id;
-    }
-
-    return target_track_id;
+    InfiniteScrollTable::RowSelected(mouse_button);
 }
 
 bool
@@ -412,8 +311,14 @@ MultiTrackTable::XButton(const char* id) const
 }
 
 void
-MultiTrackTable::RenderContextMenu() const
+MultiTrackTable::RenderContextMenu()
 {
+    if(m_open_context_menu)
+    {
+        ImGui::OpenPopup(ROWCONTEXTMENU_POPUP_NAME);
+        m_open_context_menu = false;
+    }
+
     auto style = m_settings.GetDefaultStyle();
 
     // Render context menu for row actions
@@ -423,7 +328,8 @@ MultiTrackTable::RenderContextMenu() const
     {
         const std::vector<std::vector<std::string>>& table_data =
             m_data_provider.GetTableData(m_table_type);
-        uint64_t target_track_id = GetTrackIdHelper(table_data);
+        uint64_t target_track_id = SelectedRowToTrackID(
+            m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
 
         if(ImGui::MenuItem("Copy Row Data", nullptr, false))
         {
@@ -448,8 +354,9 @@ MultiTrackTable::RenderContextMenu() const
                                                         NotificationLevel::Info, 1.0);
             }
         }
-        else if(ImGui::MenuItem("Go to event", nullptr, false,
-                                target_track_id != INVALID_UINT64_INDEX))
+        else if(ImGui::MenuItem(m_table_type == TableType::kSampleTable ? "Go to sample"
+                                                                        : "Go to event",
+                                nullptr, false, target_track_id != INVALID_UINT64_INDEX))
         {
             if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
             {
@@ -460,38 +367,27 @@ MultiTrackTable::RenderContextMenu() const
                 // Handle navigation
                 if(target_track_id != INVALID_UINT64_INDEX)
                 {
-                    spdlog::info("Navigating to track ID: {} from row: {}",
-                                 target_track_id, m_selected_row);
-                    EventManager::GetInstance()->AddEvent(
-                        std::make_shared<ScrollToTrackEvent>(
-                            static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                            target_track_id, m_data_provider.GetTraceFilePath()));
                     // get start time and duration
-                    uint64_t start_time = 0;
-                    uint64_t duration   = 0;
-                    if(m_important_column_idxs[kTimeStartNs] != INVALID_UINT64_INDEX &&
-                       m_important_column_idxs[kTimeStartNs] <
-                           table_data[m_selected_row].size())
+                    std::pair<uint64_t, uint64_t> time_range = SelectedRowToTimeRange();
+                    if(time_range.first != INVALID_UINT64_INDEX &&
+                       time_range.second != INVALID_UINT64_INDEX)
                     {
-                        start_time = std::stoull(
-                            table_data[m_selected_row]
-                                      [m_important_column_idxs[kTimeStartNs]]);
+                        ViewRangeNS view_range = calculate_adaptive_view_range(
+                            static_cast<double>(time_range.first),
+                            static_cast<double>(time_range.second - time_range.first));
+                        spdlog::info("Navigating to track ID: {} from row: {}",
+                                     target_track_id, m_selected_row);
+                        EventManager::GetInstance()->AddEvent(
+                            std::make_shared<ScrollToTrackEvent>(
+                                static_cast<int>(
+                                    RocEvents::kHandleUserGraphNavigationEvent),
+                                target_track_id, m_data_provider.GetTraceFilePath()));
+                        EventManager::GetInstance()->AddEvent(
+                            std::make_shared<RangeEvent>(
+                                static_cast<int>(RocEvents::kSetViewRange),
+                                view_range.start_ns, view_range.end_ns,
+                                m_data_provider.GetTraceFilePath()));
                     }
-
-                    if(m_important_column_idxs[kDurationNs] != INVALID_UINT64_INDEX &&
-                       m_important_column_idxs[kDurationNs] <
-                           table_data[m_selected_row].size())
-                    {
-                        duration =
-                            std::stoull(table_data[m_selected_row]
-                                                  [m_important_column_idxs[kDurationNs]]);
-                    }
-
-                    ViewRangeNS view_range = calculate_adaptive_view_range(
-                        static_cast<double>(start_time), static_cast<double>(duration));
-                    EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
-                        static_cast<int>(RocEvents::kSetViewRange), view_range.start_ns,
-                        view_range.end_ns, m_data_provider.GetTraceFilePath()));
                 }
                 else
                 {

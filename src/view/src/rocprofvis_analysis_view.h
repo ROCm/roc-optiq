@@ -30,7 +30,6 @@ public:
 
 private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
-    void HandleNewTableData(std::shared_ptr<RocEvent> e);
 
     DataProvider& m_data_provider;
 
@@ -44,7 +43,6 @@ private:
 
     EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
-    EventManager::SubscriptionToken m_new_table_data_token;
 };
 
 }  // namespace View

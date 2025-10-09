@@ -73,9 +73,6 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
     };
-    auto new_table_data_handler = [this](std::shared_ptr<RocEvent> e) {
-        this->HandleNewTableData(e);
-    };
 
     // Subscribe to timeline selection changed event
     m_timeline_track_selection_changed_token = EventManager::GetInstance()->Subscribe(
@@ -84,8 +81,6 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     m_timeline_event_selection_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         time_line_selection_changed_handler);
-    m_new_table_data_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kNewTableData), new_table_data_handler);
 }
 
 AnalysisView::~AnalysisView()
@@ -97,8 +92,6 @@ AnalysisView::~AnalysisView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         m_timeline_event_selection_changed_token);
-    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTableData),
-                                             m_new_table_data_token);
 }
 
 void
@@ -153,30 +146,6 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
                         selection_changed_event->GetEventID(),
                         selection_changed_event->EventSelected());
                 }
-            }
-        }
-    }
-}
-
-void
-AnalysisView::HandleNewTableData(std::shared_ptr<RocEvent> e)
-{
-    if(e)
-    {
-        RocEventType                    event_type = e->GetType();
-        std::shared_ptr<TableDataEvent> table_data_event =
-            std::static_pointer_cast<TableDataEvent>(e);
-        if(table_data_event &&
-           table_data_event->GetSourceId() == m_data_provider.GetTraceFilePath())
-        {
-            const uint64_t& request_id = table_data_event->GetRequestID();
-            if(request_id == DataProvider::EVENT_TABLE_REQUEST_ID && m_event_table)
-            {
-                m_event_table->HandleNewTableData(table_data_event);
-            }
-            else if(request_id == DataProvider::SAMPLE_TABLE_REQUEST_ID && m_sample_table)
-            {
-                m_sample_table->HandleNewTableData(table_data_event);
             }
         }
     }

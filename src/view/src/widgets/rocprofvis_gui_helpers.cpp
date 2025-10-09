@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_gui_helpers.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_utils.h"
 #include <cmath>
 #include <algorithm>
@@ -52,6 +53,92 @@ RocProfVis::View::RenderLoadingIndicatorDots(float dot_radius, int num_dots,
         draw_list->AddCircleFilled(ImVec2(current_dot_x, current_dot_y), dot_radius,
                                    current_color, 12);
     }
+}
+
+bool
+RocProfVis::View::IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
+                             const char* tooltip, ImVec2 tooltip_padding, bool frameless,
+                             ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
+                             ImU32 bg_color_active, const char* id)
+{
+    if(id && strlen(id) > 0)
+    {
+        ImGui::PushID(id);
+    }
+    else
+    {
+        ImGui::PushID(icon);
+    }
+    if(frameless)
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, 0);
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(0, 0, 0, 0));
+    }
+    else
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
+        ImGui::PushStyleColor(ImGuiCol_Button, bg_color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bg_color_hover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, bg_color_active);
+    }
+    ImGui::PushFont(icon_font);
+    bool clicked = ImGui::Button(icon, size);
+    ImGui::PopFont();
+    if(tooltip && strlen(tooltip) > 0)
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
+        if(ImGui::BeginItemTooltip())
+        {
+            ImGui::TextUnformatted(tooltip);
+            ImGui::EndTooltip();
+        }
+        ImGui::PopStyleVar();
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    ImGui::PopID();
+    return clicked;
+}
+
+std::pair<bool, bool>
+RocProfVis::View::InputTextWithClear(const char* id, const char* hint, char* buf,
+                                     size_t buf_size, ImFont* icon_font, ImU32 bg_color,
+                                     const ImGuiStyle& style, float width)
+{
+    bool input_cleared = false;
+    ImGui::BeginGroup();
+    ImGui::SetNextItemAllowOverlap();
+    ImGui::PushID(id);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, bg_color);
+    ImGui::SetNextItemWidth(width);
+    bool input_changed =
+        ImGui::InputTextWithHint("##input_text_with_clear", hint, buf, buf_size);
+    ImGui::PopStyleColor();
+    if(strlen(buf) > 0)
+    {
+        ImGui::PushFont(icon_font);
+        if(width >= ImGui::CalcTextSize(ICON_X_CIRCLED).x + 2 * style.FramePadding.x)
+        {
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetItemRectMax().x - 2 * style.FramePadding.x -
+                                 ImGui::CalcTextSize(ICON_X_CIRCLED).x);
+            ImGui::PopFont();
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+            input_cleared = IconButton(ICON_X_CIRCLED, icon_font, ImVec2(0, 0), "Clear",
+                                       style.WindowPadding, false, style.FramePadding,
+                                       bg_color, bg_color, bg_color);
+            ImGui::PopStyleVar();
+        }
+        else
+        {
+            ImGui::PopFont();
+        }
+    }
+    ImGui::PopID();
+    ImGui::EndGroup();
+    return std::make_pair(input_changed, input_cleared);
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER

@@ -30,7 +30,7 @@ AnnotationView::Render()
 
     if(m_annotations->GetStickyNotes().empty())
     {
-        ImGui::Text("No notes");
+        ImGui::Text("No annotations.");
     }
     else if(ImGui::BeginTable("StickyNotesTable", 4,
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))

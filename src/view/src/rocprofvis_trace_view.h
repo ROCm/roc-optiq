@@ -21,6 +21,7 @@ class TrackTopology;
 class MessageDialog;
 class TraceView;
 class SettingsManager;
+class EventSearch;
 
 class SystemTraceProjectSettings : public ProjectSetting
 {
@@ -71,7 +72,8 @@ private:
     void RenderFlowControls();
     void RenderAnnotationControls();
     void RenderSeparator();
-    
+    void RenderEventSearch();
+
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::shared_ptr<TrackTopology>     m_track_topology;
@@ -79,6 +81,7 @@ private:
     std::shared_ptr<HSplitContainer>   m_horizontal_split_container;
     std::shared_ptr<VSplitContainer>   m_vertical_split_container;
     std::shared_ptr<VFixedContainer>   m_timeline_container;
+    std::shared_ptr<EventSearch>       m_event_search;
 
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_analysis_item;
@@ -109,8 +112,8 @@ private:
     std::unique_ptr<SystemTraceProjectSettings> m_project_settings;
     // Unfortunately we should store it here because the tab appears before the view is
     // created
-    bool m_is_analysis_visible = true;
-    bool m_is_sidebar_visible = true;
+    bool m_is_analysis_visible;
+    bool m_is_sidebar_visible;
 };
 
 }  // namespace View

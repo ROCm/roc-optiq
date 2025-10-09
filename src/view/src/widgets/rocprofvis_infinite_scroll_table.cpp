@@ -2,7 +2,6 @@
 
 #include "rocprofvis_infinite_scroll_table.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_event_manager.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -15,9 +14,13 @@ namespace View
 {
 
 constexpr uint64_t FETCH_CHUNK_SIZE = 1000;
-constexpr uint64_t INVALID_UINT64_INDEX = std::numeric_limits<uint64_t>::max();
 
-InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
+const std::string START_TS_COLUMN_NAME = "startTs";
+const std::string END_TS_COLUMN_NAME   = "endTs";
+const std::string DURATION_COLUMN_NAME = "duration";
+
+InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
+                                         const std::string& no_data_text)
 : m_data_provider(dp)
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
@@ -35,7 +38,32 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 , m_pending_filter_options({ 0, "", "" })
 , m_data_changed(true)
 , m_filter_requested(false)
-{}
+, m_selected_row(-1)
+, m_no_data_text(no_data_text)
+, m_horizontal_scroll(0.0f)
+{
+    auto new_table_data_handler = [this](std::shared_ptr<RocEvent> e) {
+        this->HandleNewTableData(e);
+    };
+    m_new_table_data_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kNewTableData), new_table_data_handler);
+
+    // subscribe to time format changed event
+    auto format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        // Reformat time columns
+        this->FormatData();
+    };
+    m_format_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), format_changed_handler);
+}
+
+InfiniteScrollTable::~InfiniteScrollTable()
+{
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kNewTableData),
+                                             m_new_table_data_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), m_format_changed_token);
+}
 
 uint64_t
 InfiniteScrollTable::GetRequestID() const
@@ -111,16 +139,19 @@ InfiniteScrollTable::Update()
     }
 }
 
-void InfiniteScrollTable::FormatData() {
+void
+InfiniteScrollTable::FormatData()
+{
     // default implementation does nothing
 }
 
 void
-InfiniteScrollTable::HandleNewTableData(std::shared_ptr<TableDataEvent> e)
+InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
 {
     if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
     {
         m_data_changed = true;
+        IndexColumns();
     }
 }
 
@@ -229,15 +260,25 @@ InfiniteScrollTable::Render()
             }
 
             ImGui::TableSetupScrollFreeze(0, 1);  // Freeze header row
-            for(const auto& col : column_names)
+            int j = 0;
+            for(int i = 0; i < column_names.size(); i++)
             {
                 ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_None;
-                if(!col.empty() && col[0] == '_')
+                if(!column_names[i].empty() && column_names[i][0] == '_')
                 {
                     col_flags = ImGuiTableColumnFlags_DefaultHide |
                                 ImGuiTableColumnFlags_Disabled;
                 }
-                ImGui::TableSetupColumn(col.c_str(), col_flags);
+                if(!m_hidden_column_indices.empty() && i == m_hidden_column_indices[j])
+                {
+                    col_flags = ImGuiTableColumnFlags_DefaultHide |
+                                ImGuiTableColumnFlags_Disabled;
+                    if(j < m_hidden_column_indices.size() - 1)
+                    {
+                        j++;
+                    }
+                }
+                ImGui::TableSetupColumn(column_names[i].c_str(), col_flags);
             }
 
             // Get sort specs
@@ -306,16 +347,13 @@ InfiniteScrollTable::Render()
                                        ImGuiSelectableFlags_AllowItemOverlap,
                                    ImVec2(0, 0)))
                             {
-                                // Todo: Handle row selection
-                                // For now, just log the row and column clicked
-                                spdlog::info("Row clicked: {} {}", col, row_n);
+                                m_selected_row = row_n;
+                                RowSelected(ImGuiMouseButton_Left);
                             }
                             if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
                             {
-                                ImGui::OpenPopup(ROWCONTEXTMENU_POPUP_NAME);
                                 m_selected_row = row_n;
-                                spdlog::info("Row right-clicked: {} {} {}", col, row_n,
-                                             m_selected_row);
+                                RowSelected(ImGuiMouseButton_Right);
                             }
                         }
                         else
@@ -336,8 +374,9 @@ InfiniteScrollTable::Render()
                 ImGui::TableNextColumn();  // Declare at least one column
             }
 
-            float scroll_y     = ImGui::GetScrollY();
-            float scroll_max_y = ImGui::GetScrollMaxY();
+            float scroll_y      = ImGui::GetScrollY();
+            float scroll_max_y  = ImGui::GetScrollMaxY();
+            m_horizontal_scroll = ImGui::GetScrollMaxX() != 0;
 
             // only check if we need to fetch based on the scroll position if we don't
             // have all the data
@@ -418,16 +457,11 @@ InfiniteScrollTable::Render()
                     }
                 }
             }
-
-            // Render context menu for row actions
-            RenderContextMenu();
-
             ImGui::EndTable();  // End BeginTable
         }
-        else
+        else if(!m_no_data_text.empty())
         {
-            ImGui::Separator();
-            ImGui::Text("No data available for the selected tracks or filters.");
+            ImGui::TextUnformatted(m_no_data_text.c_str());
         }
     }
 
@@ -504,8 +538,137 @@ InfiniteScrollTable::Render()
 }
 
 void
-InfiniteScrollTable::RenderContextMenu() const
-{}
+InfiniteScrollTable::IndexColumns()
+{
+    m_time_column_indices = { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX,
+                              INVALID_UINT64_INDEX };
+    const std::vector<std::string>& column_names =
+        m_data_provider.GetTableHeader(m_table_type);
+    for(int i = 0; i < column_names.size(); i++)
+    {
+        if(column_names[i] == START_TS_COLUMN_NAME)
+        {
+            m_time_column_indices[kTimeStartNs] = i;
+        }
+        else if(column_names[i] == END_TS_COLUMN_NAME)
+        {
+            m_time_column_indices[kTimeEndNs] = i;
+        }
+        else if(column_names[i] == DURATION_COLUMN_NAME)
+        {
+            m_time_column_indices[kDurationNs] = i;
+        }
+    }
+}
+
+void
+InfiniteScrollTable::RowSelected(const ImGuiMouseButton mouse_button)
+{
+    spdlog::info(mouse_button == ImGuiMouseButton_Left ? "Row {} clicked"
+                                                       : "Row {} right-clicked",
+                 m_selected_row);
+}
+
+uint64_t
+InfiniteScrollTable::SelectedRowToTrackID(size_t track_id_column_index,
+                                          size_t stream_id_column_index) const
+{
+    uint64_t target_track_id = INVALID_UINT64_INDEX;
+    if(m_selected_row >= 0)
+    {
+        const std::vector<std::vector<std::string>>& table_data =
+            m_data_provider.GetTableData(m_table_type);
+        uint64_t track_id  = INVALID_UINT64_INDEX;
+        uint64_t stream_id = INVALID_UINT64_INDEX;
+
+        // get track id or stream id
+        if(track_id_column_index != INVALID_UINT64_INDEX &&
+           track_id_column_index < table_data[m_selected_row].size())
+        {
+            track_id = std::stoull(table_data[m_selected_row][track_id_column_index]);
+        }
+        else if(stream_id_column_index != INVALID_UINT64_INDEX &&
+                stream_id_column_index < table_data[m_selected_row].size())
+        {
+            stream_id = std::stoull(table_data[m_selected_row][stream_id_column_index]);
+        }
+        if(track_id != INVALID_UINT64_INDEX)
+        {
+            target_track_id = track_id;
+        }
+        else if(stream_id != INVALID_UINT64_INDEX)
+        {
+            target_track_id = stream_id;
+        }
+    }
+    return target_track_id;
+}
+
+std::pair<uint64_t, uint64_t>
+InfiniteScrollTable::SelectedRowToTimeRange() const
+{
+    uint64_t start_time = INVALID_UINT64_INDEX;
+    uint64_t end_time   = INVALID_UINT64_INDEX;
+    if(m_selected_row >= 0)
+    {
+        const std::vector<std::vector<std::string>>& table_data =
+            m_data_provider.GetTableData(m_table_type);
+        if(m_time_column_indices[kTimeStartNs] != INVALID_UINT64_INDEX &&
+           m_time_column_indices[kTimeStartNs] < table_data[m_selected_row].size())
+        {
+            start_time = std::stoull(
+                table_data[m_selected_row][m_time_column_indices[kTimeStartNs]]);
+        }
+
+        if(m_time_column_indices[kTimeEndNs] != INVALID_UINT64_INDEX &&
+           m_time_column_indices[kTimeEndNs] < table_data[m_selected_row].size())
+        {
+            end_time = std::stoull(
+                table_data[m_selected_row][m_time_column_indices[kTimeEndNs]]);
+        }
+    }
+    return std::make_pair(start_time, end_time);
+}
+
+void
+InfiniteScrollTable::FormatTimeColumns() const
+{
+    const std::vector<std::vector<std::string>>& table_data =
+        m_data_provider.GetTableData(m_table_type);
+    std::vector<formatted_column_info_t>& formatted_column_data =
+        m_data_provider.GetMutableFormattedTableData(m_table_type);
+    auto   time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    double start_time  = m_data_provider.GetStartTime();
+    for(size_t i : m_time_column_indices)
+    {
+        if(i < formatted_column_data.size())
+        {
+            formatted_column_data[i].needs_formatting = true;
+            formatted_column_data[i].formatted_row_value.resize(table_data.size());
+            for(size_t row_idx = 0; row_idx < table_data.size(); row_idx++)
+            {
+                const std::string& raw_value = table_data[row_idx][i];
+                // Format time values
+                try
+                {
+                    double time_ns = static_cast<double>(std::stoull(raw_value));
+                    if(i != m_time_column_indices[kDurationNs])
+                    {
+                        // time is relative to the trace start time
+                        time_ns -= start_time;
+                    }
+                    formatted_column_data[i].formatted_row_value[row_idx] =
+                        nanosecond_to_formatted_str(time_ns, time_format);
+                } catch(const std::exception& e)
+                {
+                    spdlog::warn("Failed to format time value '{}': {}", raw_value,
+                                 e.what());
+                    formatted_column_data[i].formatted_row_value[row_idx] = raw_value;
+                }
+            }
+        }
+    }
+}
 
 void
 InfiniteScrollTable::RenderLoadingIndicator() const

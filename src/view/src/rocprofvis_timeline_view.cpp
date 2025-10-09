@@ -71,6 +71,8 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_annotations(annotations)
 , m_dragged_sticky_id(-1)
 , m_histogram(nullptr)
+, m_pseudo_focus(false)
+, m_histogram_pseudo_focus(false)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -1232,15 +1234,12 @@ TimelineView::MakeGraphView()
 void
 TimelineView::RenderHistogram()
 {
-    const float    kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
+    if(!m_histogram || m_histogram->empty()) return;
+
+    const float     kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
     constexpr float kRulerHeight          = 30.0f;
     const float     kHistogramBarHeight   = kHistogramTotalHeight - kRulerHeight;
-
-    ImVec2      window_size       = ImGui::GetWindowSize();
-    ImGuiStyle& style             = ImGui::GetStyle();
-    float       font_height       = ImGui::GetFontSize();
-
-    if(!m_histogram) return;
+    ImVec2          window_size           = ImGui::GetWindowSize();
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
@@ -1277,7 +1276,9 @@ TimelineView::RenderHistogram()
                     : 0.0f;
             float y_bar = y1 - bar_height;
             draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
-                                     m_settings.GetColor(Colors::kAccentRed));
+                                     i % 2 == 0
+                                         ? m_settings.GetColor(Colors::kAccentRedActive)
+                                         : m_settings.GetColor(Colors::kAccentRed));
         }
     }
 
@@ -1340,29 +1341,57 @@ TimelineView::RenderHistogram()
     ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
     float       label_font_size = font->FontSize;
 
-    // Draw 7 ticks and labels
-    const int num_ticks = 7;
-    double    ns_range  = m_max_x - m_min_x;
-    for(int i = 0; i < num_ticks; ++i)
+    // Interval calculation
+    // measure the size of the label to determine the step size
+    std::string label =
+        nanosecond_to_formatted_str(
+            m_range_x, m_settings.GetUserSettings().unit_settings.time_format,
+            true) +
+        "gap";
+    ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+
+    // calculate the number of intervals based on the graph width and label width
+    // reserve space for first and last label
+    int interval_count = static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
+    if(interval_count < 1) interval_count = 1;
+
+    double pixels_per_ns = window_size.x / m_range_x;
+    double interval_ns = calculate_nice_interval(m_range_x, interval_count);
+    double step_size_px = interval_ns * pixels_per_ns;
+    int pad_amount = 2;  // +2 for the first and last label
+
+    // If the step size is smaller than the label size, try to adjust the interval count
+    while(step_size_px < label_size.x)
     {
-        double tick_ns = ns_range * (static_cast<double>(i) / (num_ticks - 1));
-        float  tick_x =
-            ruler_pos.x + ruler_width * (static_cast<float>(i) / (num_ticks - 1));
+        interval_count--;
+        interval_ns  = calculate_nice_interval(m_range_x, interval_count);
+        step_size_px = interval_ns * pixels_per_ns;
+        // If the interval count is too small break out
+        if(interval_count <= 0)
+        {
+            break;
+        }
+    }    
+
+    const int num_ticks          = interval_count + pad_amount;
+    double    grid_line_start_ns = 0;
+    ImVec2    window_pos         = ImGui::GetWindowPos();
+
+    for(int i = 0; i < num_ticks; i++)
+    {
+        double tick_ns = grid_line_start_ns + (i * interval_ns);
+        float  tick_x  = window_pos.x + tick_ns * pixels_per_ns;
         draw_list_ruler->AddLine(ImVec2(tick_x, tick_top), ImVec2(tick_x, tick_bottom),
                                  m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
 
         std::string tick_label = nanosecond_to_formatted_str(
             tick_ns, m_settings.GetUserSettings().unit_settings.time_format);
-        ImVec2 label_size = ImGui::CalcTextSize(tick_label.c_str());
+        label_size = ImGui::CalcTextSize(tick_label.c_str());
 
         float label_x;
         if(i == 0)
         {
             label_x = ruler_pos.x + 2.0f;
-        }
-        else if(i == num_ticks - 1)
-        {
-            label_x = ruler_pos.x + ruler_width - label_size.x - 2.0f;
         }
         else
         {
@@ -1370,7 +1399,6 @@ TimelineView::RenderHistogram()
         }
 
         ImVec2 label_pos(label_x, tick_bottom + 1.0f);
-
         draw_list_ruler->AddText(font, label_font_size, label_pos,
                                  m_settings.GetColor(Colors::kRulerTextColor),
                                  tick_label.c_str());
@@ -1380,6 +1408,27 @@ TimelineView::RenderHistogram()
     ImGui::PopStyleColor();
     ImGui::EndChild();
     ImGui::PopStyleColor();
+
+    // Check if mouse is inside histogram area
+    window_pos         = ImGui::GetWindowPos();
+    ImGuiIO& io        = ImGui::GetIO();
+    bool mouse_any = io.MouseDown[ImGuiMouseButton_Left] ||
+                     io.MouseDown[ImGuiMouseButton_Right] || io.MouseDown[ImGuiMouseButton_Middle];
+
+    ImVec2 mouse_position = io.MousePos;
+    bool   mouse_inside   = mouse_position.x >= window_pos.x && mouse_position.x <= window_pos.x + window_size.x &&
+                          mouse_position.y >= window_pos.y &&
+                          mouse_position.y <= window_pos.y + window_size.y;
+    
+    // Update pseudo focus state based on mouse interaction
+    if(mouse_any)
+    {
+        if( mouse_inside )
+            m_histogram_pseudo_focus = true;
+        else
+            m_histogram_pseudo_focus = false;
+    }
+
 }
 
 void
@@ -1673,7 +1722,7 @@ TimelineView::HandleTopSurfaceTouch()
 
     // Only handle keyboard input if not typing in a text input and no item is active
     // and this view has focus
-    if(m_pseudo_focus && !io.WantTextInput && !ImGui::IsAnyItemActive())
+    if(m_pseudo_focus || m_histogram_pseudo_focus && !io.WantTextInput && !ImGui::IsAnyItemActive())
     {
         // WASD and Arrow key panning
         float pan_speed_sped_up = 2;

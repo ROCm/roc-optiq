@@ -140,6 +140,7 @@ private:
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     std::shared_ptr<AnnotationsManager> m_annotations;
     bool                                m_pseudo_focus;
+    bool                                m_histogram_pseudo_focus;
     struct
     {
         bool     handled;

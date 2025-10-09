@@ -80,7 +80,6 @@ private:
     std::shared_ptr<VFixedContainer>   m_timeline_container;
 
     LayoutItem::Ptr m_sidebar_item;
-    //LayoutItem::Ptr m_timeline_item;
     LayoutItem::Ptr m_analysis_item;
 
     DataProvider m_data_provider;

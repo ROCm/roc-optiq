@@ -512,25 +512,6 @@ TraceView::SetHistogramVisibility(bool visibility)
     }
 }
 
-std::vector<double>
-BinTo50(const std::vector<double>& input)
-{
-    const size_t target_bins = 50;
-    size_t       n           = input.size();
-    if(n == 0) return std::vector<double>(target_bins, 0.0);
-
-    std::vector<double> output(target_bins, 0.0);
-    double              bins_per_target = static_cast<double>(n) / target_bins;
-
-    for(size_t i = 0; i < n; ++i)
-    {
-        size_t bin = static_cast<size_t>(i / bins_per_target);
-        if(bin >= target_bins) bin = target_bins - 1;
-        output[bin] += input[i];
-    }
-    return output;
-}
-
 void
 TraceView::RenderToolbar()
 {

@@ -1438,8 +1438,11 @@ TimelineView::RenderTraceView()
     float available_width = subcomponent_size_main.x - m_sidebar_size;
 
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
-                        std::clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
-                                   (available_width * 0.05f), (available_width * 0.90f)));
+                        available_width > 0
+                            ? std::clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
+                                         (available_width * 0.05f),
+                                         (available_width * 0.90f))
+                            : 4.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3.0f);
 
     ImU32 scroll_color = m_settings.GetColor(Colors::kFillerColor);

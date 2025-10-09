@@ -319,8 +319,15 @@ HSplitContainer::GetFirstChildSize(float available_width)
         float max_left_col_width = (m_second && m_second->m_visible)
             ? (available_width - m_second_min_size)
             : available_width;
-        left_col_width =
-            std::clamp(left_col_width, m_first_min_size, max_left_col_width);
+        if(m_first_min_size >= max_left_col_width)
+        {
+            left_col_width = m_first_min_size;
+        }
+        else
+        {
+            left_col_width = std::clamp(left_col_width, m_first_min_size,
+                                        max_left_col_width);
+        }
     }
     return ImVec2(left_col_width, 0);
 }

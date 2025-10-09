@@ -37,6 +37,7 @@ public:
     rocprofvis_dm_track_t GetDmHandle(void);
     Handle* GetContext(void) override;
     SegmentTimeline* GetSegments();
+    rocprofvis_result_t GetBucketValues(size_t buckets_num, Array& array);
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;

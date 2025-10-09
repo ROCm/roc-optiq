@@ -182,6 +182,19 @@ rocprofvis_dm_charptr_t  Track::CategoryString(){
     return "Invalid track";
 }
 
+rocprofvis_dm_value_t Track::GetHistogramBucketValueAt(size_t index)
+{ 
+    auto it = m_track_params->histogram.find(index);
+    if (it == m_track_params->histogram.end())
+    {
+        return 0;
+    }
+    else
+    {
+        return it->second;
+    }
+}
+
 rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, kRocProfVisDmResultNotLoaded);
@@ -214,6 +227,9 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackMaximumTimestampUInt64:
             *value = MaxTimestamp();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackHistogramEventDensityUInt64Indexed:
+            *value = GetHistogramBucketValueAt(index);
             return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);

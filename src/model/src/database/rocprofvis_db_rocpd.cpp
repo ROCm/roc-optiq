@@ -438,6 +438,36 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             break;
         }
 
+        ShowProgress(5, "Collecting track histogram",
+            kRPVDbBusy, future);
+
+        constexpr uint64_t desired_bins = 300;
+        uint64_t           trace_length =
+            TraceProperties()->end_time - TraceProperties()->start_time;
+
+        uint64_t bucket_size = (trace_length + desired_bins) / desired_bins;
+        if(bucket_size == 0) bucket_size = 1;
+
+        uint64_t bucket_count = (trace_length + bucket_size) / bucket_size;
+        if(bucket_count == 0) bucket_count = 1;
+
+        TraceProperties()->histogram_bucket_size = bucket_size;
+        TraceProperties()->histogram_bucket_count = (trace_length+bucket_size)/bucket_size;
+
+        std::string histogram_query = "SELECT (startTs - " +
+            std::to_string(TraceProperties()->start_time) +") / " + 
+            std::to_string(bucket_size) + " AS bucket, COUNT(*) AS count, ";
+
+        if(kRocProfVisDmResultSuccess !=
+            ExecuteQueryForAllTracksAsync(
+                kRocProfVisDmIncludePmcTracks, kRPVQuerySliceByTrackSliceQuery,
+                histogram_query.c_str(),
+                "GROUP BY bucket", &CallbackMakeHistogramPerTrack,
+                [](rocprofvis_dm_track_params_t* params) {}))
+        {
+            break;
+        }
+
         TraceProperties()->metadata_loaded=true;
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
         return future->SetPromise(kRocProfVisDmResultSuccess);

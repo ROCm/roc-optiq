@@ -181,25 +181,39 @@ TraceView::CreateView()
 {
     m_annotations =
         std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
-    m_timeline_selection = std::make_shared<TimelineSelection>(m_data_provider);
-    m_track_topology     = std::make_shared<TrackTopology>(m_data_provider);
-    m_timeline_view      = std::make_shared<TimelineView>(m_data_provider,
-                                                          m_timeline_selection, m_annotations);
+    m_timeline_selection    = std::make_shared<TimelineSelection>(m_data_provider);
+    m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
+    m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
+                                                             m_timeline_selection, m_annotations);
+    auto m_histogram_widget = std::make_shared<RocCustomWidget>(
+        [this]() { m_timeline_view->RenderHistogram(); });
 
-    auto sidebar  = std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                           m_timeline_view->GetGraphs(), m_data_provider);
+    auto sidebar =
+        std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
+                                  m_timeline_view->GetGraphs(), m_data_provider);
     auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
-                                                m_timeline_selection, m_annotations);
+                                                   m_timeline_selection, m_annotations);
 
     m_sidebar_item                 = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible      = m_is_sidebar_visible;
     m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
-    m_analysis_item                = LayoutItem::CreateFromWidget(analysis);
-    m_analysis_item->m_visible     = m_is_analysis_visible;
+    m_analysis_item            = LayoutItem::CreateFromWidget(analysis);
+    m_analysis_item->m_visible = m_is_analysis_visible;
 
-    m_timeline_item = LayoutItem::CreateFromWidget(m_timeline_view);
-    m_vertical_split_container = std::make_shared<VSplitContainer>(m_timeline_item, m_analysis_item);
+    LayoutItem m_histogram_item(0, 120);
+    m_histogram_item.m_item = m_histogram_widget;
+    LayoutItem timeline_item(0, 0);
+    timeline_item.m_item = m_timeline_view;
+
+    std::vector<LayoutItem> layout_items;
+    layout_items.push_back(m_histogram_item);
+    layout_items.push_back(timeline_item);
+    m_timeline_container         = std::make_shared<VFixedContainer>(layout_items);
+    auto timeline_container_item = LayoutItem::CreateFromWidget(m_timeline_container);
+
+    m_vertical_split_container =
+        std::make_shared<VSplitContainer>(timeline_container_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
 
     auto trace_area        = std::make_shared<LayoutItem>();
@@ -241,8 +255,9 @@ TraceView::OpenFile(const std::string& file_path)
 void
 TraceView::Render()
 {
-    if(m_horizontal_split_container && m_data_provider.GetState() == ProviderState::kReady)
-    {        
+    if(m_horizontal_split_container &&
+       m_data_provider.GetState() == ProviderState::kReady)
+    {
         m_horizontal_split_container->Render();
         HandleHotKeys();
     }
@@ -474,16 +489,27 @@ void
 TraceView::SetAnalysisViewVisibility(bool visibility)
 {
     m_is_analysis_visible = visibility;
-    if(m_analysis_item)
-        m_analysis_item->m_visible = m_is_analysis_visible;
+    if(m_analysis_item) m_analysis_item->m_visible = m_is_analysis_visible;
 }
 
 void
 TraceView::SetSidebarViewVisibility(bool visibility)
 {
     m_is_sidebar_visible = visibility;
-    if(m_sidebar_item)
-        m_sidebar_item->m_visible  = visibility;
+    if(m_sidebar_item) m_sidebar_item->m_visible = visibility;
+}
+
+void
+TraceView::SetHistogramVisibility(bool visibility)
+{
+    if(m_timeline_container)
+    {
+        auto histogram_item = m_timeline_container->GetMutableAt(0);
+        if(histogram_item)
+        {
+            histogram_item->m_visible = visibility;
+        }
+    }
 }
 
 void

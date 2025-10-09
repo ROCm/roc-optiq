@@ -69,18 +69,22 @@ public:
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             SetViewableRangeNS(double start_ns, double end_ns);
-    void   MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
-    void   RenderGraphPoints();
-    void   RenderGrid();
-    float  GetScrollPosition();
-    void   RenderScrubber(ImVec2 screen_pos);
-    void   RenderSplitter(ImVec2 screen_pos);
-    void   RenderGraphView();
-    void   HandleTopSurfaceTouch();
-    void   HandleNewTrackData(std::shared_ptr<RocEvent> e);
-    void   CalculateGridInterval();
-    ImVec2 GetGraphSize();
-    void   RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
+    void MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
+    void RenderGraphPoints();
+    void RenderHistogram();
+    void RenderTraceView();
+
+    void           RenderGrid();
+    float          GetScrollPosition();
+    void           RenderScrubber(ImVec2 screen_pos);
+    void           RenderSplitter(ImVec2 screen_pos);
+    void           RenderGraphView();
+    void           HandleTopSurfaceTouch();
+    void           HandleHistogramTouch();
+    void           HandleNewTrackData(std::shared_ptr<RocEvent> e);
+    void           CalculateGridInterval();
+    ImVec2         GetGraphSize();
+    void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords     GetViewCoords() const;
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
@@ -93,6 +97,7 @@ private:
     EventManager::SubscriptionToken     m_font_changed_token;
     EventManager::SubscriptionToken     m_set_view_range_token;
     int                                 m_dragged_sticky_id;
+    const std::vector<double>*          m_histogram;
     std::vector<rocprofvis_graph_t>     m_graphs;
     int                                 m_ruler_height;
     float                               m_ruler_padding;
@@ -135,6 +140,7 @@ private:
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     std::shared_ptr<AnnotationsManager> m_annotations;
     bool                                m_pseudo_focus;
+    bool                                m_histogram_pseudo_focus;
     struct
     {
         bool     handled;

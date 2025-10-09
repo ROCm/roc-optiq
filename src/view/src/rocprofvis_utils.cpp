@@ -174,7 +174,7 @@ RocProfVis::View::nanosecond_to_formatted_str(double time_point_ns, TimeFormat f
 double 
 RocProfVis::View::calculate_nice_interval(double view_range, int target_divisions) 
 {
-    if(view_range <= 0.0)
+    if(view_range <= 0.0 || target_divisions <= 0)
     {
         return 1.0;  // Avoid division by zero or log of non-positive
     }

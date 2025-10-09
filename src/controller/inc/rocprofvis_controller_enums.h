@@ -165,8 +165,14 @@ typedef enum rocprofvis_controller_properties_t
     kRPVControllerGetDmMessage = 0x00000017,
     // Get last stored data-model progress in percent 
     kRPVControllerGetDmProgress = 0x00000018,
+    // Get histogram number of bucket 
+    kRPVControllerGetHistogramBucketsNumber = 0x00000019,
+    // Get histogram bucket size
+    kRPVControllerGetHistogramBucketSize = 0x0000001A,
+    // Get histogram bucket values
+    kRPVControllerBucketDataValueIndexed = 0x0000001B,
     // Global event search table controller
-    kRPVControllerSearchResultsTable = 0x00000019,
+    kRPVControllerSearchResultsTable = 0x0000001C,
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
 {
@@ -456,6 +462,8 @@ typedef enum rocprofvis_controller_track_properties_t
     kRPVControllerTrackCounter = 0x30000012,
     // The CPU stream that the track represents - can be NULL
     kRPVControllerTrackStream   = 0x30000013,
+    //Get histogram bucket value
+    kRPVControllerTrackHistogramBucketValueIndexed = 0x30000014,
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
 {

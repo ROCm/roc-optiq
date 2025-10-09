@@ -70,6 +70,8 @@ public:
     rocprofvis_dm_value_t                               MaxValue() { return m_track_params->max_value; }
     // Returns pointer to category string
     rocprofvis_dm_charptr_t                             CategoryString();
+    // Return histogram bucket value per index
+    rocprofvis_dm_value_t                               GetHistogramBucketValueAt(size_t index);
     // Method to get slice handle at provided index
     // @param index - index of slice 
     // @param slice - handle to slice

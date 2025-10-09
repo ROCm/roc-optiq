@@ -632,6 +632,12 @@ rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t prop
         case kRPVDMTraceMemoryFootprintUInt64:
             *value = GetMemoryFootprint();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMHistogramNumBuckets:
+            *value = NumberOfHistogramBuckets();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMHistogramBucketSize:
+            *value = HistogramBucketsSize();
+            return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -687,6 +693,10 @@ const char*  Trace::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMExtInfoHandleByEventID";
         case kRPVDMTableHandleIndexed:
             return "kRPVDMTableHandleIndexed";
+        case kRPVDMHistogramNumBuckets:
+            return "kRPVDMHistogramNumBuckets";
+        case kRPVDMHistogramBucketSize:
+            return "kRPVDMHistogramBucketSize";
         default:
             return "Unknown property";
     }   

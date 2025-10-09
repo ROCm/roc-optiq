@@ -82,8 +82,9 @@ private:
     bool         m_show_provider_test_widow;
 #endif
     bool m_open_about_dialog;
-    bool m_analysis_bar_visible = true;
-    bool m_sidebar_visible = true;
+    bool m_analysis_bar_visible;
+    bool m_sidebar_visible;
+    bool m_histogram_visible;
 
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;

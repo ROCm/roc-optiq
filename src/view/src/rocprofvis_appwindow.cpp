@@ -80,6 +80,9 @@ AppWindow::AppWindow()
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
+, m_histogram_visible(true)
+, m_sidebar_visible(true)
+, m_analysis_bar_visible(true)
 {}
 
 AppWindow::~AppWindow()
@@ -531,6 +534,17 @@ AppWindow::RenderViewMenu(Project* project)
                         trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
                 }
             }
+            if(ImGui::MenuItem("Show Histogram", nullptr, m_histogram_visible))
+            {
+                m_histogram_visible = !m_histogram_visible;
+                for(const auto& tab : m_tab_container->GetTabs())
+                {
+                    auto trace_view_tab =
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                    if(trace_view_tab)
+                        trace_view_tab->SetHistogramVisibility(m_histogram_visible);
+                }
+            }            
         }
         ImGui::EndMenu();
 

@@ -201,7 +201,7 @@ TraceView::CreateView()
     m_analysis_item            = LayoutItem::CreateFromWidget(analysis);
     m_analysis_item->m_visible = m_is_analysis_visible;
 
-    LayoutItem m_histogram_item(0, 150);
+    LayoutItem m_histogram_item(0, 120);
     m_histogram_item.m_item = m_histogram_widget;
     LayoutItem timeline_item(0, 0);
     timeline_item.m_item = m_timeline_view;
@@ -209,16 +209,15 @@ TraceView::CreateView()
     std::vector<LayoutItem> layout_items;
     layout_items.push_back(m_histogram_item);
     layout_items.push_back(timeline_item);
-    auto m_timeline_container     = std::make_shared<VFixedContainer>(layout_items);
-    auto m_timeline_continer_item = LayoutItem::CreateFromWidget(m_timeline_container);
+    m_timeline_container         = std::make_shared<VFixedContainer>(layout_items);
+    auto timeline_container_item = LayoutItem::CreateFromWidget(m_timeline_container);
 
     m_vertical_split_container =
-        std::make_shared<VSplitContainer>(m_timeline_continer_item, m_analysis_item);
+        std::make_shared<VSplitContainer>(timeline_container_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
 
-    auto trace_area        = std::make_shared<LayoutItem>();
-    trace_area->m_item     = m_vertical_split_container;
-    trace_area->m_bg_color = IM_COL32(255, 255, 255, 255);
+    auto trace_area    = std::make_shared<LayoutItem>();
+    trace_area->m_item = m_vertical_split_container;
 
     m_horizontal_split_container =
         std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);
@@ -498,6 +497,19 @@ TraceView::SetSidebarViewVisibility(bool visibility)
 {
     m_is_sidebar_visible = visibility;
     if(m_sidebar_item) m_sidebar_item->m_visible = visibility;
+}
+
+void
+TraceView::SetHistogramVisibility(bool visibility)
+{
+    if(m_timeline_container)
+    {
+        auto histogram_item = m_timeline_container->GetMutableAt(0);
+        if(histogram_item)
+        {
+            histogram_item->m_visible = visibility;
+        }
+    }
 }
 
 std::vector<double>

@@ -331,12 +331,13 @@ DataProvider::SetTraceLoadedCallback(
 {
     m_trace_data_ready_callback = callback;
 }
-std::vector<double>&
+
+const std::vector<double>&
 DataProvider::GetHistogram() {
     return m_histogram;
 }
 
-std::map<int, std::vector<double>>&
+const std::map<int, std::vector<double>>&
 DataProvider::GetMiniMap()
 {
     return m_mini_map;

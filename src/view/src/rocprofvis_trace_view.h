@@ -61,6 +61,7 @@ public:
     void                               RenderEditMenuOptions() override;
     void                               SetAnalysisViewVisibility(bool visibility); 
     void                               SetSidebarViewVisibility(bool visibility);
+    void                               SetHistogramVisibility(bool visibility);
 
 
 private:
@@ -76,6 +77,7 @@ private:
     std::shared_ptr<RocCustomWidget>   m_tool_bar;
     std::shared_ptr<HSplitContainer>   m_horizontal_split_container;
     std::shared_ptr<VSplitContainer>   m_vertical_split_container;
+    std::shared_ptr<VFixedContainer>   m_timeline_container;
 
     LayoutItem::Ptr m_sidebar_item;
     //LayoutItem::Ptr m_timeline_item;

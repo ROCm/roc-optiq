@@ -70,7 +70,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_annotations(annotations)
 , m_dragged_sticky_id(-1)
-, m_histogram({})
+, m_histogram(nullptr)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -1223,7 +1223,7 @@ TimelineView::MakeGraphView()
             m_graphs[track_info->index] = std::move(graph);
         }
     }
-    m_histogram       = m_data_provider.GetHistogram();
+    m_histogram       = &m_data_provider.GetHistogram();
     m_meta_map_made   = true;
     m_resize_activity = true;
 }
@@ -1231,16 +1231,15 @@ TimelineView::MakeGraphView()
 void
 TimelineView::RenderHistogram()
 {
-    constexpr int kHistogramTotalHeight = 150;
-    constexpr int kRulerHeight          = 34;
-    constexpr int kHistogramBarHeight   = kHistogramTotalHeight - kRulerHeight;
+    const float    kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
+    constexpr float kRulerHeight          = 30.0f;
+    const float     kHistogramBarHeight   = kHistogramTotalHeight - kRulerHeight;
 
     ImVec2      window_size       = ImGui::GetWindowSize();
     ImGuiStyle& style             = ImGui::GetStyle();
     float       font_height       = ImGui::GetFontSize();
-    m_artificial_scrollbar_height = font_height + style.FramePadding.y * 2.0f;
 
-    if(m_histogram.empty()) return;
+    if(!m_histogram) return;
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
@@ -1255,13 +1254,13 @@ TimelineView::RenderHistogram()
     ImVec2      bars_pos    = ImGui::GetCursorScreenPos();
     float       bars_width  = window_size.x;
     float       bars_height = kHistogramBarHeight;
-    size_t      bin_count   = m_histogram.size();
+    size_t      bin_count   = m_histogram->size();
 
     // Draw histogram bars
     if(bin_count > 0)
     {
         uint64_t max_bin_value =
-            *std::max_element(m_histogram.begin(), m_histogram.end());
+            *std::max_element(m_histogram->begin(), m_histogram->end());
         float bin_width = bars_width / static_cast<float>(bin_count);
 
         for(size_t i = 0; i < bin_count; ++i)
@@ -1272,7 +1271,7 @@ TimelineView::RenderHistogram()
             float y1 = y0 + bars_height;
             float bar_height =
                 (max_bin_value > 0)
-                    ? (static_cast<float>(m_histogram[i]) / max_bin_value) *
+                    ? (static_cast<float>((*m_histogram)[i]) / max_bin_value) *
                           bars_height
                     : 0.0f;
             float y_bar = y1 - bar_height;
@@ -1484,13 +1483,6 @@ TimelineView::RenderGraphPoints()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
     if(ImGui::BeginChild("Main Trace"))
     {
-        ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
-        ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
-
-        ImGuiStyle& style             = ImGui::GetStyle();
-        float       fontHeight        = ImGui::GetFontSize();
-        m_artificial_scrollbar_height = fontHeight + style.FramePadding.y * 2.0f;
-
         RenderTraceView();
     }
 

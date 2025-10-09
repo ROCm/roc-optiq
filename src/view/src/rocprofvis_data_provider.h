@@ -479,11 +479,11 @@ public:
     /*
     Gets a histogram of all tracks in the controller.
     */
-    std::vector<double>& GetHistogram();
+    const std::vector<double>& GetHistogram();
     /*
      Gets a Minimap of all tracks individually in the controller.
      */
-    std::map<int, std::vector<double>>& GetMiniMap();
+    const std::map<int, std::vector<double>>& GetMiniMap();
 
     /*
      * Performs all data processing.  Call this from the "game loop".

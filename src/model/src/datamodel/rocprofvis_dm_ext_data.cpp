@@ -117,7 +117,7 @@ const char*  ExtData::GetPropertySymbol(rocprofvis_dm_property_t property) {
     switch(property)
     {
         case kRPVDMNumberOfExtDataRecordsUInt64:
-            return "kRPVDMNumberOfExtDataRecordsUInt64";        
+            return "kRPVDMNumberOfExtDataRecordsUInt64";
         case kRPVDMExtDataCategoryCharPtrIndexed:
             return "kRPVDMExtDataCategoryCharPtrIndexed";
         case kRPVDMExtDataNameCharPtrIndexed:
@@ -128,7 +128,7 @@ const char*  ExtData::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMExtDataTypeUint64Indexed";
         default:
             return "Unknown property";
-    }   
+    }
 }
 #endif
 

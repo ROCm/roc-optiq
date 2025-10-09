@@ -8,6 +8,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 
@@ -199,7 +200,7 @@ void SplitContainerBase::Render()
         ImVec2 splitter_min = ImGui::GetItemRectMin();
         ImVec2 splitter_max = ImGui::GetItemRectMax();
         if(ImGui::IsItemHovered())
-        { 
+        {
             SetCursor();
             fill_active = true;
         }
@@ -304,7 +305,7 @@ HSplitContainer::GetAvailableSize(const ImVec2& total_size)
 };
 
 void
-HSplitContainer::SetCursor() 
+HSplitContainer::SetCursor()
 {
     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
 };
@@ -441,7 +442,7 @@ VSplitContainer::GetSecondChildSize()
 
 void
 VSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
-                 float available_height) 
+                 float available_height)
 {
     float mouse_y   = mouse_pos.y - window_pos.y;
     float new_ratio = (mouse_y - (m_resize_grip_size / 2)) / available_height;
@@ -451,7 +452,7 @@ VSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_
 }
 
 ImVec2
-VSplitContainer::GetSplitterSize(const ImVec2& total_size) 
+VSplitContainer::GetSplitterSize(const ImVec2& total_size)
 {
     return ImVec2(total_size.x, m_resize_grip_size);
 }

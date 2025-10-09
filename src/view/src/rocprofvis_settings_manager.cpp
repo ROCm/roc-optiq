@@ -8,6 +8,8 @@
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_utils.h"
+
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 

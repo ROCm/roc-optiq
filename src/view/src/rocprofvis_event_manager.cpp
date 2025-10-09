@@ -3,6 +3,9 @@
 #include "rocprofvis_event_manager.h"
 #include "iostream"
 #include "spdlog/spdlog.h"
+
+#include <algorithm>
+
 using namespace RocProfVis::View;
 
 // EventManager Implementation
@@ -67,7 +70,7 @@ EventManager::Unsubscribe(int event_id, SubscriptionToken token)
                            [token](const auto& pair) { return pair.first == token; });
         if(handler_it != handlers.end())
         {
-            spdlog::debug("Handler unsubscribed successfully for event id: {}", event_id);            
+            spdlog::debug("Handler unsubscribed successfully for event id: {}", event_id);
             handlers.erase(handler_it, handlers.end());
             result = true;  // Successfully unsubscribed
         }

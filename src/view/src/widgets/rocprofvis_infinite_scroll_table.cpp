@@ -9,6 +9,8 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
+#include <algorithm>
+
 namespace RocProfVis
 {
 namespace View
@@ -39,7 +41,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type)
 
 uint64_t
 InfiniteScrollTable::GetRequestID() const
-{   
+{
     switch(m_table_type)
     {
         case TableType::kSampleTable:

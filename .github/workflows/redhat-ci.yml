@@ -15,6 +15,10 @@ on:
       - 'doc/**'
       - '*.md'
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -57,7 +61,7 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/${{ matrix.vulkan-sdk }}/setup-env.sh
-          cmake -B build
+          cmake -B build --install-prefix /opt/rocprofiler-visualizer
           cmake --build build --parallel 4
           if [ -e build/${{ env.VISUALIZER_FILE_NAME }} ]; then
             echo "✅ {{ env.VISUALIZER_FILE_NAME }} has been successfully built!"

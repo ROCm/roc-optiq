@@ -1,5 +1,5 @@
 name: Ubuntu Build and Package
-run-name: rocprofiler-visualizer-ubuntu-ci
+run-name: rocprofiler-visualizer-ubuntu-build-package
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ env:
 
 jobs:
   ubuntu:
-    name: Ubuntu ${{ matrix.os-release }} • Build Visualizer
+    name: Ubuntu ${{ matrix.os-release }} • Build and Package Visualizer
     strategy:
       matrix:
         include:

@@ -2,19 +2,19 @@ name: Windows Continuous Integration
 run-name: rocprofiler-visualizer-windows-ci
 
 on:
-  # schedule:
-  #   - cron: '0 4 * * *'
-  # push:
-  #   branches: 
-  #     - main
-  #   paths-ignore:
-  #     - 'doc/**'
-  #     - '*.md'
-  # pull_request:
-  #   paths-ignore:
-  #     - 'doc/**'
-  #     - '*.md'
   workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'
+  push:
+    branches: 
+      - main
+    paths-ignore:
+      - 'doc/**'
+      - '*.md'
+  pull_request:
+    paths-ignore:
+      - 'doc/**'
+      - '*.md'
 
 env:
   VISUALIZER_FILE_NAME: "rocprof-visualizer"
@@ -46,7 +46,7 @@ jobs:
         run: |
           mkdir build
           cmake --preset "x64-debug"
-          cmake --build build/x64-debug 
+          cmake --build build/x64-debug --preset "Windows Debug Build" --parallel 4
           if (Test-Path "build/x64-debug/Debug/${env:VISUALIZER_FILE_NAME}.exe") {
             Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
           } else {

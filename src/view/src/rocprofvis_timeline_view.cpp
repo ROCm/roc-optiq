@@ -123,6 +123,8 @@ TimelineView::TimelineView(DataProvider&                       dp,
     };
     m_navigation_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
+
+    m_graphs = std::make_shared<std::vector<rocprofvis_graph_t>>();
 }
 
 void
@@ -415,11 +417,11 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
         }
 
         uint64_t track_index = metadata->index;
-        if(track_index < m_graphs.size())
+        if(track_index < m_graphs->size())
         {
-            if(m_graphs[track_index].chart)
+            if((*m_graphs)[track_index].chart)
             {
-                m_graphs[track_index].chart->HandleTrackDataChanged(
+                (*m_graphs)[track_index].chart->HandleTrackDataChanged(
                     tde->GetRequestID(), tde->GetResponseCode());
             }
             else
@@ -450,14 +452,14 @@ TimelineView::Update()
             {
                 std::vector<rocprofvis_graph_t> m_graphs_reordered;
                 m_graphs_reordered.resize(m_data_provider.GetTrackCount());
-                for(rocprofvis_graph_t& graph : m_graphs)
+                for(rocprofvis_graph_t& graph : *m_graphs)
                 {
                     const track_info_t* metadata =
                         m_data_provider.GetTrackInfo(graph.chart->GetID());
                     ROCPROFVIS_ASSERT(metadata);
                     m_graphs_reordered[metadata->index] = std::move(graph);
                 }
-                m_graphs = std::move(m_graphs_reordered);
+                *m_graphs = std::move(m_graphs_reordered);
             }
         }
         // Rebuild the positioning map.
@@ -465,15 +467,15 @@ TimelineView::Update()
         {
             m_track_position_y.clear();
             m_track_height_sum = 0;
-            for(int i = 0; i < m_graphs.size(); i++)
+            for(int i = 0; i < m_graphs->size(); i++)
             {
-                m_track_position_y[m_graphs[i].chart->GetID()] = m_track_height_sum;
+                m_track_position_y[(*m_graphs)[i].chart->GetID()] = m_track_height_sum;
                 m_track_height_sum +=
-                    m_graphs[i].display
-                        ? m_graphs[i]
+                    (*m_graphs)[i].display
+                        ? (*m_graphs)[i]
                               .chart->GetTrackHeight()  // Get the height of the track.
                         : 0;
-                m_graphs[i].display_changed = false;
+                (*m_graphs)[i].display_changed = false;
             }
         }
         m_reorder_request.handled = true;
@@ -693,10 +695,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::PopStyleColor();
 }
 
-std::vector<rocprofvis_graph_t>*
+std::shared_ptr<std::vector<rocprofvis_graph_t>>
 TimelineView::GetGraphs()
 {
-    return &m_graphs;
+    return m_graphs;
 }
 
 void
@@ -897,9 +899,9 @@ TimelineView::RenderGraphView()
         request_data                        = true;
     }
 
-    for(int i = 0; i < m_graphs.size(); i++)
+    for(int i = 0; i < m_graphs->size(); i++)
     {
-        rocprofvis_graph_t& track_item = m_graphs[i];
+        rocprofvis_graph_t& track_item = (*m_graphs)[i];
 
         m_resize_activity |= track_item.display_changed;
 
@@ -1134,12 +1136,15 @@ TimelineView::RenderGraphView()
 void
 TimelineView::DestroyGraphs()
 {
-    for(rocprofvis_graph_t& graph : m_graphs)
+    if (m_graphs)
     {
-        delete graph.chart;
-    }
+        for(rocprofvis_graph_t& graph : *m_graphs)
+        {
+            delete graph.chart;
+        }
 
-    m_graphs.clear();
+        m_graphs->clear();
+    }
     m_meta_map_made = false;
 }
 
@@ -1160,7 +1165,7 @@ TimelineView::MakeGraphView()
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();
     int      scale_x    = 1;
-    m_graphs.resize(num_graphs);
+    m_graphs->resize(num_graphs);
 
     std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
     bool                             project_valid = m_project_settings.Valid();
@@ -1224,7 +1229,7 @@ TimelineView::MakeGraphView()
             m_min_x = std::min(track_info->min_ts, m_min_x);
             m_max_x = std::max(track_info->max_ts, m_max_x);
 
-            m_graphs[track_info->index] = std::move(graph);
+            (*m_graphs)[track_info->index] = std::move(graph);
         }
     }
     m_histogram       = &m_data_provider.GetHistogram();
@@ -1864,7 +1869,7 @@ TimelineViewProjectSettings::Valid() const
         std::vector<jt::Json>& track_order =
             m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER]
                 .getArray();
-        if(track_order.size() == m_timeline_view.m_graphs.size())
+        if(track_order.size() == m_timeline_view.m_graphs->size())
         {
             int valid_count = 0;
             for(jt::Json& track_id : track_order)
@@ -1889,7 +1894,7 @@ TimelineViewProjectSettings::Valid() const
             std::vector<jt::Json>& tracks =
                 m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                     .getArray();
-            if(tracks.size() == m_timeline_view.m_graphs.size())
+            if(tracks.size() == m_timeline_view.m_graphs->size())
             {
                 int valid_count = 0;
                 for(jt::Json& track_id : tracks)

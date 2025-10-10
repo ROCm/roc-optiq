@@ -476,7 +476,7 @@ TraceView::RenderEditMenuOptions()
     {
         if(m_timeline_selection)
         {
-            std::vector<rocprofvis_graph_t>* graphs = m_timeline_view->GetGraphs();
+            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs = m_timeline_view->GetGraphs();
             if(graphs)
             {
                 m_timeline_selection->UnselectAllTracks(*graphs);

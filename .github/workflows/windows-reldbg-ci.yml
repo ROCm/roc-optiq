@@ -1,0 +1,59 @@
+name: Windows Release with symbols build 
+run-name: rocprofiler-visualizer-windows-relwithdbg-build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: 
+      - main
+    paths-ignore:
+      - 'doc/**'
+      - '*.md'
+  pull_request:
+    paths-ignore:
+      - 'doc/**'
+      - '*.md'
+
+env:
+  VISUALIZER_FILE_NAME: "rocprof-visualizer"
+
+jobs:
+  ubuntu:
+    name: Windows • Build Visualizer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+      
+      - name: Install Vulkan SDK
+        run: |
+          curl -O https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe?Human=true
+          ./vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
+      - name: Set Vulkan SDK environment variables
+        shell: pwsh
+        run: |
+          $vulkanRoot = Get-ChildItem -Directory "C:\VulkanSDK" | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $vulkanRoot) { Write-Host "Vulkan SDK not found!"; exit 1 }
+          echo "VULKAN_SDK=$($vulkanRoot.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "PATH=$($vulkanRoot.FullName)\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+      - name: Build, Make, and Verify Installation
+        run: |
+          mkdir build
+          cmake --preset "x64-release-symbols"
+          cmake --build build/x64-release-symbols 
+          if (Test-Path "build/x64-release-symbols/RelWithDebInfo/${env:VISUALIZER_FILE_NAME}.exe") {
+            Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
+          } else {
+            Write-Host "❌ $env:VISUALIZER_FILE_NAME was not built!"
+            exit 1
+          }
+      - name: Upload Visualizer Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: rocprof-visualizer
+          path: build/x64-release-symbols/RelWithDebInfo/rocprof-visualizer.exe
+          retention-days: 2 # Retain artifact for 2 days

@@ -573,7 +573,9 @@ SideBar::DrawCollapsable(const std::vector<IterableModel>& container,
             if(item.info)
             {
                 if(RenderTrackItem(item.graph_index))
+                {
                     newButtonState = EyeButtonState::kMixed;
+                }
             }
         }
         ImGui::TreePop();

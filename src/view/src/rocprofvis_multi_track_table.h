@@ -3,8 +3,6 @@
 #pragma once
 
 #include "imgui.h"
-#include "rocprofvis_data_provider.h"
-#include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include <string>
 #include <vector>
@@ -36,21 +34,16 @@ private:
     {
         kId,
         kName,
-        kTimeStartNs,
-        kTimeEndNs,
-        kDurationNs,
         kTrackId,
         kStreamId,
         kNumImportantColumns
     };
 
     void FormatData() override;
-    //void FetchData(const TableRequestParams& params) const override;
+    void IndexColumns() override;
+    void RowSelected(const ImGuiMouseButton mouse_button) override;
+    void RenderContextMenu();
     bool XButton(const char* id) const;
-    void RenderContextMenu() const override;
-
-    uint64_t GetTrackIdHelper(
-        const std::vector<std::vector<std::string>>& table_data) const;
 
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     bool                               m_defer_track_selection_changed;
@@ -58,8 +51,9 @@ private:
     // Keep track of currently selected tracks for this table type
     std::vector<uint64_t> m_selected_tracks;
 
+    bool m_open_context_menu;
+
     std::vector<size_t> m_important_column_idxs;
-    EventManager::SubscriptionToken m_format_changed_token;
 };
 
 }  // namespace View

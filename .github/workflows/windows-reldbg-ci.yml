@@ -44,7 +44,7 @@ jobs:
         run: |
           mkdir build
           cmake --preset "x64-release-symbols"
-          cmake --build build/x64-release-symbols 
+          cmake --build build/x64-release-symbols --preset "Windows Release Build with Symbols"
           if (Test-Path "build/x64-release-symbols/RelWithDebInfo/${env:VISUALIZER_FILE_NAME}.exe") {
             Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
           } else {

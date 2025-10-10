@@ -18,8 +18,14 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr int   MIN_LABEL_WIDTH     = 40;
-constexpr float HIGHLIGHT_THICKNESS = 3.0f;
+constexpr int   MIN_LABEL_WIDTH          = 40;
+constexpr float HIGHLIGHT_THICKNESS      = 4.0f;
+constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
+/*
+For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
+issues (rectangle being too big or too small).
+*/
+constexpr int ANTI_ALIASING_WORKAROUND = 1;
 
 FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
@@ -36,6 +42,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_selection_changed(false)
 , m_has_drawn_tool_tip(false)
 , m_project_settings(dp.GetTraceFilePath(), *this)
+, m_selected_chart_items({})
 {
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
@@ -69,12 +76,13 @@ FlameTrackItem::RenderMetaAreaExpand()
     {
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
-            m_track_height = m_max_level * m_level_height + m_level_height + 2.0f;
+            m_track_height         = m_max_level * m_level_height + m_level_height + 2.0f;
             m_track_height_changed = true;
         }
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to see all events");
     }
-    else if(m_track_height > std::max(m_max_level * m_level_height + m_level_height,
+    else if(m_track_height >
+            std::max(m_max_level * m_level_height + m_level_height,
                      m_track_default_height))  // stand-in for default height..
     {
         if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
@@ -147,7 +155,7 @@ FlameTrackItem::ExtractPointsFromData()
     {
         const rocprofvis_trace_event_t& event = events_data[i];
         m_chart_items[i].event                = event;
-        m_chart_items[i].selected = m_timeline_selection->EventSelected(event.m_id);
+        m_chart_items[i].selected  = m_timeline_selection->EventSelected(event.m_id);
         m_chart_items[i].name_hash = std::hash<std::string>{}(event.m_name);
     }
 
@@ -194,19 +202,11 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
     float rounding = 2.0f;
     draw_list->AddRectFilled(rectMin, rectMax, rectColor, rounding);
 
-    if(chart_item.selected)
-    {
-        draw_list->AddRect(rectMin - ImVec2(2, 2), rectMax + ImVec2(2, 2),
-                           m_settings.GetColor(Colors::kEventHighlight), rounding + 2, 0,
-                           HIGHLIGHT_THICKNESS + 2);
-    }
-
     if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH)
     {
         draw_list->PushClipRect(rectMin, rectMax, true);
         ImVec2 textPos =
             ImVec2(rectMin.x + m_text_padding.x, rectMin.y + m_text_padding.y);
-
 
         draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
                            chart_item.event.m_name.c_str());
@@ -223,17 +223,36 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id)
                 : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id);
             m_selection_changed = true;
+            if(chart_item.selected == false)
+            {
+                for(int select = 0; select < m_selected_chart_items.size(); select++)
+                {
+                    if(m_selected_chart_items[select].event.m_id == chart_item.event.m_id)
+                    {
+                        m_selected_chart_items.erase(m_selected_chart_items.begin() +
+                                                     select);
+
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                m_selected_chart_items.push_back(chart_item);
+            }
         }
 
         if(!m_has_drawn_tool_tip)
         {
-            const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
+            const auto& time_format =
+                m_settings.GetUserSettings().unit_settings.time_format;
             rocprofvis_trace_event_t_id_t event_id{};
             event_id.id = chart_item.event.m_id;
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
             ImGui::BeginTooltip();
             ImGui::Text("%s", chart_item.event.m_name.c_str());
-            std::string label = nanosecond_to_formatted_str(chart_item.event.m_start_ts - m_min_x, time_format);
+            std::string label = nanosecond_to_formatted_str(
+                chart_item.event.m_start_ts - m_min_x, time_format);
             ImGui::Text("Start: %s", label.c_str());
             label = nanosecond_to_formatted_str(chart_item.event.m_duration, time_format);
             ImGui::Text("Duration: %s", label.c_str());
@@ -292,6 +311,38 @@ FlameTrackItem::RenderChart(float graph_width)
 
         DrawBox(start_position, color_index, item, normalized_duration, draw_list);
     }
+
+    for(ChartItem& item : m_selected_chart_items)
+    {
+        ImVec2 container_pos = ImGui::GetWindowPos();
+        double normalized_start =
+            container_pos.x +
+            (item.event.m_start_ts - (m_min_x + m_time_offset_ns)) * m_scale_x;
+
+        double normalized_duration = std::max(item.event.m_duration * m_scale_x, 1.0);
+        double normalized_end      = normalized_start + normalized_duration;
+
+        ImVec2 start_position;
+        float  rounding = 2.0f;
+        // Calculate the start position based on the normalized start time and level
+        start_position = ImVec2(normalized_start, item.event.m_level * m_level_height);
+
+        ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+        ImVec2 content_size    = ImGui::GetContentRegionAvail();
+
+        ImVec2 rectMin =
+            ImVec2(start_position.x - HIGHLIGHT_THICKNESS_HALF,
+                                start_position.y + cursor_position.y +
+                                    HIGHLIGHT_THICKNESS_HALF - ANTI_ALIASING_WORKAROUND);
+        ImVec2 rectMax =
+            ImVec2(start_position.x + normalized_duration + HIGHLIGHT_THICKNESS_HALF,
+                   start_position.y + m_level_height + cursor_position.y -
+                       HIGHLIGHT_THICKNESS_HALF + ANTI_ALIASING_WORKAROUND);
+        // Outer border (sticks out by 2)
+        draw_list->AddRect(rectMin, rectMax, m_settings.GetColor(Colors::kEventHighlight),
+                           rounding, 0, HIGHLIGHT_THICKNESS);
+    }
+
     m_selection_changed = false;
 
     ImGui::EndChild();
@@ -347,10 +398,12 @@ FlameTrackProjectSettings::ColorEvents() const
 {
     EventColorMode color_mode = EventColorMode::kNone;
 
-    double color_mode_raw = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
-                              .getNumber();
-    if(color_mode_raw >= 0 && color_mode_raw < static_cast<int>(EventColorMode::__kCount)) {
+    double color_mode_raw =
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
+                           .getNumber();
+    if(color_mode_raw >= 0 && color_mode_raw < static_cast<int>(EventColorMode::__kCount))
+    {
         color_mode = static_cast<EventColorMode>(color_mode_raw);
     }
     return color_mode;

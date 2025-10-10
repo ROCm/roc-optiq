@@ -24,7 +24,8 @@ jobs:
     name: Windows • Build Visualizer
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout Repository
+        uses: actions/checkout@v5
         with:
           submodules: true
       

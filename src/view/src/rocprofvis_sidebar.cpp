@@ -465,6 +465,7 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
     EyeButtonState allProcessesState = EyeButtonState::kAllHidden;
     for(const ProcessModel& process : processes)     
     {
+        if(process.info)
         {
             EyeButtonState queueButtonState   = parentEyeButtonState;
             EyeButtonState streamButtonState  = parentEyeButtonState;
@@ -539,7 +540,6 @@ SideBar::DrawCollapsable(const std::vector<IterableModel>& container,
                          EyeButtonState                    parentEyeButtonState)
 {
     ImGui::PushID(collapsable_header.c_str());
-    if(parentEyeButtonState == EyeButtonState::kAllVisible)
     if(parentEyeButtonState == EyeButtonState::kAllVisible)
     {
         UnhideAllSubItems(container);

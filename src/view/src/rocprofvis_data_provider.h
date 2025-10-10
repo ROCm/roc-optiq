@@ -152,7 +152,7 @@ typedef struct iterable_info_t
     std::string name;
 } iterable_info_t;
 
-typedef struct thread_info_t: public iterable_info_t
+typedef struct thread_info_t : public iterable_info_t
 {
     double      start_time;
     double      end_time;

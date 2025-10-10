@@ -61,8 +61,7 @@ SideBar::Render()
         }
         ImGui::SameLine();
 
-        if(ImGui::TreeNodeEx("Project",
-                             CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
+        if(ImGui::TreeNodeEx("Project", CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
         {
             if (!topology.nodes.empty())
             {

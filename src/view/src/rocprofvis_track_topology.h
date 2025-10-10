@@ -50,7 +50,7 @@ struct ProcessModel
     std::string                                  counter_header;
     std::vector<IterableModel>                   counters;
     std::unordered_map<uint64_t, IterableModel*> counter_lut;
-    mutable bool                                         all_subitems_hidden = false;
+    mutable bool                                 all_subitems_hidden = false;
 
 };
 struct NodeModel
@@ -60,7 +60,7 @@ struct NodeModel
     std::string                                 process_header;
     std::vector<ProcessModel>                   processes;
     std::unordered_map<uint64_t, ProcessModel*> process_lut;
-    mutable bool                                 all_subitems_hidden = false;
+    mutable bool                                all_subitems_hidden = false;
 };
 struct TopologyModel
 {
@@ -68,7 +68,7 @@ struct TopologyModel
     std::string                              node_header;
     std::unordered_map<uint64_t, NodeModel*> node_lut;
     std::vector<uint64_t>                    uncategorized_graph_indices;
-    mutable bool                              all_subitems_hidden = false;
+    mutable bool                             all_subitems_hidden = false;
 };
 
 class TrackTopology

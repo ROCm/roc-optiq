@@ -2,18 +2,18 @@ name: Windows Continuous Integration
 run-name: rocprofiler-visualizer-windows-ci
 
 on:
-  schedule:
-    - cron: '0 4 * * *'
-  push:
-    branches: 
-      - main
-    paths-ignore:
-      - 'doc/**'
-      - '*.md'
-  pull_request:
-    paths-ignore:
-      - 'doc/**'
-      - '*.md'
+  # schedule:
+  #   - cron: '0 4 * * *'
+  # push:
+  #   branches: 
+  #     - main
+  #   paths-ignore:
+  #     - 'doc/**'
+  #     - '*.md'
+  # pull_request:
+  #   paths-ignore:
+  #     - 'doc/**'
+  #     - '*.md'
   workflow_dispatch:
 
 env:

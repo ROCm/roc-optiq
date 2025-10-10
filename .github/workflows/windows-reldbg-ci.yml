@@ -44,7 +44,7 @@ jobs:
         run: |
           mkdir build
           cmake --preset "x64-release-symbols"
-          cmake --build build/x64-release-symbols --preset "Windows Release Build with Symbols"
+          cmake --build build/x64-release-symbols --preset "Windows Release Build with Symbols" --parallel 4
           if (Test-Path "build/x64-release-symbols/RelWithDebInfo/${env:VISUALIZER_FILE_NAME}.exe") {
             Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
           } else {
@@ -56,5 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rocprof-visualizer
-          path: build/x64-release-symbols/RelWithDebInfo/rocprof-visualizer.exe
+          path: |
+            build/x64-release-symbols/RelWithDebInfo/rocprof-visualizer.exe
+            build/x64-release-symbols/RelWithDebInfo/rocprof-visualizer.pdb
           retention-days: 2 # Retain artifact for 2 days

@@ -3,16 +3,6 @@ run-name: rocprofiler-visualizer-ubuntu-build-package
 
 on:
   workflow_dispatch:
-  push:
-    branches: 
-      - main
-    paths-ignore:
-      - 'doc/**'
-      - '*.md'
-  pull_request:
-    paths-ignore:
-      - 'doc/**'
-      - '*.md'
 
 env:
   VISUALIZER_FILE_NAME: "rocprof-visualizer"

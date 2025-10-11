@@ -826,6 +826,13 @@ TraceView::RenderFlowControls()
     {
         arrow_layer.SetView(!arrow_layer.TrueView());
     }
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::PopFont();
+        ImGui::SetTooltip("Flow Render Style");
+        ImGui::PushFont(icon_font);
+    }
     ImGui::PopFont();
 
     ImGui::EndGroup();

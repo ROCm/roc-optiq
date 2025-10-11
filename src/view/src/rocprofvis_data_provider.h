@@ -146,32 +146,30 @@ typedef struct process_info_t
     std::vector<uint64_t> counter_ids;  // IDs of this process' counters
 } process_info_t;
 
-typedef struct thread_info_t
+typedef struct iterable_info_t
 {
-    uint64_t    id;
+    uint64_t id;
     std::string name;
+} iterable_info_t;
+
+typedef struct thread_info_t : public iterable_info_t
+{
     double      start_time;
     double      end_time;
 } thread_info_t;
 
-typedef struct queue_info_t
+typedef struct queue_info_t : public iterable_info_t
 {
-    uint64_t    id;
-    std::string name;
     uint64_t    device_id;  // ID of owning device.
 } queue_info_t;
 
-typedef struct stream_info_t
+typedef struct stream_info_t : public iterable_info_t
 {
-    uint64_t    id;
-    std::string name;
     uint64_t    device_id;  // ID of owning device.
 } stream_info_t;
 
-typedef struct counter_info_t
+typedef struct counter_info_t : public iterable_info_t
 {
-    uint64_t    id;
-    std::string name;
     uint64_t    device_id;  // ID of owning device.
     std::string description;
     std::string units;

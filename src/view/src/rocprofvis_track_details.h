@@ -13,10 +13,7 @@ class DataProvider;
 class TrackTopology;
 class NodeModel;
 class ProcessModel;
-class QueueModel;
-class ThreadModel;
-class CounterModel;
-class StreamModel;
+class IterableModel;
 class TimelineSelection;
 struct InfoTable;
 
@@ -39,10 +36,10 @@ private:
         const std::string* track_name;
         NodeModel*         node;
         ProcessModel*      process;
-        QueueModel*        queue;
-        ThreadModel*       thread;
-        CounterModel*      counter;
-        StreamModel*       stream;
+        IterableModel*     queue;
+        IterableModel*     thread;
+        IterableModel*     counter;
+        IterableModel*     stream;
 
         bool operator==(const DetailItem& other) const
         {

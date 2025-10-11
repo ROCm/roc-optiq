@@ -41,7 +41,7 @@ void
 TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                       const double pixels_per_ns, const ImVec2 window,
                       const std::unordered_map<uint64_t, float>& track_position_y,
-                      const std::vector<rocprofvis_graph_t>&     graphs) const
+                      const std::shared_ptr<std::vector<rocprofvis_graph_t>>     graphs) const
 {
     if(m_flow_display_mode == FlowDisplayMode::kHide) return;   
 
@@ -64,7 +64,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
             const track_info_t*      origin_track_info =
                 m_data_provider.GetTrackInfo(origin.track_id);
             if(!origin_track_info) continue;
-            const rocprofvis_graph_t& origin_track = graphs[origin_track_info->index];
+            const rocprofvis_graph_t& origin_track = (*graphs)[origin_track_info->index];
 
             float origin_x = (origin.timestamp - v_min_x) * pixels_per_ns;
             float origin_y = track_position_y.at(origin.track_id) +
@@ -78,7 +78,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 const track_info_t*      target_track_info =
                     m_data_provider.GetTrackInfo(target.track_id);
                 if(!target_track_info) continue;
-                const rocprofvis_graph_t& target_track = graphs[target_track_info->index];
+                const rocprofvis_graph_t& target_track = (*graphs)[target_track_info->index];
                 if(!target_track.display) continue;
 
                 float target_x = (target.timestamp - v_min_x) * pixels_per_ns;
@@ -143,8 +143,8 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                     m_data_provider.GetTrackInfo(to.track_id);
                 if(!from_track_info || !to_track_info) continue;
 
-                const rocprofvis_graph_t& from_track = graphs[from_track_info->index];
-                const rocprofvis_graph_t& to_track   = graphs[to_track_info->index];
+                const rocprofvis_graph_t& from_track = (*graphs)[from_track_info->index];
+                const rocprofvis_graph_t& to_track   = (*graphs)[to_track_info->index];
 
                 if(!from_track.display || !to_track.display) continue;
 

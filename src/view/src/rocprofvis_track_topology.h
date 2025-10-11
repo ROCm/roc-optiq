@@ -24,47 +24,34 @@ struct InfoTable
     };
     std::vector<std::vector<Cell>> cells;
 };
-struct QueueModel
+
+struct IterableModel
 {
-    const queue_info_t* info;
-    InfoTable           info_table;
-    uint64_t            graph_index;
+    const iterable_info_t* info;
+    InfoTable              info_table;
+    uint64_t               graph_index;
+    mutable bool           all_subitems_hidden = false;
 };
-struct StreamModel
-{
-    const stream_info_t* info;
-    InfoTable           info_table;
-    uint64_t            graph_index;
-};
-struct ThreadModel
-{
-    const thread_info_t* info;
-    InfoTable            info_table;
-    uint64_t             graph_index;
-};
-struct CounterModel
-{
-    const counter_info_t* info;
-    InfoTable             info_table;
-    uint64_t              graph_index;
-};
+
 struct ProcessModel
 {
-    const process_info_t*                       info;
-    InfoTable                                   info_table;
-    std::string                                 header;
-    std::string                                 queue_header;
-    std::vector<QueueModel>                     queues;
-    std::unordered_map<uint64_t, QueueModel*>   queue_lut;
-    std::string                                 stream_header;
-    std::vector<StreamModel>                     streams;
-    std::unordered_map<uint64_t, StreamModel*>   stream_lut;
-    std::string                                 thread_header;
-    std::vector<ThreadModel>                    threads;
-    std::unordered_map<uint64_t, ThreadModel*>  thread_lut;
-    std::string                                 counter_header;
-    std::vector<CounterModel>                   counters;
-    std::unordered_map<uint64_t, CounterModel*> counter_lut;
+    const process_info_t*                        info;
+    InfoTable                                    info_table;
+    std::string                                  header;
+    std::string                                  queue_header;
+    std::vector<IterableModel>                   queues;
+    std::unordered_map<uint64_t, IterableModel*> queue_lut;
+    std::string                                  stream_header;
+    std::vector<IterableModel>                   streams;
+    std::unordered_map<uint64_t, IterableModel*> stream_lut;
+    std::string                                  thread_header;
+    std::vector<IterableModel>                   threads;
+    std::unordered_map<uint64_t, IterableModel*> thread_lut;
+    std::string                                  counter_header;
+    std::vector<IterableModel>                   counters;
+    std::unordered_map<uint64_t, IterableModel*> counter_lut;
+    mutable bool                                 all_subitems_hidden = false;
+
 };
 struct NodeModel
 {
@@ -73,6 +60,7 @@ struct NodeModel
     std::string                                 process_header;
     std::vector<ProcessModel>                   processes;
     std::unordered_map<uint64_t, ProcessModel*> process_lut;
+    mutable bool                                all_subitems_hidden = false;
 };
 struct TopologyModel
 {
@@ -80,6 +68,7 @@ struct TopologyModel
     std::string                              node_header;
     std::unordered_map<uint64_t, NodeModel*> node_lut;
     std::vector<uint64_t>                    uncategorized_graph_indices;
+    mutable bool                             all_subitems_hidden = false;
 };
 
 class TrackTopology

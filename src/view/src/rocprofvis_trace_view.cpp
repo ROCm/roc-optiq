@@ -5,6 +5,7 @@
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_event_search.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_timeline_selection.h"
@@ -34,6 +35,9 @@ TraceView::TraceView()
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
 , m_settings_manager(SettingsManager::GetInstance())
+, m_event_search(nullptr)
+, m_is_sidebar_visible(true)
+, m_is_analysis_visible(true)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -174,6 +178,10 @@ TraceView::Update()
     {
         m_analysis_item->m_item->Update();
     }
+    if(m_event_search)
+    {
+        m_event_search->Update();
+    }
 }
 
 void
@@ -193,6 +201,7 @@ TraceView::CreateView()
                                   m_timeline_view->GetGraphs(), m_data_provider);
     auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                    m_timeline_selection, m_annotations);
+    m_event_search = std::make_shared<EventSearch>(m_data_provider);
 
     m_sidebar_item                 = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible      = m_is_sidebar_visible;
@@ -468,7 +477,7 @@ TraceView::RenderEditMenuOptions()
     {
         if(m_timeline_selection)
         {
-            std::vector<rocprofvis_graph_t>* graphs = m_timeline_view->GetGraphs();
+            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs = m_timeline_view->GetGraphs();
             if(graphs)
             {
                 m_timeline_selection->UnselectAllTracks(*graphs);
@@ -530,9 +539,12 @@ TraceView::RenderToolbar()
     ImGui::AlignTextToFramePadding();
 
     // Toolbar Controls
+    ImGui::BeginGroup();
     RenderFlowControls();
     RenderSeparator();
     RenderAnnotationControls();
+    RenderSeparator();
+    RenderEventSearch();
     RenderSeparator();
     RenderBookmarkControls();
     RenderSeparator();
@@ -547,6 +559,12 @@ TraceView::RenderToolbar()
     if(ImGui::IsItemHovered())
     {
         ImGui::SetTooltip("Reset view to default zoom and pan");
+    }
+    ImGui::EndGroup();
+    float available_width = ImGui::GetContentRegionAvail().x - ImGui::GetItemRectSize().x;
+    if(m_event_search && available_width != 0)
+    {
+        m_event_search->SetWidth(m_event_search->Width() + available_width);
     }
 
     // pop content style
@@ -672,6 +690,9 @@ TraceView::RenderBookmarkControls()
     ImGui::PushID("bookmark_toggle_dropdown");
 
     static int selected_slot = -1;
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("BookMarks").x +
+                            2 * ImGui::GetStyle().FramePadding.x +
+                            ImGui::GetFrameHeightWithSpacing());
     if(ImGui::BeginCombo("", "Bookmarks"))
     {
         if(ImGui::BeginTable("BookmarkTable", 2, ImGuiTableFlags_SizingStretchProp))
@@ -842,6 +863,42 @@ TraceView::RenderFlowControls()
 
     // Update the mode if changed
     if(mode != current_mode) arrow_layer.SetFlowDisplayMode(mode);
+}
+
+void
+TraceView::RenderEventSearch()
+{
+    if(m_event_search && m_event_search->Width() > 0)
+    {
+        SettingsManager& settings = SettingsManager::GetInstance();
+        if(m_event_search->FocusTextInput())
+        {
+            ImGui::SetKeyboardFocusHere();
+        }
+        std::pair<bool, bool> search_bar = InputTextWithClear(
+            "search_bar", "Search: hipLaunchKernel or \"hip\"\"kernel\"",
+            m_event_search->TextInput(), m_event_search->TextInputLimit(),
+            settings.GetFontManager().GetIconFont(FontType::kDefault),
+            settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),
+            m_event_search->Width());
+        if(ImGui::IsItemClicked() && !m_event_search->Searched())
+        {
+            m_event_search->Show();
+        }
+        if(ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter))
+        {
+            m_event_search->Search();
+        }
+        if(search_bar.second)
+        {
+            m_event_search->Clear();
+        }
+        if(m_event_search->FocusTextInput())
+        {
+            ImGui::GetIO().MouseClicked[0] = false;
+        }
+        m_event_search->Render();
+    }
 }
 
 SystemTraceProjectSettings::SystemTraceProjectSettings(const std::string& project_id,

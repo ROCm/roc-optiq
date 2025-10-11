@@ -64,7 +64,7 @@ public:
     void                             MakeGraphView();
     void                             ResetView();
     void                             DestroyGraphs();
-    std::vector<rocprofvis_graph_t>* GetGraphs();
+    std::shared_ptr<std::vector<rocprofvis_graph_t>> GetGraphs();
     void                             RenderInteractiveUI(ImVec2 screen_pos);
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
@@ -97,8 +97,7 @@ private:
     EventManager::SubscriptionToken     m_font_changed_token;
     EventManager::SubscriptionToken     m_set_view_range_token;
     int                                 m_dragged_sticky_id;
-    const std::vector<double>*          m_histogram;
-    std::vector<rocprofvis_graph_t>     m_graphs;
+    const std::vector<double>*          m_histogram;    
     int                                 m_ruler_height;
     float                               m_ruler_padding;
     double                              m_v_min_x;
@@ -141,6 +140,7 @@ private:
     std::shared_ptr<AnnotationsManager> m_annotations;
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
+    std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
     struct
     {
         bool     handled;

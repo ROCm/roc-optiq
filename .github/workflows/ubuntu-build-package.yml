@@ -57,7 +57,7 @@ jobs:
         #if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: rocprof-visualizer-${{ matrix.os-name }}
+          name: rocprof-visualizer-ubuntu-${{ matrix.os-release }}
           path: |
             build/linux-release-symbols/rocprof-visualizer
             build/linux-release-symbols/*.deb

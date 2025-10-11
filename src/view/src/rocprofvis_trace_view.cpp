@@ -225,8 +225,8 @@ TraceView::CreateView()
         std::make_shared<VSplitContainer>(timeline_container_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
 
-    auto trace_area        = std::make_shared<LayoutItem>();
-    trace_area->m_item     = m_vertical_split_container;
+    auto trace_area    = std::make_shared<LayoutItem>();
+    trace_area->m_item = m_vertical_split_container;
 
     m_horizontal_split_container =
         std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);
@@ -347,7 +347,8 @@ TraceView::HandleHotKeys()
 
     // Don’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
     // InputText) or a pop up is open
-    if(io.WantTextInput || ImGui::IsAnyItemActive() || ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
+    if(io.WantTextInput || ImGui::IsAnyItemActive() ||
+       ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
     {
         return;
     }
@@ -585,8 +586,7 @@ TraceView::RenderSeparator()
     float       height    = ImGui::GetFrameHeight();
     ImVec2      p         = ImGui::GetCursorScreenPos();
     draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + height),
-                       m_settings_manager.GetColor(Colors::kMetaDataSeparator),
-                       2.0f);
+                       m_settings_manager.GetColor(Colors::kMetaDataSeparator), 2.0f);
     ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
     ImGui::SameLine();
 }
@@ -792,8 +792,8 @@ TraceView::RenderFlowControls()
 
     ImGuiStyle& style = ImGui::GetStyle();
 
-    static const char* flow_labels[]    = { ICON_EYE, ICON_EYE_THIN, ICON_EYE_SLASH };
-    static const char* flow_tool_tips[] = { "Show All", "Show First & Last", "Hide All" };
+    static const char* flow_labels[]    = { ICON_EYE, ICON_EYE_SLASH };
+    static const char* flow_tool_tips[] = { "Show All", "Hide All" };
 
     TimelineArrow&  arrow_layer  = m_timeline_view->GetArrowLayer();
     FlowDisplayMode current_mode = arrow_layer.GetFlowDisplayMode();
@@ -836,8 +836,30 @@ TraceView::RenderFlowControls()
         ImGui::PopID();
         ImGui::SameLine();
     }
-    ImGui::EndGroup();
+
+    char* label = ICON_TREE;
+
+    if(arrow_layer.GetRenderStyle() == TimelineArrow::RenderStyle::kChain)
+    {
+        label = ICON_CHAIN;
+    }
+    if(ImGui::Button(label))
+    {
+        arrow_layer.SetRenderStyle(arrow_layer.GetRenderStyle() ==
+                                           TimelineArrow::RenderStyle::kChain
+                                       ? TimelineArrow::RenderStyle::kFan
+                                       : TimelineArrow::RenderStyle::kChain);
+    }
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::PopFont();
+        ImGui::SetTooltip("Flow Render Style");
+        ImGui::PushFont(icon_font);
+    }
     ImGui::PopFont();
+
+    ImGui::EndGroup();
 
     // Update the mode if changed
     if(mode != current_mode) arrow_layer.SetFlowDisplayMode(mode);

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_view_structs.h"
 #include <memory>
@@ -29,6 +30,8 @@ class TimelineArrow
 public:
     void            SetFlowDisplayMode(FlowDisplayMode mode);
     FlowDisplayMode GetFlowDisplayMode() const;
+    bool            TrueView();
+    void            SetView(bool type);
     TimelineArrow(DataProvider&                      data_provider,
                   std::shared_ptr<TimelineSelection> selection);
     ~TimelineArrow();
@@ -47,6 +50,8 @@ private:
     EventManager::SubscriptionToken    m_selection_changed_token;
     std::vector<const event_info_t*>   m_selected_event_data;
     FlowDisplayMode                    m_flow_display_mode = FlowDisplayMode::kShowAll;
+    std::unordered_map<uint64_t, std::vector<event_flow_data_t>*> m_arrow_dictionary;
+    bool                                                          m_true_view;
 };
 
 }  // namespace View

@@ -348,7 +348,8 @@ DataProvider::SetTraceLoadedCallback(
 }
 
 const std::vector<double>&
-DataProvider::GetHistogram() {
+DataProvider::GetHistogram()
+{
     return m_histogram;
 }
 
@@ -498,8 +499,7 @@ DataProvider::HandleLoadTrace()
             result = rocprofvis_controller_get_object(
                 m_trace_controller, kRPVControllerTimeline, 0, &m_trace_timeline);
 
-
-            //Minimap and histogram load
+            // Minimap and histogram load
             uint64_t num_buckets = 0;
             result               = rocprofvis_controller_get_uint64(
                 m_trace_controller, kRPVControllerGetHistogramBucketsNumber, 0,
@@ -539,7 +539,6 @@ DataProvider::HandleLoadTrace()
                 }
                 m_mini_map = histogram_minimap;
 
-           
                 m_min_ts = 0;
                 result   = rocprofvis_controller_get_double(
                     m_trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &m_min_ts);
@@ -1707,10 +1706,10 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
                         args, kRPVControllerTableArgsNumOpTypes, 0,
                         filtered_op_types.size());
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                    
+
                     // set the number of string filters in request
                     result = rocprofvis_controller_set_uint64(
-                        args, kRPVControllerTableNumStringTableFilters, 0, 
+                        args, kRPVControllerTableNumStringTableFilters, 0,
                         table_params.m_string_table_filters.size());
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
@@ -2282,6 +2281,8 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
 
     std::shared_ptr<EventRequestParams> event_params =
         std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
+    const event_info_t* event_info_for_requester = GetEventInfo(event_params->m_event_id);
+
     if(event_params && m_event_data.count(event_params->m_event_id) > 0)
     {
         event_info_t& event_info = m_event_data[event_params->m_event_id];
@@ -2343,6 +2344,22 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
             event_info.flow_info[j].name =
                 GetString(flow_control_handle, kRPVControllerFlowControlName, 0);
         }
+
+        event_flow_data_t flow;
+        flow.direction = 0;  // Doesnt matter the UI will figure out direction by order.
+        flow.id        = event_info_for_requester->basic_info.m_id;
+        flow.level     = event_info_for_requester->basic_info.m_level;
+        flow.name      = event_info_for_requester->basic_info.m_name;
+        flow.timestamp = event_info_for_requester->basic_info.m_start_ts;
+        flow.track_id  = event_info_for_requester->track_id;
+        event_info.flow_info.push_back(flow);
+
+        std::sort(event_info.flow_info.begin(), event_info.flow_info.end(),
+                  [](const event_flow_data_t& a, const event_flow_data_t& b) {
+                      return a.timestamp < b.timestamp;
+                  });
+
+        event_info.flow_info.push_back(flow);
     }
 
     rocprofvis_controller_array_free(req.request_array);
@@ -2576,7 +2593,6 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
             table_data.push_back(std::move(row_data));
         }
 
-        
         std::shared_ptr<TableRequestParams> table_params =
             std::dynamic_pointer_cast<TableRequestParams>(req.custom_params);
         if(!table_params)

@@ -216,8 +216,8 @@ TraceView::CreateView()
         std::make_shared<VSplitContainer>(timeline_container_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
 
-    auto trace_area        = std::make_shared<LayoutItem>();
-    trace_area->m_item     = m_vertical_split_container;
+    auto trace_area    = std::make_shared<LayoutItem>();
+    trace_area->m_item = m_vertical_split_container;
 
     m_horizontal_split_container =
         std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);
@@ -338,7 +338,8 @@ TraceView::HandleHotKeys()
 
     // Don’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
     // InputText) or a pop up is open
-    if(io.WantTextInput || ImGui::IsAnyItemActive() || ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
+    if(io.WantTextInput || ImGui::IsAnyItemActive() ||
+       ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
     {
         return;
     }
@@ -567,8 +568,7 @@ TraceView::RenderSeparator()
     float       height    = ImGui::GetFrameHeight();
     ImVec2      p         = ImGui::GetCursorScreenPos();
     draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + height),
-                       m_settings_manager.GetColor(Colors::kMetaDataSeparator),
-                       2.0f);
+                       m_settings_manager.GetColor(Colors::kMetaDataSeparator), 2.0f);
     ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
     ImGui::SameLine();
 }
@@ -815,8 +815,20 @@ TraceView::RenderFlowControls()
         ImGui::PopID();
         ImGui::SameLine();
     }
-    ImGui::EndGroup();
     ImGui::PopFont();
+
+    std::string label = "Default View";
+
+    if(!arrow_layer.TrueView())
+    {
+        label = "Chain View";
+    }
+    if(ImGui::Button(label.c_str()))
+    {
+        arrow_layer.SetView(!arrow_layer.TrueView());
+    }
+
+    ImGui::EndGroup();
 
     // Update the mode if changed
     if(mode != current_mode) arrow_layer.SetFlowDisplayMode(mode);

@@ -27,10 +27,15 @@ struct event_info_t;
 class TimelineArrow
 {
 public:
+    enum class RenderStyle {
+        kFan,
+        kChain
+    };
+
     void            SetFlowDisplayMode(FlowDisplayMode mode);
     FlowDisplayMode GetFlowDisplayMode() const;
-    bool            TrueView();
-    void            SetView(bool type);
+    RenderStyle     GetRenderStyle() const;
+    void            SetRenderStyle(RenderStyle style);
     TimelineArrow(DataProvider&                      data_provider,
                   std::shared_ptr<TimelineSelection> selection);
     ~TimelineArrow();
@@ -50,7 +55,7 @@ private:
     std::vector<const event_info_t*>   m_selected_event_data;
     FlowDisplayMode                    m_flow_display_mode = FlowDisplayMode::kShowAll;
     std::unordered_map<uint64_t, std::vector<event_flow_data_t>*> m_arrow_dictionary;
-    bool                                                          m_true_view;
+    RenderStyle                                                   m_render_style;
 };
 
 }  // namespace View

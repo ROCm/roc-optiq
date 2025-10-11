@@ -24,15 +24,17 @@ TimelineArrow::GetFlowDisplayMode() const
 {
     return m_flow_display_mode;
 }
-bool
-TimelineArrow::TrueView()
+
+TimelineArrow::RenderStyle
+TimelineArrow::GetRenderStyle() const
 {
-    return m_true_view;
+    return m_render_style;
 }
+
 void
-TimelineArrow::SetView(bool type)
+TimelineArrow::SetRenderStyle(RenderStyle style)
 {
-    m_true_view = type;
+    m_render_style = style;
 }
 
 void
@@ -55,7 +57,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
 
         const std::vector<event_flow_data_t>& flows = event->flow_info;
 
-        if(m_true_view)
+        if(m_render_style == RenderStyle::kFan)
         {
             // True view: origin + multiple targets
             const event_flow_data_t& origin = flows[0];
@@ -208,6 +210,8 @@ TimelineArrow::TimelineArrow(DataProvider&                      data_provider,
 : m_data_provider(data_provider)
 , m_timeline_selection(selection)
 , m_selection_changed_token(-1)
+, m_flow_display_mode(FlowDisplayMode::kShowAll)
+, m_render_style(RenderStyle::kFan)
 {
     auto scroll_to_arrow_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleEventSelectionChanged(e);

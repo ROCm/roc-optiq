@@ -818,13 +818,16 @@ TraceView::RenderFlowControls()
 
     char* label = ICON_TREE;
 
-    if(!arrow_layer.TrueView())
+    if(arrow_layer.GetRenderStyle() == TimelineArrow::RenderStyle::kChain)
     {
         label = ICON_CHAIN;
     }
     if(ImGui::Button(label))
     {
-        arrow_layer.SetView(!arrow_layer.TrueView());
+        arrow_layer.SetRenderStyle(arrow_layer.GetRenderStyle() ==
+                                           TimelineArrow::RenderStyle::kChain
+                                       ? TimelineArrow::RenderStyle::kFan
+                                       : TimelineArrow::RenderStyle::kChain);
     }
 
     if(ImGui::IsItemHovered())

@@ -2358,8 +2358,6 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
                   [](const event_flow_data_t& a, const event_flow_data_t& b) {
                       return a.timestamp < b.timestamp;
                   });
-
-        event_info.flow_info.push_back(flow);
     }
 
     rocprofvis_controller_array_free(req.request_array);

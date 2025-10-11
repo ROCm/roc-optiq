@@ -771,8 +771,8 @@ TraceView::RenderFlowControls()
 
     ImGuiStyle& style = ImGui::GetStyle();
 
-    static const char* flow_labels[]    = { ICON_EYE, ICON_EYE_THIN, ICON_EYE_SLASH };
-    static const char* flow_tool_tips[] = { "Show All", "Show First & Last", "Hide All" };
+    static const char* flow_labels[]    = { ICON_EYE, ICON_EYE_SLASH };
+    static const char* flow_tool_tips[] = { "Show All", "Hide All" };
 
     TimelineArrow&  arrow_layer  = m_timeline_view->GetArrowLayer();
     FlowDisplayMode current_mode = arrow_layer.GetFlowDisplayMode();
@@ -815,18 +815,18 @@ TraceView::RenderFlowControls()
         ImGui::PopID();
         ImGui::SameLine();
     }
-    ImGui::PopFont();
 
-    std::string label = "Default View";
+    char* label = ICON_TREE;
 
     if(!arrow_layer.TrueView())
     {
-        label = "Chain View";
+        label = ICON_CHAIN;
     }
-    if(ImGui::Button(label.c_str()))
+    if(ImGui::Button(label))
     {
         arrow_layer.SetView(!arrow_layer.TrueView());
     }
+    ImGui::PopFont();
 
     ImGui::EndGroup();
 

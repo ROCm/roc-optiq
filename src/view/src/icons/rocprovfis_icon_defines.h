@@ -17,6 +17,8 @@ constexpr ImWchar icon_ranges[] = {
     0xF2CA, 0xF2CA,
     0xF30F, 0xF30F, 
     0xF2D7, 0xF2D7, 
+    0xF1FE, 0xF1FE, 
+    0xF33F, 0xF33F,
     0
 };
 
@@ -32,6 +34,8 @@ constexpr ImWchar icon_ranges[] = {
     constexpr char* ICON_LEFT_ARROW    = u8"\uF2CA";
     constexpr char* ICON_RIGHT_ARROW    = u8"\uF30F";
     constexpr char* ICON_DELETE      = u8"\uF2D7";
+    constexpr char* ICON_CHAIN       = u8"\uF1FE";
+    constexpr char* ICON_TREE    = u8"\uF33F";
 
 
 

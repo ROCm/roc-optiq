@@ -41,6 +41,8 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                       const std::unordered_map<uint64_t, float>& track_position_y,
                       const std::vector<rocprofvis_graph_t>&     graphs) const
 {
+    if(m_flow_display_mode == FlowDisplayMode::kHide) return;   
+
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            color        = settings.GetColor(Colors::kArrowColor);
     float            thickness    = 2.0f;

@@ -16,7 +16,6 @@ namespace View
 enum class FlowDisplayMode
 {
     kShowAll,
-    kShowFirstAndLast,
     kHide,
     __kLastMode = kHide
 };

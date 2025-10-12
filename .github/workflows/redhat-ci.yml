@@ -1,5 +1,5 @@
-name: Ubuntu Continuous Integration
-run-name: rocprofiler-visualizer-ubuntu-ci
+name: Redhat Continuous Integration
+run-name: rocprofiler-visualizer-redhat-ci
 
 on:
   schedule:
@@ -36,41 +36,40 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
             # Full matrix for the 'schedule' event
-            echo "matrix={\"os-release\":[\"22.04\", \"24.04\"], \"vulkan-sdk\":[\"1.4.328.1\"]}" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"os-release\":[\"9\", \"10\"], \"vulkan-sdk\":[\"1.4.328.1\"]}" >> "$GITHUB_OUTPUT"
           else
             # Limited matrix for other events (push, pull_request)
-            echo "matrix={\"os-release\":[\"24.04\"], \"vulkan-sdk\":[\"1.4.328.1\"]}" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"os-release\":[\"10\"], \"vulkan-sdk\":[\"1.4.328.1\"]}" >> "$GITHUB_OUTPUT"
           fi
 
-  ubuntu:
-    name: Ubuntu ${{ matrix.os-release }} • Build Visualizer
+  rocky-linux:
     needs: [set-matrix]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
       # matrix:
-        # os-release: [ '22.04', '24.04' ]
-        # vulkan-sdk: [ '1.4.328.1' ]
-
+      #     os-release: [ '9', '10' ]
+      #     vulkan-sdk: [ '1.4.328.1' ]
     runs-on: ubuntu-latest
     container:
-        image: ubuntu:${{ matrix.os-release }}
+        image: rockylinux/rockylinux:${{ matrix.os-release }}
+    name: RockyLinux ${{ matrix.os-release }} • Build Visualizer
 
     steps:
       - name: Install Dependencies
         run: |
-          apt update -y
-          apt install -y build-essential cmake git libncurses-dev libwayland-dev \
-            libx11-dev libxcursor-dev libxi-dev libxinerama-dev libxkbcommon-dev \
-            libxrandr-dev pkg-config wget xorg-dev
-          echo "✅ Dependencies Installed!"
+            dnf groupinstall -y "Development Tools"
+            dnf install -y epel-release && crb enable
+            dnf install -y cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget
+            dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel
+            echo "✅ Dependencies Installed!"
 
       - name: Install Vulkan SDK
         run: |
-          mkdir -p /opt/vulkan
-          wget -q https://sdk.lunarg.com/sdk/download/${{ matrix.vulkan-sdk }}/linux/vulkansdk-linux-x86_64-${{ matrix.vulkan-sdk }}.tar.xz -O /tmp/vulkansdk.tar.xz
-          tar -xJvf /tmp/vulkansdk.tar.xz -C /opt/vulkan
-          echo "✅ Vulkan SDK Installed!"
+            mkdir -p /opt/vulkan
+            wget -q https://sdk.lunarg.com/sdk/download/${{ matrix.vulkan-sdk }}/linux/vulkansdk-linux-x86_64-${{ matrix.vulkan-sdk }}.tar.xz -O /tmp/vulkansdk.tar.xz
+            tar -xf /tmp/vulkansdk.tar.xz -C /opt/vulkan
+            echo "✅ Vulkan SDK Installed!"
 
       - uses: actions/checkout@v5
         with:

@@ -3,7 +3,9 @@
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_core_assert.h"
+
 #include <cfloat>
+#include <algorithm>
 
 namespace RocProfVis
 {
@@ -90,10 +92,10 @@ JobSystem::JobSystem()
                 {
                     std::unique_lock<std::mutex> lock(m_queue_mutex);
                     m_condition_variable.wait(lock, [this]()
-                    { 
-                        return m_terminate || !m_jobs.empty(); 
+                    {
+                        return m_terminate || !m_jobs.empty();
                     });
-                    
+
                     if (m_terminate && m_jobs.empty())
                     {
                         break;

@@ -12,6 +12,8 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
+
+#include <algorithm>
 #include <GLFW/glfw3.h>
 #include "rocprofvis_font_manager.h"
 namespace RocProfVis
@@ -1377,7 +1379,7 @@ TimelineView::RenderHistogram()
         {
             break;
         }
-    }    
+    }
 
     const int num_ticks          = interval_count + pad_amount;
     double    grid_line_start_ns = 0;
@@ -1425,7 +1427,7 @@ TimelineView::RenderHistogram()
     bool   mouse_inside   = mouse_position.x >= window_pos.x && mouse_position.x <= window_pos.x + window_size.x &&
                           mouse_position.y >= window_pos.y &&
                           mouse_position.y <= window_pos.y + window_size.y;
-    
+
     // Update pseudo focus state based on mouse interaction
     if(mouse_any)
     {
@@ -1548,7 +1550,7 @@ TimelineView::RenderGraphPoints()
     }
 
     ImGui::EndChild();
-    ImGui::PopStyleVar(2); 
+    ImGui::PopStyleVar(2);
 }
 
 void
@@ -1629,7 +1631,7 @@ TimelineView::HandleTopSurfaceTouch()
 
     ImGuiIO&    io         = ImGui::GetIO();
     const float zoom_speed = 0.1f;
-    
+
     bool mouse_any = io.MouseDown[ImGuiMouseButton_Left] ||
                      io.MouseDown[ImGuiMouseButton_Right] || io.MouseDown[ImGuiMouseButton_Middle];
 
@@ -1650,7 +1652,7 @@ TimelineView::HandleTopSurfaceTouch()
                 std::clamp(m_scroll_position_y - scroll_wheel * scroll_speed, 0.0f,
                            m_content_max_y_scroll);
         }
-    }                     
+    }
     // Graph area: allow full interaction
     else if(is_mouse_in_graph)
     {
@@ -1739,7 +1741,7 @@ TimelineView::HandleTopSurfaceTouch()
         float region_moved_per_click_x = 0.01 * m_graph_size.x;
         float region_moved_per_click_y = 0.01 * m_content_max_y_scroll;
 
-        //A, D, left arrow, right arrow go left and right 
+        //A, D, left arrow, right arrow go left and right
         if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
         {
             m_view_time_offset_ns -=

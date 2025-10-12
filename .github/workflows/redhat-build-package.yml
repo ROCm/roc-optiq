@@ -1,4 +1,4 @@
-name: Redhat Build and Packagen
+name: Redhat Build and Package
 run-name: rocprofiler-visualizer-redhat-build-package
 
 on:

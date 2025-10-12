@@ -27,13 +27,30 @@ env:
   VISUALIZER_FILE_NAME: "rocprof-visualizer"
 
 jobs:
+  set-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # Full matrix for the 'schedule' event
+            echo "matrix={\"os-release\":[\"22.04\", \"24.04\"], \"vulkan-sdk\":[\"1.4.328.1\"]}" >> "$GITHUB_OUTPUT"
+          else
+            # Limited matrix for other events (push, pull_request)
+            echo "matrix={\"os-release\":[\"24.04\"], \"vulkan-sdk\":[\"1.4.328.1\"]}" >> "$GITHUB_OUTPUT"
+          fi
+
   ubuntu:
     name: Ubuntu ${{ matrix.os-release }} • Build Visualizer
+    needs: [set-matrix]
     strategy:
       fail-fast: false
-      matrix:
-        os-release: [ '22.04', '24.04' ]
-        vulkan-sdk: [ '1.4.328.1' ]
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+      # matrix:
+        # os-release: [ '22.04', '24.04' ]
+        # vulkan-sdk: [ '1.4.328.1' ]
 
     runs-on: ubuntu-latest
     if: |

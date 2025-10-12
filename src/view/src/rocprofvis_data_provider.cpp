@@ -5,6 +5,7 @@
 
 #include "spdlog/spdlog.h"
 
+#include <algorithm>
 #include <cfloat>
 #include <future>
 #include <iostream>

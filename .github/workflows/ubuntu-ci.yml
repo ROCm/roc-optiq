@@ -36,6 +36,9 @@ jobs:
         vulkan-sdk: [ '1.4.328.1' ]
 
     runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && matrix.os-release == '22.04') ||
+      (matrix.os-release == '24.04')    
     container:
         image: ubuntu:${{ matrix.os-release }}
 

@@ -28,15 +28,18 @@ env:
 
 jobs:
   rocky-linux:
-    runs-on: ubuntu-latest
-    container:
-        image: rockylinux/rockylinux:${{ matrix.os-release }}
-    name: RockyLinux ${{ matrix.os-release }} • Build Visualizer
     strategy:
       fail-fast: false
       matrix:
           os-release: [ '9', '10' ]
           vulkan-sdk: [ '1.4.328.1' ]
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && matrix.os-release == '9') ||
+      (matrix.os-release == '10')
+    container:
+        image: rockylinux/rockylinux:${{ matrix.os-release }}
+    name: RockyLinux ${{ matrix.os-release }} • Build Visualizer
 
     steps:
       - name: Install Dependencies

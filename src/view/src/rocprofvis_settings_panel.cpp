@@ -44,6 +44,7 @@ SettingsPanel::Show()
     m_should_open               = true;
     m_category                  = Display;
     m_usersettings_initial      = m_usersettings;
+    m_usersettings_previous     = m_usersettings;
     m_font_settings.dpi_scaling = m_usersettings.display_settings.dpi_based_scaling;
     m_font_settings.size_index  = m_usersettings.display_settings.font_size_index;
 }
@@ -154,7 +155,8 @@ SettingsPanel::Render()
 
         if(m_settings_changed)
         {
-            m_settings.ApplyUserSettings(m_usersettings_initial, m_settings_confirmed);
+            m_settings.ApplyUserSettings(m_usersettings_previous, m_settings_confirmed);
+            m_usersettings_previous = m_settings.GetUserSettings();
             m_settings_changed   = false;
             m_settings_confirmed = false;
         }

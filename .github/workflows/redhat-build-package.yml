@@ -1,4 +1,4 @@
-name: Redhat Build and Packagen
+name: Redhat Build and Package
 run-name: rocprofiler-visualizer-redhat-build-package
 
 on:
@@ -68,4 +68,5 @@ jobs:
             build/linux-release-symbols/rocprof-visualizer
             build/linux-release-symbols/*.deb
             build/linux-release-symbols/*.gz
-          retention-days: 2 # Retain artifact for 2 days          
+            build/linux-release-symbols/*.rpm
+          retention-days: 2 # Retain artifact for 2 days

@@ -62,4 +62,5 @@ jobs:
             build/linux-release-symbols/rocprof-visualizer
             build/linux-release-symbols/*.deb
             build/linux-release-symbols/*.gz
+            build/linux-release-symbols/*.rpm
           retention-days: 2 # Retain artifact for 2 days

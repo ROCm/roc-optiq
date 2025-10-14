@@ -44,22 +44,6 @@ SideBar::Render()
                               m_settings.GetColor(Colors::kTransparent));
 
         const TopologyModel& topology = m_track_topology->GetTopology();
-
-        if(m_root_eye_button_state == EyeButtonState::kAllVisible)
-        {
-            topology.all_subitems_hidden = false;
-        }
-
-        if(topology.all_subitems_hidden)
-        {
-            m_root_eye_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
-        }
-        else
-        {
-            m_root_eye_button_state = DrawEyeButton(m_root_eye_button_state);
-        }
-        ImGui::SameLine();
-
         if(ImGui::TreeNodeEx("Project",
                              CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
         {
@@ -112,7 +96,6 @@ SideBar::Render()
                 }
             }
             ImGui::TreePop();
-            ImGui::Unindent();
         }
         ImGui::PopStyleColor(3);
         ImGui::PopStyleVar();
@@ -322,7 +305,6 @@ SideBar::DrawTopology(const TopologyModel& topology,
     {
         topology.all_subitems_hidden = false;
     }
-    ImGui::Indent();
     EyeButtonState new_button_state = parent_eye_button_state;
     if(show_eye_button)
     {
@@ -488,7 +470,6 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
             if(ImGui::TreeNodeEx(process.header.c_str(),
                                  CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
             {
-                ImGui::Indent();
                 if(!process.queues.empty())
                 {
                     queue_button_state = DrawCollapsable(
@@ -518,7 +499,6 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
                                         current_eye_button_state);
                 }
                 ImGui::TreePop();
-                ImGui::Unindent();
             }
 
             if(queue_button_state == EyeButtonState::kAllHidden &&
@@ -575,7 +555,6 @@ SideBar::DrawCollapsable(const std::vector<IterableModel>& container,
                                   CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
     if(open)
     {
-        ImGui::Indent();
         for(const IterableModel& item : container)
         {
             if(item.info)
@@ -587,7 +566,6 @@ SideBar::DrawCollapsable(const std::vector<IterableModel>& container,
             }
         }
         ImGui::TreePop();
-        ImGui::Unindent();
     }
     ImGui::PopID();
     return new_button_state;

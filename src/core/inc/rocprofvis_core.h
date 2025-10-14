@@ -11,7 +11,7 @@ extern "C"
 {
 #endif
 
-    void rocprofvis_core_enable_log(void);
+    void rocprofvis_core_enable_log(const char* log_path);
 
     void rocprofvis_core_get_log_entries(void* user_ptr, rocprofvis_core_process_log_t handler);
 

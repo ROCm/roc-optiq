@@ -190,5 +190,7 @@ constexpr uint64_t minute_in_s  = 60;
 constexpr uint64_t minute_in_ns = minute_in_s * ns_per_s;
 }  // namespace TimeConstants
 
+std::string get_application_config_path(bool create_dirs);
+
 }  // namespace View
 }  // namespace RocProfVis

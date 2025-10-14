@@ -8,6 +8,7 @@
 #include "../resources/AMD_LOGO.h"
 #include "rocprofvis_view_module.h"
 #include <GLFW/glfw3.h>
+#include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,7 +93,9 @@ main(int, char**)
 {
     int resultCode = 0;
 
-    rocprofvis_core_enable_log();
+    std::string config_path = rocprofvis_get_application_config_path();
+    std::filesystem::path log_path = std::filesystem::path(config_path) / "visualizer.log.txt";
+    rocprofvis_core_enable_log(log_path.string().c_str());
 
     glfwSetErrorCallback(glfw_error_callback);
 

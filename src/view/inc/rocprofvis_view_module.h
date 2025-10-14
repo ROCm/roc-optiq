@@ -31,3 +31,6 @@ rocprofvis_view_set_dpi(float dpi);
 
 void
 rocprofvis_view_open_files(const std::vector<std::string>& file_paths);
+
+std::string
+rocprofvis_get_application_config_path();

@@ -100,6 +100,13 @@ AppWindow::~AppWindow()
 bool
 AppWindow::Init()
 {
+    std::string config_path = get_application_config_path(true);
+
+    std::filesystem::path ini_path = std::filesystem::path(config_path) / "imgui.ini";
+    ImGuiIO& io = ImGui::GetIO();
+    static std::string ini_path_str = ini_path.string();
+    io.IniFilename = ini_path_str.c_str();
+
     ImPlot::CreateContext();
 
     SettingsManager& settings = SettingsManager::GetInstance();

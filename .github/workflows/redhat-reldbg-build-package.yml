@@ -1,5 +1,5 @@
-name: Redhat Build and Package
-run-name: rocprofiler-visualizer-redhat-build-package
+name: Redhat Build and Package Release with Debug Symbols
+run-name: rocprofiler-visualizer-reldbg-redhat-build-package
 
 on:
   workflow_dispatch:

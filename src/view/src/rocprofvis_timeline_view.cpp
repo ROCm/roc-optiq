@@ -1245,8 +1245,7 @@ TimelineView::RenderHistogram()
     if(!m_histogram || m_histogram->empty()) return;
 
     const float     kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
-    constexpr float kRulerHeight          = 30.0f;
-    const float     kHistogramBarHeight   = kHistogramTotalHeight - kRulerHeight;
+    const float     kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
     ImVec2          window_size           = ImGui::GetWindowSize();
 
     // Outer container
@@ -1338,7 +1337,7 @@ TimelineView::RenderHistogram()
 
     // Ruler area
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kRulerBgColor));
-    ImGui::BeginChild("Histogram Ruler", ImVec2(window_size.x, kRulerHeight), false,
+    ImGui::BeginChild("Histogram Ruler", ImVec2(window_size.x, m_ruler_height), false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list_ruler = ImGui::GetWindowDrawList();
@@ -1399,11 +1398,11 @@ TimelineView::RenderHistogram()
         float label_x;
         if(i == 0)
         {
-            label_x = ruler_pos.x + 2.0f;
+            label_x = tick_x + ImGui::CalcTextSize("0").x;
         }
         else
         {
-            label_x = tick_x - label_size.x * 0.5f;
+            label_x = tick_x;
         }
 
         ImVec2 label_pos(label_x, tick_bottom + 1.0f);

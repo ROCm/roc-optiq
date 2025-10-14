@@ -62,7 +62,7 @@ jobs:
       - name: Upload Visualizer Binary
         uses: actions/upload-artifact@v4
         with:
-          name: rocprof-visualizer-ubuntu-${{ matrix.os-release }}
+          name: rocprof-visualizer-rocky-${{ matrix.os-release }}
           path: |
             build/linux-release/rocprof-visualizer
             build/linux-release/*.deb

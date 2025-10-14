@@ -589,6 +589,10 @@ ProfileDatabase::BuildTableQuery(
             slice_query_map[GetEventOperationQuery((rocprofvis_dm_event_operation_t)track)] = " WHERE " + string_id_filter_map.at((rocprofvis_dm_event_operation_t)track);
         }
     }
+    if(slice_query_map.empty())
+    {
+        return kRocProfVisDmResultSuccess;
+    }
     query = "WITH all_rows AS (";
 
     if (group && strlen(group))

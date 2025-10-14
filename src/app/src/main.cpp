@@ -94,10 +94,13 @@ main(int, char**)
     int resultCode = 0;
 
     std::string config_path = rocprofvis_get_application_config_path();
-    std::filesystem::path log_path = std::filesystem::path(config_path) / "visualizer.log.txt";
-    rocprofvis_core_enable_log(log_path.string().c_str());
-
-    glfwSetErrorCallback(glfw_error_callback);
+    #ifndef NDEBUG
+    std::filesystem::path log_path = std::filesystem::path(config_path) / "visualizer.debug.log";
+        rocprofvis_core_enable_log(log_path.string().c_str(),spdlog::level::debug);
+    #else
+        std::filesystem::path log_path = std::filesystem::path(config_path) / "visualizer.log";
+        rocprofvis_core_enable_log(log_path.string().c_str(),spdlog::level::info);
+    #endif
 
     if(glfwInit())
     {

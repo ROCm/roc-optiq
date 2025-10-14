@@ -72,7 +72,7 @@ static std::weak_ptr<RocProfVis::Core::BufferSinkMT> g_rpv_log_ringbuffer;
 
 extern "C"
 {
-    void rocprofvis_core_enable_log(const char* log_path)
+    void rocprofvis_core_enable_log(const char* log_path, int log_level)
     {
         static bool is_inited = false;
         if (!is_inited)
@@ -110,7 +110,7 @@ extern "C"
             spdlog::details::registry::instance().initialize_logger(new_logger);
 
             spdlog::set_default_logger(new_logger);
-            spdlog::set_level(spdlog::level::debug);
+            spdlog::set_level(static_cast<spdlog::level::level_enum>(log_level));
         }
     }
 

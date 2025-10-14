@@ -41,7 +41,7 @@ DeleteSliceData(rocprofvis_dm_trace_t trace, rocprofvis_dm_timestamp_t start_tim
 
 int main(int argc, char** argv)
 {
-  rocprofvis_core_enable_log("log.txt");
+  rocprofvis_core_enable_log("log.txt", spdlog::level::debug);
   Catch::Session session;
 
   using namespace Catch::Clara;

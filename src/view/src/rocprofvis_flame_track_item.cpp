@@ -313,8 +313,7 @@ FlameTrackItem::RenderChart(float graph_width)
     }
 
     // This is here to check for universal event clear.
-    std::vector<uint64_t> event_ids;
-    if(m_timeline_selection->GetSelectedEvents(event_ids) == false)
+    if(!m_timeline_selection->HasSelectedEvents())
     {
         m_selected_chart_items.clear();
     }

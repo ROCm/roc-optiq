@@ -1,4 +1,4 @@
-name: Windows Release with Symbols Build and Package
+name: Windows Build and Package Release and Release with Debug Symbols
 run-name: rocprofiler-visualizer-windows-relwithdbg-build-package
 
 on:

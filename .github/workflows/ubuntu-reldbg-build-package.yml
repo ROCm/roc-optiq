@@ -1,5 +1,5 @@
-name: Ubuntu Build and Package
-run-name: rocprofiler-visualizer-ubuntu-build-package
+name: Ubuntu Build and Package Release with Debug Symbols
+run-name: rocprofiler-visualizer-reldbg-ubuntu-build-package
 
 on:
   workflow_dispatch:

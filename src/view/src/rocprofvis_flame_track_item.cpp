@@ -312,6 +312,13 @@ FlameTrackItem::RenderChart(float graph_width)
         DrawBox(start_position, color_index, item, normalized_duration, draw_list);
     }
 
+    // This is here to check for universal event clear.
+    std::vector<uint64_t> event_ids;
+    if(m_timeline_selection->GetSelectedEvents(event_ids) == false)
+    {
+        m_selected_chart_items.clear();
+    }
+                   
     for(ChartItem& item : m_selected_chart_items)
     {
         ImVec2 container_pos = ImGui::GetWindowPos();

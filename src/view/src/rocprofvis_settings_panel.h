@@ -53,6 +53,7 @@ private:
     const UserSettings& m_usersettings_default;
     // Copy of settings on Show().
     UserSettings m_usersettings_initial;
+    UserSettings m_usersettings_previous;
     // Seperate store for font settings to keep changes isolated to preview.
     FontSettings m_font_settings;
 };

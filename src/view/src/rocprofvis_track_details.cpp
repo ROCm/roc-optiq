@@ -56,12 +56,20 @@ TrackDetails::Render()
                         ImGui::TextUnformatted(detail.queue->info->name.c_str());
                         RenderTable(detail.queue->info_table);
                     }
-                    else if(detail.thread)
+                    else if(detail.instrumented_thread)
                     {
                         ImGui::TextUnformatted("Thread: ");
                         ImGui::SameLine();
-                        ImGui::TextUnformatted(detail.thread->info->name.c_str());
-                        RenderTable(detail.thread->info_table);
+                        ImGui::TextUnformatted(
+                            detail.instrumented_thread->info->name.c_str());
+                        RenderTable(detail.instrumented_thread->info_table);
+                    }
+                    else if(detail.sampled_thread)
+                    {
+                        ImGui::TextUnformatted("Thread: ");
+                        ImGui::SameLine();
+                        ImGui::TextUnformatted(detail.sampled_thread->info->name.c_str());
+                        RenderTable(detail.sampled_thread->info_table);
                     }
                     else if(detail.counter)
                     {
@@ -120,11 +128,21 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case track_info_t::Topology::Thread:
+                            case track_info_t::Topology::InstrumentedThread:
                             {
-                                if(process.thread_lut.count(type_id) > 0)
+                                if(process.instrumented_thread_lut.count(type_id) > 0)
                                 {
-                                    item.thread = process.thread_lut.at(type_id);
+                                    item.instrumented_thread =
+                                        process.instrumented_thread_lut.at(type_id);
+                                }
+                                break;
+                            }
+                            case track_info_t::Topology::SampledThread:
+                            {
+                                if(process.sampled_thread_lut.count(type_id) > 0)
+                                {
+                                    item.sampled_thread =
+                                        process.sampled_thread_lut.at(type_id);
                                 }
                                 break;
                             }

@@ -205,38 +205,92 @@ TrackTopology::UpdateTopology()
                                 }
                             }
                         }
-                        
-                        const std::vector<uint64_t>& thread_ids =
-                            process_info->thread_ids;
-                        m_topology.nodes[i].processes[j].threads.resize(
-                            thread_ids.size());
-                        m_topology.nodes[i].processes[j].thread_header =
-                            "Threads (" + std::to_string(thread_ids.size()) + ")";
-                        for(int k = 0; k < thread_ids.size(); k++)
+
+                        const std::vector<uint64_t>& instrumented_thread_ids =
+                            process_info->instrumented_thread_ids;
+                        m_topology.nodes[i].processes[j].instrumented_threads.resize(
+                            instrumented_thread_ids.size());
+                        m_topology.nodes[i].processes[j].instrumented_thread_header =
+                            "Threads (" + std::to_string(instrumented_thread_ids.size()) +
+                            ")";
+                        for(int k = 0; k < instrumented_thread_ids.size(); k++)
                         {
-                            m_topology.nodes[i].processes[j].thread_lut[thread_ids[k]] =
-                                &m_topology.nodes[i].processes[j].threads[k];
+                            m_topology.nodes[i]
+                                .processes[j]
+                                .instrumented_thread_lut[instrumented_thread_ids[k]] =
+                                &m_topology.nodes[i].processes[j].instrumented_threads[k];
                             const thread_info_t* thread_info =
-                                m_data_provider.GetThreadInfo(thread_ids[k]);
+                                m_data_provider.GetInstrumentedThreadInfo(instrumented_thread_ids[k]);
                             if(thread_info)
                             {
-                                m_topology.nodes[i].processes[j].threads[k].info =
+                                m_topology.nodes[i]
+                                    .processes[j]
+                                    .instrumented_threads[k]
+                                    .info = thread_info;
+                                m_topology.nodes[i]
+                                    .processes[j]
+                                    .instrumented_threads[k]
+                                    .info_table = InfoTable{ {
+                                    { InfoTable::Cell{ "Start Time", false },
+                                      InfoTable::Cell{
+                                          std::to_string(thread_info->start_time), false,
+                                          true,
+                                          [this](const std::string& raw,
+                                                 std::string&       formatted_out) {
+                                              return FormatTimeCell(raw, formatted_out);
+                                          } } },
+                                    { InfoTable::Cell{ "End Time", false },
+                                      InfoTable::Cell{
+                                          std::to_string(thread_info->end_time), false,
+                                          true,
+                                          [this](const std::string& raw,
+                                                 std::string&       formatted_out) {
+                                              return FormatTimeCell(raw, formatted_out);
+                                          } } },
+                                } };
+                            }
+                        }
+
+                        const std::vector<uint64_t>& sampled_thread_ids =
+                            process_info->sampled_thread_ids;
+                        m_topology.nodes[i].processes[j].sampled_threads.resize(
+                            sampled_thread_ids.size());
+                        m_topology.nodes[i].processes[j].sampled_thread_header =
+                            "Sample Threads (" +
+                            std::to_string(sampled_thread_ids.size()) + ")";
+                        for(int k = 0; k < sampled_thread_ids.size(); k++)
+                        {
+                            m_topology.nodes[i]
+                                .processes[j]
+                                .sampled_thread_lut[sampled_thread_ids[k]] =
+                                &m_topology.nodes[i].processes[j].sampled_threads[k];
+                            const thread_info_t* thread_info =
+                                m_data_provider.GetSampledThreadInfo(sampled_thread_ids[k]);
+                            if(thread_info)
+                            {
+                                m_topology.nodes[i].processes[j].sampled_threads[k].info =
                                     thread_info;
-                                m_topology.nodes[i].processes[j].threads[k].info_table =
-                                    InfoTable{ {
-                                        { InfoTable::Cell{ "Start Time", false },
-                                          InfoTable::Cell{
-                                              std::to_string(thread_info->start_time),
-                                              false, true, [this](const std::string& raw, std::string& formatted_out) {
-                                                  return FormatTimeCell(raw, formatted_out);
-                                              } } },
-                                        { InfoTable::Cell{ "End Time", false },
-                                          InfoTable::Cell{
-                                              std::to_string(thread_info->end_time),
-                                              false, true, [this](const std::string& raw, std::string& formatted_out) {
-                                                  return FormatTimeCell(raw, formatted_out);
-                                              } } },                               
-                                    } };
+                                m_topology.nodes[i]
+                                    .processes[j]
+                                    .sampled_threads[k]
+                                    .info_table = InfoTable{ {
+                                    { InfoTable::Cell{ "Start Time", false },
+                                      InfoTable::Cell{
+                                          std::to_string(thread_info->start_time), false,
+                                          true,
+                                          [this](const std::string& raw,
+                                                 std::string&       formatted_out) {
+                                              return FormatTimeCell(raw, formatted_out);
+                                          } } },
+                                    { InfoTable::Cell{ "End Time", false },
+                                      InfoTable::Cell{
+                                          std::to_string(thread_info->end_time), false,
+                                          true,
+                                          [this](const std::string& raw,
+                                                 std::string&       formatted_out) {
+                                              return FormatTimeCell(raw, formatted_out);
+                                          } } },
+                                } };
                             }
                         }
                         const std::vector<uint64_t>& counter_ids =
@@ -314,7 +368,20 @@ TrackTopology::FormatCells()
                 }
             }
             // Format child tables
-            for(auto& t : process.threads)
+            for(auto& t : process.instrumented_threads)
+            {
+                for(auto& row : t.info_table.cells)
+                {
+                    for(auto& cell : row)
+                    {
+                        if(cell.needs_format && cell.formatter)
+                        {
+                            cell.formatter(cell.data, cell.formatted);
+                        }
+                    }
+                }
+            }
+            for(auto& t : process.sampled_threads)
             {
                 for(auto& row : t.info_table.cells)
                 {
@@ -412,11 +479,19 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case track_info_t::Topology::Thread:
+                    case track_info_t::Topology::InstrumentedThread:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
-                            ->thread_lut[id]
+                            ->instrumented_thread_lut[id]
+                            ->graph_index = index;
+                        break;
+                    }
+                    case track_info_t::Topology::SampledThread:
+                    {
+                        m_topology.node_lut[node_id]
+                            ->process_lut[process_id]
+                            ->sampled_thread_lut[id]
                             ->graph_index = index;
                         break;
                     }

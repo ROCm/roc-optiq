@@ -216,11 +216,21 @@ DataProvider::GetProcessInfo(uint64_t process_id) const
 }
 
 const thread_info_t*
-DataProvider::GetThreadInfo(uint64_t thread_id) const
+DataProvider::GetInstrumentedThreadInfo(uint64_t thread_id) const
 {
-    if(m_thread_infos.count(thread_id) > 0)
+    if(m_instrumented_thread_infos.count(thread_id) > 0)
     {
-        return &m_thread_infos.at(thread_id);
+        return &m_instrumented_thread_infos.at(thread_id);
+    }
+    return nullptr;
+}
+
+const thread_info_t*
+DataProvider::GetSampledThreadInfo(uint64_t thread_id) const
+{
+    if(m_sampled_thread_infos.count(thread_id) > 0)
+    {
+        return &m_sampled_thread_infos.at(thread_id);
     }
     return nullptr;
 }
@@ -690,7 +700,8 @@ DataProvider::HandleLoadSystemTopology()
             result = rocprofvis_controller_get_uint64(
                 process_handle, kRPVControllerProcessNumThreads, 0, &num_threads);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            process_info.thread_ids.reserve(num_threads);
+            process_info.instrumented_thread_ids.reserve(num_threads);
+            process_info.sampled_thread_ids.reserve(num_threads);
             // Query threads...
             for(int k = 0; k < num_threads; k++)
             {
@@ -699,11 +710,11 @@ DataProvider::HandleLoadSystemTopology()
                     process_handle, kRPVControllerProcessThreadIndexed, k,
                     &thread_handle);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && thread_handle);
-                rocprofvis_handle_t* track;
-                result = rocprofvis_controller_get_object(
-                    thread_handle, kRPVControllerThreadTrack, 0, &track);
+                uint64_t thread_type;
+                result = rocprofvis_controller_get_uint64(
+                    thread_handle, kRPVControllerThreadType, 0, &thread_type);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                if(track)
+                if(thread_type != kRPVControllerThreadTypeUndefined)
                 {
                     thread_info_t thread_info;
                     result = rocprofvis_controller_get_uint64(
@@ -719,8 +730,17 @@ DataProvider::HandleLoadSystemTopology()
                                                               kRPVControllerThreadEndTime,
                                                               0, &thread_info.end_time);
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                    process_info.thread_ids.push_back(thread_info.id);
-                    m_thread_infos[thread_info.id] = std::move(thread_info);
+                    if(thread_type == kRPVControllerThreadTypeInstrumented)
+                    {
+                        process_info.instrumented_thread_ids.push_back(thread_info.id);
+                        m_instrumented_thread_infos[thread_info.id] =
+                            std::move(thread_info);
+                    }
+                    else if(thread_type == kRPVControllerThreadTypeSampled)
+                    {
+                        process_info.sampled_thread_ids.push_back(thread_info.id);
+                        m_sampled_thread_infos[thread_info.id] = std::move(thread_info);
+                    }
                 }
             }
             uint64_t num_queues;
@@ -999,7 +1019,15 @@ DataProvider::HandleLoadTrackMetaData()
                 result = rocprofvis_controller_get_object(
                     thread, kRPVControllerThreadNode, 0, &node);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                track_info.topology.type = track_info_t::Topology::Thread;
+                uint64_t type;
+                result = rocprofvis_controller_get_uint64(
+                    thread, kRPVControllerThreadType, 0, &type);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
+                                  type != kRPVControllerThreadTypeUndefined);
+                track_info.topology.type =
+                    type == kRPVControllerThreadTypeInstrumented
+                        ? track_info_t::Topology::InstrumentedThread
+                        : track_info_t::Topology::SampledThread;
             }
             else if(counter)
             {

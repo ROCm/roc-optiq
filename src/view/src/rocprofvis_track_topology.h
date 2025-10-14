@@ -44,9 +44,12 @@ struct ProcessModel
     std::string                                  stream_header;
     std::vector<IterableModel>                   streams;
     std::unordered_map<uint64_t, IterableModel*> stream_lut;
-    std::string                                  thread_header;
-    std::vector<IterableModel>                   threads;
-    std::unordered_map<uint64_t, IterableModel*> thread_lut;
+    std::string                                  instrumented_thread_header;
+    std::vector<IterableModel>                   instrumented_threads;
+    std::unordered_map<uint64_t, IterableModel*> instrumented_thread_lut;
+    std::string                                  sampled_thread_header;
+    std::vector<IterableModel>                   sampled_threads;
+    std::unordered_map<uint64_t, IterableModel*> sampled_thread_lut;
     std::string                                  counter_header;
     std::vector<IterableModel>                   counters;
     std::unordered_map<uint64_t, IterableModel*> counter_lut;

@@ -8,7 +8,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 
-
 namespace RocProfVis
 {
 namespace View
@@ -18,8 +17,8 @@ constexpr ImGuiTreeNodeFlags CATEGORY_HEADER_FLAGS =
     ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanLabelWidth;
 constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
 
-SideBar::SideBar(std::shared_ptr<TrackTopology>     topology,
-                 std::shared_ptr<TimelineSelection> timeline_selection,
+SideBar::SideBar(std::shared_ptr<TrackTopology>                   topology,
+                 std::shared_ptr<TimelineSelection>               timeline_selection,
                  std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
                  DataProvider&                                    dp)
 : m_settings(SettingsManager::GetInstance())
@@ -27,6 +26,7 @@ SideBar::SideBar(std::shared_ptr<TrackTopology>     topology,
 , m_timeline_selection(timeline_selection)
 , m_graphs(graphs)
 , m_data_provider(dp)
+, m_root_eye_button_state(EyeButtonState::kMixed)
 {}
 
 SideBar::~SideBar() {}
@@ -45,7 +45,6 @@ SideBar::Render()
 
         const TopologyModel& topology = m_track_topology->GetTopology();
 
-
         if(m_root_eye_button_state == EyeButtonState::kAllVisible)
         {
             topology.all_subitems_hidden = false;
@@ -61,9 +60,10 @@ SideBar::Render()
         }
         ImGui::SameLine();
 
-        if(ImGui::TreeNodeEx("Project", CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
+        if(ImGui::TreeNodeEx("Project",
+                             CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
         {
-            if (!topology.nodes.empty())
+            if(!topology.nodes.empty())
             {
                 m_root_eye_button_state =
                     DrawTopology(topology, m_root_eye_button_state, false);
@@ -75,7 +75,7 @@ SideBar::Render()
                 else
                 {
                     topology.all_subitems_hidden = false;
-                }          
+                }
             }
             if(m_root_eye_button_state == EyeButtonState::kAllHidden)
             {
@@ -85,7 +85,7 @@ SideBar::Render()
             {
                 UnhideAllUncategorizedItems(topology.uncategorized_graph_indices);
             }
-            
+
             if(!topology.uncategorized_graph_indices.empty())
             {
                 bool use_header  = !topology.nodes.empty();
@@ -126,11 +126,11 @@ SideBar::Update()
 bool
 SideBar::RenderTrackItem(const int& index)
 {
-    bool stateChanged = false;
+    bool state_changed = false;
 
     if(!m_graphs || m_graphs->empty())
     {
-        return stateChanged;
+        return state_changed;
     }
     rocprofvis_graph_t& graph = (*m_graphs)[index];
 
@@ -146,7 +146,7 @@ SideBar::RenderTrackItem(const int& index)
     {
         graph.display         = !graph.display;
         graph.display_changed = true;
-        stateChanged = true;
+        state_changed         = true;
     }
     ImGui::PopFont();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
@@ -181,26 +181,26 @@ SideBar::RenderTrackItem(const int& index)
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                               m_settings.GetColor(Colors::kTransparent));
     }
-    if (!display)
+    if(!display)
     {
         ImGui::PushStyleColor(ImGuiCol_Text,
-            ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+                              ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     }
-    if (ImGui::Button(graph.chart->GetName().c_str()))
+    if(ImGui::Button(graph.chart->GetName().c_str()))
     {
         m_timeline_selection->ToggleSelectTrack(graph);
     }
-    if (!display)
+    if(!display)
     {
         ImGui::PopStyleColor();
     }
-    if (!highlight)
+    if(!highlight)
     {
         ImGui::PopStyleColor(3);
     }
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     // Lets you know if component is in Frame. Dev purpose only.
-    if (graph.chart->IsInViewVertical())
+    if(graph.chart->IsInViewVertical())
     {
         ImGui::TextColored(
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
@@ -224,19 +224,19 @@ SideBar::RenderTrackItem(const int& index)
     }
 #endif
     ImGui::PopID();
-    return stateChanged;
+    return state_changed;
 }
 
 bool
 SideBar::IsAllSubItemsHidden(const std::vector<IterableModel>& container)
 {
     bool all_hidden = true;
-    if (m_graphs && !m_graphs->empty())
+    if(m_graphs && !m_graphs->empty())
     {
-        for (const IterableModel& elem : container)
+        for(const IterableModel& elem : container)
         {
             rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
-            if (graph.display)
+            if(graph.display)
             {
                 all_hidden = false;
                 break;
@@ -249,12 +249,12 @@ SideBar::IsAllSubItemsHidden(const std::vector<IterableModel>& container)
 void
 SideBar::HideAllSubItems(const std::vector<IterableModel>& container)
 {
-    if (m_graphs && !m_graphs->empty())
+    if(m_graphs && !m_graphs->empty())
     {
-        for (const IterableModel& elem : container)
+        for(const IterableModel& elem : container)
         {
             rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
-            if (graph.display == true)
+            if(graph.display == true)
             {
                 graph.display         = false;
                 graph.display_changed = true;
@@ -266,9 +266,9 @@ SideBar::HideAllSubItems(const std::vector<IterableModel>& container)
 void
 SideBar::HideAllUncategorizedItems(const std::vector<uint64_t>& indices)
 {
-    if (m_graphs && !m_graphs->empty())
+    if(m_graphs && !m_graphs->empty())
     {
-        for (const uint64_t& index : indices)
+        for(const uint64_t& index : indices)
         {
             rocprofvis_graph_t& graph = (*m_graphs)[index];
             if(graph.display == true)
@@ -292,7 +292,7 @@ SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
             {
                 graph.display         = true;
                 graph.display_changed = true;
-            }            
+            }
         }
     }
 }
@@ -300,39 +300,39 @@ SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
 void
 SideBar::UnhideAllSubItems(const std::vector<IterableModel>& container)
 {
-    if (m_graphs && !m_graphs->empty())
+    if(m_graphs && !m_graphs->empty())
     {
-        for (const IterableModel& elem : container)
+        for(const IterableModel& elem : container)
         {
             rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
             if(graph.display == false)
             {
                 graph.display         = true;
                 graph.display_changed = true;
-            }            
+            }
         }
     }
 }
 
 SideBar::EyeButtonState
 SideBar::DrawTopology(const TopologyModel& topology,
-    EyeButtonState parentEyeButtonState, bool show_eye_button)
+                      EyeButtonState parent_eye_button_state, bool show_eye_button)
 {
-    if(parentEyeButtonState == EyeButtonState::kAllVisible)
+    if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
         topology.all_subitems_hidden = false;
     }
     ImGui::Indent();
-    EyeButtonState newButtonState = parentEyeButtonState;
+    EyeButtonState new_button_state = parent_eye_button_state;
     if(show_eye_button)
     {
         if(topology.all_subitems_hidden)
         {
-            newButtonState = DrawEyeButton(EyeButtonState::kAllHidden);
+            new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
         }
         else
         {
-            newButtonState = DrawEyeButton(parentEyeButtonState);
+            new_button_state = DrawEyeButton(parent_eye_button_state);
         }
         ImGui::SameLine();
     }
@@ -340,8 +340,8 @@ SideBar::DrawTopology(const TopologyModel& topology,
     if(ImGui::TreeNodeEx(topology.node_header.c_str(),
                          CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
     {
-        newButtonState = DrawNodes(topology.nodes, newButtonState, false);
-        if(newButtonState == EyeButtonState::kAllHidden)
+        new_button_state = DrawNodes(topology.nodes, new_button_state, false);
+        if(new_button_state == EyeButtonState::kAllHidden)
         {
             topology.all_subitems_hidden = true;
         }
@@ -351,22 +351,21 @@ SideBar::DrawTopology(const TopologyModel& topology,
         }
         ImGui::TreePop();
     }
-    return newButtonState;
+    return new_button_state;
 }
 
 SideBar::EyeButtonState
 SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
-    EyeButtonState parentEyeButtonState,
-    bool show_eye_button)
+                   EyeButtonState parent_eye_button_state, bool show_eye_button)
 {
-    if (parentEyeButtonState == EyeButtonState::kAllVisible)
+    if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
-        for (const auto& node : nodes)
+        for(const auto& node : nodes)
         {
             node.all_subitems_hidden = false;
         }
     }
-    EyeButtonState newButtonState = parentEyeButtonState;
+    EyeButtonState new_button_state = parent_eye_button_state;
     for(const NodeModel& node : nodes)
     {
         if(node.info)
@@ -375,11 +374,11 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
             {
                 if(node.all_subitems_hidden)
                 {
-                    newButtonState = DrawEyeButton(EyeButtonState::kAllHidden);
+                    new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
                 }
                 else
                 {
-                    newButtonState = DrawEyeButton(parentEyeButtonState);
+                    new_button_state = DrawEyeButton(parent_eye_button_state);
                 }
                 ImGui::SameLine();
             }
@@ -388,8 +387,8 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
             if(ImGui::TreeNodeEx(node.info->host_name.c_str(),
                                  CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
             {
-                newButtonState = DrawNode(node, newButtonState, false);
-                if(newButtonState == EyeButtonState::kAllHidden)
+                new_button_state = DrawNode(node, new_button_state, false);
+                if(new_button_state == EyeButtonState::kAllHidden)
                 {
                     node.all_subitems_hidden = true;
                 }
@@ -402,28 +401,28 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
             ImGui::PopID();
         }
     }
-    return newButtonState;
+    return new_button_state;
 }
 
 SideBar::EyeButtonState
-SideBar::DrawNode(const NodeModel& node,
-    EyeButtonState parentEyeButtonState, bool show_eye_button)
+SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
+                  bool show_eye_button)
 {
-    if(parentEyeButtonState == EyeButtonState::kAllVisible)
+    if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
         node.all_subitems_hidden = false;
     }
-    EyeButtonState newButtonState = parentEyeButtonState;
+    EyeButtonState new_button_state = parent_eye_button_state;
 
     if(show_eye_button)
     {
         if(node.all_subitems_hidden)
         {
-            newButtonState = DrawEyeButton(EyeButtonState::kAllHidden);
+            new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
         }
         else
         {
-            newButtonState = DrawEyeButton(parentEyeButtonState);
+            new_button_state = DrawEyeButton(parent_eye_button_state);
         }
         ImGui::SameLine();
     }
@@ -433,8 +432,8 @@ SideBar::DrawNode(const NodeModel& node,
 
     if(!node.processes.empty() && open)
     {
-        newButtonState = DrawProcesses(node.processes, newButtonState, false);
-        if(newButtonState == EyeButtonState::kAllHidden)
+        new_button_state = DrawProcesses(node.processes, new_button_state, false);
+        if(new_button_state == EyeButtonState::kAllHidden)
         {
             node.all_subitems_hidden = true;
         }
@@ -445,15 +444,14 @@ SideBar::DrawNode(const NodeModel& node,
 
         ImGui::TreePop();
     }
-    return newButtonState;
+    return new_button_state;
 }
 
 SideBar::EyeButtonState
 SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
-                       EyeButtonState                   parentEyeButtonState,
-                       bool                             show_eye_button)
+                       EyeButtonState parent_eye_button_state, bool show_eye_button)
 {
-    if(parentEyeButtonState == EyeButtonState::kAllVisible)
+    if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
         for(const auto& process : processes)
         {
@@ -461,103 +459,113 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
         }
     }
 
-    EyeButtonState allProcessesState = EyeButtonState::kAllHidden;
-    for(const ProcessModel& process : processes)     
+    EyeButtonState all_process_state = EyeButtonState::kAllHidden;
+    for(const ProcessModel& process : processes)
     {
         if(process.info)
         {
-            EyeButtonState queueButtonState   = parentEyeButtonState;
-            EyeButtonState streamButtonState  = parentEyeButtonState;
-            EyeButtonState threadButtonState  = parentEyeButtonState;
-            EyeButtonState counterButtonState = parentEyeButtonState;
+            EyeButtonState queue_button_state               = parent_eye_button_state;
+            EyeButtonState stream_button_state              = parent_eye_button_state;
+            EyeButtonState instrumented_thread_button_state = parent_eye_button_state;
+            EyeButtonState sampled_thread_button_state      = parent_eye_button_state;
+            EyeButtonState counter_button_state             = parent_eye_button_state;
             ImGui::PushID(process.info->id);
 
-            EyeButtonState currentEyeButtonState = parentEyeButtonState;
-            if (show_eye_button)
+            EyeButtonState current_eye_button_state = parent_eye_button_state;
+            if(show_eye_button)
             {
                 if(process.all_subitems_hidden)
                 {
-                    currentEyeButtonState = DrawEyeButton(EyeButtonState::kAllHidden);
+                    current_eye_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
                 }
                 else
                 {
-                    currentEyeButtonState = DrawEyeButton(parentEyeButtonState);
+                    current_eye_button_state = DrawEyeButton(parent_eye_button_state);
                 }
                 ImGui::SameLine();
             }
-            
+
             if(ImGui::TreeNodeEx(process.header.c_str(),
                                  CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
             {
                 ImGui::Indent();
                 if(!process.queues.empty())
                 {
-                    queueButtonState = DrawCollapsable(
-                        process.queues, process.queue_header, currentEyeButtonState);
+                    queue_button_state = DrawCollapsable(
+                        process.queues, process.queue_header, current_eye_button_state);
                 }
                 if(!process.streams.empty())
                 {
-                    streamButtonState = DrawCollapsable(
-                        process.streams, process.stream_header, currentEyeButtonState);
+                    stream_button_state = DrawCollapsable(
+                        process.streams, process.stream_header, current_eye_button_state);
                 }
-                if(!process.threads.empty())
+                if(!process.instrumented_threads.empty())
                 {
-                    threadButtonState = DrawCollapsable(
-                        process.threads, process.thread_header, currentEyeButtonState);
+                    instrumented_thread_button_state = DrawCollapsable(
+                        process.instrumented_threads, process.instrumented_thread_header,
+                        current_eye_button_state);
+                }
+                if(!process.sampled_threads.empty())
+                {
+                    sampled_thread_button_state = DrawCollapsable(
+                        process.sampled_threads, process.sampled_thread_header,
+                        current_eye_button_state);
                 }
                 if(!process.counters.empty())
                 {
-                    counterButtonState = DrawCollapsable(
-                        process.counters, process.counter_header, currentEyeButtonState);
+                    counter_button_state =
+                        DrawCollapsable(process.counters, process.counter_header,
+                                        current_eye_button_state);
                 }
                 ImGui::TreePop();
                 ImGui::Unindent();
             }
 
-            if(queueButtonState == EyeButtonState::kAllHidden &&
-               streamButtonState == EyeButtonState::kAllHidden &&
-               threadButtonState == EyeButtonState::kAllHidden &&
-               counterButtonState == EyeButtonState::kAllHidden)
+            if(queue_button_state == EyeButtonState::kAllHidden &&
+               stream_button_state == EyeButtonState::kAllHidden &&
+               instrumented_thread_button_state == EyeButtonState::kAllHidden &&
+               sampled_thread_button_state == EyeButtonState::kAllHidden &&
+               counter_button_state == EyeButtonState::kAllHidden)
             {
                 process.all_subitems_hidden = true;
-                allProcessesState = EyeButtonState::kAllHidden;
+                all_process_state           = EyeButtonState::kAllHidden;
             }
             else
             {
                 process.all_subitems_hidden = false;
-                allProcessesState = EyeButtonState::kMixed;
+                all_process_state           = EyeButtonState::kMixed;
             }
             ImGui::PopID();
         }
     }
-    return allProcessesState;
+    return all_process_state;
 }
 
 SideBar::EyeButtonState
 SideBar::DrawCollapsable(const std::vector<IterableModel>& container,
                          const std::string&                collapsable_header,
-                         EyeButtonState                    parentEyeButtonState)
+                         EyeButtonState                    parent_eye_button_state)
 {
     ImGui::PushID(collapsable_header.c_str());
-    if(parentEyeButtonState == EyeButtonState::kAllVisible)
+    if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
         UnhideAllSubItems(container);
     }
-    EyeButtonState newButtonState = parentEyeButtonState;
+    EyeButtonState new_button_state = parent_eye_button_state;
     if(IsAllSubItemsHidden(container))
     {
-        newButtonState = DrawEyeButton(EyeButtonState::kAllHidden);        
+        new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
     }
     else
     {
-        newButtonState = DrawEyeButton(parentEyeButtonState);
+        new_button_state = DrawEyeButton(parent_eye_button_state);
     }
-    
-    if(newButtonState == EyeButtonState::kAllHidden)
+
+    if(new_button_state == EyeButtonState::kAllHidden)
     {
         HideAllSubItems(container);
     }
-    else if(newButtonState == EyeButtonState::kAllVisible)
+    else if(new_button_state == EyeButtonState::kAllVisible)
     {
         UnhideAllSubItems(container);
     }
@@ -574,7 +582,7 @@ SideBar::DrawCollapsable(const std::vector<IterableModel>& container,
             {
                 if(RenderTrackItem(item.graph_index))
                 {
-                    newButtonState = EyeButtonState::kMixed;
+                    new_button_state = EyeButtonState::kMixed;
                 }
             }
         }
@@ -582,11 +590,11 @@ SideBar::DrawCollapsable(const std::vector<IterableModel>& container,
         ImGui::Unindent();
     }
     ImGui::PopID();
-    return newButtonState;
+    return new_button_state;
 }
 
 SideBar::EyeButtonState
-SideBar::DrawEyeButton(EyeButtonState eyeButtonState)
+SideBar::DrawEyeButton(EyeButtonState eye_button_state)
 {
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
@@ -599,19 +607,19 @@ SideBar::DrawEyeButton(EyeButtonState eyeButtonState)
     float  button_w = eye_size.x + ImGui::GetStyle().FramePadding.x * 2;
     float  button_h = eye_size.y + ImGui::GetStyle().FramePadding.y * 2;
 
-    EyeButtonState newButtonState = eyeButtonState;
-    if(ImGui::Button(eyeButtonState == EyeButtonState::kAllHidden ? ICON_EYE_SLASH
-                                                                  : ICON_EYE,
+    EyeButtonState new_button_state = eye_button_state;
+    if(ImGui::Button(eye_button_state == EyeButtonState::kAllHidden ? ICON_EYE_SLASH
+                                                                    : ICON_EYE,
                      ImVec2(button_w, button_h)))
     {
-        if(eyeButtonState == EyeButtonState::kAllHidden)
+        if(eye_button_state == EyeButtonState::kAllHidden)
         {
-            newButtonState = EyeButtonState::kAllVisible;
+            new_button_state = EyeButtonState::kAllVisible;
         }
-        else if(eyeButtonState == EyeButtonState::kAllVisible ||
-                eyeButtonState == EyeButtonState::kMixed)
+        else if(eye_button_state == EyeButtonState::kAllVisible ||
+                eye_button_state == EyeButtonState::kMixed)
         {
-            newButtonState = EyeButtonState::kAllHidden;
+            new_button_state = EyeButtonState::kAllHidden;
         }
     }
     ImGui::PopFont();
@@ -624,7 +632,7 @@ SideBar::DrawEyeButton(EyeButtonState eyeButtonState)
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
 
-    return newButtonState;
+    return new_button_state;
 }
 
 bool

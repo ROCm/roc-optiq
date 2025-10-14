@@ -332,7 +332,15 @@ typedef enum rocprofvis_controller_thread_properties_t
     kRPVControllerThreadStartTime = 0xF2000007,
     kRPVControllerThreadEndTime   = 0xF2000008,
     kRPVControllerThreadTrack     = 0xF2000009,
+    kRPVControllerThreadType      = 0xF2000010,
 } rocprofvis_controller_thread_properties_t;
+
+typedef enum rocprofvis_controller_thread_type_t
+{
+    kRPVControllerThreadTypeUndefined = 0,
+    kRPVControllerThreadTypeInstrumented = 1,
+    kRPVControllerThreadTypeSampled = 2,
+} rocprofvis_controller_thread_type_t;
 
 typedef enum rocprofvis_controller_queue_properties_t
 {

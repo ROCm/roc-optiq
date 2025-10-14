@@ -1,12 +1,12 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
+#include "rocprofvis_track_topology.h"
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
-#include "rocprofvis_track_topology.h"
 
-#include <vector>
 #include <optional>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -21,10 +21,9 @@ class DataProvider;
 class SideBar : public RocWidget
 {
 public:
-    SideBar(std::shared_ptr<TrackTopology>     topology,
-            std::shared_ptr<TimelineSelection> timeline_selection,
-            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
-            DataProvider &dp);
+    SideBar(std::shared_ptr<TrackTopology>                   topology,
+            std::shared_ptr<TimelineSelection>               timeline_selection,
+            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs, DataProvider& dp);
     ~SideBar();
     virtual void Render() override;
     virtual void Update() override;
@@ -44,36 +43,34 @@ private:
     void UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices);
     void UnhideAllSubItems(const std::vector<IterableModel>& container);
 
-    EyeButtonState DrawTopology(const TopologyModel&          topology,
-                                EyeButtonState                parentEyeButtonState,
-                                bool                          show_eye_button = true);
+    EyeButtonState DrawTopology(const TopologyModel& topology,
+                                EyeButtonState       parent_eye_button_state,
+                                bool                 show_eye_button = true);
 
     EyeButtonState DrawNodes(const std::vector<NodeModel>& nodes,
-                             EyeButtonState                parentEyeButtonState,
+                             EyeButtonState                parent_eye_button_state,
                              bool                          show_eye_button = true);
-    
-    EyeButtonState DrawNode(const NodeModel& node,
-                                       EyeButtonState parentEyeButtonState,
-                                       bool           show_eye_button = true);
+
+    EyeButtonState DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
+                            bool show_eye_button = true);
 
     EyeButtonState DrawProcesses(const std::vector<ProcessModel>& processes,
-                                 EyeButtonState                   parentEyeButtonState, 
-                                 bool show_eye_button = true);
+                                 EyeButtonState                   parent_eye_button_state,
+                                 bool                             show_eye_button = true);
 
     EyeButtonState DrawCollapsable(const std::vector<IterableModel>& container,
                                    const std::string&                collapsable_header,
-                                   EyeButtonState                    parentEyeButtonState);
+                                   EyeButtonState parent_eye_button_state);
 
+    EyeButtonState DrawEyeButton(EyeButtonState eye_button_state);
+    bool           IsEyeButtonVisible();
 
-    EyeButtonState DrawEyeButton(EyeButtonState parentEyeButtonState);
-    bool IsEyeButtonVisible();
-
-    SettingsManager&                   m_settings;
-    std::shared_ptr<TrackTopology>     m_track_topology;
-    std::shared_ptr<TimelineSelection> m_timeline_selection;
-    std::shared_ptr<std::vector<rocprofvis_graph_t>>   m_graphs;
-    DataProvider &                     m_data_provider;
-    EyeButtonState m_root_eye_button_state = EyeButtonState::kMixed;
+    SettingsManager&                                 m_settings;
+    std::shared_ptr<TrackTopology>                   m_track_topology;
+    std::shared_ptr<TimelineSelection>               m_timeline_selection;
+    std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
+    DataProvider&                                    m_data_provider;
+    EyeButtonState                                   m_root_eye_button_state;
 };
 
 }  // namespace View

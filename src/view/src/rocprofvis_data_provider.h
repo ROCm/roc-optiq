@@ -69,7 +69,8 @@ typedef struct track_info_t
             Unknown,
             Queue,
             Stream,
-            Thread,
+            InstrumentedThread,
+            SampledThread,
             Counter
         } type;
         uint64_t id;  // ID of queue/stream/thread/counter
@@ -135,15 +136,17 @@ typedef struct device_info_t
 
 typedef struct process_info_t
 {
-    uint64_t              id;
-    double                start_time;
-    double                end_time;
-    std::string           command;
-    std::string           environment;
-    std::vector<uint64_t> thread_ids;   // IDs of this process' threads
-    std::vector<uint64_t> queue_ids;    // IDs of this process' queues
-    std::vector<uint64_t> stream_ids;   // IDs of this process' streams
-    std::vector<uint64_t> counter_ids;  // IDs of this process' counters
+    uint64_t    id;
+    double      start_time;
+    double      end_time;
+    std::string command;
+    std::string environment;
+    std::vector<uint64_t>
+        instrumented_thread_ids;  // IDs of this process' instrumented threads
+    std::vector<uint64_t> sampled_thread_ids;  // IDs of this process' sampled threads
+    std::vector<uint64_t> queue_ids;           // IDs of this process' queues
+    std::vector<uint64_t> stream_ids;          // IDs of this process' streams
+    std::vector<uint64_t> counter_ids;         // IDs of this process' counters
 } process_info_t;
 
 typedef struct iterable_info_t
@@ -533,7 +536,8 @@ public:
     std::vector<const node_info_t*> GetNodeInfoList() const;
     const device_info_t*            GetDeviceInfo(uint64_t device_id) const;
     const process_info_t*           GetProcessInfo(uint64_t process_id) const;
-    const thread_info_t*            GetThreadInfo(uint64_t thread_id) const;
+    const thread_info_t*            GetInstrumentedThreadInfo(uint64_t thread_id) const;
+    const thread_info_t*            GetSampledThreadInfo(uint64_t thread_id) const;
     const queue_info_t*             GetQueueInfo(uint64_t queue_id) const;
     const stream_info_t*            GetStreamInfo(uint64_t stream_id) const;
     const counter_info_t*           GetCounterInfo(uint64_t counter_id) const;
@@ -618,7 +622,8 @@ private:
     std::unordered_map<uint64_t, node_info_t>    m_node_infos;
     std::unordered_map<uint64_t, device_info_t>  m_device_infos;
     std::unordered_map<uint64_t, process_info_t> m_process_infos;
-    std::unordered_map<uint64_t, thread_info_t>  m_thread_infos;
+    std::unordered_map<uint64_t, thread_info_t>  m_instrumented_thread_infos;
+    std::unordered_map<uint64_t, thread_info_t>  m_sampled_thread_infos;
     std::unordered_map<uint64_t, queue_info_t>   m_queue_infos;
     std::unordered_map<uint64_t, stream_info_t>  m_stream_infos;
     std::unordered_map<uint64_t, counter_info_t> m_counter_infos;

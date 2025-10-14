@@ -411,6 +411,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                     std::multimap<uint64_t, Track*> queue_to_track;
                     std::multimap<uint64_t, Track*> stream_to_track;
                     std::multimap<uint64_t, Track*> thread_to_track;
+                    std::multimap<uint64_t, Track*> sample_thread_to_track;
                     std::multimap<uint64_t, Track*> counter_to_track;
                     
                     if(kRocProfVisDmResultSuccess ==
@@ -576,7 +577,14 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 char*    end = nullptr;
                                                 uint64_t val = std::strtoull(
                                                     value.c_str(), &end, 10);
-                                                thread_to_track.insert({ val, track });
+                                                if(dm_track_type == kRocProfVisDmRegionSampleTrack)
+                                                {
+                                                    sample_thread_to_track.insert({ val, track });
+                                                }
+                                                else
+                                                {
+                                                    thread_to_track.insert({ val, track });
+                                                }                                                
                                             }
                                             else if(category == "PMC")
                                             {
@@ -1603,6 +1611,22 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                                 0, (rocprofvis_handle_t*)threads.back());
                                                                         threads.back()->SetObject(kRPVControllerThreadTrack,
                                                                                 0, (rocprofvis_handle_t*)it->second);
+                                                                        threads.back()->SetUInt64(kRPVControllerThreadType,
+                                                                                0, kRPVControllerThreadTypeInstrumented);
+                                                                    }
+                                                                }
+                                                                range = sample_thread_to_track.equal_range(thread_id);
+                                                                for (auto it = range.first; it != range.second; ++it)
+                                                                {
+                                                                    if(it->second != nullptr)
+                                                                    {
+                                                                        threads.push_back(new Thread);
+                                                                        it->second->SetObject(kRPVControllerTrackThread,
+                                                                                0, (rocprofvis_handle_t*)threads.back());
+                                                                        threads.back()->SetObject(kRPVControllerThreadTrack,
+                                                                                0, (rocprofvis_handle_t*)it->second);
+                                                                        threads.back()->SetUInt64(kRPVControllerThreadType,
+                                                                                0, kRPVControllerThreadTypeSampled);
                                                                     }
                                                                 }
                                                             }

@@ -8,7 +8,7 @@
 
 // Layout constants
 constexpr float kCategorywidth = 150.0f;
-constexpr float kContentwidth  = 460.0f;
+constexpr float kContentwidth  = 550.0f;
 constexpr float kContentHeight = 450.0f;
 
 namespace RocProfVis
@@ -257,7 +257,7 @@ SettingsPanel::RenderUnitOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Time Format");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::CalcTextSize("0Nanoseconds").x +
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Condensed Timecode").x +
                             2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);

@@ -37,7 +37,8 @@ private:
         NodeModel*         node;
         ProcessModel*      process;
         IterableModel*     queue;
-        IterableModel*     thread;
+        IterableModel*     instrumented_thread;
+        IterableModel*     sampled_thread;
         IterableModel*     counter;
         IterableModel*     stream;
 

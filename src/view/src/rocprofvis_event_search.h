@@ -41,7 +41,7 @@ private:
 
     void FormatData() override;
     void IndexColumns() override;
-    void RowSelected(const ImGuiMouseButton mouse_button);
+    void RowSelected(const ImGuiMouseButton mouse_button) override;
 
     bool  Open() const;
     float Height() const;

@@ -881,7 +881,7 @@ TraceView::RenderEventSearch()
             settings.GetFontManager().GetIconFont(FontType::kDefault),
             settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),
             m_event_search->Width());
-        if(ImGui::IsItemClicked() && !m_event_search->Searched())
+        if(ImGui::IsItemClicked() && m_event_search->Searched())
         {
             m_event_search->Show();
         }

@@ -233,7 +233,7 @@ EventSearch::Open() const
 bool
 EventSearch::Searched() const
 {
-    return !m_searched;
+    return m_searched;
 }
 
 float

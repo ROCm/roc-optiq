@@ -4,6 +4,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_font_manager.h"
+#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
@@ -64,4 +65,11 @@ rocprofvis_view_open_files(const std::vector<std::string>& file_paths)
     {
         AppWindow::GetInstance()->OpenFile(path);
     }
+}
+
+std::string
+rocprofvis_get_application_config_path()
+{
+    // Get the application config path
+    return get_application_config_path(true);
 }

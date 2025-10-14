@@ -72,7 +72,7 @@ static std::weak_ptr<RocProfVis::Core::BufferSinkMT> g_rpv_log_ringbuffer;
 
 extern "C"
 {
-    void rocprofvis_core_enable_log(void)
+    void rocprofvis_core_enable_log(const char* log_path, int log_level)
     {
         static bool is_inited = false;
         if (!is_inited)
@@ -80,8 +80,7 @@ extern "C"
             is_inited = true;
 
             std::vector<std::shared_ptr<spdlog::sinks::sink>> sinks;
-
-            auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("log.txt", true);
+            auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_path, true);
             file_sink->set_level(spdlog::level::debug);
             sinks.push_back(file_sink);
 
@@ -111,7 +110,7 @@ extern "C"
             spdlog::details::registry::instance().initialize_logger(new_logger);
 
             spdlog::set_default_logger(new_logger);
-            spdlog::set_level(spdlog::level::debug);
+            spdlog::set_level(static_cast<spdlog::level::level_enum>(log_level));
         }
     }
 

@@ -340,19 +340,7 @@ SettingsManager::LoadSettingsJson()
 std::filesystem::path
 SettingsManager::GetStandardConfigPath()
 {
-#ifdef _WIN32
-    const char*           appdata = std::getenv("APPDATA");
-    std::filesystem::path config_dir =
-        appdata ? appdata : std::filesystem::current_path();
-    config_dir /= "rocprofvis";
-#else
-    const char*           xdg_config = std::getenv("XDG_CONFIG_HOME");
-    std::filesystem::path config_dir =
-        xdg_config ? xdg_config
-                   : (std::filesystem::path(std::getenv("HOME")) / ".config");
-    config_dir /= "rocprofvis";
-#endif
-    std::filesystem::create_directories(config_dir);
+    std::filesystem::path config_dir = get_application_config_path(true);
     return config_dir / SETTINGS_FILE_NAME;
 }
 

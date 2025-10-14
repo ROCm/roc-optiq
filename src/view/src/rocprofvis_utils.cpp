@@ -3,6 +3,7 @@
 #include "rocprofvis_utils.h"
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -245,4 +246,27 @@ RocProfVis::View::calculate_adaptive_view_range(double item_start_ns,
     double viewable_range_end   = center + span * 0.5;
 
     return { viewable_range_start, viewable_range_end };
+}
+
+std::string
+RocProfVis::View::get_application_config_path(bool create_dirs)
+{
+#ifdef _WIN32
+    const char*           appdata = std::getenv("APPDATA");
+    std::filesystem::path config_dir =
+        appdata ? appdata : std::filesystem::current_path();
+    config_dir /= "rocprofvis";
+#else
+    const char*           xdg_config = std::getenv("XDG_CONFIG_HOME");
+    std::filesystem::path config_dir =
+        xdg_config ? xdg_config
+                   : (std::filesystem::path(std::getenv("HOME")) / ".config");
+    config_dir /= "rocprofvis";
+#endif
+    if(create_dirs)
+    {
+        std::filesystem::create_directories(config_dir);
+    }
+
+    return config_dir.string();
 }

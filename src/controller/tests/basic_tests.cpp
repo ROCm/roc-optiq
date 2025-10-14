@@ -32,7 +32,7 @@ bool        g_full_range=false;
 
 int main(int argc, char** argv)
 {
-  rocprofvis_core_enable_log();
+  rocprofvis_core_enable_log("log.txt", spdlog::level::debug);
   Catch::Session session;
 
   using namespace Catch::Clara;

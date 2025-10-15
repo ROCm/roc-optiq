@@ -152,7 +152,8 @@ MultiTrackTable::Render()
     {
         ImGui::SetNextItemAllowOverlap();
         ImGui::Combo("##group_by", &m_pending_filter_options.column_index,
-                     m_column_names_ptr.data(), m_column_names_ptr.size());
+                     m_column_names_ptr.data(),
+                     static_cast<int>(m_column_names_ptr.size()));
         if(m_pending_filter_options.column_index != 0)
         {
             ImGui::SameLine();

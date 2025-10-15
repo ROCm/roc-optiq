@@ -87,8 +87,7 @@ AnnotationView::Render()
             {
                 m_selected_note_id = note.GetID();
                 auto event         = std::make_shared<NavigationEvent>(
-                    static_cast<int>(RocEvents::kGoToTimelineSpot), note.GetVMinX(),
-                    note.GetVMaxX(), note.GetYOffset(), true);
+                    note.GetVMinX(), note.GetVMaxX(), note.GetYOffset(), true);
                 EventManager::GetInstance()->AddEvent(event);
             }
 

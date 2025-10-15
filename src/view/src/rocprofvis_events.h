@@ -123,7 +123,7 @@ private:
 class NavigationEvent : public RocEvent
 {
 public:
-    NavigationEvent(int event_id,double v_min, double v_max, double y_position, bool center);
+    NavigationEvent(double v_min, double v_max, double y_position, bool center);
 
     double GetVMin() const;
     double GetVMax() const;
@@ -229,7 +229,7 @@ public:
     
 private:
     uint64_t    m_event_id;
-    uint16_t    m_event_track_id;
+    uint64_t    m_event_track_id;
     bool        m_selected;
     bool        m_is_batch;
 };

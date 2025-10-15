@@ -837,7 +837,7 @@ TraceView::RenderFlowControls()
         ImGui::SameLine();
     }
 
-    char* label = ICON_TREE;
+    const char* label = ICON_TREE;
 
     if(arrow_layer.GetRenderStyle() == TimelineArrow::RenderStyle::kChain)
     {

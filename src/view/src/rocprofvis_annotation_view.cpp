@@ -22,10 +22,6 @@ AnnotationView::~AnnotationView() {}
 void
 AnnotationView::Render()
 {
-    ImFont* icon_font =
-        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
-    ImGuiStyle& style = ImGui::GetStyle();
-
     ImGui::BeginChild("Annotations");
 
     if(m_annotations->GetStickyNotes().empty())

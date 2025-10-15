@@ -3,6 +3,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_stickynote.h"
+#include <algorithm>
 #include <cstring>
 #include <vector>
 namespace RocProfVis
@@ -134,13 +135,14 @@ AnnotationsManager::AnnotationsManager(const std::string& project_id)
                 if(m_sticky_notes[i].GetID() == m_edit_sticky_id)
                 {
                     const std::string& title = m_sticky_notes[i].GetTitle();
-                    std::strncpy(m_sticky_title, title.c_str(),
-                                 sizeof(m_sticky_title) - 1);
-                    m_sticky_title[sizeof(m_sticky_title) - 1] = '\0';
+                    size_t len_title = std::min(title.size(), sizeof(m_sticky_title) - 1);
+                    std::memcpy(m_sticky_title, title.c_str(), len_title);
+                    m_sticky_title[len_title] = '\0';
                     // Copy the text string to m_sticky_text safely
                     const std::string& text = m_sticky_notes[i].GetText();
-                    std::strncpy(m_sticky_text, text.c_str(), sizeof(m_sticky_text) - 1);
-                    m_sticky_text[sizeof(m_sticky_text) - 1] = '\0';
+                    size_t len_text = std::min(text.size(), sizeof(m_sticky_text) - 1);
+                    std::memcpy(m_sticky_text, text.c_str(), len_text);
+                    m_sticky_text[len_text] = '\0';
                     break;
                 }
             }
@@ -307,12 +309,14 @@ AnnotationsManager::ShowStickyNotePopup()
         if(note.GetID() == m_edit_sticky_id)
         {
             const std::string& title = note.GetTitle();
-            std::strncpy(m_sticky_title, title.c_str(), sizeof(m_sticky_title) - 1);
-            m_sticky_title[sizeof(m_sticky_title) - 1] = '\0';
+            size_t len_title = std::min(title.size(), sizeof(m_sticky_title) - 1);
+            std::memcpy(m_sticky_title, title.c_str(), len_title);
+            m_sticky_title[len_title] = '\0';
             // Copy the text string to m_sticky_text safely
             const std::string& text = note.GetText();
-            std::strncpy(m_sticky_text, text.c_str(), sizeof(m_sticky_text) - 1);
-            m_sticky_text[sizeof(m_sticky_text) - 1] = '\0';
+            size_t len_text = std::min(text.size(), sizeof(m_sticky_text) - 1);
+            std::memcpy(m_sticky_text, text.c_str(), len_text);
+            m_sticky_text[len_text] = '\0';
         }
         count++;
     }

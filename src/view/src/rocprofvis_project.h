@@ -127,27 +127,27 @@ private:
     jt::Json                   m_settings_json;
 };
 
-constexpr char* JSON_KEY_GROUP_GENERAL  = "general";
-constexpr char* JSON_KEY_GROUP_TIMELINE = "timeline";
+constexpr const char* JSON_KEY_GROUP_GENERAL  = "general";
+constexpr const char* JSON_KEY_GROUP_TIMELINE = "timeline";
 
-constexpr char* JSON_KEY_GENERAL_VERSION    = "version";
-constexpr char* JSON_KEY_GENERAL_TRACE_PATH = "trace_path";
+constexpr const char* JSON_KEY_GENERAL_VERSION    = "version";
+constexpr const char* JSON_KEY_GENERAL_TRACE_PATH = "trace_path";
 
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK         = "bookmarks";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_KEY     = "key";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X = "view_start_ns ";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X = "view_end_ns";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_Y       = "y";
-constexpr char* JSON_KEY_TIMELINE_BOOKMARK_Z       = "z";
+constexpr const char* JSON_KEY_TIMELINE_BOOKMARK         = "bookmarks";
+constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_KEY     = "key";
+constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X = "view_start_ns ";
+constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X = "view_end_ns";
+constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_Y       = "y";
+constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_Z       = "z";
 
-constexpr char* JSON_KEY_TIMELINE_TRACK                 = "tracks";
-constexpr char* JSON_KEY_TIMELINE_TRACK_ORDER           = "order";
-constexpr char* JSON_KEY_TIMELINE_TRACK_DISPLAY         = "display";
-constexpr char* JSON_KEY_TIMELINE_TRACK_HEIGHT          = "height";
-constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR           = "color";
-constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN = "color_min";
-constexpr char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX = "color_max";
-constexpr char* JSON_KEY_TIMELINE_TRACK_BOX_PLOT        = "box_plot";
+constexpr const char* JSON_KEY_TIMELINE_TRACK                 = "tracks";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_ORDER           = "order";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_DISPLAY         = "display";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_HEIGHT          = "height";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR           = "color";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN = "color_min";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX = "color_max";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_BOX_PLOT        = "box_plot";
 
 constexpr const char* JSON_KEY_ANNOTATIONS                 = "annotations";
 constexpr const char* JSON_KEY_ANNOTATION_TIME_NS          = "time_ns";
@@ -157,8 +157,8 @@ constexpr const char* JSON_KEY_ANNOTATION_SIZE_Y           = "size_y";
 constexpr const char* JSON_KEY_ANNOTATION_TEXT             = "text";
 constexpr const char* JSON_KEY_ANNOTATION_TITLE            = "title";
 constexpr const char* JSON_KEY_ANNOTATION_ID               = "id";
-constexpr char*       JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
-constexpr char*       JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
+constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
+constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
 
 class ProjectSetting
 {

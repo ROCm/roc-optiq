@@ -22,22 +22,20 @@ constexpr ImWchar icon_ranges[] = {
     0
 };
 
-	constexpr char* ICON_X_CIRCLED     = u8"\uF128";
-	constexpr char* ICON_EYE           = u8"\uF133";
-	constexpr char* ICON_GEAR          = u8"\uF13D";
-	constexpr char* ICON_ARROWS_SHRINK = u8"\uF267";
-	constexpr char* ICON_EYE_SLASH     = u8"\uF306";
-	constexpr char* ICON_GRID          = u8"\uF35C";
-	constexpr char* ICON_ARROWS_CYCLE  = u8"\uF3A8";
-	constexpr char* ICON_EYE_THIN      = u8"\uF424";
-	constexpr char* ICON_ADD_NOTE      = u8"\uF218";
-    constexpr char* ICON_LEFT_ARROW    = u8"\uF2CA";
-    constexpr char* ICON_RIGHT_ARROW    = u8"\uF30F";
-    constexpr char* ICON_DELETE      = u8"\uF2D7";
-    constexpr char* ICON_CHAIN       = u8"\uF1FE";
-    constexpr char* ICON_TREE    = u8"\uF33F";
-
-
+constexpr const char* ICON_X_CIRCLED     = u8"\uF128";
+constexpr const char* ICON_EYE           = u8"\uF133";
+constexpr const char* ICON_GEAR          = u8"\uF13D";
+constexpr const char* ICON_ARROWS_SHRINK = u8"\uF267";
+constexpr const char* ICON_EYE_SLASH     = u8"\uF306";
+constexpr const char* ICON_GRID          = u8"\uF35C";
+constexpr const char* ICON_ARROWS_CYCLE  = u8"\uF3A8";
+constexpr const char* ICON_EYE_THIN      = u8"\uF424";
+constexpr const char* ICON_ADD_NOTE      = u8"\uF218";
+constexpr const char* ICON_LEFT_ARROW    = u8"\uF2CA";
+constexpr const char* ICON_RIGHT_ARROW   = u8"\uF30F";
+constexpr const char* ICON_DELETE        = u8"\uF2D7";
+constexpr const char* ICON_CHAIN         = u8"\uF1FE";
+constexpr const char* ICON_TREE          = u8"\uF33F";
 
 }  // namespace View
 }  // namespace RocProfVis

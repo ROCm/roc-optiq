@@ -1,8 +1,13 @@
+
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_stickynote.h"
 #include "imgui.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
+#include <algorithm>
+
 namespace RocProfVis
 {
 namespace View

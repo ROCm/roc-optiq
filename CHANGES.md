@@ -1,3 +1,46 @@
+## 0.6.0
+
+### Features and Improvements
+
+- **Search**
+  - New search bar added to Toolbar.
+  - Searches entire trace for events matching search text.
+  - Results displayed in tabular format.
+  - Clicking result navigates view to event. 
+
+- **Trace Histogram**
+  - New histogram plot displaying the event density of trace data.
+  - Trace can be panned by interacting with histogram.
+
+- **Timeline**
+  - WASD keyboard navigation now supported.
+  - Selected event outlines rendering improved.
+  - Reset view button added to Toolbar.
+  - Improved flow rendering. Chain mode now available.
+
+- **Sidebar**
+  - New feature to hide / show all tracks in a group.
+
+- **Misc UI**
+  - Time formatting options applied to time fields in tables and other analysis panel views.
+  - Splitter separator bar highlight when hovered.
+  - Show confirmation dialog before closing the application.
+  - Various small layout spacing tweaks and improvements.
+  - Menu options added to show hide various UI panels, sidebar, analysis pane, and histogram.
+
+- **Backend**
+  - Performance improvements
+  - Initial support for version 4 schema files
+
+### Fixes
+
+- Don't allow user to scroll / pan past trace's extents.
+- Fixed: Application failed to start if binary is in read only folder. (Log and ini files now saved to config folder).
+- Fixed: Sidebar ImGui id collision error.
+
+### Known Issues
+- Zooming in a large amount on sample counter tracks may cause plot to not render.
+
 ## 0.1.6
 
 ### Features and Improvements

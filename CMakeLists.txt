@@ -3,8 +3,8 @@ project(rocprof-visualizer)
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
-set(PROJECT_VERSION_MINOR 1)
-set(PROJECT_VERSION_PATCH 7)
+set(PROJECT_VERSION_MINOR 6)
+set(PROJECT_VERSION_PATCH 0)
 set(PROJECT_VERSION_BUILD 0)
 
 # Name and path of the icon font header

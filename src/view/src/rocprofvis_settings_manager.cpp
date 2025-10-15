@@ -359,6 +359,7 @@ SettingsManager ::GetDPI()
 void
 SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
 {
+    (void)old_settings; //currently unused
     if(m_usersettings.display_settings.use_dark_mode)
     {
         m_color_store = &DARK_THEME_COLORS;

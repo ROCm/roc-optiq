@@ -52,7 +52,7 @@ protected:
 
 private:
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
-                   float scale_x, float scale_y);
+                   double scale_x, float scale_y);
     bool   ExtractPointsFromData();
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
     void   LineTrackRender(float graph_width);

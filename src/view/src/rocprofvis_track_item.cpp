@@ -154,7 +154,7 @@ TrackItem::Render(float width)
 
     if(ImGui::IsItemVisible())
     {
-        m_is_in_view_vertical = true;
+        m_is_in_view_vertical = true; 
     }
     else
     {
@@ -371,9 +371,10 @@ TrackItem::RequestData(double min, double max, float width)
         float  percentage  = static_cast<float>(chunk_range / range);
         float  chunk_width = width * percentage;
 
-        TrackRequestParams request_params(m_id, chunk_start, chunk_end,
+        TrackRequestParams request_params(static_cast<uint32_t>(m_id), chunk_start, chunk_end,
                                           static_cast<uint32_t>(chunk_width),
-                                          m_group_id_counter, i, chunk_count);
+                                          m_group_id_counter, 
+                                          static_cast<uint16_t>(i), chunk_count);
 
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",

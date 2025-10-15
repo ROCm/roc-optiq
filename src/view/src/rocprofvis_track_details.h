@@ -11,9 +11,9 @@ namespace View
 
 class DataProvider;
 class TrackTopology;
-class NodeModel;
-class ProcessModel;
-class IterableModel;
+struct NodeModel;
+struct ProcessModel;
+struct IterableModel;
 class TimelineSelection;
 struct InfoTable;
 

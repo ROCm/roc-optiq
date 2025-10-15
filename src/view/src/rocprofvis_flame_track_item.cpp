@@ -29,7 +29,7 @@ constexpr int ANTI_ALIASING_WORKAROUND = 1;
 
 FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
-                               int id, std::string name, double zoom,
+                               int id, std::string name, float zoom,
                                double time_offset_ns, double min_x, double max_x,
                                double scale_x, float level_min, float level_max)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
@@ -180,7 +180,7 @@ FlameTrackItem::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
 
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart_item,
-                        double duration, ImDrawList* draw_list)
+                        float duration, ImDrawList* draw_list)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -271,7 +271,7 @@ FlameTrackItem::RenderChart(float graph_width)
     ImGui::BeginChild("FV", ImVec2(graph_width, m_track_content_height), false);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    auto colorCount = m_settings.GetColorWheel().size();
+    int colorCount = static_cast<int>(m_settings.GetColorWheel().size());
     ROCPROFVIS_ASSERT(colorCount > 0);
 
     int color_index      = 0;
@@ -290,7 +290,8 @@ FlameTrackItem::RenderChart(float graph_width)
         ImVec2 start_position;
 
         // Calculate the start position based on the normalized start time and level
-        start_position = ImVec2(normalized_start, item.event.m_level * m_level_height);
+        start_position = ImVec2(static_cast<float>(normalized_start),
+                                item.event.m_level * m_level_height);
 
         if(normalized_end < container_pos.x ||
            normalized_start > container_pos.x + graph_width)
@@ -301,15 +302,21 @@ FlameTrackItem::RenderChart(float graph_width)
         if(m_event_color_mode == EventColorMode::kByTimeLevel)
         {
             color_index =
-                static_cast<long long>(item.event.m_start_ts + item.event.m_level) %
+                static_cast<uint64_t>(item.event.m_start_ts + item.event.m_level) %
                 colorCount;
         }
         else if(m_event_color_mode == EventColorMode::kByEventName)
         {
-            color_index = static_cast<long long>(item.name_hash) % colorCount;
+            color_index = static_cast<uint64_t>(item.name_hash) % colorCount;
         }
 
-        DrawBox(start_position, color_index, item, normalized_duration, draw_list);
+        if(normalized_duration > std::numeric_limits<float>::max())
+        {
+            normalized_duration = std::numeric_limits<float>::max();
+        }
+
+        DrawBox(start_position, color_index, item,
+                static_cast<float>(normalized_duration), draw_list);
     }
 
     // This is here to check for universal event clear.
@@ -326,12 +333,11 @@ FlameTrackItem::RenderChart(float graph_width)
             (item.event.m_start_ts - (m_min_x + m_time_offset_ns)) * m_scale_x;
 
         double normalized_duration = std::max(item.event.m_duration * m_scale_x, 1.0);
-        double normalized_end      = normalized_start + normalized_duration;
 
         ImVec2 start_position;
         float  rounding = 2.0f;
         // Calculate the start position based on the normalized start time and level
-        start_position = ImVec2(normalized_start, item.event.m_level * m_level_height);
+        start_position = ImVec2(static_cast<float>(normalized_start), item.event.m_level * m_level_height);
 
         ImVec2 cursor_position = ImGui::GetCursorScreenPos();
         ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -341,7 +347,8 @@ FlameTrackItem::RenderChart(float graph_width)
                                 start_position.y + cursor_position.y +
                                     HIGHLIGHT_THICKNESS_HALF - ANTI_ALIASING_WORKAROUND);
         ImVec2 rectMax =
-            ImVec2(start_position.x + normalized_duration + HIGHLIGHT_THICKNESS_HALF,
+            ImVec2(start_position.x + static_cast<float>(normalized_duration) +
+                       HIGHLIGHT_THICKNESS_HALF,
                    start_position.y + m_level_height + cursor_position.y -
                        HIGHLIGHT_THICKNESS_HALF + ANTI_ALIASING_WORKAROUND);
         // Outer border (sticks out by 2)

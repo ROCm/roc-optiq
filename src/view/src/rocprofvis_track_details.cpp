@@ -184,8 +184,8 @@ TrackDetails::RenderTable(InfoTable& table)
 {
     if(!table.cells.empty() && !table.cells[0].empty())
     {
-        const int& rows = table.cells.size();
-        const int& cols = table.cells[0].size();
+        const int& rows = static_cast<int>(table.cells.size());
+        const int& cols = static_cast<int>(table.cells[0].size());
 
         float table_x_min = ImGui::GetCursorScreenPos().x;
         float table_width = ImGui::GetContentRegionAvail().x;

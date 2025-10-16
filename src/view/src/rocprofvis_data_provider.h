@@ -87,6 +87,7 @@ typedef struct event_flow_data_t
 {
     uint64_t    id;
     uint64_t    timestamp;
+    uint64_t    end_timestamp;
     uint64_t    track_id;
     uint64_t    level;
     uint64_t    direction;

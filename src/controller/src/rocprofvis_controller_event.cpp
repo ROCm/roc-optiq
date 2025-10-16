@@ -107,6 +107,7 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                 {
                                     uint64_t id   = 0;
                                     uint64_t timestamp = 0;
+                                    uint64_t end_timestamp = 0;
                                     uint64_t track_id  = 0;
                                     uint64_t level     = 0;
                                     char* category  = "";
@@ -122,6 +123,11 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                                kRPVDMEndpointTimestampUInt64Indexed,
                                                index,
                                                &timestamp) &&
+                                       kRocProfVisDmResultSuccess ==
+                                           rocprofvis_dm_get_property_as_uint64(
+                                               dm_flowtrace,
+                                               kRPVDMEndpointEndTimestampUInt64Indexed,
+                                               index, &end_timestamp) &&
                                        kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_uint64(
                                                dm_flowtrace,
@@ -145,7 +151,7 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                         )
                                     {
                                         FlowControl* flow_control = new FlowControl(
-                                            id, timestamp, track_id, level,
+                                            id, timestamp, end_timestamp, track_id, level,
                                             dm_event_id.bitfield.event_op ==
                                                         kRocProfVisDmOperationLaunch ||
                                             dm_event_id.bitfield.event_op ==

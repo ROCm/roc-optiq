@@ -66,7 +66,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
             if(!origin_track_info) continue;
             const rocprofvis_graph_t& origin_track = (*graphs)[origin_track_info->index];
 
-            float origin_x = (origin.timestamp - v_min_x) * pixels_per_ns;
+            float origin_x = (origin.end_timestamp - v_min_x) * pixels_per_ns;
             float origin_y = track_position_y.at(origin.track_id) +
                              std::min(level_height * origin.level,
                                       origin_track.chart->GetTrackHeight());

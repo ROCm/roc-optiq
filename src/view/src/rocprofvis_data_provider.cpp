@@ -2320,6 +2320,14 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
 
             data   = 0;
             result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlEndTimestamp, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].end_timestamp = data;
+            }
+
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
                 flow_control_handle, kRPVControllerFlowControlTrackId, 0, &data);
             if(result == kRocProfVisResultSuccess)
             {

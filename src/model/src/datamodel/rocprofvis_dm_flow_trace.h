@@ -105,6 +105,11 @@ class FlowTrace : public DmBase {
         // @category  - reference to timestamp
         // @return status of operation
         rocprofvis_dm_result_t          GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp);
+        // Method to get flow trace record end timestamp at provided record index
+        // @param index - record index
+        // @category  - reference to timestamp
+        // @return status of operation
+        rocprofvis_dm_result_t          GetRecordEndTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp);
         // Method to get flow trace record event at provided record index
         // @param index - record index
         // @category  - reference to event id (60-bit event id and 4-bit operation type)

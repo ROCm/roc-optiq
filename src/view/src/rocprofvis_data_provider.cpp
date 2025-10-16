@@ -2361,6 +2361,8 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
         flow.name      = event_info_for_requester->basic_info.m_name;
         flow.timestamp = event_info_for_requester->basic_info.m_start_ts;
         flow.track_id  = event_info_for_requester->track_id;
+        flow.end_timestamp = event_info_for_requester->basic_info.m_start_ts +
+                             event_info_for_requester->basic_info.m_duration;
         event_info.flow_info.push_back(flow);
 
         std::sort(event_info.flow_info.begin(), event_info.flow_info.end(),

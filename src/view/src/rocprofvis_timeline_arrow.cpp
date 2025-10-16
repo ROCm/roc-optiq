@@ -148,7 +148,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
 
                 if(!from_track.display || !to_track.display) continue;
 
-                float from_x = (from.timestamp - v_min_x) * pixels_per_ns;
+                float from_x = (from.end_timestamp - v_min_x) * pixels_per_ns;
                 float from_y = track_position_y.at(from.track_id) +
                                std::min(level_height * from.level,
                                         from_track.chart->GetTrackHeight());

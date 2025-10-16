@@ -1,8 +1,13 @@
+
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_stickynote.h"
 #include "imgui.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
+#include <algorithm>
+
 namespace RocProfVis
 {
 namespace View
@@ -116,16 +121,15 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     // Set the cursor to the sticky note position inside the parent window
     ImGui::SetCursorScreenPos(sticky_pos);
 
-    // Begin a child window for the sticky note
+    // Begin a child window for the sticky note to receive input (for button clicks)
     ImGui::BeginChild(
         ("StickyNoteChild##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
         sticky_size, false,
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-            ImGuiWindowFlags_NoBackground);
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     // Get the child window's draw list and position
-    ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
-    ImVec2      child_offset    = ImGui::GetWindowPos();
+    ImDrawList* child_draw_list = draw_list;
+    ImVec2      child_offset    = sticky_pos;
 
     // Draw sticky note graphics (background, border, accent bar)
     child_draw_list->AddRectFilled(child_offset + ImVec2(shadow_offset, shadow_offset),
@@ -160,9 +164,10 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     // Edit Button (top right, local to child window)
     ImVec2 edit_btn_local_pos = ImVec2(sticky_size.x - edit_btn_size - margin / 2,
                                        (header_height - edit_btn_size) / 2);
+
     ImGui::SetCursorPos(edit_btn_local_pos);
 
-    if(ImGui::Button(
+    if(ImGui::InvisibleButton(
            ("EditSticky##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
            ImVec2(edit_btn_size, edit_btn_size)))
     {
@@ -217,7 +222,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
     ImVec2 handle_max = ImVec2(sticky_max.x, sticky_max.y);
 
     ImVec2 mouse_pos = ImGui::GetMousePos();
-
+    
     if(ImGui::IsMouseHoveringRect(handle_pos, handle_max)) return false;
 
     bool mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
@@ -237,6 +242,10 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
     {
         float new_x = mouse_pos.x - window_position.x - m_drag_offset.x;
         float new_y = mouse_pos.y - window_position.y - m_drag_offset.y;
+        ImVec2 window_size = ImGui::GetWindowSize();
+        new_y = std::clamp(new_y, 0.0f, window_size.y - m_size.y); // Limit to window height
+        new_x = std::clamp(new_x, 0.0f, window_size.x - m_size.x); // Limit to window width
+
         m_time_ns   = v_min_x + (new_x / pixels_per_ns);
         m_y_offset  = new_y;
         m_v_max_x   = v_max_x;

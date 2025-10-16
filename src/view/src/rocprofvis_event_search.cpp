@@ -52,7 +52,7 @@ EventSearch::Update()
                i != m_time_column_indices[kTimeStartNs] &&
                i != m_time_column_indices[kDurationNs])
             {
-                m_hidden_column_indices.push_back(i);
+                m_hidden_column_indices.push_back(static_cast<int>(i));
             }
         }
     }

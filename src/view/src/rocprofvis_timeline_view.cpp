@@ -147,7 +147,7 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
     ImGui::BeginChild(
         "UI Interactive Content", ImVec2(m_graph_size.x, m_track_height_sum), false,
-        window_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        window_flags | ImGuiWindowFlags_NoScrollbar);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();

@@ -203,7 +203,7 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                     m_settings.GetUserSettings().unit_settings.time_format;
 
                 ImGuiListClipper clipper;
-                clipper.Begin(event_data->flow_info.size());
+                clipper.Begin(static_cast<int>(event_data->flow_info.size()));
                 while(clipper.Step())
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
@@ -263,7 +263,7 @@ EventsView::RenderCallStackData(const event_info_t* event_data)
                 ImGui::TableHeadersRow();
 
                 ImGuiListClipper clipper;
-                clipper.Begin(event_data->call_stack_info.size());
+                clipper.Begin(static_cast<int>(event_data->call_stack_info.size()));
                 while(clipper.Step())
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)

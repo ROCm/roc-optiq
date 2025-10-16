@@ -91,20 +91,20 @@ enum class Colors
     __kLastColor
 };
 
-constexpr char* JSON_KEY_VERSION = "version";
+constexpr const char* JSON_KEY_VERSION = "version";
 
-constexpr char* JSON_KEY_GROUP_SETTINGS             = "settings";
-constexpr char* JSON_KEY_SETTINGS_CATEGORY_DISPLAY  = "display_settings";
-constexpr char* JSON_KEY_SETTINGS_CATEGORY_UNITS    = "units";
-constexpr char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
+constexpr const char* JSON_KEY_GROUP_SETTINGS             = "settings";
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_DISPLAY  = "display_settings";
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_UNITS    = "units";
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 
-constexpr char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
-constexpr char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
-constexpr char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
- 
-constexpr char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
 
-constexpr char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
+constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
+
+constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
 
 class SettingsManager
 {

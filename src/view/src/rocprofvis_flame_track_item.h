@@ -45,7 +45,7 @@ class FlameTrackItem : public TrackItem
 public:
     FlameTrackItem(DataProvider&                      dp,
                    std::shared_ptr<TimelineSelection> timeline_selection, int chart_id,
-                   std::string name, double zoom, double movement, double min_x,
+                   std::string name, float zoom, double movement, double min_x,
                    double max_x, double scale_x, float level_min, float level_max);
     ~FlameTrackItem();
 
@@ -69,7 +69,7 @@ private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
 
     void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
-                 double duration, ImDrawList* draw_list);
+                 float duration, ImDrawList* draw_list);
     bool ExtractPointsFromData();
 
     std::vector<ChartItem>             m_chart_items;

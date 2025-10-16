@@ -2,6 +2,7 @@
 
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 
 namespace RocProfVis
@@ -67,13 +68,15 @@ LineTrackItem::LineTrackRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
-    float scale_y = content_size.y / (m_max_y - m_min_y);
+    float scale_y = static_cast<float>(content_size.y / (m_max_y - m_min_y));
 
-    float tooltip_x     = 0;
+    double tooltip_x     = 0;
     float tooltip_y     = 0;
     bool  show_tooltip  = false;
     ImU32 generic_black = m_settings.GetColor(Colors::kLineChartColor);
     ImU32 generic_red   = m_settings.GetColor(Colors::kGridRed);
+
+    const float line_thickness = 2.0f;
 
     for(int i = 1; i < m_data.size(); i++)
     {
@@ -83,13 +86,13 @@ LineTrackItem::LineTrackRender(float graph_width)
                                       ImVec2(point_1.x + 10, point_1.y + 10)))
         {
             tooltip_x    = m_data[i - 1].x_value - m_min_x;
-            tooltip_y    = m_data[i - 1].y_value - m_min_y;
+            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y);
             show_tooltip = true;
         }
 
         ImVec2 point_2 =
             MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
-        ImU32 LineColor = generic_black;
+        ImU32 line_color = generic_black;
 
         if(point_2.x < container_pos.x || point_1.x > container_pos.x + content_size.x)
         {
@@ -111,37 +114,40 @@ LineTrackItem::LineTrackRender(float graph_width)
 
             if(point_1_in && point_2_in)
             {
-                LineColor = generic_red;
+                line_color = generic_red;
             }
 
             else if(!point_1_in && point_2_in)
             {
                 if(m_color_by_value_digits.interest_1_max < m_data[i - 1].y_value)
                 {
-                    double new_y =
-                        cursor_position.y + content_size.y -
-                        (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                    float new_y = cursor_position.y + content_size.y -
+                                  (m_color_by_value_digits.interest_1_max -
+                                   static_cast<float>(m_min_y)) *
+                                      scale_y;
+
+                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                      point_2.y, new_y);
 
                     ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = generic_black;
-                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = generic_red;
+                    line_color        = generic_black;
+                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
+                    line_color = generic_red;
                     point_1   = new_point;
                 }
                 else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].y_value)
                 {
-                    double new_y =
-                        cursor_position.y + content_size.y -
-                        (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                    float new_y = cursor_position.y + content_size.y -
+                                  (m_color_by_value_digits.interest_1_min -
+                                   static_cast<float>(m_min_y)) *
+                                      scale_y;
+                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                      point_2.y, new_y);
 
                     ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = generic_black;
-                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = generic_red;
+                    line_color        = generic_black;
+                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
+                    line_color = generic_red;
                     point_1   = new_point;
                 }
             }
@@ -151,41 +157,45 @@ LineTrackItem::LineTrackRender(float graph_width)
                 {
                     // if greater than upper max.
 
-                    double new_y =
-                        cursor_position.y + content_size.y -
-                        (m_color_by_value_digits.interest_1_max - m_min_y) * scale_y;
-                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                    float new_y = cursor_position.y + content_size.y -
+                                  (m_color_by_value_digits.interest_1_max -
+                                   static_cast<float>(m_min_y)) *
+                                      scale_y;
+                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                      point_2.y, new_y);
 
                     ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = generic_red;
-                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = generic_black;
+                    line_color        = generic_red;
+                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
+                    line_color = generic_black;
                     point_1   = new_point;
                 }
                 else if(m_color_by_value_digits.interest_1_min > m_data[i].y_value)
                 {
-                    double new_y =
-                        cursor_position.y + content_size.y -
-                        (m_color_by_value_digits.interest_1_min - m_min_y) * scale_y;
-                    double new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
+                    float new_y = cursor_position.y + content_size.y -
+                                  (m_color_by_value_digits.interest_1_min -
+                                   static_cast<float>(m_min_y)) *
+                                      scale_y;
+                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                      point_2.y, new_y);
 
                     ImVec2 new_point = ImVec2(new_x, new_y);
-                    LineColor        = generic_red;
-                    draw_list->AddLine(point_1, new_point, LineColor, 2.0f);
-                    LineColor = generic_black;
+                    line_color        = generic_red;
+                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
+                    line_color = generic_black;
                     point_1   = new_point;
                 }
             }
         }
-        draw_list->AddLine(point_1, point_2, LineColor, 2.0f);
+        draw_list->AddLine(point_1, point_2, line_color, line_thickness);
     }
     if(show_tooltip == true)
     {
+        std::string x_label = nanosecond_to_formatted_str(
+            tooltip_x, m_settings.GetUserSettings().unit_settings.time_format, true);
         ImGui::BeginTooltip();
-        ImGui::Text("X Value: %f", tooltip_x);
-        ImGui::Text("Y Value: %f", tooltip_y);
+        ImGui::Text("X: %s", x_label.c_str());
+        ImGui::Text("Y: %.2f", tooltip_y);
         ImGui::EndTooltip();
     }
     ImGui::EndChild();
@@ -201,13 +211,11 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
-    float scale_y = content_size.y / (m_max_y - m_min_y);
+    float scale_y = static_cast<float>(content_size.y / (m_max_y - m_min_y));
 
     float tooltip_x     = 0;
     float tooltip_y     = 0;
     bool  show_tooltip  = false;
-    ImU32 generic_black = m_settings.GetColor(Colors::kLineChartColor);
-    ImU32 generic_red   = m_settings.GetColor(Colors::kGridRed);
 
     for(int i = 1; i < m_data.size(); i++)
     {
@@ -216,14 +224,13 @@ LineTrackItem::BoxPlotRender(float graph_width)
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
                                       ImVec2(point_1.x + 10, point_1.y + 10)))
         {
-            tooltip_x    = m_data[i - 1].x_value - m_min_x;
-            tooltip_y    = m_data[i - 1].y_value - m_min_y;
+            tooltip_x    = static_cast<float>(m_data[i - 1].x_value - m_min_x);
+            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y);
             show_tooltip = true;
         }
 
         ImVec2 point_2 =
             MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
-        ImU32 LineColor = generic_black;
 
         if(point_2.x < container_pos.x || point_1.x > container_pos.x + content_size.x)
         {
@@ -231,8 +238,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
             continue;
         }
 
-        float bottom_of_chart =
-            cursor_position.y + content_size.y - (m_min_y - m_min_y) * scale_y;
+        float bottom_of_chart = cursor_position.y + content_size.y;
 
         draw_list->AddRectFilled(
             point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
@@ -319,7 +325,7 @@ LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
     // Calculate x for the given y
     double x = (known_y - b) / m;
 
-    return x;
+    return static_cast<float>(x);
 }
 
 void
@@ -377,24 +383,28 @@ LineTrackItem::RenderMetaAreaOptions()
         ImGui::TextUnformatted("Max");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
-        ImGui::SliderFloat("##max", &m_color_by_value_digits.interest_1_max, m_color_by_value_digits.interest_1_min, m_max_y, "%.1f");
+        ImGui::SliderFloat("##max", &m_color_by_value_digits.interest_1_max,
+                           m_color_by_value_digits.interest_1_min,
+                           static_cast<float>(m_max_y), "%.1f");
         ImGui::TextUnformatted("Min");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
-        ImGui::SliderFloat("##min", &m_color_by_value_digits.interest_1_min, m_min_y, m_color_by_value_digits.interest_1_max, "%.1f");
+        ImGui::SliderFloat("##min", &m_color_by_value_digits.interest_1_min,
+                           static_cast<float>(m_min_y),
+                           m_color_by_value_digits.interest_1_max, "%.1f");
     }
 }
 
 ImVec2
 LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
-                       ImVec2& content_size, float scaleX, float scaleY)
+                       ImVec2& content_size, double scaleX, float scaleY)
 {
     ImVec2 container_pos = ImGui::GetWindowPos();
 
     double x = container_pos.x + (point.x_value - (m_min_x + m_time_offset_ns)) * scaleX;
     double y = cursor_position.y + content_size.y - (point.y_value - m_min_y) * scaleY;
 
-    return ImVec2(x, y);
+    return ImVec2(static_cast<float>(x), static_cast<float>(y));
 }
 
 LineTrackProjectSettings::LineTrackProjectSettings(const std::string& project_id,

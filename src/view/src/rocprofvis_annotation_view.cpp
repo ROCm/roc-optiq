@@ -22,10 +22,6 @@ AnnotationView::~AnnotationView() {}
 void
 AnnotationView::Render()
 {
-    ImFont* icon_font =
-        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
-    ImGuiStyle& style = ImGui::GetStyle();
-
     ImGui::BeginChild("Annotations");
 
     if(m_annotations->GetStickyNotes().empty())
@@ -87,8 +83,7 @@ AnnotationView::Render()
             {
                 m_selected_note_id = note.GetID();
                 auto event         = std::make_shared<NavigationEvent>(
-                    static_cast<int>(RocEvents::kGoToTimelineSpot), note.GetVMinX(),
-                    note.GetVMaxX(), note.GetYOffset(), true);
+                    note.GetVMinX(), note.GetVMaxX(), note.GetYOffset(), true);
                 EventManager::GetInstance()->AddEvent(event);
             }
 

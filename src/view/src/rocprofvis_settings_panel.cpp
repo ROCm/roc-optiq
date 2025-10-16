@@ -210,7 +210,7 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("00").x + 2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     ImGui::Combo("##font_size", &m_font_settings.size_index, m_font_sizes_ptr.data(),
-                 m_font_sizes_ptr.size());
+                 static_cast<int>(m_font_sizes_ptr.size()));
     ImGui::SameLine();
     if(ImGui::Button("+", ImVec2(button_width, 0)) &&
        m_font_settings.size_index < m_fonts.GetAvailableFonts().size())

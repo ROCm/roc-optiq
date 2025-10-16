@@ -114,7 +114,7 @@ protected:
     float                 m_reorder_grip_width;
 
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
-    uint64_t m_group_id_counter;   // Counter for grouping requests
+    uint8_t  m_group_id_counter;   // Counter for grouping requests
 
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;

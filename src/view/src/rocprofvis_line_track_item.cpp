@@ -325,25 +325,26 @@ LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
 void
 LineTrackItem::RenderMetaAreaScale()
 {
-    ImVec2 max_size =
+        ImVec2 max_size =
         ImGui::CalcTextSize(m_max_y_str.c_str()) + ImGui::CalcTextSize("Max: ");
-    ImVec2 min_size         = ImGui::CalcTextSize(m_min_y_str.c_str());
-    m_meta_area_scale_width = max_size.x + 2 * m_metadata_padding.x;
-    ImVec2 content_region   = ImGui::GetContentRegionMax();
-    ImVec2 window_pos       = ImGui::GetWindowPos();
+    ImVec2 min_size = ImGui::CalcTextSize(m_min_y_str.c_str());
+    m_meta_area_scale_width =
+        std::max(max_size.x + 2 * m_metadata_padding.x, m_meta_area_scale_width);
+    ImVec2 content_region = ImGui::GetContentRegionMax();
+    ImVec2 window_pos     = ImGui::GetWindowPos();
 
-    ImGui::SetCursorPos(ImVec2(content_region.x - (max_size.x + m_metadata_padding.x),
-                               m_metadata_padding.y));
+    ImGui::SetCursorPos(
+        ImVec2(content_region.x + m_metadata_padding.x - m_meta_area_scale_width,
+               m_metadata_padding.y));
     ImGui::TextUnformatted("Max: ");
     ImGui::SameLine();
     ImGui::TextUnformatted(m_max_y_str.c_str());
 
-    ImGui::SetCursorPos(ImVec2(content_region.x - (max_size.x + m_metadata_padding.x),
-                               content_region.y - min_size.y - m_metadata_padding.y));
+    ImGui::SetCursorPos(
+        ImVec2(content_region.x + m_metadata_padding.x - m_meta_area_scale_width,
+               content_region.y - min_size.y - m_metadata_padding.y));
     ImGui::TextUnformatted("Min: ");
-
-    ImGui::SetCursorPos(ImVec2(content_region.x - (min_size.x + m_metadata_padding.x),
-                               content_region.y - min_size.y - m_metadata_padding.y));
+    ImGui::SameLine();
     ImGui::TextUnformatted(m_min_y_str.c_str());
 
     ImGui::GetWindowDrawList()->AddLine(

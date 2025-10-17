@@ -1811,6 +1811,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id AND E1.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id AND R.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id AND T.guid = R.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.end_id AND TS.guid = R.guid"),
                         Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R.end_id AND TE.guid = R.guid"),
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
                     { 

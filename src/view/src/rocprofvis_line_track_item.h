@@ -64,6 +64,8 @@ private:
     double                               m_max_y;
     std::string                          m_min_y_str;
     std::string                          m_max_y_str;
+    std::string                          m_compact_max;
+    std::string                          m_compact_min;
     bool                                 m_is_color_value_existant;
     DataProvider&                        m_dp;
     bool                                 m_show_boxplot;

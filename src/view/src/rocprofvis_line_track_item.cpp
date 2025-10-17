@@ -58,6 +58,9 @@ void LineTrackItem::UpdateYScaleExtents() {
     m_min_y_str     = flt.substr(0, flt.find('.') + 2);
     flt             = std::to_string(m_max_y);
     m_max_y_str     = flt.substr(0, flt.find('.') + 2);
+
+    m_compact_max   = compact_number_format(m_max_y);
+    m_compact_min   = compact_number_format(m_min_y);
 }
 
 void
@@ -328,11 +331,9 @@ LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
 void
 LineTrackItem::RenderMetaAreaScale()
 {
-    std::string compact_max = CompactNumberFormat(m_max_y);
-    std::string compact_min = CompactNumberFormat(m_min_y);
     ImVec2      max_size =
-        ImGui::CalcTextSize(compact_max.c_str()) + ImGui::CalcTextSize("Max: ");
-    ImVec2 min_size         = ImGui::CalcTextSize(compact_min.c_str());
+        ImGui::CalcTextSize(m_compact_max.c_str()) + ImGui::CalcTextSize("Max: ");
+    ImVec2 min_size         = ImGui::CalcTextSize(m_compact_min.c_str());
     m_meta_area_scale_width = std::max({ max_size.x + 2 * m_metadata_padding.x, m_meta_area_scale_width,
                    min_size.x + 2 * m_metadata_padding.x });
     ImVec2 content_region = ImGui::GetContentRegionMax();
@@ -343,7 +344,7 @@ LineTrackItem::RenderMetaAreaScale()
                m_metadata_padding.y));
     ImGui::TextUnformatted("Max: ");
     ImGui::SameLine();
-    ImGui::TextUnformatted(compact_max.c_str());
+    ImGui::TextUnformatted(m_compact_max.c_str());
     if(ImGui::BeginItemTooltip())
     {
         ImGui::TextUnformatted(m_max_y_str.c_str());
@@ -355,7 +356,7 @@ LineTrackItem::RenderMetaAreaScale()
                content_region.y - min_size.y - m_metadata_padding.y));
     ImGui::TextUnformatted("Min: ");
     ImGui::SameLine();
-    ImGui::TextUnformatted(compact_min.c_str());
+    ImGui::TextUnformatted(m_compact_min.c_str());
     if(ImGui::BeginItemTooltip())
     {
         ImGui::TextUnformatted(m_min_y_str.c_str());

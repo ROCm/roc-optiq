@@ -272,7 +272,7 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
 }
 
 std::string
-RocProfVis::View::CompactNumberFormat(float number)
+RocProfVis::View::compact_number_format(float number)
 {
     const char* suffixes[] = { "", "K", "M", "B", "T" };
     uint32_t    magnitude  = 0;

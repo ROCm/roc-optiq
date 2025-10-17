@@ -109,7 +109,7 @@ protected:
     TrackDataRequestState m_request_state;
     SettingsManager&      m_settings;
     bool                  m_meta_area_clicked;
-    static float                 m_meta_area_scale_width;
+    static float          m_meta_area_scale_width;
     bool                  m_selected;
     float                 m_reorder_grip_width;
 

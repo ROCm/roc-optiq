@@ -1473,6 +1473,8 @@ namespace DataModel
                         Builder::QParam("E2.category_id"),
                         Builder::QParam("R2.name_id"),
                         Builder::QParam("L.level"),
+                        Builder::QParam("TE.value", "end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R1"),
@@ -1481,6 +1483,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_region", "R2", "R2.event_id = E2.id AND R2.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R2.track_id AND T.guid = R2.guid"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R2.start_id AND TS.guid = R2.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R2.end_id AND TE.guid = R2.guid"), 
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L","R2.id = L.eid") },
                     { Builder::Where(
                         "R1.id", "==", std::to_string(event_id))
@@ -1498,6 +1501,8 @@ namespace DataModel
                         Builder::QParam("E2.category_id"),
                         Builder::QParam("K.kernel_id"),
                         Builder::QParam("L.level"),
+                        Builder::QParam("TE.end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R"),
@@ -1506,6 +1511,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_kernel_dispatch", "K", "K.event_id = E2.id AND K.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = K.track_id AND T.guid = K.guid"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = K.start_id AND TS.guid = K.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = K.end_id AND TE.guid = K.guid"),
                         Builder::InnerJoin(Builder::LevelTable("dispatch"), "L", "K.id = L.eid")
                     },
                     { Builder::Where(
@@ -1523,6 +1529,8 @@ namespace DataModel
                         Builder::QParam("E2.category_id"),
                         Builder::QParam("M.name_id"),
                         Builder::QParam("L.level"),
+                        Builder::QParam("TE.end"),
+
                         },
                     { Builder::From("rocpd_region", "R"),
                         Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0 AND R.guid = E1.guid"),
@@ -1530,6 +1538,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_memory_copy", "M", "M.event_id = E2.id AND M.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id AND T.guid = M.guid"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id AND TS.guid = M.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = M.end_id AND TE.guid = M.guid"), 
                         Builder::InnerJoin(Builder::LevelTable("mem_copy"), "L", "M.id = L.eid") },
                     { Builder::Where(
                         "R.id", "==", std::to_string(event_id)) } })) +
@@ -1546,6 +1555,8 @@ namespace DataModel
                         Builder::QParam("E2.category_id"),
                         Builder::QParam("E2.category_id"), // This should be name_id, but Alloc table does not have column
                         Builder::QParam("L.level"),
+                        Builder::QParam("TE.end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R"),
@@ -1554,6 +1565,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_memory_allocate", "M", "M.event_id = E2.id AND M.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id AND T.guid = M.guid"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id AND TS.guid = M.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = M.end_id AND TE.guid = M.guid"),
                         Builder::InnerJoin(Builder::LevelTable("mem_alloc"), "L", "M.id = L.eid") },
                     { Builder::Where(
                         "R.id", "==", std::to_string(event_id)) } })));
@@ -1573,6 +1585,7 @@ namespace DataModel
                         Builder::QParam("E2.category_id"),
                         Builder::QParam("R2.name_id"),
                         Builder::QParam("L.level"),
+                        Builder::QParam("R2.end"),
                         },
                     { 
                         Builder::From("rocpd_region", "R1"),
@@ -1596,6 +1609,8 @@ namespace DataModel
                         Builder::QParam("E2.category_id"),
                         Builder::QParam("K.kernel_id"),
                         Builder::QParam("L.level"),
+                        Builder::QParam("K.end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R"),
@@ -1619,6 +1634,8 @@ namespace DataModel
                         Builder::QParam("E2.category_id"),
                         Builder::QParam("M.name_id"),
                         Builder::QParam("L.level"),
+                        Builder::QParam("M.end"),
+
                         },
                     { Builder::From("rocpd_region", "R"),
                         Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0 AND R.guid = E1.guid"),
@@ -1640,6 +1657,8 @@ namespace DataModel
                         Builder::QParam("E2.category_id"),
                         Builder::QParam("E2.category_id"), // This should be name_id, but Alloc table does not have column
                         Builder::QParam("L.level"),
+                        Builder::QParam("M.end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R"),
@@ -1669,6 +1688,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.value", "end"),
+
                         },
                     {
                         Builder::From("rocpd_kernel_dispatch", "K"),
@@ -1677,6 +1698,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id AND R.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id AND T.guid = R.guid"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_id AND TS.guid = R.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE","TE.id = R.end_id AND TE.guid = R.guid"),
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
                     { Builder::Where("K.id", "==", std::to_string(event_id)) } })) +
                     Builder::Union() +
@@ -1692,6 +1714,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("K2.kernel_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.end"),
+
                         },
                     {
                         Builder::From("rocpd_kernel_dispatch", "K1"),
@@ -1700,6 +1724,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_kernel_dispatch", "K2", "K2.event_id = E2.id AND K2.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = K2.track_id AND T.guid = K2.guid"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = K2.start_id AND TS.guid = K2.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE","TE.id = K2.end_id AND TE.guid = K2.guid"),
                         Builder::InnerJoin(Builder::LevelTable("dispatch"), "L", "K2.id = L.eid")
                     },
                     { Builder::Where(
@@ -1720,6 +1745,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("R.end"),
+
                         },
                     {
                         Builder::From("rocpd_kernel_dispatch", "K"),
@@ -1741,6 +1768,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("K2.kernel_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("R.end"),
+
                         },
                     {
                         Builder::From("rocpd_kernel_dispatch", "K1"),
@@ -1757,6 +1786,7 @@ namespace DataModel
 
     std::string QueryFactory::GetRocprofDataFlowQueryForMemoryCopyEvent(uint64_t event_id)
     {
+
         if (IsVersionGreaterOrEqual("4"))
         {
             return Builder::SelectAll(
@@ -1772,6 +1802,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.end"),
+
                         },
                     { 
                         Builder::From("rocpd_memory_copy", "M"),
@@ -1779,7 +1811,8 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id AND E1.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id AND R.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id AND T.guid = R.guid"),
-                        Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_id AND TS.guid = R.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.end_id AND TS.guid = R.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R.end_id AND TE.guid = R.guid"),
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
                     { 
                         Builder::Where("M.id", "==", std::to_string(event_id)) } })) +
@@ -1796,6 +1829,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("M2.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.end"),
+
                         },
                     { 
                         Builder::From("rocpd_memory_copy", "M1"),
@@ -1804,6 +1839,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_memory_copy", "M2", "M2.event_id = E2.id AND M2.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = M2.track_id AND T.guid = M2.guid"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M2.start_id AND TS.guid = M2.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE","TE.id = M2.end_id AND TE.guid = M2.guid"),
                         Builder::InnerJoin(Builder::LevelTable("mem_copy"), "L", "M2.id = L.eid") 
                     },
                     { Builder::Where(
@@ -1824,6 +1860,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("R.end"),
+
                     },
                     { 
                         Builder::From("rocpd_memory_copy", "M"),
@@ -1846,6 +1884,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("M2.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("M2.end"),
+
                     },
                     { 
                         Builder::From("rocpd_memory_copy", "M1"),
@@ -1861,6 +1901,7 @@ namespace DataModel
 
     std::string QueryFactory::GetRocprofDataFlowQueryForMemoryAllocEvent(uint64_t event_id)
     {
+
         if (IsVersionGreaterOrEqual("4"))
         {
             return Builder::SelectAll(
@@ -1876,6 +1917,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.value", "end"),
+
                         },
                     { 
                         Builder::From("rocpd_memory_allocate", "M"),
@@ -1884,6 +1927,8 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id AND R.guid = E2.guid"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id AND T.guid = R.guid"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_id AND TS.guid = R.guid"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R.end_id AND TE.guid = R.guid"),
+
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
                     { Builder::Where("M.id", "==", std::to_string(event_id)) } })));
         }
@@ -1902,6 +1947,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("R.end"),
+
                         },
                     { 
                         Builder::From("rocpd_memory_allocate", "M"),

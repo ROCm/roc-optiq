@@ -766,7 +766,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(
         std::stringstream query;
         if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {
-            query << "select 2, rocpd_api_ops.api_id, rocpd_api_ops.op_id, 0, gpuId, queueId, rocpd_op.start, rocpd_op.opType_id, rocpd_op.description_id, " << Builder::LevelTable("op") << ".level "
+            query << "select 2, rocpd_api_ops.api_id, rocpd_api_ops.op_id, 0, gpuId, queueId, rocpd_op.start, rocpd_op.opType_id, rocpd_op.description_id, " << Builder::LevelTable("op") << ".level, rocpd_op.end AS end "
                 "from rocpd_api_ops "
                 "INNER JOIN rocpd_api on rocpd_api_ops.api_id = rocpd_api.id "
                 "INNER JOIN rocpd_op on rocpd_api_ops.op_id = rocpd_op.id "
@@ -778,7 +778,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
-            query << "select 1, rocpd_api_ops.op_id, rocpd_api_ops.api_id, 0, pid, tid, rocpd_api.end, rocpd_api.apiName_id, rocpd_api.args_id, " << Builder::LevelTable("api") << ".level "
+            query << "select 1, rocpd_api_ops.op_id, rocpd_api_ops.api_id, 0, pid, tid, rocpd_api.apiName_id, rocpd_api.args_id, " << Builder::LevelTable("api") << ".level, rocpd_api.end "
                 "from rocpd_api_ops "
                 "INNER JOIN rocpd_api on rocpd_api_ops.api_id = rocpd_api.id "
                 "INNER JOIN rocpd_op on rocpd_api_ops.op_id = rocpd_op.id "

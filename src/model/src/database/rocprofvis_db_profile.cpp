@@ -202,6 +202,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
         record.category_id = db->Sqlite3ColumnInt64(func, stmt, azColName, 7);
         record.symbol_id = db->Sqlite3ColumnInt64(func, stmt, azColName, 8);
         record.level = db->Sqlite3ColumnInt64(func, stmt, azColName, 9);
+        record.end_time = db->Sqlite3ColumnInt64(func, stmt, azColName, 10);    
         if(kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
         if (db->BindObject()->FuncAddFlow(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     }

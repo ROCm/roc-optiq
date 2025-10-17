@@ -90,7 +90,7 @@ private:
     std::unique_ptr<MessageDialog>      m_message_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
 
-    size_t m_tool_bar_index;
+    int m_tool_bar_index;
     std::function<void(int)> m_notification_callback;
 };
 

@@ -5,6 +5,8 @@
 #include "spdlog/spdlog.h"
 #include "rocprofvis_utils.h"
 
+#include <algorithm>
+
 namespace RocProfVis
 {
 namespace View

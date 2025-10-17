@@ -373,8 +373,7 @@ Thread::SetObject(rocprofvis_property_t property, uint64_t index,
 }
 
 rocprofvis_result_t
-Thread::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
-                  uint32_t length)
+Thread::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)

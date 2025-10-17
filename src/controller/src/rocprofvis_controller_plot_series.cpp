@@ -245,7 +245,7 @@ rocprofvis_result_t PlotSeries::SetObject(rocprofvis_property_t property, uint64
     return result;
 }
 
-rocprofvis_result_t PlotSeries::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length)
+rocprofvis_result_t PlotSeries::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch (property)

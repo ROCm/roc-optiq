@@ -36,7 +36,7 @@ public:
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
     rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) final;
 
     rocprofvis_result_t Load(const std::string& csv_file);
     rocprofvis_result_t GetMetric(const std::string& key, std::pair<std::string, Data*>& metric) const;

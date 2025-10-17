@@ -304,8 +304,7 @@ rocprofvis_result_t Queue::SetObject(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-rocprofvis_result_t Queue::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
-                  uint32_t length)
+rocprofvis_result_t Queue::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)

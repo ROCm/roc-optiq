@@ -137,7 +137,7 @@ AppWindow::Init()
 
     std::vector<LayoutItem> layout_items;
     layout_items.push_back(tool_bar_item);
-    m_tool_bar_index = layout_items.size() - 1;
+    m_tool_bar_index = static_cast<int>(layout_items.size() - 1);
     layout_items.push_back(main_area_item);
     layout_items.push_back(status_bar_item);
     m_main_view = std::make_shared<VFixedContainer>(layout_items);
@@ -697,7 +697,7 @@ RenderProviderTest(DataProvider& provider)
 
     static char     track_index_buffer[64]     = "0";
     static char     end_track_index_buffer[64] = "1";  // for setting table track range
-    static uint64_t group_id_counter           = 0;
+    static uint8_t  group_id_counter           = 0;
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {

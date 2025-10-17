@@ -570,11 +570,10 @@ Process::SetObject(rocprofvis_property_t property, uint64_t index,
 }
 
 rocprofvis_result_t
-Process::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
-                   uint32_t length)
+Process::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value && length)
+    if(value && *value != 0)
     {
         switch(property)
         {

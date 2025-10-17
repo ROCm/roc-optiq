@@ -283,7 +283,7 @@ rocprofvis_result_t Future::SetObject(rocprofvis_property_t property, uint64_t i
     }
     return result;
 }
-rocprofvis_result_t Future::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length)
+rocprofvis_result_t Future::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     switch(property)

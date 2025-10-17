@@ -275,7 +275,7 @@ std::string
 RocProfVis::View::CompactNumberFormat(float number)
 {
     const char* suffixes[] = { "", "K", "M", "B", "T" };
-    int         magnitude  = 0;
+    uint32_t    magnitude  = 0;
 
     while(std::fabs(number) >= 1000.0 && magnitude < 4)
     {
@@ -283,9 +283,9 @@ RocProfVis::View::CompactNumberFormat(float number)
         ++magnitude;
     }
 
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(number >= 100 ? 0 : (number >= 10 ? 1 : 2))
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(number >= 100 ? 0 : (number >= 10 ? 1 : 2))
         << number
         << suffixes[magnitude];
-    return oss.str();
+    return output.str();
 }

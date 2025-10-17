@@ -35,7 +35,6 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_request_state(TrackDataRequestState::kIdle)
 , m_track_height_changed(false)
 , m_meta_area_clicked(false)
-//, m_meta_area_scale_width(0.0f)
 , m_settings(SettingsManager::GetInstance())
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
@@ -199,7 +198,6 @@ TrackItem::RenderMetaArea()
                                      ? m_settings.GetColor(Colors::kGridRed)
                                      : m_settings.GetColor(Colors::kMetaDataColor)));
     ImGui::SetCursorPos(metadata_shrink_padding);
-    //ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
                                                       metadata_shrink_padding.y * 2.0f),
@@ -307,7 +305,6 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaExpand();
     }
     ImGui::EndChild();  // end metadata area
-    //ImGui::PopStyleColor();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(4);
     if(ImGui::IsItemClicked(ImGuiMouseButton_Left))

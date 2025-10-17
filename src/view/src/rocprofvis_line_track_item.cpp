@@ -333,8 +333,8 @@ LineTrackItem::RenderMetaAreaScale()
     ImVec2      max_size =
         ImGui::CalcTextSize(compact_max.c_str()) + ImGui::CalcTextSize("Max: ");
     ImVec2 min_size         = ImGui::CalcTextSize(compact_min.c_str());
-    m_meta_area_scale_width = std::max(
-        { max_size.x + 2 * m_metadata_padding.x, m_meta_area_scale_width, min_size.x });
+    m_meta_area_scale_width = std::max({ max_size.x + 2 * m_metadata_padding.x, m_meta_area_scale_width,
+                   min_size.x + 2 * m_metadata_padding.x });
     ImVec2 content_region = ImGui::GetContentRegionMax();
     ImVec2 window_pos     = ImGui::GetWindowPos();
 

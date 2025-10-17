@@ -28,12 +28,10 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr ImVec2 FILE_DIALOG_SIZE         = ImVec2(480.0f, 360.0f);
-constexpr char*  FILE_DIALOG_NAME         = "ChooseFileDlgKey";
-constexpr char*  FILE_SAVE_DIALOG_NAME    = "SaveFileDlgKey";
-constexpr char*  PROJECT_SAVE_DIALOG_NAME = "SaveProjectDlgKey";
-constexpr char*  TAB_CONTAINER_SRC_NAME   = "MainTabContainer";
-constexpr char*  ABOUT_DIALOG_NAME        = "About##_dialog";
+constexpr ImVec2 FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
+constexpr const char*  FILE_DIALOG_NAME       = "ChooseFileDlgKey";
+constexpr const char*  TAB_CONTAINER_SRC_NAME = "MainTabContainer";
+constexpr const char*  ABOUT_DIALOG_NAME      = "About##_dialog";
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
 
@@ -72,6 +70,7 @@ AppWindow::AppWindow()
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
 , m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 , m_show_debug_window(false)
 , m_show_provider_test_widow(false)
@@ -83,6 +82,7 @@ AppWindow::AppWindow()
 , m_histogram_visible(true)
 , m_sidebar_visible(true)
 , m_analysis_bar_visible(true)
+, m_init_file_dialog(false)
 {}
 
 AppWindow::~AppWindow()
@@ -214,6 +214,22 @@ AppWindow::ShowMessageDialog(const std::string& title, const std::string& messag
     m_message_dialog->Show(title, message);
 }
 
+void
+AppWindow::ShowFileDialog(const std::string& title, const std::string& file_filter,
+                          const std::string& initial_path, const bool& confirm_overwrite,
+                          std::function<void(std::string)> callback)
+{
+    m_file_dialog_callback = callback;
+    m_init_file_dialog     = true;
+    IGFD::FileDialogConfig config;
+    config.path  = initial_path;
+    config.flags = confirm_overwrite
+                       ? ImGuiFileDialogFlags_Default
+                       : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
+    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, file_filter.c_str(),
+                                            config);
+}
+
 Project*
 AppWindow::GetProject(const std::string& id)
 {
@@ -310,7 +326,7 @@ AppWindow::Render()
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
-    RenderFileDialogs();
+    RenderFileDialog();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
@@ -320,11 +336,9 @@ AppWindow::Render()
 }
 
 void
-AppWindow::RenderFileDialogs()
+AppWindow::RenderFileDialog()
 {
-    if(!ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME) &&
-       !ImGuiFileDialog::Instance()->IsOpened(FILE_SAVE_DIALOG_NAME) &&
-       !ImGuiFileDialog::Instance()->IsOpened(PROJECT_SAVE_DIALOG_NAME))
+    if(!ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME))
     {
         return;  // No file dialog is opened, nothing to render
     }
@@ -337,45 +351,26 @@ AppWindow::RenderFileDialogs()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, defaultStyle.WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, defaultStyle.CellPadding);
 
-    ImGui::SetNextWindowPos(
-        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
-        ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
+    if(m_init_file_dialog)
+    {
+        // Basically ImGuiCond_Appearing, except overwrite confirmation is a popup
+        // ontop of dialog which triggers ImGuiCond_Appearing, thus flag cannot be used.
+        ImGui::SetNextWindowPos(
+            ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()));
+        ImGui::SetNextWindowSize(FILE_DIALOG_SIZE);
+        m_init_file_dialog = false;
+    }
+
     if(ImGuiFileDialog::Instance()->Display(FILE_DIALOG_NAME))
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {
-            OpenFile(std::filesystem::path(ImGuiFileDialog::Instance()->GetFilePathName())
-                         .string());
+            m_file_dialog_callback(
+                std::filesystem::path(ImGuiFileDialog::Instance()->GetFilePathName())
+                    .string());
         }
         ImGuiFileDialog::Instance()->Close();
     }
-    Project* project = GetCurrentProject();
-    if(ImGuiFileDialog::Instance()->Display(FILE_SAVE_DIALOG_NAME) && project)
-    {
-        if(ImGuiFileDialog::Instance()->IsOk())
-        {
-            std::filesystem::path file_path(
-                ImGuiFileDialog::Instance()->GetFilePathName());
-
-            std::string file_path_str = file_path.string();
-            project->TrimSave(file_path_str);
-        }
-        ImGuiFileDialog::Instance()->Close();
-    }
-    if(ImGuiFileDialog::Instance()->Display(PROJECT_SAVE_DIALOG_NAME) && project)
-    {
-        if(ImGuiFileDialog::Instance()->IsOk())
-        {
-            std::filesystem::path file_path(
-                ImGuiFileDialog::Instance()->GetFilePathName());
-
-            std::string file_path_str = file_path.string();
-            project->SaveAs(file_path_str);
-        }
-        ImGuiFileDialog::Instance()->Close();
-    }
-
     ImGui::PopStyleVar(3);
 }
 
@@ -425,9 +420,6 @@ AppWindow::RenderFileMenu(Project* project)
     {
         if(ImGui::MenuItem("Open", nullptr))
         {
-            IGFD::FileDialogConfig config;
-            config.path = ".";
-
             std::string trace_types = ".db,.rpd";
 #ifdef JSON_TRACE_SUPPORT
             trace_types += ",.json";
@@ -438,8 +430,10 @@ AppWindow::RenderFileMenu(Project* project)
             std::string filters = "All (.rpv," + trace_types + "){.rpv," + trace_types +
                                   "},Projects (.rpv){.rpv},Traces (" + trace_types +
                                   "){" + trace_types + "}";
-            ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, "Choose File",
-                                                    filters.c_str(), config);
+
+            ShowFileDialog(
+                "Choose File", filters.c_str(), ".", false,
+                [this](std::string file_path) -> void { this->OpenFile(file_path); });
         }
         if(ImGui::MenuItem("Save", nullptr, false, project && project->IsProject()))
         {
@@ -447,8 +441,9 @@ AppWindow::RenderFileMenu(Project* project)
         }
         if(ImGui::MenuItem("Save As", nullptr, false, project))
         {
-            ImGuiFileDialog::Instance()->OpenDialog(PROJECT_SAVE_DIALOG_NAME,
-                                                    "Save as Project", ".rpv");
+            ShowFileDialog(
+                "Save as Project", ".rpv", "", true,
+                [project](std::string file_path) -> void { project->SaveAs(file_path); });
         }
         ImGui::Separator();
         const std::list<std::string> recent_files =
@@ -494,8 +489,10 @@ AppWindow::RenderEditMenu(Project* project)
         if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
                            project && project->IsTrimSaveAllowed()))
         {
-            ImGuiFileDialog::Instance()->OpenDialog(FILE_SAVE_DIALOG_NAME,
-                                                    "Save Trace Selection", ".db,.rpd");
+            ShowFileDialog("Save Trace Selection", ".db,.rpd", "", true,
+                           [project](std::string file_path) -> void {
+                               project->TrimSave(file_path);
+                           });
         }
         ImGui::Separator();
         if(ImGui::MenuItem("Preferences"))

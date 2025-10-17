@@ -557,6 +557,8 @@ typedef enum rocprofvis_controller_flow_control_properties_t : uint32_t
     kRPVControllerFlowControlName      = 0x50000004,
     // Level of target in track
     kRPVControllerFlowControlLevel     = 0x50000005,
+    // The target end timestamp
+    kRPVControllerFlowControlEndTimestamp = 0x50000006,
 } rocprofvis_controller_flow_control_properties_t;
 /* JSON: RPVFlowControl
 {

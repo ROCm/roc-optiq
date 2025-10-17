@@ -2343,7 +2343,15 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
                 flow_control_handle, kRPVControllerFlowControlTimestamp, 0, &data);
             if(result == kRocProfVisResultSuccess)
             {
-                event_info.flow_info[j].timestamp = data;
+                event_info.flow_info[j].start_timestamp = data;
+            }
+
+            data   = 0;
+            result = rocprofvis_controller_get_uint64(
+                flow_control_handle, kRPVControllerFlowControlEndTimestamp, 0, &data);
+            if(result == kRocProfVisResultSuccess)
+            {
+                event_info.flow_info[j].end_timestamp = data;
             }
 
             data   = 0;
@@ -2382,11 +2390,13 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
         flow.timestamp =
             static_cast<uint64_t>(event_info_for_requester->basic_info.m_start_ts);
         flow.track_id  = event_info_for_requester->track_id;
+        flow.end_timestamp = event_info_for_requester->basic_info.m_start_ts +
+                             event_info_for_requester->basic_info.m_duration;
         event_info.flow_info.push_back(flow);
 
         std::sort(event_info.flow_info.begin(), event_info.flow_info.end(),
                   [](const event_flow_data_t& a, const event_flow_data_t& b) {
-                      return a.timestamp < b.timestamp;
+                      return a.start_timestamp < b.start_timestamp;
                   });
     }
 

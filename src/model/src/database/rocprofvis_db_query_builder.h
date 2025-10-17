@@ -94,7 +94,7 @@ typedef struct rocprofvis_db_sqlite_sample_table_query_format
 
 typedef struct rocprofvis_db_sqlite_dataflow_query_format
 {
-    static constexpr const int NUM_PARAMS = 10;
+    static constexpr const int NUM_PARAMS = 11;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
     std::vector<std::string>   where;

@@ -32,7 +32,7 @@ rocprofvis_dm_size_t  FlowTrace::GetMemoryFootprint(){
 
 rocprofvis_dm_result_t  FlowTrace::AddRecord( rocprofvis_db_flow_data_t & data){
     try{
-        m_flows.push_back(FlowRecord(data.time, data.id, data.track_id, data.category_id, data.symbol_id, data.level));
+        m_flows.push_back(FlowRecord(data.time, data.end_time, data.id, data.track_id, data.category_id, data.symbol_id, data.level));
     }
     catch(std::exception ex)
     {
@@ -44,6 +44,11 @@ rocprofvis_dm_result_t  FlowTrace::AddRecord( rocprofvis_db_flow_data_t & data){
 rocprofvis_dm_result_t FlowTrace::GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_flows.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     timestamp = m_flows[index].Timestamp();
+    return kRocProfVisDmResultSuccess;
+}
+rocprofvis_dm_result_t FlowTrace::GetRecordEndTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp){
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_flows.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    timestamp = m_flows[index].EndTimestamp();
     return kRocProfVisDmResultSuccess;
 }
 rocprofvis_dm_result_t FlowTrace::GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_id_t & event_id){
@@ -91,6 +96,8 @@ rocprofvis_dm_result_t FlowTrace::GetPropertyAsUint64(rocprofvis_dm_property_t p
             return kRocProfVisDmResultSuccess;
         case kRPVDMEndpointTimestampUInt64Indexed:
             return GetRecordTimestampAt(index, *value);
+        case kRPVDMEndpointEndTimestampUInt64Indexed:
+            return GetRecordEndTimestampAt(index, *value);
         case kRPVDMEndpointIDUInt64Indexed:
             return GetRecordIdAt(index, *(rocprofvis_dm_event_id_t*)value);
         case kRPVDMEndpointTrackIDUInt64Indexed:

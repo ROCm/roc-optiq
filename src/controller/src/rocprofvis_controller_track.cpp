@@ -326,8 +326,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                         kRPVControllerEventCategory, 0,
                                         rocprofvis_dm_get_property_as_charptr(
                                             slice,
-                                            kRPVDMEventTypeStringCharPtrIndexed, i),
-                                        0);
+                                            kRPVDMEventTypeStringCharPtrIndexed, i));
                                     ROCPROFVIS_ASSERT(result ==
                                                         kRocProfVisResultSuccess);
 
@@ -335,8 +334,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                         kRPVControllerEventName, 0,
                                         rocprofvis_dm_get_property_as_charptr(
                                             slice,
-                                            kRPVDMEventSymbolStringCharPtrIndexed, i),
-                                        0);
+                                            kRPVDMEventSymbolStringCharPtrIndexed, i));
                                     ROCPROFVIS_ASSERT(result ==
                                                         kRocProfVisResultSuccess);
 
@@ -990,7 +988,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
-rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length)
+rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)

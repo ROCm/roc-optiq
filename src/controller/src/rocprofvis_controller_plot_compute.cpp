@@ -42,7 +42,7 @@ rocprofvis_result_t ComputePlot::Load(const ComputeTable* table, const std::stri
         else
         {
             // New series, set the name.
-            result = m_series[series_name].SetString(kRPVControllerPlotSeriesName, 0, series_name.c_str(), series_name.length());
+            result = m_series[series_name].SetString(kRPVControllerPlotSeriesName, 0, series_name.c_str());
         }
         if (result == kRocProfVisResultSuccess)
         {
@@ -274,7 +274,7 @@ rocprofvis_result_t ComputePlot::Load(ComputeTable* counter_table, ComputeTable*
                                 double y = static_cast<double>(flops_counters) / num_dispatches / dispatch_duration / num_dispatches;
 
                                 PlotSeries series;
-                                ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetString(kRPVControllerPlotSeriesName, 0, name.c_str(), name.length()));
+                                ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetString(kRPVControllerPlotSeriesName, 0, name.c_str()));
                                 ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetDouble(kRPVControllerPlotSeriesXValuesIndexed, 0, x));
                                 ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetDouble(kRPVControllerPlotSeriesYValuesIndexed, 0, y));
                                 m_series[name] = std::move(series);
@@ -309,7 +309,7 @@ rocprofvis_result_t ComputePlot::Load(ComputeTable* counter_table, ComputeTable*
                     max_ops = std::max(max_ops, ops);
                         
                     PlotSeries series;
-                    ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetString(kRPVControllerPlotSeriesName, 0, name.c_str(), name.length()));
+                    ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetString(kRPVControllerPlotSeriesName, 0, name.c_str()));
                     ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetDouble(kRPVControllerPlotSeriesXValuesIndexed, 0, ops / max_memory_bw));
                     ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetDouble(kRPVControllerPlotSeriesYValuesIndexed, 0, ops));
                     ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetDouble(kRPVControllerPlotSeriesXValuesIndexed, 1, ROOFLINE_DEFINITION.x_axis_max));
@@ -324,7 +324,7 @@ rocprofvis_result_t ComputePlot::Load(ComputeTable* counter_table, ComputeTable*
                     std::string name = ROOFLINE_DEFINITION.m_memory_names.at(level) + "-" + ROOFLINE_DEFINITION.m_format_names.at(format);
 
                     PlotSeries series;
-                    ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetString(kRPVControllerPlotSeriesName, 0, name.c_str(), name.length()));
+                    ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetString(kRPVControllerPlotSeriesName, 0, name.c_str()));
                     ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetDouble(kRPVControllerPlotSeriesXValuesIndexed, 0, ROOFLINE_DEFINITION.x_axis_min));
                     ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetDouble(kRPVControllerPlotSeriesYValuesIndexed, 0, ROOFLINE_DEFINITION.x_axis_min * bw));
                     ROCPROFVIS_ASSERT(kRocProfVisResultSuccess == series.SetDouble(kRPVControllerPlotSeriesXValuesIndexed, 1, max_ops / bw));

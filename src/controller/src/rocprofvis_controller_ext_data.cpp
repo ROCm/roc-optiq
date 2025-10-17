@@ -313,7 +313,7 @@ rocprofvis_result_t ExtData::SetObject(rocprofvis_property_t property, uint64_t 
     return result;
 }
 rocprofvis_result_t ExtData::SetString(rocprofvis_property_t property, uint64_t index,
-                                char const* value, uint32_t length) 
+                                char const* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)

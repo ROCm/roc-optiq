@@ -171,8 +171,7 @@ Graph::GenerateLODEvent(std::vector<Event*> & events, uint32_t lod_to_generate, 
                                                            &m_lods[lod_to_generate]);
         ROCPROFVIS_ASSERT(level != UINT64_MAX);
         event->SetUInt64(kRPVControllerEventLevel, 0, level);
-        event->SetString(kRPVControllerEventName, 0, combined_name.c_str(),
-                         combined_name.size());
+        event->SetString(kRPVControllerEventName, 0, combined_name.c_str());
 
         event->SetUInt64(kRPVControllerEventNumChildren, 0, events.size());
         for(uint32_t e_idx = 0; e_idx < events.size(); e_idx++)
@@ -894,8 +893,7 @@ Graph::SetObject(rocprofvis_property_t property, uint64_t index,
     return result;
 }
 rocprofvis_result_t
-Graph::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
-                 uint32_t length)
+Graph::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)

@@ -474,8 +474,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 dm_track_handle,
                                                 kRPVDMTrackSubProcessNameCharPtr, 0);
                                         track->SetString(kRPVControllerTrackName, 0,
-                                                         dm_track_name.c_str(),
-                                                         dm_track_name.length());
+                                                         dm_track_name.c_str());
 
                                         uint64_t num_records =
                                             rocprofvis_dm_get_property_as_uint64(
@@ -812,8 +811,8 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             else
                                                             {
                                                                 node->SetString(
-                                                                    columns[j], 0, prop_string, strlen(prop_string));
-
+                                                                    columns[j], 0,
+                                                                    prop_string);
                                                             }
                                                         }
 
@@ -957,7 +956,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             }
                                                             else
                                                             {
-                                                                proc->SetString( columns[j], 0, prop_string, strlen(prop_string));
+                                                                proc->SetString( columns[j], 0, prop_string);
                                                             }
                                                         }
 
@@ -1140,8 +1139,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             {
                                                                 proc->SetString(
                                                                     columns[j], 0,
-                                                                    prop_string,
-                                                                    strlen(prop_string));
+                                                                    prop_string);
                                                             }
                                                         }
 
@@ -1877,7 +1875,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 queue_processor->SetObject(kRPVControllerProcessorQueueIndexed,count,(rocprofvis_handle_t*) queue);
                                                             }
 
-                                                            queue->SetString(kRPVControllerQueueName, 0, queue_name.c_str(), queue_name.length());
+                                                            queue->SetString(kRPVControllerQueueName, 0, queue_name.c_str());
 
                                                             queues[queue_id] = queue;
                                                         }
@@ -2086,8 +2084,8 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 stream->SetObject(  kRPVControllerStreamQueueIndexed,  num_queues, (rocprofvis_handle_t*) q);
                                                             }
 
-                                                            stream->SetString( kRPVControllerStreamName, 0, stream_name.c_str(), stream_name.length());
-                                                            stream->SetString( kRPVControllerStreamExtData, 0, stream_ext_data.c_str(), stream_ext_data.length());
+                                                            stream->SetString( kRPVControllerStreamName, 0, stream_name.c_str());
+                                                            stream->SetString( kRPVControllerStreamExtData, 0, stream_ext_data.c_str());
                                                         }
                                                     }
                                                 }
@@ -2300,7 +2298,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             }
                                                             for (const auto& [key, value] : string_values)
                                                             {
-                                                                counter->SetString(key, 0, value.c_str(),value.length());
+                                                                counter->SetString(key, 0, value.c_str());
                                                             }
 
                                                             counter->SetObject(kRPVControllerCounterNode, 0,(rocprofvis_handle_t*) counter_node);
@@ -3172,7 +3170,7 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
-rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) 
+rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t index, char const* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)

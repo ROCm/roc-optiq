@@ -697,7 +697,7 @@ rocprofvis_result_t Event::SetObject(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
-rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) 
+rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t index, char const* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
@@ -706,13 +706,13 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerEventName:
             {
-                m_name = StringTable::Get().AddString(value, length > 0);
+                m_name = StringTable::Get().AddString(value, *value != 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventCategory:
             {
-                m_category = StringTable::Get().AddString(value, length > 0);
+                m_category = StringTable::Get().AddString(value, *value != 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }

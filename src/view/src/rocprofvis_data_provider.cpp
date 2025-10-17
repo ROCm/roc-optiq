@@ -1332,19 +1332,16 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                               table_params.m_sort_order);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result = rocprofvis_controller_set_string(
-        args, kRPVControllerTableArgsFilter, 0, table_params.m_filter.data(),
-        static_cast<uint32_t>(table_params.m_filter.length()));
+    result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0,
+                                              table_params.m_filter.data());
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result = rocprofvis_controller_set_string(
-        args, kRPVControllerTableArgsGroup, 0, table_params.m_group.data(),
-        static_cast<uint32_t>(table_params.m_group.length()));
+    result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsGroup, 0,
+                                              table_params.m_group.data());
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result = rocprofvis_controller_set_string(
-        args, kRPVControllerTableArgsGroupColumns, 0, table_params.m_group_columns.data(),
-        static_cast<uint32_t>(table_params.m_group_columns.length()));
+    result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsGroupColumns,
+                                              0, table_params.m_group_columns.data());
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     if(table_params.m_start_row != -1)
@@ -1752,9 +1749,7 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
                     {
                         result = rocprofvis_controller_set_string(
                             args, kRPVControllerTableStringTableFiltersIndexed, i,
-                            table_params.m_string_table_filters[i].data(),
-                            static_cast<uint32_t>(
-                                table_params.m_string_table_filters[i].length()));
+                            table_params.m_string_table_filters[i].data());
                         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                     }
                     break;

@@ -163,7 +163,7 @@ rocprofvis_result_t Arguments::SetObject(rocprofvis_property_t property, uint64_
     return result;
 }
 rocprofvis_result_t Arguments::SetString(rocprofvis_property_t property, uint64_t index,
-                                char const* value, uint32_t length) 
+                                char const* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)

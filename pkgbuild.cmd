@@ -22,6 +22,11 @@ SET PKGCHECK=TRUE
 SET ISM_FILE_PATH=%DEVROOT%\Installation\Scripts\setup.ism
 SET ROOTFOLDER=%DEVROOT%
 
+
+echo Copying Installer folder to root for RMS build...
+xcopy "%DEVROOT%\Installer" "%DEVROOT%" /E /I /Y
+
+
 Echo PkgBuild.cmd: ISM File Path %ISM_FILE_PATH%
 Echo PkgBuild.cmd: Root Folder %DEVROOT%
 

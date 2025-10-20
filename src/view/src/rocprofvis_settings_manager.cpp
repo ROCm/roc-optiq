@@ -119,7 +119,7 @@ const std::vector<ImU32> FLAME_COLORS = {
     IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
     IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
 };
-constexpr char*  SETTINGS_FILE_NAME = "settings_application.json";
+constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
 constexpr size_t RECENT_FILES_LIMIT = 5;
 constexpr float  EVENT_LEVEL_HEIGHT = 40.0f;
 

@@ -110,8 +110,8 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                     uint64_t end_timestamp = 0;
                                     uint64_t track_id  = 0;
                                     uint64_t level     = 0;
-                                    char* category  = "";
-                                    char* symbol    = "";                                    
+                                    char* category  = nullptr;
+                                    char* symbol    = nullptr;                                    
                                     if(kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_uint64(
                                                dm_flowtrace,

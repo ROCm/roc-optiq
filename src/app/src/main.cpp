@@ -101,7 +101,8 @@ main(int, char**)
         std::filesystem::path log_path = std::filesystem::path(config_path) / "visualizer.log";
         rocprofvis_core_enable_log(log_path.string().c_str(),spdlog::level::info);
     #endif
-
+    
+    glfwSetErrorCallback(glfw_error_callback);
     if(glfwInit())
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);

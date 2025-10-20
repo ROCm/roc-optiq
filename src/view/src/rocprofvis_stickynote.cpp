@@ -2,6 +2,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_stickynote.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
@@ -103,15 +104,12 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kFillerColor);
     ImU32            border_color = settings.GetColor(Colors::kBorderColor);
-    ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
-    ImU32            shadow_color = IM_COL32(0, 0, 0, 60);
+    ImU32            accent_color = settings.GetColor(Colors::kStickyNoteYellow);
 
     const float rounding      = 8.0f;
-    const float border_thick  = 2.0f;
-    const float shadow_offset = 4.0f;
     const float margin        = 12.0f;
-    const float header_height = 28.0f;
-    const float edit_btn_size = 20.0f;
+    const float header_height = 32.0f;
+    const float edit_btn_size = 30.0f;
 
     float  x           = static_cast<float>((m_time_ns - v_min_x) * pixels_per_ns);
     float  y           = m_y_offset;
@@ -121,89 +119,57 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     // Set the cursor to the sticky note position inside the parent window
     ImGui::SetCursorScreenPos(sticky_pos);
 
-    // Begin a child window for the sticky note to receive input (for button clicks)
+    // Round corners
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+
+    ImGui::SetCursorScreenPos(sticky_pos);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg_color);
+    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+
     ImGui::BeginChild(
         ("StickyNoteChild##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
-        sticky_size, false,
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        sticky_size, true);
 
-    // Get the child window's draw list and position
-    ImDrawList* child_draw_list = draw_list;
-    ImVec2      child_offset    = sticky_pos;
+    // Header (accent bar)
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, accent_color);
+    ImGui::BeginChild("Header", ImVec2(sticky_size.x, header_height), false);
 
-    // Draw sticky note graphics (background, border, accent bar)
-    child_draw_list->AddRectFilled(child_offset + ImVec2(shadow_offset, shadow_offset),
-                                   child_offset + ImVec2(sticky_size.x + shadow_offset,
-                                                         sticky_size.y + shadow_offset),
-                                   shadow_color, rounding);
+    // Title (left)
+    ImGui::SetCursorPos(ImVec2(margin, 4.0f));
+    ImGui::TextUnformatted(m_title.c_str());
 
-    child_draw_list->AddRectFilled(child_offset, child_offset + sticky_size, bg_color,
-                                   rounding);
-    child_draw_list->AddRect(child_offset, child_offset + sticky_size, border_color,
-                             rounding, 0, border_thick);
-
-    ImU32 accent_color = settings.GetColor(Colors::kHighlightChart);
-    child_draw_list->AddRectFilled(child_offset,
-                                   child_offset + ImVec2(sticky_size.x, header_height),
-                                   accent_color, rounding, ImDrawFlags_RoundCornersTop);
-
-    // Title (top left, clipped if too long)
-    float  title_padding_x = margin;
-    float  title_padding_y = 4.0f;
-    float  title_max_width = sticky_size.x - 2 * margin - edit_btn_size - margin;
-    ImVec2 title_pos       = ImVec2(title_padding_x, title_padding_y);
-    ImVec4 title_clip =
-        ImVec4(child_offset.x + title_pos.x, child_offset.y + title_pos.y,
-               child_offset.x + title_pos.x + title_max_width,
-               child_offset.y + title_pos.y + header_height - title_padding_y);
-
-    child_draw_list->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-                             child_offset + title_pos, text_color, m_title.c_str(),
-                             nullptr, title_max_width, &title_clip);
-
-    // Edit Button (top right, local to child window)
-    ImVec2 edit_btn_local_pos = ImVec2(sticky_size.x - edit_btn_size - margin / 2,
-                                       (header_height - edit_btn_size) / 2);
-
-    ImGui::SetCursorPos(edit_btn_local_pos);
-
-    if(ImGui::InvisibleButton(
-           ("EditSticky##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
-           ImVec2(edit_btn_size, edit_btn_size)))
+    // Edit button (right)
+    ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size - margin / 2,
+                               (header_height - edit_btn_size) / 2));
+    ImGui::PushFont(
+        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault));
+    if(ImGui::Button((std::string(ICON_EDIT) + "##" +
+                      std::to_string(reinterpret_cast<uintptr_t>(this)))
+                         .c_str(),
+                     ImVec2(edit_btn_size, edit_btn_size)))
     {
         EventManager::GetInstance()->AddEvent(
             std::make_shared<StickyNoteEvent>(m_id, m_project_id));
-         
     }
-
-    // Draw edit button graphics over the button
-    ImVec2 edit_btn_max = ImVec2(edit_btn_local_pos.x + edit_btn_size,
-                                 edit_btn_local_pos.y + edit_btn_size);
-    child_draw_list->AddRectFilled(child_offset + edit_btn_local_pos,
-                                   child_offset + edit_btn_max,
-                                   IM_COL32(220, 220, 220, 255), 6.0f);
-    child_draw_list->AddLine(
-        child_offset + ImVec2(edit_btn_local_pos.x + 5, edit_btn_local_pos.y + 15),
-        child_offset + ImVec2(edit_btn_local_pos.x + 15, edit_btn_local_pos.y + 5),
-        IM_COL32(80, 80, 80, 255), 2.0f);
-
-    // Text Area (local to child window)
-    float  text_area_x = margin;
-    float  text_area_y = header_height + margin;
-    float  text_area_w = sticky_size.x - 2 * margin;
-    float  text_area_h = sticky_size.y - header_height - 2 * margin;
-    ImVec2 text_pos    = ImVec2(text_area_x, text_area_y);
-
-    const ImVec4 clip_rect =
-        ImVec4(child_offset.x + text_area_x, child_offset.y + text_area_y,
-               child_offset.x + text_area_x + text_area_w,
-               child_offset.y + text_area_y + text_area_h);
-
-    child_draw_list->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-                             child_offset + text_pos, text_color, m_text.c_str(), nullptr,
-                             text_area_w, &clip_rect);
+    ImGui::PopFont();
 
     ImGui::EndChild();
+    ImGui::PopStyleColor();
+
+    // Text area
+    ImGui::SetCursorPos(ImVec2(margin, header_height + margin));
+    ImGui::PushTextWrapPos(sticky_size.x - margin);
+    ImGui::TextUnformatted(m_text.c_str());
+    ImGui::PopTextWrapPos();
+
+
+    ImGui::EndChild();
+
+ 
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
 }
 
 bool
@@ -222,7 +188,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
     ImVec2 handle_max = ImVec2(sticky_max.x, sticky_max.y);
 
     ImVec2 mouse_pos = ImGui::GetMousePos();
-    
+
     if(ImGui::IsMouseHoveringRect(handle_pos, handle_max)) return false;
 
     bool mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
@@ -240,16 +206,18 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
 
     if(m_dragging && mouse_down)
     {
-        float new_x = mouse_pos.x - window_position.x - m_drag_offset.x;
-        float new_y = mouse_pos.y - window_position.y - m_drag_offset.y;
+        float  new_x       = mouse_pos.x - window_position.x - m_drag_offset.x;
+        float  new_y       = mouse_pos.y - window_position.y - m_drag_offset.y;
         ImVec2 window_size = ImGui::GetWindowSize();
-        new_y = std::clamp(new_y, 0.0f, window_size.y - m_size.y); // Limit to window height
-        new_x = std::clamp(new_x, 0.0f, window_size.x - m_size.x); // Limit to window width
+        new_y =
+            std::clamp(new_y, 0.0f, window_size.y - m_size.y);  // Limit to window height
+        new_x =
+            std::clamp(new_x, 0.0f, window_size.x - m_size.x);  // Limit to window width
 
-        m_time_ns   = v_min_x + (new_x / pixels_per_ns);
-        m_y_offset  = new_y;
-        m_v_max_x   = v_max_x;
-        m_v_min_x   = v_min_x;
+        m_time_ns  = v_min_x + (new_x / pixels_per_ns);
+        m_y_offset = new_y;
+        m_v_max_x  = v_max_x;
+        m_v_min_x  = v_min_x;
         return true;
     }
 

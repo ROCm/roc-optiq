@@ -160,6 +160,10 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::EndChild();
+    bool overlay_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_None);
+     bool overlay_clicked =
+        overlay_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    std::cout << overlay_clicked<<std::endl;
 }
 
 void
@@ -743,6 +747,7 @@ TimelineView::CalculateGridInterval()
 void
 TimelineView::RenderGrid()
 {
+   
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -1465,8 +1470,11 @@ TimelineView::RenderTraceView()
     m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
     RenderGrid();
-    RenderGraphView();
-    RenderSplitter(screen_pos);
+    if (!m_stop_user_interaction) {
+        RenderGraphView();
+        RenderSplitter(screen_pos);
+    }
+     
     RenderInteractiveUI(screen_pos);
 
     RenderScrubber(screen_pos);

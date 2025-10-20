@@ -199,17 +199,15 @@ set(CPACK_PACKAGE_VERSION
 set(CPACK_PACKAGE_CONTACT "${PKG_MAINTAINER_NM} <${PKG_MAINTAINER_EMAIL}>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PKG_DESCRIPTION}")
 
-#TODO - License File is mandatory for packaging release
-#Once License file is available in the source path
-#Enable this Code for License File Packaging.
-#set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" CACHE PATH "Path to License File in source dir" )
-#set(CPACK_RESOURCE_FILE_LICENSE "${LICENSE_FILE}")
-#set(CPACK_PACKAGE_LICENSE "MIT")
-#set(CPACK_RPM_PACKAGE_LICENSE "MIT" )
+# License Information
+set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" CACHE PATH "Path to License File in source dir" )
+set(CPACK_RESOURCE_FILE_LICENSE "${LICENSE_FILE}")
+set(CPACK_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
+set(CPACK_RPM_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
 # License file
-# install(FILES ${LICENSE_FILE}
-#        DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
-#        COMPONENT ${RUNTIME_COMP_TYPE} )
+install(FILES ${LICENSE_FILE}
+       DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
+       COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
 install(PROGRAMS ${BUILD_DIR}/rocprof-visualizer

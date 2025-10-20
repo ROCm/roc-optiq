@@ -24,6 +24,8 @@ ComputePlot::~ComputePlot()
 
 rocprofvis_result_t ComputePlot::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args)
 {
+    (void) dm_handle;
+    (void) args;
     rocprofvis_result_t result = kRocProfVisResultSuccess;
     return result;
 }
@@ -67,9 +69,9 @@ rocprofvis_result_t ComputePlot::Load(const ComputeTable* table, const std::stri
                             }
                             else if (values[i].second->GetType() == kRPVControllerPrimitiveTypeUInt64)
                             {
-                                uint64_t data_uint;
+                                uint64_t data_uint = 0;
                                 result = values[i].second->GetUInt64(&data_uint);
-                                data = data_uint;
+                                data = static_cast<double>(data_uint);
                             }
                             if (result == kRocProfVisResultSuccess)
                             {
@@ -98,9 +100,9 @@ rocprofvis_result_t ComputePlot::Load(const ComputeTable* table, const std::stri
                         }
                         else if (value.second->GetType() == kRPVControllerPrimitiveTypeUInt64)
                         {
-                            uint64_t data_uint;
+                            uint64_t data_uint = 0;
                             result = value.second->GetUInt64(&data_uint);
-                            data = data_uint;
+                            data = static_cast<double>(data_uint);
                         }
                     }
                     result = kRocProfVisResultSuccess;
@@ -130,13 +132,13 @@ rocprofvis_result_t ComputePlot::Load(ComputeTable* counter_table, ComputeTable*
         std::array dispatch_groups = {std::unordered_map<std::string, std::vector<std::string>> {}, std::unordered_map<std::string, std::vector<std::string>> {}};
         std::pair<std::string, Data*> metric_data;
 
-        uint64_t num_dispatches = -1;
+        uint64_t num_dispatches = 0;
         result = counter_table->GetUInt64(kRPVControllerTableNumRows, 0, &num_dispatches);
         if (result == kRocProfVisResultSuccess)
         {
             ROCPROFVIS_ASSERT(num_dispatches > 0);
-            uint32_t length = -1;
-            rocprofvis_result_t result = counter_table->GetString(kRPVControllerTableColumnHeaderIndexed, 1, nullptr, &length);
+            uint32_t length = 0;
+            result = counter_table->GetString(kRPVControllerTableColumnHeaderIndexed, 1, nullptr, &length);
             if (result == kRocProfVisResultSuccess)
             {
                 ROCPROFVIS_ASSERT(length >= 0);

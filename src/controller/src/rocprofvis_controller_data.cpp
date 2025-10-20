@@ -165,7 +165,7 @@ Data::Data(char const* const string)
         ROCPROFVIS_ASSERT(m_string);
         if (m_string)
         {
-            strcpy(m_string, string);
+            std::memcpy(m_string, string, length);
         }
     }
 }
@@ -274,7 +274,7 @@ rocprofvis_result_t Data::GetString(char* string, uint32_t* length)
         {
             if (length && (!string || (*length == 0)))
             {
-                *length = m_string ? strlen(m_string) : 0;
+                *length = static_cast<uint32_t>(m_string ? strlen(m_string) : 0);
                 result = kRocProfVisResultSuccess;
             }
             else if (length && string && (*length > 0))
@@ -315,11 +315,12 @@ rocprofvis_result_t Data::SetString(char const* string)
                     m_string = nullptr;
                 }
 
-                uint32_t length = strlen(string);
+                size_t length = strlen(string);
                 m_string = (char*)calloc(length+1, 1);
                 if (m_string)
                 {
-                    strncpy(m_string, string, length);
+                    std::memcpy(m_string, string, length);
+                    m_string[length] = '\0';
                     result = kRocProfVisResultSuccess;
                 }
                 else

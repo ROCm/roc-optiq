@@ -47,6 +47,7 @@ Counter::GetType(void)
 rocprofvis_result_t
 Counter::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -115,6 +116,8 @@ Counter::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* val
 rocprofvis_result_t
 Counter::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -156,6 +159,7 @@ rocprofvis_result_t
 Counter::GetObject(rocprofvis_property_t property, uint64_t index,
                      rocprofvis_handle_t** value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -220,6 +224,7 @@ rocprofvis_result_t
 Counter::GetString(rocprofvis_property_t property, uint64_t index, char* value,
                      uint32_t* length)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -308,24 +313,25 @@ Counter::GetString(rocprofvis_property_t property, uint64_t index, char* value,
 rocprofvis_result_t
 Counter::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
         case kRPVControllerCounterId:
         {
-            m_id   = value;
+            m_id   = static_cast<uint32_t>(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerCounterEventCode:
         {
-            m_event_code   = value;
+            m_event_code   = static_cast<uint32_t>(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerCounterInstanceId:
         {
-            m_instance_id   = value;
+            m_instance_id   = static_cast<uint32_t>(value);
             result = kRocProfVisResultSuccess;
             break;
         }
@@ -373,6 +379,8 @@ Counter::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t valu
 rocprofvis_result_t
 Counter::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -415,6 +423,7 @@ Counter::SetObject(rocprofvis_property_t property, uint64_t index,
                      rocprofvis_handle_t* value)
 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -494,6 +503,7 @@ Counter::SetObject(rocprofvis_property_t property, uint64_t index,
 rocprofvis_result_t
 Counter::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value && *value != 0)
     {

@@ -41,4 +41,4 @@ protected:
 }
 }
 
-#define GetStdStringImpl(value, length, data) GetStringImpl(value, length, data.c_str(), data.length())
+#define GetStdStringImpl(value, length, data) GetStringImpl(value, length, data.c_str(), static_cast<uint32_t>(data.length()))

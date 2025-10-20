@@ -28,11 +28,12 @@ rocprofvis_controller_object_type_t Plot::GetType(void)
 
 rocprofvis_result_t Plot::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array)
 {
+    (void) dm_handle;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, m_series.size());
     if (result == kRocProfVisResultSuccess)
     {
-        int index = 0;
+        // int index = 0; TODO <-- was this intentional?
         std::vector<Data>& array_data = array.GetVector();
         array_data.resize(m_series.size());
         for (auto& it : m_series)
@@ -46,6 +47,7 @@ rocprofvis_result_t Plot::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index,
 
 rocprofvis_result_t Plot::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -96,6 +98,7 @@ rocprofvis_result_t Plot::GetUInt64(rocprofvis_property_t property, uint64_t ind
 
 rocprofvis_result_t Plot::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -126,6 +129,7 @@ rocprofvis_result_t Plot::GetDouble(rocprofvis_property_t property, uint64_t ind
 
 rocprofvis_result_t Plot::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -175,7 +179,7 @@ rocprofvis_result_t Plot::GetString(rocprofvis_property_t property, uint64_t ind
                 {
                     if (!value && length)
                     {
-                        *length = m_x_axis.m_tick_labels[index].size();
+                        *length = static_cast<uint32_t>(m_x_axis.m_tick_labels[index].size());
                         result  = kRocProfVisResultSuccess;
                     }
                     else if (value && length)
@@ -192,7 +196,7 @@ rocprofvis_result_t Plot::GetString(rocprofvis_property_t property, uint64_t ind
                 {
                     if (!value && length)
                     {
-                        *length = m_y_axis.m_tick_labels[index].size();
+                        *length = static_cast<uint32_t>(m_y_axis.m_tick_labels[index].size());
                         result  = kRocProfVisResultSuccess;
                     }
                     else if (value && length)
@@ -207,7 +211,7 @@ rocprofvis_result_t Plot::GetString(rocprofvis_property_t property, uint64_t ind
             {
                 if (!value && length)
                 {
-                    *length = m_x_axis.m_title.size();
+                    *length = static_cast<uint32_t>(m_x_axis.m_title.size());
                     result  = kRocProfVisResultSuccess;
                 }
                 else if (value && length)
@@ -221,7 +225,7 @@ rocprofvis_result_t Plot::GetString(rocprofvis_property_t property, uint64_t ind
             {
                 if (!value && length)
                 {
-                    *length = m_y_axis.m_title.size();
+                    *length = static_cast<uint32_t>(m_y_axis.m_title.size());
                     result  = kRocProfVisResultSuccess;
                 }
                 else if (value && length)
@@ -235,7 +239,7 @@ rocprofvis_result_t Plot::GetString(rocprofvis_property_t property, uint64_t ind
             {
                 if (!value && length)
                 {
-                    *length = m_title.size();
+                    *length = static_cast<uint32_t>(m_title.size());
                     result  = kRocProfVisResultSuccess;
                 }
                 else if (value && length)

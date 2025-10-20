@@ -29,6 +29,7 @@ rocprofvis_controller_object_type_t CallStack::GetType(void)
 rocprofvis_result_t CallStack::GetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -90,6 +91,7 @@ rocprofvis_result_t CallStack::GetUInt64(rocprofvis_property_t property, uint64_
 rocprofvis_result_t CallStack::GetDouble(rocprofvis_property_t property, uint64_t index,
                                 double* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -118,6 +120,7 @@ rocprofvis_result_t CallStack::GetDouble(rocprofvis_property_t property, uint64_
 rocprofvis_result_t CallStack::GetObject(rocprofvis_property_t property, uint64_t index,
                                 rocprofvis_handle_t** value) 
 {
+    (void) index;   
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -146,6 +149,7 @@ rocprofvis_result_t CallStack::GetObject(rocprofvis_property_t property, uint64_
 rocprofvis_result_t CallStack::GetString(rocprofvis_property_t property, uint64_t index,
                                 char* value, uint32_t* length) 
 {
+    (void) index;    
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -179,6 +183,8 @@ rocprofvis_result_t CallStack::GetString(rocprofvis_property_t property, uint64_
 rocprofvis_result_t CallStack::SetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t value) 
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -205,6 +211,8 @@ rocprofvis_result_t CallStack::SetUInt64(rocprofvis_property_t property, uint64_
 rocprofvis_result_t CallStack::SetDouble(rocprofvis_property_t property, uint64_t index,
                                 double value) 
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -231,6 +239,8 @@ rocprofvis_result_t CallStack::SetDouble(rocprofvis_property_t property, uint64_
 rocprofvis_result_t CallStack::SetObject(rocprofvis_property_t property, uint64_t index,
                                 rocprofvis_handle_t* value) 
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -259,6 +269,7 @@ rocprofvis_result_t CallStack::SetObject(rocprofvis_property_t property, uint64_
 rocprofvis_result_t CallStack::SetString(rocprofvis_property_t property, uint64_t index,
                                 char const* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {

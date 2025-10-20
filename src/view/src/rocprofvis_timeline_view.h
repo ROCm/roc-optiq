@@ -90,6 +90,8 @@ public:
     TimelineArrow& GetArrowLayer();
 
 private:
+    void                            UpdateMaxMetaAreaSize(float new_size);
+    void                            UpdateAllMaxMetaAreaSizes();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
 
@@ -140,6 +142,7 @@ private:
     std::shared_ptr<AnnotationsManager> m_annotations;
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
+    float                               m_max_meta_area_size;
     std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
     struct
     {

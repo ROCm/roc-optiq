@@ -12,8 +12,6 @@ namespace View
 {
 
 float            TrackItem::s_metadata_width = 400.0f;
-float            TrackItem::m_meta_area_scale_width = 0.0f;
-
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                      double time_offset_ns, double& min_x, double& max_x, double scale_x)
@@ -35,6 +33,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_request_state(TrackDataRequestState::kIdle)
 , m_track_height_changed(false)
 , m_meta_area_clicked(false)
+, m_meta_area_scale_width(0.0f)
 , m_settings(SettingsManager::GetInstance())
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
@@ -167,6 +166,15 @@ float
 TrackItem::GetReorderGripWidth()
 {
     return m_reorder_grip_width;
+}
+
+void 
+TrackItem::UpdateMaxMetaAreaSize(float newSize)
+{
+    if (m_meta_area_scale_width > 0)
+    {
+        m_meta_area_scale_width = newSize;
+    }
 }
 
 void

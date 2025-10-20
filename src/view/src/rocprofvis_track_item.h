@@ -78,6 +78,9 @@ public:
 
     float GetReorderGripWidth();
 
+    float GetMetaAreaScaleWidth() { return m_meta_area_scale_width; }
+    void  UpdateMaxMetaAreaSize(float newSize);
+
 protected:
     virtual void RenderMetaArea();
     virtual void RenderMetaAreaScale()          = 0;
@@ -109,7 +112,7 @@ protected:
     TrackDataRequestState m_request_state;
     SettingsManager&      m_settings;
     bool                  m_meta_area_clicked;
-    static float          m_meta_area_scale_width;
+    float                 m_meta_area_scale_width;
     bool                  m_selected;
     float                 m_reorder_grip_width;
 

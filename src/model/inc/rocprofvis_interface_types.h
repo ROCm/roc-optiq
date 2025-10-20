@@ -157,7 +157,6 @@ typedef enum rocprofvis_time_bucket_size {
     kRPVDbMicrosecond = 1000,
     kRPVDbMillisecond = 1000000,
     kRPVDbSecond = 1000000000,
-    kRPVDb1000Seconds = 1000000000000,
 } rocprofvis_time_bucket_size;
 
 typedef enum rocprofvis_db_data_type_t

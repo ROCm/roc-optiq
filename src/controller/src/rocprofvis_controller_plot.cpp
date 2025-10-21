@@ -29,6 +29,7 @@ rocprofvis_controller_object_type_t Plot::GetType(void)
 rocprofvis_result_t Plot::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array)
 {
     (void) dm_handle;
+    (void) count;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, m_series.size());
     if (result == kRocProfVisResultSuccess)

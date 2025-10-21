@@ -34,7 +34,7 @@ rocprofvis_result_t Plot::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index,
     result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, m_series.size());
     if (result == kRocProfVisResultSuccess)
     {
-        // int index = 0; TODO <-- was this intentional?
+        index = 0;
         std::vector<Data>& array_data = array.GetVector();
         array_data.resize(m_series.size());
         for (auto& it : m_series)

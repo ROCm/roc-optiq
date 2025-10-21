@@ -29,6 +29,7 @@ Processor::GetType(void)
 rocprofvis_result_t
 Processor::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -103,6 +104,8 @@ Processor::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* v
 rocprofvis_result_t
 Processor::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -204,6 +207,7 @@ rocprofvis_result_t
 Processor::GetString(rocprofvis_property_t property, uint64_t index, char* value,
                      uint32_t* length)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -272,36 +276,37 @@ Processor::GetString(rocprofvis_property_t property, uint64_t index, char* value
 rocprofvis_result_t
 Processor::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
         case kRPVControllerProcessorId:
         {
-            m_id   = value;
+            m_id   = static_cast<uint32_t>(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerProcessorTypeIndex:
         {
-            m_type_index = value;
+            m_type_index = static_cast<uint32_t>(value);
             result       = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerProcessorIndex:
         {
-            m_index = value;
-            result       = kRocProfVisResultSuccess;
+            m_index = static_cast<uint32_t>(value);
+            result  = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerProcessorLogicalIndex:
         {
-            m_logical_index = value;
-            result       = kRocProfVisResultSuccess;
+            m_logical_index = static_cast<uint32_t>(value);
+            result          = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerProcessorNodeId:
         {
-            m_node_id = value;
+            m_node_id = static_cast<uint32_t>(value);;
             result    = kRocProfVisResultSuccess;
             break;
         }
@@ -309,7 +314,7 @@ Processor::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t va
         {
             if(m_queues.size() != value)
             {
-                for(uint32_t i = value; i < m_queues.size(); i++)
+                for(uint64_t i = value; i < m_queues.size(); i++)
                 {
                     delete m_queues[i];
                     m_queues[i] = nullptr;
@@ -328,7 +333,7 @@ Processor::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t va
         {
             if(m_streams.size() != value)
             {
-                for(uint32_t i = value; i < m_streams.size(); i++)
+                for(uint64_t i = value; i < m_streams.size(); i++)
                 {
                     delete m_streams[i];
                     m_streams[i] = nullptr;
@@ -369,6 +374,8 @@ Processor::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t va
 rocprofvis_result_t
 Processor::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -478,6 +485,7 @@ Processor::SetObject(rocprofvis_property_t property, uint64_t index,
 rocprofvis_result_t
 Processor::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value && *value != 0)
     {

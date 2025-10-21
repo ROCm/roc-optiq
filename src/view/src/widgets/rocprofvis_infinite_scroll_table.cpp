@@ -360,7 +360,7 @@ InfiniteScrollTable::Render()
                         }
                         else
                         {
-                            ImGui::Text(display_value->c_str());
+                            ImGui::TextUnformatted(display_value->c_str());
                         }
                         column++;
                     }

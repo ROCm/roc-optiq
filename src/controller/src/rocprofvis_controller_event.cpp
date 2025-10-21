@@ -110,8 +110,8 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                     uint64_t end_timestamp = 0;
                                     uint64_t track_id  = 0;
                                     uint64_t level     = 0;
-                                    char* category  = "";
-                                    char* symbol    = "";                                    
+                                    char* category  = nullptr;
+                                    char* symbol    = nullptr;                                    
                                     if(kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_uint64(
                                                dm_flowtrace,
@@ -380,6 +380,7 @@ rocprofvis_result_t
 Event::Fetch(rocprofvis_property_t property, Array& array,
              rocprofvis_dm_trace_t dm_trace_handle)
 {
+    (void) array;
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     if(dm_trace_handle)
     {
@@ -477,6 +478,7 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Event::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -515,6 +517,7 @@ rocprofvis_result_t Event::GetDouble(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Event::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -542,19 +545,20 @@ rocprofvis_result_t Event::GetObject(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
         case kRPVControllerEventName:
         {
             char const* name     = StringTable::Get().GetString(m_name);
-            result = GetStringImpl(value, length, name, strlen(name));
+            result = GetStringImpl(value, length, name, static_cast<uint32_t>(strlen(name)));
             break;
         }
         case kRPVControllerEventCategory:
         {
             char const* category = StringTable::Get().GetString(m_category);
-            result = GetStringImpl(value, length, category, strlen(category));
+            result = GetStringImpl(value, length, category, static_cast<uint32_t>(strlen(category)));
             break;
         }
         case kRPVControllerEventStartTimestamp:
@@ -616,7 +620,7 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
             // Currently the level should be an 8bit unsigned integer
             // Anything beyond 255 will probably not display well.
             ROCPROFVIS_ASSERT(value < 256);
-            m_level = std::min(value, static_cast<uint64_t>(255));
+            m_level = std::min( static_cast<uint8_t>(value), static_cast<uint8_t>(255));
             result = kRocProfVisResultSuccess;
             break;
         }
@@ -638,6 +642,7 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Event::SetDouble(rocprofvis_property_t property, uint64_t index, double value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -673,6 +678,7 @@ rocprofvis_result_t Event::SetDouble(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Event::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -705,6 +711,7 @@ rocprofvis_result_t Event::SetObject(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t index, char const* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {

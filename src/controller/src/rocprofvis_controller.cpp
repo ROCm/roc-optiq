@@ -154,7 +154,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc()
     }
     catch(const std::exception& e)
     {
-        spdlog::error("Failed to allocate controller");
+        spdlog::error("Failed to allocate controller: {}", e.what());
     }
     return controller;
 }

@@ -379,7 +379,9 @@ rocprofvis_result_t Trace::LoadJson(char const* const filename) {
 void Trace::ProgressCallback(rocprofvis_db_filename_t db_filename,
     rocprofvis_db_progress_percent_t progress_percent,
     rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data)
-{ 
+{
+    (void) db_filename;
+    (void) status;
     ROCPROFVIS_ASSERT(user_data);
     Trace* trace = (Trace*) user_data;
     if(trace != nullptr)
@@ -490,14 +492,14 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                         track->SetUInt64(
                                             kRPVControllerTrackNumberOfEntries, 0,
                                             num_records);
-                                        double min_ts =
+                                        double min_ts = static_cast<double>(
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
-                                                kRPVDMTrackMinimumTimestampUInt64, 0);
-                                        double max_ts =
+                                                kRPVDMTrackMinimumTimestampUInt64, 0));
+                                        double max_ts = static_cast<double>(
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
-                                                kRPVDMTrackMaximumTimestampUInt64, 0);
+                                                kRPVDMTrackMaximumTimestampUInt64, 0));
                                         double min_value =
                                             rocprofvis_dm_get_property_as_double(
                                                 track->GetDmHandle(),
@@ -600,7 +602,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                          name.c_str(), value.c_str());
                                         }
 
-                                        uint32_t index = m_tracks.size();
+                                        uint32_t index = static_cast<uint32_t>(m_tracks.size());
                                         m_tracks.push_back(track);
                                         if(m_tracks.size() != (index + 1))
                                         {
@@ -1825,17 +1827,17 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
 
                                                                 auto range = queue_to_track.equal_range(queue_id);
                                                                 int id_offset = 0;
-                                                                for (auto it = range.first; it != range.second; ++it)
+                                                                for (auto it_r = range.first; it_r != range.second; ++it_r)
                                                                 {
-                                                                    if(it->second != nullptr)
+                                                                    if(it_r->second != nullptr)
                                                                     {
                                                                         lqueues.push_back(new Queue);
-                                                                        it->second->SetObject(
+                                                                        it_r->second->SetObject(
                                                                             kRPVControllerTrackQueue,
                                                                                 0, (rocprofvis_handle_t*)lqueues.back());
                                                                         lqueues.back()->SetObject(
                                                                             kRPVControllerQueueTrack,
-                                                                                0, (rocprofvis_handle_t*)it->second);
+                                                                                0, (rocprofvis_handle_t*)it_r->second);
                                                                         lqueues.back()->SetUInt64(kRPVControllerQueueId, 0, queue_id+id_offset);
                                                                         id_offset+=100;
                                                                     }
@@ -2025,17 +2027,17 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 }
                                                                     
                                                                 auto range = stream_to_track.equal_range(stream_id);
-                                                                for (auto it = range.first; it != range.second; ++it)
+                                                                for (auto it_r = range.first; it_r != range.second; ++it_r)
                                                                 {
-                                                                    if(it->second != nullptr)
+                                                                    if(it_r->second != nullptr)
                                                                     {
                                                                         streams.push_back(new Stream);
-                                                                        it->second->SetObject(
+                                                                        it_r->second->SetObject(
                                                                             kRPVControllerTrackStream,
                                                                                 0, (rocprofvis_handle_t*)streams.back());
                                                                         streams.back()->SetObject(
                                                                             kRPVControllerStreamTrack,
-                                                                                0, (rocprofvis_handle_t*)it->second);
+                                                                                0, (rocprofvis_handle_t*)it_r->second);
                                                                         streams.back()->SetUInt64(columns[j], 0, stream_id);
                                                                     }
                                                                 }
@@ -2357,6 +2359,7 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
     std::string filepath = filename;
     future.Set(JobSystem::Get().IssueJob([this, filepath](Future* future) -> rocprofvis_result_t
         {
+            (void) future;
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos || 
                 filepath.find(".db", filepath.size() - 3) != std::string::npos)
@@ -2402,6 +2405,7 @@ rocprofvis_result_t Trace::SaveTrimmedTrace(Future& future, double start, double
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
     std::string path_str = path;
     future.Set(JobSystem::Get().IssueJob([start, end, path_str, dm_handle](Future* future) -> rocprofvis_result_t {
+                              (void) future;
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
                               if (db)
@@ -2466,6 +2470,7 @@ Trace::AsyncFetch(Event& event, Future& future, Array& array,
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
     future.Set(JobSystem::Get().IssueJob([&event, &array, property, dm_handle](Future* future) -> rocprofvis_result_t {
+                              (void) future;
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
                               result = event.Fetch(property, array, dm_handle);
                               return result;
@@ -2484,10 +2489,12 @@ rocprofvis_result_t
 Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
                   uint64_t index, uint64_t count)
 {
+    (void) count;
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
     future.Set(JobSystem::Get().IssueJob(
         [this, property, &array, index](Future* future) -> rocprofvis_result_t {
+            (void) future;
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
 
             switch(property)
@@ -2615,6 +2622,7 @@ Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
     rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
     future.Set(JobSystem::Get().IssueJob([&plot, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
+            (void) future;
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             result = plot.Setup(dm_handle, args);
             if (result == kRocProfVisResultSuccess)
@@ -2640,6 +2648,7 @@ rocprofvis_controller_object_type_t Trace::GetType(void)
 
 rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -2752,6 +2761,8 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) 
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -2898,6 +2909,7 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -2941,6 +2953,7 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
 
 rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -2953,7 +2966,7 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
         {
             if (m_tracks.size() != value)
             {
-                for (uint32_t i = value; i < m_tracks.size(); i++)
+                for (uint64_t i = value; i < m_tracks.size(); i++)
                 {
                     delete m_tracks[i];
                     m_tracks[i] = nullptr;
@@ -2984,7 +2997,7 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
         {
             if (m_nodes.size() != value)
             {
-                for (uint32_t i = value; i < m_nodes.size(); i++)
+                for (uint64_t i = value; i < m_nodes.size(); i++)
                 {
                     delete m_nodes[i];
                     m_nodes[i] = nullptr;
@@ -3025,6 +3038,8 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t index, double value) 
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -3172,6 +3187,8 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
 }
 rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t index, char const* value) 
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {

@@ -89,13 +89,13 @@ EventSearch::Render()
             auto table_params = m_data_provider.GetTableParams(m_table_type);
             if(table_params)
             {
-                ImGui::Text("Showing %llu to %llu of %llu result(s)",
+                ImGui::Text("Showing %lu to %lu of %lu result(s)",
                             table_params->m_start_row,
                             table_params->m_start_row + table_params->m_req_row_count,
                             m_data_provider.GetTableTotalRowCount(m_table_type));
             }
 #else
-            ImGui::Text("Showing %llu result(s)",
+            ImGui::Text("Showing %lu result(s)",
                         m_data_provider.GetTableTotalRowCount(m_table_type));
 #endif
             if(m_should_close)

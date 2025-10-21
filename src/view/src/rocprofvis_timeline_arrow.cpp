@@ -1,6 +1,4 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
-#pragma once
-
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"

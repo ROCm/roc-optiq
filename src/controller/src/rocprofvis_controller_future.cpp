@@ -96,6 +96,7 @@ Future::RemoveDependentFuture(rocprofvis_db_future_t db_future)
 
 rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -143,6 +144,7 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
 }
 rocprofvis_result_t Future::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -170,6 +172,7 @@ rocprofvis_result_t Future::GetDouble(rocprofvis_property_t property, uint64_t i
 }
 rocprofvis_result_t Future::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -197,6 +200,7 @@ rocprofvis_result_t Future::GetObject(rocprofvis_property_t property, uint64_t i
 }
 rocprofvis_result_t Future::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -225,6 +229,8 @@ rocprofvis_result_t Future::GetString(rocprofvis_property_t property, uint64_t i
 
 rocprofvis_result_t Future::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     switch(property)
     {
@@ -245,6 +251,8 @@ rocprofvis_result_t Future::SetUInt64(rocprofvis_property_t property, uint64_t i
 }
 rocprofvis_result_t Future::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     switch(property)
     {
@@ -265,6 +273,8 @@ rocprofvis_result_t Future::SetDouble(rocprofvis_property_t property, uint64_t i
 }
 rocprofvis_result_t Future::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     switch(property)
     {
@@ -285,6 +295,8 @@ rocprofvis_result_t Future::SetObject(rocprofvis_property_t property, uint64_t i
 }
 rocprofvis_result_t Future::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     switch(property)
     {

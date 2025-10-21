@@ -314,7 +314,7 @@ TraceView::Render()
                             0.5f);
             ImGui::SetCursorScreenPos(center_pos);
 
-            ImGui::Text(label);
+            ImGui::TextUnformatted(label);
 
             pos            = ImGui::GetCursorScreenPos();
             ImVec2 dot_pos = ImVec2(pos.x + (available_space.x - dot_size.x) * 0.5f,
@@ -331,7 +331,7 @@ TraceView::Render()
                                               progress_label_size.y + item_spacing)) *
                             0.5f);
             ImGui::SetCursorScreenPos(center_pos);
-            ImGui::Text(progress_label);
+            ImGui::TextUnformatted(progress_label);
 
             ImGui::EndPopup();
         }
@@ -825,7 +825,7 @@ TraceView::RenderFlowControls()
         if(ImGui::IsItemHovered())
         {
             ImGui::PopFont();
-            ImGui::SetTooltip(flow_tool_tips[i]);
+            ImGui::SetTooltip("%s", flow_tool_tips[i]);
             ImGui::PushFont(icon_font);
         }
 

@@ -243,7 +243,7 @@ TrackItem::RenderMetaArea()
 
         ImGui::PushFont(large_font);
 
-        ImGui::Text(m_name.c_str());
+        ImGui::TextUnformatted(m_name.c_str());
 
         ImGui::PopFont();   
 

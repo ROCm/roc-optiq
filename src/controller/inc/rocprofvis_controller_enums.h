@@ -37,6 +37,8 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultPending = 12,
     // Operation failed as a value is duplicated
     kRocProfVisResultDuplicate = 13,
+    // Operation is unsupported
+    kRocProfVisResultUnsupported = 14,
 } rocprofvis_result_t;
 
 /*
@@ -382,15 +384,17 @@ typedef enum rocprofvis_controller_counter_properties_t : uint32_t
 
 typedef enum rocprofvis_controller_stream_properties_t : uint32_t
 {
-    kRPVControllerStreamId           = 0xF4000000,
-    kRPVControllerStreamNode         = 0xF4000001,
-    kRPVControllerStreamProcess      = 0xF4000002,
-    kRPVControllerStreamName         = 0xF4000004,
-    kRPVControllerStreamExtData      = 0xF4000005,
-    kRPVControllerStreamProcessor    = 0xF4000006,
-    kRPVControllerStreamNumQueues    = 0xF4000007,
-    kRPVControllerStreamQueueIndexed = 0xF4000008,
-    kRPVControllerStreamTrack        = 0xF4000009,
+    kRPVControllerStreamFirst = 0xF4000000,
+    kRPVControllerStreamId    = kRPVControllerStreamFirst,
+    kRPVControllerStreamNode,
+    kRPVControllerStreamProcess,
+    kRPVControllerStreamName,
+    kRPVControllerStreamExtData,
+    kRPVControllerStreamProcessor,
+    kRPVControllerStreamNumQueues,
+    kRPVControllerStreamQueueIndexed,
+    kRPVControllerStreamTrack,
+    kRPVControllerStreamLast = kRPVControllerStreamTrack,
 } rocprofvis_controller_stream_properties_t;
 
 typedef enum rocprofvis_controller_process_properties_t : uint32_t

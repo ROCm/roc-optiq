@@ -43,11 +43,12 @@ public:
     ~LineTrackItem();
 
     bool ReleaseData() override;
+    virtual float CalculateNewMetaAreaSize() override;
 
 protected:
-    virtual void RenderMetaAreaScale() override;
-    virtual void RenderChart(float graph_width) override;
-    virtual void RenderMetaAreaOptions() override;
+    virtual void  RenderMetaAreaScale() override;
+    virtual void  RenderChart(float graph_width) override;
+    virtual void  RenderMetaAreaOptions() override;
 
     void UpdateYScaleExtents();
 

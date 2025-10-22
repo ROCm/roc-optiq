@@ -569,5 +569,10 @@ SettingsManager::GetEventLevelHeight() const
     return EVENT_LEVEL_HEIGHT;
 }
 
+int
+SettingsManager::GetCurrentFontSizeIndex() const
+{
+    return m_usersettings.display_settings.font_size_index;
+}
 }  // namespace View
 }  // namespace RocProfVis

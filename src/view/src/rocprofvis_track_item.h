@@ -66,11 +66,12 @@ public:
     bool        TrackHeightChanged();
     static void SetSidebarSize(int sidebar_size);
 
-    virtual bool HasData();
-    virtual bool ReleaseData();
-    virtual void RequestData(double min, double max, float width);
-    virtual bool HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
-    virtual bool HasPendingRequests() const;
+    virtual bool  HasData();
+    virtual bool  ReleaseData();
+    virtual void  RequestData(double min, double max, float width);
+    virtual bool  HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
+    virtual bool  HasPendingRequests() const;
+    virtual float CalculateNewMetaAreaSize();
 
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
@@ -81,14 +82,15 @@ public:
     float GetMetaAreaScaleWidth() { return m_meta_area_scale_width; }
     void  UpdateMaxMetaAreaSize(float newSize);
 
+
 protected:
-    virtual void RenderMetaArea();
-    virtual void RenderMetaAreaScale()          = 0;
-    virtual void RenderMetaAreaOptions()        = 0;
-    virtual void RenderMetaAreaExpand();
-    virtual void RenderChart(float graph_width) = 0;
-    virtual void RenderResizeBar(const ImVec2& parent_size);
-    virtual bool ExtractPointsFromData() = 0;
+    virtual void  RenderMetaArea();
+    virtual void  RenderMetaAreaScale()          = 0;
+    virtual void  RenderMetaAreaOptions()        = 0;
+    virtual void  RenderMetaAreaExpand();
+    virtual void  RenderChart(float graph_width) = 0;
+    virtual void  RenderResizeBar(const ImVec2& parent_size);
+    virtual bool  ExtractPointsFromData() = 0;
 
     void FetchHelper();
 
@@ -115,6 +117,7 @@ protected:
     float                 m_meta_area_scale_width;
     bool                  m_selected;
     float                 m_reorder_grip_width;
+
 
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
     uint64_t m_group_id_counter;   // Counter for grouping requests

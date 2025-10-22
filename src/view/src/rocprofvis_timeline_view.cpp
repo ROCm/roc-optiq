@@ -836,6 +836,14 @@ TimelineView::RenderGrid()
 void
 TimelineView::RenderGraphView()
 {
+    int new_font_size_index = m_settings.GetCurrentFontSizeIndex();
+    if(new_font_size_index != m_current_font_size_index)
+    {
+        m_current_font_size_index = new_font_size_index;
+        CalculateMaxMetaAreaSize();
+        UpdateAllMaxMetaAreaSizes();
+    }
+
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -1848,6 +1856,25 @@ TimelineView::UpdateMaxMetaAreaSize(float new_size)
 {
     m_max_meta_area_size =
         new_size > m_max_meta_area_size ? new_size : m_max_meta_area_size;
+}
+
+void
+TimelineView::CalculateMaxMetaAreaSize()
+{
+    m_max_meta_area_size = 0.0f;
+    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
+    bool                             project_valid = m_project_settings.Valid();
+
+    for(int i = 0; i < track_list.size(); i++)
+    {
+        const track_info_t* track_info = track_list[i];
+        auto                graph      = (*m_graphs)[track_info->index];
+        if(track_info->track_type == kRPVControllerTrackTypeSamples)
+        {            graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
+            m_max_meta_area_size =
+                std::max(graph.chart->CalculateNewMetaAreaSize(), m_max_meta_area_size);
+        }
+    }
 }
 
 void

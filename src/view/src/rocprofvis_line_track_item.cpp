@@ -61,17 +61,7 @@ void LineTrackItem::UpdateYScaleExtents() {
     flt             = std::to_string(m_max_y);
     m_max_y_str     = flt.substr(0, flt.find('.') + 2);
 
-    m_compact_max   = compact_number_format(m_max_y);
-    m_compact_min   = compact_number_format(m_min_y);
-
-    ImVec2 max_size =
-        ImGui::CalcTextSize(m_compact_max.c_str()) + ImGui::CalcTextSize("Max: ");
-
-    ImVec2 min_size = ImGui::CalcTextSize(m_compact_min.c_str());
-
-    m_meta_area_scale_width =
-        std::max({ max_size.x + 2 * m_metadata_padding.x, m_meta_area_scale_width,
-                   min_size.x + 2 * m_metadata_padding.x });
+    m_meta_area_scale_width = CalculateNewMetaAreaSize();
 }
 
 void
@@ -263,6 +253,21 @@ LineTrackItem::BoxPlotRender(float graph_width)
         ImGui::EndTooltip();
     }
     ImGui::EndChild();
+}
+
+float
+LineTrackItem::CalculateNewMetaAreaSize()
+{
+    m_compact_max = compact_number_format(m_max_y);
+    m_compact_min = compact_number_format(m_min_y);
+
+    ImVec2 max_size =
+        ImGui::CalcTextSize(m_compact_max.c_str()) + ImGui::CalcTextSize("Max: ");
+
+    ImVec2 min_size = ImGui::CalcTextSize(m_compact_min.c_str());
+
+    return std::max({ max_size.x + 2 * m_metadata_padding.x,
+                   min_size.x + 2 * m_metadata_padding.x });
 }
 
 bool

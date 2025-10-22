@@ -91,6 +91,7 @@ public:
 
 private:
     void                            UpdateMaxMetaAreaSize(float new_size);
+    void                            CalculateMaxMetaAreaSize();
     void                            UpdateAllMaxMetaAreaSizes();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
@@ -144,6 +145,8 @@ private:
     bool                                m_histogram_pseudo_focus;
     float                               m_max_meta_area_size;
     std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
+    int m_current_font_size_index;
+
     struct
     {
         bool     handled;

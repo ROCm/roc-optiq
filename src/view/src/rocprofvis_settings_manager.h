@@ -146,6 +146,8 @@ public:
     // Constant for event height;
     const float GetEventLevelHeight() const;
 
+    int GetCurrentFontSizeIndex() const;
+
 private:
     SettingsManager();
     ~SettingsManager();

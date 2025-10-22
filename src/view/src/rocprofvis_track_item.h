@@ -84,13 +84,13 @@ public:
 
 
 protected:
-    virtual void  RenderMetaArea();
-    virtual void  RenderMetaAreaScale()          = 0;
-    virtual void  RenderMetaAreaOptions()        = 0;
-    virtual void  RenderMetaAreaExpand();
-    virtual void  RenderChart(float graph_width) = 0;
-    virtual void  RenderResizeBar(const ImVec2& parent_size);
-    virtual bool  ExtractPointsFromData() = 0;
+    virtual void RenderMetaArea();
+    virtual void RenderMetaAreaScale()          = 0;
+    virtual void RenderMetaAreaOptions()        = 0;
+    virtual void RenderMetaAreaExpand();
+    virtual void RenderChart(float graph_width) = 0;
+    virtual void RenderResizeBar(const ImVec2& parent_size);
+    virtual bool ExtractPointsFromData() = 0;
 
     void FetchHelper();
 
@@ -117,7 +117,6 @@ protected:
     float                 m_meta_area_scale_width;
     bool                  m_selected;
     float                 m_reorder_grip_width;
-
 
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
     uint64_t m_group_id_counter;   // Counter for grouping requests

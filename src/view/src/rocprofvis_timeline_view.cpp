@@ -1884,7 +1884,7 @@ TimelineView::UpdateAllMaxMetaAreaSizes()
         if (track_info->track_type == kRPVControllerTrackTypeSamples)
         {
             graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
-        }        
+        }
     }
 }
 

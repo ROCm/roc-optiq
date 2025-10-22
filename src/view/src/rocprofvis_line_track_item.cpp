@@ -5,8 +5,6 @@
 #include "spdlog/spdlog.h"
 #include "rocprofvis_utils.h"
 
-#include <algorithm>
-
 namespace RocProfVis
 {
 namespace View
@@ -14,7 +12,7 @@ namespace View
 
 LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
                              double time_offset_ns, double& min_x, double& max_x,
-                             double scale_x, float max_meta_area_size)
+                             double scale_x, float max_meta_area_width)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
@@ -25,7 +23,7 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_show_boxplot(false)
 , m_project_settings(dp.GetTraceFilePath(), *this)
 {
-    m_meta_area_scale_width = max_meta_area_size;
+    m_meta_area_scale_width = max_meta_area_width;
     m_track_height = 90.0f;
 
     UpdateYScaleExtents();
@@ -267,7 +265,7 @@ LineTrackItem::CalculateNewMetaAreaSize()
     ImVec2 min_size = ImGui::CalcTextSize(m_compact_min.c_str());
 
     return std::max({ max_size.x + 2 * m_metadata_padding.x,
-                   min_size.x + 2 * m_metadata_padding.x });
+                      min_size.x + 2 * m_metadata_padding.x });
 }
 
 bool

@@ -363,7 +363,7 @@ TimelineView::~TimelineView()
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         m_scroll_to_track_token);
     EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kFontSizeChanged), m_new_track_token);
+        static_cast<int>(RocEvents::kFontSizeChanged), m_font_changed_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kSetViewRange),
                                              m_set_view_range_token);
     EventManager::GetInstance()->Unsubscribe(

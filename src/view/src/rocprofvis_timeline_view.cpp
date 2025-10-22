@@ -114,6 +114,8 @@ TimelineView::TimelineView(DataProvider&                       dp,
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         m_recalculate_grid_interval = true;
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
+        CalculateMaxMetaAreaSize();
+        UpdateAllMaxMetaAreaSizes();
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
@@ -836,14 +838,6 @@ TimelineView::RenderGrid()
 void
 TimelineView::RenderGraphView()
 {
-    int new_font_size_index = m_settings.GetCurrentFontSizeIndex();
-    if(new_font_size_index != m_current_font_size_index)
-    {
-        m_current_font_size_index = new_font_size_index;
-        CalculateMaxMetaAreaSize();
-        UpdateAllMaxMetaAreaSizes();
-    }
-
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
 

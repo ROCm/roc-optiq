@@ -1859,12 +1859,12 @@ TimelineView::CalculateMaxMetaAreaSize()
     std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
     bool                             project_valid = m_project_settings.Valid();
 
-    for(int i = 0; i < track_list.size(); i++)
+    for(size_t i = 0; i < track_list.size(); i++)
     {
         const track_info_t* track_info = track_list[i];
         auto                graph      = (*m_graphs)[track_info->index];
         if(track_info->track_type == kRPVControllerTrackTypeSamples)
-        {            graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
+        {
             m_max_meta_area_size =
                 std::max(graph.chart->CalculateNewMetaAreaSize(), m_max_meta_area_size);
         }
@@ -1877,7 +1877,7 @@ TimelineView::UpdateAllMaxMetaAreaSizes()
     std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
     bool                             project_valid = m_project_settings.Valid();
 
-    for(int i = 0; i < track_list.size(); i++)
+    for(size_t i = 0; i < track_list.size(); i++)
     {
         const track_info_t* track_info = track_list[i];
         auto                graph      = (*m_graphs)[track_info->index];

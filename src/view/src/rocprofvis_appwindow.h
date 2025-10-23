@@ -36,6 +36,9 @@ public:
     void ShowConfirmationDialog(const std::string& title, const std::string& message,
                                 std::function<void()> on_confirm_callback) const;
     void ShowMessageDialog(const std::string& title, const std::string& message) const;
+    void ShowFileDialog(const std::string& title, const std::string& file_filter,
+                        const std::string& initial_path, const bool& confirm_overwrite,
+                        std::function<void(std::string)> callback);
 
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();
@@ -53,7 +56,7 @@ private:
     void RenderViewMenu(Project* project);
     void RenderHelpMenu();
 
-    void RenderFileDialogs();
+    void RenderFileDialog();
     void RenderAboutDialog();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
@@ -85,13 +88,15 @@ private:
     bool m_analysis_bar_visible;
     bool m_sidebar_visible;
     bool m_histogram_visible;
+    bool m_init_file_dialog;
 
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
 
-    size_t m_tool_bar_index;
-    std::function<void(int)> m_notification_callback;
+    int                              m_tool_bar_index;
+    std::function<void(int)>         m_notification_callback;
+    std::function<void(std::string)> m_file_dialog_callback;
 };
 
 }  // namespace View

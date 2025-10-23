@@ -43,6 +43,7 @@ rocprofvis_controller_object_type_t ExtData::GetType(void)
 rocprofvis_result_t ExtData::GetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -123,6 +124,7 @@ rocprofvis_result_t ExtData::GetUInt64(rocprofvis_property_t property, uint64_t 
 rocprofvis_result_t ExtData::GetDouble(rocprofvis_property_t property, uint64_t index,
                                 double* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -159,6 +161,7 @@ rocprofvis_result_t ExtData::GetDouble(rocprofvis_property_t property, uint64_t 
 rocprofvis_result_t ExtData::GetObject(rocprofvis_property_t property, uint64_t index,
                                 rocprofvis_handle_t** value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -185,6 +188,7 @@ rocprofvis_result_t ExtData::GetObject(rocprofvis_property_t property, uint64_t 
 rocprofvis_result_t ExtData::GetString(rocprofvis_property_t property, uint64_t index,
                                 char* value, uint32_t* length) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -243,6 +247,8 @@ rocprofvis_result_t ExtData::GetString(rocprofvis_property_t property, uint64_t 
 rocprofvis_result_t ExtData::SetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t value) 
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -266,6 +272,8 @@ rocprofvis_result_t ExtData::SetUInt64(rocprofvis_property_t property, uint64_t 
 rocprofvis_result_t ExtData::SetDouble(rocprofvis_property_t property, uint64_t index,
                                 double value) 
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -289,6 +297,7 @@ rocprofvis_result_t ExtData::SetDouble(rocprofvis_property_t property, uint64_t 
 rocprofvis_result_t ExtData::SetObject(rocprofvis_property_t property, uint64_t index,
                                 rocprofvis_handle_t* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -313,8 +322,9 @@ rocprofvis_result_t ExtData::SetObject(rocprofvis_property_t property, uint64_t 
     return result;
 }
 rocprofvis_result_t ExtData::SetString(rocprofvis_property_t property, uint64_t index,
-                                char const* value, uint32_t length) 
+                                char const* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {

@@ -113,13 +113,13 @@ rocprofvis_result_t rocprofvis_controller_get_string(rocprofvis_handle_t* object
     }
     return result;
 }
-rocprofvis_result_t rocprofvis_controller_set_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length)
+rocprofvis_result_t rocprofvis_controller_set_string(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(object && value)
     {
         RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*) object;
-        result = handle->SetString(property, index, value, length);
+        result = handle->SetString(property, index, value);
     }
     return result;
 }
@@ -154,7 +154,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc()
     }
     catch(const std::exception& e)
     {
-        spdlog::error("Failed to allocate controller");
+        spdlog::error("Failed to allocate controller: {}", e.what());
     }
     return controller;
 }

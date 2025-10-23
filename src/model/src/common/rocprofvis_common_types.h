@@ -154,6 +154,8 @@ typedef struct {
     rocprofvis_dm_id_t  symbol_id;
     rocprofvis_dm_id_t  category_id;
     rocprofvis_dm_event_level_t level;              // endpoint level in track
+    rocprofvis_dm_timestamp_t   end_time;           // 64-bit endpoint end timestamp
+
 }rocprofvis_db_flow_data_t;
 
 // rocprofvis_db_stack_data_t is used to pass record stack data from database to data model. Used by database query callbacks

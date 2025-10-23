@@ -89,13 +89,13 @@ EventSearch::Render()
             auto table_params = m_data_provider.GetTableParams(m_table_type);
             if(table_params)
             {
-                ImGui::Text("Showing %llu to %llu of %llu result(s)",
+                ImGui::Text("Showing %lu to %lu of %lu result(s)",
                             table_params->m_start_row,
                             table_params->m_start_row + table_params->m_req_row_count,
                             m_data_provider.GetTableTotalRowCount(m_table_type));
             }
 #else
-            ImGui::Text("Showing %llu result(s)",
+            ImGui::Text("Showing %lu result(s)",
                         m_data_provider.GetTableTotalRowCount(m_table_type));
 #endif
             if(m_should_close)
@@ -164,7 +164,8 @@ EventSearch::Search()
             m_data_provider.CancelRequest(GetRequestID());
             m_search_deferred = !m_data_provider.FetchTable(TableRequestParams(
                 m_req_table_type, {},
-                { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch },
+                { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
+                  kRocProfVisDmOperationLaunchSample },
                 m_data_provider.GetStartTime(), m_data_provider.GetEndTime(), "", "", "",
                 { terms }, 0, m_fetch_chunk_size));
             m_searched        = true;
@@ -319,8 +320,9 @@ EventSearch::Height() const
     uint64_t results = m_data_provider.GetTableTotalRowCount(m_table_type);
     if(results > 0)
     {
-        height = (2 + std::min(results, MAX_RESULTS_DISPLAYED)) *
-                 ImGui::GetFrameHeightWithSpacing();
+        height = (m_horizontal_scroll ? ImGui::GetStyle().ScrollbarSize : 0) +
+                 (2 + std::min(results, MAX_RESULTS_DISPLAYED)) *
+                     ImGui::GetFrameHeightWithSpacing();
     }
     else
     {
@@ -328,7 +330,7 @@ EventSearch::Height() const
                      ? 2 * ImGui::GetFrameHeightWithSpacing()
                      : ImGui::GetFrameHeightWithSpacing();
     }
-    return m_horizontal_scroll ? height + ImGui::GetStyle().ScrollbarSize : height;
+    return height;
 }
 
 }  // namespace View

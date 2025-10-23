@@ -1,6 +1,4 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
-#pragma once
-
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
@@ -66,7 +64,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
             if(!origin_track_info) continue;
             const rocprofvis_graph_t& origin_track = (*graphs)[origin_track_info->index];
 
-            float origin_x = (origin.timestamp - v_min_x) * pixels_per_ns;
+            float origin_x = (origin.end_timestamp - v_min_x) * pixels_per_ns;
             float origin_y = track_position_y.at(origin.track_id) +
                              std::min(level_height * origin.level,
                                       origin_track.chart->GetTrackHeight());
@@ -81,7 +79,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 const rocprofvis_graph_t& target_track = (*graphs)[target_track_info->index];
                 if(!target_track.display) continue;
 
-                float target_x = (target.timestamp - v_min_x) * pixels_per_ns;
+                float target_x = (target.start_timestamp - v_min_x) * pixels_per_ns;
                 float target_y = track_position_y.at(target.track_id) +
                                  std::min(level_height * target.level,
                                           target_track.chart->GetTrackHeight());
@@ -148,13 +146,13 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
 
                 if(!from_track.display || !to_track.display) continue;
 
-                float from_x = (from.timestamp - v_min_x) * pixels_per_ns;
+                float from_x = (from.end_timestamp - v_min_x) * pixels_per_ns;
                 float from_y = track_position_y.at(from.track_id) +
                                std::min(level_height * from.level,
                                         from_track.chart->GetTrackHeight());
                 ImVec2 p_from = ImVec2(window.x + from_x, window.y + from_y);
 
-                float to_x = (to.timestamp - v_min_x) * pixels_per_ns;
+                float to_x = (to.start_timestamp - v_min_x) * pixels_per_ns;
                 float to_y =
                     track_position_y.at(to.track_id) +
                     std::min(level_height * to.level, to_track.chart->GetTrackHeight());

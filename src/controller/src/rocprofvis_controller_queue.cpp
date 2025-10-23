@@ -42,6 +42,7 @@ rocprofvis_controller_object_type_t Queue::GetType(void)
 rocprofvis_result_t Queue::GetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -75,6 +76,7 @@ rocprofvis_result_t Queue::GetUInt64(rocprofvis_property_t property, uint64_t in
 
 rocprofvis_result_t Queue::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -104,6 +106,7 @@ rocprofvis_result_t Queue::GetDouble(rocprofvis_property_t property, uint64_t in
 rocprofvis_result_t Queue::GetObject(rocprofvis_property_t property, uint64_t index,
                   rocprofvis_handle_t** value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -153,6 +156,7 @@ rocprofvis_result_t Queue::GetObject(rocprofvis_property_t property, uint64_t in
 rocprofvis_result_t Queue::GetString(rocprofvis_property_t property, uint64_t index, char* value,
                   uint32_t* length)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -186,12 +190,13 @@ rocprofvis_result_t Queue::GetString(rocprofvis_property_t property, uint64_t in
 
 rocprofvis_result_t Queue::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
         case kRPVControllerQueueId:
         {
-            m_id  = value;
+            m_id  = static_cast<uint32_t>(value);
             result = kRocProfVisResultSuccess;
             break;
         }
@@ -216,6 +221,8 @@ rocprofvis_result_t Queue::SetUInt64(rocprofvis_property_t property, uint64_t in
 
 rocprofvis_result_t Queue::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -242,6 +249,7 @@ rocprofvis_result_t Queue::SetDouble(rocprofvis_property_t property, uint64_t in
 rocprofvis_result_t Queue::SetObject(rocprofvis_property_t property, uint64_t index,
                   rocprofvis_handle_t* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -304,9 +312,9 @@ rocprofvis_result_t Queue::SetObject(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-rocprofvis_result_t Queue::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
-                  uint32_t length)
+rocprofvis_result_t Queue::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {

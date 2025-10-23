@@ -37,6 +37,7 @@ Node::GetType(void)
 rocprofvis_result_t
 Node::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -93,6 +94,8 @@ Node::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 rocprofvis_result_t
 Node::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -188,6 +191,7 @@ rocprofvis_result_t
 Node::GetString(rocprofvis_property_t property, uint64_t index, char* value,
                 uint32_t* length)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -253,12 +257,13 @@ Node::GetString(rocprofvis_property_t property, uint64_t index, char* value,
 rocprofvis_result_t
 Node::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
         case kRPVControllerNodeId:
         {
-            m_id   = value;
+            m_id   = static_cast<uint32_t>(value);
             result = kRocProfVisResultSuccess;
             break;
         }
@@ -312,6 +317,8 @@ Node::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
 rocprofvis_result_t
 Node::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
 {
+    (void) index;
+    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -409,11 +416,11 @@ Node::SetObject(rocprofvis_property_t property, uint64_t index,
 }
 
 rocprofvis_result_t
-Node::SetString(rocprofvis_property_t property, uint64_t index, char const* value,
-                uint32_t length)
+Node::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value && length)
+    if(value && *value != 0)
     {
         switch(property)
         {

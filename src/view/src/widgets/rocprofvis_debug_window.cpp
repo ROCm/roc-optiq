@@ -117,7 +117,7 @@ DebugWindow::RenderPersitent()
     ImGui::Separator();
     for(const std::string& message : m_persitent_debug_messages.GetContainer())
     {
-        ImGui::Text(message.c_str());
+        ImGui::TextUnformatted(message.c_str());
     }
 }
 
@@ -128,7 +128,7 @@ DebugWindow::RenderTransient()
     ImGui::Separator();
     for(const std::string& message : m_transient_debug_messages)
     {
-        ImGui::Text(message.c_str());
+        ImGui::TextUnformatted(message.c_str());
     }
 }
 

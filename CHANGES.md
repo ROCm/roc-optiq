@@ -1,3 +1,9 @@
+## 0.6.1
+
+### Fixes
+  - Fix: Text search returns incorrect event IDs
+  - Fix: Improve flow arrow rendering
+
 ## 0.6.0
 
 ### Features and Improvements

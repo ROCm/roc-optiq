@@ -93,24 +93,10 @@ Project::Save()
 void
 Project::SaveAs(const std::string& file_path)
 {
-    if(std::filesystem::exists(file_path))
-    {
-        AppWindow::GetInstance()->ShowConfirmationDialog(
-            "Confirm Save", "File already exists. Do you want to overwrite it?",
-            [this, file_path]() {
-                m_project_file_path = file_path;
-                m_name = std::filesystem::path(m_project_file_path).filename().string();
-                AppWindow::GetInstance()->SetTabLabel(GetName(), GetID());
-                Save();
-            });
-    }
-    else
-    {
-        m_project_file_path = file_path;
-        m_name = std::filesystem::path(m_project_file_path).filename().string();
-        AppWindow::GetInstance()->SetTabLabel(GetName(), GetID());
-        Save();
-    }
+    m_project_file_path = file_path;
+    m_name              = std::filesystem::path(m_project_file_path).filename().string();
+    AppWindow::GetInstance()->SetTabLabel(GetName(), GetID());
+    Save();
 }
 
 void
@@ -284,25 +270,6 @@ Project::IsTrimSaveAllowed()
 
 void
 Project::TrimSave(const std::string& file_path_str)
-{
-    // Check if file already exists
-    std::error_code ec;
-    if(std::filesystem::exists(file_path_str, ec))
-    {
-        // Show confirmation dialog
-        AppWindow::GetInstance()->ShowConfirmationDialog(
-            "Confirm Save", "File already exists. Do you want to overwrite it?",
-            [this, file_path_str]() { TrimSaveOverwrite(file_path_str); });
-        return;
-    }
-    else
-    {
-        TrimSaveOverwrite(file_path_str);
-    }
-}
-
-void
-Project::TrimSaveOverwrite(const std::string& file_path_str)
 {
     if(m_trace_type == System)
     {

@@ -35,7 +35,7 @@ public:
     rocprofvis_result_t                 CombineEventNames(std::vector<Event*>& events, std::string& combined_name);
     rocprofvis_result_t                 GenerateLODEvent(std::vector<Event*>& events,
                                                          uint32_t lod_to_generate, uint32_t level,
-                                                         uint64_t event_min, uint64_t event_max);
+                                                         double event_min, double event_max);
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -46,7 +46,7 @@ public:
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
     rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) final;
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) final;
 
 private:
     std::map<uint32_t, SegmentTimeline> m_lods;

@@ -220,7 +220,7 @@ rocprofvis_result_t ComputeTable::SetObject(rocprofvis_property_t property, uint
     return result;
 }
 
-rocprofvis_result_t ComputeTable::SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length)
+rocprofvis_result_t ComputeTable::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     return result;

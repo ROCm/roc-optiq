@@ -91,7 +91,6 @@ public:
     // many)
     bool IsTrimSaveAllowed();
     void TrimSave(const std::string& file_path_str);
-    void TrimSaveOverwrite(const std::string& file_path_str);
 
 private:
     /*

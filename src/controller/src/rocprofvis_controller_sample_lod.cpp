@@ -429,7 +429,7 @@ rocprofvis_result_t SampleLOD::SetObject(rocprofvis_property_t property, uint64_
     return result;
 }
 rocprofvis_result_t SampleLOD::SetString(rocprofvis_property_t property, uint64_t index,
-                                char const* value, uint32_t length) 
+                                char const* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
@@ -450,7 +450,7 @@ rocprofvis_result_t SampleLOD::SetString(rocprofvis_property_t property, uint64_
             case kRPVControllerSampleTimestamp:
             case kRPVControllerSampleTrack:
             {
-                result = Sample::SetString(property, index, value, length);
+                result = Sample::SetString(property, index, value);
                 break;
             }
             default:

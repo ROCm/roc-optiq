@@ -28,7 +28,7 @@ public:
     virtual rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) = 0;
     virtual rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) = 0;
     virtual rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) = 0;
-    virtual rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value, uint32_t length) = 0;
+    virtual rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) = 0;
 
     virtual Handle* GetContext() { return nullptr; }
     virtual bool    IsDeletable() { return true; }
@@ -41,4 +41,4 @@ protected:
 }
 }
 
-#define GetStdStringImpl(value, length, data) GetStringImpl(value, length, data.c_str(), data.length())
+#define GetStdStringImpl(value, length, data) GetStringImpl(value, length, data.c_str(), static_cast<uint32_t>(data.length()))

@@ -216,7 +216,7 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                         ImGui::TextUnformatted(event_data->flow_info[i].name.c_str());
                         ImGui::TableSetColumnIndex(2);
                         std::string timestamp_label = nanosecond_to_formatted_str(
-                            event_data->flow_info[i].timestamp - trace_start_time,
+                            event_data->flow_info[i].start_timestamp - trace_start_time,
                             time_format, true);
                         ImGui::TextUnformatted(timestamp_label.c_str());
                         ImGui::TableSetColumnIndex(3);

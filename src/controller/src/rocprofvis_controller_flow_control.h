@@ -15,7 +15,7 @@ namespace Controller
 class FlowControl : public Handle
 {
 public:
-    FlowControl(uint64_t id, uint64_t timestamp, uint32_t track_id, uint32_t level, uint32_t direction, const char* category, const char* symbol);
+    FlowControl(uint64_t id, uint64_t start_timestamp, uint64_t end_timestamp, uint32_t track_id, uint32_t level, uint32_t direction, const char* category, const char* symbol);
 
     virtual ~FlowControl();
 
@@ -38,11 +38,12 @@ public:
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index,
                                   rocprofvis_handle_t* value) override;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index,
-                                  char const* value, uint32_t length) override;
+                                  char const* value) override;
 
 private:
     uint64_t m_id;
-    uint64_t m_timestamp;
+    uint64_t m_start_timestamp;
+    uint64_t m_end_timestamp;
     uint32_t m_track_id;
     uint32_t m_level;
     uint32_t m_direction;

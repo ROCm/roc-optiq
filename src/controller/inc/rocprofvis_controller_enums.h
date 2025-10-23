@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <stdint.h>
+
 /*
 * Result type, enumerating success & failure conditions.
 */
@@ -40,7 +42,7 @@ typedef enum rocprofvis_result_t
 /*
 * Common object properties
 */
-typedef enum rocprofvis_common_property_t
+typedef enum rocprofvis_common_property_t : uint32_t
 {
     // Total memory usage for the object - including any owned sub-objects
     kRPVControllerCommonMemoryUsageInclusive = 0xFFFF0000,
@@ -123,7 +125,7 @@ typedef enum rocprofvis_controller_primitive_type_t
 /*
 * Properties for the controller which manages a trace.
 */
-typedef enum rocprofvis_controller_properties_t
+typedef enum rocprofvis_controller_properties_t : uint32_t
 {
     // Id of the controller - one per trace
     kRPVControllerId = 0x00000000,
@@ -189,7 +191,7 @@ typedef enum rocprofvis_controller_properties_t
 /* 
 * The timeline is the primary view on to the data, it contains tracks which can be iterated
 */
-typedef enum rocprofvis_controller_timeline_properties_t
+typedef enum rocprofvis_controller_timeline_properties_t : uint32_t
 {
     // Timeline ID
     kRPVControllerTimelineId = 0x10000000,
@@ -216,7 +218,7 @@ typedef enum rocprofvis_controller_timeline_properties_t
 /*
 * A view holds analysis views that display data generated from the raw contents of the trace
 */
-typedef enum rocprofvis_controller_view_properties_t
+typedef enum rocprofvis_controller_view_properties_t : uint32_t
 {
     // ID of view
     kRPVControllerViewId = 0x20000000,
@@ -250,7 +252,7 @@ typedef enum rocprofvis_controller_track_type_t
     kRPVControllerTrackTypeEvents = 1,
 } rocprofvis_controller_track_type_t;
 
-typedef enum rocprofvis_controller_node_properties_t
+typedef enum rocprofvis_controller_node_properties_t : uint32_t
 {
     kRPVControllerNodeId = 0xC0000000,
     kRPVControllerNodeHostName = 0xC0000001,
@@ -284,7 +286,7 @@ typedef enum rocprofvis_controller_node_properties_t
 }
 */
 
-typedef enum rocprofvis_controller_processor_properties_t
+typedef enum rocprofvis_controller_processor_properties_t : uint32_t
 {
     kRPVControllerProcessorId = 0xD0000000,
     kRPVControllerProcessorName      = 0xD0000001,
@@ -320,7 +322,7 @@ typedef enum rocprofvis_controller_processor_properties_t
 }
 */
 
-typedef enum rocprofvis_controller_thread_properties_t
+typedef enum rocprofvis_controller_thread_properties_t : uint32_t
 {
     kRPVControllerThreadId        = 0xF2000000,
     kRPVControllerThreadNode      = 0xF2000001,
@@ -342,7 +344,7 @@ typedef enum rocprofvis_controller_thread_type_t
     kRPVControllerThreadTypeSampled = 2,
 } rocprofvis_controller_thread_type_t;
 
-typedef enum rocprofvis_controller_queue_properties_t
+typedef enum rocprofvis_controller_queue_properties_t : uint32_t
 {
     kRPVControllerQueueId        = 0xF3000000,
     kRPVControllerQueueNode      = 0xF3000001,
@@ -353,7 +355,7 @@ typedef enum rocprofvis_controller_queue_properties_t
     kRPVControllerQueueTrack     = 0xF3000007,
 } rocprofvis_controller_queue_properties_t;
 
-typedef enum rocprofvis_controller_counter_properties_t
+typedef enum rocprofvis_controller_counter_properties_t : uint32_t
 {
     kRPVControllerCounterId = 0xF5000000,
     kRPVControllerCounterNode = 0xF5000001,
@@ -378,7 +380,7 @@ typedef enum rocprofvis_controller_counter_properties_t
     kRPVControllerCounterTrack = 0xF5000014,
 } rocprofvis_controller_counter_properties_t;
 
-typedef enum rocprofvis_controller_stream_properties_t
+typedef enum rocprofvis_controller_stream_properties_t : uint32_t
 {
     kRPVControllerStreamId           = 0xF4000000,
     kRPVControllerStreamNode         = 0xF4000001,
@@ -391,7 +393,7 @@ typedef enum rocprofvis_controller_stream_properties_t
     kRPVControllerStreamTrack        = 0xF4000009,
 } rocprofvis_controller_stream_properties_t;
 
-typedef enum rocprofvis_controller_process_properties_t
+typedef enum rocprofvis_controller_process_properties_t : uint32_t
 {
     kRPVControllerProcessId = 0xF1000000,
     kRPVControllerProcessNodeId = 0xF1000001,
@@ -429,7 +431,7 @@ typedef enum rocprofvis_controller_process_properties_t
 /*
 * Properties for each track of data within the data set.
 */
-typedef enum rocprofvis_controller_track_properties_t
+typedef enum rocprofvis_controller_track_properties_t : uint32_t
 {
     kRPVControllerTrackId = 0x30000000,
     // Track type, see rocprofvis_controller_track_type_t.
@@ -488,7 +490,7 @@ typedef enum rocprofvis_controller_track_properties_t
 /*
 * Properties for a sample in a track or graph
 */
-typedef enum rocprofvis_controller_sample_properties_t
+typedef enum rocprofvis_controller_sample_properties_t : uint32_t
 {
     // Sample Id
     kRPVControllerSampleId = 0x40000000,
@@ -541,7 +543,7 @@ typedef enum rocprofvis_controller_sample_properties_t
 /*
  * Properties for a flow-control entry.
  */
-typedef enum rocprofvis_controller_flow_control_properties_t
+typedef enum rocprofvis_controller_flow_control_properties_t : uint32_t
 {
     // The target event ID
     kRPVControllerFlowControltId       = 0x50000000,
@@ -555,6 +557,8 @@ typedef enum rocprofvis_controller_flow_control_properties_t
     kRPVControllerFlowControlName      = 0x50000004,
     // Level of target in track
     kRPVControllerFlowControlLevel     = 0x50000005,
+    // The target end timestamp
+    kRPVControllerFlowControlEndTimestamp = 0x50000006,
 } rocprofvis_controller_flow_control_properties_t;
 /* JSON: RPVFlowControl
 {
@@ -570,7 +574,7 @@ typedef enum rocprofvis_controller_flow_control_properties_t
 * Each entry resolves the ISA/ASM function/file/line and if possible the human readable source version.
 * The backend is the right place to resolve the ISA to Source mapping so we can reuse any code that already does it. 
 */
-typedef enum rocprofvis_controller_callstack_properties_t
+typedef enum rocprofvis_controller_callstack_properties_t : uint32_t
 {
     // Human readable source code function
     kRPVControllerCallstackFunction = 0x60000000,
@@ -602,7 +606,7 @@ typedef enum rocprofvis_controller_callstack_properties_t
 /*
 * Properties for each event in a track or graph
 */
-typedef enum rocprofvis_controller_event_properties_t
+typedef enum rocprofvis_controller_event_properties_t : uint32_t
 {
     // Unique ID for the event
     kRPVControllerEventId = 0x70000000,
@@ -661,7 +665,7 @@ typedef enum rocprofvis_controller_graph_type_t
 * Instead it represents a segment of the whole or a derived LOD with synthetic events.
 * This allows the controller to provide only the data required by the UI.
 */
-typedef enum rocprofvis_controller_graph_properties_t
+typedef enum rocprofvis_controller_graph_properties_t : uint32_t
 {
     // The graph ID
     kRPVControllerGraphId = 0x80000000,
@@ -693,7 +697,7 @@ typedef enum rocprofvis_controller_graph_properties_t
 /*
 * Properties for an array.
 */
-typedef enum rocprofvis_controller_array_properties_t
+typedef enum rocprofvis_controller_array_properties_t : uint32_t
 {
     // Number of entries in array.
     kRPVControllerArrayNumEntries = 0x90000000,
@@ -710,7 +714,7 @@ typedef enum rocprofvis_controller_array_properties_t
 /*
 * Tables permit us to display organized text data
 */
-typedef enum rocprofvis_controller_table_properties_t
+typedef enum rocprofvis_controller_table_properties_t : uint32_t
 {
     // Id for the table
     kRPVControllerTableId = 0xA0000000,
@@ -742,7 +746,7 @@ typedef enum rocprofvis_controller_table_properties_t
 }
 */
 
-typedef enum rocprofvis_controller_table_arguments_t
+typedef enum rocprofvis_controller_table_arguments_t : uint32_t
 {
     kRPVControllerTableArgsType = 0xE0000000,
     kRPVControllerTableArgsNumTracks = 0xE0000001,
@@ -772,7 +776,7 @@ typedef enum rocprofvis_controller_table_type_t
 /*
 * Properties for a future object
 */
-typedef enum rocprofvis_controller_future_properties_t
+typedef enum rocprofvis_controller_future_properties_t : uint32_t
 {
     // Result code
     kRPVControllerFutureResult = 0xB0000000,
@@ -785,7 +789,7 @@ typedef enum rocprofvis_controller_future_properties_t
 /*
 * Event extended properties . To be used by rocprofvis_controller_get_indexed_property_async 
 */
-typedef enum rocprofvis_controller_event_data_properties_t
+typedef enum rocprofvis_controller_event_data_properties_t : uint32_t
 {
     // Load Event Flow control properties  
     kRPVControllerEventDataFlowControl = 0xC0000000,
@@ -798,7 +802,7 @@ typedef enum rocprofvis_controller_event_data_properties_t
 /*
 * Properties for extended data
 */
-typedef enum rocprofvis_controller_extdata_properties_t
+typedef enum rocprofvis_controller_extdata_properties_t : uint32_t
 {
     // Extended data category
     kRPVControllerExtDataCategory = 0xD0000000,
@@ -1007,7 +1011,7 @@ typedef enum rocprofvis_controller_compute_metric_types_t
 /*
 * Properties of a Plot object
 */
-typedef enum rocprofvis_controller_plot_properties_t
+typedef enum rocprofvis_controller_plot_properties_t : uint32_t
 {
     // Id for the plot
     kRPVControllerPlotId = 0x1A000000,
@@ -1032,7 +1036,7 @@ typedef enum rocprofvis_controller_plot_properties_t
 /*
 * Properties of a PlotSeries object
 */
-typedef enum rocprofvis_controller_plot_series_properties_t
+typedef enum rocprofvis_controller_plot_series_properties_t : uint32_t
 {
     // Number of x,y pairs in the series
     kRPVControllerPlotSeriesNumValues = 0x2A000000,

@@ -37,8 +37,6 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultPending = 12,
     // Operation failed as a value is duplicated
     kRocProfVisResultDuplicate = 13,
-    // Operation is unsupported
-    kRocProfVisResultUnsupported = 14,
 } rocprofvis_result_t;
 
 /*

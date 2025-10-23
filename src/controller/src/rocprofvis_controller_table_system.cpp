@@ -15,7 +15,7 @@ namespace Controller
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 
 SystemTable::SystemTable(uint64_t id)
-: Table(id)
+: Table(id, __kRPVControllerTablePropertiesFirst, __kRPVControllerTablePropertiesLast)
 , m_track_type(kRPVControllerTrackTypeEvents)
 {
 }
@@ -205,8 +205,6 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
     std::vector<uint32_t> tracks;
     uint64_t sort_column = 0;
     uint64_t sort_order  = 0;
-    uint64_t start_index = 0;
-    uint64_t start_count = 0;
     uint64_t num_tracks = 0;
     uint64_t num_op_types = 0;
     double   end_ts     = 0;
@@ -551,33 +549,13 @@ rocprofvis_result_t SystemTable::GetUInt64(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-            case kRPVControllerTableColumnHeaderIndexed:
-            case kRPVControllerTableRowHeaderIndexed:
-            case kRPVControllerTableRowIndexed:
-            case kRPVControllerTableTitle:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
-    return result;
-}
-
-rocprofvis_result_t SystemTable::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t SystemTable::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     return result;
 }
 
@@ -596,48 +574,13 @@ rocprofvis_result_t SystemTable::GetString(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-            case kRPVControllerTableId:
-            case kRPVControllerTableNumColumns:
-            case kRPVControllerTableNumRows:
-            case kRPVControllerTableColumnTypeIndexed:
-            case kRPVControllerTableRowHeaderIndexed:
-            case kRPVControllerTableRowIndexed:
-            case kRPVControllerTableTitle:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
-    return result;
-}
-
-rocprofvis_result_t SystemTable::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t SystemTable::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t SystemTable::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t SystemTable::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     return result;
 }
 

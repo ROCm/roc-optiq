@@ -9,11 +9,6 @@ namespace RocProfVis
 namespace Controller
 {
 
-Handle::Handle()
-: m_first_prop_index(0)
-, m_last_prop_index(0)
-{}
-
 Handle::Handle(uint32_t first_prop_index, uint32_t last_prop_index)
 : m_first_prop_index(first_prop_index)
 , m_last_prop_index(last_prop_index)
@@ -48,21 +43,21 @@ rocprofvis_result_t Handle::GetUInt64(rocprofvis_property_t property, uint64_t i
     (void) property;
     (void) index;
     (void) value;
-    return kRocProfVisResultUnsupported;
+    return kRocProfVisResultNotSupported;
 }
 
 rocprofvis_result_t Handle::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) {
     (void) property;
     (void) index;
     (void) value;    
-    return kRocProfVisResultUnsupported;
+    return kRocProfVisResultNotSupported;
 }
 
 rocprofvis_result_t Handle::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) {
     (void) property;
     (void) index;
     (void) value;    
-    return kRocProfVisResultUnsupported;
+    return kRocProfVisResultNotSupported;
 }
 
 rocprofvis_result_t Handle::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) {
@@ -70,35 +65,35 @@ rocprofvis_result_t Handle::GetString(rocprofvis_property_t property, uint64_t i
     (void) index;
     (void) value;
     (void) length; 
-    return kRocProfVisResultUnsupported;
+    return kRocProfVisResultNotSupported;
 }
 
 rocprofvis_result_t Handle::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) {
     (void) property;
     (void) index;
     (void) value;    
-    return kRocProfVisResultUnsupported;
+    return kRocProfVisResultNotSupported;
 }
 
 rocprofvis_result_t Handle::SetDouble(rocprofvis_property_t property, uint64_t index, double value) {
     (void) property;
     (void) index;
     (void) value;    
-    return kRocProfVisResultUnsupported;
+    return kRocProfVisResultNotSupported;
 }
 
 rocprofvis_result_t Handle::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) {
     (void) property;
     (void) index;
     (void) value;    
-    return kRocProfVisResultUnsupported;
+    return kRocProfVisResultNotSupported;
 }
 
 rocprofvis_result_t Handle::SetString(rocprofvis_property_t property, uint64_t index, char const* value) {
     (void) property;
     (void) index;
     (void) value;    
-    return kRocProfVisResultUnsupported;
+    return kRocProfVisResultNotSupported;
 }
 
 }

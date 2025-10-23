@@ -8,9 +8,10 @@ namespace RocProfVis
 namespace Controller
 {
 
-Array::Array() : Handle(0,0)
-{ 
-    m_ctx = nullptr; 
+Array::Array()
+: Handle(__kRPVControllerArrayPropertiesFirst, __kRPVControllerArrayPropertiesLast)
+{
+    m_ctx = nullptr;
 }
 
 Array::~Array() {}
@@ -109,14 +110,9 @@ rocprofvis_result_t Array::GetDouble(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
-            case kRPVControllerArrayNumEntries:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -143,14 +139,9 @@ rocprofvis_result_t Array::GetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
-            case kRPVControllerArrayNumEntries:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -177,14 +168,9 @@ rocprofvis_result_t Array::GetString(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
-            case kRPVControllerArrayNumEntries:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -225,7 +211,7 @@ rocprofvis_result_t Array::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -251,14 +237,9 @@ rocprofvis_result_t Array::SetDouble(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
-            case kRPVControllerArrayNumEntries:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -286,14 +267,9 @@ rocprofvis_result_t Array::SetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
-            case kRPVControllerArrayNumEntries:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -320,14 +296,9 @@ rocprofvis_result_t Array::SetString(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
-            case kRPVControllerArrayNumEntries:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }

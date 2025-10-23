@@ -33,14 +33,15 @@ class RocprofDatabase : public ProfileDatabase
     // map array for fast track ID search
     typedef std::map<uint64_t, uint32_t> sub_process_map_t;
     typedef std::map<uint64_t, sub_process_map_t> process_map_t;
-    typedef std::map<uint64_t, process_map_t> op_map_t;
-    typedef std::map<uint32_t, op_map_t> track_find_map_t;
+    //typedef std::map<uint64_t, process_map_t> op_map_t;
+    typedef std::map<uint32_t, process_map_t> track_find_map_t;
+
+    typedef std::vector<std::string> guid_list_t;
 
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
         ProfileDatabase(path),
-        m_query_factory(this)
-    {
+        m_query_factory(this) {
     };
     // class destructor, not really required, unless declared as virtual
     ~RocprofDatabase()override{};
@@ -164,7 +165,7 @@ private:
     {
         return &s_null_data_exceptions_skip;
     }
-    const rocprofvis_dm_track_category_t GetRegionTrackCategory() override
+    const rocprofvis_dm_track_category_t GetRegionTrackCategory()
     {
         return kRocProfVisDmRegionMainTrack;
     }
@@ -172,11 +173,14 @@ private:
 
     private:
         rocprofvis_dm_result_t CreateIndexes();
+
         
     private:
         track_find_map_t find_track_map;
         QueryFactory m_query_factory;
         std::string db_version;
+        guid_list_t   m_guid_list;
+
 
         inline static const rocprofvis_event_data_category_map_t
             s_rocprof_categorized_data = {

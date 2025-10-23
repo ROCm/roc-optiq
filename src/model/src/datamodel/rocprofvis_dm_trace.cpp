@@ -20,6 +20,7 @@
 
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_dm_table_row.h"
+#include <numeric>
 
 namespace RocProfVis
 {
@@ -60,6 +61,9 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncCheckSliceExists = CheckSliceExists;
     m_binding_info.FuncCheckTableExists = CheckTableExists;
     m_binding_info.FuncCompleteSlice  = CompleteSlice;
+    m_binding_info.FuncGetString = GetString;
+    m_binding_info.FuncMetadataLoaded = MetadataLoaded;
+    m_binding_info.FuncGetStringOrder = GetStringOrder;
     bind_data = &m_binding_info;
     m_db = db;
     return kRocProfVisDmResultSuccess;
@@ -318,6 +322,39 @@ rocprofvis_dm_index_t Trace::AddString(const rocprofvis_dm_trace_t object,  cons
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating string memory", INVALID_INDEX);
     }
     return current_index;
+}
+
+const char* Trace::GetString(const rocprofvis_dm_trace_t object, uint32_t index) {
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
+    Trace* trace = (Trace*)object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < trace->m_strings.size(), ERROR_INDEX_OUT_OF_RANGE , nullptr);
+    return trace->m_strings[index].c_str();
+}
+
+void Trace::BuildStringsOrderArray() {
+    std::vector<size_t> idx(m_strings.size());
+    std::iota(idx.begin(), idx.end(), 0);
+    std::sort(idx.begin(), idx.end(),
+        [&](size_t a, size_t b) {
+            return m_strings[a] < m_strings[b];
+        });
+    m_sorted_strings_lookup_array.resize(m_strings.size());
+    for (size_t sorted_pos = 0; sorted_pos < idx.size(); ++sorted_pos)
+        m_sorted_strings_lookup_array[idx[sorted_pos]] = sorted_pos;
+}
+
+const size_t Trace::GetStringOrder(const rocprofvis_dm_trace_t object, uint32_t index) {
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, 0);
+    Trace* trace = (Trace*)object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < trace->m_strings.size(), ERROR_INDEX_OUT_OF_RANGE , 0);
+    return trace->m_sorted_strings_lookup_array[index];
+}
+
+void Trace::MetadataLoaded(const rocprofvis_dm_trace_t object)
+{
+    ROCPROFVIS_ASSERT_MSG(object, ERROR_TRACE_CANNOT_BE_NULL);
+    Trace* trace = (Trace*)object;
+    trace->BuildStringsOrderArray();
 }
 
 rocprofvis_dm_result_t Trace::AddFlow(const rocprofvis_dm_flowtrace_t object, rocprofvis_db_flow_data_t & data){

@@ -27,6 +27,7 @@ namespace RocProfVis
 namespace DataModel
 {
 
+
 rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
                                                     uint64_t node,
                                                     uint32_t process,
@@ -38,18 +39,14 @@ rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
         GetTrackSearchId(TranslateOperationToTrackCategory((rocprofvis_dm_event_operation_t) operation)));
     if(it_op != find_track_map.end())
     {
-        auto it_node = it_op->second.find(node);
-        if(it_node != it_op->second.end())
+        auto it_process = it_op->second.find(process);
+        if(it_process != it_op->second.end())
         {
-            auto it_process = it_node->second.find(process);
-            if(it_process != it_node->second.end())
+            auto it_subprocess = it_process->second.find(std::atoll(subprocess));
+            if(it_subprocess != it_process->second.end())
             {
-                auto it_subprocess = it_process->second.find(std::atoll(subprocess));
-                if(it_subprocess != it_process->second.end())
-                {
-                    track_id = it_subprocess->second;
-                    return kRocProfVisDmResultSuccess;
-                }
+                track_id = it_subprocess->second;
+                return kRocProfVisDmResultSuccess;
             }
         }
     }
@@ -114,7 +111,6 @@ int RocprofDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
     if(it == db->TrackPropertiesEnd())
     {
         db->find_track_map[GetTrackSearchId(track_params.process.category)]
-                          [track_params.process.id[TRACK_ID_NODE]]
                           [track_params.process.id[TRACK_ID_PID_OR_AGENT]]
                           [track_params.process.id[TRACK_ID_TID_OR_QUEUE]] =
             track_params.track_id;
@@ -269,40 +265,40 @@ rocprofvis_dm_result_t
 RocprofDatabase::CreateIndexes()
 { 
     std::vector<std::string> vec;
-    for(int i = 0; i < GuidList().size(); i++)
+    for(int i = 0; i < m_guid_list.size(); i++)
     {
         if(m_query_factory.IsVersionGreaterOrEqual("4"))
         {
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_track_idx_") + GuidList()[i] +
-                     " ON rocpd_track_" + GuidList()[i] + "(nid,pid,tid);");
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_track_idx_") + GuidList()[i] +
-                     " ON rocpd_track_" + GuidList()[i] + "(nid,agent_id,queue_id);");
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_stream_idx_") + GuidList()[i] +
-                     " ON rocpd_track_" + GuidList()[i] + "(nid,stream_id);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_track_idx_") + m_guid_list[i] +
+                     " ON rocpd_track_" + m_guid_list[i] + "(nid,pid,tid);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_track_idx_") + m_guid_list[i] +
+                     " ON rocpd_track_" + m_guid_list[i] + "(nid,agent_id,queue_id);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_stream_idx_") + m_guid_list[i] +
+                     " ON rocpd_track_" + m_guid_list[i] + "(nid,stream_id);");
         } else
         {
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_idx_") + GuidList()[i] +
-                     " ON rocpd_region_" + GuidList()[i] + "(nid,pid,tid,start);");
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_idx_") + GuidList()[i] +
-                     " ON rocpd_kernel_dispatch_" + GuidList()[i] + "(nid,agent_id,queue_id,start);");
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_stream_idx_") + GuidList()[i] +
-                     " ON rocpd_kernel_dispatch_" + GuidList()[i] + "(nid,stream_id,start);");
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_allocate_idx_") + GuidList()[i] +
-                     " ON rocpd_memory_allocate_" + GuidList()[i] + "(nid,agent_id,queue_id,start);");
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_allocate_stream_idx_") + GuidList()[i] +
-                     " ON rocpd_memory_allocate_" + GuidList()[i] + "(nid,stream_id,start);");
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_idx_") + GuidList()[i] +
-                     " ON rocpd_memory_copy_" + GuidList()[i] + "(nid,dst_agent_id,queue_id,start);");
-            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_stream_idx_") + GuidList()[i] +
-                     " ON rocpd_memory_copy_" + GuidList()[i] + "(nid,stream_id,start);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_idx_") + m_guid_list[i] +
+                     " ON rocpd_region_" + m_guid_list[i] + "(nid,pid,tid,start);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_idx_") + m_guid_list[i] +
+                     " ON rocpd_kernel_dispatch_" + m_guid_list[i] + "(nid,agent_id,queue_id,start);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_stream_idx_") + m_guid_list[i] +
+                     " ON rocpd_kernel_dispatch_" + m_guid_list[i] + "(nid,stream_id,start);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_allocate_idx_") + m_guid_list[i] +
+                     " ON rocpd_memory_allocate_" + m_guid_list[i] + "(nid,agent_id,queue_id,start);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_allocate_stream_idx_") + m_guid_list[i] +
+                     " ON rocpd_memory_allocate_" + m_guid_list[i] + "(nid,stream_id,start);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_idx_") + m_guid_list[i] +
+                     " ON rocpd_memory_copy_" + m_guid_list[i] + "(nid,dst_agent_id,queue_id,start);");
+            vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_stream_idx_") + m_guid_list[i] +
+                     " ON rocpd_memory_copy_" + m_guid_list[i] + "(nid,stream_id,start);");
 
         }
-        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_event_idx_") + GuidList()[i] +
-                    " ON rocpd_region_" + GuidList()[i] + "(event_id);");
-        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_sample_event_idx_") + GuidList()[i] +
-                    " ON rocpd_sample_" + GuidList()[i] + "(event_id);");
-        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_stack_idx_") + GuidList()[i] +
-                    " ON rocpd_event_" + GuidList()[i] + "(stack_id);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_event_idx_") + m_guid_list[i] +
+                    " ON rocpd_region_" + m_guid_list[i] + "(event_id);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_sample_event_idx_") + m_guid_list[i] +
+                    " ON rocpd_sample_" + m_guid_list[i] + "(event_id);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_stack_idx_") + m_guid_list[i] +
+                    " ON rocpd_event_" + m_guid_list[i] + "(stack_id);");
     }
 
     return ExecuteTransaction(vec);
@@ -321,9 +317,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(2, "Detect Nodes", kRPVDbBusy, future);
         ExecuteSQLQuery(future,
                         "SELECT name from sqlite_master where type = 'table' and name like 'rocpd_info_node_%';",
-                        "rocpd_info_node_", (rocprofvis_dm_handle_t) &GuidList(),
+                        "rocpd_info_node_", (rocprofvis_dm_handle_t) &m_guid_list,
                         &CallbackNodeEnumeration);
-        if(GuidList().size() > 1)
+        if(m_guid_list.size() > 1)
         {
             spdlog::debug("Multi-node databases are not yet supported!");
             break;
@@ -338,7 +334,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         CreateIndexes();
 
         ShowProgress(2, "Load Nodes information", kRPVDbBusy, future);
-        ExecuteSQLQuery(future,"SELECT * from rocpd_info_node;", "Node", (rocprofvis_dm_handle_t)CachedTables(), &CallbackCacheTable);
+        ExecuteSQLQuery(future,"SELECT 0 as idx, * from rocpd_info_node;", "Node", (rocprofvis_dm_handle_t)CachedTables(), &CallbackCacheTable);
         
         ShowProgress(2, "Load Agents information", kRPVDbBusy, future);
         ExecuteSQLQuery(future,"SELECT * from rocpd_info_agent;", "Agent", (rocprofvis_dm_handle_t)CachedTables(), &CallbackCacheTable);
@@ -636,7 +632,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if(kRocProfVisDmResultSuccess !=
            ExecuteQueryForAllTracksAsync(
                kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
-               "SELECT MIN(startTs), MAX(endTs), MIN(level), MAX(level), ",
+               "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ",
                "", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {}))
         {
@@ -644,6 +640,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         }
 
         TraceProperties()->metadata_loaded=true;
+        BindObject()->FuncMetadataLoaded(BindObject()->trace_object);
         ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
         return future->SetPromise(kRocProfVisDmResultSuccess);
 

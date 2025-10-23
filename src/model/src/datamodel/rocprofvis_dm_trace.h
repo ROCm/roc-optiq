@@ -174,6 +174,11 @@ class Trace : public DmBase{
         // @param string_value - pointer to string
         // @return status of operation
         static rocprofvis_dm_index_t                    AddString(const rocprofvis_dm_trace_t object,  const char* stringValue);
+        // Static method to  get string from string array by index
+        // @param object - trace object handle to add new string to
+        // @param index - index to string
+        // @return status of operation
+        static const char*                              GetString(const rocprofvis_dm_trace_t object, uint32_t index);
         // Static method to add event flow trace. Used by database component via binding interface
         // @param object - trace object handle to add flowtrace object to.
         // @param event_id - 60-bit event id and 4-bit operation type
@@ -237,6 +242,11 @@ class Trace : public DmBase{
         static rocprofvis_dm_result_t                   CompleteSlice(const rocprofvis_dm_slice_t object);
         static rocprofvis_dm_result_t                   RemoveSlice(const rocprofvis_dm_trace_t trace, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_slice_t object);
 
+        void                                            BuildStringsOrderArray();
+        static void                                     MetadataLoaded(const rocprofvis_dm_trace_t object);
+        static const size_t                             GetStringOrder(const rocprofvis_dm_trace_t object, uint32_t index);
+
+
         // trace parameters structure
         rocprofvis_dm_trace_params_t                    m_parameters;
         // binding info structure
@@ -255,6 +265,8 @@ class Trace : public DmBase{
         std::vector<std::shared_ptr<Table>>             m_tables;
         // vector array of strings
         std::vector<std::string>                        m_strings;
+        // vector array of sorted lookup indeces to string array
+        std::vector<uint32_t>                           m_sorted_strings_lookup_array;
         // map of every event level in graph
         event_level_map_t                               m_event_level_map;
         // object mutex, for shared access

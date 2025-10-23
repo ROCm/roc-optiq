@@ -21,11 +21,14 @@
 #pragma once
 
 #include "rocprofvis_db_sqlite.h"
+#include "rocprofvis_db_table_processor.h"
 
 namespace RocProfVis
 {
 namespace DataModel
 {
+
+#define SINGLE_THREAD_RECORDS_COUNT_LIMIT 50000
 
 typedef enum rocprofvis_db_async_tracks_flags_t
 {
@@ -49,15 +52,18 @@ typedef struct rocprofvis_db_sqlite_trim_parameters
 typedef std::map<uint64_t, std::map<std::string, rocprofvis_event_data_category_enum_t>>
     rocprofvis_event_data_category_map_t;
 
+
 // class for methods and members common for all RocPd-based schemas
 class ProfileDatabase : public SqliteDatabase
 {
+    friend class TableProcessor;
     
     public:
         // Database constructor
         // @param path - full path to database file
         ProfileDatabase( rocprofvis_db_filename_t path) : 
                         SqliteDatabase(path), 
+                        m_table_processor(this),
                         m_symbols_offset(0){};
         // ProfileDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~ProfileDatabase() {}
@@ -87,6 +93,10 @@ class ProfileDatabase : public SqliteDatabase
         // @param filename - full path to database file
         static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
 
+        bool isServiceColumn(const char* name);
+        uint32_t SymbolsOffset() { return m_symbols_offset; }
+        StringTable& StringTableReference() { return m_string_table; };
+
     private:
 
     // sqlite3_exec callback to add any record (Event or PMC) to time slice container. Used in all-selected-tracks time slice query
@@ -96,6 +106,8 @@ class ProfileDatabase : public SqliteDatabase
     // @param azColName - pointer to column names  
     // @return SQLITE_OK if successful
         static int CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+       
+        static rocprofvis_dm_event_operation_t GetTableQueryOperation(std::string query);
 
     protected:
 
@@ -146,6 +158,11 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_charptr_t suffix,
                             RpvSqliteExecuteQueryCallback callback, 
                             std::function<void(rocprofvis_dm_track_params_t*)> func_clear);
+        rocprofvis_dm_result_t ExecuteQueriesAsync(
+                            std::vector<std::string>& queries,
+                            std::vector<Future*>& futures,
+                            rocprofvis_dm_handle_t handle,
+                            RpvSqliteExecuteQueryCallback callback);
 
     protected:
     // sqlite3_exec callback to add flowtrace record to FlowTrace container.
@@ -199,7 +216,19 @@ class ProfileDatabase : public SqliteDatabase
             const rocprofvis_event_data_category_map_t category_map,
             rocprofvis_dm_event_operation_t op, std::string column);
 
+
     virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
+    virtual const rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
+
+    static void CollectTrackServiceData(ProfileDatabase* db,
+        sqlite3_stmt* stmt, int column_index, char** azColName,
+        rocprofvis_db_sqlite_track_service_data_t& service_data);
+    static void FindTrackIDs(
+        ProfileDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
+        int& trackId, int & streamTrackId);
+    rocprofvis_dm_track_category_t TranslateOperationToTrackCategory(rocprofvis_dm_event_operation_t op);
+    static const rocprofvis_dm_track_search_id_t GetTrackSearchId(rocprofvis_dm_track_category_t category);
+
 
     protected:
     // offset of kernel symbols in string table
@@ -207,6 +236,10 @@ class ProfileDatabase : public SqliteDatabase
         std::vector<rocprofvis_db_event_level_t> m_event_levels[kRocProfVisDmNumOperation];
         std::unordered_map<uint64_t, size_t> m_event_levels_id_to_index[kRocProfVisDmNumOperation];
         std::mutex   m_level_lock;
+        TableProcessor m_table_processor;
+        StringTable m_string_table;
+
+
 };
 
 }  // namespace DataModel

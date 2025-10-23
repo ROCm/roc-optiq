@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 #include "rocprofvis_db_query_builder.h"
-#include "rocprofvis_db_sqlite.h"
+#include "rocprofvis_db_profile.h"
 
 namespace RocProfVis
 {
@@ -46,11 +46,25 @@ namespace DataModel
         return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
-    std::string Builder::Select(rocprofvis_db_sqlite_table_query_format params)
+    std::string Builder::Select(rocprofvis_db_sqlite_launch_table_query_format params)
     {
-        BuildBlanksMask(params.owner, params.NUM_PARAMS, params.parameters);
         return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
                           "");
+    }
+    std::string Builder::Select(rocprofvis_db_sqlite_dispatch_table_query_format params)
+    {
+        return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
+            "");
+    }
+    std::string Builder::Select(rocprofvis_db_sqlite_memory_alloc_table_query_format params)
+    {
+        return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
+            "");
+    }
+    std::string Builder::Select(rocprofvis_db_sqlite_memory_copy_table_query_format params)
+    {
+        return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
+            "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_sample_table_query_format params)
     {
@@ -79,7 +93,7 @@ namespace DataModel
     }
     std::string Builder::QParam(std::string name, std::string public_name)
     {
-        return name + " as " + public_name;
+        return name + SQL_AS_STATEMENT + public_name;
     };
     std::string Builder::Blank()
     {
@@ -87,16 +101,16 @@ namespace DataModel
     };
     std::string Builder::QParamBlank(std::string public_name)
     {
-        return std::string(BLANK_COLUMN_STR) + " as " + public_name;
+        return std::string(BLANK_COLUMN_STR) + SQL_AS_STATEMENT + public_name;
     };
     std::string Builder::QParam(std::string name) { return name; };
     std::string Builder::QParamOperation(const rocprofvis_dm_event_operation_t op)
     {
-        return std::to_string((uint32_t) op) + " as " + OPERATION_SERVICE_NAME;
+        return std::to_string((uint32_t) op) + SQL_AS_STATEMENT + OPERATION_SERVICE_NAME;
     }
     std::string Builder::QParamCategory(const rocprofvis_dm_track_category_t category)
     {
-        return std::to_string((uint32_t) category) + " as " + OPERATION_SERVICE_NAME;
+        return std::to_string((uint32_t) category) + SQL_AS_STATEMENT + OPERATION_SERVICE_NAME;
     }
     std::string Builder::From(std::string table) { return std::string(" FROM ") + table; }
     std::string Builder::From(std::string table, std::string nick_name)
@@ -105,17 +119,17 @@ namespace DataModel
     }
     std::string Builder::InnerJoin(std::string table, std::string nick_name, std::string on)
     {
-        return std::string(" INNER JOIN ") + table + " " + nick_name + " ON " + on;
+        return std::string(" INNER JOIN ") + table + " " + nick_name + SQL_ON_STATEMENT + on;
     }
     std::string Builder::LeftJoin(std::string table, std::string nick_name, std::string on)
     {
-        return std::string(" LEFT JOIN ") + table + " " + nick_name + " ON " + on;
+        return std::string(" LEFT JOIN ") + table + " " + nick_name + SQL_ON_STATEMENT + on;
     }
     std::string Builder::RightJoin(std::string table, std::string nick_name, std::string on)
     {
-        return std::string(" RIGHT JOIN ") + table + " " + nick_name + " ON " + on;
+        return std::string(" RIGHT JOIN ") + table + " " + nick_name + SQL_ON_STATEMENT + on;
     }
-    std::string Builder::SpaceSaver(int val) { return std::to_string(val) + " as const"; }
+    std::string Builder::SpaceSaver(int val) { return std::to_string(val) + SQL_AS_STATEMENT + "const"; }
     std::string Builder::THeader(std::string header)
     {
         return std::string("'") + header + " '";
@@ -151,16 +165,6 @@ namespace DataModel
         return std::string("concat(") + result + ")";
     }
 
-    void Builder::BuildBlanksMask(SqliteDatabase* owner, int num_params, std::string* params)
-    {
-        for(int i = 0; i < num_params; i++)
-        {
-            if(params[i].find(BLANK_COLUMN_STR) == 0)
-            {
-                owner->SetBlankMask(params[0], (uint64_t) 1 << i);
-            }
-        }
-    }
     std::string Builder::BuildQuery(std::string select, int num_params, std::string* params,
                                   std::vector<std::string> from,
                                   std::string              finalize_with)
@@ -224,6 +228,21 @@ namespace DataModel
             v.push_back(base + operation + "_v" + std::to_string(i)); 
         }
         return v;
+    }
+
+    const char* Builder::IntToTypeEnum(int val, std::vector<std::string>& lookup) {
+        return lookup[val].c_str();
+    }
+
+    const uint8_t Builder::TypeEnumToInt(const char* type, std::vector<std::string>& lookup) {
+        for (int i=0; i < lookup.size(); i++)
+        {
+            if (lookup[i] == type)
+            {
+                return i;
+            }
+        }
+        return 0;
     }
 
 }  // namespace DataModel

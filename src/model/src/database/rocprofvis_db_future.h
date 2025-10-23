@@ -81,6 +81,8 @@ class Future
 
         void                                LinkDatabase(Database* db, void* connection);
 
+        std::vector<Future*>&               SubFeatures() { return m_sub_futures; }
+
     private:
         // stdlib promise object
         std::promise<rocprofvis_dm_result_t> m_promise;
@@ -100,6 +102,7 @@ class Future
         void*                 m_connection;
         void*                 m_user_data;
         std::mutex            m_mutex;
+        std::vector<Future*>  m_sub_futures;
 };
 
 }  // namespace DataModel

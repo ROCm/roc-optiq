@@ -199,6 +199,9 @@ typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_event_property_exists_t) (c
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_table_exists_t) (const rocprofvis_dm_trace_t object,  const rocprofvis_dm_table_id_t table_id);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_complete_slice_func_t) (const rocprofvis_dm_slice_t object);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_remove_slice_func_t) (const rocprofvis_dm_trace_t trace, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_slice_t object);
+typedef const char*  (*rocprofvis_dm_get_string_func_t) (const rocprofvis_dm_trace_t object, uint32_t index);
+typedef const size_t  (*rocprofvis_dm_get_string_order_func_t) (const rocprofvis_dm_trace_t object, uint32_t index);
+typedef void (*rocprofvis_dm_metadata_loaded_func_t) (const rocprofvis_dm_trace_t object);
 
 typedef struct 
 {
@@ -225,6 +228,9 @@ typedef struct
         rocprofvis_dm_check_table_exists_t FuncCheckTableExists;        // Called by database async interface before quering a table with the same parameters
         rocprofvis_dm_complete_slice_func_t FuncCompleteSlice;        // Set complete state for slice
         rocprofvis_dm_remove_slice_func_t FuncRemoveSlice;          // Remove slice if query has been cancelled
+        rocprofvis_dm_get_string_func_t FuncGetString;              // Get string from string array by index
+        rocprofvis_dm_get_string_order_func_t FuncGetStringOrder;   // Get order of string in sorted array;
+        rocprofvis_dm_metadata_loaded_func_t FuncMetadataLoaded;    // Called when metadata has been loaded
 } rocprofvis_dm_db_bind_struct;
 
 inline uint64_t hash_combine(uint64_t a, uint64_t b)

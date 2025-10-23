@@ -85,6 +85,8 @@ public:
                                            rocprofvis_dm_timestamp_t end,
                                            rocprofvis_dm_charptr_t new_db_path,
                                            Future* future) override;
+
+    uint64_t RemapStringId(uint64_t index) override;
     
 private:
     // sqlite3_exec callback to process track information query and add track object to Trace container
@@ -134,7 +136,7 @@ private:
     // method to remap single string ID. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     // @param id - string id to be remapped
     // @return True if remapped
-    const bool RemapStringId(uint64_t & id);
+    const bool RemapStringIdHelper(uint64_t & id);
 
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override
     {

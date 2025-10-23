@@ -50,6 +50,13 @@ void
 Future::SetInterrupted()
 {
     std::unique_lock lock(m_mutex);
+    if (m_sub_futures.size() > 0)
+    {
+        for (auto future : m_sub_futures)
+        {
+            future->SetInterrupted();
+        }
+    }
     if (m_db != nullptr && m_connection != nullptr)
     {
         m_db->InterruptQuery(m_connection);

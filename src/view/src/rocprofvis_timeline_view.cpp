@@ -1857,7 +1857,6 @@ TimelineView::CalculateMaxMetaAreaSize()
 {
     m_max_meta_area_size = 0.0f;
     std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
-    bool                             project_valid = m_project_settings.Valid();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
@@ -1875,7 +1874,6 @@ void
 TimelineView::UpdateAllMaxMetaAreaSizes()
 {
     std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
-    bool                             project_valid = m_project_settings.Valid();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {

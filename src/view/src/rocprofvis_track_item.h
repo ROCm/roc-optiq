@@ -82,7 +82,6 @@ public:
     float GetMetaAreaScaleWidth() { return m_meta_area_scale_width; }
     void  UpdateMaxMetaAreaSize(float newSize);
 
-
 protected:
     virtual void RenderMetaArea();
     virtual void RenderMetaAreaScale()          = 0;

@@ -75,6 +75,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_histogram(nullptr)
 , m_pseudo_focus(false)
 , m_histogram_pseudo_focus(false)
+, m_max_meta_area_size(0.0f)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -113,6 +114,8 @@ TimelineView::TimelineView(DataProvider&                       dp,
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         m_recalculate_grid_interval = true;
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
+        CalculateMaxMetaAreaSize();
+        UpdateAllMaxMetaAreaSizes();
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
@@ -360,7 +363,7 @@ TimelineView::~TimelineView()
         static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
         m_scroll_to_track_token);
     EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kFontSizeChanged), m_new_track_token);
+        static_cast<int>(RocEvents::kFontSizeChanged), m_font_changed_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kSetViewRange),
                                              m_set_view_range_token);
     EventManager::GetInstance()->Unsubscribe(
@@ -1217,7 +1220,8 @@ TimelineView::MakeGraphView()
                 // Linechart
                 graph.chart = new LineTrackItem(
                     m_data_provider, track_info->id, track_info->name, m_zoom,
-                    m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns);
+                    m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns, m_max_meta_area_size);
+                UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
                 graph.graph_type = rocprofvis_graph_t::TYPE_LINECHART;
                 break;
             }
@@ -1234,6 +1238,7 @@ TimelineView::MakeGraphView()
             (*m_graphs)[track_info->index] = std::move(graph);
         }
     }
+    UpdateAllMaxMetaAreaSizes();
     m_histogram       = &m_data_provider.GetHistogram();
     m_meta_map_made   = true;
     m_resize_activity = true;
@@ -1838,6 +1843,47 @@ TimelineArrow&
 TimelineView::GetArrowLayer()
 {
     return m_arrow_layer;
+}
+
+void
+TimelineView::UpdateMaxMetaAreaSize(float new_size)
+{
+    m_max_meta_area_size =
+        new_size > m_max_meta_area_size ? new_size : m_max_meta_area_size;
+}
+
+void
+TimelineView::CalculateMaxMetaAreaSize()
+{
+    m_max_meta_area_size = 0.0f;
+    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
+
+    for(size_t i = 0; i < track_list.size(); i++)
+    {
+        const track_info_t* track_info = track_list[i];
+        auto                graph      = (*m_graphs)[track_info->index];
+        if(track_info->track_type == kRPVControllerTrackTypeSamples)
+        {
+            m_max_meta_area_size =
+                std::max(graph.chart->CalculateNewMetaAreaSize(), m_max_meta_area_size);
+        }
+    }
+}
+
+void
+TimelineView::UpdateAllMaxMetaAreaSizes()
+{
+    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
+
+    for(size_t i = 0; i < track_list.size(); i++)
+    {
+        const track_info_t* track_info = track_list[i];
+        auto                graph      = (*m_graphs)[track_info->index];
+        if (track_info->track_type == kRPVControllerTrackTypeSamples)
+        {
+            graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
+        }
+    }
 }
 
 TimelineViewProjectSettings::TimelineViewProjectSettings(const std::string& project_id,

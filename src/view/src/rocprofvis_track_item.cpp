@@ -168,6 +168,18 @@ TrackItem::GetReorderGripWidth()
     return m_reorder_grip_width;
 }
 
+void 
+TrackItem::UpdateMaxMetaAreaSize(float new_size)
+{
+    m_meta_area_scale_width = std::max(CalculateNewMetaAreaSize(), new_size);
+}
+
+float
+TrackItem::CalculateNewMetaAreaSize()
+{
+    return m_meta_area_scale_width;
+}
+
 void
 TrackItem::RenderMetaAreaExpand()
 {

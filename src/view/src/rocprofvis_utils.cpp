@@ -270,3 +270,22 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
 
     return config_dir.string();
 }
+
+std::string
+RocProfVis::View::compact_number_format(float number)
+{
+    const char* suffixes[] = { "", "K", "M", "B", "T" };
+    uint32_t    magnitude  = 0;
+
+    while(std::fabs(number) >= 1000.0 && magnitude < std::size(suffixes) - 1)
+    {
+        number /= 1000.0;
+        ++magnitude;
+    }
+
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(number >= 100 ? 0 : (number >= 10 ? 1 : 2))
+        << number
+        << suffixes[magnitude];
+    return output.str();
+}

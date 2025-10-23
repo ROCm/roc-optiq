@@ -9,6 +9,16 @@ namespace RocProfVis
 namespace Controller
 {
 
+Handle::Handle()
+: m_first_prop_index(0)
+, m_last_prop_index(0)
+{}
+
+Handle::Handle(uint32_t first_prop_index, uint32_t last_prop_index)
+: m_first_prop_index(first_prop_index)
+, m_last_prop_index(last_prop_index)
+{}
+
 rocprofvis_result_t Handle::GetStringImpl(char* value, uint32_t* length, char const* data, uint32_t data_len)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;

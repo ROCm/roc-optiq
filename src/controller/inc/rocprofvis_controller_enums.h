@@ -403,8 +403,8 @@ typedef enum rocprofvis_controller_counter_properties_t : uint32_t
 
 typedef enum rocprofvis_controller_stream_properties_t : uint32_t
 {
-    __kRPVControllerStreamFirst = 0xF4000000,
-    kRPVControllerStreamId      = __kRPVControllerStreamFirst,
+    __kRPVControllerStreamPropertiesFirst = 0xF4000000,
+    kRPVControllerStreamId      = __kRPVControllerStreamPropertiesFirst,
     kRPVControllerStreamNode,
     kRPVControllerStreamProcess,
     kRPVControllerStreamName,
@@ -413,13 +413,13 @@ typedef enum rocprofvis_controller_stream_properties_t : uint32_t
     kRPVControllerStreamNumQueues,
     kRPVControllerStreamQueueIndexed,
     kRPVControllerStreamTrack,
-    __kRPVControllerStreamLast
+    __kRPVControllerStreamPropertiesLast
 } rocprofvis_controller_stream_properties_t;
 
 typedef enum rocprofvis_controller_process_properties_t : uint32_t
 {
-    __kRPVControllerProcessFirst = 0xF1000000,
-    kRPVControllerProcessId      = __kRPVControllerProcessFirst,
+    __kRPVControllerProcessPropertiesFirst = 0xF1000000,
+    kRPVControllerProcessId      = __kRPVControllerProcessPropertiesFirst,
     kRPVControllerProcessNodeId,
     kRPVControllerProcessInitTime,
     kRPVControllerProcessFinishTime,
@@ -437,7 +437,7 @@ typedef enum rocprofvis_controller_process_properties_t : uint32_t
     kRPVControllerProcessStreamIndexed,
     kRPVControllerProcessNumCounters,
     kRPVControllerProcessCounterIndexed,
-    __kRPVControllerProcessLast,
+    __kRPVControllerProcessPropertiesLast,
 } rocprofvis_controller_process_properties_t;
 /* JSON: RPVProcess
 {

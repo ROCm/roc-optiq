@@ -23,7 +23,8 @@ typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectType
     TrackRef;
 
 Counter::Counter()
-: m_node(nullptr)
+: Handle(__kRPVControllerCounterPropertiesFirst, __kRPVControllerCounterPropertiesLast)
+, m_node(nullptr)
 , m_process(nullptr)
 , m_processor(nullptr)
 , m_track(nullptr)
@@ -32,9 +33,7 @@ Counter::Counter()
 , m_instance_id(0)
 , m_is_constant(false)
 , m_is_derived(false)
-{
-
-}
+{}
 
 Counter::~Counter() {}
 
@@ -83,73 +82,11 @@ Counter::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* val
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerCounterTrack:
-            case kRPVControllerCounterNode:
-            case kRPVControllerCounterProcess:
-            case kRPVControllerCounterProcessor:
-            case kRPVControllerCounterName:
-            case kRPVControllerCounterSymbol:
-            case kRPVControllerCounterDescription:
-            case kRPVControllerCounterExtendedDesc:
-            case kRPVControllerCounterComponent:
-            case kRPVControllerCounterUnits:
-            case kRPVControllerCounterValueType:
-            case kRPVControllerCounterBlock:
-            case kRPVControllerCounterExpression:
-            case kRPVControllerCounterGuid:
-            case kRPVControllerCounterExtData:
-            case kRPVControllerCounterTargetArch:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t
-Counter::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        case kRPVControllerCounterTrack:
-        case kRPVControllerCounterId:
-        case kRPVControllerCounterNode:
-        case kRPVControllerCounterProcess:
-        case kRPVControllerCounterProcessor:
-        case kRPVControllerCounterName:
-        case kRPVControllerCounterSymbol:
-        case kRPVControllerCounterDescription:
-        case kRPVControllerCounterExtendedDesc:
-        case kRPVControllerCounterComponent:
-        case kRPVControllerCounterUnits:
-        case kRPVControllerCounterValueType:
-        case kRPVControllerCounterBlock:
-        case kRPVControllerCounterExpression:
-        case kRPVControllerCounterGuid:
-        case kRPVControllerCounterExtData:
-        case kRPVControllerCounterTargetArch:
-        case kRPVControllerCounterEventCode:
-        case kRPVControllerCounterInstanceId:
-        case kRPVControllerCounterIsConstant:
-        case kRPVControllerCounterIsDerived:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
         }
     }
     return result;
@@ -189,30 +126,9 @@ Counter::GetObject(rocprofvis_property_t property, uint64_t index,
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerCounterId:
-            case kRPVControllerCounterName:
-            case kRPVControllerCounterSymbol:
-            case kRPVControllerCounterDescription:
-            case kRPVControllerCounterExtendedDesc:
-            case kRPVControllerCounterComponent:
-            case kRPVControllerCounterUnits:
-            case kRPVControllerCounterValueType:
-            case kRPVControllerCounterBlock:
-            case kRPVControllerCounterExpression:
-            case kRPVControllerCounterGuid:
-            case kRPVControllerCounterExtData:
-            case kRPVControllerCounterTargetArch:
-            case kRPVControllerCounterEventCode:
-            case kRPVControllerCounterInstanceId:
-            case kRPVControllerCounterIsConstant:
-            case kRPVControllerCounterIsDerived:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -288,22 +204,9 @@ Counter::GetString(rocprofvis_property_t property, uint64_t index, char* value,
             result = GetStdStringImpl(value, length, m_target_arch);
             break;
         }
-        case kRPVControllerCounterTrack:
-        case kRPVControllerCounterId:
-        case kRPVControllerCounterNode:
-        case kRPVControllerCounterProcess:
-        case kRPVControllerCounterProcessor:
-        case kRPVControllerCounterEventCode:
-        case kRPVControllerCounterInstanceId:
-        case kRPVControllerCounterIsConstant:
-        case kRPVControllerCounterIsDerived:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -347,71 +250,9 @@ Counter::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t valu
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerCounterTrack:
-        case kRPVControllerCounterNode:
-        case kRPVControllerCounterProcess:
-        case kRPVControllerCounterProcessor:
-        case kRPVControllerCounterName:
-        case kRPVControllerCounterSymbol:
-        case kRPVControllerCounterDescription:
-        case kRPVControllerCounterExtendedDesc:
-        case kRPVControllerCounterComponent:
-        case kRPVControllerCounterUnits:
-        case kRPVControllerCounterValueType:
-        case kRPVControllerCounterBlock:
-        case kRPVControllerCounterExpression:
-        case kRPVControllerCounterGuid:
-        case kRPVControllerCounterExtData:
-        case kRPVControllerCounterTargetArch:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
-            break;
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t
-Counter::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        case kRPVControllerCounterTrack:
-        case kRPVControllerCounterId:
-        case kRPVControllerCounterNode:
-        case kRPVControllerCounterProcess:
-        case kRPVControllerCounterProcessor:
-        case kRPVControllerCounterName:
-        case kRPVControllerCounterSymbol:
-        case kRPVControllerCounterDescription:
-        case kRPVControllerCounterExtendedDesc:
-        case kRPVControllerCounterComponent:
-        case kRPVControllerCounterUnits:
-        case kRPVControllerCounterValueType:
-        case kRPVControllerCounterBlock:
-        case kRPVControllerCounterExpression:
-        case kRPVControllerCounterGuid:
-        case kRPVControllerCounterExtData:
-        case kRPVControllerCounterTargetArch:
-        case kRPVControllerCounterEventCode:
-        case kRPVControllerCounterInstanceId:
-        case kRPVControllerCounterIsConstant:
-        case kRPVControllerCounterIsDerived:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -469,30 +310,9 @@ Counter::SetObject(rocprofvis_property_t property, uint64_t index,
                 }
                 break;
             }
-            case kRPVControllerCounterId:
-            case kRPVControllerCounterName:
-            case kRPVControllerCounterSymbol:
-            case kRPVControllerCounterDescription:
-            case kRPVControllerCounterExtendedDesc:
-            case kRPVControllerCounterComponent:
-            case kRPVControllerCounterUnits:
-            case kRPVControllerCounterValueType:
-            case kRPVControllerCounterBlock:
-            case kRPVControllerCounterExpression:
-            case kRPVControllerCounterGuid:
-            case kRPVControllerCounterExtData:
-            case kRPVControllerCounterTargetArch:
-            case kRPVControllerCounterEventCode:
-            case kRPVControllerCounterInstanceId:
-            case kRPVControllerCounterIsConstant:
-            case kRPVControllerCounterIsDerived:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -581,22 +401,9 @@ Counter::SetString(rocprofvis_property_t property, uint64_t index, char const* v
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerCounterTrack:
-            case kRPVControllerCounterId:
-            case kRPVControllerCounterNode:
-            case kRPVControllerCounterProcess:
-            case kRPVControllerCounterProcessor:
-            case kRPVControllerCounterEventCode:
-            case kRPVControllerCounterInstanceId:
-            case kRPVControllerCounterIsConstant:
-            case kRPVControllerCounterIsDerived:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }

@@ -14,7 +14,8 @@ namespace Controller
 class Handle
 {
 public:
-    Handle() {}
+    Handle(); //TODO: remove this constructor - just here for testing during transition
+    Handle(uint32_t first_prop_index, uint32_t last_prop_index);
     virtual ~Handle() {}
 
     virtual rocprofvis_controller_object_type_t GetType(void) = 0;

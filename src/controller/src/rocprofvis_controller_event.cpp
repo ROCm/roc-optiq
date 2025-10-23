@@ -18,7 +18,8 @@ namespace Controller
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 
 Event::Event(uint64_t id, double start_ts, double end_ts)
-: m_children(nullptr)
+: Handle(__kRPVControllerEventPropertiesFirst, __kRPVControllerEventPropertiesLast)
+, m_children(nullptr)
 , m_id(id)
 , m_start_timestamp(start_ts)
 , m_end_timestamp(end_ts)
@@ -26,8 +27,7 @@ Event::Event(uint64_t id, double start_ts, double end_ts)
 , m_category(UINT64_MAX)
 , m_level(0)
 , m_retain_counter(0)
-{
-}
+{}
 
 Event& Event::operator=(Event&& other)
 {
@@ -459,17 +459,9 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerEventStartTimestamp:
-            case kRPVControllerEventEndTimestamp:
-            case kRPVControllerEventName:
-            case kRPVControllerEventCallstackEntryIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -496,53 +488,16 @@ rocprofvis_result_t Event::GetDouble(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerEventId:
-            case kRPVControllerEventNumChildren:
-            case kRPVControllerEventName:
-            case kRPVControllerEventChildIndexed:
-            case kRPVControllerEventCallstackEntryIndexed:
-            case kRPVControllerEventLevel:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
     return result;
 }
-rocprofvis_result_t Event::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) 
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (value)
-    {
-        switch(property)
-        {
-            case kRPVControllerEventStartTimestamp:
-            case kRPVControllerEventEndTimestamp:
-            case kRPVControllerEventId:
-            case kRPVControllerEventNumChildren:
-            case kRPVControllerEventName:
-            case kRPVControllerEventChildIndexed:
-            case kRPVControllerEventLevel:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
-        }
-    }
-    return result;
-}
+
 rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
 {
     (void) index;
@@ -561,20 +516,9 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
             result = GetStringImpl(value, length, category, static_cast<uint32_t>(strlen(category)));
             break;
         }
-        case kRPVControllerEventStartTimestamp:
-        case kRPVControllerEventEndTimestamp:
-        case kRPVControllerEventId:
-        case kRPVControllerEventNumChildren:
-        case kRPVControllerEventChildIndexed:
-        case kRPVControllerEventCallstackEntryIndexed:
-        case kRPVControllerEventLevel:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -624,17 +568,9 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerEventStartTimestamp:
-        case kRPVControllerEventEndTimestamp:
-        case kRPVControllerEventName:
-        case kRPVControllerEventCallstackEntryIndexed:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -658,53 +594,10 @@ rocprofvis_result_t Event::SetDouble(rocprofvis_property_t property, uint64_t in
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerEventId:
-        case kRPVControllerEventNumChildren:
-        case kRPVControllerEventName:
-        case kRPVControllerEventChildIndexed:
-        case kRPVControllerEventCallstackEntryIndexed:
-        case kRPVControllerEventLevel:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
-        }
-    }
-    return result;
-}
-rocprofvis_result_t Event::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) 
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (value)
-    {
-        switch(property)
-        {
-            case kRPVControllerEventCallstackEntryIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            case kRPVControllerEventStartTimestamp:
-            case kRPVControllerEventEndTimestamp:
-            case kRPVControllerEventId:
-            case kRPVControllerEventNumChildren:
-            case kRPVControllerEventName:
-            case kRPVControllerEventChildIndexed:
-            case kRPVControllerEventLevel:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
         }
     }
     return result;
@@ -729,20 +622,9 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerEventStartTimestamp:
-            case kRPVControllerEventEndTimestamp:
-            case kRPVControllerEventId:
-            case kRPVControllerEventNumChildren:
-            case kRPVControllerEventChildIndexed:
-            case kRPVControllerEventCallstackEntryIndexed:
-            case kRPVControllerEventLevel:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }

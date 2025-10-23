@@ -8,14 +8,12 @@ namespace RocProfVis
 namespace Controller
 {
 
-Array::Array()
+Array::Array() : Handle(0,0)
 { 
     m_ctx = nullptr; 
 }
 
-Array::~Array()
-{
-}
+Array::~Array() {}
 
 std::vector<Data>& Array::GetVector(void)
 {

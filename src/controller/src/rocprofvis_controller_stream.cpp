@@ -26,19 +26,15 @@ typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectType
     TrackRef;
 
 Stream::Stream()
-: m_node(nullptr)
+: Handle(__kRPVControllerStreamPropertiesFirst, __kRPVControllerStreamPropertiesLast)
+, m_node(nullptr)
 , m_process(nullptr)
 , m_processor(nullptr)
 , m_track(nullptr)
 , m_id(0)
-{
-    m_first_prop_index = __kRPVControllerStreamFirst;
-    m_last_prop_index = __kRPVControllerStreamLast;
-}
+{}
 
-Stream::~Stream() {
-
-}
+Stream::~Stream() {}
 
 rocprofvis_controller_object_type_t Stream::GetType(void)
 {

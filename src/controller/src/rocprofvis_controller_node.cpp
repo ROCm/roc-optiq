@@ -18,7 +18,9 @@ typedef Reference<rocprofvis_controller_process_t, Process,
                   kRPVControllerObjectTypeProcess>
     ProcessRef;
 
-Node::Node() {}
+Node::Node()
+: Handle(__kRPVControllerNodePropertiesFirst, __kRPVControllerNodePropertiesLast)
+{}
 
 Node::~Node()
 {
@@ -67,60 +69,11 @@ Node::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerNodeHostName:
-            case kRPVControllerNodeDomainName:
-            case kRPVControllerNodeOSName:
-            case kRPVControllerNodeOSRelease:
-            case kRPVControllerNodeOSVersion:
-            case kRPVControllerNodeHardwareName:
-            case kRPVControllerNodeMachineId:
-            case kRPVControllerNodeMachineGuid:
-            case kRPVControllerNodeProcessorIndexed:
-            case kRPVControllerNodeProcessIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t
-Node::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        case kRPVControllerNodeId:
-        case kRPVControllerNodeHostName:
-        case kRPVControllerNodeDomainName:
-        case kRPVControllerNodeOSName:
-        case kRPVControllerNodeOSRelease:
-        case kRPVControllerNodeOSVersion:
-        case kRPVControllerNodeHardwareName:
-        case kRPVControllerNodeMachineId:
-        case kRPVControllerNodeMachineGuid:
-        case kRPVControllerNodeNumProcessors:
-        case kRPVControllerNodeProcessorIndexed:
-        case kRPVControllerNodeNumProcesses:
-        case kRPVControllerNodeProcessIndexed:
-        case kRPVControllerNodeHash:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
         }
     }
     return result;
@@ -161,25 +114,9 @@ Node::GetObject(rocprofvis_property_t property, uint64_t index,
                 }
                 break;
             }
-            case kRPVControllerNodeId:
-            case kRPVControllerNodeHostName:
-            case kRPVControllerNodeDomainName:
-            case kRPVControllerNodeOSName:
-            case kRPVControllerNodeOSRelease:
-            case kRPVControllerNodeOSVersion:
-            case kRPVControllerNodeHardwareName:
-            case kRPVControllerNodeMachineId:
-            case kRPVControllerNodeMachineGuid:
-            case kRPVControllerNodeNumProcessors:
-            case kRPVControllerNodeNumProcesses:
-            case kRPVControllerNodeHash:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -235,19 +172,9 @@ Node::GetString(rocprofvis_property_t property, uint64_t index, char* value,
             result = GetStdStringImpl(value, length, m_guid);
             break;
         }
-        case kRPVControllerNodeId:
-        case kRPVControllerNodeNumProcessors:
-        case kRPVControllerNodeProcessorIndexed:
-        case kRPVControllerNodeNumProcesses:
-        case kRPVControllerNodeProcessIndexed:
-        case kRPVControllerNodeHash:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -291,58 +218,9 @@ Node::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerNodeHostName:
-        case kRPVControllerNodeDomainName:
-        case kRPVControllerNodeOSName:
-        case kRPVControllerNodeOSRelease:
-        case kRPVControllerNodeOSVersion:
-        case kRPVControllerNodeHardwareName:
-        case kRPVControllerNodeMachineId:
-        case kRPVControllerNodeMachineGuid:
-        case kRPVControllerNodeProcessorIndexed:
-        case kRPVControllerNodeProcessIndexed:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
-            break;
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t
-Node::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        case kRPVControllerNodeId:
-        case kRPVControllerNodeHostName:
-        case kRPVControllerNodeDomainName:
-        case kRPVControllerNodeOSName:
-        case kRPVControllerNodeOSRelease:
-        case kRPVControllerNodeOSVersion:
-        case kRPVControllerNodeHardwareName:
-        case kRPVControllerNodeMachineId:
-        case kRPVControllerNodeHash:
-        case kRPVControllerNodeMachineGuid:
-        case kRPVControllerNodeNumProcessors:
-        case kRPVControllerNodeProcessorIndexed:
-        case kRPVControllerNodeNumProcesses:
-        case kRPVControllerNodeProcessIndexed:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -390,25 +268,9 @@ Node::SetObject(rocprofvis_property_t property, uint64_t index,
             }
             break;
         }
-        case kRPVControllerNodeId:
-        case kRPVControllerNodeHostName:
-        case kRPVControllerNodeDomainName:
-        case kRPVControllerNodeOSName:
-        case kRPVControllerNodeOSRelease:
-        case kRPVControllerNodeOSVersion:
-        case kRPVControllerNodeHardwareName:
-        case kRPVControllerNodeMachineId:
-        case kRPVControllerNodeHash:
-        case kRPVControllerNodeMachineGuid:
-        case kRPVControllerNodeNumProcessors:
-        case kRPVControllerNodeNumProcesses:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -472,19 +334,9 @@ Node::SetString(rocprofvis_property_t property, uint64_t index, char const* valu
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerNodeHash:
-            case kRPVControllerNodeId:
-            case kRPVControllerNodeNumProcessors:
-            case kRPVControllerNodeProcessorIndexed:
-            case kRPVControllerNodeNumProcesses:
-            case kRPVControllerNodeProcessIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }

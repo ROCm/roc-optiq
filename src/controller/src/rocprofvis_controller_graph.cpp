@@ -543,7 +543,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
 }
 
 Graph::Graph(Handle* ctx, rocprofvis_controller_graph_type_t type, uint64_t id)
-: m_id(id)
+: Handle(__kRPVControllerGraphPropertiesFirst, __kRPVControllerGraphPropertiesLast)
+, m_id(id)
 , m_track(nullptr)
 , m_type(type)
 , m_ctx((Trace*)ctx)
@@ -668,17 +669,9 @@ Graph::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value
                                  : kRocProfVisResultUnknownError;
                 break;
             }
-            case kRPVControllerGraphTrack:
-            case kRPVControllerGraphStartTimestamp:
-            case kRPVControllerGraphEndTimestamp:
-            case kRPVControllerGraphEntryIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -709,18 +702,9 @@ Graph::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
                                  : kRocProfVisResultUnknownError;
                 break;
             }
-            case kRPVControllerGraphId:
-            case kRPVControllerGraphType:
-            case kRPVControllerGraphTrack:
-            case kRPVControllerGraphNumEntries:
-            case kRPVControllerGraphEntryIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -743,50 +727,9 @@ Graph::GetObject(rocprofvis_property_t property, uint64_t index,
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerGraphId:
-            case kRPVControllerGraphType:
-            case kRPVControllerGraphStartTimestamp:
-            case kRPVControllerGraphEndTimestamp:
-            case kRPVControllerGraphNumEntries:
-            case kRPVControllerGraphEntryIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
-        }
-    }
-    return result;
-}
-rocprofvis_result_t
-Graph::GetString(rocprofvis_property_t property, uint64_t index, char* value,
-                 uint32_t* length)
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(length)
-    {
-        switch(property)
-        {
-            case kRPVControllerGraphId:
-            case kRPVControllerGraphType:
-            case kRPVControllerGraphTrack:
-            case kRPVControllerGraphStartTimestamp:
-            case kRPVControllerGraphEndTimestamp:
-            case kRPVControllerGraphNumEntries:
-            case kRPVControllerGraphEntryIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -813,17 +756,9 @@ Graph::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
             result = kRocProfVisResultReadOnlyError;
             break;
         }
-        case kRPVControllerGraphTrack:
-        case kRPVControllerGraphStartTimestamp:
-        case kRPVControllerGraphEndTimestamp:
-        case kRPVControllerGraphEntryIndexed:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -843,18 +778,9 @@ Graph::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
             result = kRocProfVisResultReadOnlyError;
             break;
         }
-        case kRPVControllerGraphId:
-        case kRPVControllerGraphType:
-        case kRPVControllerGraphTrack:
-        case kRPVControllerGraphNumEntries:
-        case kRPVControllerGraphEntryIndexed:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -880,48 +806,9 @@ Graph::SetObject(rocprofvis_property_t property, uint64_t index,
                 }
                 break;
             }
-            case kRPVControllerGraphId:
-            case kRPVControllerGraphType:
-            case kRPVControllerGraphStartTimestamp:
-            case kRPVControllerGraphEndTimestamp:
-            case kRPVControllerGraphNumEntries:
-            case kRPVControllerGraphEntryIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
-        }
-    }
-    return result;
-}
-rocprofvis_result_t
-Graph::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        switch(property)
-        {
-            case kRPVControllerGraphId:
-            case kRPVControllerGraphType:
-            case kRPVControllerGraphTrack:
-            case kRPVControllerGraphStartTimestamp:
-            case kRPVControllerGraphEndTimestamp:
-            case kRPVControllerGraphNumEntries:
-            case kRPVControllerGraphEntryIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }

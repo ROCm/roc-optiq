@@ -1524,13 +1524,13 @@ TimelineView::RenderTraceView()
     float min_offset  = 0.0f;
     float view_offset = static_cast<float>(m_view_time_offset_ns);
 
-    if (ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, "%.5f")) {
+    if (ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, "")) {
 
         // Clamp the view offset to prevent scrolling out of bounds
         m_view_time_offset_ns = std::clamp(static_cast<double>(view_offset), 0.0,
                                         (m_range_x - m_v_width) + m_v_width * 0.10);
     }
-    
+
     ImGui::PopStyleColor(5);  // Pop the colors we pushed above
     ImGui::PopStyleVar(2);    // Pop both style variables
     ImGui::PopItemWidth();

@@ -27,7 +27,7 @@ rocprofvis_result_t Handle::GetStringImpl(char* value, uint32_t* length, char co
 
 rocprofvis_result_t Handle::UnhandledProperty(rocprofvis_property_t property)
 {
-    if(property >= m_first_prop_index && property <= m_last_prop_index)
+    if(property >= m_first_prop_index && property < m_last_prop_index)
     {
         return kRocProfVisResultInvalidType;
     }

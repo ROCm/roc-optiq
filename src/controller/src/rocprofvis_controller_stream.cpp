@@ -32,8 +32,8 @@ Stream::Stream()
 , m_track(nullptr)
 , m_id(0)
 {
-    m_first_prop_index = kRPVControllerStreamFirst;
-    m_last_prop_index = kRPVControllerStreamLast;
+    m_first_prop_index = __kRPVControllerStreamFirst;
+    m_last_prop_index = __kRPVControllerStreamLast;
 }
 
 Stream::~Stream() {

@@ -66,17 +66,21 @@ public:
     bool        TrackHeightChanged();
     static void SetSidebarSize(int sidebar_size);
 
-    virtual bool HasData();
-    virtual bool ReleaseData();
-    virtual void RequestData(double min, double max, float width);
-    virtual bool HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
-    virtual bool HasPendingRequests() const;
+    virtual bool  HasData();
+    virtual bool  ReleaseData();
+    virtual void  RequestData(double min, double max, float width);
+    virtual bool  HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
+    virtual bool  HasPendingRequests() const;
+    virtual float CalculateNewMetaAreaSize();
 
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
     bool IsMetaAreaClicked() const { return m_meta_area_clicked; }
 
     float GetReorderGripWidth();
+
+    float GetMetaAreaScaleWidth() { return m_meta_area_scale_width; }
+    void  UpdateMaxMetaAreaSize(float newSize);
 
 protected:
     virtual void RenderMetaArea();

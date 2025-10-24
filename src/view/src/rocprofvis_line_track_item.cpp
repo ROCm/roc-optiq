@@ -4,6 +4,9 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
+#include "rocprofvis_utils.h"
+
+#include <algorithm>
 
 namespace RocProfVis
 {
@@ -11,7 +14,8 @@ namespace View
 {
 
 LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
-                             double time_offset_ns, double& min_x, double& max_x, double scale_x)
+                             double time_offset_ns, double& min_x, double& max_x,
+                             double scale_x, float max_meta_area_width)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_min_y(0)
 , m_max_y(0)
@@ -22,6 +26,7 @@ LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float z
 , m_show_boxplot(false)
 , m_project_settings(dp.GetTraceFilePath(), *this)
 {
+    m_meta_area_scale_width = max_meta_area_width;
     m_track_height = 90.0f;
 
     UpdateYScaleExtents();
@@ -56,6 +61,8 @@ void LineTrackItem::UpdateYScaleExtents() {
     m_min_y_str     = flt.substr(0, flt.find('.') + 2);
     flt             = std::to_string(m_max_y);
     m_max_y_str     = flt.substr(0, flt.find('.') + 2);
+
+    m_meta_area_scale_width = CalculateNewMetaAreaSize();
 }
 
 void
@@ -254,6 +261,21 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImGui::EndChild();
 }
 
+float
+LineTrackItem::CalculateNewMetaAreaSize()
+{
+    m_compact_max = compact_number_format(m_max_y);
+    m_compact_min = compact_number_format(m_min_y);
+
+    ImVec2 max_size =
+        ImGui::CalcTextSize(m_compact_max.c_str()) + ImGui::CalcTextSize("Max: ");
+
+    ImVec2 min_size = ImGui::CalcTextSize(m_compact_min.c_str());
+
+    return std::max({ max_size.x + 2 * m_metadata_padding.x,
+                      min_size.x + 2 * m_metadata_padding.x });
+}
+
 bool
 LineTrackItem::ReleaseData()
 {
@@ -331,26 +353,33 @@ LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
 void
 LineTrackItem::RenderMetaAreaScale()
 {
-    ImVec2 max_size =
-        ImGui::CalcTextSize(m_max_y_str.c_str()) + ImGui::CalcTextSize("Max: ");
-    ImVec2 min_size         = ImGui::CalcTextSize(m_min_y_str.c_str());
-    m_meta_area_scale_width = max_size.x + 2 * m_metadata_padding.x;
-    ImVec2 content_region   = ImGui::GetContentRegionMax();
-    ImVec2 window_pos       = ImGui::GetWindowPos();
+    ImVec2 content_region = ImGui::GetContentRegionMax();
+    ImVec2 window_pos     = ImGui::GetWindowPos();
 
-    ImGui::SetCursorPos(ImVec2(content_region.x - (max_size.x + m_metadata_padding.x),
-                               m_metadata_padding.y));
+    ImGui::SetCursorPos(
+        ImVec2(content_region.x + m_metadata_padding.x - m_meta_area_scale_width,
+               m_metadata_padding.y));
     ImGui::TextUnformatted("Max: ");
     ImGui::SameLine();
-    ImGui::TextUnformatted(m_max_y_str.c_str());
+    ImGui::TextUnformatted(m_compact_max.c_str());
+    if(ImGui::BeginItemTooltip())
+    {
+        ImGui::TextUnformatted(m_max_y_str.c_str());
+        ImGui::EndTooltip();
+    }
 
-    ImGui::SetCursorPos(ImVec2(content_region.x - (max_size.x + m_metadata_padding.x),
-                               content_region.y - min_size.y - m_metadata_padding.y));
+    ImVec2 min_size = ImGui::CalcTextSize(m_compact_min.c_str());
+    ImGui::SetCursorPos(
+        ImVec2(content_region.x + m_metadata_padding.x - m_meta_area_scale_width,
+               content_region.y - min_size.y - m_metadata_padding.y));
     ImGui::TextUnformatted("Min: ");
-
-    ImGui::SetCursorPos(ImVec2(content_region.x - (min_size.x + m_metadata_padding.x),
-                               content_region.y - min_size.y - m_metadata_padding.y));
-    ImGui::TextUnformatted(m_min_y_str.c_str());
+    ImGui::SameLine();
+    ImGui::TextUnformatted(m_compact_min.c_str());
+    if(ImGui::BeginItemTooltip())
+    {
+        ImGui::TextUnformatted(m_min_y_str.c_str());
+        ImGui::EndTooltip();
+    }
 
     ImGui::GetWindowDrawList()->AddLine(
         ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width, window_pos.y),

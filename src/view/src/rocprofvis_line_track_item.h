@@ -38,15 +38,17 @@ class LineTrackItem : public TrackItem
 
 public:
     LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
-                  double time_offset_ns, double& min_x, double& max_x, double scale_x);
+                  double time_offset_ns, double& min_x, double& max_x, double scale_x,
+                  float max_meta_area_width);
     ~LineTrackItem();
 
     bool ReleaseData() override;
+    virtual float CalculateNewMetaAreaSize() override;
 
 protected:
-    virtual void RenderMetaAreaScale() override;
-    virtual void RenderChart(float graph_width) override;
-    virtual void RenderMetaAreaOptions() override;
+    virtual void  RenderMetaAreaScale() override;
+    virtual void  RenderChart(float graph_width) override;
+    virtual void  RenderMetaAreaOptions() override;
 
     void UpdateYScaleExtents();
 
@@ -64,6 +66,8 @@ private:
     double                               m_max_y;
     std::string                          m_min_y_str;
     std::string                          m_max_y_str;
+    std::string                          m_compact_max;
+    std::string                          m_compact_min;
     bool                                 m_is_color_value_existant;
     DataProvider&                        m_dp;
     bool                                 m_show_boxplot;

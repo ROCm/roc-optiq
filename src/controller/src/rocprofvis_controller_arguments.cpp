@@ -8,12 +8,10 @@ namespace Controller
 {
 
 Arguments::Arguments()
-{
-}
+: Handle(0, 0)
+{}
 
-Arguments::~Arguments()
-{
-}
+Arguments::~Arguments() {}
 
 rocprofvis_controller_object_type_t Arguments::GetType(void) 
 {

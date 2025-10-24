@@ -12,10 +12,10 @@ namespace Controller
 {
 
 Future::Future()
-: m_job(nullptr)
+: Handle(__kRPVControllerFuturePropertiesFirst, __kRPVControllerFuturePropertiesLast)
+, m_job(nullptr)
 , m_cancelled(false)
-{
-}
+{}
 
 Future::~Future()
 {
@@ -135,7 +135,7 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
             }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -155,15 +155,9 @@ rocprofvis_result_t Future::GetDouble(rocprofvis_property_t property, uint64_t i
                 result = m_object.GetDouble(value);
                 break;
             }
-            case kRPVControllerFutureResult:
-            case kRPVControllerFutureType:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -183,15 +177,9 @@ rocprofvis_result_t Future::GetObject(rocprofvis_property_t property, uint64_t i
                 result = m_object.GetObject(value);
                 break;
             }
-            case kRPVControllerFutureResult:
-            case kRPVControllerFutureType:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -211,106 +199,11 @@ rocprofvis_result_t Future::GetString(rocprofvis_property_t property, uint64_t i
                 result = m_object.GetString(value, length);
                 break;
             }
-            case kRPVControllerFutureResult:
-            case kRPVControllerFutureType:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t Future::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    switch(property)
-    {
-        case kRPVControllerFutureObject:
-        case kRPVControllerFutureResult:
-        case kRPVControllerFutureType:
-        {
-            result = kRocProfVisResultReadOnlyError;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
-        }
-    }
-    return result;
-}
-rocprofvis_result_t Future::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    switch(property)
-    {
-        case kRPVControllerFutureObject:
-        case kRPVControllerFutureResult:
-        case kRPVControllerFutureType:
-        {
-            result = kRocProfVisResultReadOnlyError;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
-        }
-    }
-    return result;
-}
-rocprofvis_result_t Future::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value)
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    switch(property)
-    {
-        case kRPVControllerFutureObject:
-        case kRPVControllerFutureResult:
-        case kRPVControllerFutureType:
-        {
-            result = kRocProfVisResultReadOnlyError;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
-        }
-    }
-    return result;
-}
-rocprofvis_result_t Future::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    switch(property)
-    {
-        case kRPVControllerFutureObject:
-        case kRPVControllerFutureResult:
-        case kRPVControllerFutureType:
-        {
-            result = kRocProfVisResultReadOnlyError;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
         }
     }
     return result;

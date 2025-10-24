@@ -23,8 +23,8 @@ typedef Reference<rocprofvis_controller_counter_t, Counter, kRPVControllerObject
     CounterRef;
 
 Process::Process()
-{
-}
+: Handle(__kRPVControllerProcessPropertiesFirst, __kRPVControllerProcessPropertiesLast)
+{}
 
 Process::~Process()
 {
@@ -103,24 +103,9 @@ Process::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* val
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerProcessInitTime:
-            case kRPVControllerProcessFinishTime:
-            case kRPVControllerProcessStartTime:
-            case kRPVControllerProcessEndTime:
-            case kRPVControllerProcessCommand:
-            case kRPVControllerProcessEnvironment:
-            case kRPVControllerProcessExtData:
-            case kRPVControllerProcessThreadIndexed:
-            case kRPVControllerProcessQueueIndexed:
-            case kRPVControllerProcessStreamIndexed:
-            case kRPVControllerProcessCounterIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -161,27 +146,9 @@ Process::GetDouble(rocprofvis_property_t property, uint64_t index, double* value
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerProcessNumCounters:
-            case kRPVControllerProcessId:
-            case kRPVControllerProcessNodeId:
-            case kRPVControllerProcessParentId:
-            case kRPVControllerProcessCommand:
-            case kRPVControllerProcessEnvironment:
-            case kRPVControllerProcessExtData:
-            case kRPVControllerProcessNumThreads:
-            case kRPVControllerProcessNumQueues:
-            case kRPVControllerProcessNumStreams:
-            case kRPVControllerProcessThreadIndexed:
-            case kRPVControllerProcessQueueIndexed:
-            case kRPVControllerProcessStreamIndexed:
-            case kRPVControllerProcessCounterIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -250,26 +217,9 @@ Process::GetObject(rocprofvis_property_t property, uint64_t index,
                 }
                 break;
             }
-            case kRPVControllerProcessId:
-            case kRPVControllerProcessNodeId:
-            case kRPVControllerProcessParentId:
-            case kRPVControllerProcessInitTime:
-            case kRPVControllerProcessFinishTime:
-            case kRPVControllerProcessStartTime:
-            case kRPVControllerProcessEndTime:
-            case kRPVControllerProcessCommand:
-            case kRPVControllerProcessEnvironment:
-            case kRPVControllerProcessExtData:
-            case kRPVControllerProcessNumThreads:
-            case kRPVControllerProcessNumQueues:
-            case kRPVControllerProcessNumStreams:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -300,28 +250,9 @@ Process::GetString(rocprofvis_property_t property, uint64_t index, char* value,
             result = GetStdStringImpl(value, length, m_ext_data);
             break;
         }
-        case kRPVControllerProcessId:
-        case kRPVControllerProcessNodeId:
-        case kRPVControllerProcessParentId:
-        case kRPVControllerProcessInitTime:
-        case kRPVControllerProcessFinishTime:
-        case kRPVControllerProcessStartTime:
-        case kRPVControllerProcessEndTime:
-        case kRPVControllerProcessNumThreads:
-        case kRPVControllerProcessNumQueues:
-        case kRPVControllerProcessNumStreams:
-        case kRPVControllerProcessThreadIndexed:
-        case kRPVControllerProcessQueueIndexed:
-        case kRPVControllerProcessStreamIndexed:
-        case kRPVControllerProcessNumCounters:
-        case kRPVControllerProcessCounterIndexed:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -389,24 +320,9 @@ Process::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t valu
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerProcessCounterIndexed:
-        case kRPVControllerProcessInitTime:
-        case kRPVControllerProcessFinishTime:
-        case kRPVControllerProcessStartTime:
-        case kRPVControllerProcessEndTime:
-        case kRPVControllerProcessCommand:
-        case kRPVControllerProcessEnvironment:
-        case kRPVControllerProcessExtData:
-        case kRPVControllerProcessThreadIndexed:
-        case kRPVControllerProcessQueueIndexed:
-        case kRPVControllerProcessStreamIndexed:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -444,27 +360,9 @@ Process::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
             result     = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerProcessNumCounters:
-        case kRPVControllerProcessCounterIndexed:
-        case kRPVControllerProcessId:
-        case kRPVControllerProcessNodeId:
-        case kRPVControllerProcessParentId:
-        case kRPVControllerProcessCommand:
-        case kRPVControllerProcessEnvironment:
-        case kRPVControllerProcessExtData:
-        case kRPVControllerProcessNumThreads:
-        case kRPVControllerProcessNumQueues:
-        case kRPVControllerProcessNumStreams:
-        case kRPVControllerProcessThreadIndexed:
-        case kRPVControllerProcessQueueIndexed:
-        case kRPVControllerProcessStreamIndexed:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -547,27 +445,9 @@ Process::SetObject(rocprofvis_property_t property, uint64_t index,
             }
             break;
         }
-        case kRPVControllerProcessNumCounters:
-        case kRPVControllerProcessId:
-        case kRPVControllerProcessNodeId:
-        case kRPVControllerProcessParentId:
-        case kRPVControllerProcessInitTime:
-        case kRPVControllerProcessFinishTime:
-        case kRPVControllerProcessStartTime:
-        case kRPVControllerProcessEndTime:
-        case kRPVControllerProcessCommand:
-        case kRPVControllerProcessEnvironment:
-        case kRPVControllerProcessExtData:
-        case kRPVControllerProcessNumThreads:
-        case kRPVControllerProcessNumQueues:
-        case kRPVControllerProcessNumStreams:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -601,28 +481,9 @@ Process::SetString(rocprofvis_property_t property, uint64_t index, char const* v
                 result     = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerProcessNumCounters:
-            case kRPVControllerProcessCounterIndexed:
-            case kRPVControllerProcessId:
-            case kRPVControllerProcessNodeId:
-            case kRPVControllerProcessParentId:
-            case kRPVControllerProcessInitTime:
-            case kRPVControllerProcessFinishTime:
-            case kRPVControllerProcessStartTime:
-            case kRPVControllerProcessEndTime:
-            case kRPVControllerProcessNumThreads:
-            case kRPVControllerProcessNumQueues:
-            case kRPVControllerProcessNumStreams:
-            case kRPVControllerProcessThreadIndexed:
-            case kRPVControllerProcessQueueIndexed:
-            case kRPVControllerProcessStreamIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }

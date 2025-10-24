@@ -22,7 +22,7 @@ class Future;
 class Table : public Handle
 {
 public:
-    Table(uint64_t id);
+    Table(uint64_t id, uint32_t first_prop_index, uint32_t last_prop_index);
 
     virtual ~Table();
 

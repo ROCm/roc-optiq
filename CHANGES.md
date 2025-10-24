@@ -1,3 +1,9 @@
+## 0.6.2
+
+### Fixes
+  - Fix: Event Id on tooltip shows incorrect value
+  - Fix: Panning on timeline does not work at large zoom level
+
 ## 0.6.1
 
 ### Fixes

@@ -256,8 +256,8 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
             ImGui::Text("Start: %s", label.c_str());
             label = nanosecond_to_formatted_str(chart_item.event.m_duration, time_format);
             ImGui::Text("Duration: %s", label.c_str());
-            ImGui::Text("Id: %lu", chart_item.event.m_id);
-            ImGui::Text("DB Id: %lu", event_id.bitfield.db_event_id);
+            ImGui::Text("Id: %llu", chart_item.event.m_id);
+            ImGui::Text("DB Id: %llu", event_id.bitfield.db_event_id);
             ImGui::EndTooltip();
             ImGui::PopStyleVar();
             m_has_drawn_tool_tip = true;

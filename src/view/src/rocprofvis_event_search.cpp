@@ -13,18 +13,18 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr uint64_t MAX_RESULTS_DISPLAYED = 5;
-
-const std::string TRACK_ID_COLUMN_NAME  = "__trackId";
-const std::string STREAM_ID_COLUMN_NAME = "__streamTrackId";
-const std::string ID_COLUMN_NAME        = "id";
-const std::string NAME_COLUMN_NAME      = "name";
+constexpr uint64_t    MAX_RESULTS_DISPLAYED = 5;
+constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
+constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
+constexpr const char* ID_COLUMN_NAME        = "id";
+constexpr const char* NAME_COLUMN_NAME      = "name";
 
 EventSearch::EventSearch(DataProvider& dp)
 : InfiniteScrollTable(dp, TableType::kEventSearchTable)
 , m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
 , m_should_open(false)
 , m_should_close(false)
+, m_open_context_menu(false)
 , m_focus_text_input(false)
 , m_search_deferred(false)
 , m_searched(false)
@@ -83,6 +83,7 @@ EventSearch::Render()
                 ImGui::SetNextWindowSize(ImGui::GetContentRegionAvail() -
                                          ImVec2(0, ImGui::GetFrameHeightWithSpacing()));
                 InfiniteScrollTable::Render();
+                RenderContextMenu();
             }
             ImGui::AlignTextToFramePadding();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
@@ -244,7 +245,7 @@ EventSearch::Width() const
 }
 
 void
-EventSearch::FormatData()
+EventSearch::FormatData() const
 {
     std::vector<formatted_column_info_t>& formatted_column_data =
         m_data_provider.GetMutableFormattedTableData(m_table_type);
@@ -292,25 +293,52 @@ EventSearch::RowSelected(const ImGuiMouseButton mouse_button)
 {
     if(mouse_button == ImGuiMouseButton_Left)
     {
-        uint64_t track_id = SelectedRowToTrackID(m_important_column_idxs[kTrackId],
-                                                 m_important_column_idxs[kStreamId]);
-        std::pair<uint64_t, uint64_t> time_range = SelectedRowToTimeRange();
-        if(track_id != INVALID_UINT64_INDEX && time_range.first != INVALID_UINT64_INDEX &&
-           time_range.second != INVALID_UINT64_INDEX)
-        {
-            ViewRangeNS view_range = calculate_adaptive_view_range(
-                static_cast<double>(time_range.first),
-                static_cast<double>(time_range.second - time_range.first));
-            EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
-                static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent), track_id,
-                m_data_provider.GetTraceFilePath()));
-            EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
-                static_cast<int>(RocEvents::kSetViewRange), view_range.start_ns,
-                view_range.end_ns, m_data_provider.GetTraceFilePath()));
-            m_should_close = true;
-        }
+        SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
+                                 m_important_column_idxs[kStreamId]);
+        m_should_close = true;
+    }
+    else if(mouse_button == ImGuiMouseButton_Right)
+    {
+        m_open_context_menu = true;
     }
     InfiniteScrollTable::RowSelected(mouse_button);
+}
+
+void
+EventSearch::RenderContextMenu()
+{
+    if(m_open_context_menu)
+    {
+        ImGui::OpenPopup("");
+        m_open_context_menu = false;
+    }
+
+    const ImGuiStyle& style = m_settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    if(ImGui::BeginPopup(""))
+    {
+        uint64_t target_track_id = SelectedRowToTrackID(
+            m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
+        if(ImGui::MenuItem("Copy Row Data", nullptr, false))
+        {
+            SelectedRowToClipboard();
+        }
+        else if(ImGui::MenuItem("Go To Event", nullptr, false,
+                                target_track_id != INVALID_UINT64_INDEX))
+        {
+            SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
+                                     m_important_column_idxs[kStreamId]);
+        }
+        else if(ImGui::MenuItem("Export To File", nullptr, false,
+                                !m_data_provider.IsRequestPending(
+                                    DataProvider::TABLE_EXPORT_REQUEST_ID)))
+        {
+            ExportToFile();
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar(2);
 }
 
 float

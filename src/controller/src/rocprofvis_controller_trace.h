@@ -59,6 +59,10 @@ public:
 
     rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future,
                                    Array& array);
+
+    rocprofvis_result_t TableExportCSV(Table& table, Arguments& args, Future& future, 
+                                       const char* path);
+
 #ifdef COMPUTE_UI_SUPPORT
     rocprofvis_result_t AsyncFetch(Plot& plot, Arguments& args, Future& future,
                                    Array& array);

@@ -136,6 +136,21 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     uint64_t max_count, uint64_t offset, 
     bool count_only, char** out_query);
 
+/****************************************************************************************************
+ * @brief Asynchronous call to write the results of a table query to .CSV
+ *
+ * @param database database handle
+ * @param query sql table query (see rocprofvis_db_build_table_query)
+ * @param file_path output path to write .CSV
+ * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @return status of operation
+ ***************************************************************************************************/
+rocprofvis_dm_result_t rocprofvis_db_export_table_csv_async(
+    rocprofvis_dm_database_t database,
+    rocprofvis_dm_charptr_t query,
+    rocprofvis_dm_charptr_t file_path,
+    rocprofvis_db_future_t object);
+
 rocprofvis_dm_result_t rocprofvis_db_trim_save_async(rocprofvis_dm_database_t database, rocprofvis_dm_timestamp_t start,
                                             rocprofvis_dm_timestamp_t end,
                                             rocprofvis_dm_charptr_t new_db_path, 

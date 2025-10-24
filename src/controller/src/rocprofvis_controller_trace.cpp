@@ -2615,6 +2615,25 @@ Trace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
     return error;
 }
 
+rocprofvis_result_t
+Trace::TableExportCSV(Table& table, Arguments& args, Future& future, const char* path)
+{
+    rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    std::string path_str = path; 
+
+    future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, path_str](Future* future) -> rocprofvis_result_t {
+            return table.ExportCSV(dm_handle, args, future, path_str.c_str());
+        }, &future));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
+
 #ifdef COMPUTE_UI_SUPPORT
 rocprofvis_result_t
 Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)

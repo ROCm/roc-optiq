@@ -21,6 +21,7 @@
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_c_interface.h"
 #include <sstream>
+#include <fstream>
 
 namespace RocProfVis
 {
@@ -673,15 +674,18 @@ ProfileDatabase::BuildTableQuery(
     }
     if(!count_only)
     {
-        if(max_count)
+        if(max_count < UINT64_MAX)
         {
-            query += " LIMIT ";
-            query += std::to_string(max_count);
-        }
-        if(offset)
-        {
-            query += " OFFSET ";
-            query += std::to_string(offset);
+            if(max_count)
+            {
+                query += " LIMIT ";
+                query += std::to_string(max_count);
+            }
+            if(offset)
+            {
+                query += " OFFSET ";
+                query += std::to_string(offset);
+            }
         }
     }
     else
@@ -769,6 +773,46 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename){
     
     sqlite3_close(db);
     return rocprofvis_db_type_t::kAutodetect;
+}
+
+rocprofvis_dm_result_t ProfileDatabase::ExportTableCSV(rocprofvis_dm_charptr_t query,
+                                                       rocprofvis_dm_charptr_t file_path,
+                                                       Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Output path cannot be NULL.",
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+
+    Future* internal_future = new Future(nullptr);
+
+    std::ofstream file(file_path);
+    if(file.is_open())
+    {
+        if(strstr(query, "GROUP BY"))
+        {
+            result = ExecuteSQLQuery(internal_future, query, (rocprofvis_dm_handle_t)&file, &CallbackQueryToCSV);
+        }
+        else
+        {
+            result = ExecuteSQLQuery(internal_future, query, (rocprofvis_dm_handle_t)&file, &CallbackTableQueryToCSV);
+        }        
+        file.close();
+    }   
+
+    if (result == kRocProfVisDmResultSuccess)
+    {
+        ShowProgress(100, "CSV export success", kRPVDbSuccess, future);        
+    }
+    else
+    {
+        ShowProgress(0, "CSV export failed", kRPVDbError, future);
+    }
+
+    delete internal_future;
+
+    return future->SetPromise(result);
 }
 
 

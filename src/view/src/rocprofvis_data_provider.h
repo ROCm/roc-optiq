@@ -36,7 +36,8 @@ enum class RequestType
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
     kFetchEventCallStack,
-    kSaveTrimmedTrace
+    kSaveTrimmedTrace,
+    kTableExport
 };
 
 enum class TableType
@@ -231,6 +232,7 @@ public:
     std::vector<std::string>           m_string_table_filters; // strings to use for string table filtering.
     std::string                        m_group;
     std::string                        m_group_columns;
+    std::string                        m_export_to_file_path;
 
     TableRequestParams(const TableRequestParams& table_params)            = default;
     TableRequestParams& operator=(const TableRequestParams& table_params) = default;
@@ -242,7 +244,8 @@ public:
         double end_ts, char const* filter, char const* group, char const* group_cols,
         const std::vector<std::string> string_table_filters = {}, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
-        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending)
+        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
+        std::string export_to_file_path = "")
     : m_table_type(table_type)
     , m_track_ids(track_ids)
     , m_op_types(op_types)
@@ -256,6 +259,7 @@ public:
     , m_group(group)
     , m_group_columns(group_cols)
     , m_string_table_filters(string_table_filters)
+    , m_export_to_file_path(export_to_file_path)
     {}
 };
 
@@ -336,6 +340,7 @@ public:
     static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
     static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
+    static const uint64_t TABLE_EXPORT_REQUEST_ID;
 
     DataProvider();
     ~DataProvider();
@@ -568,6 +573,7 @@ public:
     void SetTraceLoadedCallback(
         const std::function<void(const std::string&, uint64_t)>& callback);
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
+    void SetExportTableCallback(const std::function<void(const std::string&, bool)>& callback);
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -593,6 +599,7 @@ private:
     void ProcessGraphRequest(data_req_info_t& req);
     void ProcessTrackRequest(data_req_info_t& req);
     void ProcessTableRequest(data_req_info_t& req);
+    void ProcessTableExportRequest(data_req_info_t& req);
     void ProcessSaveTrimmedTraceRequest(data_req_info_t& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
@@ -650,6 +657,8 @@ private:
     std::function<void(const std::string&, uint64_t)> m_trace_data_ready_callback;
     // Callback when trace is saved
     std::function<void(bool)> m_save_trace_callback;
+    // Callback when table export has completed
+    std::function<void(const std::string&, bool)> m_table_export_callback;
     // Current loading status message retrieved form data model
     std::string m_progress_mesage;
     // Current loading status progress in percents

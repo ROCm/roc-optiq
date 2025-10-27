@@ -796,7 +796,11 @@ rocprofvis_dm_result_t ProfileDatabase::ExportTableCSV(rocprofvis_dm_charptr_t q
             result = ExecuteSQLQuery(internal_future, query, (rocprofvis_dm_handle_t)&file, &CallbackTableQueryToCSV);
         }        
         file.close();
-    }   
+    }
+    else
+    {
+        result = kRocProfVisDmResultDbAccessFailed;
+    }
 
     if (result == kRocProfVisDmResultSuccess)
     {

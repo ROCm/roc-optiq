@@ -674,18 +674,15 @@ ProfileDatabase::BuildTableQuery(
     }
     if(!count_only)
     {
-        if(max_count < UINT64_MAX)
+        if(max_count)
         {
-            if(max_count)
-            {
-                query += " LIMIT ";
-                query += std::to_string(max_count);
-            }
-            if(offset)
-            {
-                query += " OFFSET ";
-                query += std::to_string(offset);
-            }
+            query += " LIMIT ";
+            query += std::to_string(max_count);
+        }
+        if(offset)
+        {
+            query += " OFFSET ";
+            query += std::to_string(offset);
         }
     }
     else

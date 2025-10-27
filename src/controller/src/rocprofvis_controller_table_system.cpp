@@ -374,7 +374,7 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
             rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
                 db, query_args.m_start_ts, query_args.m_end_ts, (rocprofvis_db_num_of_tracks_t)query_args.m_tracks.size(), query_args.m_tracks.data(), query_args.m_filter.c_str(), query_args.m_group.c_str(), query_args.m_group_cols.c_str(), sort_column,
                 (rocprofvis_dm_sort_order_t)query_args.m_sort_order, (rocprofvis_dm_num_string_table_filters_t)string_table_filters_ptr.size(), string_table_filters_ptr.data(), 
-                UINT64_MAX, 0, false, &query);
+                0, 0, false, &query);
             if(dm_result == kRocProfVisDmResultSuccess)
             {
                 dm_result = rocprofvis_db_export_table_csv_async(db, query, path, object2wait);

@@ -623,7 +623,7 @@ ProfileDatabase::BuildTableQuery(
         query += std::to_string(start);
         query += " and ";
         query += Builder::END_SERVICE_NAME;
-        query += " < ";
+        query += " <= ";
         query += std::to_string(end);
     }
     if (group && strlen(group))

@@ -5,6 +5,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_view.h"
 #include <algorithm>
+#include <cmath>
 
 namespace RocProfVis
 {
@@ -17,13 +18,12 @@ MiniMap::MiniMap(DataProvider& dp, std::shared_ptr<TimelineView> timeline)
 , m_height(0)
 , m_rebinned_mini_map({})
 , m_histogram_bins(0)
-{
- }
+{}
 MiniMap::~MiniMap() {}
 void
 MiniMap::RebinMiniMap(size_t max_bins)
 {
-    m_histogram_bins = m_data_provider.GetHistogram().size();
+    m_histogram_bins        = m_data_provider.GetHistogram().size();
     const auto& mini_map    = m_data_provider.GetMiniMap();
     size_t      track_count = mini_map.size();
     if(track_count <= max_bins)
@@ -38,7 +38,7 @@ MiniMap::RebinMiniMap(size_t max_bins)
     for(const auto& [track_id, _] : mini_map)
         track_ids.push_back(track_id);
 
-    size_t group_size = (track_count + max_bins - 1) / max_bins;  
+    size_t group_size = (track_count + max_bins - 1) / max_bins;
     m_rebinned_mini_map.clear();
 
     for(size_t i = 0; i < track_count; i += group_size)
@@ -126,11 +126,10 @@ MiniMap::Render()
             int color_idx = static_cast<int>(std::round(bins[i] * 6));
             color_idx     = std::clamp(color_idx, 0, 6);
 
-            // Use rounded pixel positions to avoid floating point errors
-            float x0 = std::round(cursor.x + static_cast<float>(i) * rect_width);
-            float x1 = std::round(cursor.x + static_cast<float>(i + 1) * rect_width);
-            float y0 = std::round(cursor.y);
-            float y1 = std::round(cursor.y + rect_height);
+            float x0 = cursor.x + i * rect_width;
+            float x1 = cursor.x + (i + 1) * rect_width;
+            float y0 = cursor.y;
+            float y1 = cursor.y + rect_height;
 
             ImVec2 p_min(x0, y0);
             ImVec2 p_max(x1, y1);

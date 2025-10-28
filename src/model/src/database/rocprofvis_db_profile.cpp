@@ -23,6 +23,7 @@
 #include "rocprofvis_c_interface.h"
 #include <sstream>
 #include <unordered_set>
+#include <cfloat>
 
 namespace RocProfVis
 {

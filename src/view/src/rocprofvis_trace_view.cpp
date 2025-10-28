@@ -60,7 +60,7 @@ TraceView::TraceView()
 
     m_data_provider.SetTrackMetadataChangedCallback([](const std::string& trace_path) {
         EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
-            static_cast<int>(RocEvents::kTrackMetadataChanged)));
+            static_cast<int>(RocEvents::kTrackMetadataChanged), trace_path));
     });
 
     m_data_provider.SetTableDataReadyCallback(
@@ -295,7 +295,7 @@ TraceView::Render()
             const char* progress_label      = m_data_provider.GetProgressMessage();
             ImVec2      progress_label_size = ImGui::CalcTextSize(progress_label);
 
-            int item_spacing = 10.0f;
+            float item_spacing = 10.0f;
 
             float dot_radius  = 5.0f;
             int   num_dots    = 3;

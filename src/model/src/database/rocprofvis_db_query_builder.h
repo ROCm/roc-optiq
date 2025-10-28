@@ -81,6 +81,7 @@ typedef struct rocprofvis_db_sqlite_table_query_format
 typedef struct rocprofvis_db_sqlite_rocpd_table_query_format
 {
     static constexpr const int NUM_PARAMS = 9;
+    SqliteDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_rocpd_table_query_format;
@@ -88,6 +89,7 @@ typedef struct rocprofvis_db_sqlite_rocpd_table_query_format
 typedef struct rocprofvis_db_sqlite_sample_table_query_format
 {
     static constexpr const int NUM_PARAMS = 7;
+    SqliteDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_sample_table_query_format;
@@ -107,6 +109,14 @@ typedef struct rocprofvis_db_sqlite_essential_data_query_format
     std::vector<std::string>   from;
     std::vector<std::string>   where;
 } rocprofvis_db_sqlite_essential_data_query_format;
+
+typedef enum rocprofvis_db_sqlite_table_query_column_mask
+{
+    kRPVTableQueryColumnMaskBlank = 0,
+    kRPVTableQueryColumnMaskService,
+    kRPVTableQueryColumnMaskTimestamp,
+    kRPVTableQueryColumnMaskCount,
+} rocprofvis_db_sqlite_table_query_column_mask;
 
 class Builder
 {
@@ -128,7 +138,7 @@ class Builder
         static constexpr const char* STREAM_TRACK_ID_PUBLIC_NAME = "__streamTrackId";
         static constexpr const char* SPACESAVER_SERVICE_NAME     = "const";
         static constexpr const char* COUNTER_NAME_SERVICE_NAME   = "monitorType";
-        static constexpr const char* BLANK_COLUMN_STR            = "' '";
+        static constexpr const char* BLANK_COLUMN_STR            = "''";
         static constexpr const char* START_SERVICE_NAME     = "startTs";
         static constexpr const char* END_SERVICE_NAME       = "endTs";
 
@@ -166,7 +176,7 @@ class Builder
         static std::string LevelTable(std::string operation);
         static std::vector<std::string> OldLevelTables(std::string operation);
     private:
-        static void        BuildBlanksMask(SqliteDatabase* owner, int num_params, std::string* params);
+        static void        BuildColumnMasks(SqliteDatabase* owner, int num_params, std::string* params); 
         static std::string BuildQuery(std::string select, int num_params,
                                       std::string* params, std::vector<std::string> from,
                                       std::string finalize_with);

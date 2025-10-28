@@ -170,6 +170,15 @@ class Database
                                                                 rocprofvis_dm_string_table_filters_t string_table_filters,
                                                                 table_string_id_filter_map_t& filter) = 0;
 
+        // Asynchronously writes the results of a table query to .CSV
+        // @param query - database query 
+        // @param file_path - .CSV output path
+        // @param object - future object providing asynchronous execution mechanism 
+        // @return status of operation
+       rocprofvis_dm_result_t ExportTableCSVAsync(rocprofvis_dm_string_t query,
+                                                  rocprofvis_dm_string_t file_path,
+                                                  rocprofvis_db_future_t object);
+
        virtual rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t start,
                                                       rocprofvis_dm_timestamp_t end,
                                                       rocprofvis_dm_charptr_t new_db_path,
@@ -245,6 +254,17 @@ class Database
                                                                const rocprofvis_dm_id_t instance_id, 
                                                                rocprofvis_dm_charptr_t column_name,
                                                                rocprofvis_dm_charptr_t* value); 
+
+        // static method to export the results of a table query to .CSV
+        // @param db - pointer to database object
+        // @param query - database query
+        // @param file_path - .CSV output path
+        // @param future - future object providing asynchronous execution mechanism 
+        // @return status of operation 
+        static rocprofvis_dm_result_t   ExportTableCSVStatic(  Database* db,
+                                                               rocprofvis_dm_string_t query,
+                                                               rocprofvis_dm_string_t file_path,
+                                                               Future* future);
 
     /************************pure virtual worker methods to be implemented in derived classes**********************/
 
@@ -322,7 +342,15 @@ class Database
                                                                 rocprofvis_db_num_of_tracks_t num, 
                                                                 rocprofvis_db_track_selection_t tracks, 
                                                                 rocprofvis_dm_string_t& query, 
-                                                                slice_array_t& slices) = 0; 
+                                                                slice_array_t& slices) = 0;
+
+        // method to export the results of a table query to .CSV
+        // @param query - database query
+        // @param file_path - .CSV output path
+        // @return status of operation 
+        virtual rocprofvis_dm_result_t ExportTableCSV(          rocprofvis_dm_charptr_t query,
+                                                                rocprofvis_dm_charptr_t file_path,
+                                                                Future* future);
     private:
         // pointer to a binding information structure physically located in Trace object and passed to Database object during binding
         // binding structure contains methods to transfer data between database and trace objects 

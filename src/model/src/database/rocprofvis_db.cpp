@@ -135,6 +135,49 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t Database::ExportTableCSVAsync(rocprofvis_dm_string_t query,
+                                                     rocprofvis_dm_string_t file_path,
+                                                     rocprofvis_db_future_t object)
+{
+    Future* future = (Future*) object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(!file_path.empty(), "Output path cannot be empty.",
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED,
+                                 kRocProfVisDmResultResourceBusy);
+    try
+    {
+        future->SetWorker(std::move(std::thread(&ExportTableCSVStatic, this, query, file_path, future)));
+    } catch(std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t Database::ExportTableCSVStatic(Database* db,
+                                                      rocprofvis_dm_string_t query,
+                                                      rocprofvis_dm_string_t file_path,
+                                                      Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(!file_path.empty(), "New DB path cannot be empty.",
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);    
+    return db->ExportTableCSV(query.c_str(), file_path.c_str(), future);
+}
+
+rocprofvis_dm_result_t Database::ExportTableCSV(rocprofvis_dm_charptr_t query,
+                                                rocprofvis_dm_charptr_t file_path, 
+                                                Future* future)
+{
+    (void) query;
+    (void) file_path;
+    (void) future;
+    return kRocProfVisDmResultNotSupported;
+}
+
 rocprofvis_dm_result_t
 Database::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
                                rocprofvis_dm_timestamp_t end,

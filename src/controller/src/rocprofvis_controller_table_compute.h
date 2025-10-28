@@ -24,8 +24,8 @@ public:
     virtual ~ComputeTable();
 
     rocprofvis_result_t Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future) final;
-    rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index,
-                              uint64_t count, Array& array, Future* future) final;
+    rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future) final;
+    rocprofvis_result_t ExportCSV(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future, const char* path) const final;
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;

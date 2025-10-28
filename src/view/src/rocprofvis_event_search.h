@@ -39,15 +39,17 @@ private:
         kNumImportantColumns
     };
 
-    void FormatData() override;
+    void FormatData() const override;
     void IndexColumns() override;
     void RowSelected(const ImGuiMouseButton mouse_button) override;
+    void RenderContextMenu();
 
     bool  Open() const;
     float Height() const;
 
     bool  m_should_open;
     bool  m_should_close;
+    bool  m_open_context_menu;
     bool  m_focus_text_input;
     bool  m_search_deferred;
     bool  m_searched;

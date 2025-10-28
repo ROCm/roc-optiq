@@ -2,24 +2,26 @@
 
 #include "rocprofvis_infinite_scroll_table.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
-
+#include "widgets/rocprofvis_notification_manager.h"
 #include <algorithm>
+#include <sstream>
 
 namespace RocProfVis
 {
 namespace View
 {
 
-constexpr uint64_t FETCH_CHUNK_SIZE = 1000;
-
-const std::string START_TS_COLUMN_NAME = "startTs";
-const std::string END_TS_COLUMN_NAME   = "endTs";
-const std::string DURATION_COLUMN_NAME = "duration";
+constexpr uint64_t    FETCH_CHUNK_SIZE               = 1000;
+constexpr const char* START_TS_COLUMN_NAME           = "startTs";
+constexpr const char* END_TS_COLUMN_NAME             = "endTs";
+constexpr const char* DURATION_COLUMN_NAME           = "duration";
+constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
                                          const std::string& no_data_text)
@@ -43,6 +45,8 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_selected_row(-1)
 , m_no_data_text(no_data_text)
 , m_horizontal_scroll(0.0f)
+, m_time_column_indices(
+      { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
 {
     auto new_table_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTableData(e);
@@ -57,6 +61,14 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
     };
     m_format_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimeFormatChanged), format_changed_handler);
+
+    m_data_provider.SetExportTableCallback(
+        [this](const std::string& file_path, bool success) {
+            NotificationManager::GetInstance().Hide(EXPORT_PENDING_NOTIFICATION_ID);
+            NotificationManager::GetInstance().Show(
+                success ? "Exported: " + file_path : "Failed to export: " + file_path,
+                success ? NotificationLevel::Success : NotificationLevel::Error);
+        });
 }
 
 InfiniteScrollTable::~InfiniteScrollTable()
@@ -142,7 +154,7 @@ InfiniteScrollTable::Update()
 }
 
 void
-InfiniteScrollTable::FormatData()
+InfiniteScrollTable::FormatData() const
 {
     // default implementation does nothing
 }
@@ -633,6 +645,76 @@ InfiniteScrollTable::SelectedRowToTimeRange() const
 }
 
 void
+InfiniteScrollTable::SelectedRowToClipboard() const
+{
+    const std::vector<std::vector<std::string>>& table_data =
+        m_data_provider.GetTableData(m_table_type);
+    if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
+    {
+        spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
+    }
+    else
+    {
+        // Build and copy the data from the selected row
+        std::ostringstream str_collector;
+        for(size_t i = 0; i < table_data[m_selected_row].size(); ++i)
+        {
+            if(i > 0) str_collector << ",";
+            str_collector << table_data[m_selected_row][i];
+        }
+        std::string row_data = str_collector.str();
+        // Copy the row data to the clipboard
+        ImGui::SetClipboardText(row_data.c_str());
+        // Show notification that data was copied
+        NotificationManager::GetInstance().Show("Row data copied to clipboard",
+                                                NotificationLevel::Info, 1.0);
+    }
+}
+
+void
+InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
+                                     size_t stream_id_column_index) const
+{
+    const std::vector<std::vector<std::string>>& table_data =
+        m_data_provider.GetTableData(m_table_type);
+    if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
+    {
+        spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
+    }
+    else
+    {
+        // Handle navigation
+        uint64_t target_track_id =
+            SelectedRowToTrackID(track_id_column_index, stream_id_column_index);
+        if(target_track_id != INVALID_UINT64_INDEX)
+        {
+            // get start time and duration
+            std::pair<uint64_t, uint64_t> time_range = SelectedRowToTimeRange();
+            if(time_range.first != INVALID_UINT64_INDEX &&
+               time_range.second != INVALID_UINT64_INDEX)
+            {
+                ViewRangeNS view_range = calculate_adaptive_view_range(
+                    static_cast<double>(time_range.first),
+                    static_cast<double>(time_range.second - time_range.first));
+                spdlog::info("Navigating to track ID: {} from row: {}", target_track_id,
+                             m_selected_row);
+                EventManager::GetInstance()->AddEvent(
+                    std::make_shared<ScrollToTrackEvent>(
+                        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+                        target_track_id, m_data_provider.GetTraceFilePath()));
+                EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
+                    static_cast<int>(RocEvents::kSetViewRange), view_range.start_ns,
+                    view_range.end_ns, m_data_provider.GetTraceFilePath()));
+            }
+        }
+        else
+        {
+            spdlog::warn("No valid track or stream ID found for row: {}", m_selected_row);
+        }
+    }
+}
+
+void
 InfiniteScrollTable::FormatTimeColumns() const
 {
     const std::vector<std::vector<std::string>>& table_data =
@@ -670,6 +752,30 @@ InfiniteScrollTable::FormatTimeColumns() const
             }
         }
     }
+}
+
+void
+InfiniteScrollTable::ExportToFile() const
+{
+    AppWindow::GetInstance()->ShowFileDialog(
+        "Export Table", ".csv", "", true, [this](std::string file_path) -> void {
+            std::shared_ptr<TableRequestParams> table_params =
+                m_data_provider.GetTableParams(m_table_type);
+            if(table_params &&
+               m_data_provider.FetchTable(TableRequestParams(
+                   m_req_table_type, table_params->m_track_ids, table_params->m_op_types,
+                   table_params->m_start_ts, table_params->m_end_ts,
+                   table_params->m_filter.c_str(), table_params->m_group.c_str(),
+                   table_params->m_group_columns.c_str(),
+                   table_params->m_string_table_filters, INVALID_UINT64_INDEX,
+                   INVALID_UINT64_INDEX, table_params->m_sort_column_index,
+                   table_params->m_sort_order, file_path)))
+            {
+                NotificationManager::GetInstance().ShowPersistent(
+                    EXPORT_PENDING_NOTIFICATION_ID, "Exporting: " + file_path,
+                    NotificationLevel::Info);
+            }
+        });
 }
 
 void

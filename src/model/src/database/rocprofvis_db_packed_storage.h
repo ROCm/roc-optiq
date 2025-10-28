@@ -30,6 +30,7 @@
 #include <unordered_set>
 #include <mutex>
 #include <shared_mutex>
+#include <cfloat>
 #include "rocprofvis_common_types.h"
 
 namespace RocProfVis

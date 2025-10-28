@@ -406,7 +406,7 @@ class Builder
                                       std::string* params, std::vector<std::string> from,
                                       std::vector<std::string> where,
                                       std::string              finalize_with);
-        static std::string Builder::GroupBy(int num_params, std::string* params);
+        static std::string GroupBy(int num_params, std::string* params);
 
        
 };

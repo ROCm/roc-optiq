@@ -100,7 +100,7 @@ MiniMap::Render()
     if(m_height != mini_map_height || m_timeline->GetReorderStatus())
     {
         m_height = mini_map_height;
-        RebinMiniMap(m_height);
+        RebinMiniMap(std::round(m_height / 2));  // Target ~2 pixels per track
     }
 
     SettingsManager& settings = SettingsManager::GetInstance();
@@ -140,6 +140,36 @@ MiniMap::Render()
         track_idx++;
     }
 
+    ViewCoords view_area = m_timeline->GetViewCoords();
+    double     min_val   = m_data_provider.GetStartTime();
+    double     max_val   = m_data_provider.GetEndTime();
+
+
+    float scroll_area_available_with_viewport =
+        m_timeline->GetYScrollMax() + m_timeline->GetGraphSize().y;
+    float y0 = static_cast<float>(view_area.y / scroll_area_available_with_viewport *
+                                  mini_map_height);
+    float y1 = static_cast<float>((view_area.y + m_timeline->GetGraphSize().y) /
+                                  scroll_area_available_with_viewport * mini_map_height);
+    y0       = std::clamp(y0, 0.0f, mini_map_height);
+    y1       = std::clamp(y1, 0.0f, mini_map_height);
+
+    float x_start = static_cast<float>((view_area.v_min_x - min_val) /
+                                       (max_val - min_val) * mini_map_width);
+    float x_end = static_cast<float>((view_area.v_max_x - min_val) / (max_val - min_val) *
+                                     mini_map_width);
+    x_start     = std::clamp(x_start, 0.0f, mini_map_width);
+    x_end       = std::clamp(x_end, 0.0f, mini_map_width);
+
+    // Offset by the minimap container's screen position
+    ImVec2 container_pos   = ImGui::GetWindowPos();
+    ImVec2 start_rectangle = ImVec2(container_pos.x + x_start, container_pos.y + y0);
+    ImVec2 end_rectangle   = ImVec2(container_pos.x + x_end, container_pos.y + y1);
+
+    ImGui::GetWindowDrawList()->AddRect(start_rectangle, end_rectangle,
+                                              settings.GetColor(Colors::kMMBin7));
+
+ 
     ImGui::EndChild();
 
     if(ImGui::IsItemClicked())
@@ -154,6 +184,7 @@ MiniMap::Render()
         const auto& histogram = m_data_provider.GetHistogram();
         double      min_val   = m_data_provider.GetStartTime();
         double      max_val   = m_data_provider.GetEndTime();
+       
 
         // Calculate bin index
         size_t bin_count = histogram.size();

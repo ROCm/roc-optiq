@@ -170,7 +170,7 @@ MiniMap::Render()
         double y_relative_position =
             m_timeline->GetYScrollMax() * (rel_y / mini_map_height);
         // Center the view on the selected bin
-        bool center = true;
+        bool center = false;
 
         // NavigationEvent
         EventManager::GetInstance()->AddEvent(

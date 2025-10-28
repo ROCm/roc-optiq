@@ -13,9 +13,9 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
 
-#include <algorithm>
-#include <GLFW/glfw3.h>
 #include "rocprofvis_font_manager.h"
+#include <GLFW/glfw3.h>
+#include <algorithm>
 namespace RocProfVis
 {
 namespace View
@@ -76,7 +76,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_pseudo_focus(false)
 , m_histogram_pseudo_focus(false)
 , m_max_meta_area_size(0.0f)
-, m_has_tracks_been_moved(false)    
+, m_has_tracks_been_moved(false)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -149,9 +149,9 @@ TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
                       false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
-    ImGui::BeginChild(
-        "UI Interactive Content", ImVec2(m_graph_size.x, m_track_height_sum), false,
-        window_flags | ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("UI Interactive Content",
+                      ImVec2(m_graph_size.x, m_track_height_sum), false,
+                      window_flags | ImGuiWindowFlags_NoScrollbar);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
@@ -307,8 +307,9 @@ TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position,
 
     ImGui::SetScrollY(m_scroll_position_y);
 }
-double 
-TimelineView::GetYScrollMax() {
+double
+TimelineView::GetYScrollMax()
+{
     return m_content_max_y_scroll;
 }
 
@@ -465,8 +466,48 @@ TimelineView::Update()
             if(m_data_provider.SetGraphIndex(m_reorder_request.track_id,
                                              m_reorder_request.new_index))
             {
-                std::vector<rocprofvis_graph_t>         m_graphs_reordered;
-                
+                // Find the old index of the track being moved (for minimap reordering)
+                int old_index = -1;
+                for(int i = 0; i < m_graphs->size(); ++i)
+                {
+                    if((*m_graphs)[i].chart->GetID() == m_reorder_request.track_id)
+                    {
+                        old_index = i;
+                        break;
+                    }
+                }
+                int new_index = m_reorder_request.new_index;
+
+                if(old_index == -1 || new_index < 0 ||
+                   new_index >= static_cast<int>(m_graphs->size()))
+                {
+                    spdlog::warn("Invalid indices for track reordering: old_index={}, "
+                                 "new_index={}",
+                                 old_index, new_index);
+                    return;
+                }
+                else
+                {
+                    // Minimap reordering
+                    auto minimap_copy = m_data_provider.GetMiniMap();
+                    if(minimap_copy.count(static_cast<uint64_t>(old_index)) &&
+                       minimap_copy.count(static_cast<uint64_t>(new_index)))
+                    {
+                        std::swap(minimap_copy[static_cast<uint64_t>(old_index)],
+                                  minimap_copy[static_cast<uint64_t>(new_index)]);
+                        m_data_provider.SetMiniMap(minimap_copy);
+                    }
+                    else
+                    {
+                        spdlog::warn("Invalid minimap indices for swap: old_index={}, "
+                                     "new_index={}",
+                                     old_index, new_index);
+                    }
+                }
+
+                // Chart Reordering
+                std::vector<rocprofvis_graph_t> m_graphs_reordered;
+
                 m_graphs_reordered.resize(m_data_provider.GetTrackCount());
                 for(rocprofvis_graph_t& graph : *m_graphs)
                 {
@@ -474,11 +515,9 @@ TimelineView::Update()
                         m_data_provider.GetTrackInfo(graph.chart->GetID());
                     ROCPROFVIS_ASSERT(metadata);
                     m_graphs_reordered[metadata->index] = std::move(graph);
-
-                    
                 }
-                *m_graphs = std::move(m_graphs_reordered);
-                 m_has_tracks_been_moved = true;
+                *m_graphs               = std::move(m_graphs_reordered);
+                m_has_tracks_been_moved = true;
             }
         }
         // Rebuild the positioning map.
@@ -855,7 +894,7 @@ TimelineView::RenderGraphView()
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
     m_has_tracks_been_moved = false;  // Reset movement flag
-    ImVec2 container_size = ImGui::GetWindowSize();
+    ImVec2 container_size   = ImGui::GetWindowSize();
     ImGui::SetCursorPos(ImVec2(0, 0));
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
@@ -1144,7 +1183,6 @@ TimelineView::RenderGraphView()
                 }
                 m_scroll_position_y = ImGui::GetScrollY();
             }
-
         }
     }
 
@@ -1156,7 +1194,7 @@ TimelineView::RenderGraphView()
 void
 TimelineView::DestroyGraphs()
 {
-    if (m_graphs)
+    if(m_graphs)
     {
         for(rocprofvis_graph_t& graph : *m_graphs)
         {
@@ -1233,9 +1271,10 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                graph.chart = new LineTrackItem(
-                    m_data_provider, track_info->id, track_info->name, m_zoom,
-                    m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns, m_max_meta_area_size);
+                graph.chart =
+                    new LineTrackItem(m_data_provider, track_info->id, track_info->name,
+                                      m_zoom, m_view_time_offset_ns, m_min_x, m_max_x,
+                                      m_pixels_per_ns, m_max_meta_area_size);
                 UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
                 graph.graph_type = rocprofvis_graph_t::TYPE_LINECHART;
                 break;
@@ -1264,9 +1303,9 @@ TimelineView::RenderHistogram()
 {
     if(!m_histogram || m_histogram->empty()) return;
 
-    const float     kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
-    const float     kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
-    ImVec2          window_size           = ImGui::GetWindowSize();
+    const float kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
+    const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
+    ImVec2      window_size           = ImGui::GetWindowSize();
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
@@ -1372,20 +1411,20 @@ TimelineView::RenderHistogram()
     // measure the size of the label to determine the step size
     std::string label =
         nanosecond_to_formatted_str(
-            m_range_x, m_settings.GetUserSettings().unit_settings.time_format,
-            true) +
+            m_range_x, m_settings.GetUserSettings().unit_settings.time_format, true) +
         "gap";
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
     // reserve space for first and last label
-    int interval_count = static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
+    int interval_count =
+        static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
     if(interval_count < 1) interval_count = 1;
 
     double pixels_per_ns = window_size.x / m_range_x;
-    double interval_ns = calculate_nice_interval(m_range_x, interval_count);
-    double step_size_px = interval_ns * pixels_per_ns;
-    int pad_amount = 2;  // +2 for the first and last label
+    double interval_ns   = calculate_nice_interval(m_range_x, interval_count);
+    double step_size_px  = interval_ns * pixels_per_ns;
+    int    pad_amount    = 2;  // +2 for the first and last label
 
     // If the step size is smaller than the label size, try to adjust the interval count
     while(step_size_px < label_size.x)
@@ -1439,23 +1478,24 @@ TimelineView::RenderHistogram()
     // Check if mouse is inside histogram area
     window_pos         = ImGui::GetWindowPos();
     ImGuiIO& io        = ImGui::GetIO();
-    bool mouse_any = io.MouseDown[ImGuiMouseButton_Left] ||
-                     io.MouseDown[ImGuiMouseButton_Right] || io.MouseDown[ImGuiMouseButton_Middle];
+    bool     mouse_any = io.MouseDown[ImGuiMouseButton_Left] ||
+                     io.MouseDown[ImGuiMouseButton_Right] ||
+                     io.MouseDown[ImGuiMouseButton_Middle];
 
     ImVec2 mouse_position = io.MousePos;
-    bool   mouse_inside   = mouse_position.x >= window_pos.x && mouse_position.x <= window_pos.x + window_size.x &&
-                          mouse_position.y >= window_pos.y &&
-                          mouse_position.y <= window_pos.y + window_size.y;
+    bool   mouse_inside   = mouse_position.x >= window_pos.x &&
+                        mouse_position.x <= window_pos.x + window_size.x &&
+                        mouse_position.y >= window_pos.y &&
+                        mouse_position.y <= window_pos.y + window_size.y;
 
     // Update pseudo focus state based on mouse interaction
     if(mouse_any)
     {
-        if( mouse_inside )
+        if(mouse_inside)
             m_histogram_pseudo_focus = true;
         else
             m_histogram_pseudo_focus = false;
     }
-
 }
 
 void
@@ -1539,11 +1579,11 @@ TimelineView::RenderTraceView()
     float min_offset  = 0.0f;
     float view_offset = static_cast<float>(m_view_time_offset_ns);
 
-    if (ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, "")) {
-
+    if(ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, ""))
+    {
         // Clamp the view offset to prevent scrolling out of bounds
         m_view_time_offset_ns = std::clamp(static_cast<double>(view_offset), 0.0,
-                                        (m_range_x - m_v_width) + m_v_width * 0.10);
+                                           (m_range_x - m_v_width) + m_v_width * 0.10);
     }
 
     ImGui::PopStyleColor(5);  // Pop the colors we pushed above
@@ -1652,7 +1692,8 @@ TimelineView::HandleTopSurfaceTouch()
     const float zoom_speed = 0.1f;
 
     bool mouse_any = io.MouseDown[ImGuiMouseButton_Left] ||
-                     io.MouseDown[ImGuiMouseButton_Right] || io.MouseDown[ImGuiMouseButton_Middle];
+                     io.MouseDown[ImGuiMouseButton_Right] ||
+                     io.MouseDown[ImGuiMouseButton_Middle];
 
     // Sidebar: scroll wheel pans vertically
     if(is_mouse_in_sidebar)
@@ -1743,13 +1784,14 @@ TimelineView::HandleTopSurfaceTouch()
     }
     else if(mouse_any)
     {
-        //mouse activity outside the graph area removes pseudo focus
+        // mouse activity outside the graph area removes pseudo focus
         m_pseudo_focus = false;
     }
 
     // Only handle keyboard input if not typing in a text input and no item is active
     // and this view has focus
-    if(m_pseudo_focus || m_histogram_pseudo_focus && !io.WantTextInput && !ImGui::IsAnyItemActive())
+    if(m_pseudo_focus ||
+       m_histogram_pseudo_focus && !io.WantTextInput && !ImGui::IsAnyItemActive())
     {
         // WASD and Arrow key panning
         float pan_speed_sped_up = 2;
@@ -1760,7 +1802,7 @@ TimelineView::HandleTopSurfaceTouch()
         float region_moved_per_click_x = 0.01 * m_graph_size.x;
         float region_moved_per_click_y = 0.01 * m_content_max_y_scroll;
 
-        //A, D, left arrow, right arrow go left and right
+        // A, D, left arrow, right arrow go left and right
         if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
         {
             m_view_time_offset_ns -=
@@ -1802,14 +1844,14 @@ TimelineView::HandleTopSurfaceTouch()
         if(ImGui::IsKeyPressed(ImGuiKey_UpArrow))
         {
             m_scroll_position_y =
-                std::clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y, 0.0f,
-                    m_content_max_y_scroll);
+                std::clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y,
+                           0.0f, m_content_max_y_scroll);
         }
         if(ImGui::IsKeyPressed(ImGuiKey_DownArrow))
         {
             m_scroll_position_y =
-                std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y, 0.0f,
-                    m_content_max_y_scroll);
+                std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y,
+                           0.0f, m_content_max_y_scroll);
         }
     }
 
@@ -1870,8 +1912,8 @@ TimelineView::UpdateMaxMetaAreaSize(float new_size)
 void
 TimelineView::CalculateMaxMetaAreaSize()
 {
-    m_max_meta_area_size = 0.0f;
-    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
+    m_max_meta_area_size                        = 0.0f;
+    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
@@ -1888,13 +1930,13 @@ TimelineView::CalculateMaxMetaAreaSize()
 void
 TimelineView::UpdateAllMaxMetaAreaSizes()
 {
-    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
+    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
         const track_info_t* track_info = track_list[i];
         auto                graph      = (*m_graphs)[track_info->index];
-        if (track_info->track_type == kRPVControllerTrackTypeSamples)
+        if(track_info->track_type == kRPVControllerTrackTypeSamples)
         {
             graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
         }

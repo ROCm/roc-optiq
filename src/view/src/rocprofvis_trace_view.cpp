@@ -596,7 +596,7 @@ TraceView::RenderMiniMapControls()
     {
         ImGui::SetNextWindowSize(ImVec2(500, 500), ImGuiCond_FirstUseEver);
         ImGui::Begin("MiniMap", &m_is_mini_map_visible,
-                     ImGuiWindowFlags_NoCollapse  |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
                          ImGuiWindowFlags_NoSavedSettings);
         if(m_mini_map)
         {

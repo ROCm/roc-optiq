@@ -6,12 +6,6 @@ SET VISUALIZER_FILE_NAME=rocprof-visualizer
 
 if %ERRORLEVEL%==0 ECHO. > %DEVROOT%\success
 
-REM Installer Reqs
-REM ***************
-REM %DEVROOT% is a variable used during build, signifying rootfolder in a git repo.
-
-REM === PowerShell translation begins ===
-
 REM Create build directory
 IF NOT EXIST "%DEVROOT%\build" mkdir "%DEVROOT%\build"
 

@@ -16,9 +16,9 @@ REM Create build directory
 IF NOT EXIST "%DEVROOT%\build" mkdir "%DEVROOT%\build"
 
 REM Run cmake build commands
-cmake --preset "x64-debug"
-cmake --build %DEVROOT%\build\x64-debug
-IF NOT EXIST "%DEVROOT%\build\x64-debug\Debug\%VISUALIZER_FILE_NAME%.exe" (
+cmake --preset "x64-release"
+cmake --build build/x64-release --preset "Windows Release Build" --parallel 4
+IF NOT EXIST "%DEVROOT%\build\x64-release\Release\${env:VISUALIZER_FILE_NAME}.exe" (
     ECHO ❌ %VISUALIZER_FILE_NAME% was not built!
     GOTO BUILDISSUE
 ) ELSE (
@@ -34,11 +34,11 @@ ECHO Build.cmd: Copying files to standard folder structure
 copy /y "%DEVROOT%\build\x64-debug\Debug\%VISUALIZER_FILE_NAME%.exe" "%DEVROOT%\ReleaseCommon\Common\All\"
 if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
 
+GOTO END
 
 :BUILDISSUE
 del /Q /F %DEVROOT%\success
 ECHO Build failed!
-GOTO END
 
 :END
 ECHO Build completed.

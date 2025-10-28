@@ -26,14 +26,19 @@ MiniMap::RebinMiniMap(size_t max_bins)
     m_histogram_bins = m_data_provider.GetHistogram().size();
     const auto& mini_map    = m_data_provider.GetMiniMap();
     size_t      track_count = mini_map.size();
- 
+    if(track_count <= max_bins)
+    {
+        m_rebinned_mini_map = mini_map;
+        Normalize();
+        return;
+    }
 
     // Get all keys
     std::vector<uint64_t> track_ids;
     for(const auto& [track_id, _] : mini_map)
         track_ids.push_back(track_id);
 
-    size_t group_size = (track_count + max_bins - 1) / max_bins; 
+    size_t group_size = (track_count + max_bins - 1) / max_bins;  
     m_rebinned_mini_map.clear();
 
     for(size_t i = 0; i < track_count; i += group_size)
@@ -56,7 +61,7 @@ MiniMap::RebinMiniMap(size_t max_bins)
 
         m_rebinned_mini_map[track_ids[i]] = std::move(avg_bins);
     }
-    m_rebinned_mini_map = std::move(m_data_provider.GetMiniMap());
+
     Normalize();
 }
 void

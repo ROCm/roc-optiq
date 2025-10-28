@@ -4,7 +4,7 @@ project(rocprof-visualizer)
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 6)
-set(PROJECT_VERSION_PATCH 0)
+set(PROJECT_VERSION_PATCH 2)
 set(PROJECT_VERSION_BUILD 0)
 
 # Name and path of the icon font header
@@ -68,12 +68,12 @@ set(VIEW_FILES
     src/view/src/rocprofvis_events.cpp
     src/view/src/rocprofvis_event_manager.cpp
     src/view/src/rocprofvis_utils.cpp
-    src/view/src/rocprofvis_mini_map.cpp
     src/view/src/rocprofvis_timeline_selection.cpp
     src/view/src/rocprofvis_track_topology.cpp
     src/view/src/rocprofvis_track_details.cpp
     src/view/src/rocprofvis_project.cpp
     src/view/src/rocprofvis_multi_track_table.cpp
+    src/view/src/rocprofvis_mini_map.cpp
     src/view/src/rocprofvis_event_search.cpp
     src/view/src/widgets/rocprofvis_widget.cpp	
     src/view/src/widgets/rocprofvis_debug_window.cpp
@@ -200,17 +200,15 @@ set(CPACK_PACKAGE_VERSION
 set(CPACK_PACKAGE_CONTACT "${PKG_MAINTAINER_NM} <${PKG_MAINTAINER_EMAIL}>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PKG_DESCRIPTION}")
 
-#TODO - License File is mandatory for packaging release
-#Once License file is available in the source path
-#Enable this Code for License File Packaging.
-#set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" CACHE PATH "Path to License File in source dir" )
-#set(CPACK_RESOURCE_FILE_LICENSE "${LICENSE_FILE}")
-#set(CPACK_PACKAGE_LICENSE "MIT")
-#set(CPACK_RPM_PACKAGE_LICENSE "MIT" )
+# License Information
+set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" CACHE PATH "Path to License File in source dir" )
+set(CPACK_RESOURCE_FILE_LICENSE "${LICENSE_FILE}")
+set(CPACK_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
+set(CPACK_RPM_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
 # License file
-# install(FILES ${LICENSE_FILE}
-#        DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
-#        COMPONENT ${RUNTIME_COMP_TYPE} )
+install(FILES ${LICENSE_FILE}
+       DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
+       COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
 install(PROGRAMS ${BUILD_DIR}/rocprof-visualizer

@@ -32,7 +32,7 @@ if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
 
 REM Copy the built executable to proper folder structure for release
 ECHO Build.cmd: Copying files to standard folder structure
-copy /y "%DEVROOT%\build\x64-debug\Debug\%VISUALIZER_FILE_NAME%.exe" "%DEVROOT%\ReleaseCommon\Common\All\"
+copy /y "%DEVROOT%\build\x64-release\Release\%VISUALIZER_FILE_NAME%.exe" "%DEVROOT%\ReleaseCommon\Common\All\"
 if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
 
 GOTO END

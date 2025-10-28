@@ -23,6 +23,7 @@ namespace View
 
 // 20% top and bottom of the window size
 constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
+constexpr float SIDEBAR_WIDTH_MAX = 600.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -116,6 +117,9 @@ TimelineView::TimelineView(DataProvider&                       dp,
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
         CalculateMaxMetaAreaSize();
         UpdateAllMaxMetaAreaSizes();
+        m_sidebar_size = std::clamp(
+            static_cast<float>(m_sidebar_size),
+            m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(), SIDEBAR_WIDTH_MAX);
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
@@ -531,7 +535,9 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_sidebar_size    = std::clamp(m_sidebar_size + drag_delta.x, 100.0f, 600.0f);
+        m_sidebar_size    = std::clamp(
+            m_sidebar_size + drag_delta.x,
+            m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(), SIDEBAR_WIDTH_MAX);
         m_view_time_offset_ns -=
             (drag_delta.x / display_size.x) *
             m_v_width;  // Prevents chart from moving in unexpected way.

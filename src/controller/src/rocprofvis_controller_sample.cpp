@@ -12,11 +12,11 @@ namespace Controller
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 
 Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
-: m_data(type)
+: Handle(__kRPVControllerSamplePropertiesFirst, __kRPVControllerSamplePropertiesLast)
+, m_data(type)
 , m_id(id)
 , m_timestamp(timestamp)
-{
-}
+{}
 
 Sample& Sample::operator=(Sample&& other)
 {
@@ -26,9 +26,7 @@ Sample& Sample::operator=(Sample&& other)
     return *this;
 }
 
-Sample::~Sample()
-{
-}
+Sample::~Sample() {}
 
 rocprofvis_controller_object_type_t Sample::GetType(void) 
 {
@@ -38,6 +36,7 @@ rocprofvis_controller_object_type_t Sample::GetType(void)
 rocprofvis_result_t Sample::GetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -73,31 +72,20 @@ rocprofvis_result_t Sample::GetUInt64(rocprofvis_property_t property, uint64_t i
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerSampleChildIndex:
-            case kRPVControllerSampleChildMin:
-            case kRPVControllerSampleChildMean:
-            case kRPVControllerSampleChildMedian:
-            case kRPVControllerSampleChildMax:
-            case kRPVControllerSampleChildMinTimestamp:
-            case kRPVControllerSampleChildMaxTimestamp:
-            case kRPVControllerSampleTimestamp:
-            case kRPVControllerSampleTrack:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
     return result;
 }
+
 rocprofvis_result_t Sample::GetDouble(rocprofvis_property_t property, uint64_t index,
                                 double* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -106,37 +94,37 @@ rocprofvis_result_t Sample::GetDouble(rocprofvis_property_t property, uint64_t i
             case kRPVControllerSampleChildMin:
             {
                 *value = 0;
-                result = kRocProfVisResultSuccess;
+                result = kRocProfVisResultNotSupported;
                 break;
             }
             case kRPVControllerSampleChildMean:
             {
                 *value = 0;
-                result = kRocProfVisResultSuccess;
+                result = kRocProfVisResultNotSupported;
                 break;
             }
             case kRPVControllerSampleChildMedian:
             {
                 *value = 0;
-                result = kRocProfVisResultSuccess;
+                result = kRocProfVisResultNotSupported;
                 break;
             }
             case kRPVControllerSampleChildMax:
             {
                 *value = 0;
-                result = kRocProfVisResultSuccess;
+                result = kRocProfVisResultNotSupported;
                 break;
             }
             case kRPVControllerSampleChildMinTimestamp:
             {
                 *value = 0;
-                result = kRocProfVisResultSuccess;
+                result = kRocProfVisResultNotSupported;
                 break;
             }
             case kRPVControllerSampleChildMaxTimestamp:
             {
                 *value = 0;
-                result = kRocProfVisResultSuccess;
+                result = kRocProfVisResultNotSupported;
                 break;
             }
             case kRPVControllerSampleTimestamp:
@@ -150,27 +138,20 @@ rocprofvis_result_t Sample::GetDouble(rocprofvis_property_t property, uint64_t i
                 result = m_data.GetDouble(value);
                 break;
             }
-            case kRPVControllerSampleId:
-            case kRPVControllerSampleType:
-            case kRPVControllerSampleNumChildren:
-            case kRPVControllerSampleChildIndex:
-            case kRPVControllerSampleTrack:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
     return result;
 }
+
 rocprofvis_result_t Sample::GetObject(rocprofvis_property_t property, uint64_t index,
                                 rocprofvis_handle_t** value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -179,13 +160,13 @@ rocprofvis_result_t Sample::GetObject(rocprofvis_property_t property, uint64_t i
             case kRPVControllerSampleChildIndex:
             {
                 *value = nullptr;
-                result = kRocProfVisResultSuccess;
+                result = kRocProfVisResultNotSupported;
                 break;
             }
             case kRPVControllerSampleTrack:
             {
                 *value = nullptr;
-                result = kRocProfVisResultSuccess;
+                result = kRocProfVisResultNotSupported;
                 break;
             }
             case kRPVControllerSampleValue:
@@ -193,64 +174,43 @@ rocprofvis_result_t Sample::GetObject(rocprofvis_property_t property, uint64_t i
                 result = m_data.GetObject(value);
                 break;
             }
-            case kRPVControllerSampleId:
-            case kRPVControllerSampleType:
-            case kRPVControllerSampleNumChildren:
-            case kRPVControllerSampleChildMin:
-            case kRPVControllerSampleChildMean:
-            case kRPVControllerSampleChildMedian:
-            case kRPVControllerSampleChildMax:
-            case kRPVControllerSampleChildMinTimestamp:
-            case kRPVControllerSampleChildMaxTimestamp:
-            case kRPVControllerSampleTimestamp:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
     return result;
 }
+
+
 rocprofvis_result_t Sample::GetString(rocprofvis_property_t property, uint64_t index,
                                 char* value, uint32_t* length) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
         case kRPVControllerSampleValue:
-        case kRPVControllerSampleId:
-        case kRPVControllerSampleType:
-        case kRPVControllerSampleNumChildren:
-        case kRPVControllerSampleChildIndex:
-        case kRPVControllerSampleChildMin:
-        case kRPVControllerSampleChildMean:
-        case kRPVControllerSampleChildMedian:
-        case kRPVControllerSampleChildMax:
-        case kRPVControllerSampleChildMinTimestamp:
-        case kRPVControllerSampleChildMaxTimestamp:
-        case kRPVControllerSampleTimestamp:
-        case kRPVControllerSampleTrack:
         {
-            result = kRocProfVisResultInvalidType;
+            result = m_data.GetString(value, length);
             break;
         }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
     return result;
 }
 
+
 rocprofvis_result_t Sample::SetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -264,32 +224,19 @@ rocprofvis_result_t Sample::SetUInt64(rocprofvis_property_t property, uint64_t i
             result = kRocProfVisResultReadOnlyError;
             break;
         }
-        case kRPVControllerSampleType:
-        case kRPVControllerSampleNumChildren:
-        case kRPVControllerSampleChildIndex:
-        case kRPVControllerSampleChildMin:
-        case kRPVControllerSampleChildMean:
-        case kRPVControllerSampleChildMedian:
-        case kRPVControllerSampleChildMax:
-        case kRPVControllerSampleChildMinTimestamp:
-        case kRPVControllerSampleChildMaxTimestamp:
-        case kRPVControllerSampleTimestamp:
-        case kRPVControllerSampleTrack:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
     return result;
 }
+
 rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t index,
                                 double value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -298,67 +245,45 @@ rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t i
             result = m_data.SetDouble(value);
             break;
         }
-        case kRPVControllerSampleId:
-        case kRPVControllerSampleType:
-        case kRPVControllerSampleNumChildren:
-        case kRPVControllerSampleChildIndex:
-        case kRPVControllerSampleChildMin:
-        case kRPVControllerSampleChildMean:
-        case kRPVControllerSampleChildMedian:
-        case kRPVControllerSampleChildMax:
-        case kRPVControllerSampleChildMinTimestamp:
-        case kRPVControllerSampleChildMaxTimestamp:
-        case kRPVControllerSampleTimestamp:
-        case kRPVControllerSampleTrack:
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
     return result;
 }
-rocprofvis_result_t Sample::SetObject(rocprofvis_property_t property, uint64_t index,
-                                rocprofvis_handle_t* value) 
+
+rocprofvis_result_t
+Sample::SetObject(rocprofvis_property_t property, uint64_t index,
+                  rocprofvis_handle_t* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
         switch(property)
         {
-            case kRPVControllerSampleTrack:
             case kRPVControllerSampleValue:
-            case kRPVControllerSampleId:
-            case kRPVControllerSampleType:
-            case kRPVControllerSampleNumChildren:
-            case kRPVControllerSampleChildIndex:
-            case kRPVControllerSampleChildMin:
-            case kRPVControllerSampleChildMean:
-            case kRPVControllerSampleChildMedian:
-            case kRPVControllerSampleChildMax:
-            case kRPVControllerSampleChildMinTimestamp:
-            case kRPVControllerSampleChildMaxTimestamp:
-            case kRPVControllerSampleTimestamp:
             {
-                result = kRocProfVisResultInvalidType;
+                result = m_data.SetObject(value);
                 break;
             }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
     return result;
 }
-rocprofvis_result_t Sample::SetString(rocprofvis_property_t property, uint64_t index,
+
+rocprofvis_result_t 
+Sample::SetString(rocprofvis_property_t property, uint64_t index,
                                 char const* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -369,25 +294,9 @@ rocprofvis_result_t Sample::SetString(rocprofvis_property_t property, uint64_t i
                 result = m_data.SetString(value);
                 break;
             }
-            case kRPVControllerSampleId:
-            case kRPVControllerSampleType:
-            case kRPVControllerSampleNumChildren:
-            case kRPVControllerSampleChildIndex:
-            case kRPVControllerSampleChildMin:
-            case kRPVControllerSampleChildMean:
-            case kRPVControllerSampleChildMedian:
-            case kRPVControllerSampleChildMax:
-            case kRPVControllerSampleChildMinTimestamp:
-            case kRPVControllerSampleChildMaxTimestamp:
-            case kRPVControllerSampleTimestamp:
-            case kRPVControllerSampleTrack:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }

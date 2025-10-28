@@ -10,16 +10,15 @@ namespace Controller
 {
 
 Plot::Plot(uint64_t id, std::string title, std::string x_axis_title, std::string y_axis_title)
-: m_id(id)
+: Handle(__kRPVControllerPlotPropertiesFirst, __kRPVControllerPlotPropertiesLast)
+, m_id(id)
 , m_title(title)
 {
 	m_x_axis.m_title = x_axis_title;
 	m_y_axis.m_title = y_axis_title;
 }
 
-Plot::~Plot()
-{
-}
+Plot::~Plot(){}
 
 rocprofvis_controller_object_type_t Plot::GetType(void)
 {
@@ -78,18 +77,9 @@ rocprofvis_result_t Plot::GetUInt64(rocprofvis_property_t property, uint64_t ind
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerPlotXAxisLabelsIndexed:
-            case kRPVControllerPlotYAxisLabelsIndexed:
-            case kRPVControllerPlotXAxisTitle:
-            case kRPVControllerPlotYAxisTitle:
-            case kRPVControllerPlotTitle:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -97,67 +87,6 @@ rocprofvis_result_t Plot::GetUInt64(rocprofvis_property_t property, uint64_t ind
     return result;
 }
 
-rocprofvis_result_t Plot::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (value)
-    {
-        switch (property)
-        {
-            case kRPVControllerPlotId:
-            case kRPVControllerPlotNumSeries:
-            case kRPVControllerPlotNumXAxisLabels:
-            case kRPVControllerPlotNumYAxisLabels:
-            case kRPVControllerPlotXAxisLabelsIndexed:
-            case kRPVControllerPlotYAxisLabelsIndexed:
-            case kRPVControllerPlotXAxisTitle:
-            case kRPVControllerPlotYAxisTitle:
-            case kRPVControllerPlotTitle:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t Plot::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (value)
-    {
-        switch (property)
-        {
-            case kRPVControllerPlotId:
-            case kRPVControllerPlotNumSeries:
-            case kRPVControllerPlotNumXAxisLabels:
-            case kRPVControllerPlotNumYAxisLabels:
-            case kRPVControllerPlotXAxisLabelsIndexed:
-            case kRPVControllerPlotYAxisLabelsIndexed:
-            case kRPVControllerPlotXAxisTitle:
-            case kRPVControllerPlotYAxisTitle:
-            case kRPVControllerPlotTitle:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
-        }
-    }
-    return result;
-}
 
 rocprofvis_result_t Plot::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
 {
@@ -166,14 +95,6 @@ rocprofvis_result_t Plot::GetString(rocprofvis_property_t property, uint64_t ind
     {
         switch (property)
         {
-            case kRPVControllerPlotId:
-            case kRPVControllerPlotNumSeries:
-            case kRPVControllerPlotNumXAxisLabels:
-            case kRPVControllerPlotNumYAxisLabels:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             case kRPVControllerPlotXAxisLabelsIndexed:
             {
                 if (index < m_x_axis.m_tick_labels.size())
@@ -252,35 +173,11 @@ rocprofvis_result_t Plot::GetString(rocprofvis_property_t property, uint64_t ind
             }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
-    return result;
-}
-
-rocprofvis_result_t Plot::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t Plot::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t Plot::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t Plot::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     return result;
 }
 

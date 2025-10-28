@@ -126,7 +126,7 @@ MultiTrackTable::Render()
     auto table_params = m_data_provider.GetTableParams(m_table_type);
     if(table_params)
     {
-        ImGui::Text("Cached %lu to %lu of %lu events for %lu tracks",
+        ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks",
                     table_params->m_start_row,
                     table_params->m_start_row + table_params->m_req_row_count,
                     m_data_provider.GetTableTotalRowCount(m_table_type),

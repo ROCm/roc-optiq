@@ -12,10 +12,7 @@ namespace RocProfVis
 namespace Controller
 {
 
-ComputeTrace::ComputeTrace()
-{
-
-}
+ComputeTrace::ComputeTrace() : Handle(0,0) {}
 
 ComputeTrace::~ComputeTrace()
 {
@@ -192,35 +189,6 @@ rocprofvis_result_t ComputeTrace::GetObject(rocprofvis_property_t property, uint
             result = kRocProfVisResultInvalidEnum;
         }
     }
-    return result;
-}
-
-
-rocprofvis_result_t ComputeTrace::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t ComputeTrace::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) 
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-rocprofvis_result_t ComputeTrace::SetDouble(rocprofvis_property_t property, uint64_t index, double value) 
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t ComputeTrace::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) 
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-rocprofvis_result_t ComputeTrace::SetString(rocprofvis_property_t property, uint64_t index, char const* value) 
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     return result;
 }
 

@@ -18,18 +18,19 @@ namespace Controller
 {
 
 ComputeTable::ComputeTable(const uint64_t id, const rocprofvis_controller_compute_table_types_t type, const std::string& title)
-: Table(id)
+: Table(id, __kRPVControllerTablePropertiesFirst, __kRPVControllerTablePropertiesLast)
 , m_type(type)
 , m_title(title)
-{
-}
+{}
 
-ComputeTable::~ComputeTable() 
-{
-}
+ComputeTable::~ComputeTable() {}
 
 rocprofvis_result_t ComputeTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future)
 {
+    (void) dm_handle;
+    (void) index;
+    (void) count;
+    (void) future;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;    
     result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, m_rows.size());
     if (result == kRocProfVisResultSuccess)
@@ -53,6 +54,9 @@ rocprofvis_result_t ComputeTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_
 
 rocprofvis_result_t ComputeTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future)
 {
+    (void) dm_handle;
+    (void) args;
+    (void) future;
     rocprofvis_result_t result = kRocProfVisResultSuccess;
     return result;
 }
@@ -91,52 +95,9 @@ rocprofvis_result_t ComputeTable::GetUInt64(rocprofvis_property_t property, uint
                 }
                 break;
             }
-            case kRPVControllerTableColumnHeaderIndexed:
-            case kRPVControllerTableRowHeaderIndexed:
-            case kRPVControllerTableRowIndexed:
-            case kRPVControllerTableTitle:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t ComputeTable::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t ComputeTable::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        switch(property)
-        {
-            case kRPVControllerTableId:
-            case kRPVControllerTableNumColumns:
-            case kRPVControllerTableNumRows:
-            case kRPVControllerTableColumnTypeIndexed:
-            case kRPVControllerTableColumnHeaderIndexed:
-            case kRPVControllerTableRowHeaderIndexed:
-            case kRPVControllerTableRowIndexed:
-            case kRPVControllerTableTitle:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -182,47 +143,13 @@ rocprofvis_result_t ComputeTable::GetString(rocprofvis_property_t property, uint
                 }
                 break;
             }
-            case kRPVControllerTableId:
-            case kRPVControllerTableNumColumns:
-            case kRPVControllerTableNumRows:
-            case kRPVControllerTableColumnTypeIndexed:
-            case kRPVControllerTableRowHeaderIndexed:
-            case kRPVControllerTableRowIndexed:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
-    return result;
-}
-
-rocprofvis_result_t ComputeTable::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t ComputeTable::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t ComputeTable::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    return result;
-}
-
-rocprofvis_result_t ComputeTable::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     return result;
 }
 

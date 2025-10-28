@@ -53,7 +53,8 @@ typedef Reference<rocprofvis_controller_stream_t, Stream, kRPVControllerObjectTy
 typedef Reference<rocprofvis_controller_node_t, Node, kRPVControllerObjectTypeNode> NodeRef;
 
 Trace::Trace()
-: m_id(s_trace_id.GetNextId())
+: Handle(__kRPVControllerPropertiesFirst, __kRPVControllerPropertiesLast)
+,m_id(s_trace_id.GetNextId())
 , m_timeline(nullptr)
 , m_event_table(nullptr)
 , m_sample_table(nullptr)
@@ -2733,71 +2734,16 @@ rocprofvis_result_t Trace::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerNodeIndexed:
-            case kRPVControllerTimeline:
-            case kRPVControllerTrackIndexed:
-            case kRPVControllerTrackById:
-            case kRPVControllerEventTable:
-            case kRPVControllerSampleTable:
-            case kRPVControllerSearchResultsTable:
-            case kRPVControllerAnalysisViewIndexed:
-            case kRPVControllerNotifySelected:
-            case kRPVControllerGetDmMessage:
-#ifdef COMPUTE_UI_SUPPORT
-            case kRPVControllerComputeTrace:
-#endif
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
     }
     return result;
 }
-rocprofvis_result_t Trace::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) 
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        case kRPVControllerId:
-        case kRPVControllerNumAnalysisView:
-        case kRPVControllerNumTracks:
-        case kRPVControllerNumNodes:
-        case kRPVControllerNodeIndexed:
-        case kRPVControllerTimeline:
-        case kRPVControllerTrackIndexed:
-        case kRPVControllerTrackById:
-        case kRPVControllerEventTable:
-        case kRPVControllerSampleTable:
-        case kRPVControllerSearchResultsTable:
-        case kRPVControllerAnalysisViewIndexed:
-        case kRPVControllerNotifySelected:
-        case kRPVControllerGetDmProgress:
-        case kRPVControllerGetDmMessage:
-        case kRPVControllerGetHistogramBucketsNumber:
-        case kRPVControllerGetHistogramBucketSize:
-#ifdef COMPUTE_UI_SUPPORT
-        case kRPVControllerComputeTrace:
-#endif
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
-        }
-    }
-    return result;
-}
+
 rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -2886,21 +2832,9 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
-            case kRPVControllerGetHistogramBucketsNumber:
-            case kRPVControllerGetHistogramBucketSize:
-            case kRPVControllerNumTracks:
-            case kRPVControllerId:
-            case kRPVControllerNumAnalysisView:
-            case kRPVControllerNotifySelected:
-            case kRPVControllerGetDmProgress:
-            case kRPVControllerGetDmMessage:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
         }
@@ -2919,32 +2853,9 @@ rocprofvis_result_t Trace::GetString(rocprofvis_property_t property, uint64_t in
             result = m_dm_message.GetString(value, length);
             break;
         }
-        case kRPVControllerId:
-        case kRPVControllerNumAnalysisView:
-        case kRPVControllerNumTracks:
-        case kRPVControllerNumNodes:
-        case kRPVControllerNodeIndexed:
-        case kRPVControllerTimeline:
-        case kRPVControllerTrackIndexed:
-        case kRPVControllerTrackById:
-        case kRPVControllerEventTable:
-        case kRPVControllerSampleTable:
-        case kRPVControllerSearchResultsTable:
-        case kRPVControllerAnalysisViewIndexed:
-        case kRPVControllerNotifySelected:
-        case kRPVControllerGetDmProgress:
-        case kRPVControllerGetHistogramBucketsNumber:
-        case kRPVControllerGetHistogramBucketSize:
-#ifdef COMPUTE_UI_SUPPORT
-        case kRPVControllerComputeTrace:
-#endif
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -3011,63 +2922,9 @@ rocprofvis_result_t Trace::SetUInt64(rocprofvis_property_t property, uint64_t in
             }
             break;
         }
-        case kRPVControllerTimeline:
-        case kRPVControllerEventTable:
-        case kRPVControllerSampleTable:
-        case kRPVControllerSearchResultsTable:
-        case kRPVControllerAnalysisViewIndexed:
-        case kRPVControllerTrackIndexed:
-        case kRPVControllerTrackById:
-        case kRPVControllerNodeIndexed:
-        case kRPVControllerGetDmProgress:
-        case kRPVControllerGetDmMessage:
-#ifdef COMPUTE_UI_SUPPORT
-        case kRPVControllerComputeTrace:
-#endif
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
         default:
         {
-            result = kRocProfVisResultInvalidEnum;
-            break;
-        }
-    }
-    return result;
-}
-rocprofvis_result_t Trace::SetDouble(rocprofvis_property_t property, uint64_t index, double value) 
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        case kRPVControllerId:
-        case kRPVControllerNumAnalysisView:
-        case kRPVControllerNumTracks:
-        case kRPVControllerNumNodes:
-        case kRPVControllerNodeIndexed:
-        case kRPVControllerTimeline:
-        case kRPVControllerTrackIndexed:
-        case kRPVControllerTrackById:
-        case kRPVControllerEventTable:
-        case kRPVControllerSampleTable:
-        case kRPVControllerSearchResultsTable:
-        case kRPVControllerAnalysisViewIndexed:
-        case kRPVControllerNotifySelected:
-        case kRPVControllerGetDmProgress:
-        case kRPVControllerGetDmMessage:
-#ifdef COMPUTE_UI_SUPPORT
-        case kRPVControllerComputeTrace:
-#endif
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
+            result = UnhandledProperty(property);
             break;
         }
     }
@@ -3161,63 +3018,11 @@ rocprofvis_result_t Trace::SetObject(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
-#ifdef COMPUTE_UI_SUPPORT
-            case kRPVControllerComputeTrace:
-#endif
-            case kRPVControllerNumNodes:
-            case kRPVControllerNumTracks:
-            case kRPVControllerId:
-            case kRPVControllerNumAnalysisView:
-            case kRPVControllerTrackById:
-            case kRPVControllerNotifySelected:
-            case kRPVControllerGetDmProgress:
-            case kRPVControllerGetDmMessage:
-            {
-                result = kRocProfVisResultInvalidType;
-                break;
-            }
             default:
             {
-                result = kRocProfVisResultInvalidEnum;
+                result = UnhandledProperty(property);
                 break;
             }
-        }
-    }
-    return result;
-}
-rocprofvis_result_t Trace::SetString(rocprofvis_property_t property, uint64_t index, char const* value) 
-{
-    (void) index;
-    (void) value;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        case kRPVControllerId:
-        case kRPVControllerNumAnalysisView:
-        case kRPVControllerNumTracks:
-        case kRPVControllerNumNodes:
-        case kRPVControllerNodeIndexed:
-        case kRPVControllerTimeline:
-        case kRPVControllerTrackIndexed:
-        case kRPVControllerTrackById:
-        case kRPVControllerEventTable:
-        case kRPVControllerSampleTable:
-        case kRPVControllerSearchResultsTable:
-        case kRPVControllerAnalysisViewIndexed:
-        case kRPVControllerNotifySelected:
-        case kRPVControllerGetDmProgress:
-        case kRPVControllerGetDmMessage:
-#ifdef COMPUTE_UI_SUPPORT
-        case kRPVControllerComputeTrace:
-#endif
-        {
-            result = kRocProfVisResultInvalidType;
-            break;
-        }
-        default:
-        {
-            result = kRocProfVisResultInvalidEnum;
-            break;
         }
     }
     return result;

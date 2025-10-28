@@ -29,8 +29,6 @@ public:
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,
                                   uint64_t* value) final;
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index,
-                                  double* value) final;
     rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index,
                                   rocprofvis_handle_t** value) final;
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index,
@@ -38,8 +36,6 @@ public:
 
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index,
                                   uint64_t value) final;
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index,
-                                  double value) final;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index,
                                   rocprofvis_handle_t* value) final;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index,

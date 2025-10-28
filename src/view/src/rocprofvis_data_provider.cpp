@@ -90,9 +90,13 @@ DataProvider::CloseController()
         m_trace_controller = nullptr;
     }
 }
-
 void
-DataProvider::SetSelectedState(const std::string& id)
+DataProvider::SetMiniMap(std::map<uint64_t, std::vector<double>> minimap)
+{
+    m_mini_map = std::move(minimap);
+}
+
+void DataProvider::SetSelectedState(const std::string& id)
 {
     if(id == m_trace_file_path)
     {
@@ -364,7 +368,7 @@ DataProvider::GetHistogram()
     return m_histogram;
 }
 
-const std::map<int, std::vector<double>>&
+const std::map<uint64_t, std::vector<double>>&
 DataProvider::GetMiniMap()
 {
     return m_mini_map;
@@ -517,7 +521,7 @@ DataProvider::HandleLoadTrace()
                 &num_buckets);
 
             const int                          target_bins = 300;
-            std::map<int, std::vector<double>> histogram_minimap;
+            std::map<uint64_t, std::vector<double>> histogram_minimap;
             m_histogram.resize(target_bins, 0);
 
             if(result == kRocProfVisResultSuccess && m_trace_timeline)

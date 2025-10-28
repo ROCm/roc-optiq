@@ -76,6 +76,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_pseudo_focus(false)
 , m_histogram_pseudo_focus(false)
 , m_max_meta_area_size(0.0f)
+, m_has_tracks_been_moved(false)    
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -306,6 +307,10 @@ TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position,
 
     ImGui::SetScrollY(m_scroll_position_y);
 }
+double 
+TimelineView::GetYScrollMax() {
+    return m_content_max_y_scroll;
+}
 
 void
 TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
@@ -444,6 +449,11 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
         }
     }
 }
+bool
+TimelineView::GetReorderStatus()
+{
+    return m_has_tracks_been_moved;
+}
 
 void
 TimelineView::Update()
@@ -455,7 +465,8 @@ TimelineView::Update()
             if(m_data_provider.SetGraphIndex(m_reorder_request.track_id,
                                              m_reorder_request.new_index))
             {
-                std::vector<rocprofvis_graph_t> m_graphs_reordered;
+                std::vector<rocprofvis_graph_t>         m_graphs_reordered;
+                
                 m_graphs_reordered.resize(m_data_provider.GetTrackCount());
                 for(rocprofvis_graph_t& graph : *m_graphs)
                 {
@@ -463,8 +474,11 @@ TimelineView::Update()
                         m_data_provider.GetTrackInfo(graph.chart->GetID());
                     ROCPROFVIS_ASSERT(metadata);
                     m_graphs_reordered[metadata->index] = std::move(graph);
+
+                    
                 }
                 *m_graphs = std::move(m_graphs_reordered);
+                 m_has_tracks_been_moved = true;
             }
         }
         // Rebuild the positioning map.
@@ -840,7 +854,7 @@ TimelineView::RenderGraphView()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
-
+    m_has_tracks_been_moved = false;  // Reset movement flag
     ImVec2 container_size = ImGui::GetWindowSize();
     ImGui::SetCursorPos(ImVec2(0, 0));
 
@@ -1130,6 +1144,7 @@ TimelineView::RenderGraphView()
                 }
                 m_scroll_position_y = ImGui::GetScrollY();
             }
+
         }
     }
 

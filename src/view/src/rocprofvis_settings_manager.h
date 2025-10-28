@@ -87,6 +87,13 @@ enum class Colors
     kButtonActive,
     kBgWarning,
     kBgError,
+    kMMBin1,
+    kMMBin2,
+    kMMBin3,
+    kMMBin4,
+    kMMBin5,
+    kMMBin6,
+    kMMBin7,
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };

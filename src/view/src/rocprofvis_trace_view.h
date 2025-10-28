@@ -7,7 +7,7 @@
 #include "rocprofvis_timeline_view.h"
 #include "widgets/rocprofvis_widget.h"
 #include <unordered_map>
-
+#include "rocprofvis_mini_map.h"
 namespace RocProfVis
 {
 namespace View
@@ -69,6 +69,7 @@ public:
 private:
     void HandleHotKeys();
     void RenderToolbar();
+    void RenderMiniMapControls();
     void RenderFlowControls();
     void RenderAnnotationControls();
     void RenderSeparator();
@@ -82,6 +83,7 @@ private:
     std::shared_ptr<VSplitContainer>   m_vertical_split_container;
     std::shared_ptr<VFixedContainer>   m_timeline_container;
     std::shared_ptr<EventSearch>       m_event_search;
+    std::shared_ptr<MiniMap>           m_mini_map;      
 
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_analysis_item;
@@ -113,6 +115,7 @@ private:
     // Unfortunately we should store it here because the tab appears before the view is
     // created
     bool m_is_analysis_visible;
+    bool m_is_mini_map_visible;
     bool m_is_sidebar_visible;
 };
 

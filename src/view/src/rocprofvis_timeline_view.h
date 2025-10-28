@@ -61,6 +61,7 @@ public:
     ~TimelineView();
     virtual void                     Render() override;
     void                             Update() override;
+    bool                             GetReorderStatus();
     void                             MakeGraphView();
     void                             ResetView();
     void                             DestroyGraphs();
@@ -69,6 +70,7 @@ public:
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             SetViewableRangeNS(double start_ns, double end_ns);
+    double                           GetYScrollMax();
     void MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
     void RenderGraphPoints();
     void RenderHistogram();
@@ -144,6 +146,7 @@ private:
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
     float                               m_max_meta_area_size;
+    bool                                m_has_tracks_been_moved;
     std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
 
     struct

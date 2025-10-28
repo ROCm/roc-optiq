@@ -34,7 +34,10 @@ class RocprofDatabase : public ProfileDatabase
     typedef std::map<uint64_t, uint32_t> sub_process_map_t;
     typedef std::map<uint64_t, sub_process_map_t> process_map_t;
     typedef std::map<uint64_t, process_map_t> op_map_t;
-    typedef std::map<uint32_t, op_map_t> track_find_map_t;
+    //typedef std::map<uint64_t, process_map_t> op_map_t;
+    typedef std::map<uint32_t, process_map_t> track_find_map_t;
+
+    typedef std::vector<std::string> guid_list_t;
 
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
@@ -85,18 +88,10 @@ public:
     rocprofvis_dm_string_t GetEventOperationQuery(
                                         const rocprofvis_dm_event_operation_t operation) override;
 
-    
     rocprofvis_dm_result_t StringIndexToId(
                                         rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id) override;
 
 private:
-    // sqlite3_exec callback to process track information query and add track object to Trace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallBackAddTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
     // sqlite3_exec callback to process string list query and add string object to Trace container
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
@@ -158,6 +153,8 @@ private:
                                                         rocprofvis_dm_op_t operation,
                                                         rocprofvis_dm_track_id_t& track_id) override;
 
+    int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
+
     protected:
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override {
         return &s_rocprof_categorized_data;
@@ -187,6 +184,8 @@ private:
         track_find_map_t find_track_map;
         QueryFactory m_query_factory;
         std::string db_version;
+        guid_list_t   m_guid_list;
+
 
         inline static const rocprofvis_event_data_category_map_t
             s_rocprof_categorized_data = {

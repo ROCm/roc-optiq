@@ -104,6 +104,8 @@ class Database
         // @return status of operation
         rocprofvis_dm_result_t          BindTrace(
                                                                 rocprofvis_dm_db_bind_struct * binding_info);
+        // returns pointer to binding structure
+        rocprofvis_dm_db_bind_struct *  BindObject() {return m_binding_info;}
         // Asynchronously read trace metadata from database
         // @param object - future object providing asynchronous execution mechanism
         // @return status of operation
@@ -186,6 +188,10 @@ class Database
                                                     rocprofvis_dm_string_t new_db_path,
                                                     Future* object);
        virtual void InterruptQuery(void* connection) {};
+       virtual uint64_t RemapStringId(uint64_t index) { return index; };
+
+       // returns pointer to cached tables map array
+       DatabaseCache*                  CachedTables() {return &m_cached_tables;}
 
     private:
     /************************static methods to be used as a parameter to std::thread**********************/
@@ -335,8 +341,6 @@ class Database
         DatabaseCache m_cached_tables;
 
     protected:
-        // returns pointer to binding structure
-        rocprofvis_dm_db_bind_struct *  BindObject() {return m_binding_info;}
         // returns pointer to database file path
         rocprofvis_db_filename_t        Path() {return m_path.c_str();}
         // return current number of tracks
@@ -351,8 +355,6 @@ class Database
         rocprofvis_dm_track_params_it   TrackPropertiesEnd() { return m_track_properties.end(); }
         // returns pointer to trace properties, which contains shared trace information
         rocprofvis_dm_trace_params_t*   TraceProperties() { return m_binding_info->trace_properties; }
-        // returns pointer to cached tables map array
-        DatabaseCache*                  CachedTables() {return &m_cached_tables;}
         // register new track
         // @param props - track properties structure
         // @return status of operation

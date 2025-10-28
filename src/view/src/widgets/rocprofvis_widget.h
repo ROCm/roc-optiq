@@ -241,5 +241,29 @@ void
 WithPadding(float left, float right, float top, float bottom,
             const std::function<void()>& content);
 
+
+class EditableTextField
+{
+public:
+    EditableTextField(std::string id);
+    void        SetText(std::string text);
+    std::string Render();
+    float       ButtonSize() const;
+    void        RevertToDefault();
+    void        ShowResetButton(bool is_button_shown);
+
+private:
+    void DrawPlainText();
+    void DrawEditingText();
+    void AcceptEdit();
+
+    bool        m_editing_mode = false;
+    bool        m_request_keyboard_focus = false;
+    bool        m_show_reset_button = false;
+    std::string m_id;
+    std::string m_text;
+    std::string m_edit_buf;
+};
+
 }  // namespace View
 }  // namespace RocProfVis

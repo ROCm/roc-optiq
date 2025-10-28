@@ -30,7 +30,6 @@
 #include <unordered_set>
 #include <mutex>
 #include <shared_mutex>
-#include <cfloat>
 #include "rocprofvis_common_types.h"
 
 namespace RocProfVis
@@ -69,8 +68,8 @@ namespace DataModel
     {
         std::string name;
         uint32_t count;
-        uint64_t min_duration=DBL_MAX;
-        uint64_t max_duration=DBL_MIN;
+        uint64_t min_duration=UINT64_MAX;
+        uint64_t max_duration=0;
         double avg_duration=0;
     };
 
@@ -170,7 +169,7 @@ namespace DataModel
 
         static void CreateMergedTable(std::vector<std::unique_ptr<PackedTable>>& tables, PackedTable & result);
        
-        static uint8_t PackedTable::ColumnTypeSize(ColumnType type);
+        static uint8_t ColumnTypeSize(ColumnType type);
         void Clear() { m_columns.clear(); m_rows.clear(); m_merged_columns.clear(); m_rowSize = 0; m_currentRow = static_cast<size_t>(-1); };
 
         void SortById();

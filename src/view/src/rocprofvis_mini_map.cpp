@@ -167,7 +167,7 @@ MiniMap::Render()
     ImVec2 end_rectangle   = ImVec2(container_pos.x + x_end, container_pos.y + y1);
 
     ImGui::GetWindowDrawList()->AddRect(start_rectangle, end_rectangle,
-                                              settings.GetColor(Colors::kMMBin7));
+                                              settings.GetColor(Colors::kGridColor));
 
  
     ImGui::EndChild();

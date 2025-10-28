@@ -22,6 +22,7 @@
 #include "rocprofvis_db_profile.h"
 #include <numeric>
 #include <execution>
+#include <cfloat>
 
 namespace RocProfVis
 {

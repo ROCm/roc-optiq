@@ -1,3 +1,4 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 #include "rocprofvis_controller_mem_mgmt.h"
 #include "rocprofvis_controller_segment.h"
 #include "rocprofvis_controller_event.h"

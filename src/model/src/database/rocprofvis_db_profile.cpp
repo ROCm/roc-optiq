@@ -540,10 +540,36 @@ ProfileDatabase::BuildTableQuery(
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t filter,
     rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, rocprofvis_dm_charptr_t sort_column,
     rocprofvis_dm_sort_order_t sort_order, rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
-    uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
+    uint64_t max_count, uint64_t offset, bool count_only, bool summary, rocprofvis_dm_string_t& query)
 {
     slice_query_t slice_query_map;
     table_string_id_filter_map_t string_id_filter_map;
+    std::string group_by_select;
+    std::string group_by;
+    if(summary)
+    {
+        bool sample_query = false;
+        if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
+        {
+            sample_query = TrackPropertiesAt(tracks[0])->process.category == kRocProfVisDmPmcTrack;
+        }
+        else
+        {
+            sample_query = (rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == kRocProfVisDmOperationNoOp;
+        }        
+        BuildTableSummaryClause(sample_query, group_by_select, group_by);
+    }
+    else
+    {
+        if(group)
+        {
+            group_by = group;
+            if(group_cols)
+            {
+                group_by_select = group_cols;
+            }
+        }
+    }
     rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, string_id_filter_map);
     for (int i = 0; i < num; i++){
         rocprofvis_dm_index_t track = tracks[i];
@@ -597,13 +623,13 @@ ProfileDatabase::BuildTableQuery(
     }
     query = "WITH all_rows AS (";
 
-    if (group && strlen(group))
+    if (!group_by.empty())
     {
         query += "SELECT ";
 
-        if (group_cols && strlen(group_cols))
+        if (!group_by_select.empty())
         {
-            query += group_cols;
+            query += group_by_select;
         }
         else
         {
@@ -627,10 +653,10 @@ ProfileDatabase::BuildTableQuery(
         query += " <= ";
         query += std::to_string(end);
     }
-    if (group && strlen(group))
+    if (!group_by.empty())
     {
         query += ") GROUP BY ";
-        query += group;
+        query += group_by;
     }
     query += ")";
     if (filter && strlen(filter))

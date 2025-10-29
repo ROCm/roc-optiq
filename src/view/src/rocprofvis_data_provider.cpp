@@ -1354,6 +1354,10 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                               0, table_params.m_group_columns.data());
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+    result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSummary, 0,
+                                              table_params.m_summary ? 1 : 0);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
     if(table_params.m_start_row != -1)
     {
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex,
@@ -1723,7 +1727,7 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
 
                         // set the number of string filters in request
                         result = rocprofvis_controller_set_uint64(
-                            args, kRPVControllerTableNumStringTableFilters, 0, 0);
+                            args, kRPVControllerTableArgsNumStringTableFilters, 0, 0);
                         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                     }
                     break;
@@ -1758,7 +1762,7 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
 
                     // set the number of string filters in request
                     result = rocprofvis_controller_set_uint64(
-                        args, kRPVControllerTableNumStringTableFilters, 0,
+                        args, kRPVControllerTableArgsNumStringTableFilters, 0,
                         table_params.m_string_table_filters.size());
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
@@ -1766,7 +1770,7 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
                     for(int i = 0; i < table_params.m_string_table_filters.size(); i++)
                     {
                         result = rocprofvis_controller_set_string(
-                            args, kRPVControllerTableStringTableFiltersIndexed, i,
+                            args, kRPVControllerTableArgsStringTableFiltersIndexed, i,
                             table_params.m_string_table_filters[i].data());
                         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                     }

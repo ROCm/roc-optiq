@@ -233,6 +233,7 @@ public:
     std::string                        m_group;
     std::string                        m_group_columns;
     std::string                        m_export_to_file_path;
+    bool                               m_summary;
 
     TableRequestParams(const TableRequestParams& table_params)            = default;
     TableRequestParams& operator=(const TableRequestParams& table_params) = default;
@@ -245,7 +246,7 @@ public:
         const std::vector<std::string> string_table_filters = {}, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string export_to_file_path = "")
+        std::string export_to_file_path = "", bool summary = false)
     : m_table_type(table_type)
     , m_track_ids(track_ids)
     , m_op_types(op_types)
@@ -260,6 +261,7 @@ public:
     , m_group_columns(group_cols)
     , m_string_table_filters(string_table_filters)
     , m_export_to_file_path(export_to_file_path)
+    , m_summary(summary)
     {}
 };
 

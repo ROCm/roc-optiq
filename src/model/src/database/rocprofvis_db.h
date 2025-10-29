@@ -157,7 +157,8 @@ class Database
                                                                 rocprofvis_dm_string_table_filters_t string_table_filters,
                                                                 uint64_t max_count, 
                                                                 uint64_t offset,
-                                                                bool count_only, 
+                                                                bool count_only,
+                                                                bool summary,
                                                                 rocprofvis_dm_string_t& query) = 0;
 
         // Searches for strings containing the passed in list of filter strings and builds a WHERE IN clause for the table query.
@@ -169,6 +170,11 @@ class Database
                                                                 rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
                                                                 rocprofvis_dm_string_table_filters_t string_table_filters,
                                                                 table_string_id_filter_map_t& filter) = 0;
+
+       virtual rocprofvis_dm_result_t BuildTableSummaryClause(
+                                                                bool sample_query,
+                                                                rocprofvis_dm_string_t& select,
+                                                                rocprofvis_dm_string_t& group_by) = 0;
 
         // Asynchronously writes the results of a table query to .CSV
         // @param query - database query 

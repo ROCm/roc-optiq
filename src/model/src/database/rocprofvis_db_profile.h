@@ -152,7 +152,8 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_string_table_filters_t string_table_filters,
                             uint64_t max_count, 
                             uint64_t offset,
-                            bool count_only, 
+                            bool count_only,
+                            bool summary,
                             rocprofvis_dm_string_t& query) override;
 
         rocprofvis_dm_result_t ExecuteQueryForAllTracksAsync(

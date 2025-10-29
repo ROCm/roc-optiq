@@ -1021,6 +1021,35 @@ rocprofvis_dm_result_t RocprofDatabase::StringIndexToId(rocprofvis_dm_index_t in
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t
+RocprofDatabase::BuildTableSummaryClause(bool sample_query,
+                                   rocprofvis_dm_string_t& select,
+                                   rocprofvis_dm_string_t& group_by)
+{
+    if(sample_query)
+    {
+        select = Builder::NODE_ID_SERVICE_NAME;
+        select += ", ";
+        select += Builder::COUNTER_ID_SERVICE_NAME;
+        select += ", AVG(";
+        select += Builder::COUNTER_VALUE_SERVICE_NAME;
+        select += ") AS avg_value, MIN(";
+        select += Builder::COUNTER_VALUE_SERVICE_NAME;
+        select += ") AS min_value, MAX(";
+        select += Builder::COUNTER_VALUE_SERVICE_NAME;
+        select += ") AS max_value";
+        group_by = Builder::NODE_ID_SERVICE_NAME;
+        group_by += ", ";
+        group_by += Builder::COUNTER_ID_SERVICE_NAME;
+    }
+    else
+    {
+        select = "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration";
+        group_by = "name";
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)

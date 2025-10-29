@@ -316,7 +316,7 @@ sqlite3* SqliteDatabase::GetConnection()
     {
         
         sqlite3* conn;
-        size_t   thread_count = std::thread::hardware_concurrency();
+        size_t   thread_count = std::thread::hardware_concurrency()*2;
         if(m_connections_inuse.size() > thread_count ||
            kRocProfVisDmResultSuccess != OpenConnection(&conn))
         {
@@ -548,14 +548,22 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
     if(rc == SQLITE_OK)
     {
         int                cols = sqlite3_column_count(stmt);
+        std::vector<std::string> col_names_strorage;
         std::vector<char*> col_names;
-        for(int i = 0; i < cols; ++i)
-        {
-            col_names.push_back(const_cast<char*>(sqlite3_column_name(stmt, i)));
-        }
 
         while(sqlite3_step(stmt) == SQLITE_ROW)
         {
+            if (col_names.size() == 0)
+            {
+                for(int i = 0; i < cols; ++i)
+                {
+                    col_names_strorage.push_back(const_cast<char*>(sqlite3_column_name(stmt, i)));
+                }
+                for (auto & col_name : col_names_strorage)
+                {
+                    col_names.push_back((char*)col_name.c_str());
+                }
+            }
             bool skip_this_row = false;
 
             for(int i = 0; i < cols; ++i)

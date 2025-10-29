@@ -17,8 +17,8 @@ namespace View
 
 constexpr uint64_t FETCH_CHUNK_SIZE = 1000;
 
-const std::string START_TS_COLUMN_NAME = "startTs";
-const std::string END_TS_COLUMN_NAME   = "endTs";
+const std::string START_TS_COLUMN_NAME = "start";
+const std::string END_TS_COLUMN_NAME   = "end";
 const std::string DURATION_COLUMN_NAME = "duration";
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,

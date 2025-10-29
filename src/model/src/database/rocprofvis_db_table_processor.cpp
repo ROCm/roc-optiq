@@ -94,7 +94,7 @@ namespace DataModel
                     m_tables.push_back(std::make_unique<PackedTable>());
                     m_query_data[i].query = queries[i];
                 }
-                spdlog::info("table query 0: {} ", queries[0].c_str());
+
                 result = m_db->ExecuteQueriesAsync(queries, future->SubFeatures(), (rocprofvis_dm_handle_t)this, &CallbackRunCompoundQuery);
                 if (kRocProfVisDmResultSuccess == result)
                 {

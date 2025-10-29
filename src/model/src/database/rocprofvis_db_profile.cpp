@@ -892,7 +892,7 @@ ProfileDatabase::BuildTableQuery(
     }
     query = "";
 
-    size_t thread_count = std::thread::hardware_concurrency();
+    size_t thread_count = std::thread::hardware_concurrency()*2;
     bool event_table = false;
     for (int i = 0; i < num; i++)
     {

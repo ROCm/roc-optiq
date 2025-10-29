@@ -3,6 +3,7 @@
 #include "rocprofvis_stickynote.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
@@ -154,7 +155,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     ImGui::PopFont();
 
     ImGui::EndChild();
-  
+
     ImGui::PopStyleColor();
 
     // Text area
@@ -164,14 +165,19 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     ImGui::PopTextWrapPos();
 
     ImGui::EndChild();
-    if (ImGui::IsItemHovered()) {
-        SettingsManager::GetInstance().SetLayerClicked(4);
-
+    // Cover hover case for input control
+    ImVec2 sticky_max =
+        ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
+    if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max))
+    {
+        ClickManager::GetInstance().SetLayerClicked(Layer::kInteractiveLayer);
     }
-    else {
-        SettingsManager::GetInstance().SetLayerClicked(-1);
 
+    else
+    {
+        ClickManager::GetInstance().SetLayerClicked(Layer::kNone);
     }
+
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
 }
@@ -206,7 +212,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
         m_dragging    = true;
         m_drag_offset = ImVec2(mouse_pos.x - sticky_pos.x, mouse_pos.y - sticky_pos.y);
         dragged_id    = m_id;
-        SettingsManager::GetInstance().SetLayerClicked(4);
+        ClickManager::GetInstance().SetLayerClicked(Layer::kInteractiveLayer);
     }
 
     if(m_dragging && mouse_down)
@@ -223,6 +229,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
         m_y_offset = new_y;
         m_v_max_x  = v_max_x;
         m_v_min_x  = v_min_x;
+
         return true;
     }
 
@@ -230,8 +237,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
     {
         m_dragging = false;
         dragged_id = -1;
-        SettingsManager::GetInstance().SetLayerClicked(-1);
-
+        ClickManager::GetInstance().SetLayerClicked(Layer::kNone);
     }
 
     return m_dragging;

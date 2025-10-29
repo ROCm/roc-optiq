@@ -2,6 +2,7 @@
 
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -219,11 +220,11 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         if(!m_selection_changed && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             // Delay Click Execution
-            m_settings.SetLayerClicked(2);
+            ClickManager::GetInstance().SetLayerClicked(Layer::kGraphLayer);
         }
-        else if(m_settings.GetLayerClicked() == 2)
+        else if(ClickManager::GetInstance().GetLayerClicked() == Layer::kGraphLayer)
         {
-            // Execute next loop if layer clicked is actually 2
+            // Execute next loop if layer clicked
             chart_item.selected = !chart_item.selected;
             chart_item.selected
                 ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id)
@@ -246,12 +247,13 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 m_selected_chart_items.push_back(chart_item);
             }
             // Always reset layer clicked after handling
-            m_settings.SetLayerClicked(-1);
+            ClickManager::GetInstance().SetLayerClicked(Layer::kNone);
         }
-        
 
-        if(!m_has_drawn_tool_tip && m_settings.GetLayerClicked() !=4)
+        if(!m_has_drawn_tool_tip &&
+           ClickManager::GetInstance().GetLayerClicked() == Layer::kNone)
         {
+            // Do not render if anything else is hovered or dragged.
             const auto& time_format =
                 m_settings.GetUserSettings().unit_settings.time_format;
             rocprofvis_trace_event_t_id_t event_id{};

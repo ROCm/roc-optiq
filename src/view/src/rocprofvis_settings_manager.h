@@ -19,10 +19,10 @@ enum class TimeFormat;
 
 typedef struct DisplaySettings
 {
-    bool  use_dark_mode;
-    bool  dpi_based_scaling;
-    int   font_size_index;
- 
+    bool use_dark_mode;
+    bool dpi_based_scaling;
+    int  font_size_index;
+
 } DisplaySettings;
 
 typedef struct UnitSettings
@@ -122,9 +122,6 @@ public:
     void         SetDPI(float DPI);
     float        GetDPI();
 
-    int GetLayerClicked();
-    void SetLayerClicked(int layer);    
-
     // Styling
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel();
@@ -181,8 +178,6 @@ private:
     const UserSettings m_usersettings_default;
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;
-    int m_layer_clicked;
-
 
     std::filesystem::path m_json_path;
 };

@@ -406,16 +406,7 @@ SettingsManager::GetColorWheel()
     return FLAME_COLORS;
 }
 
-void
-SettingsManager::SetLayerClicked(int layer)
-{
-    m_layer_clicked = layer;
-}   
-int
-SettingsManager::GetLayerClicked()
-{
-    return m_layer_clicked;
-}
+ 
 
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
@@ -424,7 +415,6 @@ SettingsManager::SettingsManager()
 , m_usersettings(m_usersettings_default)
 , m_display_dpi(1.5f)
 , m_json_path(GetStandardConfigPath())
-, m_layer_clicked(0)
 {}
 
 SettingsManager::~SettingsManager() { SaveSettingsJson(); }

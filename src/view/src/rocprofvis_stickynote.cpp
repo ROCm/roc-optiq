@@ -154,6 +154,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     ImGui::PopFont();
 
     ImGui::EndChild();
+  
     ImGui::PopStyleColor();
 
     // Text area
@@ -163,7 +164,14 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     ImGui::PopTextWrapPos();
 
     ImGui::EndChild();
+    if (ImGui::IsItemHovered()) {
+        SettingsManager::GetInstance().SetLayerClicked(4);
 
+    }
+    else {
+        SettingsManager::GetInstance().SetLayerClicked(-1);
+
+    }
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
 }
@@ -198,6 +206,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
         m_dragging    = true;
         m_drag_offset = ImVec2(mouse_pos.x - sticky_pos.x, mouse_pos.y - sticky_pos.y);
         dragged_id    = m_id;
+        SettingsManager::GetInstance().SetLayerClicked(4);
     }
 
     if(m_dragging && mouse_down)
@@ -221,6 +230,8 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
     {
         m_dragging = false;
         dragged_id = -1;
+        SettingsManager::GetInstance().SetLayerClicked(-1);
+
     }
 
     return m_dragging;

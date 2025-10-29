@@ -122,6 +122,9 @@ public:
     void         SetDPI(float DPI);
     float        GetDPI();
 
+    int GetLayerClicked();
+    void SetLayerClicked(int layer);    
+
     // Styling
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel();
@@ -178,6 +181,8 @@ private:
     const UserSettings m_usersettings_default;
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;
+    int m_layer_clicked;
+
 
     std::filesystem::path m_json_path;
 };

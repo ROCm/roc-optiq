@@ -1475,12 +1475,16 @@ TimelineView::RenderTraceView()
 
     m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
+ 
     RenderGrid();
+ 
     RenderGraphView();
+ 
     RenderSplitter(screen_pos);
     RenderInteractiveUI(screen_pos);
 
     RenderScrubber(screen_pos);
+  
 
     if(!m_resize_activity && !m_stop_user_interaction)
     {

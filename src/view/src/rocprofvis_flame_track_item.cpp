@@ -218,6 +218,12 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         // Select on click
         if(!m_selection_changed && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
+            // Delay Click Execution
+            m_settings.SetLayerClicked(2);
+        }
+        else if(m_settings.GetLayerClicked() == 2)
+        {
+            // Execute next loop if layer clicked is actually 2
             chart_item.selected = !chart_item.selected;
             chart_item.selected
                 ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id)
@@ -231,7 +237,6 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                     {
                         m_selected_chart_items.erase(m_selected_chart_items.begin() +
                                                      select);
-
                         break;
                     }
                 }
@@ -240,9 +245,12 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
             {
                 m_selected_chart_items.push_back(chart_item);
             }
+            // Always reset layer clicked after handling
+            m_settings.SetLayerClicked(-1);
         }
+        
 
-        if(!m_has_drawn_tool_tip)
+        if(!m_has_drawn_tool_tip && m_settings.GetLayerClicked() !=4)
         {
             const auto& time_format =
                 m_settings.GetUserSettings().unit_settings.time_format;
@@ -324,7 +332,7 @@ FlameTrackItem::RenderChart(float graph_width)
     {
         m_selected_chart_items.clear();
     }
-                   
+
     for(ChartItem& item : m_selected_chart_items)
     {
         ImVec2 container_pos = ImGui::GetWindowPos();
@@ -337,13 +345,13 @@ FlameTrackItem::RenderChart(float graph_width)
         ImVec2 start_position;
         float  rounding = 2.0f;
         // Calculate the start position based on the normalized start time and level
-        start_position = ImVec2(static_cast<float>(normalized_start), item.event.m_level * m_level_height);
+        start_position = ImVec2(static_cast<float>(normalized_start),
+                                item.event.m_level * m_level_height);
 
         ImVec2 cursor_position = ImGui::GetCursorScreenPos();
         ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
-        ImVec2 rectMin =
-            ImVec2(start_position.x - HIGHLIGHT_THICKNESS_HALF,
+        ImVec2 rectMin = ImVec2(start_position.x - HIGHLIGHT_THICKNESS_HALF,
                                 start_position.y + cursor_position.y +
                                     HIGHLIGHT_THICKNESS_HALF - ANTI_ALIASING_WORKAROUND);
         ImVec2 rectMax =

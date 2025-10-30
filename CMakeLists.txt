@@ -172,6 +172,16 @@ set(EXTENDED_PACKAGE_DESCRIPTION
 	"This package provides `rocprof-visualizer` which helps in post analysis of ROCm Systems profiling data.")
 
 include(GNUInstallDirs)
+
+# Set runtime dependencies for generated packages
+if(UNIX AND NOT APPLE)
+    # For DEB packages (Debian, Ubuntu, etc.)
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libglfw3")
+
+    # For RPM packages (Fedora, CentOS, RHEL, etc.)
+    set(CPACK_RPM_PACKAGE_REQUIRES "glfw")
+endif()
+
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 set(CPACK_GENERATOR "TGZ;DEB;RPM" CACHE STRING "package types to be produced")
 
@@ -258,4 +268,14 @@ set ( CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}" )
 
 ## Include packaging
 include(CPack)
+
+if(WIN32)
+    add_custom_command(
+        TARGET rocprof-visualizer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_RUNTIME_DLLS:rocprof-visualizer>"
+            "$<TARGET_FILE_DIR:rocprof-visualizer>"
+        COMMENT "Copying dependent DLLs to executable directory"
+    )
+endif()
 

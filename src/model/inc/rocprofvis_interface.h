@@ -134,7 +134,8 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order, 
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
     uint64_t max_count, uint64_t offset, 
-    bool count_only, char** out_query);
+    bool count_only, bool summary,
+    char** out_query);
 
 /****************************************************************************************************
  * @brief Asynchronous call to write the results of a table query to .CSV

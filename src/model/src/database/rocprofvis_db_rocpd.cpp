@@ -755,6 +755,24 @@ rocprofvis_dm_result_t RocpdDatabase::StringIndexToId(rocprofvis_dm_index_t inde
     return result;
 }
 
+rocprofvis_dm_result_t
+RocpdDatabase::BuildTableSummaryClause(bool sample_query,
+                                 rocprofvis_dm_string_t& select,
+                                 rocprofvis_dm_string_t& group_by)
+{
+    if(sample_query)
+    {
+        select = "monitorType, AVG(value) AS avg_value, MIN(value) AS min_value, MAX(value) AS max_value";
+        group_by = "monitorType";
+    }
+    else
+    {
+        select = "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration";
+        group_by = "name";
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)

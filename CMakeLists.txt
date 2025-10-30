@@ -4,7 +4,7 @@ project(rocprof-visualizer)
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 6)
-set(PROJECT_VERSION_PATCH 2)
+set(PROJECT_VERSION_PATCH 3)
 set(PROJECT_VERSION_BUILD 0)
 
 # Name and path of the icon font header
@@ -175,10 +175,7 @@ include(GNUInstallDirs)
 
 # Set runtime dependencies for generated packages
 if(UNIX AND NOT APPLE)
-    # For DEB packages (Debian, Ubuntu, etc.)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libglfw3")
-
-    # For RPM packages (Fedora, CentOS, RHEL, etc.)
     set(CPACK_RPM_PACKAGE_REQUIRES "glfw")
 endif()
 

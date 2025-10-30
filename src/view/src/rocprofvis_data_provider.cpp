@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"

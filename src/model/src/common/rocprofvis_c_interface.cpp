@@ -267,6 +267,24 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     return result;
 }
 
+rocprofvis_dm_result_t rocprofvis_db_export_table_csv_async(
+    rocprofvis_dm_database_t database,
+    rocprofvis_dm_charptr_t query,
+    rocprofvis_dm_charptr_t file_path,
+    rocprofvis_db_future_t object)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+                                RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(object,
+                                 RocProfVis::DataModel::ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Error! Output path cannot be null.",
+                                kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    return db->ExportTableCSVAsync(query, file_path, object);
+}
+
 rocprofvis_dm_result_t rocprofvis_db_trim_save_async(rocprofvis_dm_database_t database, rocprofvis_dm_timestamp_t start,
                                             rocprofvis_dm_timestamp_t end,
                                             rocprofvis_dm_charptr_t new_db_path, 

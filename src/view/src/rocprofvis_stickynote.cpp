@@ -170,12 +170,12 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
         ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
     if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max))
     {
-        ClickManager::GetInstance().SetLayerClicked(Layer::kInteractiveLayer);
+        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
     }
 
     else
     {
-        ClickManager::GetInstance().SetLayerClicked(Layer::kNone);
+        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
     }
 
     ImGui::PopStyleColor(2);
@@ -212,7 +212,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
         m_dragging    = true;
         m_drag_offset = ImVec2(mouse_pos.x - sticky_pos.x, mouse_pos.y - sticky_pos.y);
         dragged_id    = m_id;
-        ClickManager::GetInstance().SetLayerClicked(Layer::kInteractiveLayer);
+        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
     }
 
     if(m_dragging && mouse_down)
@@ -237,7 +237,7 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
     {
         m_dragging = false;
         dragged_id = -1;
-        ClickManager::GetInstance().SetLayerClicked(Layer::kNone);
+        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
     }
 
     return m_dragging;

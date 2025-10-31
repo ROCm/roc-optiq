@@ -303,6 +303,24 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     return error;
 }
 
+rocprofvis_result_t rocprofvis_controller_table_export_csv(
+    rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table,
+    rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result,
+    char const* path)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::TableRef table_ref(table);
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    RocProfVis::Controller::FutureRef future(result);
+    if (trace.IsValid() && table_ref.IsValid() && args_ref.IsValid() && future.IsValid() &&
+        path)
+    {
+        error = trace->TableExportCSV(*table_ref, *args_ref, *future, path);
+    }
+    return error;
+}
+
 #ifdef COMPUTE_UI_SUPPORT
 rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_plot_t* plot,

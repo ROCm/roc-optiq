@@ -16,23 +16,23 @@ enum class Layer
     kCount
 };
 
-class ClickManager
+class TimelineFocusManager
 {
 public:
-    static ClickManager& GetInstance();
+    static TimelineFocusManager& GetInstance();
 
-    void  SetLayerClicked(Layer layer);
-    Layer GetLayerClicked() const;
-    Layer EvaluateClickedLayers();
+    void  RequestLayerFocus(Layer layer);
+    Layer GetFocusedLayer() const;
+    Layer EvaluateFocusedLayer();
 
 private:
-    ClickManager();
-    ~ClickManager()                              = default;
-    ClickManager(const ClickManager&)            = delete;
-    ClickManager& operator=(const ClickManager&) = delete;
+    TimelineFocusManager();
+    ~TimelineFocusManager()                              = default;
+    TimelineFocusManager(const TimelineFocusManager&)            = delete;
+    TimelineFocusManager& operator=(const TimelineFocusManager&) = delete;
 
-    Layer                 m_layer_clicked;
-    std::map<Layer, bool> m_layers_clicked;
+    Layer                 m_layer_focused;
+    std::map<Layer, bool> m_all_layers_focused;
 };
 
 }  // namespace View

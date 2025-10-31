@@ -26,6 +26,7 @@
 #include <mutex>
 #include <condition_variable>
 #include "rocprofvis_db_query_builder.h"
+#include <array>
 
 namespace RocProfVis
 {
@@ -111,6 +112,8 @@ class SqliteDatabase : public Database
         void  InterruptQuery(void* connection) override;
 
         void SetBlankMask(std::string op, uint64_t mask);
+        void SetServiceMask(std::string op, uint64_t mask);
+        void SetTimestampMask(std::string op, uint64_t mask);
 
         guid_list_t & GuidList() { return m_guid_list; } 
 
@@ -237,6 +240,20 @@ class SqliteDatabase : public Database
         // @param azColName - pointer to column names  
         // @return SQLITE_OK if successful
         static int CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, char **azColName); 
+        // sqlite3_exec callback to write table query result to .CSV file with post processesing such that output matches tables in UI 
+        // @param data - pointer to callback caller argument
+        // @param argc - number of columns in the query
+        // @param argv - pointer to row values
+        // @param azColName - pointer to column names  
+        // @return SQLITE_OK if successful
+        static int CallbackTableQueryToCSV(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        // sqlite3_exec callback to write query result to .CSV file
+        // @param data - pointer to callback caller argument
+        // @param argc - number of columns in the query
+        // @param argv - pointer to row values
+        // @param azColName - pointer to column names  
+        // @return SQLITE_OK if successful
+        static int CallbackQueryToCSV(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
         static rocprofvis_dm_result_t ExecuteSQLQueryStatic(
             SqliteDatabase* db, 
@@ -281,7 +298,7 @@ class SqliteDatabase : public Database
         std::set<sqlite3*> m_connections_inuse;
         std::mutex         m_mutex;
         std::condition_variable      m_inuse_cv;
-        std::map<std::string, uint64_t> m_blank_mask;
+        std::unordered_map<std::string, std::array<uint64_t, 3>> m_column_masks;
         guid_list_t        m_guid_list;
 
         // method to mimic slite3_exec using sqlite3_prepare_v2
@@ -297,7 +314,7 @@ class SqliteDatabase : public Database
         void ReleaseConnection(sqlite3* conn);
         bool isServiceColumn(char* name);
         uint64_t GetBlanksMaskForQuery(std::string query);
-
+        std::array<uint64_t, kRPVTableQueryColumnMaskCount> GetColumnMasksForQuery(std::string_view query);
 };
 
 }  // namespace DataModel

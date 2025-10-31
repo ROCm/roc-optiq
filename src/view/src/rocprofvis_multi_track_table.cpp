@@ -6,8 +6,6 @@
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-#include "widgets/rocprofvis_notification_manager.h"
-#include <sstream>
 
 namespace RocProfVis
 {
@@ -17,11 +15,10 @@ namespace View
 constexpr const char* ROWCONTEXTMENU_POPUP_NAME = "RowContextMenu";
 constexpr const char* NO_DATA_TEXT =
     "No data available for the selected tracks or filters.";
-
-const std::string TRACK_ID_COLUMN_NAME  = "__trackId";
-const std::string STREAM_ID_COLUMN_NAME = "__streamTrackId";
-const std::string ID_COLUMN_NAME        = "id";
-const std::string NAME_COLUMN_NAME      = "name";
+constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
+constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
+constexpr const char* ID_COLUMN_NAME        = "id";
+constexpr const char* NAME_COLUMN_NAME      = "name";
 
 MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
                                  std::shared_ptr<TimelineSelection> timeline_selection,
@@ -228,7 +225,7 @@ MultiTrackTable::Update()
 }
 
 void
-MultiTrackTable::FormatData()
+MultiTrackTable::FormatData() const
 {
     std::vector<formatted_column_info_t>& formatted_column_data =
         m_data_provider.GetMutableFormattedTableData(m_table_type);
@@ -327,75 +324,24 @@ MultiTrackTable::RenderContextMenu()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup(ROWCONTEXTMENU_POPUP_NAME))
     {
-        const std::vector<std::vector<std::string>>& table_data =
-            m_data_provider.GetTableData(m_table_type);
         uint64_t target_track_id = SelectedRowToTrackID(
             m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
-
         if(ImGui::MenuItem("Copy Row Data", nullptr, false))
         {
-            if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
-            {
-                spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
-            }
-            else
-            {
-                // Build and copy the data from the selected row
-                std::ostringstream str_collector;
-                for(size_t i = 0; i < table_data[m_selected_row].size(); ++i)
-                {
-                    if(i > 0) str_collector << ",";
-                    str_collector << table_data[m_selected_row][i];
-                }
-                std::string row_data = str_collector.str();
-                // Copy the row data to the clipboard
-                ImGui::SetClipboardText(row_data.c_str());
-                // Show notification that data was copied
-                NotificationManager::GetInstance().Show("Row data copied to clipboard",
-                                                        NotificationLevel::Info, 1.0);
-            }
+            SelectedRowToClipboard();
         }
-        else if(ImGui::MenuItem(m_table_type == TableType::kSampleTable ? "Go to sample"
-                                                                        : "Go to event",
+        else if(ImGui::MenuItem(m_table_type == TableType::kSampleTable ? "Go To Sample"
+                                                                        : "Go To Event",
                                 nullptr, false, target_track_id != INVALID_UINT64_INDEX))
         {
-            if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
-            {
-                spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
-            }
-            else
-            {
-                // Handle navigation
-                if(target_track_id != INVALID_UINT64_INDEX)
-                {
-                    // get start time and duration
-                    std::pair<uint64_t, uint64_t> time_range = SelectedRowToTimeRange();
-                    if(time_range.first != INVALID_UINT64_INDEX &&
-                       time_range.second != INVALID_UINT64_INDEX)
-                    {
-                        ViewRangeNS view_range = calculate_adaptive_view_range(
-                            static_cast<double>(time_range.first),
-                            static_cast<double>(time_range.second - time_range.first));
-                        spdlog::info("Navigating to track ID: {} from row: {}",
-                                     target_track_id, m_selected_row);
-                        EventManager::GetInstance()->AddEvent(
-                            std::make_shared<ScrollToTrackEvent>(
-                                static_cast<int>(
-                                    RocEvents::kHandleUserGraphNavigationEvent),
-                                target_track_id, m_data_provider.GetTraceFilePath()));
-                        EventManager::GetInstance()->AddEvent(
-                            std::make_shared<RangeEvent>(
-                                static_cast<int>(RocEvents::kSetViewRange),
-                                view_range.start_ns, view_range.end_ns,
-                                m_data_provider.GetTraceFilePath()));
-                    }
-                }
-                else
-                {
-                    spdlog::warn("No valid track or stream ID found for row: {}",
-                                 m_selected_row);
-                }
-            }
+            SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
+                                     m_important_column_idxs[kStreamId]);
+        }
+        else if(ImGui::MenuItem("Export To File", nullptr, false,
+                                !m_data_provider.IsRequestPending(
+                                    DataProvider::TABLE_EXPORT_REQUEST_ID)))
+        {
+            ExportToFile();
         }
         // TODO handle event selection
         // else if(ImGui::MenuItem("Select event", nullptr, false))

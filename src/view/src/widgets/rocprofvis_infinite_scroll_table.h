@@ -46,7 +46,7 @@ protected:
         char filter[256];
     };
 
-    virtual void FormatData();
+    virtual void FormatData() const;
     virtual void IndexColumns();
     virtual void RowSelected(const ImGuiMouseButton mouse_button);
 
@@ -54,7 +54,11 @@ protected:
     uint64_t                      SelectedRowToTrackID(size_t track_id_column_index,
                                                        size_t stream_id_column_index) const;
     std::pair<uint64_t, uint64_t> SelectedRowToTimeRange() const;
+    void                          SelectedRowToClipboard() const;
     void                          FormatTimeColumns() const;
+    void                          SelectedRowNavigateEvent(size_t track_id_column_index,
+                                                           size_t stream_id_column_index) const;
+    void                          ExportToFile() const;
 
     std::vector<std::string> m_column_names;
     std::vector<const char*> m_column_names_ptr;

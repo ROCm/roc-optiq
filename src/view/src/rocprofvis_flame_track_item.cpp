@@ -220,9 +220,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         if(!m_selection_changed && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             // Delay Click Execution
-            ClickManager::GetInstance().SetLayerClicked(Layer::kGraphLayer);
+            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kGraphLayer);
         }
-        else if(ClickManager::GetInstance().GetLayerClicked() == Layer::kGraphLayer)
+        else if(TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kGraphLayer)
         {
             // Execute next loop if layer clicked
             chart_item.selected = !chart_item.selected;
@@ -247,11 +247,11 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 m_selected_chart_items.push_back(chart_item);
             }
             // Always reset layer clicked after handling
-            ClickManager::GetInstance().SetLayerClicked(Layer::kNone);
+            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }
 
         if(!m_has_drawn_tool_tip &&
-           ClickManager::GetInstance().GetLayerClicked() == Layer::kNone)
+           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             // Do not render if anything else is hovered or dragged.
             const auto& time_format =

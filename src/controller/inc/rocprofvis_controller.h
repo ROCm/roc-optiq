@@ -222,6 +222,17 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controlle
 */
 
 /*
+* Writes the results of a table query to a .CSV file.
+* @param controller The controller
+* @param table The table to fetch data from
+* @param args The arguments that setup the table
+* @param result The future to wait on
+* @param path The path to write the .CSV
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_table_export_csv(rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, char const* path);
+
+/*
 * Setup and fetches data for a plot, populating the passed in array with PlotSeries objects.
 * Data within PlotSeries can be accessed using GetUInt64/GetDouble/GetString.
 * @param controller The controller.

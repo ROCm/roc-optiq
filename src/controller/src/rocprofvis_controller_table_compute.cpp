@@ -61,6 +61,12 @@ rocprofvis_result_t ComputeTable::Setup(rocprofvis_dm_trace_t dm_handle, Argumen
     return result;
 }
 
+rocprofvis_result_t ComputeTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future, const char* path) const
+{
+    rocprofvis_result_t result = kRocProfVisResultNotSupported;
+    return result;
+}
+
 rocprofvis_result_t ComputeTable::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;

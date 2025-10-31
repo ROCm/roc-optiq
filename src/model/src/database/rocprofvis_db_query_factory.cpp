@@ -1381,7 +1381,8 @@ namespace DataModel
         if (IsVersionGreaterOrEqual("4"))
         {
             return  Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
-                { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                { m_db,
+                { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::QParam("TS.value", Builder::START_SERVICE_NAME), 
                 Builder::QParam("TE.value", Builder::END_SERVICE_NAME),
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
@@ -1400,7 +1401,8 @@ namespace DataModel
         else
         {
             return  Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
-                { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                { m_db,
+                { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::QParam("K.start", Builder::START_SERVICE_NAME), 
                 Builder::QParam("K.end", Builder::END_SERVICE_NAME),
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
@@ -1423,7 +1425,8 @@ namespace DataModel
         if (IsVersionGreaterOrEqual("4"))
         {
             return  Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
-                { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                { m_db,
+                { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::QParam("TS.value", Builder::START_SERVICE_NAME), 
                 Builder::QParam("TS.value", Builder::END_SERVICE_NAME),
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
@@ -1441,7 +1444,8 @@ namespace DataModel
         else
         {
             return  Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
-                { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+                { m_db,
+                { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME), 
                 Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
                 Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),

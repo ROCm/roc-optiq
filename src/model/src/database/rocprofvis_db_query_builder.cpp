@@ -48,18 +48,20 @@ namespace DataModel
     }
     std::string Builder::Select(rocprofvis_db_sqlite_table_query_format params)
     {
-        BuildBlanksMask(params.owner, params.NUM_PARAMS, params.parameters);
+        BuildColumnMasks(params.owner, params.NUM_PARAMS, params.parameters);
         return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_sample_table_query_format params)
     {
+        BuildColumnMasks(params.owner, params.NUM_PARAMS, params.parameters);
         return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters,
                                    params.from,
                           "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format params)
     {
+        BuildColumnMasks(params.owner, params.NUM_PARAMS, params.parameters);
         return BuildQuery("SELECT", params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
@@ -151,16 +153,31 @@ namespace DataModel
         return std::string("concat(") + result + ")";
     }
 
-    void Builder::BuildBlanksMask(SqliteDatabase* owner, int num_params, std::string* params)
+    void Builder::BuildColumnMasks(SqliteDatabase* owner, int num_params, std::string* params)
     {
         for(int i = 0; i < num_params; i++)
         {
+            //blank mask
             if(params[i].find(BLANK_COLUMN_STR) == 0)
             {
                 owner->SetBlankMask(params[0], (uint64_t) 1 << i);
             }
-        }
+            //service mask
+            if(params[i].find(AGENT_ID_SERVICE_NAME) != std::string::npos || params[i].find(QUEUE_ID_SERVICE_NAME) != std::string::npos ||
+               params[i].find(STREAM_ID_SERVICE_NAME) != std::string::npos || params[i].find(PROCESS_ID_SERVICE_NAME) != std::string::npos || 
+               params[i].find(THREAD_ID_SERVICE_NAME) != std::string::npos || params[i].find(SPACESAVER_SERVICE_NAME) != std::string::npos ||
+               params[i].find(OPERATION_SERVICE_NAME) != std::string::npos && params[i].find("opType") == std::string::npos)
+            {
+                owner->SetServiceMask(params[0], (uint64_t) 1 << i);
+            }
+            //start/end timestamp mask
+            if(params[i].find(START_SERVICE_NAME) != std::string::npos || params[i].find(END_SERVICE_NAME) != std::string::npos)
+            {
+                owner->SetTimestampMask(params[0], (uint64_t) 1 << i);
+            }
+        }    
     }
+
     std::string Builder::BuildQuery(std::string select, int num_params, std::string* params,
                                   std::vector<std::string> from,
                                   std::string              finalize_with)

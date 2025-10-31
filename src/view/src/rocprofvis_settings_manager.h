@@ -87,7 +87,9 @@ enum class Colors
     kButtonActive,
     kBgWarning,
     kBgError,
+    kBgSuccess,
     kStickyNote,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };

@@ -7,44 +7,44 @@ namespace RocProfVis
 namespace View
 {
 
-ClickManager&
-ClickManager::GetInstance()
+TimelineFocusManager&
+TimelineFocusManager::GetInstance()
 {
-    static ClickManager instance;
+    static TimelineFocusManager instance;
     return instance;
 }
 
-ClickManager::ClickManager()
-: m_layer_clicked(Layer::kNone)
-, m_layers_clicked()
+TimelineFocusManager::TimelineFocusManager()
+: m_layer_focused(Layer::kNone)
+, m_all_layers_focused()
 
 {}
 
 void
-ClickManager::SetLayerClicked(Layer layer)
+TimelineFocusManager::RequestLayerFocus(Layer layer)
 {
-    m_layers_clicked[layer] = m_layers_clicked[layer] || true;
+    m_all_layers_focused[layer] = true;
 }
 Layer
-ClickManager::EvaluateClickedLayers()
+TimelineFocusManager::EvaluateFocusedLayer()
 {
-    if(m_layers_clicked.empty())
+    if(m_all_layers_focused.empty())
     {
-        m_layer_clicked = Layer::kNone;
+        m_layer_focused = Layer::kNone;
     }
     else
     {
         // Take the last entry in the map (highest Layer value)
-        m_layer_clicked = m_layers_clicked.rbegin()->first;
+        m_layer_focused = m_all_layers_focused.rbegin()->first;
     }
-    m_layers_clicked.clear();
-    return m_layer_clicked;
+    m_all_layers_focused.clear();
+    return m_layer_focused;
 }
 
 Layer
-ClickManager::GetLayerClicked() const
+TimelineFocusManager::GetFocusedLayer() const
 {
-    return m_layer_clicked;
+    return m_layer_focused;
 }
 
 }  // namespace View

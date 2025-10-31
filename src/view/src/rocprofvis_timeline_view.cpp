@@ -137,7 +137,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 }
 
 void
-TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
+TimelineView::RenderInteractiveUI()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse |
@@ -332,7 +332,7 @@ TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
     // Compute zoom: m_v_width = m_range_x / m_zoom  =>  m_zoom = m_range_x / m_v_width
     if(m_range_x > 0.0)
     {
-        m_zoom = std::max(0.000001, m_range_x / new_width_ns);
+        m_zoom = static_cast<float>(std::max(0.000001, m_range_x / new_width_ns));
     }
 
     // view_time_offset is relative to m_min_x
@@ -509,7 +509,7 @@ TimelineView::Render()
 }
 
 void
-TimelineView::RenderSplitter(ImVec2 screen_pos)
+TimelineView::RenderSplitter()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
@@ -1301,8 +1301,8 @@ TimelineView::RenderHistogram()
     }
 
     // Draw view range overlays and labels
-    float view_start_frac = m_view_time_offset_ns / m_range_x;
-    float view_end_frac   = (m_view_time_offset_ns + m_v_width) / m_range_x;
+    float view_start_frac = static_cast<float>(m_view_time_offset_ns / m_range_x);
+    float view_end_frac   = static_cast<float>((m_view_time_offset_ns + m_v_width) / m_range_x);
     view_start_frac       = std::clamp(view_start_frac, 0.0f, 1.0f);
     view_end_frac         = std::clamp(view_end_frac, 0.0f, 1.0f);
 
@@ -1311,13 +1311,17 @@ TimelineView::RenderHistogram()
     float y0           = bars_pos.y;
     float y1           = bars_pos.y + bars_height;
 
+    const auto &time_format = m_settings.GetUserSettings().unit_settings.time_format;
+
     // Left overlay
     if(x_view_start > bars_pos.x)
     {
         draw_list->AddRectFilled(ImVec2(bars_pos.x, y0), ImVec2(x_view_start, y1),
                                  m_settings.GetColor(Colors::kGridColor));
-        std::string vmin_label = nanosecond_to_formatted_str(
-            m_v_min_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format);
+        draw_list->AddLine(ImVec2(x_view_start, y0), ImVec2(x_view_start, y1),
+                           m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
+        std::string vmin_label =
+            nanosecond_to_formatted_str(m_v_min_x - m_min_x, time_format, true);
         ImVec2 vmin_label_size = ImGui::CalcTextSize(vmin_label.c_str());
         float  vmin_label_x =
             std::max(x_view_start - vmin_label_size.x - 6, bars_pos.x + 2);
@@ -1332,8 +1336,10 @@ TimelineView::RenderHistogram()
         draw_list->AddRectFilled(ImVec2(x_view_end, y0),
                                  ImVec2(bars_pos.x + bars_width, y1),
                                  m_settings.GetColor(Colors::kGridColor));
-        std::string vmax_label = nanosecond_to_formatted_str(
-            m_v_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format);
+        draw_list->AddLine(ImVec2(x_view_end, y0), ImVec2(x_view_end, y1),
+                           m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
+        std::string vmax_label =
+            nanosecond_to_formatted_str(m_v_max_x - m_min_x, time_format, true);
         ImVec2 vmax_label_size = ImGui::CalcTextSize(vmax_label.c_str());
         float  vmax_label_x =
             std::min(x_view_end + 6, bars_pos.x + bars_width - vmax_label_size.x - 2);
@@ -1361,11 +1367,7 @@ TimelineView::RenderHistogram()
 
     // Interval calculation
     // measure the size of the label to determine the step size
-    std::string label =
-        nanosecond_to_formatted_str(
-            m_range_x, m_settings.GetUserSettings().unit_settings.time_format,
-            true) +
-        "gap";
+    std::string label = nanosecond_to_formatted_str(m_range_x, time_format, true) + "gap";
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
@@ -1402,8 +1404,7 @@ TimelineView::RenderHistogram()
         draw_list_ruler->AddLine(ImVec2(tick_x, tick_top), ImVec2(tick_x, tick_bottom),
                                  m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
 
-        std::string tick_label = nanosecond_to_formatted_str(
-            tick_ns, m_settings.GetUserSettings().unit_settings.time_format);
+        std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
         label_size = ImGui::CalcTextSize(tick_label.c_str());
 
         float label_x;
@@ -1479,9 +1480,8 @@ TimelineView::RenderTraceView()
     RenderGrid();
  
     RenderGraphView();
- 
-    RenderSplitter(screen_pos);
-    RenderInteractiveUI(screen_pos);
+    RenderSplitter();
+    RenderInteractiveUI();
 
     RenderScrubber(screen_pos);
   
@@ -1550,7 +1550,7 @@ TimelineView::RenderTraceView()
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
-    ClickManager::GetInstance().EvaluateClickedLayers();
+    TimelineFocusManager::GetInstance().EvaluateFocusedLayer();
 }
 void
 TimelineView::RenderGraphPoints()

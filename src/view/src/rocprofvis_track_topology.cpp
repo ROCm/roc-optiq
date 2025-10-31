@@ -19,7 +19,12 @@ TrackTopology::TrackTopology(DataProvider& dp)
 , m_format_changed_token(EventManager::InvalidSubscriptionToken)
 {
     auto metadata_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
-        m_graphs_dirty = true;
+        if(event) {
+            if(m_data_provider.GetTraceFilePath() == event->GetSourceId()) {
+                m_topology_dirty = true;
+                m_graphs_dirty = true;
+            }
+        }
     };
     m_metadata_changed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTrackMetadataChanged),

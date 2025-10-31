@@ -24,9 +24,22 @@ ECHO Build.cmd: Creating standard release folder structure
 CALL %DEVROOT%\CreateReleaseFolderStructure.cmd
 if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
 
+REM Use : "%DEVROOT%\ReleaseCommon\64Bit\All\" - For Public release files , if any
+REM Use : "%DEVROOT%\ReleaseInternal\64Bit\All\" - For Internal release files , if any
+REM Use : "%DEVROOT%\ReleaseNDA\64Bit\All\" - For NDA release files , if any
+ 
+REM Keep using md to create subfolders if needed.
+REM Example : md %DEVROOT%\ReleaseCommon\64Bit\All\bin
+REM copy /y "%DEVROOT%\somefile" "%DEVROOT%\ReleaseCommon\64Bit\All\bin"
+REM if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
+
 REM Copy the built executable to proper folder structure for release
 ECHO Build.cmd: Copying files to standard folder structure
-copy /y "%DEVROOT%\build\x64-release\Release\%VISUALIZER_FILE_NAME%.exe" "%DEVROOT%\ReleaseCommon\Common\All\"
+copy /y "%DEVROOT%\build\x64-release\Release\%VISUALIZER_FILE_NAME%.exe" "%DEVROOT%\ReleaseNDA\64Bit\All\"
+REM copy /y "%DEVROOT%\build\x64-release\Release\glfw3.dll" "%DEVROOT%\ReleaseNDA\64Bit\All\"
+copy /y "%DEVROOT%\README.md" "%DEVROOT%\ReleaseNDA\64Bit\All\"
+md "%DEVROOT%\ReleaseNDA\64Bit\All\doc"
+copy /y "%DEVROOT%\doc\ui_sections.png" "%DEVROOT%\ReleaseNDA\64Bit\All\doc\"
 if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
 
 GOTO END

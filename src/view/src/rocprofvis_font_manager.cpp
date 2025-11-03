@@ -44,13 +44,12 @@ FontManager::GetFontByIndex(int idx)
 int
 FontManager::GetDPIScaledFontIndex()
 {
-    // DPI returns the dots per inch of the display. Essentially, it is a scaling factor.
-    float scaled_size =
-        BASE_FONT_SIZE *
-        std::sqrt(SettingsManager::GetInstance()
-                      .GetDPI());  // Scale the base size by the square root of DPI. SQRT
-                                   // needed to prevent scaling from becoming comical on
-                                   // higher res monitors.
+    constexpr float DPI_EXPONENT =
+        0.75f;  // Adjust as needed. Higher values increase size more rapidly.
+
+    float           scaled_size =
+        BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT); 
+ 
 
     // Find the index of the font size closest to scaled_size
     int best_index = 0;

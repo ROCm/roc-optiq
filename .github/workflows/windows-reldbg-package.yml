@@ -62,7 +62,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rocprof-visualizer-release
-          path: build/x64-release/Release/rocprof-visualizer.exe
+          path: | 
+            build/x64-release/Release/rocprof-visualizer.exe
+            build/x64-release/Release/glfw3.dll
           retention-days: 2
       - name: Upload Visualizer Binary (release-symbols)
         if: matrix.build-type == 'release-symbols'
@@ -72,4 +74,5 @@ jobs:
           path: |
             build/x64-release-symbols/RelWithDebInfo/rocprof-visualizer.exe
             build/x64-release-symbols/RelWithDebInfo/rocprof-visualizer.pdb
+            build/x64-release-symbols/RelWithDebInfo/glfw3.dll
           retention-days: 2

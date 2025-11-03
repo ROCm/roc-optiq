@@ -85,6 +85,8 @@ class Future
 
         const char*                         GetAsyncQueryPtr(){return m_async_query.c_str(); }
 
+        std::vector<Future*>&               SubFeatures() { return m_sub_futures; }
+
     private:
         // stdlib promise object
         std::promise<rocprofvis_dm_result_t> m_promise;
@@ -105,6 +107,7 @@ class Future
         void*                 m_user_data;
         std::mutex            m_mutex;
         std::string           m_async_query;
+        std::vector<Future*>  m_sub_futures;
 };
 
 }  // namespace DataModel

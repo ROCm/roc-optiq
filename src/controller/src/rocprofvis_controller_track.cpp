@@ -43,7 +43,6 @@ Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm
 , m_counter(nullptr)
 , m_ctx(ctx)
 { 
-    s_data_model_load = 0;
 }
 
 Track::~Track()
@@ -227,9 +226,28 @@ inline uint64_t hash_combine(uint64_t a, uint64_t b)
     return a;
 }
 
+
+uint32_t Track::GetNumberOfEventsForTimeRange(double start, double end)
+{
+    rocprofvis_dm_trace_t trace = rocprofvis_dm_get_property_as_handle(
+        m_dm_handle, kRPVDMTrackTraceHandle, 0);
+    uint64_t start_time = rocprofvis_dm_get_property_as_uint64(
+        trace, kRPVDMStartTimeUInt64, 0);
+    size_t bucket_size = rocprofvis_dm_get_property_as_uint64(
+        trace, kRPVDMHistogramBucketSize, 0);
+    uint64_t start_bucket = (start - start_time) / bucket_size;
+    uint64_t end_bucket = ((end - start_time) + bucket_size) / bucket_size;
+    uint32_t num_events = 0;
+    for (int i = start_bucket; i <= end_bucket; i++)
+    {
+        num_events += rocprofvis_dm_get_property_as_uint64(
+            m_dm_handle, kRPVDMTrackHistogramEventDensityUInt64Indexed, i);
+    }
+    return num_events;
+}
+
 rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* future)
 {
-    s_data_model_load++;
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
 
     rocprofvis_dm_trace_t trace = rocprofvis_dm_get_property_as_handle(
@@ -248,8 +266,14 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
     double ceil_segment       = ceil(divided_by_segment);
     double rounded_segment    = ceil_segment * kSegmentDuration;
     double fetch_end          = m_start_timestamp + rounded_segment;
-
-    int num_threads = 1;
+    constexpr uint32_t thread_max_events = 1000000;
+    constexpr uint32_t max_threads_per_range = 2;
+    uint32_t num_events_per_range = GetNumberOfEventsForTimeRange(fetch_start, fetch_end);
+    if (num_events_per_range == 0 && kRocProfVisDmPmcTrack!=dm_track_type)
+        return kRocProfVisResultSuccess;
+    int num_threads = (num_events_per_range + thread_max_events) / thread_max_events;
+    if (num_threads > max_threads_per_range)
+        num_threads = max_threads_per_range;
 
     std::vector<rocprofvis_db_future_t> futures;
     double time_per_query = (fetch_end - fetch_start) / num_threads;
@@ -419,8 +443,6 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
         future->RemoveDependentFuture(futures[i]);
         rocprofvis_db_future_free(futures[i]);
     }
-    s_data_model_load--;
-
 
     return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }

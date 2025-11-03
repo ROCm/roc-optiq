@@ -468,10 +468,6 @@ Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it,
     newprops.query[slice_query_category].push_back(newqueries[slice_source_query_category]);
     newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
     newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]); 
-    newprops.max_ts = 0;
-    newprops.min_ts = UINT64_MAX;
-    newprops.max_value = 0;
-    newprops.min_value = DBL_MAX;
 }
 
 }  // namespace DataModel

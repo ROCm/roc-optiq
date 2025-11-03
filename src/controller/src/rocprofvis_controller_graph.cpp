@@ -306,6 +306,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
         double               min_ts = start_ts;
         double               max_ts = start_ts + scale;
         std::vector<Sample*> samples;
+        double sample_insert_ts = 0.0;
         for(auto& data : entries)
         {
             //if(future->IsCancelled())
@@ -329,6 +330,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 {
                     if(sample_start >= min_ts && sample_start <= max_ts)
                     {
+                        if (samples.size() == 0)
+                        {
+                            sample_insert_ts = sample_start;
+                        }
                         // Merge into the current sample
                         samples.push_back(sample);
                     }
@@ -347,8 +352,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                             {
                                 SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
                                     (rocprofvis_controller_primitive_type_t) type, 0,
-                                        sample_start, samples, &m_lods[lod_to_generate]);
-                                Insert(lod_to_generate, sample_start, 0, new_sample);
+                                    sample_insert_ts, samples, &m_lods[lod_to_generate]);
+                                Insert(lod_to_generate, sample_insert_ts, 0, new_sample);
                             }
 
                             // Create a new event & increment the search
@@ -360,6 +365,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
                             samples.clear();
                             samples.push_back(sample);
+                            sample_insert_ts = sample_start;
                         }
                     }
                 }
@@ -376,9 +382,9 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 kRocProfVisResultSuccess))
             {
                 SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
-                    (rocprofvis_controller_primitive_type_t) type, 0, sample_start,
+                    (rocprofvis_controller_primitive_type_t) type, 0, sample_insert_ts,
                     samples, &m_lods[lod_to_generate]);
-                Insert(lod_to_generate, sample_start, 0, new_sample);
+                Insert(lod_to_generate, sample_insert_ts, 0, new_sample);
             }
         }
     }
@@ -407,6 +413,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
            (m_track->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &max_ts) ==
             kRocProfVisResultSuccess))
         {
+            if (max_ts == min_ts)
+            {
+                max_ts = min_ts + 1; //assuming it's single sample
+            }
             double scale = 1.0;
             for(uint32_t i = 0; i < lod_to_generate; i++)
             {
@@ -482,7 +492,6 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                     	args.m_lru_params.m_ctx      = (Trace*)m_track->GetContext();
                     	args.m_lru_params.m_lod      = 0;
                         m_ctx->GetMemoryManager()->EnterArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
-
                         result = m_track->FetchSegments(
                             fetch_start, fetch_end, &args, future,
                             [](double start, double end, Segment& segment,

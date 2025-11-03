@@ -624,9 +624,14 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             TraceProperties()->start_time = std::atoll(CachedTables()->GetTableCell("Process", process_id, "start"));
             TraceProperties()->end_time = std::atoll(CachedTables()->GetTableCell("Process", process_id, "end"));
             uint32_t split_flag = 0;
-            if (TraceProperties()->end_time > 0)
+            if (TraceProperties()->end_time > 0 && TraceProperties()->start_time > 0)
             {
                 split_flag = kRocProfVisDmTrySplitTrack;
+            }
+            else
+            {
+                TraceProperties()->start_time = UINT64_MAX;
+                TraceProperties()->end_time = 0;
             }
 
             if (kRocProfVisDmResultSuccess !=

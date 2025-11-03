@@ -191,7 +191,7 @@ namespace DataModel
         {
             SkipSpaces();
             static const std::vector<std::string> ops = {
-                "<=", ">=", "<>", "!=", "=", "==" "<", ">", "+", "-", "*", "/", "%", "LIKE"
+                "<=", ">=", "<>", "!=", "=", "==", "<", ">", "+", "-", "*", "/", "%", "LIKE"
             };
 
             for (const auto& op : ops)

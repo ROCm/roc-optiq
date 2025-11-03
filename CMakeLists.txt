@@ -57,6 +57,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_annotations.cpp
     src/view/src/rocprofvis_settings_panel.cpp 
     src/view/src/rocprofvis_stickynote.cpp
+    src/view/src/rocprofvis_click_manager.cpp
     src/view/src/rocprofvis_analysis_view.cpp 
     src/view/src/rocprofvis_trace_view.cpp 
     src/view/src/rocprofvis_line_track_item.cpp 

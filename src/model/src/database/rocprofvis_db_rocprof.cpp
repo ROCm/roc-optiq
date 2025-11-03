@@ -633,7 +633,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 ExecuteQueryForAllTracksAsync(
                     kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks | split_flag, kRPVQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ",
-                    "", &CallbackGetTrackProperties,
+                    "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
                     [](rocprofvis_dm_track_params_t* params) {}))
             {
                 break;

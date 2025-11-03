@@ -128,6 +128,20 @@ namespace DataModel
                             spdlog::error("Error: {} ", e.what());
                             result = kRocProfVisDmResultUnknownError;
                         }
+                        catch (const std::out_of_range& e) {
+                            spdlog::error("Error: {} ", e.what());
+                        } 
+                        catch (const std::exception& e) {
+                            spdlog::error("Exception: {} ", e.what());
+                            result = kRocProfVisDmResultUnknownError;
+                        }
+                        catch (const std::bad_variant_access& e) {
+                            spdlog::error("Bad_variant_access: {} ", e.what());
+                        } 
+                        catch (...) {
+                            spdlog::error("Unknown error!");
+                            result = kRocProfVisDmResultUnknownError;
+                        }
                     }                      
                 }
                 else
@@ -286,12 +300,13 @@ namespace DataModel
                 else
                 {
                     Numeric val = m_merged_table.GetMergeTableValue(op, row_index, column_index, m_db);
+                    bool numeric_string = false;
                     const char* str = columns[column_index].m_type[op] == ColumnType::Null ? "" :
-                        PackedTable::ConvertTableIndexToString(m_db, columns[column_index].m_schema_index[op], val.data.u64);
+                        PackedTable::ConvertTableIndexToString(m_db, columns[column_index].m_schema_index[op], val.data.u64, numeric_string);
                     std::string output;
                     if (str == nullptr)
                     {
-                        output = std::to_string(val.data.u64);
+                        output += std::to_string(val.data.u64);
                     }
                     else
                     {
@@ -305,7 +320,9 @@ namespace DataModel
                             {
                                 *file << ", ";
                             }
+                            if (str != nullptr && !numeric_string)  *file << '"';
                             *file << output;
+                            if (str != nullptr && !numeric_string)  *file << '"';
                             column_counter++;
                         }
                     }
@@ -451,11 +468,19 @@ namespace DataModel
                             else
                             {
                                 Numeric val = m_merged_table.GetMergeTableValue(op, row_index, column_index, m_db);
+                                bool numeric_string = false;
                                 const char* str = columns[column_index].m_type[op] == ColumnType::Null ? "" :
-                                    PackedTable::ConvertTableIndexToString(m_db, columns[column_index].m_schema_index[op], val.data.u64);
+                                    PackedTable::ConvertTableIndexToString(m_db, columns[column_index].m_schema_index[op], val.data.u64, numeric_string);
                                 if (str != nullptr)
                                 {
-                                    map[columns[column_index].m_name] = str;
+                                    if (numeric_string)
+                                    {
+                                        map[columns[column_index].m_name] = std::stod(str);
+                                    }
+                                    else
+                                    {
+                                        map[columns[column_index].m_name] = str;
+                                    }
                                 }
                                 else
                                 {

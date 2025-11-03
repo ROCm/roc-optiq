@@ -167,10 +167,11 @@ namespace DataModel
     }
 
 
-    const char* PackedTable::ConvertTableIndexToString(ProfileDatabase* db, uint32_t column_index, uint64_t  index) {
-
+    const char* PackedTable::ConvertTableIndexToString(ProfileDatabase* db, uint32_t column_index, uint64_t  index, bool & numeric_string) {
+        numeric_string = false;
         if (column_index == Builder::SCHEMA_INDEX_NODE_ID)
         {
+            numeric_string = true;
             return db->CachedTables()->GetTableCell("Node", index, "id");
         } else
         if (column_index == Builder::SCHEMA_INDEX_CATEGORY || column_index == Builder::SCHEMA_INDEX_CATEGORY_RPD)
@@ -381,9 +382,10 @@ namespace DataModel
         {
             m_aggregation.aggregation_maps[map_index].insert({ value, {} });
             it = m_aggregation.aggregation_maps[map_index].find(value);
-            const char* str =  PackedTable::ConvertTableIndexToString(db, group_by_column_info.m_schema_index[op], value);
+            bool numeric_string = false;
+            const char* str =  PackedTable::ConvertTableIndexToString(db, group_by_column_info.m_schema_index[op], value, numeric_string);
             if (str == nullptr){
-                it->second.name = std::to_string(value);
+                it->second.name = std::to_string(group_by_column_info.m_type[op] == ColumnType::Double ? value : (uint64_t)value);
             }
             else
             {

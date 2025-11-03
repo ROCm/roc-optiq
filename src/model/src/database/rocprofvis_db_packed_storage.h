@@ -199,7 +199,7 @@ namespace DataModel
         void SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order);
         void RemoveRowsForSetOfTracks(std::set<uint32_t> tracks, bool remove_all);
 
-        static const char* ConvertTableIndexToString(ProfileDatabase* db, uint32_t column_index, uint64_t index);
+        static const char* ConvertTableIndexToString(ProfileDatabase* db, uint32_t column_index, uint64_t index, bool & numeric_string);
 
     private:
         std::vector<ColumnDef> m_columns;

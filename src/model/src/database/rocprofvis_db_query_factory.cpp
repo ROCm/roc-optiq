@@ -1327,16 +1327,18 @@ namespace DataModel
             return Builder::SelectAll(
                 Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
-                        Builder::QParamOperation(kRocProfVisDmOperationLaunch),
-                        Builder::QParam("E2.id", "id"),
-                        Builder::QParam("R2.id"),
-                        Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
-                        Builder::QParam("T.tid", Builder::THREAD_ID_SERVICE_NAME),
-                        Builder::QParam("TS.value","start"),
-                        Builder::QParam("E2.category_id"),
-                        Builder::QParam("R2.name_id"),
-                        Builder::QParam("L.level"),
+                            Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                            Builder::QParam("E2.id", "id"),
+                            Builder::QParam("R2.id"),
+                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                            Builder::QParam("T.tid", Builder::THREAD_ID_SERVICE_NAME),
+                            Builder::QParam("TS.value","start"),
+                            Builder::QParam("E2.category_id"),
+                            Builder::QParam("R2.name_id"),
+                            Builder::QParam("L.level"),
+                            Builder::QParam("TE.value", "end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R1"),
@@ -1345,6 +1347,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_region", "R2", "R2.event_id = E2.id"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R2.track_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R2.start_id"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R2.end_idd"), 
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L","R2.id = L.eid") },
                     { Builder::Where(
                         "R1.id", "==", std::to_string(event_id))
@@ -1352,24 +1355,27 @@ namespace DataModel
                 Builder::Union() +
                 Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
-                        Builder::QParamOperation(kRocProfVisDmOperationDispatch),
-                        Builder::QParam("E2.id", "id"),
-                        Builder::QParam("K.id"),
-                        Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                        Builder::QParam("TS.start"),
-                        Builder::QParam("E2.category_id"),
-                        Builder::QParam("K.kernel_id"),
-                        Builder::QParam("L.level"),
+                            Builder::QParamOperation(kRocProfVisDmOperationDispatch),
+                            Builder::QParam("E2.id", "id"),
+                            Builder::QParam("K.id"),
+                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                            Builder::QParam("TS.start"),
+                            Builder::QParam("E2.category_id"),
+                            Builder::QParam("K.kernel_id"),
+                            Builder::QParam("L.level"),
+                            Builder::QParam("TE.end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R"),
                         Builder::InnerJoin("rocpd_event", "E1","R.event_id = E1.id AND E1.stack_id != 0"),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
-                        Builder::InnerJoin("rocpd_kernel_dispatch", "K", "K.event_id = E2.id"),
+                        Builder::InnerJoin("rocpd_kernel_dispatch", "K", "K.event_id = E2.id "),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = K.track_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = K.start_id"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = K.end_id"),
                         Builder::InnerJoin(Builder::LevelTable("dispatch"), "L", "K.id = L.eid")
                     },
                     { Builder::Where(
@@ -1377,47 +1383,53 @@ namespace DataModel
                 Builder::Union() +
                 Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
-                        Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
-                        Builder::QParam("E2.id", "id"),
-                        Builder::QParam("M.id"),
-                        Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                        Builder::QParam("TS.start"),
-                        Builder::QParam("E2.category_id"),
-                        Builder::QParam("M.name_id"),
-                        Builder::QParam("L.level"),
+                            Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
+                            Builder::QParam("E2.id", "id"),
+                            Builder::QParam("M.id"),
+                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                            Builder::QParam("TS.start"),
+                            Builder::QParam("E2.category_id"),
+                            Builder::QParam("M.name_id"),
+                            Builder::QParam("L.level"),
+                            Builder::QParam("TE.end"),
+
                         },
                     { Builder::From("rocpd_region", "R"),
-                        Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0"),
-                        Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
-                        Builder::InnerJoin("rocpd_memory_copy", "M", "M.event_id = E2.id"),
-                        Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
-                        Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
-                        Builder::InnerJoin(Builder::LevelTable("mem_copy"), "L", "M.id = L.eid") },
+                    Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0"),
+                    Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
+                    Builder::InnerJoin("rocpd_memory_copy", "M", "M.event_id = E2.id"),
+                    Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
+                    Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
+                    Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = M.end_id"), 
+                    Builder::InnerJoin(Builder::LevelTable("mem_copy"), "L", "M.id = L.eid") },
                     { Builder::Where(
                         "R.id", "==", std::to_string(event_id)) } })) +
                 Builder::Union() +
                 Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
-                        Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
-                        Builder::QParam("E2.id", "id"),
-                        Builder::QParam("M.id"),
-                        Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                        Builder::QParam("TS.start"),
-                        Builder::QParam("E2.category_id"),
-                        Builder::QParam("E2.category_id"), // This should be name_id, but Alloc table does not have column
-                        Builder::QParam("L.level"),
+                            Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
+                            Builder::QParam("E2.id", "id"),
+                            Builder::QParam("M.id"),
+                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                            Builder::QParam("TS.start"),
+                            Builder::QParam("E2.category_id"),
+                            Builder::QParam("E2.category_id"), // This should be name_id, but Alloc table does not have column
+                            Builder::QParam("L.level"),
+                            Builder::QParam("TE.end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R"),
                         Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0"),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
-                        Builder::InnerJoin("rocpd_memory_allocate", "M", "M.event_id = E2.id"),
+                        Builder::InnerJoin("rocpd_memory_allocate", "M", "M.event_id = E2.id "),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = M.end_id"),
                         Builder::InnerJoin(Builder::LevelTable("mem_alloc"), "L", "M.id = L.eid") },
                     { Builder::Where(
                         "R.id", "==", std::to_string(event_id)) } })));
@@ -1427,16 +1439,17 @@ namespace DataModel
             return Builder::SelectAll(
                 Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
-                        Builder::QParamOperation(kRocProfVisDmOperationLaunch),
-                        Builder::QParam("E2.id", "id"),
-                        Builder::QParam("R2.id"),
-                        Builder::QParam("R2.nid", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("R2.pid", Builder::PROCESS_ID_SERVICE_NAME),
-                        Builder::QParam("R2.tid", Builder::THREAD_ID_SERVICE_NAME),
-                        Builder::QParam("R2.start"),
-                        Builder::QParam("E2.category_id"),
-                        Builder::QParam("R2.name_id"),
-                        Builder::QParam("L.level"),
+                            Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+                            Builder::QParam("E2.id", "id"),
+                            Builder::QParam("R2.id"),
+                            Builder::QParam("R2.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("R2.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                            Builder::QParam("R2.tid", Builder::THREAD_ID_SERVICE_NAME),
+                            Builder::QParam("R2.start"),
+                            Builder::QParam("E2.category_id"),
+                            Builder::QParam("R2.name_id"),
+                            Builder::QParam("L.level"),
+                            Builder::QParam("R2.end"),
                         },
                     { 
                         Builder::From("rocpd_region", "R1"),
@@ -1450,16 +1463,18 @@ namespace DataModel
                 Builder::Union() +
                 Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
-                        Builder::QParamOperation(kRocProfVisDmOperationDispatch),
-                        Builder::QParam("E2.id", "id"),
-                        Builder::QParam("K.id"),
-                        Builder::QParam("K.nid", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("K.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                        Builder::QParam("K.start"),
-                        Builder::QParam("E2.category_id"),
-                        Builder::QParam("K.kernel_id"),
-                        Builder::QParam("L.level"),
+                            Builder::QParamOperation(kRocProfVisDmOperationDispatch),
+                            Builder::QParam("E2.id", "id"),
+                            Builder::QParam("K.id"),
+                            Builder::QParam("K.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("K.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                            Builder::QParam("K.start"),
+                            Builder::QParam("E2.category_id"),
+                            Builder::QParam("K.kernel_id"),
+                            Builder::QParam("L.level"),
+                            Builder::QParam("K.end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R"),
@@ -1473,43 +1488,47 @@ namespace DataModel
                 Builder::Union() +
                 Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
-                        Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
-                        Builder::QParam("E2.id", "id"),
-                        Builder::QParam("M.id"),
-                        Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                        Builder::QParam("M.start"),
-                        Builder::QParam("E2.category_id"),
-                        Builder::QParam("M.name_id"),
-                        Builder::QParam("L.level"),
+                            Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
+                            Builder::QParam("E2.id", "id"),
+                            Builder::QParam("M.id"),
+                            Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                            Builder::QParam("M.start"),
+                            Builder::QParam("E2.category_id"),
+                            Builder::QParam("M.name_id"),
+                            Builder::QParam("L.level"),
+                            Builder::QParam("M.end"),
+
                         },
                     { Builder::From("rocpd_region", "R"),
-                        Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0"),
-                        Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
-                        Builder::InnerJoin("rocpd_memory_copy", "M", "M.event_id = E2.id"),
-                        Builder::InnerJoin(Builder::LevelTable("mem_copy"), "L", "M.id = L.eid") },
+                    Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0"),
+                    Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
+                    Builder::InnerJoin("rocpd_memory_copy", "M", "M.event_id = E2.id "),
+                    Builder::InnerJoin(Builder::LevelTable("mem_copy"), "L", "M.id = L.eid") },
                     { Builder::Where(
                         "R.id", "==", std::to_string(event_id)) } })) +
                 Builder::Union() +
                 Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
-                        Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
-                        Builder::QParam("E2.id", "id"),
-                        Builder::QParam("M.id"),
-                        Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
-                        Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                        Builder::QParam("M.start"),
-                        Builder::QParam("E2.category_id"),
-                        Builder::QParam("E2.category_id"), // This should be name_id, but Alloc table does not have column
-                        Builder::QParam("L.level"),
+                            Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
+                            Builder::QParam("E2.id", "id"),
+                            Builder::QParam("M.id"),
+                            Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                            Builder::QParam("M.start"),
+                            Builder::QParam("E2.category_id"),
+                            Builder::QParam("E2.category_id"), // This should be name_id, but Alloc table does not have column
+                            Builder::QParam("L.level"),
+                            Builder::QParam("M.end"),
+
                         },
                     { 
                         Builder::From("rocpd_region", "R"),
                         Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0"),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
-                        Builder::InnerJoin("rocpd_memory_allocate", "M", "M.event_id = E2.id"),
+                        Builder::InnerJoin("rocpd_memory_allocate", "M", "M.event_id = E2.id "),
                         Builder::InnerJoin(Builder::LevelTable("mem_alloc"), "L", "M.id = L.eid") },
                     { Builder::Where(
                         "R.id", "==", std::to_string(event_id)) } })));
@@ -1533,14 +1552,17 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.value", "end"),
+
                         },
                     {
                         Builder::From("rocpd_kernel_dispatch", "K"),
-                        Builder::InnerJoin("rocpd_event", "E1", "K.event_id = E1.id AND E1.stack_id != 0"),
+                        Builder::InnerJoin("rocpd_event", "E1", "K.event_id = E1.id AND E1.stack_id != 0 "),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_id"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE","TE.id = R.end_id"),
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
                     { Builder::Where("K.id", "==", std::to_string(event_id)) } })) +
                     Builder::Union() +
@@ -1556,14 +1578,17 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("K2.kernel_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.end"),
+
                         },
                     {
                         Builder::From("rocpd_kernel_dispatch", "K1"),
                         Builder::InnerJoin("rocpd_event", "E1", "K1.event_id = E1.id AND E1.stack_id != 0"),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
-                        Builder::InnerJoin("rocpd_kernel_dispatch", "K2", "K2.event_id = E2.id "),
+                        Builder::InnerJoin("rocpd_kernel_dispatch", "K2", "K2.event_id = E2.id"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = K2.track_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = K2.start_id"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE","TE.id = K2.end_id"),
                         Builder::InnerJoin(Builder::LevelTable("dispatch"), "L", "K2.id = L.eid")
                     },
                     { Builder::Where(
@@ -1584,10 +1609,12 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("R.end"),
+
                         },
                     {
                         Builder::From("rocpd_kernel_dispatch", "K"),
-                        Builder::InnerJoin("rocpd_event", "E1", "K.event_id = E1.id AND E1.stack_id != 0"),
+                        Builder::InnerJoin("rocpd_event", "E1", "K.event_id = E1.id AND E1.stack_id != 0 "),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id"),
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
@@ -1605,6 +1632,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("K2.kernel_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("R.end"),
+
                         },
                     {
                         Builder::From("rocpd_kernel_dispatch", "K1"),
@@ -1621,6 +1650,7 @@ namespace DataModel
 
     std::string QueryFactory::GetRocprofDataFlowQueryForMemoryCopyEvent(uint64_t event_id)
     {
+
         if (IsVersionGreaterOrEqual("4"))
         {
             return Builder::SelectAll(
@@ -1636,6 +1666,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.end"),
+
                         },
                     { 
                         Builder::From("rocpd_memory_copy", "M"),
@@ -1643,7 +1675,8 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id"),
-                        Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_i"),
+                        Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.end_id"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R.end_id"),
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
                     { 
                         Builder::Where("M.id", "==", std::to_string(event_id)) } })) +
@@ -1660,6 +1693,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("M2.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.end"),
+
                         },
                     { 
                         Builder::From("rocpd_memory_copy", "M1"),
@@ -1668,6 +1703,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_memory_copy", "M2", "M2.event_id = E2.id"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = M2.track_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M2.start_id"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE","TE.id = M2.end_id"),
                         Builder::InnerJoin(Builder::LevelTable("mem_copy"), "L", "M2.id = L.eid") 
                     },
                     { Builder::Where(
@@ -1688,7 +1724,9 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
-                    },
+                            Builder::QParam("R.end"),
+
+                        },
                     { 
                         Builder::From("rocpd_memory_copy", "M"),
                         Builder::InnerJoin("rocpd_event", "E1", "M.event_id = E1.id AND E1.stack_id != 0"),
@@ -1698,7 +1736,7 @@ namespace DataModel
                     { 
                         Builder::Where("M.id", "==", std::to_string(event_id)) } })) +
                         Builder::Union() +
-                        Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
+                Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
                             Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
                             Builder::QParam("E2.id", "id"),
@@ -1710,7 +1748,9 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("M2.name_id"),
                             Builder::QParam("L.level"),
-                    },
+                            Builder::QParam("M2.end"),
+
+                        },
                     { 
                         Builder::From("rocpd_memory_copy", "M1"),
                         Builder::InnerJoin("rocpd_event", "E1", "M1.event_id = E1.id AND E1.stack_id != 0"),
@@ -1725,6 +1765,7 @@ namespace DataModel
 
     std::string QueryFactory::GetRocprofDataFlowQueryForMemoryAllocEvent(uint64_t event_id)
     {
+
         if (IsVersionGreaterOrEqual("4"))
         {
             return Builder::SelectAll(
@@ -1740,14 +1781,18 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("TE.value", "end"),
+
                         },
                     { 
                         Builder::From("rocpd_memory_allocate", "M"),
                         Builder::InnerJoin("rocpd_event", "E1", "M.event_id = E1.id AND E1.stack_id != 0"),
-                        Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.idd"),
+                        Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_id"),
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R.end_id"),
+
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
                     { Builder::Where("M.id", "==", std::to_string(event_id)) } })));
         }
@@ -1766,6 +1811,8 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
+                            Builder::QParam("R.end"),
+
                         },
                     { 
                         Builder::From("rocpd_memory_allocate", "M"),
@@ -1776,6 +1823,7 @@ namespace DataModel
                     { Builder::Where("M.id", "==", std::to_string(event_id)) } })));
         }
     }
+
 
 
     std::string QueryFactory::GetRocprofEssentialInfoQueryForRegionEvent(uint64_t event_id) {

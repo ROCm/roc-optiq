@@ -146,16 +146,20 @@ namespace DataModel
 
         };
 
-        static bool IsCompoundQuery(const char* query, std::vector<std::pair<std::string, uint32_t>>& queries, std::set<uint32_t>& tracks, std::vector<rocprofvis_db_compound_query_command>& commands);
+        static bool IsCompoundQuery(const char* query, std::vector<std::pair<std::string, 
+            uint32_t>>& queries, std::set<uint32_t>& tracks, 
+            std::vector<rocprofvis_db_compound_query_command>& commands);
+        static std::string QueryWithoutCommands(const char* query);
         rocprofvis_dm_result_t ExecuteCompoundQuery(Future* future, 
             std::vector<std::pair<std::string, uint32_t>>& queries, 
             std::set<uint32_t>& tracks,
             std::vector<rocprofvis_db_compound_query_command> commands, 
             rocprofvis_dm_handle_t handle, 
-            rocprofvis_db_compound_table_type type);
+            rocprofvis_db_compound_table_type type,
+            bool query_updated);
         std::string ParseSortCommand(std::string param, bool& order);
         void SaveCurrentQuery(rocprofvis_dm_charptr_t query) { m_current_query = query; };
-        bool IsCurrentQuery(rocprofvis_dm_charptr_t query) { return m_current_query.find(query) == 0; };
+        bool IsCurrentQuery(rocprofvis_dm_charptr_t query) { return m_current_query == query; };
         rocprofvis_dm_result_t ExportToCSV(rocprofvis_dm_charptr_t file_path);
 
     private:
@@ -181,6 +185,7 @@ namespace DataModel
         std::mutex m_lock;
         std::string m_current_query;
 
+        static constexpr const char* QUERY_COMMAND_TAG = "-- CMD:";
     };
 
 

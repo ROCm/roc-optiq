@@ -65,7 +65,8 @@ namespace DataModel
         std::set<uint32_t>& tracks,
         std::vector<rocprofvis_db_compound_query_command> commands, 
         rocprofvis_dm_handle_t handle, 
-        rocprofvis_db_compound_table_type type) 
+        rocprofvis_db_compound_table_type type,
+        bool query_updated) 
     {
         m_timer.pause();
         rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
@@ -76,19 +77,25 @@ namespace DataModel
             std::set<uint32_t> removed_tracks;
             std::set<uint32_t> added_tracks;
 
-            std::set_difference(
-                m_tracks.begin(), m_tracks.end(),
-                tracks.begin(), tracks.end(),
-                std::inserter(removed_tracks, removed_tracks.end())
-            );
+            if (query_updated)
+            {
+                removed_tracks = m_tracks;
+                added_tracks = tracks;
+            }
+            else
+            {
+                std::set_difference(
+                    m_tracks.begin(), m_tracks.end(),
+                    tracks.begin(), tracks.end(),
+                    std::inserter(removed_tracks, removed_tracks.end())
+                );
 
-            std::set_difference(
-                tracks.begin(), tracks.end(),
-                m_tracks.begin(), m_tracks.end(),
-                std::inserter(added_tracks, added_tracks.end())
-            );
-
-            
+                std::set_difference(
+                    tracks.begin(), tracks.end(),
+                    m_tracks.begin(), m_tracks.end(),
+                    std::inserter(added_tracks, added_tracks.end())
+                );
+            }
 
             result = kRocProfVisDmResultSuccess;
             bool same_queries = (removed_tracks.size() == 0) && (added_tracks.size() == 0);
@@ -106,7 +113,7 @@ namespace DataModel
                     
                 }
 
-                m_merged_table.RemoveRowsForSetOfTracks(removed_tracks);
+                m_merged_table.RemoveRowsForSetOfTracks(removed_tracks, query_updated);
 
                 if (new_queries.size())
                 {
@@ -145,9 +152,18 @@ namespace DataModel
         return result;
     }
 
+    std::string TableProcessor::QueryWithoutCommands(const char* query) {
+        std::string query_without_commands = query;
+        size_t pos = query_without_commands.find(QUERY_COMMAND_TAG);
+        if (pos != std::string::npos)
+        {
+            query_without_commands.erase(pos);
+        }
+        return query_without_commands;
+    }
+
     bool TableProcessor::IsCompoundQuery(const char* query, std::vector<std::pair<std::string, uint32_t>>& queries, std::set<uint32_t>& tracks, std::vector<rocprofvis_db_compound_query_command>& commands)
     {
-        const std::string command_tag = "-- CMD:";
         std::istringstream stream(query);
         std::string line;
         std::string currentSql;
@@ -156,8 +172,8 @@ namespace DataModel
             line = Trim(line);
             if (line.empty()) continue;
 
-            if (line.rfind(command_tag.c_str(), 0) == 0) {
-                std::string cmdline = Trim(line.substr(command_tag.length()));
+            if (line.rfind(QUERY_COMMAND_TAG, 0) == 0) {
+                std::string cmdline = Trim(line.substr(strlen(QUERY_COMMAND_TAG)));
                 std::istringstream cmdStream(cmdline);
                 rocprofvis_db_compound_query_command cmd;
                 cmdStream >> cmd.name;
@@ -186,8 +202,6 @@ namespace DataModel
             }
         }
 
-        //std::string leftover = Trim(currentSql);
-        //if (!leftover.empty()) queries.push_back(leftover);
         if (queries.size() > 1 || commands.size() > 0)
         {
             return true;

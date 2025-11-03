@@ -1080,17 +1080,18 @@ rocprofvis_dm_result_t  ProfileDatabase::ExecuteQuery(
         std::vector<std::pair<std::string, uint32_t>> queries;
         std::vector<rocprofvis_db_compound_query_command> commands;
         std::set<uint32_t> tracks;
+        std::string query_without_commands = TableProcessor::QueryWithoutCommands(query);
         if (TableProcessor::IsCompoundQuery(query, queries, tracks,  commands))
         {
             auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
             rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
             if (it != commands.end())
             {
-                if (std::atoll(it->parameter.c_str()))
-                    data_type = kRPVTableDataTypeSample;
+                data_type = (rocprofvis_db_compound_table_type)std::atol(it->parameter.c_str());
             }
-            m_table_processor[data_type].SaveCurrentQuery(query);
-            if (kRocProfVisDmResultSuccess != m_table_processor[data_type].ExecuteCompoundQuery(future, queries, tracks, commands, table, data_type)) break;
+            bool query_updated = !m_table_processor[data_type].IsCurrentQuery(query_without_commands.c_str());
+            m_table_processor[data_type].SaveCurrentQuery(query_without_commands.c_str());
+            if (kRocProfVisDmResultSuccess != m_table_processor[data_type].ExecuteCompoundQuery(future, queries, tracks, commands, table, data_type, query_updated)) break;
         }
         else
         {
@@ -1132,13 +1133,14 @@ rocprofvis_dm_result_t ProfileDatabase::ExportTableCSV(rocprofvis_dm_charptr_t q
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+    std::string query_without_commands = TableProcessor::QueryWithoutCommands(query);
 
     Future* internal_future = new Future(nullptr);
 
 
     for (int i = 0; i < kRPVTableDataTypesNum; i++)
     {
-        if (m_table_processor[i].IsCurrentQuery(query))
+        if (m_table_processor[i].IsCurrentQuery(query_without_commands.c_str()))
         {
             result = m_table_processor[i].ExportToCSV(file_path);
             break;

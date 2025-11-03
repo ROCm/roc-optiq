@@ -556,8 +556,12 @@ namespace DataModel
         m_rows.erase(new_end, m_rows.end());
     }
 
-    void PackedTable::RemoveRowsForSetOfTracks(std::set<uint32_t> tracks)
+    void PackedTable::RemoveRowsForSetOfTracks(std::set<uint32_t> tracks, bool remove_all)
     {
+        if (remove_all)
+        {
+            m_rows.clear();
+        } else
         if (tracks.size() > 0 && m_merged_columns.size() > 0)
         {
             auto track_info_it = Builder::table_view_schema.find(Builder::TRACK_ID_PUBLIC_NAME);

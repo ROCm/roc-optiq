@@ -197,7 +197,7 @@ namespace DataModel
         void FinalizeAggregation();
         void AggregateRow(ProfileDatabase * db, int row_index, int map_index);
         void SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order);
-        void RemoveRowsForSetOfTracks(std::set<uint32_t> tracks);
+        void RemoveRowsForSetOfTracks(std::set<uint32_t> tracks, bool remove_all);
 
         static const char* ConvertTableIndexToString(ProfileDatabase* db, uint32_t column_index, uint64_t index);
 

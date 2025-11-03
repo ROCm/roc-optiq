@@ -18,8 +18,8 @@ namespace View
 {
 
 constexpr uint64_t    FETCH_CHUNK_SIZE               = 1000;
-constexpr const char* START_TS_COLUMN_NAME           = "startTs";
-constexpr const char* END_TS_COLUMN_NAME             = "endTs";
+constexpr const char* START_TS_COLUMN_NAME           = "start";
+constexpr const char* END_TS_COLUMN_NAME             = "end";
 constexpr const char* DURATION_COLUMN_NAME           = "duration";
 constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 

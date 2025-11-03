@@ -25,6 +25,9 @@ namespace View
 constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 constexpr float SIDEBAR_WIDTH_MAX             = 600.0f;
 
+// Maximum zoom out extent (1x zoom)
+constexpr float MAX_ZOOM_OUT_EXTENT = 1.0f;
+
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotations)
@@ -1462,9 +1465,8 @@ TimelineView::RenderTraceView()
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
-    ImGuiStyle& style             = ImGui::GetStyle();
-    float       fontHeight        = ImGui::GetFontSize();
-    m_artificial_scrollbar_height = fontHeight + style.FramePadding.y * 2.0f;
+    ImGuiStyle& style      = ImGui::GetStyle();
+    float       fontHeight = ImGui::GetFontSize();
     m_graph_size =
         ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
 
@@ -1498,55 +1500,51 @@ TimelineView::RenderTraceView()
     ImGui::EndChild();  // End of Grid View 2
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
     ImGui::BeginChild("scrollbar",
                       ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_height),
                       true, ImGuiWindowFlags_NoScrollbar);
 
-    // ImGui::SameLine();
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
     ImGui::SameLine();
 
     float available_width = subcomponent_size_main.x - m_sidebar_size;
+    float view_width      = static_cast<float>(std::min(m_v_width, m_range_x));
+    float max_offset      = static_cast<float>(m_range_x - view_width);
+    float view_offset =
+        static_cast<float>(std::clamp(m_view_time_offset_ns, 0.0, (double) max_offset));
 
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
-                        available_width > 0
-                            ? std::clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
-                                         (available_width * 0.05f),
-                                         (available_width * 0.90f))
-                            : 4.0f);
+    float min_grab = 4.0f;
+    float max_grab = available_width;
+    float grab_fraction =
+        (m_range_x > 0.0) ? static_cast<float>(m_v_width / m_range_x) : 1.0f;
+    float grab_min_size = std::clamp(available_width * grab_fraction, min_grab, max_grab);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, grab_min_size);
     ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab,
+                          m_settings.GetColor(Colors::kScrollBarColor));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive,
+                          m_settings.GetColor(Colors::kScrollBarColor));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, m_settings.GetColor(Colors::kFillerColor));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,
+                          m_settings.GetColor(Colors::kFillerColor));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,
+                          m_settings.GetColor(Colors::kFillerColor));
 
-    ImU32 scroll_color = m_settings.GetColor(Colors::kFillerColor);
-    ImU32 grab_color   = m_settings.GetColor(Colors::kScrollBarColor);
+    ImGui::PushItemWidth(available_width);
 
-    ImGui::PushStyleColor(ImGuiCol_SliderGrab, grab_color);
-    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, grab_color);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, scroll_color);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, scroll_color);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, scroll_color);
-
-    ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
-
-    m_v_width = std::min(m_v_width,
-                         m_range_x);  // Ensure view width does not exceed total
-                                      // range. Prevents jitter and assertion errors.
-    float max_offset  = static_cast<float>((m_range_x - m_v_width) + m_v_width * 0.10f);
-    float min_offset  = 0.0f;
-    float view_offset = static_cast<float>(m_view_time_offset_ns);
-
-    if(ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, ""))
+    if(ImGui::SliderFloat("##scrollbar", &view_offset, 0.0f, max_offset, ""))
     {
-        // Clamp the view offset to prevent scrolling out of bounds
-        m_view_time_offset_ns = std::clamp(static_cast<double>(view_offset), 0.0,
-                                           (m_range_x - m_v_width) + m_v_width * 0.10);
+        m_view_time_offset_ns =
+            std::clamp(static_cast<double>(view_offset), 0.0, (double) max_offset);
     }
 
-    ImGui::PopStyleColor(5);  // Pop the colors we pushed above
-    ImGui::PopStyleVar(2);    // Pop both style variables
     ImGui::PopItemWidth();
+    ImGui::PopStyleColor(5);
+    ImGui::PopStyleVar(2);
 
     m_stop_user_interaction = false;
 
@@ -1720,7 +1718,7 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 new_zoom *= 1.0f - zoom_speed;
             }
-            new_zoom = std::max(new_zoom, 0.9f);
+            new_zoom = std::max(new_zoom, MAX_ZOOM_OUT_EXTENT);
 
             // 4. Calculate new view width
             double new_v_width = m_range_x / new_zoom;
@@ -1774,13 +1772,13 @@ TimelineView::HandleTopSurfaceTouch()
         {
             // Zoom in
             new_zoom = m_zoom * (1.0f + zoom_speed * pan_speed);
-            new_zoom = std::max(new_zoom, 0.9f);
+            new_zoom = std::max(new_zoom, MAX_ZOOM_OUT_EXTENT);
         }
         if(ImGui::IsKeyPressed(ImGuiKey_S))
         {
             // Zoom out
             new_zoom = m_zoom * (1.0f - zoom_speed * pan_speed);
-            new_zoom = std::max(new_zoom, 0.9f);
+            new_zoom = std::max(new_zoom, MAX_ZOOM_OUT_EXTENT);
         }
         if(new_zoom > 0.0f)
         {
@@ -1840,6 +1838,7 @@ TimelineView::HandleTopSurfaceTouch()
         m_view_time_offset_ns = m_range_x - m_v_width;
     }
 }
+
 ViewCoords
 TimelineView::GetViewCoords() const
 {

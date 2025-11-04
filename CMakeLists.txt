@@ -54,6 +54,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_events_view.cpp 
     src/view/src/rocprofvis_settings_manager.cpp
     src/view/src/rocprofvis_font_manager.cpp 
+    src/view/src/rocprofvis_mini_map.cpp
     src/view/src/rocprofvis_annotations.cpp
     src/view/src/rocprofvis_settings_panel.cpp 
     src/view/src/rocprofvis_stickynote.cpp
@@ -276,4 +277,3 @@ if(WIN32)
         COMMENT "Copying dependent DLLs to executable directory"
     )
 endif()
-

@@ -65,6 +65,13 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(100, 10, 10, 255),    // Colors::kBgError
     IM_COL32(10, 100, 0, 255),     // Colors::kBgSuccess
     IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
+    IM_COL32(30, 30, 30, 255),     // Colors::kMMBin1
+    IM_COL32(0, 80, 180, 255),     // Colors::kMMBin2
+    IM_COL32(0, 180, 180, 255),    // Colors::kMMBin3
+    IM_COL32(0, 180, 80, 255),     // Colors::kMMBin4
+    IM_COL32(220, 180, 0, 255),    // Colors::kMMBin5
+    IM_COL32(255, 100, 0, 255),    // Colors::kMMBin6
+    IM_COL32(220, 40, 40, 255)     // Colors::kMMBin7
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
@@ -114,6 +121,13 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
     IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
+    IM_COL32(240, 240, 240, 255),  // Colors::kMMBin1
+    IM_COL32(0, 120, 255, 255),    // Colors::kMMBin2
+    IM_COL32(0, 200, 200, 255),    // Colors::kMMBin3
+    IM_COL32(0, 200, 0, 255),      // Colors::kMMBin4
+    IM_COL32(255, 220, 0, 255),    // Colors::kMMBin5
+    IM_COL32(255, 140, 0, 255),    // Colors::kMMBin6
+    IM_COL32(220, 40, 40, 255)     // Colors::kMMBin7
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> FLAME_COLORS = {
@@ -123,6 +137,7 @@ const std::vector<ImU32> FLAME_COLORS = {
     IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
     IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
 };
+ 
 constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
 constexpr size_t RECENT_FILES_LIMIT = 5;
 constexpr float  EVENT_LEVEL_HEIGHT = 40.0f;

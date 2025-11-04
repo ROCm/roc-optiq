@@ -40,6 +40,8 @@ TraceView::TraceView()
 , m_event_search(nullptr)
 , m_is_sidebar_visible(true)
 , m_is_analysis_visible(true)
+, m_mini_map(nullptr)
+, m_is_mini_map_visible(false)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -195,14 +197,15 @@ TraceView::CreateView()
     m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection, m_annotations);
+    m_mini_map              = std::make_shared<MiniMap>(m_data_provider, m_timeline_view);
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
         [this]() { m_timeline_view->RenderHistogram(); });
 
     auto sidebar =
         std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
                                   m_timeline_view->GetGraphs(), m_data_provider);
-    auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
-                                                   m_timeline_selection, m_annotations);
+    auto analysis  = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+                                                    m_timeline_selection, m_annotations);
     m_event_search = std::make_shared<EventSearch>(m_data_provider);
 
     m_sidebar_item                 = LayoutItem::CreateFromWidget(sidebar);
@@ -479,7 +482,8 @@ TraceView::RenderEditMenuOptions()
     {
         if(m_timeline_selection)
         {
-            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs = m_timeline_view->GetGraphs();
+            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs =
+                m_timeline_view->GetGraphs();
             if(graphs)
             {
                 m_timeline_selection->UnselectAllTracks(*graphs);
@@ -550,6 +554,8 @@ TraceView::RenderToolbar()
     RenderSeparator();
     RenderBookmarkControls();
     RenderSeparator();
+    RenderMiniMapControls();
+    RenderSeparator();
     if(ImGui::Button("Reset View"))
     {
         if(m_timeline_view)
@@ -576,6 +582,32 @@ TraceView::RenderToolbar()
     ImGui::PopStyleVar(2);
 }
 
+void
+TraceView::RenderMiniMapControls()
+{
+    ImFont* icon_font =
+        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+    ImGui::PushFont(icon_font);
+    if(ImGui::Button(ICON_MAP))
+    {
+        m_is_mini_map_visible = !m_is_mini_map_visible;
+    }
+    ImGui::PopFont();
+
+    if(m_is_mini_map_visible)
+    {
+        ImGui::SetNextWindowSize(ImVec2(500, 500), ImGuiCond_FirstUseEver);
+        ImGui::Begin("MiniMap", &m_is_mini_map_visible,
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+                         ImGuiWindowFlags_NoSavedSettings);
+        if(m_mini_map)
+        {
+            m_mini_map->Render();
+        }
+
+        ImGui::End();
+    }
+}
 void
 TraceView::RenderSeparator()
 {

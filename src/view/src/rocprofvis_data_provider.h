@@ -510,7 +510,7 @@ public:
     /*
      Gets a Minimap of all tracks individually in the controller.
      */
-    const std::map<int, std::vector<double>>& GetMiniMap();
+    const std::map<uint64_t, std::vector<double>>& GetMiniMap();
 
     /*
      * Performs all data processing.  Call this from the "game loop".
@@ -588,6 +588,8 @@ public:
 
     bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
 
+    void SetMiniMap(std::map<uint64_t, std::vector<double>> minimap);
+
 private:
     void HandleLoadTrace();
     void HandleLoadSystemTopology();
@@ -646,7 +648,7 @@ private:
     // Global Histogram Vector
     std::vector<double> m_histogram;
     // Minimap per track.
-    std::map<int, std::vector<double>> m_mini_map;
+    std::map<uint64_t, std::vector<double>> m_mini_map;
 
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;

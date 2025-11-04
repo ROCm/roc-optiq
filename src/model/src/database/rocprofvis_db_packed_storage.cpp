@@ -239,17 +239,17 @@ namespace DataModel
 
 
     bool PackedTable::SetupAggregation(std::string agg_spec, int num_threads)
-    {
-        m_aggregation.column_def.clear();
-        m_aggregation.agg_params = FilterExpression::ParseAggregationSpec(agg_spec);
-        if (m_aggregation.agg_params.size() > 0)
+    {       
+        auto agg_params = FilterExpression::ParseAggregationSpec(agg_spec);
+        if (agg_params.size() > 0)
         {
-            for (auto it = m_aggregation.agg_params.begin(); it != m_aggregation.agg_params.end(); ) 
+            std::unordered_map<std::string, MergedColumnDef> column_def;
+            for (auto it = agg_params.begin(); it != agg_params.end(); ) 
             {
                 auto column_it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [it](MergedColumnDef& cdef) { return cdef.m_name == it->column; });
                 if (column_it != m_merged_columns.end())
                 {
-                    m_aggregation.column_def[it->column] = *column_it;
+                    column_def[it->column] = *column_it;
                     ++it;
                 }
                 else 
@@ -258,10 +258,12 @@ namespace DataModel
                     ++it;
                 } else
                 {
-                    it = m_aggregation.agg_params.erase(it);
+                    it = agg_params.erase(it);
                 }
             }
-            if (m_aggregation.agg_params.size() == 0) return false;
+            if (agg_params.size() == 0) return false;
+            m_aggregation.agg_params = agg_params;
+            m_aggregation.column_def = column_def;
             if (m_aggregation.agg_params[0].command != FilterExpression::SqlCommand::Group) return false;
             for (int i=1; i < m_aggregation.agg_params.size();i++)
                 if (m_aggregation.agg_params[i].command == FilterExpression::SqlCommand::Group) return false;
@@ -385,7 +387,14 @@ namespace DataModel
             bool numeric_string = false;
             const char* str =  PackedTable::ConvertTableIndexToString(db, group_by_column_info.m_schema_index[op], value, numeric_string);
             if (str == nullptr){
-                it->second.name = std::to_string(group_by_column_info.m_type[op] == ColumnType::Double ? value : (uint64_t)value);
+                if (group_by_column_info.m_type[op] == ColumnType::Double)
+                {
+                    it->second.name = std::to_string(value);
+                }
+                else
+                {
+                    it->second.name = std::to_string((uint64_t)value);
+                }
             }
             else
             {
@@ -665,11 +674,14 @@ namespace DataModel
 
         tables.clear();
 
-        uint8_t op = GetOperationValue(0);
-        if (op > 0)
+        if (m_rows.size() > 0)
         {
-            SortById();
-            RemoveDuplicates();
+            uint8_t op = GetOperationValue(0);
+            if (op > 0)
+            {
+                SortById();
+                RemoveDuplicates();
+            }
         }
     }
 

@@ -131,12 +131,9 @@ namespace DataModel
                         catch (const std::out_of_range& e) {
                             spdlog::error("Error: {} ", e.what());
                         } 
-                        catch (const std::exception& e) {
-                            spdlog::error("Exception: {} ", e.what());
-                            result = kRocProfVisDmResultUnknownError;
-                        }
                         catch (const std::bad_variant_access& e) {
                             spdlog::error("Bad_variant_access: {} ", e.what());
+                            result = kRocProfVisDmResultUnknownError;
                         } 
                         catch (...) {
                             spdlog::error("Unknown error!");
@@ -412,7 +409,7 @@ namespace DataModel
             bool numeric = false;
             try {
                 size_t pos;
-                std::stod(r.second.name, &pos);
+                double d = std::stod(r.second.name, &pos);
                 numeric = pos == r.second.name.size(); 
             } catch (...) {
                 numeric = false;
@@ -644,7 +641,7 @@ namespace DataModel
                     std::vector<std::thread> threads;
                     size_t rows_per_task = thread_count == 0 ? 0 : m_merged_table.RowCount() / thread_count;
                     size_t leftover_rows_count = m_merged_table.RowCount() - (rows_per_task * thread_count);
-                    if (m_merged_table.SetupAggregation(m_last_group_str, thread_count+1))
+                    if (m_merged_table.SetupAggregation(m_last_group_str, thread_count + 1))
                     {
 
                         if (filtered)
@@ -678,6 +675,7 @@ namespace DataModel
                             t.join();
                         m_merged_table.FinalizeAggregation();
                     }
+                   
                 }
             }
 

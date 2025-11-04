@@ -77,7 +77,7 @@ namespace DataModel
             std::set<uint32_t> removed_tracks;
             std::set<uint32_t> added_tracks;
 
-            if (query_updated)
+            if (query_updated && type == kRPVTableDataTypeSearch)
             {
                 removed_tracks = m_tracks;
                 added_tracks = tracks;
@@ -113,7 +113,7 @@ namespace DataModel
                     
                 }
 
-                m_merged_table.RemoveRowsForSetOfTracks(removed_tracks, query_updated);
+                m_merged_table.RemoveRowsForSetOfTracks(removed_tracks, query_updated && type == kRPVTableDataTypeSearch);
 
                 if (new_queries.size())
                 {

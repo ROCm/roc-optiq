@@ -189,7 +189,6 @@ namespace DataModel
         static uint8_t ColumnTypeSize(ColumnType type);
         void Clear() { m_columns.clear(); m_rows.clear(); m_merged_columns.clear(); m_rowSize = 0; m_currentRow = static_cast<size_t>(-1); };
 
-        void SortById();
         void RemoveDuplicates();
         void CreateSortOrderArray();
         void SortByColumn(ProfileDatabase * db, std::string column, bool ascending);

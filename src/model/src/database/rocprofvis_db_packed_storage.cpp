@@ -153,19 +153,6 @@ namespace DataModel
         return val;
     }
 
-    void PackedTable::SortById()
-    {
-        std::sort(m_rows.begin(), m_rows.end(),
-            [](const std::unique_ptr<PackedRow>& r1, const std::unique_ptr<PackedRow>& r2) {
-                rocprofvis_dm_event_id_t id1, id2;
-                id1.bitfield.event_op = r1->Get<uint8_t>(0);
-                id1.bitfield.event_id = r1->Get<uint32_t>(1);
-                id2.bitfield.event_op = r2->Get<uint8_t>(0);
-                id2.bitfield.event_id = r2->Get<uint32_t>(1);
-                return id1.value < id2.value;
-            });
-    }
-
 
     const char* PackedTable::ConvertTableIndexToString(ProfileDatabase* db, uint32_t column_index, uint64_t  index, bool & numeric_string) {
         numeric_string = false;
@@ -479,93 +466,102 @@ namespace DataModel
         auto it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [column](MergedColumnDef& cdef) { return cdef.m_name == column; });
         if (it != m_merged_columns.end())
         {
-            if (it->m_name == Builder::COUNTER_VALUE_PUBLIC_NAME)
-            {
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
-                    [&](const uint32_t & so1, const uint32_t & so2) {
-                        std::unique_ptr<PackedRow>& r1 = m_rows[so1];
-                        std::unique_ptr<PackedRow>& r2 = m_rows[so2];
-                        uint8_t op1 = r1->Get<uint8_t>(0);
-                        uint8_t op2 = r2->Get<uint8_t>(0);
-                        uint8_t size1 = ColumnTypeSize(it->m_type[op1]);
-                        uint8_t size2 = ColumnTypeSize(it->m_type[op2]);
-                        double value1 = size1 > 0 ? r1->Get<double>(it->m_offset[op1], size1) : (ascending ? DBL_MAX : DBL_MIN);
-                        double value2 = size2 > 0 ? r2->Get<double>(it->m_offset[op2], size2) : (ascending ? DBL_MAX : DBL_MIN); 
-                        return ascending ? value1 < value2 : value2 < value1;
-                    });
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
-                    [&](const uint32_t & so1, const uint32_t & so2) {
-                        std::unique_ptr<PackedRow>& r1 = m_rows[so1];
-                        std::unique_ptr<PackedRow>& r2 = m_rows[so2];
-                        uint8_t op1 = r1->Get<uint8_t>(0);
-                        uint8_t op2 = r2->Get<uint8_t>(0);
-                        uint8_t size1 = ColumnTypeSize(it->m_type[op1]);
-                        uint8_t size2 = ColumnTypeSize(it->m_type[op2]);
-                        double value1 = size1 > 0 ? r1->Get<double>(it->m_offset[op1], size1) : (ascending ? DBL_MAX : DBL_MIN);
-                        double value2 = size2 > 0 ? r2->Get<double>(it->m_offset[op2], size2) : (ascending ? DBL_MAX : DBL_MIN); 
-                        return ascending ? value1 < value2 : value2 < value1;
-                    });
-            }
-            else if (it->m_name == Builder::CATEGORY_PUBLIC_NAME || it->m_name == Builder::NAME_PUBLIC_NAME)
-            {
+            std::vector<double> sort_values;
+            sort_values.reserve(m_sort_order.size());
+            for (auto so : m_sort_order) {
+                auto& row = *m_rows[so];
+                uint8_t op = row.Get<uint8_t>(0);
+                uint8_t size = ColumnTypeSize(it->m_type[op]);
+                if (it->m_name == Builder::COUNTER_VALUE_PUBLIC_NAME)
+                {
+                    double value = size > 0 ? row.Get<double>(it->m_offset[op], size) : (ascending ? DBL_MAX : 0);
+                    sort_values.push_back(value);
 
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
-                    [&](const uint32_t & so1, const uint32_t & so2) {
-                        std::unique_ptr<PackedRow>& r1 = m_rows[so1];
-                        std::unique_ptr<PackedRow>& r2 = m_rows[so2];
-                        uint8_t op1 = r1->Get<uint8_t>(0);
-                        uint8_t op2 = r2->Get<uint8_t>(0);
-                        uint8_t size1 = ColumnTypeSize(it->m_type[op1]);
-                        uint8_t size2 = ColumnTypeSize(it->m_type[op2]);
-                        uint64_t value1 = size1 > 0 ? r1->Get<uint64_t>(it->m_offset[op1], size1) : (ascending ? UINT64_MAX : 0);
-                        uint64_t value2 = size2 > 0 ? r2->Get<uint64_t>(it->m_offset[op2], size2) : (ascending ? UINT64_MAX : 0);
-                        if (value1 == value2)
-                            return false;
-                        if (size1 > 0)
-                        {                           
-                            uint64_t string_array_offset1 = it->m_schema_index[op1] == Builder::SCHEMA_INDEX_EVENT_SYMBOL ? db->SymbolsOffset() : 0;
-                            value1 = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, value1 + string_array_offset1);
-                        } 
-                        if (size2 > 0)
-                        {
-                            uint64_t string_array_offset2 = it->m_schema_index[op2] == Builder::SCHEMA_INDEX_EVENT_SYMBOL ? db->SymbolsOffset() : 0;
-                            value2 = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, value2 + string_array_offset2);
-                        }
-                        return ascending ? value1 < value2 : value2 < value1;
-                    });
+                }
+                else if (it->m_name == Builder::CATEGORY_PUBLIC_NAME || it->m_name == Builder::NAME_PUBLIC_NAME)
+                {
+                    uint64_t value = size > 0 ? row.Get<uint64_t>(it->m_offset[op], size) : (ascending ? UINT64_MAX : 0);
+                    if (size > 0)
+                    {
+                        uint64_t string_array_offset1 = it->m_schema_index[op] == Builder::SCHEMA_INDEX_EVENT_SYMBOL ? db->SymbolsOffset() : 0;
+                        value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, value + string_array_offset1);
+                        sort_values.push_back(static_cast<double>(value));
+                    }
+                }
+                else
+                {
+                    uint64_t value = size > 0 ? row.Get<uint64_t>(it->m_offset[op], size) : (ascending ? UINT64_MAX : 0);
+                    sort_values.push_back(static_cast<double>(value));
+                }
             }
-            else
-            {
-
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
-                    [&](const uint32_t & so1, const uint32_t & so2) {
-                        std::unique_ptr<PackedRow>& r1 = m_rows[so1];
-                        std::unique_ptr<PackedRow>& r2 = m_rows[so2];
-                        uint8_t op1 = r1->Get<uint8_t>(0);
-                        uint8_t op2 = r2->Get<uint8_t>(0);
-                        uint8_t size1 = ColumnTypeSize(it->m_type[op1]);
-                        uint8_t size2 = ColumnTypeSize(it->m_type[op2]);
-                        uint64_t value1 = size1 > 0 ? r1->Get<uint64_t>(it->m_offset[op1], size1) : (ascending ? UINT64_MAX : 0);
-                        uint64_t value2 = size2 > 0 ? r2->Get<uint64_t>(it->m_offset[op2], size2) : (ascending ? UINT64_MAX : 0);                  
-                        return ascending ? value1 < value2 : value2 < value1;
-                    });
-            }
+            std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                [&](uint32_t so1, uint32_t so2) {
+                    return ascending ? sort_values[so1] < sort_values[so2]
+                        : sort_values[so2] < sort_values[so1];
+                });
         }
     }
 
+
     void PackedTable::RemoveDuplicates()
     {
-        auto new_end = std::unique(m_rows.begin(), m_rows.end(),
-            [](const std::unique_ptr<PackedRow>& r1, const std::unique_ptr<PackedRow>& r2) {
-                rocprofvis_dm_event_id_t id1, id2;
-                id1.bitfield.event_op = r1->Get<uint8_t>(0);
-                id1.bitfield.event_id = r1->Get<uint32_t>(1);
-                id2.bitfield.event_op = r2->Get<uint8_t>(0);
-                id2.bitfield.event_id = r2->Get<uint32_t>(1);
-                return id1.value == id2.value;
+        struct SortKey {
+            uint64_t key;
+            size_t index;
+        };
+
+        std::vector<SortKey> keys;
+        keys.reserve(m_rows.size());
+        for (size_t i = 0; i < m_rows.size(); ++i) {
+            auto& row = *m_rows[i];
+            rocprofvis_dm_event_id_t id{};
+            id.bitfield.event_op = row.Get<uint8_t>(0);
+            id.bitfield.event_id = row.Get<uint32_t>(1);
+            keys.push_back({ id.value, i });
+        }
+
+        std::sort(std::execution::par_unseq, keys.begin(), keys.end(),
+            [](const SortKey& a, const SortKey& b) {
+                return a.key < b.key;
             });
-        m_rows.erase(new_end, m_rows.end());
+
+        auto new_end = std::unique(keys.begin(), keys.end(),
+            [](const SortKey& a, const SortKey& b) {
+                return a.key == b.key;
+            });
+        keys.erase(new_end, keys.end());
+
+        std::vector<bool> visited(m_rows.size(), false);
+
+        for (size_t i = 0; i < keys.size(); ++i) {
+            size_t current = i;
+            while (!visited[current]) {
+                visited[current] = true;
+
+                size_t next = keys[current].index;
+                if (next >= m_rows.size() || visited[next])
+                    break;
+
+                std::swap(m_rows[current], m_rows[next]);
+                std::swap(keys[current].index, keys[next].index);
+            }
+        }
+
+        m_rows.resize(keys.size());
     }
+    //void PackedTable::RemoveDuplicates()
+    //{
+    //    auto new_end = std::unique(m_rows.begin(), m_rows.end(),
+    //        [](const std::unique_ptr<PackedRow>& r1, const std::unique_ptr<PackedRow>& r2) {
+    //            rocprofvis_dm_event_id_t id1, id2;
+    //            id1.bitfield.event_op = r1->Get<uint8_t>(0);
+    //            id1.bitfield.event_id = r1->Get<uint32_t>(1);
+    //            id2.bitfield.event_op = r2->Get<uint8_t>(0);
+    //            id2.bitfield.event_id = r2->Get<uint32_t>(1);
+    //            return id1.value == id2.value;
+    //        });
+    //    m_rows.erase(new_end, m_rows.end());
+    //}
 
     void PackedTable::RemoveRowsForSetOfTracks(std::set<uint32_t> tracks, bool remove_all)
     {
@@ -679,7 +675,6 @@ namespace DataModel
             uint8_t op = GetOperationValue(0);
             if (op > 0)
             {
-                SortById();
                 RemoveDuplicates();
             }
         }

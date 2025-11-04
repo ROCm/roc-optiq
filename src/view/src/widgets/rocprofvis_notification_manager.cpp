@@ -214,8 +214,9 @@ NotificationManager::GetBgColorForLevel(NotificationLevel level)
     {
         default:
         case NotificationLevel::Info:
-        case NotificationLevel::Success: 
             return ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kBgPanel));
+        case NotificationLevel::Success: 
+            return ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kBgSuccess));
         case NotificationLevel::Warning: 
             return ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kBgWarning));
         case NotificationLevel::Error: 

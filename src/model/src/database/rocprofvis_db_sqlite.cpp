@@ -21,6 +21,7 @@
 #include "rocprofvis_db_sqlite.h"
 #include "rocprofvis_core_profile.h"
 #include <sstream>
+#include <fstream>
 
 namespace RocProfVis
 {
@@ -442,6 +443,186 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
                     return 1;
             }
     }
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
+int SqliteDatabase::CallbackTableQueryToCSV(void* data, int argc, sqlite3_stmt* stmt, char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void *func = (void*)&CallbackTableQueryToCSV;
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    std::ofstream* file = (std::ofstream*)callback_params->handle;
+    ROCPROFVIS_ASSERT_RETURN(file, 1);
+    SqliteDatabase* db = (SqliteDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
+    const std::array<uint64_t, kRPVTableQueryColumnMaskCount> column_masks = db->GetColumnMasksForQuery(callback_params->query[0]);
+    const uint64_t skip_mask = column_masks[kRPVTableQueryColumnMaskBlank] | column_masks[kRPVTableQueryColumnMaskService];
+    const uint64_t& timestamp_mask = column_masks[kRPVTableQueryColumnMaskTimestamp];
+
+    bool delim = false;
+    if(callback_params->future->GetProcessedRowsCount() == 0)
+    {
+        for(int i = 0; i < argc; i++)
+        {
+            if((skip_mask & (uint64_t) 1 << i) != 0) 
+            {
+                continue;
+            }
+            if(delim)
+            {
+                *file << ',';
+                delim = false;
+            }
+            *file << azColName[i];
+            delim = true;
+        }
+        *file << "\n";
+    }
+    else
+    {
+        *file << "\n";
+    }
+
+    int startCol = 0;
+    switch(argc)
+    {
+        case rocprofvis_db_sqlite_table_query_format::NUM_PARAMS:
+        case rocprofvis_db_sqlite_rocpd_table_query_format::NUM_PARAMS:
+        {
+            *file << ((uint64_t)db->Sqlite3ColumnInt(func, stmt, azColName, 0) << 60 | (uint64_t)db->Sqlite3ColumnInt64(func, stmt, azColName, 1));
+            delim = true;
+            startCol = 2;
+            break;
+        }
+        case rocprofvis_db_sqlite_sample_table_query_format::NUM_PARAMS:
+        {
+            startCol = 1;
+            delim = false;
+            break;
+        }
+        default:
+        {
+            ROCPROFVIS_ASSERT_MSG_RETURN(false, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+            break;
+        }
+    }
+
+    for(int i = startCol ; i < argc; i++)
+    {
+        if((skip_mask & (uint64_t) 1 << i) != 0) 
+        {
+            continue;
+        }
+        if(delim)
+        {
+            *file << ',';
+            delim = false;
+        }
+        switch(sqlite3_column_type(stmt, i))
+        {
+            case SQLITE_NULL:
+            {
+                *file << db->GetNullExceptionString(func, azColName[i]);
+                break;
+            }
+            case SQLITE_TEXT:
+            {
+                *file << '"';
+                *file << sqlite3_column_text(stmt, i);
+                *file << '"';
+                break;
+            }
+            case SQLITE_INTEGER:
+            {
+                if((timestamp_mask & (uint64_t) 1 << i) != 0)
+                {
+                    *file << sqlite3_column_int64(stmt, i) - db->TraceProperties()->start_time;
+                }
+                else
+                {
+                    *file << sqlite3_column_text(stmt, i);
+                }
+                break;
+            }
+            default:
+            {
+                *file << sqlite3_column_text(stmt, i);
+                break;
+            }
+        }
+        delim = true;
+    }
+
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
+int
+SqliteDatabase::CallbackQueryToCSV(void* data, int argc, sqlite3_stmt* stmt,
+                                           char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void *func = (void*)&CallbackTableQueryToCSV;
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    std::ofstream* file = (std::ofstream*)callback_params->handle;
+    ROCPROFVIS_ASSERT_RETURN(file, 1);
+    SqliteDatabase* db = (SqliteDatabase*) callback_params->db;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
+
+    bool delim = false;
+    if(callback_params->future->GetProcessedRowsCount() == 0)
+    {
+        for(int i = 0; i < argc; i++)
+        {
+            if(delim)
+            {
+                *file << ',';
+                delim = false;
+            }
+            *file << azColName[i];
+            delim = true;
+        }
+        *file << "\n";
+    }
+    else
+    {
+        *file << "\n";
+    }
+
+    delim = false;
+    for(int i = 0 ; i < argc; i++)
+    {
+        if(delim)
+        {
+            *file << ',';
+            delim = false;
+        }
+        switch(sqlite3_column_type(stmt, i))
+        {
+            case SQLITE_NULL:
+            {
+                *file << db->GetNullExceptionString(func, azColName[i]);
+                break;
+            }
+            case SQLITE_TEXT:
+            {
+                *file << '"';
+                *file << sqlite3_column_text(stmt, i);
+                *file << '"';
+                break;
+            }
+            default:
+            {
+                *file << sqlite3_column_text(stmt, i);
+                break;
+            }
+        }
+        delim = true;
+    }
+
     callback_params->future->CountThisRow();
     return 0;
 }
@@ -992,14 +1173,37 @@ SqliteDatabase::CreateSQLTable(
 uint64_t SqliteDatabase::GetBlanksMaskForQuery(std::string query)
 {
     uint64_t mask = 0;
-    for(auto it = m_blank_mask.begin(); it != m_blank_mask.end(); ++it)
+    for(auto it = m_column_masks.begin(); it != m_column_masks.end(); ++it)
     {
         if(query.find(it->first) != std::string::npos)
         {
             if(mask == 0)
-                mask = it->second;
+                mask = it->second[kRPVTableQueryColumnMaskBlank];
             else
-                mask &= it->second;
+                mask &= it->second[kRPVTableQueryColumnMaskBlank];
+        }
+    }
+    return mask;
+}
+
+std::array<uint64_t, kRPVTableQueryColumnMaskCount>
+SqliteDatabase::GetColumnMasksForQuery(std::string_view query)
+{    
+    std::array<uint64_t, kRPVTableQueryColumnMaskCount> mask {0, 0 ,0};
+    for(auto it = m_column_masks.begin(); it != m_column_masks.end(); ++it)
+    {
+        if(query.find(it->first) != std::string::npos)
+        {
+            if(mask[kRPVTableQueryColumnMaskBlank] == 0)
+            {
+                mask[kRPVTableQueryColumnMaskBlank] = it->second[kRPVTableQueryColumnMaskBlank];
+            }
+            else
+            {           
+                mask[kRPVTableQueryColumnMaskBlank] &= it->second[kRPVTableQueryColumnMaskBlank];
+            }
+            mask[kRPVTableQueryColumnMaskService] = it->second[kRPVTableQueryColumnMaskService];
+            mask[kRPVTableQueryColumnMaskTimestamp] = it->second[kRPVTableQueryColumnMaskTimestamp];
         }
     }
     return mask;
@@ -1008,9 +1212,20 @@ uint64_t SqliteDatabase::GetBlanksMaskForQuery(std::string query)
 void
 SqliteDatabase::SetBlankMask(std::string op, uint64_t mask)
 {
-    m_blank_mask[op] |= mask;
+    m_column_masks[op][kRPVTableQueryColumnMaskBlank] |= mask;
 }
 
+void
+SqliteDatabase::SetServiceMask(std::string op, uint64_t mask)
+{
+    m_column_masks[op][kRPVTableQueryColumnMaskService] |= mask;
+}
+
+void
+SqliteDatabase::SetTimestampMask(std::string op, uint64_t mask)
+{
+    m_column_masks[op][kRPVTableQueryColumnMaskTimestamp] |= mask;
+}
 
 }  // namespace DataModel
 }  // namespace RocProfVis

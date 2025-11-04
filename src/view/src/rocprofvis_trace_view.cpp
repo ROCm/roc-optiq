@@ -29,8 +29,8 @@ TraceView::TraceView()
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
-, m_tabselected_event_token(-1)
-, m_event_selection_changed_event_token(-1)
+, m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_event_selection_changed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
@@ -62,7 +62,7 @@ TraceView::TraceView()
 
     m_data_provider.SetTrackMetadataChangedCallback([](const std::string& trace_path) {
         EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
-            static_cast<int>(RocEvents::kTrackMetadataChanged)));
+            static_cast<int>(RocEvents::kTrackMetadataChanged), trace_path));
     });
 
     m_data_provider.SetTableDataReadyCallback(
@@ -298,7 +298,7 @@ TraceView::Render()
             const char* progress_label      = m_data_provider.GetProgressMessage();
             ImVec2      progress_label_size = ImGui::CalcTextSize(progress_label);
 
-            int item_spacing = 10.0f;
+            float item_spacing = 10.0f;
 
             float dot_radius  = 5.0f;
             int   num_dots    = 3;
@@ -602,6 +602,7 @@ TraceView::RenderMiniMapControls()
         {
             m_mini_map->Render();
         }
+
         ImGui::End();
     }
 }

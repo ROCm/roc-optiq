@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_project.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_trace_view.h"

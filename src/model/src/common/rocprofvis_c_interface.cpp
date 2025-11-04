@@ -243,7 +243,9 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, 
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, 
-    uint64_t max_count, uint64_t offset, bool count_only, char** out_query)
+    uint64_t max_count, uint64_t offset, 
+    bool count_only, bool summary, 
+    char** out_query)
 {
     PROFILE;
     ROCPROFVIS_ASSERT_MSG_RETURN(database,
@@ -255,7 +257,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     std::string query;
     rocprofvis_dm_result_t result = db->BuildTableQuery(start, end, num, tracks, filter, group, group_cols, sort_column, sort_order, 
                                                         num_string_table_filters, string_table_filters, max_count, offset, count_only, 
-                                                        query);
+                                                        summary, query);
     if (result == kRocProfVisDmResultSuccess)
     {
         char* ptr = (char*) calloc(query.length() + 1, 1);
@@ -265,6 +267,24 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
         *out_query = ptr;
     }
     return result;
+}
+
+rocprofvis_dm_result_t rocprofvis_db_export_table_csv_async(
+    rocprofvis_dm_database_t database,
+    rocprofvis_dm_charptr_t query,
+    rocprofvis_dm_charptr_t file_path,
+    rocprofvis_db_future_t object)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+                                RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(object,
+                                 RocProfVis::DataModel::ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Error! Output path cannot be null.",
+                                kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    return db->ExportTableCSVAsync(query, file_path, object);
 }
 
 rocprofvis_dm_result_t rocprofvis_db_trim_save_async(rocprofvis_dm_database_t database, rocprofvis_dm_timestamp_t start,

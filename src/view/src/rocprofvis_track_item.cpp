@@ -212,7 +212,9 @@ TrackItem::RenderMetaArea()
     if(ImGui::BeginChild("MetaData Area",
                          ImVec2(s_metadata_width, outer_container_size.y -
                                                       metadata_shrink_padding.y * 2.0f),
-                         ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar))
+                         ImGuiChildFlags_None,
+                         ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoScrollWithMouse))
     {
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 

@@ -6,19 +6,14 @@ SET VISUALIZER_FILE_NAME=rocprof-visualizer
 
 if %ERRORLEVEL%==0 ECHO. > %DEVROOT%\success
 
-REM Installer Reqs
-REM ***************
-REM %DEVROOT% is a variable used during build, signifying rootfolder in a git repo.
-
-REM === PowerShell translation begins ===
-
 REM Create build directory
 IF NOT EXIST "%DEVROOT%\build" mkdir "%DEVROOT%\build"
 
 REM Run cmake build commands
-cmake --preset "x64-debug"
-cmake --build %DEVROOT%\build\x64-debug
-IF NOT EXIST "%DEVROOT%\build\x64-debug\Debug\%VISUALIZER_FILE_NAME%.exe" (
+
+cmake --preset "x64-release"
+cmake --build %DEVROOT%\build\x64-release --preset "Windows Release Build" --parallel 4
+IF NOT EXIST "%DEVROOT%\build\x64-release\Release\%VISUALIZER_FILE_NAME%.exe" (
     ECHO ❌ %VISUALIZER_FILE_NAME% was not built!
     GOTO BUILDISSUE
 ) ELSE (
@@ -31,14 +26,14 @@ if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
 
 REM Copy the built executable to proper folder structure for release
 ECHO Build.cmd: Copying files to standard folder structure
-copy /y "%DEVROOT%\build\x64-debug\Debug\%VISUALIZER_FILE_NAME%.exe" "%DEVROOT%\ReleaseCommon\Common\All\"
+copy /y "%DEVROOT%\build\x64-release\Release\%VISUALIZER_FILE_NAME%.exe" "%DEVROOT%\ReleaseCommon\Common\All\"
 if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
 
+GOTO END
 
 :BUILDISSUE
 del /Q /F %DEVROOT%\success
 ECHO Build failed!
-GOTO END
 
 :END
 ECHO Build completed.

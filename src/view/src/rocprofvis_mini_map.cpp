@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_mini_map.h"
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_view.h"
@@ -91,11 +92,17 @@ MiniMap::Normalize()
 void
 MiniMap::Render()
 {
+    if(ImGui::IsItemHovered() || ImGui::IsItemClicked())
+    {
+        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kPopOut);
+    }
+
     ImGui::BeginChild("MiniMapComponent", ImVec2(0, 0), true,
                       ImGuiWindowFlags_NoScrollWithMouse);
 
-    float mini_map_height = ImGui::GetContentRegionAvail().y;
-    float mini_map_width  = ImGui::GetContentRegionAvail().x;
+    float  mini_map_height = ImGui::GetContentRegionAvail().y;
+    float  mini_map_width  = ImGui::GetContentRegionAvail().x;
+    ImVec2 minimap_pos     = ImGui::GetCursorScreenPos();
 
     if(m_height != mini_map_height || m_timeline->GetReorderStatus())
     {
@@ -144,7 +151,6 @@ MiniMap::Render()
     double     min_val   = m_data_provider.GetStartTime();
     double     max_val   = m_data_provider.GetEndTime();
 
-
     float scroll_area_available_with_viewport =
         m_timeline->GetYScrollMax() + m_timeline->GetGraphSize().y;
     float y0 = static_cast<float>(view_area.y / scroll_area_available_with_viewport *
@@ -167,12 +173,12 @@ MiniMap::Render()
     ImVec2 end_rectangle   = ImVec2(container_pos.x + x_end, container_pos.y + y1);
 
     ImGui::GetWindowDrawList()->AddRect(start_rectangle, end_rectangle,
-                                              settings.GetColor(Colors::kGridColor));
+                                        settings.GetColor(Colors::kGridColor));
 
- 
-    ImGui::EndChild();
+    ImVec2 minimap_size = ImVec2(mini_map_width, mini_map_height);
 
-    if(ImGui::IsItemClicked())
+    ImGui::SetCursorScreenPos(minimap_pos);
+    if(ImGui::InvisibleButton("MiniMapHitbox", minimap_size))
     {
         // Get mouse position relative to minimap
         ImVec2 mouse_pos   = ImGui::GetMousePos();
@@ -184,7 +190,6 @@ MiniMap::Render()
         const auto& histogram = m_data_provider.GetHistogram();
         double      min_val   = m_data_provider.GetStartTime();
         double      max_val   = m_data_provider.GetEndTime();
-       
 
         // Calculate bin index
         size_t bin_count = histogram.size();
@@ -206,6 +211,8 @@ MiniMap::Render()
         EventManager::GetInstance()->AddEvent(
             std::make_shared<NavigationEvent>(v_min, v_max, y_relative_position, center));
     }
+
+    ImGui::EndChild();
 }
 
 }  // namespace View

@@ -66,7 +66,7 @@ public:
     void                             ResetView();
     void                             DestroyGraphs();
     std::shared_ptr<std::vector<rocprofvis_graph_t>> GetGraphs();
-    void                             RenderInteractiveUI(ImVec2 screen_pos);
+    void                             RenderInteractiveUI();
     void                             ScrollToTrack(const uint64_t& track_id);
     void                             SetViewTimePosition(double time_pos_ns, bool center);
     void                             SetViewableRangeNS(double start_ns, double end_ns);
@@ -79,7 +79,7 @@ public:
     void           RenderGrid();
     float          GetScrollPosition();
     void           RenderScrubber(ImVec2 screen_pos);
-    void           RenderSplitter(ImVec2 screen_pos);
+    void           RenderSplitter();
     void           RenderGraphView();
     void           HandleTopSurfaceTouch();
     void           HandleHistogramTouch();
@@ -103,7 +103,7 @@ private:
     EventManager::SubscriptionToken     m_set_view_range_token;
     int                                 m_dragged_sticky_id;
     const std::vector<double>*          m_histogram;    
-    int                                 m_ruler_height;
+    float                               m_ruler_height;
     float                               m_ruler_padding;
     double                              m_v_min_x;
     double                              m_v_max_x;
@@ -112,7 +112,7 @@ private:
     double                              m_min_y;
     double                              m_max_y;
     float                               m_zoom;
-    int                                 m_sidebar_size;
+    float                               m_sidebar_size;
     double                              m_view_time_offset_ns;
     double                              m_v_width;
     double                              m_pixels_per_ns;

@@ -21,6 +21,7 @@
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_c_interface.h"
 #include <sstream>
+#include <fstream>
 
 namespace RocProfVis
 {
@@ -539,10 +540,36 @@ ProfileDatabase::BuildTableQuery(
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t filter,
     rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, rocprofvis_dm_charptr_t sort_column,
     rocprofvis_dm_sort_order_t sort_order, rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
-    uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
+    uint64_t max_count, uint64_t offset, bool count_only, bool summary, rocprofvis_dm_string_t& query)
 {
     slice_query_t slice_query_map;
     table_string_id_filter_map_t string_id_filter_map;
+    std::string group_by_select;
+    std::string group_by;
+    if(summary)
+    {
+        bool sample_query = false;
+        if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
+        {
+            sample_query = TrackPropertiesAt(tracks[0])->process.category == kRocProfVisDmPmcTrack;
+        }
+        else
+        {
+            sample_query = (rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == kRocProfVisDmOperationNoOp;
+        }        
+        BuildTableSummaryClause(sample_query, group_by_select, group_by);
+    }
+    else
+    {
+        if(group)
+        {
+            group_by = group;
+            if(group_cols)
+            {
+                group_by_select = group_cols;
+            }
+        }
+    }
     rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, string_id_filter_map);
     for (int i = 0; i < num; i++){
         rocprofvis_dm_index_t track = tracks[i];
@@ -596,13 +623,13 @@ ProfileDatabase::BuildTableQuery(
     }
     query = "WITH all_rows AS (";
 
-    if (group && strlen(group))
+    if (!group_by.empty())
     {
         query += "SELECT ";
 
-        if (group_cols && strlen(group_cols))
+        if (!group_by_select.empty())
         {
-            query += group_cols;
+            query += group_by_select;
         }
         else
         {
@@ -623,13 +650,13 @@ ProfileDatabase::BuildTableQuery(
         query += std::to_string(start);
         query += " and ";
         query += Builder::END_SERVICE_NAME;
-        query += " < ";
+        query += " <= ";
         query += std::to_string(end);
     }
-    if (group && strlen(group))
+    if (!group_by.empty())
     {
         query += ") GROUP BY ";
-        query += group;
+        query += group_by;
     }
     query += ")";
     if (filter && strlen(filter))
@@ -769,6 +796,50 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename){
     
     sqlite3_close(db);
     return rocprofvis_db_type_t::kAutodetect;
+}
+
+rocprofvis_dm_result_t ProfileDatabase::ExportTableCSV(rocprofvis_dm_charptr_t query,
+                                                       rocprofvis_dm_charptr_t file_path,
+                                                       Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Output path cannot be NULL.",
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+
+    Future* internal_future = new Future(nullptr);
+
+    std::ofstream file(file_path);
+    if(file.is_open())
+    {
+        if(strstr(query, "GROUP BY"))
+        {
+            result = ExecuteSQLQuery(internal_future, query, (rocprofvis_dm_handle_t)&file, &CallbackQueryToCSV);
+        }
+        else
+        {
+            result = ExecuteSQLQuery(internal_future, query, (rocprofvis_dm_handle_t)&file, &CallbackTableQueryToCSV);
+        }        
+        file.close();
+    }
+    else
+    {
+        result = kRocProfVisDmResultDbAccessFailed;
+    }
+
+    if (result == kRocProfVisDmResultSuccess)
+    {
+        ShowProgress(100, "CSV export success", kRPVDbSuccess, future);        
+    }
+    else
+    {
+        ShowProgress(0, "CSV export failed", kRPVDbError, future);
+    }
+
+    delete internal_future;
+
+    return future->SetPromise(result);
 }
 
 

@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_annotations.h"
 #include "json.h"
 #include "rocprofvis_events.h"

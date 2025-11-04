@@ -697,7 +697,8 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
         case kRocProfVisDmOperationLaunch:
         {
             return Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format(
-            { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+            { this,
+            { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                 Builder::QParam("id"), 
                 Builder::QParam("apiName", "category"),
                 Builder::QParam("args", "name"), 
@@ -711,7 +712,8 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
         case kRocProfVisDmOperationDispatch:
         {
             return Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format(
-            { { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
+            { this,
+            { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                 Builder::QParam("id"), 
                 Builder::QParam("opType", "category"),
                 Builder::QParam("description", "name"), 
@@ -725,7 +727,8 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
         case kRocProfVisDmOperationNoOp:
         {
             return Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
-            { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+            { this,
+            { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::QParam("id"), 
                 Builder::QParam("monitorType", Builder::COUNTER_NAME_SERVICE_NAME),
                 Builder::QParam("CAST(value AS REAL)", "value"), 
@@ -750,6 +753,24 @@ rocprofvis_dm_result_t RocpdDatabase::StringIndexToId(rocprofvis_dm_index_t inde
         result = kRocProfVisDmResultSuccess;
     }
     return result;
+}
+
+rocprofvis_dm_result_t
+RocpdDatabase::BuildTableSummaryClause(bool sample_query,
+                                 rocprofvis_dm_string_t& select,
+                                 rocprofvis_dm_string_t& group_by)
+{
+    if(sample_query)
+    {
+        select = "monitorType, AVG(value) AS avg_value, MIN(value) AS min_value, MAX(value) AS max_value";
+        group_by = "monitorType";
+    }
+    else
+    {
+        select = "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration";
+        group_by = "name";
+    }
+    return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(

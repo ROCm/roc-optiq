@@ -63,6 +63,8 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(120, 120, 120, 255),  // Colors::kButtonActive
     IM_COL32(100, 100, 10, 255),   // Colors::kBgWarning
     IM_COL32(100, 10, 10, 255),    // Colors::kBgError
+    IM_COL32(10, 100, 0, 255),     // Colors::kBgSuccess
+    IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
     IM_COL32(30, 30, 30, 255),     // Colors::kMMBin1
     IM_COL32(0, 80, 180, 255),     // Colors::kMMBin2
     IM_COL32(0, 180, 180, 255),    // Colors::kMMBin3
@@ -117,6 +119,8 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(180, 180, 180, 255),  // Colors::kButtonActive
     IM_COL32(250, 250, 100, 255),  // Colors::kBgWarning
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
+    IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
+    IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
     IM_COL32(240, 240, 240, 255),  // Colors::kMMBin1
     IM_COL32(0, 120, 255, 255),    // Colors::kMMBin2
     IM_COL32(0, 200, 200, 255),    // Colors::kMMBin3
@@ -417,6 +421,8 @@ SettingsManager::GetColorWheel()
 {
     return FLAME_COLORS;
 }
+
+ 
 
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)

@@ -1,3 +1,5 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
@@ -30,6 +32,8 @@ const uint64_t DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID =
     MakeRequestId(RequestType::kFetchEventCallStack);
 const uint64_t DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID =
     MakeRequestId(RequestType::kSaveTrimmedTrace);
+const uint64_t DataProvider::TABLE_EXPORT_REQUEST_ID =
+    MakeRequestId(RequestType::kTableExport);
 
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
@@ -41,6 +45,7 @@ DataProvider::DataProvider()
 , m_track_metadata_changed_callback(nullptr)
 , m_table_data_ready_callback(nullptr)
 , m_save_trace_callback(nullptr)
+, m_table_export_callback(nullptr)
 , m_num_graphs(0)
 , m_min_ts(0)
 , m_max_ts(0)
@@ -378,6 +383,13 @@ void
 DataProvider::SetSaveTraceCallback(const std::function<void(bool)>& callback)
 {
     m_save_trace_callback = callback;
+}
+
+void
+DataProvider::SetExportTableCallback(
+    const std::function<void(const std::string&, bool)>& callback)
+{
+    m_table_export_callback = callback;
 }
 
 bool
@@ -1348,6 +1360,10 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                               0, table_params.m_group_columns.data());
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+    result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSummary, 0,
+                                              table_params.m_summary ? 1 : 0);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
     if(table_params.m_start_row != -1)
     {
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex,
@@ -1579,29 +1595,37 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
         return false;
     }
 
+    bool     export_to_file = !table_params.m_export_to_file_path.empty();
     uint64_t request_id;
-    switch(table_params.m_table_type)
+    if(export_to_file)
     {
-        case kRPVControllerTableTypeEvents:
+        request_id = TABLE_EXPORT_REQUEST_ID;
+    }
+    else
+    {
+        switch(table_params.m_table_type)
         {
-            request_id = EVENT_TABLE_REQUEST_ID;
-            break;
-        }
-        case kRPVControllerTableTypeSamples:
-        {
-            request_id = SAMPLE_TABLE_REQUEST_ID;
-            break;
-        }
-        case kRPVControllerTableTypeSearchResults:
-        {
-            request_id = EVENT_SEARCH_REQUEST_ID;
-            break;
-        }
-        default:
-        {
-            spdlog::error("Unsupported table type: {}",
-                          static_cast<int>(table_params.m_table_type));
-            return false;
+            case kRPVControllerTableTypeEvents:
+            {
+                request_id = EVENT_TABLE_REQUEST_ID;
+                break;
+            }
+            case kRPVControllerTableTypeSamples:
+            {
+                request_id = SAMPLE_TABLE_REQUEST_ID;
+                break;
+            }
+            case kRPVControllerTableTypeSearchResults:
+            {
+                request_id = EVENT_SEARCH_REQUEST_ID;
+                break;
+            }
+            default:
+            {
+                spdlog::error("Unsupported table type: {}",
+                              static_cast<int>(table_params.m_table_type));
+                return false;
+            }
         }
     }
 
@@ -1709,7 +1733,7 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
 
                         // set the number of string filters in request
                         result = rocprofvis_controller_set_uint64(
-                            args, kRPVControllerTableNumStringTableFilters, 0, 0);
+                            args, kRPVControllerTableArgsNumStringTableFilters, 0, 0);
                         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                     }
                     break;
@@ -1744,7 +1768,7 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
 
                     // set the number of string filters in request
                     result = rocprofvis_controller_set_uint64(
-                        args, kRPVControllerTableNumStringTableFilters, 0,
+                        args, kRPVControllerTableArgsNumStringTableFilters, 0,
                         table_params.m_string_table_filters.size());
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
@@ -1752,7 +1776,7 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
                     for(int i = 0; i < table_params.m_string_table_filters.size(); i++)
                     {
                         result = rocprofvis_controller_set_string(
-                            args, kRPVControllerTableStringTableFiltersIndexed, i,
+                            args, kRPVControllerTableArgsStringTableFiltersIndexed, i,
                             table_params.m_string_table_filters[i].data());
                         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                     }
@@ -1774,14 +1798,23 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
             return false;
         }
         // prepare to fetch the table
-        rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
-        ROCPROFVIS_ASSERT(array != nullptr);
-
+        rocprofvis_controller_array_t* array = nullptr;
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future != nullptr);
 
-        result = rocprofvis_controller_table_fetch_async(m_trace_controller, table_handle,
-                                                         args, future, array);
+        if(export_to_file)
+        {
+            result = rocprofvis_controller_table_export_csv(
+                m_trace_controller, table_handle, args, future,
+                table_params.m_export_to_file_path.c_str());
+        }
+        else
+        {
+            array = rocprofvis_controller_array_alloc(0);
+            ROCPROFVIS_ASSERT(array != nullptr);
+            result = rocprofvis_controller_table_fetch_async(
+                m_trace_controller, table_handle, args, future, array);
+        }
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         // create the request info
@@ -1793,22 +1826,29 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
         request_info.request_id         = request_id;
         request_info.loading_state      = ProviderState::kLoading;
 
-        switch(table_params.m_table_type)
+        if(export_to_file)
         {
-            case kRPVControllerTableTypeEvents:
+            request_info.request_type = RequestType::kTableExport;
+        }
+        else
+        {
+            switch(table_params.m_table_type)
             {
-                request_info.request_type = RequestType::kFetchTrackEventTable;
-                break;
-            }
-            case kRPVControllerTableTypeSamples:
-            {
-                request_info.request_type = RequestType::kFetchTrackSampleTable;
-                break;
-            }
-            case kRPVControllerTableTypeSearchResults:
-            {
-                request_info.request_type = RequestType::kFetchEventSearchTable;
-                break;
+                case kRPVControllerTableTypeEvents:
+                {
+                    request_info.request_type = RequestType::kFetchTrackEventTable;
+                    break;
+                }
+                case kRPVControllerTableTypeSamples:
+                {
+                    request_info.request_type = RequestType::kFetchTrackSampleTable;
+                    break;
+                }
+                case kRPVControllerTableTypeSearchResults:
+                {
+                    request_info.request_type = RequestType::kFetchEventSearchTable;
+                    break;
+                }
             }
         }
 
@@ -1819,22 +1859,29 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
 
         m_requests.emplace(request_id, request_info);
 
-        switch(table_params.m_table_type)
+        if(export_to_file)
         {
-            case kRPVControllerTableTypeEvents:
+            spdlog::debug("Exporting table data");
+        }
+        else
+        {
+            switch(table_params.m_table_type)
             {
-                spdlog::debug("Fetching event table data");
-                break;
-            }
-            case kRPVControllerTableTypeSamples:
-            {
-                spdlog::debug("Fetching sample table data");
-                break;
-            }
-            case kRPVControllerTableTypeSearchResults:
-            {
-                spdlog::debug("Fetching search table data");
-                break;
+                case kRPVControllerTableTypeEvents:
+                {
+                    spdlog::debug("Fetching event table data");
+                    break;
+                }
+                case kRPVControllerTableTypeSamples:
+                {
+                    spdlog::debug("Fetching sample table data");
+                    break;
+                }
+                case kRPVControllerTableTypeSearchResults:
+                {
+                    spdlog::debug("Fetching search table data");
+                    break;
+                }
             }
         }
         return true;
@@ -2447,6 +2494,11 @@ DataProvider::ProcessRequest(data_req_info_t& req)
             ProcessTableRequest(req);
             break;
         }
+        case RequestType::kTableExport:
+        {
+            ProcessTableExportRequest(req);
+            break;
+        }
         case RequestType::kSaveTrimmedTrace:
         {
             ProcessSaveTrimmedTraceRequest(req);
@@ -2699,6 +2751,24 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
     if(m_table_data_ready_callback)
     {
         m_table_data_ready_callback(m_trace_file_path, req.request_id);
+    }
+}
+
+void
+DataProvider::ProcessTableExportRequest(data_req_info_t& req)
+{
+    if(req.request_args)
+    {
+        rocprofvis_controller_arguments_free(req.request_args);
+        req.request_args = nullptr;
+    }
+    if(m_table_export_callback)
+    {
+        std::shared_ptr<TableRequestParams> table_params =
+            std::dynamic_pointer_cast<TableRequestParams>(req.custom_params);
+        ROCPROFVIS_ASSERT(table_params);
+        m_table_export_callback(table_params->m_export_to_file_path,
+                                req.response_code == kRocProfVisResultSuccess);
     }
 }
 

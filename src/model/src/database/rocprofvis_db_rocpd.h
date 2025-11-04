@@ -97,6 +97,10 @@ public:
 
     rocprofvis_dm_result_t StringIndexToId(
                                         rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id) override;
+
+    rocprofvis_dm_result_t BuildTableSummaryClause(bool sample_query,
+                                             rocprofvis_dm_string_t& select,
+                                             rocprofvis_dm_string_t& group_by) override;
     
 private:
     // sqlite3_exec callback to process track information query and add track object to Trace container

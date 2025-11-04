@@ -39,7 +39,7 @@ private:
         kNumImportantColumns
     };
 
-    void FormatData() override;
+    void FormatData() const override;
     void IndexColumns() override;
     void RowSelected(const ImGuiMouseButton mouse_button) override;
     void RenderContextMenu();

@@ -3,17 +3,17 @@
 #include "rocprofvis_timeline_view.h"
 #include "imgui.h"
 #include "rocprofvis_annotations.h"
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_track_item.h"
+#include "rocprofvis_font_manager.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
-
-#include "rocprofvis_font_manager.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
 namespace RocProfVis
@@ -23,6 +23,7 @@ namespace View
 
 // 20% top and bottom of the window size
 constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
+constexpr float SIDEBAR_WIDTH_MAX             = 600.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -117,6 +118,10 @@ TimelineView::TimelineView(DataProvider&                       dp,
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
         CalculateMaxMetaAreaSize();
         UpdateAllMaxMetaAreaSizes();
+        m_sidebar_size =
+            std::clamp(static_cast<float>(m_sidebar_size),
+                       m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(),
+                       SIDEBAR_WIDTH_MAX);
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
@@ -134,7 +139,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 }
 
 void
-TimelineView::RenderInteractiveUI(ImVec2 screen_pos)
+TimelineView::RenderInteractiveUI()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse |
@@ -334,7 +339,7 @@ TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
     // Compute zoom: m_v_width = m_range_x / m_zoom  =>  m_zoom = m_range_x / m_v_width
     if(m_range_x > 0.0)
     {
-        m_zoom = std::max(0.000001, m_range_x / new_width_ns);
+        m_zoom = static_cast<float>(std::max(0.000001, m_range_x / new_width_ns));
     }
 
     // view_time_offset is relative to m_min_x
@@ -558,7 +563,7 @@ TimelineView::Render()
 }
 
 void
-TimelineView::RenderSplitter(ImVec2 screen_pos)
+TimelineView::RenderSplitter()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                     ImGuiWindowFlags_NoScrollWithMouse;
@@ -584,7 +589,10 @@ TimelineView::RenderSplitter(ImVec2 screen_pos)
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_sidebar_size    = std::clamp(m_sidebar_size + drag_delta.x, 100.0f, 600.0f);
+        m_sidebar_size =
+            std::clamp(m_sidebar_size + drag_delta.x,
+                       m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(),
+                       SIDEBAR_WIDTH_MAX);
         m_view_time_offset_ns -=
             (drag_delta.x / display_size.x) *
             m_v_width;  // Prevents chart from moving in unexpected way.
@@ -1349,23 +1357,28 @@ TimelineView::RenderHistogram()
     }
 
     // Draw view range overlays and labels
-    float view_start_frac = m_view_time_offset_ns / m_range_x;
-    float view_end_frac   = (m_view_time_offset_ns + m_v_width) / m_range_x;
-    view_start_frac       = std::clamp(view_start_frac, 0.0f, 1.0f);
-    view_end_frac         = std::clamp(view_end_frac, 0.0f, 1.0f);
+    float view_start_frac = static_cast<float>(m_view_time_offset_ns / m_range_x);
+    float view_end_frac =
+        static_cast<float>((m_view_time_offset_ns + m_v_width) / m_range_x);
+    view_start_frac = std::clamp(view_start_frac, 0.0f, 1.0f);
+    view_end_frac   = std::clamp(view_end_frac, 0.0f, 1.0f);
 
     float x_view_start = bars_pos.x + view_start_frac * bars_width;
     float x_view_end   = bars_pos.x + view_end_frac * bars_width;
     float y0           = bars_pos.y;
     float y1           = bars_pos.y + bars_height;
 
+    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
+
     // Left overlay
     if(x_view_start > bars_pos.x)
     {
         draw_list->AddRectFilled(ImVec2(bars_pos.x, y0), ImVec2(x_view_start, y1),
                                  m_settings.GetColor(Colors::kGridColor));
-        std::string vmin_label = nanosecond_to_formatted_str(
-            m_v_min_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format);
+        draw_list->AddLine(ImVec2(x_view_start, y0), ImVec2(x_view_start, y1),
+                           m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
+        std::string vmin_label =
+            nanosecond_to_formatted_str(m_v_min_x - m_min_x, time_format, true);
         ImVec2 vmin_label_size = ImGui::CalcTextSize(vmin_label.c_str());
         float  vmin_label_x =
             std::max(x_view_start - vmin_label_size.x - 6, bars_pos.x + 2);
@@ -1380,8 +1393,10 @@ TimelineView::RenderHistogram()
         draw_list->AddRectFilled(ImVec2(x_view_end, y0),
                                  ImVec2(bars_pos.x + bars_width, y1),
                                  m_settings.GetColor(Colors::kGridColor));
-        std::string vmax_label = nanosecond_to_formatted_str(
-            m_v_max_x - m_min_x, m_settings.GetUserSettings().unit_settings.time_format);
+        draw_list->AddLine(ImVec2(x_view_end, y0), ImVec2(x_view_end, y1),
+                           m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
+        std::string vmax_label =
+            nanosecond_to_formatted_str(m_v_max_x - m_min_x, time_format, true);
         ImVec2 vmax_label_size = ImGui::CalcTextSize(vmax_label.c_str());
         float  vmax_label_x =
             std::min(x_view_end + 6, bars_pos.x + bars_width - vmax_label_size.x - 2);
@@ -1409,11 +1424,8 @@ TimelineView::RenderHistogram()
 
     // Interval calculation
     // measure the size of the label to determine the step size
-    std::string label =
-        nanosecond_to_formatted_str(
-            m_range_x, m_settings.GetUserSettings().unit_settings.time_format, true) +
-        "gap";
-    ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+    std::string label = nanosecond_to_formatted_str(m_range_x, time_format, true) + "gap";
+    ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
     // reserve space for first and last label
@@ -1450,9 +1462,8 @@ TimelineView::RenderHistogram()
         draw_list_ruler->AddLine(ImVec2(tick_x, tick_top), ImVec2(tick_x, tick_bottom),
                                  m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
 
-        std::string tick_label = nanosecond_to_formatted_str(
-            tick_ns, m_settings.GetUserSettings().unit_settings.time_format);
-        label_size = ImGui::CalcTextSize(tick_label.c_str());
+        std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
+        label_size             = ImGui::CalcTextSize(tick_label.c_str());
 
         float label_x;
         if(i == 0)
@@ -1525,13 +1536,15 @@ TimelineView::RenderTraceView()
     m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
     RenderGrid();
+
     RenderGraphView();
-    RenderSplitter(screen_pos);
-    RenderInteractiveUI(screen_pos);
+    RenderSplitter();
+    RenderInteractiveUI();
 
     RenderScrubber(screen_pos);
 
-    if(!m_resize_activity && !m_stop_user_interaction)
+    if(!m_resize_activity && !m_stop_user_interaction &&
+       TimelineFocusManager::GetInstance().GetFocusedLayer() != Layer::kPopOut)
     {
         // Funtion enables user interactions to be captured
         HandleTopSurfaceTouch();
@@ -1595,6 +1608,7 @@ TimelineView::RenderTraceView()
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
+    TimelineFocusManager::GetInstance().EvaluateFocusedLayer();
 }
 void
 TimelineView::RenderGraphPoints()

@@ -409,7 +409,17 @@ namespace DataModel
         auto r = m_merged_table.GetAggreagationRow(row_index);
         if (to_file)
         {
+            bool numeric = false;
+            try {
+                size_t pos;
+                std::stod(r.second.name, &pos);
+                numeric = pos == r.second.name.size(); 
+            } catch (...) {
+                numeric = false;
+            }
+            if (!numeric) *file << '"';
             *file << r.second.name;
+            if (!numeric) *file << '"';
         }
         else
         {

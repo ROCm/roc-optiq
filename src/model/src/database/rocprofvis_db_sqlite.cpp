@@ -512,10 +512,16 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
           query[kRPVSourceQueryTable].c_str() },
         static_cast<rocprofvis_dm_track_id_t>(load_id)
     };
-    std::string load_query = std::string("SELECT * FROM track_info_") + 
-        std::to_string(load_hash) + " WHERE load_id = " + std::to_string(load_id);
-    rocprofvis_dm_result_t result = SqliteDatabase::ExecuteSQLQuery(load_query.c_str(), &params);
-    if (result != kRocProfVisDmResultSuccess)
+
+    rocprofvis_dm_result_t result  = kRocProfVisDmResultSuccess;
+    std::string load_table_name = std::string("track_info_")+std::to_string(load_hash);
+    
+
+    if (CheckTableExists(load_table_name))
+    {
+        std::string load_query = std::string("SELECT * FROM ") + load_table_name + " WHERE load_id = " + std::to_string(load_id);
+        result = SqliteDatabase::ExecuteSQLQuery(load_query.c_str(), &params);
+    } else
     {
         TraceProperties()->tracks_info_restored = false;
         params.callback = find_callback;
@@ -524,7 +530,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
         if (result == kRocProfVisDmResultSuccess &&
             query[kRPVSourceQueryTrackByStream].length() > 0)
         {
-            return SqliteDatabase::ExecuteSQLQuery(
+            result = SqliteDatabase::ExecuteSQLQuery(
                 query[kRPVSourceQueryTrackByStream].c_str(),
                 &params);
         }
@@ -621,6 +627,31 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(const char* query, rocpr
     } 
     ReleaseConnection(conn);
     return result;
+}
+
+bool SqliteDatabase::CheckTableExists(const std::string& table_name) {
+    sqlite3* conn = GetConnection();
+    if (!conn || table_name.empty())
+        return false;
+
+    const char* sql =
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name=?1;";
+
+    sqlite3_stmt* stmt = nullptr;
+    bool exists = false;
+
+    if (sqlite3_prepare_v2(conn, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, table_name.c_str(), -1, SQLITE_STATIC);
+
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            exists = true;  
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    ReleaseConnection(conn);
+    return exists;
 }
 
 rocprofvis_dm_result_t

@@ -272,7 +272,7 @@ class SqliteDatabase : public Database
         // @param params - set of parameters to be passed to sqlite3_exec callback
         rocprofvis_dm_result_t ExecuteSQLQuery(const char* query, rocprofvis_db_sqlite_callback_parameters * params);
 
-
+        bool CheckTableExists(const std::string& table_name);
     
     protected:
         char* Sqlite3ColumnText(void* func, sqlite3_stmt* stmt, char** azColName, int index);

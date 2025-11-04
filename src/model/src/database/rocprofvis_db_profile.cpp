@@ -1368,6 +1368,8 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
         uint32_t events_count;
     } store_params;
 
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+
     uint64_t trace_length =
         TraceProperties()->end_time - TraceProperties()->start_time;
 
@@ -1381,9 +1383,11 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
         std::to_string(bucket_size) + " AS bucket, COUNT(*) AS count, 1 as version, ";
 
     std::size_t hitogram_query_hash_value = std::hash<std::string>{}(histogram_query);
-
-    rocprofvis_dm_result_t result = ExecuteSQLQuery(future, (std::string("SELECT * from histogram_")+std::to_string(hitogram_query_hash_value)).c_str(), &CallBackLoadHistogram);
-    if (kRocProfVisDmResultSuccess != result)
+    std::string histogram_table_name = std::string("histogram_") + std::to_string(hitogram_query_hash_value);
+    if (CheckTableExists(histogram_table_name))
+    {
+        result = ExecuteSQLQuery(future, (std::string("SELECT * FROM ")+histogram_table_name).c_str(), &CallBackLoadHistogram);
+    } else
     {
 
         while (true)

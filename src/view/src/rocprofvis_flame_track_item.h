@@ -81,8 +81,8 @@ private:
     FlameTrackProjectSettings          m_project_settings;
     float                              m_min_level;
     float                              m_max_level;
-    // Used to enforce one selection change per render cycle.
-    bool                            m_selection_changed;
+    // Used to enforce one click handling per render cycle.
+    bool                            m_deferred_click_handled;
     bool                            m_has_drawn_tool_tip;
     std::vector<ChartItem>          m_selected_chart_items;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;

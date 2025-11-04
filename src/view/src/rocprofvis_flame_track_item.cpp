@@ -40,7 +40,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_timeline_selection(timeline_selection)
 , m_min_level(level_min)
 , m_max_level(level_max)
-, m_selection_changed(false)
+, m_deferred_click_handled(false)
 , m_has_drawn_tool_tip(false)
 , m_project_settings(dp.GetTraceFilePath(), *this)
 , m_selected_chart_items({})
@@ -217,43 +217,31 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
        !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
     {
         // Select on click
-        if(!m_selection_changed && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            // Delay Click Execution
+            // Defer on click execution to next frame if no other layer takes focus
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kGraphLayer);
+
         }
-        else if(TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kGraphLayer)
+        // Execute deferred click if layer has focus
+        else if(!m_deferred_click_handled &&
+                TimelineFocusManager::GetInstance().GetFocusedLayer() ==
+                    Layer::kGraphLayer)
         {
-            // Execute next loop if layer clicked
+            m_deferred_click_handled =
+                true;  // Ensure only one click is handled per render cycle
             chart_item.selected = !chart_item.selected;
             chart_item.selected
                 ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id)
                 : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id);
-            m_selection_changed = true;
-            if(chart_item.selected == false)
-            {
-                for(int select = 0; select < m_selected_chart_items.size(); select++)
-                {
-                    if(m_selected_chart_items[select].event.m_id == chart_item.event.m_id)
-                    {
-                        m_selected_chart_items.erase(m_selected_chart_items.begin() +
-                                                     select);
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                m_selected_chart_items.push_back(chart_item);
-            }
             // Always reset layer clicked after handling
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }
 
+        // only show one tooltip per render cycle and if no other layer has focus
         if(!m_has_drawn_tool_tip &&
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
-            // Do not render if anything else is hovered or dragged.
             const auto& time_format =
                 m_settings.GetUserSettings().unit_settings.time_format;
             rocprofvis_trace_event_t_id_t event_id{};
@@ -272,6 +260,11 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
             ImGui::PopStyleVar();
             m_has_drawn_tool_tip = true;
         }
+    }
+
+    if(chart_item.selected)
+    {
+        m_selected_chart_items.push_back(chart_item);
     }
 }
 
@@ -329,12 +322,6 @@ FlameTrackItem::RenderChart(float graph_width)
                 static_cast<float>(normalized_duration), draw_list);
     }
 
-    // This is here to check for universal event clear.
-    if(!m_timeline_selection->HasSelectedEvents())
-    {
-        m_selected_chart_items.clear();
-    }
-
     for(ChartItem& item : m_selected_chart_items)
     {
         ImVec2 container_pos = ImGui::GetWindowPos();
@@ -366,7 +353,8 @@ FlameTrackItem::RenderChart(float graph_width)
                            rounding, 0, HIGHLIGHT_THICKNESS);
     }
 
-    m_selection_changed = false;
+    m_selected_chart_items.clear();
+    m_deferred_click_handled = false;
 
     ImGui::EndChild();
 }

@@ -625,13 +625,18 @@ rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num
         std::string string;
         for(const rocprofvis_dm_index_t& index : string_indices)
         {
-            string += string.empty() ? "\"" + std::string(BindObject()->FuncGetString(BindObject()->trace_object, index)) + "\"" 
-                : ", \"" + std::string(BindObject()->FuncGetString(BindObject()->trace_object, index)) + "\"";
+            uint64_t id = 0;
+            if (kRocProfVisDmResultSuccess == StringIndexToId(index, id))
+            {
+                if (!string.empty())
+                    string += ", ";
+                    string += std::to_string(id);
+            }
         }
         if(!string.empty())
         {
-            filter[kRocProfVisDmOperationLaunch] = " category IN (" + string + ") OR name IN (" + string;
-            filter[kRocProfVisDmOperationDispatch] = " category IN (" + string + ") OR name IN (" + string;
+            filter[kRocProfVisDmOperationLaunch] = std::string(Builder::CATEGORY_REFERENCE_RPD)+ " IN (" + string + ") OR "+Builder::EVENT_NAME_REFERENCE_RPD + " IN(" + string;
+            filter[kRocProfVisDmOperationDispatch] = std::string(Builder::CATEGORY_REFERENCE_RPD)+ " IN (" + string + ") OR "+Builder::EVENT_NAME_REFERENCE_RPD + " IN(" + string;
         }
     }   
     return result;
@@ -755,8 +760,6 @@ RocpdDatabase::BuildTableSummaryClause(bool sample_query,
 {
     if(sample_query)
     {
-        //select = "monitorType, AVG(value) AS avg_value, MIN(value) AS min_value, MAX(value) AS max_value";
-        //group_by = "monitorType";
         select = "counter, AVG(value) AS avg_value, MIN(value) AS min_value, MAX(value) AS max_value";
         group_by = "counter";
     }

@@ -182,7 +182,8 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 
     if(ImGui::CollapsingHeader("Flow Extended Data", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        if(event_data->flow_info.empty())
+        if(event_data->flow_info.size() - 1 ==
+           0)  // Account for event adding itself into flow (done for sorting purposes in dataprovider)
         {
             ImGui::TextUnformatted("No data available.");
         }
@@ -202,12 +203,20 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                 const auto& time_format =
                     m_settings.GetUserSettings().unit_settings.time_format;
 
+                std::vector<int> valid_indices;
+                for(int i = 0; i < static_cast<int>(event_data->flow_info.size()); ++i)
+                {
+                    if(event_data->flow_info[i].id != event_data->basic_info.m_id)
+                        valid_indices.push_back(i);
+                }
+
                 ImGuiListClipper clipper;
-                clipper.Begin(static_cast<int>(event_data->flow_info.size()));
+                clipper.Begin(static_cast<int>(valid_indices.size()));
                 while(clipper.Step())
                 {
-                    for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+                    for(int idx = clipper.DisplayStart; idx < clipper.DisplayEnd; ++idx)
                     {
+                        int i = valid_indices[idx];
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
                         ImGui::TextUnformatted(
@@ -230,6 +239,7 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                             std::to_string(event_data->flow_info[i].direction).c_str());
                     }
                 }
+
                 ImGui::EndTable();
             }
         }

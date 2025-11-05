@@ -77,24 +77,23 @@ namespace DataModel
             std::set<uint32_t> removed_tracks;
             std::set<uint32_t> added_tracks;
 
-            if (query_updated && type == kRPVTableDataTypeSearch)
+
+            std::set_difference(
+                m_tracks.begin(), m_tracks.end(),
+                tracks.begin(), tracks.end(),
+                std::inserter(removed_tracks, removed_tracks.end())
+            );
+
+            std::set_difference(
+                tracks.begin(), tracks.end(),
+                m_tracks.begin(), m_tracks.end(),
+                std::inserter(added_tracks, added_tracks.end())
+            );
+            bool sametracks = (removed_tracks.size() == 0) && (added_tracks.size() == 0);
+            if (sametracks && query_updated)
             {
                 removed_tracks = m_tracks;
                 added_tracks = tracks;
-            }
-            else
-            {
-                std::set_difference(
-                    m_tracks.begin(), m_tracks.end(),
-                    tracks.begin(), tracks.end(),
-                    std::inserter(removed_tracks, removed_tracks.end())
-                );
-
-                std::set_difference(
-                    tracks.begin(), tracks.end(),
-                    m_tracks.begin(), m_tracks.end(),
-                    std::inserter(added_tracks, added_tracks.end())
-                );
             }
 
             result = kRocProfVisDmResultSuccess;
@@ -113,7 +112,7 @@ namespace DataModel
                     
                 }
 
-                m_merged_table.RemoveRowsForSetOfTracks(removed_tracks, query_updated && type == kRPVTableDataTypeSearch);
+                m_merged_table.RemoveRowsForSetOfTracks(removed_tracks, sametracks && query_updated);
 
                 if (new_queries.size())
                 {

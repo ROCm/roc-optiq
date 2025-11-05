@@ -195,6 +195,7 @@ namespace DataModel
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_ABS_INDEX || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_ABS_INDEX )
         {
+            numeric_string = true;
             return db->CachedTables()->GetTableCell("Agent", index, "absolute_index");
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_TYPE || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_TYPE)
@@ -203,6 +204,7 @@ namespace DataModel
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_TYPE_INDEX || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_TYPE_INDEX)
         {
+            numeric_string = true;
             return db->CachedTables()->GetTableCell("Agent", index, "type_index");
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_NAME || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_NAME)

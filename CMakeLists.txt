@@ -145,9 +145,12 @@ target_link_libraries(rocprof-visualizer PRIVATE sqlite3)
 target_link_libraries(rocprof-visualizer PRIVATE json)
 
 
+
 # === NativeFileDialog Extended ===
+set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
 add_subdirectory(thirdparty/nativefiledialog-extended)
 target_link_libraries(rocprof-visualizer PRIVATE nfd)
+
 
 # === Vulkan ===
 find_package(Vulkan REQUIRED)

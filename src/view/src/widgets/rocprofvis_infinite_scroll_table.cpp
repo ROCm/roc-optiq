@@ -29,8 +29,8 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
 , m_last_total_row_count(0)
-, m_fetch_chunk_size(FETCH_CHUNK_SIZE)      // Number of items to fetch in one go
-, m_fetch_pad_items(30)        // Number of items to pad the fetch range
+, m_fetch_chunk_size(FETCH_CHUNK_SIZE)  // Number of items to fetch in one go
+, m_fetch_pad_items(30)                 // Number of items to pad the fetch range
 , m_fetch_threshold_items(10)  // Number of items from the edge to trigger a fetch
 , m_last_table_size(0, 0)
 , m_settings(SettingsManager::GetInstance())
@@ -249,9 +249,9 @@ InfiniteScrollTable::Render()
             int visible_rows   = static_cast<int>(outer_size.y / row_height);
             m_fetch_pad_items  = std::clamp(visible_rows / 2, 10, 30);
             m_fetch_chunk_size = std::max(static_cast<uint64_t>(visible_rows * 4 +
-                                        m_fetch_threshold_items +
-                                        m_fetch_pad_items),
-                                        FETCH_CHUNK_SIZE);
+                                                                m_fetch_threshold_items +
+                                                                m_fetch_pad_items),
+                                          FETCH_CHUNK_SIZE);
             m_last_table_size  = outer_size;
 
             spdlog::debug("Recalculated fetch chunk size: {}, fetch pad items: {}, "
@@ -261,8 +261,8 @@ InfiniteScrollTable::Render()
         }
 
         if(column_names.size() &&
-           ImGui::BeginTable("Event Data Table", static_cast<int>(column_names.size()), table_flags,
-                             outer_size))
+           ImGui::BeginTable("Event Data Table", static_cast<int>(column_names.size()),
+                             table_flags, outer_size))
         {
             if(m_skip_data_fetch && ImGui::GetScrollY() > 0.0f)
             {
@@ -334,7 +334,7 @@ InfiniteScrollTable::Render()
                     for(const auto& col : table_data[row_n])
                     {
                         ImGui::TableSetColumnIndex(column);
-                        const std::string *display_value = &col;
+                        const std::string* display_value = &col;
                         // Check if this column needs formatting
                         if(column < formatted_table_data.size())
                         {
@@ -438,7 +438,8 @@ InfiniteScrollTable::Render()
                             (end_row != total_row_count - 1) && (scroll_max_y > 0.0f))
                     {
                         // fetch data for the end row
-                        uint64_t new_start_pos = static_cast<uint64_t>(scroll_y / row_height);
+                        uint64_t new_start_pos =
+                            static_cast<uint64_t>(scroll_y / row_height);
 
                         // Ensure start position does not go below zero
                         // (this can happen if the start_row is close to the beginning
@@ -673,7 +674,7 @@ InfiniteScrollTable::SelectedRowToClipboard() const
 
 void
 InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
-                                     size_t stream_id_column_index) const
+                                              size_t stream_id_column_index) const
 {
     const std::vector<std::vector<std::string>>& table_data =
         m_data_provider.GetTableData(m_table_type);
@@ -757,8 +758,8 @@ InfiniteScrollTable::FormatTimeColumns() const
 void
 InfiniteScrollTable::ExportToFile() const
 {
-    AppWindow::GetInstance()->ShowFileDialog(
-        "Export Table", ".csv", "", true, [this](std::string file_path) -> void {
+    AppWindow::GetInstance()->SaveFileDialog(
+        "Export Table", "csv", "", [this](std::string file_path) -> void {
             std::shared_ptr<TableRequestParams> table_params =
                 m_data_provider.GetTableParams(m_table_type);
             if(table_params &&

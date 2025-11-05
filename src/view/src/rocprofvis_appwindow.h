@@ -8,7 +8,6 @@
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_widget.h"
 
-
 namespace RocProfVis
 {
 namespace View
@@ -31,20 +30,23 @@ public:
     void Update() override;
 
     const std::string& GetMainTabSourceName() const;
-    void SetTabLabel(const std::string& label, const std::string& id);
+    void               SetTabLabel(const std::string& label, const std::string& id);
 
     void ShowConfirmationDialog(const std::string& title, const std::string& message,
                                 std::function<void()> on_confirm_callback) const;
     void ShowMessageDialog(const std::string& title, const std::string& message) const;
-    void ShowFileDialog(const std::string& title, const std::string& file_filter,
-                        const std::string& initial_path, const bool& confirm_overwrite,
+    void SaveFileDialog(const std::string& title, const std::string& file_filter,
+                        const std::string&               initial_path,
+                        std::function<void(std::string)> callback);
+    void OpenFileDialog(const std::string& title, const std::string& file_filter,
+                        const std::string&               initial_path,
                         std::function<void(std::string)> callback);
 
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();
 
     void OpenFile(std::string file_path);
-    
+
     void ShowCloseConfirm();
 
 private:
@@ -61,7 +63,7 @@ private:
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
-    
+
     static AppWindow* s_instance;
 
     std::shared_ptr<VFixedContainer> m_main_view;

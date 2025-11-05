@@ -12,15 +12,16 @@
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #ifdef COMPUTE_UI_SUPPORT
-    #include "rocprofvis_navigation_manager.h"
+#    include "rocprofvis_navigation_manager.h"
 #endif
+#include "nfd.h"
 #include "rocprofvis_root_view.h"
+#include "rocprofvis_trace_view.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "rocprofvis_trace_view.h"
 #include <filesystem>
 
 namespace RocProfVis
@@ -28,10 +29,10 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr ImVec2 FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
-constexpr const char*  FILE_DIALOG_NAME       = "ChooseFileDlgKey";
-constexpr const char*  TAB_CONTAINER_SRC_NAME = "MainTabContainer";
-constexpr const char*  ABOUT_DIALOG_NAME      = "About##_dialog";
+constexpr ImVec2      FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
+constexpr const char* FILE_DIALOG_NAME       = "ChooseFileDlgKey";
+constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
+constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
 
@@ -102,15 +103,15 @@ AppWindow::Init()
 {
     std::string config_path = get_application_config_path(true);
 
-    std::filesystem::path ini_path = std::filesystem::path(config_path) / "imgui.ini";
-    ImGuiIO& io = ImGui::GetIO();
-    static std::string ini_path_str = ini_path.string();
-    io.IniFilename = ini_path_str.c_str();
+    std::filesystem::path ini_path     = std::filesystem::path(config_path) / "imgui.ini";
+    ImGuiIO&              io           = ImGui::GetIO();
+    static std::string    ini_path_str = ini_path.string();
+    io.IniFilename                     = ini_path_str.c_str();
 
     ImPlot::CreateContext();
 
     SettingsManager& settings = SettingsManager::GetInstance();
-    bool result = settings.Init();
+    bool             result   = settings.Init();
     if(result)
     {
         m_settings_panel = std::make_unique<SettingsPanel>(settings);
@@ -215,20 +216,85 @@ AppWindow::ShowMessageDialog(const std::string& title, const std::string& messag
 }
 
 void
-AppWindow::ShowFileDialog(const std::string& title, const std::string& file_filter,
-                          const std::string& initial_path, const bool& confirm_overwrite,
+AppWindow::SaveFileDialog(const std::string& title, const std::string& file_filter,
+                          const std::string&               initial_path,
                           std::function<void(std::string)> callback)
 {
-    m_file_dialog_callback = callback;
-    m_init_file_dialog     = true;
-    IGFD::FileDialogConfig config;
-    config.path  = initial_path;
-    config.flags = confirm_overwrite
-                       ? ImGuiFileDialogFlags_Default
-                       : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
-    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, file_filter.c_str(),
-                                            config);
+    NFD_Init();
+
+    nfdu8char_t* outPath = nullptr;
+
+    nfdu8filteritem_t filterItem = { "File", file_filter.c_str() };
+
+    nfdsavedialogu8args_t args = {};
+    args.filterList            = &filterItem;
+    args.filterCount           = 1;
+ 
+    nfdresult_t result = NFD_SaveDialogU8_With(&outPath, &args);
+
+    if(result == NFD_OKAY)
+    {
+        std::string file_path(outPath);
+        NFD_FreePathU8(outPath);
+
+        if(callback)
+        {
+            callback(file_path);
+        }
+    }
+    else if(result == NFD_CANCEL)
+    {
+        // User cancelled
+    }
+    else
+    {
+        printf("Error: %s\n", NFD_GetError());
+    }
+
+    NFD_Quit();
 }
+
+
+void
+AppWindow::OpenFileDialog(const std::string& title, const std::string& file_filter,
+                          const std::string&               initial_path,
+                          std::function<void(std::string)> callback)
+{
+    NFD_Init();
+
+    nfdu8char_t* outPath = nullptr;
+
+    nfdu8filteritem_t filterItem = { "Supported Files", file_filter.c_str() };
+
+    nfdopendialogu8args_t args = {};
+    args.filterList            = &filterItem;
+    args.filterCount           = 1;
+
+ 
+    nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+
+    if(result == NFD_OKAY)
+    {
+        std::string file_path(outPath);
+        NFD_FreePathU8(outPath);
+
+        if(callback)
+        {
+            callback(file_path);
+        }
+    }
+    else if(result == NFD_CANCEL)
+    {
+        // User cancelled
+    }
+    else
+    {
+        printf("Error: %s\n", NFD_GetError());
+    }
+
+    NFD_Quit();
+}
+
 
 Project*
 AppWindow::GetProject(const std::string& id)
@@ -384,17 +450,19 @@ AppWindow::OpenFile(std::string file_path)
     {
         case Project::OpenResult::Success:
         {
-            TabItem tab = TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
+            TabItem tab =
+                TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
 
             // Set initial visibility to save the same settings in different tabs
-            auto trace_view_tab = std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab.m_widget);
-            if (trace_view_tab)
+            auto trace_view_tab =
+                std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab.m_widget);
+            if(trace_view_tab)
             {
                 trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
                 trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
             }
 
-            m_tab_container->AddTab(std::move(tab)); 
+            m_tab_container->AddTab(std::move(tab));
             m_projects[project->GetID()] = std::move(project);
             SettingsManager::GetInstance().AddRecentFile(file_path);
             break;
@@ -420,20 +488,8 @@ AppWindow::RenderFileMenu(Project* project)
     {
         if(ImGui::MenuItem("Open", nullptr))
         {
-            std::string trace_types = ".db,.rpd";
-#ifdef JSON_TRACE_SUPPORT
-            trace_types += ",.json";
-#endif
-#ifdef COMPUTE_UI_SUPPORT
-            trace_types += ",.csv";
-#endif
-            std::string filters = "All (.rpv," + trace_types + "){.rpv," + trace_types +
-                                  "},Projects (.rpv){.rpv},Traces (" + trace_types +
-                                  "){" + trace_types + "}";
-
-            ShowFileDialog(
-                "Choose File", filters.c_str(), ".", false,
-                [this](std::string file_path) -> void { this->OpenFile(file_path); });
+            OpenFileDialog("Choose File", "rpv,db,rpd,json,csv", ".",
+                           [this](std::string file_path) { this->OpenFile(file_path); });
         }
         if(ImGui::MenuItem("Save", nullptr, false, project && project->IsProject()))
         {
@@ -441,9 +497,9 @@ AppWindow::RenderFileMenu(Project* project)
         }
         if(ImGui::MenuItem("Save As", nullptr, false, project))
         {
-            ShowFileDialog(
-                "Save as Project", ".rpv", "", true,
-                [project](std::string file_path) -> void { project->SaveAs(file_path); });
+            SaveFileDialog(
+                "Save as Project", "rpv", "",
+                [project](std::string file_path) { project->SaveAs(file_path); });
         }
         ImGui::Separator();
         const std::list<std::string> recent_files =
@@ -480,16 +536,17 @@ AppWindow::RenderEditMenu(Project* project)
         if(trace_type == Project::System)
         {
             std::shared_ptr<RootView> root_view =
-                    std::dynamic_pointer_cast<RootView>(project->GetView());
+                std::dynamic_pointer_cast<RootView>(project->GetView());
 
-            if(root_view) {
+            if(root_view)
+            {
                 root_view->RenderEditMenuOptions();
             }
         }
         if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
                            project && project->IsTrimSaveAllowed()))
         {
-            ShowFileDialog("Save Trace Selection", ".db,.rpd", "", true,
+            SaveFileDialog("Save Trace Selection", ".db,.rpd", "",
                            [project](std::string file_path) -> void {
                                project->TrimSave(file_path);
                            });
@@ -511,7 +568,8 @@ AppWindow::RenderViewMenu(Project* project)
     if(ImGui::BeginMenu("View"))
     {
         LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
-        if(tool_bar_item) {
+        if(tool_bar_item)
+        {
             if(ImGui::MenuItem("Show Tool Bar", nullptr, tool_bar_item->m_visible))
             {
                 tool_bar_item->m_visible = !tool_bar_item->m_visible;
@@ -519,10 +577,11 @@ AppWindow::RenderViewMenu(Project* project)
             if(ImGui::MenuItem("Show Analysis Bar", nullptr, m_analysis_bar_visible))
             {
                 m_analysis_bar_visible = !m_analysis_bar_visible;
-                for (const auto& tab : m_tab_container->GetTabs())
+                for(const auto& tab : m_tab_container->GetTabs())
                 {
                     auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
+                            tab->m_widget);
                     if(trace_view_tab)
                         trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
                 }
@@ -533,7 +592,8 @@ AppWindow::RenderViewMenu(Project* project)
                 for(const auto& tab : m_tab_container->GetTabs())
                 {
                     auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
+                            tab->m_widget);
                     if(trace_view_tab)
                         trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
                 }
@@ -544,14 +604,14 @@ AppWindow::RenderViewMenu(Project* project)
                 for(const auto& tab : m_tab_container->GetTabs())
                 {
                     auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
+                            tab->m_widget);
                     if(trace_view_tab)
                         trace_view_tab->SetHistogramVisibility(m_histogram_visible);
                 }
-            }            
+            }
         }
         ImGui::EndMenu();
-
     }
 }
 
@@ -575,11 +635,15 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
     if(tab_closed_event && m_projects.count(tab_closed_event->GetTabId()) > 0)
     {
         auto activeProject = GetCurrentProject();
-        if(!activeProject) {
+        if(!activeProject)
+        {
             spdlog::debug("No active project found after tab closed");
-            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
-        } else {
-            spdlog::debug("Active project found after tab closed: {}", activeProject->GetName());
+            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
+        }
+        else
+        {
+            spdlog::debug("Active project found after tab closed: {}",
+                          activeProject->GetName());
             std::shared_ptr<RootView> root_view =
                 std::dynamic_pointer_cast<RootView>(activeProject->GetView());
             if(root_view)
@@ -603,7 +667,7 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
         // Only handle the event if the tab source is the main tab source
         if(tab_selected_event->GetSourceId() == GetMainTabSourceName())
         {
-            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
+            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
 
             auto id = tab_selected_event->GetTabId();
             spdlog::debug("Tab selected: {}", id);
@@ -692,9 +756,9 @@ RenderProviderTest(DataProvider& provider)
 {
     ImGui::Begin("Data Provider Test Window", nullptr, ImGuiWindowFlags_None);
 
-    static char     track_index_buffer[64]     = "0";
-    static char     end_track_index_buffer[64] = "1";  // for setting table track range
-    static uint8_t  group_id_counter           = 0;
+    static char    track_index_buffer[64]     = "0";
+    static char    end_track_index_buffer[64] = "1";  // for setting table track range
+    static uint8_t group_id_counter           = 0;
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {

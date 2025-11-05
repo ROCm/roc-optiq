@@ -8,6 +8,11 @@
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_widget.h"
 
+#include <atomic>
+#include <future>
+#include <thread>
+#include <chrono>
+
 namespace RocProfVis
 {
 namespace View
@@ -99,6 +104,13 @@ private:
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
     std::function<void(std::string)> m_file_dialog_callback;
+
+    std::future<std::string> m_open_file_dialog_future;
+    std::function<void(std::string)> m_open_file_dialog_callback;
+    std::future<std::string> m_save_file_dialog_future;
+    std::function<void(std::string)> m_save_file_dialog_callback;
+
+    std::atomic<bool> m_is_file_dialog_open;
 };
 
 }  // namespace View

@@ -84,6 +84,7 @@ AppWindow::AppWindow()
 , m_sidebar_visible(true)
 , m_analysis_bar_visible(true)
 , m_init_file_dialog(false)
+, m_is_file_dialog_open(false)
 {}
 
 AppWindow::~AppWindow()
@@ -220,38 +221,38 @@ AppWindow::SaveFileDialog(const std::string& title, const std::string& file_filt
                           const std::string&               initial_path,
                           std::function<void(std::string)> callback)
 {
-    NFD_Init();
-
-    nfdu8char_t* outPath = nullptr;
-
-    nfdu8filteritem_t filterItem = { "File", file_filter.c_str() };
-
-    nfdsavedialogu8args_t args = {};
-    args.filterList            = &filterItem;
-    args.filterCount           = 1;
- 
-    nfdresult_t result = NFD_SaveDialogU8_With(&outPath, &args);
-
-    if(result == NFD_OKAY)
+    if (m_is_file_dialog_open)
     {
-        std::string file_path(outPath);
-        NFD_FreePathU8(outPath);
+        return;
+    }
+    m_is_file_dialog_open = true;
+    m_save_file_dialog_callback = callback;
 
-        if(callback)
+    m_save_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
+        NFD_Init();
+        nfdu8char_t* outPath = nullptr;
+        nfdu8filteritem_t filterItem = { "File", file_filter.c_str() };
+        nfdsavedialogu8args_t args = {};
+        args.filterList            = &filterItem;
+        args.filterCount           = 1;
+        nfdresult_t result = NFD_SaveDialogU8_With(&outPath, &args);
+        std::string file_path;
+        if(result == NFD_OKAY)
         {
-            callback(file_path);
+            file_path = outPath;
+            NFD_FreePathU8(outPath);
         }
-    }
-    else if(result == NFD_CANCEL)
-    {
-        // User cancelled
-    }
-    else
-    {
-        printf("Error: %s\n", NFD_GetError());
-    }
-
-    NFD_Quit();
+        else if(result == NFD_CANCEL)
+        {
+            // User cancelled
+        }
+        else
+        {
+            printf("Error: %s\n", NFD_GetError());
+        }
+        NFD_Quit();
+        return file_path;
+    });
 }
 
 
@@ -260,39 +261,38 @@ AppWindow::OpenFileDialog(const std::string& title, const std::string& file_filt
                           const std::string&               initial_path,
                           std::function<void(std::string)> callback)
 {
-    NFD_Init();
-
-    nfdu8char_t* outPath = nullptr;
-
-    nfdu8filteritem_t filterItem = { "Supported Files", file_filter.c_str() };
-
-    nfdopendialogu8args_t args = {};
-    args.filterList            = &filterItem;
-    args.filterCount           = 1;
-
- 
-    nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
-
-    if(result == NFD_OKAY)
+    if (m_is_file_dialog_open)
     {
-        std::string file_path(outPath);
-        NFD_FreePathU8(outPath);
+        return;
+    }
+    m_is_file_dialog_open = true;
+    m_open_file_dialog_callback = callback;
 
-        if(callback)
+    m_open_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
+        NFD_Init();
+        nfdu8char_t* outPath = nullptr;
+        nfdu8filteritem_t filterItem = { "Supported Files", file_filter.c_str() };
+        nfdopendialogu8args_t args = {};
+        args.filterList            = &filterItem;
+        args.filterCount           = 1;
+        nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+        std::string file_path;
+        if(result == NFD_OKAY)
         {
-            callback(file_path);
+            file_path = outPath;
+            NFD_FreePathU8(outPath);
         }
-    }
-    else if(result == NFD_CANCEL)
-    {
-        // User cancelled
-    }
-    else
-    {
-        printf("Error: %s\n", NFD_GetError());
-    }
-
-    NFD_Quit();
+        else if(result == NFD_CANCEL)
+        {
+            // User cancelled
+        }
+        else
+        {
+            printf("Error: %s\n", NFD_GetError());
+        }
+        NFD_Quit();
+        return file_path;
+    });
 }
 
 
@@ -322,6 +322,31 @@ AppWindow::GetCurrentProject()
 void
 AppWindow::Update()
 {
+    if (m_is_file_dialog_open)
+    {
+        if (m_open_file_dialog_future.valid() && m_open_file_dialog_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        {
+            std::string file_path = m_open_file_dialog_future.get();
+            if (!file_path.empty() && m_open_file_dialog_callback)
+            {
+                m_open_file_dialog_callback(file_path);
+            }
+            m_is_file_dialog_open = false;
+            m_open_file_dialog_callback = nullptr;
+        }
+
+        if (m_save_file_dialog_future.valid() && m_save_file_dialog_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        {
+            std::string file_path = m_save_file_dialog_future.get();
+            if (!file_path.empty() && m_save_file_dialog_callback)
+            {
+                m_save_file_dialog_callback(file_path);
+            }
+            m_is_file_dialog_open = false;
+            m_save_file_dialog_callback = nullptr;
+        }
+    }
+
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();

@@ -221,31 +221,28 @@ AppWindow::SaveFileDialog(const std::string& title, const std::string& file_filt
                           const std::string&               initial_path,
                           std::function<void(std::string)> callback)
 {
-    if (m_is_file_dialog_open)
+    if(m_is_file_dialog_open)
     {
         return;
     }
-    m_is_file_dialog_open = true;
+    m_is_file_dialog_open       = true;
     m_save_file_dialog_callback = callback;
 
     m_save_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
         NFD_Init();
-        nfdu8char_t* outPath = nullptr;
-        nfdu8filteritem_t filterItem = { "File", file_filter.c_str() };
-        nfdsavedialogu8args_t args = {};
-        args.filterList            = &filterItem;
-        args.filterCount           = 1;
-        nfdresult_t result = NFD_SaveDialogU8_With(&outPath, &args);
+        nfdu8char_t*          outPath    = nullptr;
+        nfdu8filteritem_t     filterItem = { "File", file_filter.c_str() };
+        nfdsavedialogu8args_t args       = {};
+        args.filterList                  = &filterItem;
+        args.filterCount                 = 1;
+        nfdresult_t result               = NFD_SaveDialogU8_With(&outPath, &args);
         std::string file_path;
         if(result == NFD_OKAY)
         {
             file_path = outPath;
             NFD_FreePathU8(outPath);
         }
-        else if(result == NFD_CANCEL)
-        {
-            // User cancelled
-        }
+
         else
         {
             printf("Error: %s\n", NFD_GetError());
@@ -254,38 +251,34 @@ AppWindow::SaveFileDialog(const std::string& title, const std::string& file_filt
         return file_path;
     });
 }
-
 
 void
 AppWindow::OpenFileDialog(const std::string& title, const std::string& file_filter,
                           const std::string&               initial_path,
                           std::function<void(std::string)> callback)
 {
-    if (m_is_file_dialog_open)
+    if(m_is_file_dialog_open)
     {
         return;
     }
-    m_is_file_dialog_open = true;
+    m_is_file_dialog_open       = true;
     m_open_file_dialog_callback = callback;
 
     m_open_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
         NFD_Init();
-        nfdu8char_t* outPath = nullptr;
-        nfdu8filteritem_t filterItem = { "Supported Files", file_filter.c_str() };
-        nfdopendialogu8args_t args = {};
-        args.filterList            = &filterItem;
-        args.filterCount           = 1;
-        nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+        nfdu8char_t*          outPath    = nullptr;
+        nfdu8filteritem_t     filterItem = { "Supported Files", file_filter.c_str() };
+        nfdopendialogu8args_t args       = {};
+        args.filterList                  = &filterItem;
+        args.filterCount                 = 1;
+        nfdresult_t result               = NFD_OpenDialogU8_With(&outPath, &args);
         std::string file_path;
         if(result == NFD_OKAY)
         {
             file_path = outPath;
             NFD_FreePathU8(outPath);
         }
-        else if(result == NFD_CANCEL)
-        {
-            // User cancelled
-        }
+
         else
         {
             printf("Error: %s\n", NFD_GetError());
@@ -294,7 +287,6 @@ AppWindow::OpenFileDialog(const std::string& title, const std::string& file_filt
         return file_path;
     });
 }
-
 
 Project*
 AppWindow::GetProject(const std::string& id)
@@ -322,27 +314,31 @@ AppWindow::GetCurrentProject()
 void
 AppWindow::Update()
 {
-    if (m_is_file_dialog_open)
+    if(m_is_file_dialog_open)
     {
-        if (m_open_file_dialog_future.valid() && m_open_file_dialog_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        if(m_open_file_dialog_future.valid() &&
+           m_open_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
+               std::future_status::ready)
         {
             std::string file_path = m_open_file_dialog_future.get();
-            if (!file_path.empty() && m_open_file_dialog_callback)
+            if(!file_path.empty() && m_open_file_dialog_callback)
             {
                 m_open_file_dialog_callback(file_path);
             }
-            m_is_file_dialog_open = false;
+            m_is_file_dialog_open       = false;
             m_open_file_dialog_callback = nullptr;
         }
 
-        if (m_save_file_dialog_future.valid() && m_save_file_dialog_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        if(m_save_file_dialog_future.valid() &&
+           m_save_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
+               std::future_status::ready)
         {
             std::string file_path = m_save_file_dialog_future.get();
-            if (!file_path.empty() && m_save_file_dialog_callback)
+            if(!file_path.empty() && m_save_file_dialog_callback)
             {
                 m_save_file_dialog_callback(file_path);
             }
-            m_is_file_dialog_open = false;
+            m_is_file_dialog_open       = false;
             m_save_file_dialog_callback = nullptr;
         }
     }
@@ -511,16 +507,17 @@ AppWindow::RenderFileMenu(Project* project)
 {
     if(ImGui::BeginMenu("File"))
     {
-        if(ImGui::MenuItem("Open", nullptr))
+        if(ImGui::MenuItem("Open", nullptr, false, !m_is_file_dialog_open))
         {
             OpenFileDialog("Choose File", "rpv,db,rpd,json,csv", ".",
                            [this](std::string file_path) { this->OpenFile(file_path); });
         }
-        if(ImGui::MenuItem("Save", nullptr, false, project && project->IsProject()))
+        if(ImGui::MenuItem("Save", nullptr, false,
+                           !m_is_file_dialog_open || (project && project->IsProject())))
         {
             project->Save();
         }
-        if(ImGui::MenuItem("Save As", nullptr, false, project))
+        if(ImGui::MenuItem("Save As", nullptr, false, project || !m_is_file_dialog_open))
         {
             SaveFileDialog(
                 "Save as Project", "rpv", "",

@@ -3115,6 +3115,11 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_level = static_cast<uint32_t>(level);
 
+        uint64_t child_count = 0;
+        result = rocprofvis_controller_get_uint64(event, kRPVControllerEventNumChildren,
+                                                  0, &child_count);
+        trace_event.m_child_count = static_cast<uint32_t>(child_count);
+
         // get event name
         uint32_t length = 0;
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,

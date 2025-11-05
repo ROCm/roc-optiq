@@ -36,8 +36,11 @@ public:
     void ShowConfirmationDialog(const std::string& title, const std::string& message,
                                 std::function<void()> on_confirm_callback) const;
     void ShowMessageDialog(const std::string& title, const std::string& message) const;
-    void ShowFileDialog(const std::string& title, const std::string& file_filter,
-                        const std::string& initial_path, const bool& confirm_overwrite,
+    void SaveFileDialog(const std::string& title, const std::string& file_filter,
+                        const std::string& initial_path,  
+                        std::function<void(std::string)> callback);
+    void OpenFileDialog(const std::string& title, const std::string& file_filter,
+                        const std::string& initial_path, 
                         std::function<void(std::string)> callback);
 
     Project* GetProject(const std::string& id);

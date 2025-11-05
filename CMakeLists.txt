@@ -143,6 +143,7 @@ target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer PRIVATE spdlog)
 target_link_libraries(rocprof-visualizer PRIVATE sqlite3)
 target_link_libraries(rocprof-visualizer PRIVATE json)
+target_link_libraries(rocprof-visualizer PRIVATE nativefiledialog)
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
 
@@ -151,6 +152,42 @@ if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
     message(STATUS "Adding --coverage to linker flags for rocprof-visualizer due to potential gcov symbols from dependencies.")
     target_link_options(rocprof-visualizer PRIVATE --coverage)
 endif()
+
+
+
+# === NativeFileDialog Setup ===
+
+# Select platform-specific source
+if(WIN32)
+    set(NFD_PLATFORM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/nativefiledialog/src/nfd_win.cpp)
+elseif(UNIX)
+    set(NFD_PLATFORM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/nativefiledialog/src/nfd_gtk.c)
+endif()
+
+# Common source
+set(NFD_COMMON_SRC ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/nativefiledialog/src/nfd_common.c)
+
+# Create nativefiledialog static library
+add_library(nativefiledialog STATIC ${NFD_COMMON_SRC} ${NFD_PLATFORM_SRC})
+set_target_properties(nativefiledialog PROPERTIES LINKER_LANGUAGE CXX)
+
+# Include headers for nativefiledialog
+target_include_directories(nativefiledialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/nativefiledialog/src/include)
+
+# Link nativefiledialog to your target
+target_link_libraries(rocprof-visualizer PRIVATE nativefiledialog)
+
+# === Linux-specific dependencies ===
+if(UNIX AND NOT WIN32)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
+    target_include_directories(rocprof-visualizer PRIVATE ${GTK3_INCLUDE_DIRS})
+    target_link_libraries(rocprof-visualizer PRIVATE ${GTK3_LIBRARIES})
+endif()
+
+# === Include nativefiledialog headers in rocprof-visualizer ===
+target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/nativefiledialog/src/include)
+
 
 #CPACK Packaging Enabling
 set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})

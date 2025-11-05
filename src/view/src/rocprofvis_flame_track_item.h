@@ -58,12 +58,19 @@ protected:
     void RenderMetaAreaExpand() override;
 
 private:
-    // Local cache of selection state packed with event data for each event.
+    struct ChildEventInfo
+    {
+        std::string name;
+        size_t      name_hash;
+        size_t      count;
+    };
+    
     struct ChartItem
     {
-        rocprofvis_trace_event_t event;
-        bool                     selected;
-        size_t                   name_hash;
+        rocprofvis_trace_event_t    event;
+        bool                        selected;
+        size_t                      name_hash;
+        std::vector<ChildEventInfo> child_info;
     };
 
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
@@ -71,6 +78,9 @@ private:
     void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
                  float duration, ImDrawList* draw_list);
     bool ExtractPointsFromData();
+    bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
+
+    void RenderTooltip(const ChartItem& chart_item, int color_index);
 
     std::vector<ChartItem>             m_chart_items;
     EventColorMode                     m_event_color_mode;

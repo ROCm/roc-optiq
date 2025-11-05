@@ -466,39 +466,64 @@ namespace DataModel
         auto it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [column](MergedColumnDef& cdef) { return cdef.m_name == column; });
         if (it != m_merged_columns.end())
         {
-            std::vector<double> sort_values;
-            sort_values.reserve(m_sort_order.size());
-            for (auto so : m_sort_order) {
-                auto& row = *m_rows[so];
-                uint8_t op = row.Get<uint8_t>(0);
-                uint8_t size = ColumnTypeSize(it->m_type[op]);
-                if (it->m_name == Builder::COUNTER_VALUE_PUBLIC_NAME)
-                {
-                    double value = size > 0 ? row.Get<double>(it->m_offset[op], size) : (ascending ? DBL_MAX : 0);
+            if (it->m_name == Builder::COUNTER_VALUE_PUBLIC_NAME)
+            {
+                std::vector<double> sort_values;
+                sort_values.reserve(m_rows.size());
+                for (std::unique_ptr<PackedRow> & row : m_rows) {
+                    uint8_t op = row->Get<uint8_t>(0);
+                    uint8_t size = ColumnTypeSize(it->m_type[op]);
+                    double value = size > 0 ? row->Get<double>(it->m_offset[op], size) : (ascending ? DBL_MAX : 0);
+                    sort_values.push_back(value);
+                }
+                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                    [&](uint32_t so1, uint32_t so2) {
+                        return ascending ? sort_values[so1] < sort_values[so2]
+                            : sort_values[so2] < sort_values[so1];
+                    });
+            }
+            else if (it->m_name == Builder::CATEGORY_PUBLIC_NAME || it->m_name == Builder::NAME_PUBLIC_NAME)
+            {
+                std::vector<uint64_t> sort_values;
+                sort_values.reserve(m_rows.size());
+                for (std::unique_ptr<PackedRow> & row : m_rows) {
+                    uint8_t op = row->Get<uint8_t>(0);
+                    uint8_t size = ColumnTypeSize(it->m_type[op]);
+                    if (size > 0)
+                    {
+                        uint64_t value = row->Get<uint64_t>(it->m_offset[op], size);
+                        uint64_t string_array_offset = it->m_schema_index[op] == Builder::SCHEMA_INDEX_EVENT_SYMBOL ? db->SymbolsOffset() : 0;
+                        value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, value + string_array_offset);
+                        sort_values.push_back(value);
+                    } else
+                        sort_values.push_back(0);
+               
+                }
+                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                    [&](uint32_t so1, uint32_t so2) {
+                        return ascending ? sort_values[so1] < sort_values[so2]
+                            : sort_values[so2] < sort_values[so1];
+                    });
+
+            }
+            else
+            {
+                std::vector<uint64_t> sort_values;
+                sort_values.reserve(m_rows.size());
+                for (std::unique_ptr<PackedRow> & row : m_rows) {
+                    uint8_t op = row->Get<uint8_t>(0);
+                    uint8_t size = ColumnTypeSize(it->m_type[op]);
+                    uint64_t value = size > 0 ? row->Get<uint64_t>(it->m_offset[op], size) : (ascending ? UINT64_MAX : 0);
                     sort_values.push_back(value);
 
                 }
-                else if (it->m_name == Builder::CATEGORY_PUBLIC_NAME || it->m_name == Builder::NAME_PUBLIC_NAME)
-                {
-                    uint64_t value = size > 0 ? row.Get<uint64_t>(it->m_offset[op], size) : (ascending ? UINT64_MAX : 0);
-                    if (size > 0)
-                    {
-                        uint64_t string_array_offset1 = it->m_schema_index[op] == Builder::SCHEMA_INDEX_EVENT_SYMBOL ? db->SymbolsOffset() : 0;
-                        value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, value + string_array_offset1);
-                        sort_values.push_back(static_cast<double>(value));
-                    }
-                }
-                else
-                {
-                    uint64_t value = size > 0 ? row.Get<uint64_t>(it->m_offset[op], size) : (ascending ? UINT64_MAX : 0);
-                    sort_values.push_back(static_cast<double>(value));
-                }
+                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                    [&](uint32_t so1, uint32_t so2) {
+                        return ascending ? sort_values[so1] < sort_values[so2]
+                            : sort_values[so2] < sort_values[so1];
+                    });
             }
-            std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
-                [&](uint32_t so1, uint32_t so2) {
-                    return ascending ? sort_values[so1] < sort_values[so2]
-                        : sort_values[so2] < sort_values[so1];
-                });
+
         }
     }
 

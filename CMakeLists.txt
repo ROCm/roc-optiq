@@ -143,6 +143,13 @@ target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-core)
 target_link_libraries(rocprof-visualizer PRIVATE spdlog)
 target_link_libraries(rocprof-visualizer PRIVATE sqlite3)
 target_link_libraries(rocprof-visualizer PRIVATE json)
+
+
+# === NativeFileDialog Extended ===
+add_subdirectory(thirdparty/nativefiledialog-extended)
+target_link_libraries(rocprof-visualizer PRIVATE nfd)
+
+# === Vulkan ===
 find_package(Vulkan REQUIRED)
 target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
 

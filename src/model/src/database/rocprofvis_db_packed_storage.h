@@ -98,7 +98,7 @@ namespace DataModel
         std::unordered_map<std::string, MergedColumnDef> column_def;
         std::vector<FilterExpression::SqlAggregation> agg_params;
         std::vector<std::unordered_map<double, ColumnAggr>> aggregation_maps;
-        std::vector<std::pair<double, ColumnAggr>> result;
+        std::vector<std::pair<std::string, ColumnAggr>> result;
         std::vector<uint32_t> sort_order;
     };
 
@@ -177,7 +177,7 @@ namespace DataModel
         size_t RowCount() const { return m_rows.size(); }
         size_t AggregationRowCount() const { return m_aggregation.result.size(); }
         uint8_t GetRowSize() { return m_rowSize; }
-        std::pair<double, ColumnAggr>& GetAggreagationRow(int index) { return m_aggregation.result[m_aggregation.sort_order[index]]; };
+        std::pair<std::string, ColumnAggr>& GetAggreagationRow(int index) { return m_aggregation.result[m_aggregation.sort_order[index]]; };
         const std::vector<ColumnDef>& GetColumns() const { return m_columns; }
         const std::vector<FilterExpression::SqlAggregation>& GetAggregationSpec() const { return m_aggregation.agg_params; }
         const std::vector<MergedColumnDef>& GetMergedColumns() const { return m_merged_columns; }

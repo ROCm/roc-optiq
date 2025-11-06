@@ -408,18 +408,18 @@ namespace DataModel
             bool numeric = false;
             try {
                 size_t pos;
-                double d = std::stod(r.second.name, &pos);
-                numeric = pos == r.second.name.size(); 
+                double d = std::stod(r.first, &pos);
+                numeric = pos == r.first.size(); 
             } catch (...) {
                 numeric = false;
             }
             if (!numeric) *file << '"';
-            *file << r.second.name;
+            *file << r.first;
             if (!numeric) *file << '"';
         }
         else
         {
-            m_db->BindObject()->FuncAddTableRowCell(row, r.second.name.c_str());
+            m_db->BindObject()->FuncAddTableRowCell(row, r.first.c_str());
         }
         auto aggr_spec = m_merged_table.GetAggregationSpec();
         for (auto param : aggr_spec)

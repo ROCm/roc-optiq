@@ -266,17 +266,16 @@ namespace DataModel
 
     void PackedTable::FinalizeAggregation()
     {
-        std::map<double, ColumnAggr> result;
+        std::map<std::string, ColumnAggr> result;
         for (auto & map : m_aggregation.aggregation_maps)
         {
             for (auto [key, val] : map)
             {
-                auto it = result.find(key);
+                auto it = result.find(val.name);
                 if (it == result.end())
                 {
-                    result.insert({ key, {} });
-                    it = result.find(key);
-                    it->second.name = val.name;
+                    result.insert({ val.name, {} });
+                    it = result.find(val.name);
                     it->second.count = val.count;
                     for (auto param : m_aggregation.agg_params)
                     {
@@ -319,7 +318,7 @@ namespace DataModel
             }
             map.clear();
         }
-        std::vector<std::pair<double, ColumnAggr>> items(result.begin(), result.end());
+        std::vector<std::pair<std::string, ColumnAggr>> items(result.begin(), result.end());
         m_aggregation.result.clear();
         m_aggregation.result = std::move(items);
         m_aggregation.sort_order.clear();
@@ -335,8 +334,8 @@ namespace DataModel
             std::sort(m_aggregation.sort_order.begin(), m_aggregation.sort_order.end(),
                 [&](const uint32_t& so1, const uint32_t& so2) {
                     return sort_order ?
-                        std::strcmp(m_aggregation.result[so1].second.name.c_str(), m_aggregation.result[so2].second.name.c_str()) < 0 :
-                        std::strcmp(m_aggregation.result[so2].second.name.c_str(), m_aggregation.result[so1].second.name.c_str()) < 0;
+                        std::strcmp(m_aggregation.result[so1].first.c_str(), m_aggregation.result[so2].first.c_str()) < 0 :
+                        std::strcmp(m_aggregation.result[so2].first.c_str(), m_aggregation.result[so1].first.c_str()) < 0;
                 });
         }
         else
@@ -558,24 +557,14 @@ namespace DataModel
             });
         keys.erase(new_end, keys.end());
 
-        std::vector<bool> visited(m_rows.size(), false);
+        std::vector<std::unique_ptr<PackedRow>> new_rows;
+        new_rows.reserve(keys.size());
+        for (auto& k : keys)
+            new_rows.push_back(std::move(m_rows[k.index]));
 
-        for (size_t i = 0; i < keys.size(); ++i) {
-            size_t current = i;
-            while (!visited[current]) {
-                visited[current] = true;
-
-                size_t next = keys[current].index;
-                if (next >= m_rows.size() || visited[next])
-                    break;
-
-                std::swap(m_rows[current], m_rows[next]);
-                std::swap(keys[current].index, keys[next].index);
-            }
-        }
-
-        m_rows.resize(keys.size());
+        m_rows.swap(new_rows);
     }
+
     //void PackedTable::RemoveDuplicates()
     //{
     //    auto new_end = std::unique(m_rows.begin(), m_rows.end(),

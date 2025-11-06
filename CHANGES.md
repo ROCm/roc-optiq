@@ -1,3 +1,8 @@
+## 0.6.3
+
+### Fixes
+  - Link GLFW dynamically
+
 ## 0.6.2
 
 ### Fixes

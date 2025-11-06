@@ -19,10 +19,10 @@ enum class TimeFormat;
 
 typedef struct DisplaySettings
 {
-    bool  use_dark_mode;
-    bool  dpi_based_scaling;
-    int   font_size_index;
- 
+    bool use_dark_mode;
+    bool dpi_based_scaling;
+    int  font_size_index;
+
 } DisplaySettings;
 
 typedef struct UnitSettings
@@ -88,6 +88,8 @@ enum class Colors
     kBgWarning,
     kBgError,
     kBgSuccess,
+    kStickyNote,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };

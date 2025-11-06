@@ -64,6 +64,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(100, 100, 10, 255),   // Colors::kBgWarning
     IM_COL32(100, 10, 10, 255),    // Colors::kBgError
     IM_COL32(10, 100, 0, 255),     // Colors::kBgSuccess
+    IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
@@ -112,6 +113,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(250, 250, 100, 255),  // Colors::kBgWarning
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
+    IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> FLAME_COLORS = {
@@ -404,6 +406,8 @@ SettingsManager::GetColorWheel()
 {
     return FLAME_COLORS;
 }
+
+ 
 
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)

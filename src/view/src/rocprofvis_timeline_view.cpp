@@ -12,7 +12,9 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
-
+#include "rocprofvis_click_manager.h"   
+#include <algorithm>
+#include <GLFW/glfw3.h>
 #include "rocprofvis_font_manager.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
@@ -1484,12 +1486,15 @@ TimelineView::RenderTraceView()
 
     m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
+ 
     RenderGrid();
+ 
     RenderGraphView();
     RenderSplitter();
     RenderInteractiveUI();
 
     RenderScrubber(screen_pos);
+  
 
     if(!m_resize_activity && !m_stop_user_interaction)
     {
@@ -1551,6 +1556,7 @@ TimelineView::RenderTraceView()
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
+    TimelineFocusManager::GetInstance().EvaluateFocusedLayer();
 }
 void
 TimelineView::RenderGraphPoints()

@@ -110,7 +110,7 @@ main(int, char**)
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 #endif        
         GLFWwindow* window =
-            glfwCreateWindow(1280, 720, "ROCm Visualizer Beta", nullptr, nullptr);
+            glfwCreateWindow(1280, 720, "ROCm\xE2\x84\xA2 Optiq Beta", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
         // Drop file callback

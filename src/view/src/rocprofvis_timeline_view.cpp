@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <GLFW/glfw3.h>
 #include "rocprofvis_font_manager.h"
+#include <GLFW/glfw3.h>
+#include <algorithm>
 namespace RocProfVis
 {
 namespace View
@@ -23,7 +25,10 @@ namespace View
 
 // 20% top and bottom of the window size
 constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
-constexpr float SIDEBAR_WIDTH_MAX = 600.0f;
+constexpr float SIDEBAR_WIDTH_MAX             = 600.0f;
+
+// Maximum zoom out extent (1x zoom)
+constexpr float MAX_ZOOM_OUT_EXTENT = 1.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -117,9 +122,10 @@ TimelineView::TimelineView(DataProvider&                       dp,
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
         CalculateMaxMetaAreaSize();
         UpdateAllMaxMetaAreaSizes();
-        m_sidebar_size = std::clamp(
-            static_cast<float>(m_sidebar_size),
-            m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(), SIDEBAR_WIDTH_MAX);
+        m_sidebar_size =
+            std::clamp(static_cast<float>(m_sidebar_size),
+                       m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(),
+                       SIDEBAR_WIDTH_MAX);
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
@@ -152,9 +158,9 @@ TimelineView::RenderInteractiveUI()
                       false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
-    ImGui::BeginChild(
-        "UI Interactive Content", ImVec2(m_graph_size.x, m_track_height_sum), false,
-        window_flags | ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("UI Interactive Content",
+                      ImVec2(m_graph_size.x, m_track_height_sum), false,
+                      window_flags | ImGuiWindowFlags_NoScrollbar);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
@@ -535,9 +541,10 @@ TimelineView::RenderSplitter()
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_sidebar_size    = std::clamp(
-            m_sidebar_size + drag_delta.x,
-            m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(), SIDEBAR_WIDTH_MAX);
+        m_sidebar_size =
+            std::clamp(m_sidebar_size + drag_delta.x,
+                       m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(),
+                       SIDEBAR_WIDTH_MAX);
         m_view_time_offset_ns -=
             (drag_delta.x / display_size.x) *
             m_v_width;  // Prevents chart from moving in unexpected way.
@@ -1147,7 +1154,7 @@ TimelineView::RenderGraphView()
 void
 TimelineView::DestroyGraphs()
 {
-    if (m_graphs)
+    if(m_graphs)
     {
         for(rocprofvis_graph_t& graph : *m_graphs)
         {
@@ -1224,9 +1231,10 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                graph.chart = new LineTrackItem(
-                    m_data_provider, track_info->id, track_info->name, m_zoom,
-                    m_view_time_offset_ns, m_min_x, m_max_x, m_pixels_per_ns, m_max_meta_area_size);
+                graph.chart =
+                    new LineTrackItem(m_data_provider, track_info->id, track_info->name,
+                                      m_zoom, m_view_time_offset_ns, m_min_x, m_max_x,
+                                      m_pixels_per_ns, m_max_meta_area_size);
                 UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
                 graph.graph_type = rocprofvis_graph_t::TYPE_LINECHART;
                 break;
@@ -1255,9 +1263,9 @@ TimelineView::RenderHistogram()
 {
     if(!m_histogram || m_histogram->empty()) return;
 
-    const float     kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
-    const float     kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
-    ImVec2          window_size           = ImGui::GetWindowSize();
+    const float kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
+    const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
+    ImVec2      window_size           = ImGui::GetWindowSize();
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
@@ -1302,16 +1310,17 @@ TimelineView::RenderHistogram()
 
     // Draw view range overlays and labels
     float view_start_frac = static_cast<float>(m_view_time_offset_ns / m_range_x);
-    float view_end_frac   = static_cast<float>((m_view_time_offset_ns + m_v_width) / m_range_x);
-    view_start_frac       = std::clamp(view_start_frac, 0.0f, 1.0f);
-    view_end_frac         = std::clamp(view_end_frac, 0.0f, 1.0f);
+    float view_end_frac =
+        static_cast<float>((m_view_time_offset_ns + m_v_width) / m_range_x);
+    view_start_frac = std::clamp(view_start_frac, 0.0f, 1.0f);
+    view_end_frac   = std::clamp(view_end_frac, 0.0f, 1.0f);
 
     float x_view_start = bars_pos.x + view_start_frac * bars_width;
     float x_view_end   = bars_pos.x + view_end_frac * bars_width;
     float y0           = bars_pos.y;
     float y1           = bars_pos.y + bars_height;
 
-    const auto &time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
 
     // Left overlay
     if(x_view_start > bars_pos.x)
@@ -1368,17 +1377,18 @@ TimelineView::RenderHistogram()
     // Interval calculation
     // measure the size of the label to determine the step size
     std::string label = nanosecond_to_formatted_str(m_range_x, time_format, true) + "gap";
-    ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+    ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
     // reserve space for first and last label
-    int interval_count = static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
+    int interval_count =
+        static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
     if(interval_count < 1) interval_count = 1;
 
     double pixels_per_ns = window_size.x / m_range_x;
-    double interval_ns = calculate_nice_interval(m_range_x, interval_count);
-    double step_size_px = interval_ns * pixels_per_ns;
-    int pad_amount = 2;  // +2 for the first and last label
+    double interval_ns   = calculate_nice_interval(m_range_x, interval_count);
+    double step_size_px  = interval_ns * pixels_per_ns;
+    int    pad_amount    = 2;  // +2 for the first and last label
 
     // If the step size is smaller than the label size, try to adjust the interval count
     while(step_size_px < label_size.x)
@@ -1405,7 +1415,7 @@ TimelineView::RenderHistogram()
                                  m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
 
         std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
-        label_size = ImGui::CalcTextSize(tick_label.c_str());
+        label_size             = ImGui::CalcTextSize(tick_label.c_str());
 
         float label_x;
         if(i == 0)
@@ -1431,23 +1441,24 @@ TimelineView::RenderHistogram()
     // Check if mouse is inside histogram area
     window_pos         = ImGui::GetWindowPos();
     ImGuiIO& io        = ImGui::GetIO();
-    bool mouse_any = io.MouseDown[ImGuiMouseButton_Left] ||
-                     io.MouseDown[ImGuiMouseButton_Right] || io.MouseDown[ImGuiMouseButton_Middle];
+    bool     mouse_any = io.MouseDown[ImGuiMouseButton_Left] ||
+                     io.MouseDown[ImGuiMouseButton_Right] ||
+                     io.MouseDown[ImGuiMouseButton_Middle];
 
     ImVec2 mouse_position = io.MousePos;
-    bool   mouse_inside   = mouse_position.x >= window_pos.x && mouse_position.x <= window_pos.x + window_size.x &&
-                          mouse_position.y >= window_pos.y &&
-                          mouse_position.y <= window_pos.y + window_size.y;
+    bool   mouse_inside   = mouse_position.x >= window_pos.x &&
+                        mouse_position.x <= window_pos.x + window_size.x &&
+                        mouse_position.y >= window_pos.y &&
+                        mouse_position.y <= window_pos.y + window_size.y;
 
     // Update pseudo focus state based on mouse interaction
     if(mouse_any)
     {
-        if( mouse_inside )
+        if(mouse_inside)
             m_histogram_pseudo_focus = true;
         else
             m_histogram_pseudo_focus = false;
     }
-
 }
 
 void
@@ -1456,9 +1467,8 @@ TimelineView::RenderTraceView()
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
-    ImGuiStyle& style             = ImGui::GetStyle();
-    float       fontHeight        = ImGui::GetFontSize();
-    m_artificial_scrollbar_height = fontHeight + style.FramePadding.y * 2.0f;
+    ImGuiStyle& style      = ImGui::GetStyle();
+    float       fontHeight = ImGui::GetFontSize();
     m_graph_size =
         ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
 
@@ -1495,55 +1505,51 @@ TimelineView::RenderTraceView()
     ImGui::EndChild();  // End of Grid View 2
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
     ImGui::BeginChild("scrollbar",
                       ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_height),
                       true, ImGuiWindowFlags_NoScrollbar);
 
-    // ImGui::SameLine();
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
     ImGui::SameLine();
 
     float available_width = subcomponent_size_main.x - m_sidebar_size;
+    float view_width      = static_cast<float>(std::min(m_v_width, m_range_x));
+    float max_offset      = static_cast<float>(m_range_x - view_width);
+    float view_offset =
+        static_cast<float>(std::clamp(m_view_time_offset_ns, 0.0, (double) max_offset));
 
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
-                        available_width > 0
-                            ? std::clamp((subcomponent_size_main.x * (1.0f / m_zoom)),
-                                         (available_width * 0.05f),
-                                         (available_width * 0.90f))
-                            : 4.0f);
+    float min_grab = 4.0f;
+    float max_grab = available_width;
+    float grab_fraction =
+        (m_range_x > 0.0) ? static_cast<float>(m_v_width / m_range_x) : 1.0f;
+    float grab_min_size = std::clamp(available_width * grab_fraction, min_grab, max_grab);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, grab_min_size);
     ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab,
+                          m_settings.GetColor(Colors::kScrollBarColor));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive,
+                          m_settings.GetColor(Colors::kScrollBarColor));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, m_settings.GetColor(Colors::kFillerColor));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,
+                          m_settings.GetColor(Colors::kFillerColor));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,
+                          m_settings.GetColor(Colors::kFillerColor));
 
-    ImU32 scroll_color = m_settings.GetColor(Colors::kFillerColor);
-    ImU32 grab_color   = m_settings.GetColor(Colors::kScrollBarColor);
+    ImGui::PushItemWidth(available_width);
 
-    ImGui::PushStyleColor(ImGuiCol_SliderGrab, grab_color);
-    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, grab_color);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, scroll_color);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, scroll_color);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, scroll_color);
-
-    ImGui::PushItemWidth(subcomponent_size_main.x - m_sidebar_size);
-
-    m_v_width = std::min(m_v_width,
-                         m_range_x);  // Ensure view width does not exceed total
-                                      // range. Prevents jitter and assertion errors.
-    float max_offset  = static_cast<float>((m_range_x - m_v_width) + m_v_width * 0.10f);
-    float min_offset  = 0.0f;
-    float view_offset = static_cast<float>(m_view_time_offset_ns);
-
-    if (ImGui::SliderFloat("##scrollbar", &view_offset, min_offset, max_offset, "")) {
-
-        // Clamp the view offset to prevent scrolling out of bounds
-        m_view_time_offset_ns = std::clamp(static_cast<double>(view_offset), 0.0,
-                                        (m_range_x - m_v_width) + m_v_width * 0.10);
+    if(ImGui::SliderFloat("##scrollbar", &view_offset, 0.0f, max_offset, ""))
+    {
+        m_view_time_offset_ns =
+            std::clamp(static_cast<double>(view_offset), 0.0, (double) max_offset);
     }
 
-    ImGui::PopStyleColor(5);  // Pop the colors we pushed above
-    ImGui::PopStyleVar(2);    // Pop both style variables
     ImGui::PopItemWidth();
+    ImGui::PopStyleColor(5);
+    ImGui::PopStyleVar(2);
 
     m_stop_user_interaction = false;
 
@@ -1648,7 +1654,8 @@ TimelineView::HandleTopSurfaceTouch()
     const float zoom_speed = 0.1f;
 
     bool mouse_any = io.MouseDown[ImGuiMouseButton_Left] ||
-                     io.MouseDown[ImGuiMouseButton_Right] || io.MouseDown[ImGuiMouseButton_Middle];
+                     io.MouseDown[ImGuiMouseButton_Right] ||
+                     io.MouseDown[ImGuiMouseButton_Middle];
 
     // Sidebar: scroll wheel pans vertically
     if(is_mouse_in_sidebar)
@@ -1687,10 +1694,6 @@ TimelineView::HandleTopSurfaceTouch()
         {
             float move_amount = scroll_wheel_h * m_v_width * zoom_speed;
             m_view_time_offset_ns -= move_amount;
-
-            if(m_view_time_offset_ns < 0.0f) m_view_time_offset_ns = 0.0f;
-            if(m_view_time_offset_ns > m_range_x - m_v_width)
-                m_view_time_offset_ns = m_range_x - m_v_width;
         }
 
         // Handle Zoom at Cursor
@@ -1721,7 +1724,7 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 new_zoom *= 1.0f - zoom_speed;
             }
-            new_zoom = std::max(new_zoom, 0.9f);
+            new_zoom = std::max(new_zoom, MAX_ZOOM_OUT_EXTENT);
 
             // 4. Calculate new view width
             double new_v_width = m_range_x / new_zoom;
@@ -1739,13 +1742,14 @@ TimelineView::HandleTopSurfaceTouch()
     }
     else if(mouse_any)
     {
-        //mouse activity outside the graph area removes pseudo focus
+        // mouse activity outside the graph area removes pseudo focus
         m_pseudo_focus = false;
     }
 
     // Only handle keyboard input if not typing in a text input and no item is active
     // and this view has focus
-    if(m_pseudo_focus || m_histogram_pseudo_focus && !io.WantTextInput && !ImGui::IsAnyItemActive())
+    if(m_pseudo_focus ||
+       m_histogram_pseudo_focus && !io.WantTextInput && !ImGui::IsAnyItemActive())
     {
         // WASD and Arrow key panning
         float pan_speed_sped_up = 2;
@@ -1756,7 +1760,7 @@ TimelineView::HandleTopSurfaceTouch()
         float region_moved_per_click_x = 0.01 * m_graph_size.x;
         float region_moved_per_click_y = 0.01 * m_content_max_y_scroll;
 
-        //A, D, left arrow, right arrow go left and right
+        // A, D, left arrow, right arrow go left and right
         if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
         {
             m_view_time_offset_ns -=
@@ -1774,13 +1778,13 @@ TimelineView::HandleTopSurfaceTouch()
         {
             // Zoom in
             new_zoom = m_zoom * (1.0f + zoom_speed * pan_speed);
-            new_zoom = std::max(new_zoom, 0.9f);
+            new_zoom = std::max(new_zoom, MAX_ZOOM_OUT_EXTENT);
         }
         if(ImGui::IsKeyPressed(ImGuiKey_S))
         {
             // Zoom out
             new_zoom = m_zoom * (1.0f - zoom_speed * pan_speed);
-            new_zoom = std::max(new_zoom, 0.9f);
+            new_zoom = std::max(new_zoom, MAX_ZOOM_OUT_EXTENT);
         }
         if(new_zoom > 0.0f)
         {
@@ -1798,14 +1802,14 @@ TimelineView::HandleTopSurfaceTouch()
         if(ImGui::IsKeyPressed(ImGuiKey_UpArrow))
         {
             m_scroll_position_y =
-                std::clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y, 0.0f,
-                    m_content_max_y_scroll);
+                std::clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y,
+                           0.0f, m_content_max_y_scroll);
         }
         if(ImGui::IsKeyPressed(ImGuiKey_DownArrow))
         {
             m_scroll_position_y =
-                std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y, 0.0f,
-                    m_content_max_y_scroll);
+                std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y,
+                           0.0f, m_content_max_y_scroll);
         }
     }
 
@@ -1827,20 +1831,17 @@ TimelineView::HandleTopSurfaceTouch()
 
         float user_requested_move = (drag / m_graph_size.x) * view_width;
 
-        if(user_requested_move < 0)
-        {
-            if(m_view_time_offset_ns < (m_range_x))
-            {
-                m_view_time_offset_ns -= user_requested_move;
-            }
-        }
-        else
-        {
-            if(m_view_time_offset_ns > 0)
-            {
-                m_view_time_offset_ns -= user_requested_move;
-            }
-        }
+        m_view_time_offset_ns -= user_requested_move;
+    }
+
+    // Validate if view time offset is not negative or beyond range
+    if(m_view_time_offset_ns <= 0.0f)
+    {
+        m_view_time_offset_ns = 0.0f;
+    }
+    else if(m_view_time_offset_ns + m_v_width >= m_range_x)
+    {
+        m_view_time_offset_ns = m_range_x - m_v_width;
     }
 }
 
@@ -1866,8 +1867,8 @@ TimelineView::UpdateMaxMetaAreaSize(float new_size)
 void
 TimelineView::CalculateMaxMetaAreaSize()
 {
-    m_max_meta_area_size = 0.0f;
-    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
+    m_max_meta_area_size                        = 0.0f;
+    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
@@ -1884,13 +1885,13 @@ TimelineView::CalculateMaxMetaAreaSize()
 void
 TimelineView::UpdateAllMaxMetaAreaSizes()
 {
-    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
+    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
         const track_info_t* track_info = track_list[i];
         auto                graph      = (*m_graphs)[track_info->index];
-        if (track_info->track_type == kRPVControllerTrackTypeSamples)
+        if(track_info->track_type == kRPVControllerTrackTypeSamples)
         {
             graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
         }

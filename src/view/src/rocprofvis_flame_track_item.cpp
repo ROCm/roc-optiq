@@ -20,14 +20,23 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr int   MIN_LABEL_WIDTH          = 40;
+constexpr float MIN_LABEL_WIDTH          = 40.0f;
 constexpr float HIGHLIGHT_THICKNESS      = 4.0f;
 constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
+constexpr float MAX_NAME_WIDTH           = 200.0f;
+constexpr float TOOLTIP_OFFSET           = 16.0f;
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
 issues (rectangle being too big or too small).
 */
-constexpr int ANTI_ALIASING_WORKAROUND = 1;
+constexpr float ANTI_ALIASING_WORKAROUND = 1.0f;
+
+float FlameTrackItem::s_max_event_label_width = 0.0f;
+
+void FlameTrackItem::CalculateMaxEventLabelWidth() {
+     // Assume max 100 characters for estimation at current font size.
+    s_max_event_label_width = ImGui::CalcTextSize("W").x * 100.0f;
+}
 
 FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
@@ -45,6 +54,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_has_drawn_tool_tip(false)
 , m_project_settings(dp.GetTraceFilePath(), *this)
 , m_selected_chart_items({})
+, m_tooltip_size(0.0f, 0.0f)
 {
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
@@ -97,6 +107,7 @@ FlameTrackItem::RenderMetaAreaExpand()
     }
     ImGui::PopStyleColor(3);
 }
+
 FlameTrackItem::~FlameTrackItem()
 {
     EventManager::GetInstance()->Unsubscribe(
@@ -159,40 +170,59 @@ FlameTrackItem::ExtractPointsFromData()
         m_chart_items[i].event                = event;
         m_chart_items[i].selected  = m_timeline_selection->EventSelected(event.m_id);
         m_chart_items[i].name_hash = std::hash<std::string>{}(event.m_name);
-
-        // Parse name string to extract child event info if this is a combined event
-        if(event.m_child_count > 1) {
-            std::stringstream ss(event.m_name);
-            std::string line;
-            m_chart_items[i].child_info.reserve(event.m_child_count);
-            while (std::getline(ss, line)) {
-                ChildEventInfo child_info;
-                if (ParseChildInfo(line, child_info)) {
-                    m_chart_items[i].child_info.push_back(child_info);
-                }
-            }
-        }
-
+        m_chart_items[i].child_info.clear();
     }
     return true;
 }
 
-bool FlameTrackItem::ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info) {
-    size_t pos = combined_name.find(" of ");
-    if (pos != std::string::npos) {
-        try {
-            size_t count = std::stoul(combined_name.substr(0, pos));
-            std::string name = combined_name.substr(pos + 4);  // +4 to skip " of "
-            out_info = {name, std::hash<std::string>{}(name), count};
-            return true;
-        } catch (const std::invalid_argument&) {
-            spdlog::warn("Failed to parse child event info from string: {}", combined_name);
+bool
+FlameTrackItem::ExtractChildInfo(ChartItem& item)
+{
+    // Parse name string to extract child event info if this is a combined event
+    if(item.event.m_child_count > 1)
+    {
+        std::stringstream ss(item.event.m_name);
+        std::string       line;
+        item.child_info.clear();
+        item.child_info.reserve(item.event.m_child_count);
+        while(std::getline(ss, line))
+        {
+            ChildEventInfo child_info;
+            if(ParseChildInfo(line, child_info))
+            {
+                item.child_info.push_back(child_info);
+            }
         }
     }
-    out_info = {"", 0, 0};  // Default if parsing fails
-    return false;
+    else
+    {
+        item.child_info.clear();
+        return false;
+    }
+    return true;
 }
 
+bool
+FlameTrackItem::ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info)
+{
+    size_t pos = combined_name.find(" of ");
+    if(pos != std::string::npos)
+    {
+        try
+        {
+            size_t      count = std::stoul(combined_name.substr(0, pos));
+            std::string name  = combined_name.substr(pos + 4);  // +4 to skip " of "
+            out_info          = { name, std::hash<std::string>{}(name), count };
+            return true;
+        } catch(const std::invalid_argument&)
+        {
+            spdlog::warn("Failed to parse child event info from string: {}",
+                         combined_name);
+        }
+    }
+    out_info = { "", 0, 0 };  // Default if parsing fails
+    return false;
+}
 
 void
 FlameTrackItem::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
@@ -285,17 +315,45 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
 }
 
 void
-FlameTrackItem::RenderTooltip(const ChartItem& chart_item, int color_index)
+FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 {
     const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
     int         color_count = static_cast<int>(m_settings.GetColorWheel().size());
 
+    ImVec2 mouse_pos = ImGui::GetMousePos();
+    ImVec2 viewport_size = ImGui::GetMainViewport()->Size;
+
+    ImVec2 pos = mouse_pos + ImVec2(TOOLTIP_OFFSET, TOOLTIP_OFFSET);
+
+    ImVec2 estimated_size = m_tooltip_size;
+
+    // Flip horizontally if too close to right edge
+    if (pos.x + estimated_size.x > viewport_size.x) {
+        pos.x = mouse_pos.x - TOOLTIP_OFFSET - estimated_size.x;
+    }
+
+    // Flip vertically if too close to bottom edge
+    if (pos.y + estimated_size.y > viewport_size.y) {
+        pos.y = mouse_pos.y - TOOLTIP_OFFSET - estimated_size.y;
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, m_settings.GetColor(Colors::kBgFrame));
+    ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+    ImGui::Begin("FlameTooltip", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoFocusOnAppearing |
+                     ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize |
+                     ImGuiWindowFlags_NoSavedSettings);
+
     if(chart_item.event.m_child_count > 1)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+        if(chart_item.child_info.empty())
+        {
+            // Extract child info on demand
+            ExtractChildInfo(chart_item);
+        }
 
-        ImGui::BeginTooltip();
         ImGui::Text("%u events", chart_item.event.m_child_count);
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall));
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
@@ -303,8 +361,17 @@ FlameTrackItem::RenderTooltip(const ChartItem& chart_item, int color_index)
         if(ImGui::BeginTable("ChildEventsTable", 2,
                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
         {
-            // Table headers
-            ImGui::TableSetupColumn("Name");
+            // Calculate max name width for auto-fit up to MAX_NAME_WIDTH
+            float max_name_width = 0.0f;
+            for(int i = 0; i < chart_item.child_info.size(); ++i)
+            {
+                float text_width = ImGui::CalcTextSize(chart_item.child_info[i].name.c_str()).x;
+                if(text_width > max_name_width) max_name_width = text_width;
+            }
+            float name_col_width = (max_name_width < 300.0f) ? max_name_width : 300.0f;
+
+            // Table headers with auto-fit width for Name column
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, name_col_width);
             ImGui::TableSetupColumn("Count");
             ImGui::TableHeadersRow();
 
@@ -323,7 +390,7 @@ FlameTrackItem::RenderTooltip(const ChartItem& chart_item, int color_index)
                     ImU32 cellBgColor = m_settings.GetColorWheel()[c_idx];
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, cellBgColor);
                 }
-                ImGui::Text("%s", chart_item.child_info[i].name.c_str());
+                ImGui::TextWrapped("%s", chart_item.child_info[i].name.c_str());
 
                 // Count column
                 ImGui::TableNextColumn();
@@ -341,39 +408,37 @@ FlameTrackItem::RenderTooltip(const ChartItem& chart_item, int color_index)
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
         ImGui::Text("Combined Duration: %s", label.c_str());
-
-        ImGui::EndTooltip();
-        ImGui::PopStyleVar(2);
-        return;
     }
-
-    rocprofvis_trace_event_t_id_t event_id{};
-    event_id.id = chart_item.event.m_id;
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
-    ImGui::BeginTooltip();
-    ImGui::TextUnformatted("Name: ");
-    ImGui::SameLine();
-    if(m_event_color_mode != EventColorMode::kNone)
+    else
     {
-        ImVec2      text_size = ImGui::CalcTextSize(chart_item.event.m_name.c_str());
-        ImVec2      p         = ImGui::GetCursorScreenPos();
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImU32       rectColor = m_settings.GetColorWheel()[color_index];
-        draw_list->AddRectFilled(p, ImVec2(p.x + text_size.x, p.y + text_size.y),
-                                 rectColor);
+        rocprofvis_trace_event_t_id_t event_id{};
+        event_id.id = chart_item.event.m_id;
+        ImGui::TextUnformatted("Name: ");
+        ImGui::SameLine();
+        if(m_event_color_mode != EventColorMode::kNone)
+        {
+            ImVec2      text_size = ImGui::CalcTextSize(chart_item.event.m_name.c_str());
+            ImVec2      p         = ImGui::GetCursorScreenPos();
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            ImU32       rectColor = m_settings.GetColorWheel()[color_index];
+            draw_list->AddRectFilled(p, ImVec2(p.x + text_size.x, p.y + text_size.y),
+                                     rectColor);
+        }
+        ImGui::Text("%s", chart_item.event.m_name.c_str());
+        ImGui::Separator();
+        std::string label = nanosecond_to_formatted_str(chart_item.event.m_start_ts - m_min_x,
+                                                        time_format, true);
+        ImGui::Text("Start: %s", label.c_str());
+        label = nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
+        ImGui::Text("Duration: %s", label.c_str());
+        ImGui::Text("Id: %llu", chart_item.event.m_id);
+        ImGui::Text("DB Id: %llu", event_id.bitfield.db_event_id);
     }
-    ImGui::Text("%s", chart_item.event.m_name.c_str());
-    ImGui::Separator();
-    std::string label = nanosecond_to_formatted_str(chart_item.event.m_start_ts - m_min_x,
-                                                    time_format, true);
-    ImGui::Text("Start: %s", label.c_str());
-    label = nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
-    ImGui::Text("Duration: %s", label.c_str());
-    ImGui::Text("Id: %llu", chart_item.event.m_id);
-    ImGui::Text("DB Id: %llu", event_id.bitfield.db_event_id);
-    ImGui::EndTooltip();
+
+    m_tooltip_size = ImGui::GetWindowSize(); // save size for positioning
     ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    ImGui::End();
 }
 
 void

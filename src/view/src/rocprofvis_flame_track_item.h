@@ -51,6 +51,10 @@ public:
 
     bool ReleaseData() override;
 
+    // Called to calculate max event label width for all flame track items.
+    // Call after font size or style changes.
+    static void CalculateMaxEventLabelWidth();
+
 protected:
     void RenderChart(float graph_width) override;
     void RenderMetaAreaScale() override;
@@ -77,10 +81,12 @@ private:
 
     void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
                  float duration, ImDrawList* draw_list);
+
     bool ExtractPointsFromData();
+    bool ExtractChildInfo(ChartItem& item);
     bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
 
-    void RenderTooltip(const ChartItem& chart_item, int color_index);
+    void RenderTooltip(ChartItem& chart_item, int color_index);
 
     std::vector<ChartItem>             m_chart_items;
     EventColorMode                     m_event_color_mode;
@@ -96,6 +102,9 @@ private:
     bool                            m_has_drawn_tool_tip;
     std::vector<ChartItem>          m_selected_chart_items;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
+    ImVec2                          m_tooltip_size;
+
+    static float s_max_event_label_width;
 };
 
 }  // namespace View

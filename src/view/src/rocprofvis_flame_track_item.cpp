@@ -23,8 +23,10 @@ namespace View
 constexpr float MIN_LABEL_WIDTH          = 40.0f;
 constexpr float HIGHLIGHT_THICKNESS      = 4.0f;
 constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
-constexpr float MAX_NAME_WIDTH           = 200.0f;
 constexpr float TOOLTIP_OFFSET           = 16.0f;
+constexpr int   MAX_CHARACTERS_PER_LINE  = 40;
+constexpr float MAX_TABLE_HEIGHT         = 300.0f;
+
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
 issues (rectangle being too big or too small).
@@ -34,8 +36,8 @@ constexpr float ANTI_ALIASING_WORKAROUND = 1.0f;
 float FlameTrackItem::s_max_event_label_width = 0.0f;
 
 void FlameTrackItem::CalculateMaxEventLabelWidth() {
-     // Assume max 100 characters for estimation at current font size.
-    s_max_event_label_width = ImGui::CalcTextSize("W").x * 100.0f;
+     // Assume max MAX_CHARACTERS_PER_LINE characters for estimation at current font size.
+    s_max_event_label_width = ImGui::CalcTextSize("W").x * MAX_CHARACTERS_PER_LINE;
 }
 
 FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
@@ -322,20 +324,22 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 
     ImVec2 mouse_pos = ImGui::GetMousePos();
     ImVec2 viewport_size = ImGui::GetMainViewport()->Size;
-
-    ImVec2 pos = mouse_pos + ImVec2(TOOLTIP_OFFSET, TOOLTIP_OFFSET);
-
     ImVec2 estimated_size = m_tooltip_size;
 
-    // Flip horizontally if too close to right edge
-    if (pos.x + estimated_size.x > viewport_size.x) {
-        pos.x = mouse_pos.x - TOOLTIP_OFFSET - estimated_size.x;
-    }
+    // Calculate possible positions and choose the one with more visible content
+    float pos_x_right = mouse_pos.x + TOOLTIP_OFFSET;
+    float visible_width_right = fmax(0.0f, fmin(viewport_size.x, pos_x_right + estimated_size.x) - pos_x_right);
+    float pos_x_left = mouse_pos.x - TOOLTIP_OFFSET - estimated_size.x;
+    float visible_width_left = fmax(0.0f, fmin(viewport_size.x, pos_x_left + estimated_size.x) - pos_x_left);
+    float pos_x = (visible_width_left > visible_width_right) ? pos_x_left : pos_x_right;
 
-    // Flip vertically if too close to bottom edge
-    if (pos.y + estimated_size.y > viewport_size.y) {
-        pos.y = mouse_pos.y - TOOLTIP_OFFSET - estimated_size.y;
-    }
+    float pos_y_bottom = mouse_pos.y + TOOLTIP_OFFSET;
+    float visible_height_bottom = fmax(0.0f, fmin(viewport_size.y, pos_y_bottom + estimated_size.y) - pos_y_bottom);
+    float pos_y_top = mouse_pos.y - TOOLTIP_OFFSET - estimated_size.y;
+    float visible_height_top = fmax(0.0f, fmin(viewport_size.y, pos_y_top + estimated_size.y) - pos_y_top);
+    float pos_y = (visible_height_top > visible_height_bottom) ? pos_y_top : pos_y_bottom;
+
+    ImVec2 pos(pos_x, pos_y);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
@@ -361,14 +365,14 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         if(ImGui::BeginTable("ChildEventsTable", 2,
                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
         {
-            // Calculate max name width for auto-fit up to MAX_NAME_WIDTH
+            // Calculate max name width for auto-fit up to s_max_event_label_width
             float max_name_width = 0.0f;
             for(int i = 0; i < chart_item.child_info.size(); ++i)
             {
                 float text_width = ImGui::CalcTextSize(chart_item.child_info[i].name.c_str()).x;
                 if(text_width > max_name_width) max_name_width = text_width;
             }
-            float name_col_width = (max_name_width < 300.0f) ? max_name_width : 300.0f;
+            float name_col_width = (max_name_width < s_max_event_label_width) ? max_name_width : s_max_event_label_width;
 
             // Table headers with auto-fit width for Name column
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, name_col_width);
@@ -376,8 +380,17 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
             ImGui::TableHeadersRow();
 
             // Table rows
-            for(int i = 0; i < chart_item.child_info.size(); ++i)
+            const size_t size = chart_item.child_info.size();
+            float current_height = 0.0f;
+            int num_shown = 0;
+            for(int i = 0; i < size; ++i)
             {
+                // Calculate actual row height based on wrapped text
+                ImVec2 name_size = ImGui::CalcTextSize(chart_item.child_info[i].name.c_str(), nullptr, false, name_col_width);
+                std::string count_str = std::to_string(chart_item.child_info[i].count);
+                ImVec2 count_size = ImGui::CalcTextSize(count_str.c_str());
+                float row_height = fmax(name_size.y, count_size.y) + ImGui::GetStyle().CellPadding.y * 2.0f;
+                if(current_height + row_height > MAX_TABLE_HEIGHT) break;
                 ImGui::TableNextRow();
 
                 // Name column
@@ -396,6 +409,17 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
                 ImGui::TableNextColumn();
                 const ChildEventInfo& child = chart_item.child_info[i];
                 ImGui::Text("%zu", child.count);
+
+                current_height += row_height;
+                num_shown++;
+            }
+            if(num_shown < size)
+            {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("(%zu rows hidden)", size - num_shown);
+                ImGui::TableNextColumn();
+                // Empty
             }
             ImGui::EndTable();
         }

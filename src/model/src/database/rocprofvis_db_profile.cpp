@@ -725,10 +725,11 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
 rocprofvis_dm_result_t
 ProfileDatabase::ExecuteQueriesAsync(
     std::vector<std::string>& queries,
-    std::vector<Future*> & futures,
+    std::vector<Future*> & sub_futures,
     rocprofvis_dm_handle_t handle,
     RpvSqliteExecuteQueryCallback callback)
 {
+    std::vector<Future*> futures = sub_futures;
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     futures.resize(queries.size());
     for(int i = 0; i < queries.size(); i++)
@@ -755,7 +756,13 @@ ProfileDatabase::ExecuteQueriesAsync(
             {
                 result = kRocProfVisDmResultUnknownError;
             }
-            rocprofvis_db_future_free(futures[i]);
+            auto it = std::find_if(sub_futures.begin(), sub_futures.end(), [&](Future* f) { return f == futures[i]; });
+            if (it != sub_futures.end())
+            {
+                sub_futures.erase(it);
+                rocprofvis_db_future_free(*it);
+                futures[i] = nullptr;
+            }
         }
     }
     futures.clear();

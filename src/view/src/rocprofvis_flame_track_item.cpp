@@ -11,8 +11,8 @@
 #include "spdlog/spdlog.h"
 #include <cmath>
 #include <limits>
-#include <string>
 #include <sstream>
+#include <string>
 #include <unordered_set>
 
 namespace RocProfVis
@@ -33,10 +33,13 @@ issues (rectangle being too big or too small).
 */
 constexpr float ANTI_ALIASING_WORKAROUND = 1.0f;
 
-float FlameTrackItem::s_max_event_label_width = 0.0f;
+const std::string FlameTrackItem::s_child_info_separator  = " of ";
+float             FlameTrackItem::s_max_event_label_width = 0.0f;
 
-void FlameTrackItem::CalculateMaxEventLabelWidth() {
-     // Assume max MAX_CHARACTERS_PER_LINE characters for estimation at current font size.
+void
+FlameTrackItem::CalculateMaxEventLabelWidth()
+{
+    // Assume max MAX_CHARACTERS_PER_LINE characters for estimation at current font size.
     s_max_event_label_width = ImGui::CalcTextSize("W").x * MAX_CHARACTERS_PER_LINE;
 }
 
@@ -199,9 +202,9 @@ FlameTrackItem::ExtractChildInfo(ChartItem& item)
         if(item.child_info.empty())
         {
             item.child_info.clear();
-            item.child_info.push_back(
-                { item.event.m_name, std::hash<std::string>{}(item.event.m_name),
-                  item.event.m_child_count });
+            item.child_info.push_back({ item.event.m_name,
+                                        std::hash<std::string>{}(item.event.m_name),
+                                        item.event.m_child_count });
         }
     }
     else
@@ -215,13 +218,13 @@ FlameTrackItem::ExtractChildInfo(ChartItem& item)
 bool
 FlameTrackItem::ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info)
 {
-    size_t pos = combined_name.find(" of ");
+    size_t pos = combined_name.find(s_child_info_separator);
     if(pos != std::string::npos)
     {
         try
         {
             size_t      count = std::stoul(combined_name.substr(0, pos));
-            std::string name  = combined_name.substr(pos + 4);  // +4 to skip " of "
+            std::string name  = combined_name.substr(pos + s_child_info_separator.size());
             out_info          = { name, std::hash<std::string>{}(name), count };
             return true;
         } catch(const std::invalid_argument&)
@@ -292,7 +295,6 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         {
             // Defer on click execution to next frame if no other layer takes focus
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kGraphLayer);
-
         }
         // Execute deferred click if layer has focus
         else if(!m_deferred_click_handled &&
@@ -330,27 +332,32 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
     const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
     int         color_count = static_cast<int>(m_settings.GetColorWheel().size());
 
-    ImVec2 mouse_pos = ImGui::GetMousePos();
-    ImVec2 viewport_size = ImGui::GetMainViewport()->Size;
+    ImVec2 mouse_pos      = ImGui::GetMousePos();
+    ImVec2 viewport_size  = ImGui::GetMainViewport()->Size;
     ImVec2 estimated_size = m_tooltip_size;
 
-    // Calculate possible positions and choose the one with more visible content
+    // Calculate possible tooltip positions and choose the one with more visible content
     float pos_x_right = mouse_pos.x + TOOLTIP_OFFSET;
-    float visible_width_right = fmax(0.0f, fmin(viewport_size.x, pos_x_right + estimated_size.x) - pos_x_right);
+    float visible_width_right =
+        fmax(0.0f, fmin(viewport_size.x, pos_x_right + estimated_size.x) - pos_x_right);
     float pos_x_left = mouse_pos.x - TOOLTIP_OFFSET - estimated_size.x;
-    float visible_width_left = fmax(0.0f, fmin(viewport_size.x, pos_x_left + estimated_size.x) - pos_x_left);
+    float visible_width_left =
+        fmax(0.0f, fmin(viewport_size.x, pos_x_left + estimated_size.x) - pos_x_left);
     float pos_x = (visible_width_left > visible_width_right) ? pos_x_left : pos_x_right;
 
     float pos_y_bottom = mouse_pos.y + TOOLTIP_OFFSET;
-    float visible_height_bottom = fmax(0.0f, fmin(viewport_size.y, pos_y_bottom + estimated_size.y) - pos_y_bottom);
+    float visible_height_bottom =
+        fmax(0.0f, fmin(viewport_size.y, pos_y_bottom + estimated_size.y) - pos_y_bottom);
     float pos_y_top = mouse_pos.y - TOOLTIP_OFFSET - estimated_size.y;
-    float visible_height_top = fmax(0.0f, fmin(viewport_size.y, pos_y_top + estimated_size.y) - pos_y_top);
+    float visible_height_top =
+        fmax(0.0f, fmin(viewport_size.y, pos_y_top + estimated_size.y) - pos_y_top);
     float pos_y = (visible_height_top > visible_height_bottom) ? pos_y_top : pos_y_bottom;
 
     ImVec2 pos(pos_x, pos_y);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_text_padding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        m_settings.GetDefaultStyle().FrameRounding);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, m_settings.GetColor(Colors::kBgFrame));
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
     ImGui::Begin("FlameTooltip", nullptr,
@@ -377,27 +384,34 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
             float max_name_width = 0.0f;
             for(int i = 0; i < chart_item.child_info.size(); ++i)
             {
-                float text_width = ImGui::CalcTextSize(chart_item.child_info[i].name.c_str()).x;
+                float text_width =
+                    ImGui::CalcTextSize(chart_item.child_info[i].name.c_str()).x;
                 if(text_width > max_name_width) max_name_width = text_width;
             }
-            float name_col_width = (max_name_width < s_max_event_label_width) ? max_name_width : s_max_event_label_width;
+            float name_col_width = (max_name_width < s_max_event_label_width)
+                                       ? max_name_width
+                                       : s_max_event_label_width;
 
             // Table headers with auto-fit width for Name column
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, name_col_width);
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed,
+                                    name_col_width);
             ImGui::TableSetupColumn("Count");
             ImGui::TableHeadersRow();
 
             // Table rows
-            const size_t size = chart_item.child_info.size();
-            float current_height = 0.0f;
-            int num_shown = 0;
+            const size_t size           = chart_item.child_info.size();
+            float        current_height = 0.0f;
+            int          num_shown      = 0;
             for(int i = 0; i < size; ++i)
             {
                 // Calculate actual row height based on wrapped text
-                ImVec2 name_size = ImGui::CalcTextSize(chart_item.child_info[i].name.c_str(), nullptr, false, name_col_width);
-                std::string count_str = std::to_string(chart_item.child_info[i].count);
-                ImVec2 count_size = ImGui::CalcTextSize(count_str.c_str());
-                float row_height = fmax(name_size.y, count_size.y) + ImGui::GetStyle().CellPadding.y * 2.0f;
+                ImVec2 name_size =
+                    ImGui::CalcTextSize(chart_item.child_info[i].name.c_str(), nullptr,
+                                        false, name_col_width);
+                std::string count_str  = std::to_string(chart_item.child_info[i].count);
+                ImVec2      count_size = ImGui::CalcTextSize(count_str.c_str());
+                float       row_height = fmax(name_size.y, count_size.y) +
+                                   ImGui::GetStyle().CellPadding.y * 2.0f;
                 if(current_height + row_height > MAX_TABLE_HEIGHT) break;
                 ImGui::TableNextRow();
 
@@ -461,16 +475,17 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         ImGui::TextWrapped("%s", chart_item.event.m_name.c_str());
         ImGui::PopTextWrapPos();
         ImGui::Separator();
-        std::string label = nanosecond_to_formatted_str(chart_item.event.m_start_ts - m_min_x,
-                                                        time_format, true);
+        std::string label = nanosecond_to_formatted_str(
+            chart_item.event.m_start_ts - m_min_x, time_format, true);
         ImGui::Text("Start: %s", label.c_str());
-        label = nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
+        label =
+            nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
         ImGui::Text("Duration: %s", label.c_str());
         ImGui::Text("Id: %llu", chart_item.event.m_id);
         ImGui::Text("DB Id: %llu", event_id.bitfield.db_event_id);
     }
 
-    m_tooltip_size = ImGui::GetWindowSize(); // save size for positioning
+    m_tooltip_size = ImGui::GetWindowSize();  // save size for positioning
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();
     ImGui::End();

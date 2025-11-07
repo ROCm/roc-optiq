@@ -104,7 +104,8 @@ private:
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
     ImVec2                          m_tooltip_size;
 
-    static float s_max_event_label_width;
+    static float             s_max_event_label_width;
+    static const std::string s_child_info_separator;
 };
 
 }  // namespace View

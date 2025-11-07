@@ -2309,26 +2309,70 @@ DataProvider::ProcessEventExtendedRequest(data_req_info_t& req)
             event_info.ext_info[j].value =
                 GetString(ext_data_handle, kRPVControllerExtDataValue, 0);
 
-            // this block is for testing purposes. Use kRPVControllerExtDataType and
-            // kRPVControllerExtDataCategoryEnum as needed
+            uint64_t data_type;  // rocprofvis_controller_primitive_type_t
+            uint64_t data_enum;  // rocprofvis_event_data_category_enum_t
+            result = rocprofvis_controller_get_uint64(
+                ext_data_handle, kRPVControllerExtDataType, 0, (uint64_t*) &data_type);
+            result = rocprofvis_controller_get_uint64(ext_data_handle,
+                                                      kRPVControllerExtDataCategoryEnum,
+                                                      0, (uint64_t*) &data_enum);
+
+            // For debugging purposes, append data type and enum to value to see what they
+            // are
+            // {
+            //     event_info.ext_info[j].value += " (" + std::to_string(data_type) + ","
+            //     +
+            //                                     std::to_string(data_enum) + ")";
+            // }
+
+            event_info.ext_info[j].category_enum = data_enum;
+
+            // populate basic info section
+            switch(data_enum)
             {
-                // uint64_t data_type; //rocprofvis_controller_primitive_type_t
-                // uint64_t data_enum; //rocprofvis_event_data_category_enum_t
-                // if(kRocProfVisResultSuccess ==
-                //        rocprofvis_controller_get_uint64(ext_data_handle,
-                //                                         kRPVControllerExtDataType, 0,
-                //                                         (uint64_t*) &data_type) &&
-                //    kRocProfVisResultSuccess ==
-                //        rocprofvis_controller_get_uint64(ext_data_handle,
-                //                                         kRPVControllerExtDataCategoryEnum,
-                //                                         0, (uint64_t*) &data_enum))
-                //{
-                //     event_info.ext_info[j].value += " (" + std::to_string(data_type) +
-                //                                     "," + std::to_string(data_enum) +
-                //                                     ")";
-                // }
+                case kRocProfVisEventEssentialDataName:
+                    event_info.basic_info.m_name = event_info.ext_info[j].value;
+                    break;
+                case kRocProfVisEventEssentialDataStart:
+                {
+                    uint64_t tmp_val = 0;
+                    ROCPROFVIS_ASSERT(data_type == kRPVControllerPrimitiveTypeUInt64);
+                    result = rocprofvis_controller_get_uint64(
+                        ext_data_handle, kRPVControllerExtDataValue, 0, &tmp_val);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        event_info.basic_info.m_start_ts = static_cast<double>(tmp_val);
+                    }
+                }
+                break;
+                case kRocProfVisEventEssentialDataDuration:
+                {
+                    uint64_t tmp_val = 0;
+                    ROCPROFVIS_ASSERT(data_type == kRPVControllerPrimitiveTypeUInt64);
+                    result = rocprofvis_controller_get_uint64(
+                        ext_data_handle, kRPVControllerExtDataValue, 0, &tmp_val);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        event_info.basic_info.m_duration = static_cast<double>(tmp_val);
+                    }
+                }
+                break;
+                // TODO: how to handle stream levels?
+                case kRocProfVisEventEssentialDataLevel:
+                {
+                    uint64_t tmp_val = 0;
+                    ROCPROFVIS_ASSERT(data_type == kRPVControllerPrimitiveTypeUInt64);
+                    result = rocprofvis_controller_get_uint64(
+                        ext_data_handle, kRPVControllerExtDataValue, 0, &tmp_val);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        event_info.basic_info.m_level = static_cast<uint32_t>(tmp_val);
+                    }
+                }
+                break;
+                default: 
+                break;
             }
-            // end of test block
         }
     }
 
@@ -2429,23 +2473,29 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
                 GetString(flow_control_handle, kRPVControllerFlowControlName, 0);
         }
 
-        event_flow_data_t flow;
-        flow.direction = 0;  // Doesnt matter the UI will figure out direction by order.
-        flow.id        = event_info_for_requester->basic_info.m_id;
-        flow.level     = event_info_for_requester->basic_info.m_level;
-        flow.name      = event_info_for_requester->basic_info.m_name;
-        flow.start_timestamp =
-            static_cast<uint64_t>(event_info_for_requester->basic_info.m_start_ts);
-        flow.track_id  = event_info_for_requester->track_id;
-        flow.end_timestamp =
-            static_cast<uint64_t>(event_info_for_requester->basic_info.m_start_ts +
-                                  event_info_for_requester->basic_info.m_duration);
-        event_info.flow_info.push_back(flow);
+        // Add the event itself as part of the flow and sort by timestamp
+        if(prop_count > 0) 
+        {
+            // TODO: basic info might not be ready yet as some fields may
+            // come from extended data, need to ensure that is handled properly
+            event_flow_data_t flow;
+            flow.direction = 0;  // TODO: fix direction for RPD traces
+            flow.id        = event_info_for_requester->basic_info.m_id;
+            flow.level     = event_info_for_requester->basic_info.m_level;
+            flow.name      = event_info_for_requester->basic_info.m_name;
+            flow.start_timestamp =
+                static_cast<uint64_t>(event_info_for_requester->basic_info.m_start_ts);
+            flow.track_id  = event_info_for_requester->track_id;
+            flow.end_timestamp =
+                static_cast<uint64_t>(event_info_for_requester->basic_info.m_start_ts +
+                                    event_info_for_requester->basic_info.m_duration);
+            event_info.flow_info.push_back(flow);
 
-        std::sort(event_info.flow_info.begin(), event_info.flow_info.end(),
-                  [](const event_flow_data_t& a, const event_flow_data_t& b) {
-                      return a.start_timestamp < b.start_timestamp;
-                  });
+            std::sort(event_info.flow_info.begin(), event_info.flow_info.end(),
+                    [](const event_flow_data_t& a, const event_flow_data_t& b) {
+                        return a.start_timestamp < b.start_timestamp;
+                    });    
+        }
     }
 
     rocprofvis_controller_array_free(req.request_array);
@@ -3152,6 +3202,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
 bool
 DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
 {
+    m_event_data[event_id] = {};
     m_event_data[event_id].track_id = track_id;
     const RawTrackEventData* event_track =
         dynamic_cast<const RawTrackEventData*>(GetRawTrackData(track_id));
@@ -3161,7 +3212,16 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
         {
             if(event.m_id == event_id)
             {
-                m_event_data[event_id].basic_info = event;
+                m_event_data[event_id].basic_info.m_id = event.m_id;
+                m_event_data[event_id].basic_info.m_start_ts = event.m_start_ts;
+                m_event_data[event_id].basic_info.m_child_count = event.m_child_count;
+                //only set values below if this is single event, not a combined event
+                if(event.m_child_count == 1) 
+                {
+                    m_event_data[event_id].basic_info.m_duration = event.m_duration;
+                    m_event_data[event_id].basic_info.m_level = event.m_level;
+                    m_event_data[event_id].basic_info.m_name = event.m_name;
+                }
                 break;
             }
         }

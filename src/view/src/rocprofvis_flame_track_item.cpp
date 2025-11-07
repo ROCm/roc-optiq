@@ -283,8 +283,18 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         ImVec2 textPos =
             ImVec2(rectMin.x + m_text_padding.x, rectMin.y + m_text_padding.y);
 
-        draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                           chart_item.event.m_name.c_str());
+        if(chart_item.event.m_child_count > 1)
+        {
+            std::string label =
+                std::to_string(chart_item.event.m_child_count) + " events";
+            draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
+                               label.c_str());
+        }
+        else
+        {
+            draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
+                               chart_item.event.m_name.c_str());
+        }
         draw_list->PopClipRect();
     }
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax) &&

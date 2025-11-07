@@ -1826,7 +1826,7 @@ namespace DataModel
 
 
 
-    std::string QueryFactory::GetRocprofEssentialInfoQueryForRegionEvent(uint64_t event_id) {
+    std::string QueryFactory::GetRocprofEssentialInfoQueryForRegionEvent(uint64_t event_id, bool is_sample_track) {
         if (IsVersionGreaterOrEqual("4"))
         {
             return Builder::Select(rocprofvis_db_sqlite_essential_data_query_format(
@@ -1839,7 +1839,7 @@ namespace DataModel
                 Builder::QParam("L.level_for_stream") },
                 { Builder::From("rocpd_region", "R"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id"),
-                Builder::LeftJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
+                Builder::LeftJoin(Builder::LevelTable(is_sample_track? "launch_sample" : "launch"), "L", "R.id = L.eid") },
                 { Builder::Where("R.id", "==", std::to_string(event_id)) } }));
         }
         else
@@ -1853,7 +1853,7 @@ namespace DataModel
                 Builder::QParam("L.level"),
                 Builder::QParam("L.level_for_stream") },
                 { Builder::From("rocpd_region", "R"),
-                Builder::LeftJoin(Builder::LevelTable("launch"), "L", "R.id = L.eid") },
+                Builder::LeftJoin(Builder::LevelTable(is_sample_track? "launch_sample" : "launch"), "L", "R.id = L.eid") },
                 { Builder::Where("R.id", "==", std::to_string(event_id)) } }));
         }
     }

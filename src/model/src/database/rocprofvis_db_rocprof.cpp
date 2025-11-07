@@ -1076,7 +1076,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
                    (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
                    &CallbackAddExtInfo))
                 break;
-            query = m_query_factory.GetRocprofEssentialInfoQueryForRegionEvent(event_id.bitfield.event_id);
+            query = m_query_factory.GetRocprofEssentialInfoQueryForRegionEvent(event_id.bitfield.event_id, event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
 
         } else

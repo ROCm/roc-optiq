@@ -123,9 +123,11 @@ EventsView::RenderBasicData(const event_info_t* event_data)
     label = nanosecond_to_formatted_str(info.m_duration, time_format, true);
     ImGui::TextUnformatted(label.c_str());
 
+#ifdef ROCPROFVIS_DEVELOPER_MODE
     ImGui::TextUnformatted("Level");
     ImGui::SameLine(160);
     ImGui::Text("%u", info.m_level);
+#endif
 
     ImGui::PopFont();
 }
@@ -154,13 +156,35 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
             {
                 ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed);
                 ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+                double     offset_ns = 0;
+                TimeFormat time_format =
+                    m_settings.GetUserSettings().unit_settings.time_format;
+
                 for(size_t i = 0; i < event_data->ext_info.size(); ++i)
                 {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     ImGui::TextUnformatted(event_data->ext_info[i].name.c_str());
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::TextUnformatted(event_data->ext_info[i].value.c_str());
+
+                    switch(event_data->ext_info[i].category_enum)
+                    {
+                        case kRocProfVisEventEssentialDataStart:
+                        case kRocProfVisEventEssentialDataEnd:
+                            offset_ns = m_data_provider.GetStartTime();
+                        case kRocProfVisEventEssentialDataDuration:
+                        {
+                            ImGui::TextUnformatted(nanosecond_str_to_formatted_str(
+                                                       event_data->ext_info[i].value,
+                                                       offset_ns, time_format, true)
+                                                       .c_str());
+                            offset_ns = 0;
+                            break;
+                        }
+                        default:
+                            ImGui::TextUnformatted(event_data->ext_info[i].value.c_str());
+                            break;
+                    }
                 }
                 ImGui::EndTable();
             }

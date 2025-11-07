@@ -195,6 +195,14 @@ FlameTrackItem::ExtractChildInfo(ChartItem& item)
                 item.child_info.push_back(child_info);
             }
         }
+        // If parsing failed to extract any child info, fall back to using the full name
+        if(item.child_info.empty())
+        {
+            item.child_info.clear();
+            item.child_info.push_back(
+                { item.event.m_name, std::hash<std::string>{}(item.event.m_name),
+                  item.event.m_child_count });
+        }
     }
     else
     {
@@ -441,14 +449,17 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         ImGui::SameLine();
         if(m_event_color_mode != EventColorMode::kNone)
         {
-            ImVec2      text_size = ImGui::CalcTextSize(chart_item.event.m_name.c_str());
+            ImVec2 text_size = ImGui::CalcTextSize(
+                chart_item.event.m_name.c_str(), nullptr, false, s_max_event_label_width);
             ImVec2      p         = ImGui::GetCursorScreenPos();
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             ImU32       rectColor = m_settings.GetColorWheel()[color_index];
             draw_list->AddRectFilled(p, ImVec2(p.x + text_size.x, p.y + text_size.y),
                                      rectColor);
         }
-        ImGui::Text("%s", chart_item.event.m_name.c_str());
+        ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + s_max_event_label_width);
+        ImGui::TextWrapped("%s", chart_item.event.m_name.c_str());
+        ImGui::PopTextWrapPos();
         ImGui::Separator();
         std::string label = nanosecond_to_formatted_str(chart_item.event.m_start_ts - m_min_x,
                                                         time_format, true);

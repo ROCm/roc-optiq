@@ -82,7 +82,7 @@ public:
     std::string GetRocprofDataFlowQueryForMemoryAllocEvent(uint64_t event_id);
     std::string GetRocprofDataFlowQueryForMemoryCopyEvent(uint64_t event_id);
 
-    std::string GetRocprofEssentialInfoQueryForRegionEvent(uint64_t event_id);
+    std::string GetRocprofEssentialInfoQueryForRegionEvent(uint64_t event_id, bool is_sample_track);
     std::string GetRocprofEssentialInfoQueryForKernelDispatchEvent(uint64_t event_id);
     std::string GetRocprofEssentialInfoQueryForMemoryAllocEvent(uint64_t event_id);
     std::string GetRocprofEssentialInfoQueryForMemoryCopyEvent(uint64_t event_id);

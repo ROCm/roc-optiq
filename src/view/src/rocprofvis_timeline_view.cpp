@@ -1516,10 +1516,10 @@ TimelineView::RenderTraceView()
     ImGui::SameLine();
 
     float available_width = subcomponent_size_main.x - m_sidebar_size;
-    float view_width      = static_cast<float>(std::min(m_v_width, m_range_x));
-    float max_offset      = static_cast<float>(m_range_x - view_width);
+    double view_width      = std::min(m_v_width, m_range_x);
+    double max_offset      = m_range_x - view_width;
     float view_offset =
-        static_cast<float>(std::clamp(m_view_time_offset_ns, 0.0, (double) max_offset));
+        static_cast<float>(std::clamp(m_view_time_offset_ns, 0.0, max_offset));
 
     float min_grab = 4.0f;
     float max_grab = available_width;
@@ -1541,10 +1541,11 @@ TimelineView::RenderTraceView()
 
     ImGui::PushItemWidth(available_width);
 
-    if(ImGui::SliderFloat("##scrollbar", &view_offset, 0.0f, max_offset, ""))
+    if(ImGui::SliderFloat("##scrollbar", &view_offset, 0.0f,
+                          static_cast<float>(max_offset), ""))
     {
         m_view_time_offset_ns =
-            std::clamp(static_cast<double>(view_offset), 0.0, (double) max_offset);
+            std::clamp(static_cast<double>(view_offset), 0.0, max_offset);
     }
 
     ImGui::PopItemWidth();

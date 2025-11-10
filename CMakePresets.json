@@ -3,7 +3,7 @@
     "configurePresets": [
         {
             "name": "windows-base",
-            "description": "Base settings for Windows Visual Studio builds of RocProfVis.",
+            "description": "Base settings for Windows Visual Studio builds of ROCm Optiq.",
             "hidden": true,
             "generator": "Visual Studio 17 2022",
             "binaryDir": "${sourceDir}/build/${presetName}",
@@ -21,7 +21,7 @@
         {
             "name": "x64-debug",
             "displayName": "x64 Debug",
-            "description": "Configure RocProfVis for Windows (64-bit) with Visual Studio, enabling detailed debugging symbols and checks.",
+            "description": "Configure ROCm Optiq for Windows (64-bit) with Visual Studio, enabling detailed debugging symbols and checks.",
             "inherits": "windows-base",
             "architecture": {
                 "value": "x64",
@@ -38,7 +38,7 @@
         {
             "name": "x64-release",
             "displayName": "x64 Release",
-            "description": "Configure RocProfVis for Windows (64-bit) with Visual Studio, optimized for speed and efficiency.",
+            "description": "Configure ROCm Optiq for Windows (64-bit) with Visual Studio, optimized for speed and efficiency.",
             "inherits": "windows-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
@@ -47,7 +47,7 @@
         {
             "name": "x64-release-symbols",
             "displayName": "x64 Release with Symbols",
-            "description": "Configure RocProfVis for Windows (64-bit) with Visual Studio, optimized for speed and efficiency with symbols.",
+            "description": "Configure ROCm Optiq for Windows (64-bit) with Visual Studio, optimized for speed and efficiency with symbols.",
             "inherits": "windows-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
@@ -56,7 +56,7 @@
         {
             "name": "x86-debug",
             "displayName": "x86 Debug",
-            "description": "Configure RocProfVis for Windows (32-bit) with Visual Studio, enabling detailed debugging symbols and checks.",
+            "description": "Configure ROCm Optiq for Windows (32-bit) with Visual Studio, enabling detailed debugging symbols and checks.",
             "inherits": "windows-base",
             "architecture": {
                 "value": "x86",
@@ -69,7 +69,7 @@
         {
             "name": "x86-release",
             "displayName": "x86 Release",
-            "description": "Configure RocProfVis for Windows (32-bit) with Visual Studio, optimized for speed and efficiency.",
+            "description": "Configure ROCm Optiq for Windows (32-bit) with Visual Studio, optimized for speed and efficiency.",
             "inherits": "windows-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
@@ -78,7 +78,7 @@
         {
             "name": "linux-base",
             "hidden": true,
-            "description": "Base settings for Linux GCC builds of RocProfVis",
+            "description": "Base settings for Linux GCC builds of ROCm Optiq",
             "generator": "Unix Makefiles",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "installDir": "${sourceDir}/build/install/${presetName}",
@@ -94,8 +94,8 @@
         },
         {
             "name": "linux-debug",
-            "displayName": "RocProfVis debug",
-            "description": "Configure RocProfVis for Linux with GCC, enabling detailed debugging symbols and checks.",
+            "displayName": "ROCm Optiq debug",
+            "description": "Configure ROCm Optiq for Linux with GCC, enabling detailed debugging symbols and checks.",
             "inherits": "linux-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
@@ -103,8 +103,8 @@
         },
         {
             "name": "linux-release",
-            "displayName": "RocProfVis release",
-            "description": "Configure RocProfVis for Linux with GCC, optimized for speed and efficiency in production.",
+            "displayName": "ROCm Optiq release",
+            "description": "Configure ROCm Optiq for Linux with GCC, optimized for speed and efficiency in production.",
             "inherits": "linux-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
@@ -112,8 +112,8 @@
         },
                 {
             "name": "linux-release-symbols",
-            "displayName": "RocProfVis release",
-            "description": "Configure RocProfVis for Linux with GCC, optimized for speed and efficiency with symbols.",
+            "displayName": "ROCm Optiq release",
+            "description": "Configure ROCm Optiq for Linux with GCC, optimized for speed and efficiency with symbols.",
             "inherits": "linux-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"

@@ -171,8 +171,8 @@ if( NOT DEFINED BUILD_ID )
 endif()
 
 #Package Maintainer Name and Email
-set(PKG_MAINTAINER_NM  "ROCm Visualizer Support")
-set(PKG_MAINTAINER_EMAIL  "rocm-visualizer-support@amd.com")
+set(PKG_MAINTAINER_NM  "ROCm Optiq Support")
+set(PKG_MAINTAINER_EMAIL  "rocm-optiq@amd.com")
 
 set(RUNTIME_COMP_TYPE "RV_RUNTIME")
 set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")
@@ -278,8 +278,8 @@ if(WIN32)
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_RUNTIME_DLLS:roc-optiq>"
-            "$<TARGET_FILE_DIR:roc-optiq>"
+            "$<TARGET_RUNTIME_DLLS:${TARGET_NAME}>"
+            "$<TARGET_FILE_DIR:${TARGET_NAME}>"
         COMMENT "Copying dependent DLLs to executable directory"
     )
 endif()

@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  VISUALIZER_FILE_NAME: "rocprof-visualizer"
+  VISUALIZER_FILE_NAME: "roc-optiq"
 
 jobs:
   set-matrix:

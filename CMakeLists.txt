@@ -149,13 +149,6 @@ target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 
-
-# === NativeFileDialog Extended ===
-set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
-add_subdirectory(thirdparty/nativefiledialog-extended)
-target_link_libraries(${TARGET_NAME} PRIVATE nfd)
-
-
 # === Vulkan ===
 find_package(Vulkan REQUIRED)
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")

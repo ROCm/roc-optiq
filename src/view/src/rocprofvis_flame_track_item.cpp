@@ -30,7 +30,7 @@ constexpr int ANTI_ALIASING_WORKAROUND = 1;
 
 FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
-                               int id, std::string name, float zoom,
+                               uint64_t id, std::string name, float zoom,
                                double time_offset_ns, double min_x, double max_x,
                                double scale_x, float level_min, float level_max)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)

@@ -812,8 +812,8 @@ TimelineView::RenderGrid()
         for(auto i = 0; i < m_grid_interval_count; i++)
         {
             double grid_line_ns = grid_line_start_ns + (i * m_grid_interval_ns);
-            float  normalized_start =
-                child_win.x + (grid_line_ns - m_view_time_offset_ns) * m_pixels_per_ns;
+            float  normalized_start = static_cast<float>(
+                child_win.x + (grid_line_ns - m_view_time_offset_ns) * m_pixels_per_ns);
 
             draw_list->AddLine(
                 ImVec2(normalized_start, cursor_position.y),
@@ -1221,11 +1221,11 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-
                 graph.chart = new FlameTrackItem(
                     m_data_provider, m_timeline_selection, track_info->id,
                     track_info->name, m_zoom, m_view_time_offset_ns, m_min_x, m_max_x,
-                    scale_x, track_info->min_value, track_info->max_value);
+                    scale_x, static_cast<float>(track_info->min_value),
+                    static_cast<float>(track_info->max_value));
                 graph.graph_type = rocprofvis_graph_t::TYPE_FLAMECHART;
                 break;
             }
@@ -1298,8 +1298,8 @@ TimelineView::RenderHistogram()
             float y1 = y0 + bars_height;
             float bar_height =
                 (max_bin_value > 0)
-                    ? (static_cast<float>((*m_histogram)[i]) / max_bin_value) *
-                          bars_height
+                    ? (static_cast<float>((*m_histogram)[i] / max_bin_value) *
+                       bars_height)
                     : 0.0f;
             float y_bar = y1 - bar_height;
             draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
@@ -1609,7 +1609,7 @@ TimelineView::HandleHistogramTouch()
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 
-        float user_requested_move = (drag / m_graph_size.x) * m_range_x;
+        float user_requested_move = static_cast<float>((drag / m_graph_size.x) * m_range_x);
 
         if(user_requested_move <= 0)
         {
@@ -1692,7 +1692,7 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel_h = io.MouseWheelH;
         if(scroll_wheel_h != 0.0f)
         {
-            float move_amount = scroll_wheel_h * m_v_width * zoom_speed;
+            float move_amount = static_cast<float>(scroll_wheel_h * m_v_width * zoom_speed);
             m_view_time_offset_ns -= move_amount;
         }
 
@@ -1829,7 +1829,7 @@ TimelineView::HandleTopSurfaceTouch()
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 
-        float user_requested_move = (drag / m_graph_size.x) * view_width;
+        float user_requested_move = static_cast<float>((drag / m_graph_size.x) * view_width);
 
         m_view_time_offset_ns -= user_requested_move;
     }

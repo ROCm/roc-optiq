@@ -13,7 +13,7 @@ namespace RocProfVis
 namespace View
 {
 
-LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
+LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                              double time_offset_ns, double& min_x, double& max_x,
                              double scale_x, float max_meta_area_width)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)

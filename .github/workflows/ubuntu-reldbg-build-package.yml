@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 env:
-  VISUALIZER_FILE_NAME: "rocprof-visualizer"
+  VISUALIZER_FILE_NAME: "roc-optiq"
 
 jobs:
   ubuntu:

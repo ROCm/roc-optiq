@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  VISUALIZER_FILE_NAME: "rocprof-visualizer"
+  VISUALIZER_FILE_NAME: "roc-optiq"
 
 jobs:
   rocky-linux:
@@ -62,9 +62,9 @@ jobs:
       - name: Upload Visualizer Binary
         uses: actions/upload-artifact@v4
         with:
-          name: rocprof-visualizer-rocky-${{ matrix.os-release }}
+          name: roc-optiq-rocky-${{ matrix.os-release }}
           path: |
-            build/linux-release-symbols/rocprof-visualizer
+            build/linux-release-symbols/roc-optiq
             build/linux-release-symbols/*.deb
             build/linux-release-symbols/*.gz
             build/linux-release-symbols/*.rpm

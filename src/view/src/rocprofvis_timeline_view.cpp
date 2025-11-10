@@ -611,9 +611,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
-        double normalized_start_box_highlighted =
+        float normalized_start_box_highlighted = static_cast<float>(
             window_position.x +
-            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
+            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns);
 
         draw_list->AddLine(ImVec2(normalized_start_box_highlighted, cursor_position.y),
                            ImVec2(normalized_start_box_highlighted,
@@ -622,9 +622,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     }
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
-        double normalized_start_box_highlighted_end =
+        float normalized_start_box_highlighted_end = static_cast<float>(
             window_position.x +
-            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
+            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns);
 
         draw_list->AddLine(
             ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
@@ -635,12 +635,12 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
        m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
     {
-        double normalized_start_box_highlighted =
+        float normalized_start_box_highlighted = static_cast<float>(
             window_position.x +
-            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
-        double normalized_start_box_highlighted_end =
+            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns);
+        float normalized_start_box_highlighted_end = static_cast<float>(
             window_position.x +
-            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
+            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns);
         draw_list->AddRectFilled(
             ImVec2(normalized_start_box_highlighted, cursor_position.y),
             ImVec2(normalized_start_box_highlighted_end,
@@ -731,7 +731,8 @@ TimelineView::CalculateGridInterval()
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
-    int interval_count = m_graph_size.x / label_size.x;
+    int interval_count =
+        label_size.x > 0 ? static_cast<int>(m_graph_size.x / label_size.x) : 0;
 
     double interval_ns  = calculate_nice_interval(m_v_width, interval_count);
     double step_size_px = interval_ns * m_pixels_per_ns;
@@ -1285,7 +1286,7 @@ TimelineView::RenderHistogram()
     // Draw histogram bars
     if(bin_count > 0)
     {
-        uint64_t max_bin_value =
+        double max_bin_value =
             *std::max_element(m_histogram->begin(), m_histogram->end());
         float bin_width = bars_width / static_cast<float>(bin_count);
 
@@ -1410,7 +1411,7 @@ TimelineView::RenderHistogram()
     for(int i = 0; i < num_ticks; i++)
     {
         double tick_ns = grid_line_start_ns + (i * interval_ns);
-        float  tick_x  = window_pos.x + tick_ns * pixels_per_ns;
+        float  tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
         draw_list_ruler->AddLine(ImVec2(tick_x, tick_top), ImVec2(tick_x, tick_bottom),
                                  m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
 
@@ -1467,8 +1468,6 @@ TimelineView::RenderTraceView()
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
-    ImGuiStyle& style      = ImGui::GetStyle();
-    float       fontHeight = ImGui::GetFontSize();
     m_graph_size =
         ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
 
@@ -1758,8 +1757,8 @@ TimelineView::HandleTopSurfaceTouch()
 
         float pan_speed = is_shift_down ? pan_speed_sped_up : 1.0f;
 
-        float region_moved_per_click_x = 0.01 * m_graph_size.x;
-        float region_moved_per_click_y = 0.01 * m_content_max_y_scroll;
+        float region_moved_per_click_x = 0.01f * m_graph_size.x;
+        float region_moved_per_click_y = 0.01f * m_content_max_y_scroll;
 
         // A, D, left arrow, right arrow go left and right
         if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))

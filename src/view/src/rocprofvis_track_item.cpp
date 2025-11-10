@@ -76,9 +76,9 @@ TrackItem::GetID()
 }
 
 void
-TrackItem::SetSidebarSize(int sidebar_size)
+TrackItem::SetSidebarSize(float sidebar_size)
 {
-    s_metadata_width = static_cast<float>(sidebar_size);
+    s_metadata_width = sidebar_size;
 }
 
 bool

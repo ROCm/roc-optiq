@@ -611,9 +611,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
-        double normalized_start_box_highlighted =
+        float normalized_start_box_highlighted = static_cast<float>(
             window_position.x +
-            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
+            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns);
 
         draw_list->AddLine(ImVec2(normalized_start_box_highlighted, cursor_position.y),
                            ImVec2(normalized_start_box_highlighted,
@@ -622,9 +622,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     }
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
-        double normalized_start_box_highlighted_end =
+        float normalized_start_box_highlighted_end = static_cast<float>(
             window_position.x +
-            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
+            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns);
 
         draw_list->AddLine(
             ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
@@ -635,12 +635,12 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
        m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
     {
-        double normalized_start_box_highlighted =
+        float normalized_start_box_highlighted = static_cast<float>(
             window_position.x +
-            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns;
-        double normalized_start_box_highlighted_end =
+            (m_highlighted_region.first - m_view_time_offset_ns) * m_pixels_per_ns);
+        float normalized_start_box_highlighted_end = static_cast<float>(
             window_position.x +
-            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns;
+            (m_highlighted_region.second - m_view_time_offset_ns) * m_pixels_per_ns);
         draw_list->AddRectFilled(
             ImVec2(normalized_start_box_highlighted, cursor_position.y),
             ImVec2(normalized_start_box_highlighted_end,
@@ -731,7 +731,8 @@ TimelineView::CalculateGridInterval()
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
-    int interval_count = m_graph_size.x / label_size.x;
+    int interval_count =
+        label_size.x > 0 ? static_cast<int>(m_graph_size.x / label_size.x) : 0;
 
     double interval_ns  = calculate_nice_interval(m_v_width, interval_count);
     double step_size_px = interval_ns * m_pixels_per_ns;
@@ -811,8 +812,8 @@ TimelineView::RenderGrid()
         for(auto i = 0; i < m_grid_interval_count; i++)
         {
             double grid_line_ns = grid_line_start_ns + (i * m_grid_interval_ns);
-            float  normalized_start =
-                child_win.x + (grid_line_ns - m_view_time_offset_ns) * m_pixels_per_ns;
+            float  normalized_start = static_cast<float>(
+                child_win.x + (grid_line_ns - m_view_time_offset_ns) * m_pixels_per_ns);
 
             draw_list->AddLine(
                 ImVec2(normalized_start, cursor_position.y),
@@ -1220,11 +1221,11 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-
                 graph.chart = new FlameTrackItem(
                     m_data_provider, m_timeline_selection, track_info->id,
                     track_info->name, m_zoom, m_view_time_offset_ns, m_min_x, m_max_x,
-                    scale_x, track_info->min_value, track_info->max_value);
+                    scale_x, static_cast<float>(track_info->min_value),
+                    static_cast<float>(track_info->max_value));
                 graph.graph_type = rocprofvis_graph_t::TYPE_FLAMECHART;
                 break;
             }
@@ -1285,7 +1286,7 @@ TimelineView::RenderHistogram()
     // Draw histogram bars
     if(bin_count > 0)
     {
-        uint64_t max_bin_value =
+        double max_bin_value =
             *std::max_element(m_histogram->begin(), m_histogram->end());
         float bin_width = bars_width / static_cast<float>(bin_count);
 
@@ -1297,8 +1298,8 @@ TimelineView::RenderHistogram()
             float y1 = y0 + bars_height;
             float bar_height =
                 (max_bin_value > 0)
-                    ? (static_cast<float>((*m_histogram)[i]) / max_bin_value) *
-                          bars_height
+                    ? (static_cast<float>((*m_histogram)[i] / max_bin_value) *
+                       bars_height)
                     : 0.0f;
             float y_bar = y1 - bar_height;
             draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
@@ -1410,7 +1411,7 @@ TimelineView::RenderHistogram()
     for(int i = 0; i < num_ticks; i++)
     {
         double tick_ns = grid_line_start_ns + (i * interval_ns);
-        float  tick_x  = window_pos.x + tick_ns * pixels_per_ns;
+        float  tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
         draw_list_ruler->AddLine(ImVec2(tick_x, tick_top), ImVec2(tick_x, tick_bottom),
                                  m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
 
@@ -1467,8 +1468,6 @@ TimelineView::RenderTraceView()
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
-    ImGuiStyle& style      = ImGui::GetStyle();
-    float       fontHeight = ImGui::GetFontSize();
     m_graph_size =
         ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
 
@@ -1516,10 +1515,10 @@ TimelineView::RenderTraceView()
     ImGui::SameLine();
 
     float available_width = subcomponent_size_main.x - m_sidebar_size;
-    float view_width      = static_cast<float>(std::min(m_v_width, m_range_x));
-    float max_offset      = static_cast<float>(m_range_x - view_width);
+    double view_width      = std::min(m_v_width, m_range_x);
+    double max_offset      = m_range_x - view_width;
     float view_offset =
-        static_cast<float>(std::clamp(m_view_time_offset_ns, 0.0, (double) max_offset));
+        static_cast<float>(std::clamp(m_view_time_offset_ns, 0.0, max_offset));
 
     float min_grab = 4.0f;
     float max_grab = available_width;
@@ -1541,10 +1540,11 @@ TimelineView::RenderTraceView()
 
     ImGui::PushItemWidth(available_width);
 
-    if(ImGui::SliderFloat("##scrollbar", &view_offset, 0.0f, max_offset, ""))
+    if(ImGui::SliderFloat("##scrollbar", &view_offset, 0.0f,
+                          static_cast<float>(max_offset), ""))
     {
         m_view_time_offset_ns =
-            std::clamp(static_cast<double>(view_offset), 0.0, (double) max_offset);
+            std::clamp(static_cast<double>(view_offset), 0.0, max_offset);
     }
 
     ImGui::PopItemWidth();
@@ -1609,7 +1609,7 @@ TimelineView::HandleHistogramTouch()
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 
-        float user_requested_move = (drag / m_graph_size.x) * m_range_x;
+        float user_requested_move = static_cast<float>((drag / m_graph_size.x) * m_range_x);
 
         if(user_requested_move <= 0)
         {
@@ -1692,7 +1692,7 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel_h = io.MouseWheelH;
         if(scroll_wheel_h != 0.0f)
         {
-            float move_amount = scroll_wheel_h * m_v_width * zoom_speed;
+            float move_amount = static_cast<float>(scroll_wheel_h * m_v_width * zoom_speed);
             m_view_time_offset_ns -= move_amount;
         }
 
@@ -1757,8 +1757,8 @@ TimelineView::HandleTopSurfaceTouch()
 
         float pan_speed = is_shift_down ? pan_speed_sped_up : 1.0f;
 
-        float region_moved_per_click_x = 0.01 * m_graph_size.x;
-        float region_moved_per_click_y = 0.01 * m_content_max_y_scroll;
+        float region_moved_per_click_x = 0.01f * m_graph_size.x;
+        float region_moved_per_click_y = 0.01f * m_content_max_y_scroll;
 
         // A, D, left arrow, right arrow go left and right
         if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
@@ -1829,7 +1829,7 @@ TimelineView::HandleTopSurfaceTouch()
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 
-        float user_requested_move = (drag / m_graph_size.x) * view_width;
+        float user_requested_move = static_cast<float>((drag / m_graph_size.x) * view_width);
 
         m_view_time_offset_ns -= user_requested_move;
     }

@@ -66,7 +66,7 @@ public:
     virtual std::tuple<double, double> GetMinMax();
 
     bool        TrackHeightChanged();
-    static void SetSidebarSize(int sidebar_size);
+    static void SetSidebarSize(float sidebar_size);
 
     virtual bool  HasData();
     virtual bool  ReleaseData();

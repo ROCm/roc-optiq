@@ -37,7 +37,7 @@ class LineTrackItem : public TrackItem
     friend LineTrackProjectSettings;
 
 public:
-    LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
+    LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                   double time_offset_ns, double& min_x, double& max_x, double scale_x,
                   float max_meta_area_width);
     ~LineTrackItem();

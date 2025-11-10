@@ -172,6 +172,28 @@ RocProfVis::View::nanosecond_to_formatted_str(double time_point_ns, TimeFormat f
     }
 }
 
+std::string
+RocProfVis::View::nanosecond_str_to_formatted_str(const std::string& time_str, double offset_ns,
+                                TimeFormat time_format, bool include_units)
+{
+    if(time_str.empty())
+    {
+        return time_str;
+    }
+
+    // convert string to double
+    double time_ns = 0;
+    try
+    {
+        time_ns = std::stod(time_str);
+    } catch(const std::exception&)
+    {
+        return time_str;
+    }
+
+    return nanosecond_to_formatted_str(time_ns - offset_ns, time_format, include_units);
+}
+
 double 
 RocProfVis::View::calculate_nice_interval(double view_range, int target_divisions) 
 {

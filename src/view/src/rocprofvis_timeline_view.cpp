@@ -122,6 +122,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
         CalculateMaxMetaAreaSize();
         UpdateAllMaxMetaAreaSizes();
+        FlameTrackItem::CalculateMaxEventLabelWidth();
         m_sidebar_size =
             std::clamp(static_cast<float>(m_sidebar_size),
                        m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(),
@@ -140,6 +141,9 @@ TimelineView::TimelineView(DataProvider&                       dp,
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
 
     m_graphs = std::make_shared<std::vector<rocprofvis_graph_t>>();
+    
+    // force initial calculation of flame track label width
+    FlameTrackItem::CalculateMaxEventLabelWidth();
 }
 
 void

@@ -83,6 +83,7 @@ typedef struct event_ext_data_t
     std::string category;
     std::string name;
     std::string value;
+    uint64_t    category_enum;
 } event_ext_data_t;
 
 typedef struct event_flow_data_t

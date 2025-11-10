@@ -1,5 +1,6 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -90,10 +91,11 @@ LineTrackItem::LineTrackRender(float graph_width)
         ImVec2 point_1 =
             MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
-                                      ImVec2(point_1.x + 10, point_1.y + 10)))
+                                      ImVec2(point_1.x + 10, point_1.y + 10)) &&
+           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = m_data[i - 1].x_value - m_min_x;
-            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y);
+            tooltip_y    = static_cast<float>(m_data[i - 1].y_value);
             show_tooltip = true;
         }
 
@@ -196,14 +198,9 @@ LineTrackItem::LineTrackRender(float graph_width)
         }
         draw_list->AddLine(point_1, point_2, line_color, line_thickness);
     }
-    if(show_tooltip == true)
+    if(show_tooltip)
     {
-        std::string x_label = nanosecond_to_formatted_str(
-            tooltip_x, m_settings.GetUserSettings().unit_settings.time_format, true);
-        ImGui::BeginTooltip();
-        ImGui::Text("X: %s", x_label.c_str());
-        ImGui::Text("Y: %.2f", tooltip_y);
-        ImGui::EndTooltip();
+        RenderTooltip(tooltip_x, tooltip_y);
     }
     ImGui::EndChild();
 }
@@ -229,10 +226,11 @@ LineTrackItem::BoxPlotRender(float graph_width)
         ImVec2 point_1 =
             MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
-                                      ImVec2(point_1.x + 10, point_1.y + 10)))
+                                      ImVec2(point_1.x + 10, point_1.y + 10)) &&
+           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = static_cast<float>(m_data[i - 1].x_value - m_min_x);
-            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y);
+            tooltip_y    = static_cast<float>(m_data[i - 1].y_value);
             show_tooltip = true;
         }
 
@@ -251,14 +249,22 @@ LineTrackItem::BoxPlotRender(float graph_width)
             point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
             m_settings.GetColor(Colors::kLineChartColor), 2.0f);
     }
-    if(show_tooltip == true)
+    if(show_tooltip)
     {
-        ImGui::BeginTooltip();
-        ImGui::Text("X Value: %f", tooltip_x);
-        ImGui::Text("Y Value: %f", tooltip_y);
-        ImGui::EndTooltip();
+        RenderTooltip(tooltip_x, tooltip_y);
     }
     ImGui::EndChild();
+}
+
+void
+LineTrackItem::RenderTooltip(float tooltip_x, float tooltip_y)
+{
+    std::string x_label = nanosecond_to_formatted_str(
+        tooltip_x, m_settings.GetUserSettings().unit_settings.time_format, true);
+    ImGui::BeginTooltip();
+    ImGui::Text("X: %s", x_label.c_str());
+    ImGui::Text("Y: %.2f", tooltip_y);
+    ImGui::EndTooltip();
 }
 
 float

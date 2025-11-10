@@ -154,6 +154,21 @@ std::string
 nanosecond_to_formatted_str(double time_point_ns, TimeFormat format, bool include_units = false);
 
 /**
+ * @brief Converts a string representing nanoseconds into a formatted string representation
+ * based on the specified TimeFormat.
+ *
+ * @param time_str The duration in nanoseconds as a string.
+ * @param offset A double offset in nanoseconds to subtract from the parsed value.
+ * @param time_format The desired TimeFormat for the output string.
+ * @param include_units If true, appends the appropriate time unit suffix to the string.
+ * @return std::string The formatted duration string.
+ */
+std::string 
+nanosecond_str_to_formatted_str(const std::string& time_ns_str, double offset_ns,
+                                TimeFormat time_format, bool include_units);
+
+
+/**
  * @brief Calculates a "nice" grid interval for a timeline.
  *
  * @param viewRange The total duration of the visible timeline range in nanoseconds,

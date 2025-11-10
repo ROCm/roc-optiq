@@ -51,6 +51,10 @@ public:
 
     bool ReleaseData() override;
 
+    // Called to calculate max event label width for all flame track items.
+    // Call after font size or style changes.
+    static void CalculateMaxEventLabelWidth();
+
 protected:
     void RenderChart(float graph_width) override;
     void RenderMetaAreaScale() override;
@@ -58,19 +62,31 @@ protected:
     void RenderMetaAreaExpand() override;
 
 private:
-    // Local cache of selection state packed with event data for each event.
+    struct ChildEventInfo
+    {
+        std::string name;
+        size_t      name_hash;
+        size_t      count;
+    };
+    
     struct ChartItem
     {
-        rocprofvis_trace_event_t event;
-        bool                     selected;
-        size_t                   name_hash;
+        rocprofvis_trace_event_t    event;
+        bool                        selected;
+        size_t                      name_hash;
+        std::vector<ChildEventInfo> child_info;
     };
 
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
 
     void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
                  float duration, ImDrawList* draw_list);
+
     bool ExtractPointsFromData();
+    bool ExtractChildInfo(ChartItem& item);
+    bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
+
+    void RenderTooltip(ChartItem& chart_item, int color_index);
 
     std::vector<ChartItem>             m_chart_items;
     EventColorMode                     m_event_color_mode;
@@ -81,11 +97,15 @@ private:
     FlameTrackProjectSettings          m_project_settings;
     float                              m_min_level;
     float                              m_max_level;
-    // Used to enforce one selection change per render cycle.
-    bool                            m_selection_changed;
+    // Used to enforce one click handling per render cycle.
+    bool                            m_deferred_click_handled;
     bool                            m_has_drawn_tool_tip;
     std::vector<ChartItem>          m_selected_chart_items;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
+    ImVec2                          m_tooltip_size;
+
+    static float             s_max_event_label_width;
+    static const std::string s_child_info_separator;
 };
 
 }  // namespace View

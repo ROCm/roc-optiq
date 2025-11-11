@@ -429,11 +429,12 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->start_time                                   = UINT64_MAX;
         TraceProperties()->end_time                                     = 0;
         if(kRocProfVisDmResultSuccess !=
-           ExecuteQueryForAllTracksAsync(kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks,
+           ExecuteQueryForAllTracksAsync(
+               kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks,
                kRPVQuerySliceByTrackSliceQuery,
-               "SELECT MIN(startTs), MAX(endTs), MIN(level), MAX(level), ", ";", &CallbackGetTrackProperties,
-               [](rocprofvis_dm_track_params_t* params) {
-               }))
+               "SELECT MIN(startTs), MAX(endTs), MIN(level), MAX(level), ",
+               "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
+               [](rocprofvis_dm_track_params_t* params) {}))
         {
             break;
         }

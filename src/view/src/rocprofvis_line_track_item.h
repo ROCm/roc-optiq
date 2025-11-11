@@ -56,6 +56,8 @@ class LineTrackItem : public TrackItem
 
         double            m_value;
         double            m_default_value;
+        std::string       m_formatted_default;
+
         std::string       m_formatted_str;
         std::string       m_compact_str;
 

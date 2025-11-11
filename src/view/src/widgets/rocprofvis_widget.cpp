@@ -781,7 +781,7 @@ EditableTextField::DrawPlainText()
     bool clicked = ImGui::Button(m_text.c_str());
     if(ImGui::BeginItemTooltip())
     {
-        ImGui::TextUnformatted(m_edit_buf.c_str());
+        ImGui::TextUnformatted(m_tooltip_text.c_str());
         ImGui::EndTooltip();
     }
 
@@ -830,6 +830,7 @@ EditableTextField::DrawPlainText()
         if(ImGui::BeginItemTooltip())
         {
             ImGui::TextUnformatted("Revert To Default");
+            ImGui::TextUnformatted(m_reset_tooltip.c_str());
             ImGui::EndTooltip();
         }
     }
@@ -888,9 +889,11 @@ EditableTextField::DrawEditingText()
 }
 
 void
-EditableTextField::SetText(std::string text)
+EditableTextField::SetText(std::string text, std::string tooltip, std::string reset_tooltip)
 {
     m_text = std::move(text);
+    m_tooltip_text = std::move(tooltip);
+    m_reset_tooltip = std::move(reset_tooltip);
 }
 
 float

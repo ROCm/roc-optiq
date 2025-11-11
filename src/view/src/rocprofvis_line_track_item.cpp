@@ -614,6 +614,7 @@ void
 LineTrackItem::VerticalLimits::SetValue(double value)
 {
     m_default_value = value;
+    m_formatted_default = FormatValue(value);
     UpdateValue(value);
 }
 
@@ -628,11 +629,6 @@ void LineTrackItem::VerticalLimits::Render()
     {
         UpdateValue(ProcessUserInput(new_value));
     }
-    if(ImGui::BeginItemTooltip())
-    {
-        ImGui::TextUnformatted(FormatValue(m_default_value).c_str());
-        ImGui::EndTooltip();
-    }
 }
 
 void
@@ -642,7 +638,7 @@ LineTrackItem::VerticalLimits::UpdateValue(double value)
     m_value = value;
     m_formatted_str = FormatValue(value);
     m_compact_str  = compact_number_format(value);
-    m_text_field.SetText(m_compact_str);
+    m_text_field.SetText(m_compact_str, m_formatted_str, m_formatted_default);
 }
 
 std::string

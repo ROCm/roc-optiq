@@ -1067,7 +1067,7 @@ SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries)
             break;
         }
 
-        for (auto query : queries)
+        for (const auto &query : queries)
         {
             if (sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
             {

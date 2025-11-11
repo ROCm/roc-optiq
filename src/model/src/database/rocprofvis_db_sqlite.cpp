@@ -1058,21 +1058,33 @@ rocprofvis_dm_result_t
 SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries)
 {
     sqlite3* conn = GetConnection();
-    if(sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) != SQLITE_OK)
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    while (true)
     {
-        return kRocProfVisDmResultDbAccessFailed;
-    }
+        if (sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) != SQLITE_OK)
+        {
+            result = kRocProfVisDmResultDbAccessFailed;
+            break;
+        }
 
-    for (auto query : queries)
-    {
-        sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr);
-    }
+        for (auto query : queries)
+        {
+            if (sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
+            {
+                result = kRocProfVisDmResultDbAccessFailed;
+                break;
+            }
+        }
 
-    if(sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
-    {
-        return kRocProfVisDmResultDbAccessFailed;
+        if (sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
+        {
+            result = kRocProfVisDmResultDbAccessFailed;
+            break;
+        }
+        break;
     }
-    return kRocProfVisDmResultSuccess;
+    ReleaseConnection(conn);
+    return result;
 }
 
 rocprofvis_dm_result_t

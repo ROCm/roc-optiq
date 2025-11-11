@@ -42,13 +42,13 @@ class LineTrackItem : public TrackItem
     {
     public:
         VerticalLimits(double value, std::string field_id, std::string prefix);
-        double      Value() const;
-        std::string StrValue() const;
-        std::string CompactValue() const;
-        void        SetValue(double value);
-        void        Render();
-        float       ButtonSize() const;
-        std::string Prefix();
+        double             Value() const;
+        std::string        StrValue() const;
+        std::string        CompactValue() const;
+        void               SetValue(double value);
+        void               Render();
+        float              ButtonSize() const;
+        const std::string& Prefix();
     private:
         void UpdateValue(double value);
         std::string FormatValue(double value);

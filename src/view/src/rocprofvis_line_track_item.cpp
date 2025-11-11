@@ -521,7 +521,7 @@ LineTrackItem::VerticalLimits::ButtonSize() const
     return m_text_field.ButtonSize();
 }
 
-std::string
+const std::string&
 LineTrackItem::VerticalLimits::Prefix()
 {
     return m_prefix;

@@ -267,89 +267,6 @@ LineTrackItem::RenderTooltip(float tooltip_x, float tooltip_y)
     ImGui::EndTooltip();
 }
 
-bool
-LineTrackItem::EditableText(const char* id, std::string& value)
-{
-    //TODO: It should be a separate class with states
-    static ImGuiID s_activeEditId = 0;
-    const ImGuiID  myId           = ImGui::GetID(id);
-    bool           changed        = false;
-
-    ImGui::PushID(id);
-
-    auto resize_cb = [](ImGuiInputTextCallbackData* data) -> int {
-        if(data->EventFlag == ImGuiInputTextFlags_CallbackResize)
-        {
-            auto* str = static_cast<std::string*>(data->UserData);
-            str->resize(static_cast<size_t>(data->BufTextLen));
-            data->Buf = str->data();
-        }
-        return 0;
-    };
-
-    static std::string editBuf;  // TODO: move to class member   
-    static std::string beforeEditValue; // TODO: move to class member
-
-    if(s_activeEditId == myId)
-    {
-        if(editBuf.data() != value.data())
-        {  // first frame after entering edit mode
-            editBuf         = value;
-            beforeEditValue = value;
-        }
-
-        ImGui::SetNextItemWidth(ImGui::CalcTextSize(value.c_str()).x +
-                                ImGui::GetFontSize() * 4.0f);
-
-        const bool pressedEnter = ImGui::InputText(
-            "##edit", editBuf.data(), editBuf.size() + 1,
-            ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue |
-                ImGuiInputTextFlags_CallbackResize,
-            resize_cb, &editBuf);
-
-        if(pressedEnter)
-        {
-            if(value != editBuf)
-            {
-                value   = editBuf;
-                changed = true;
-            }
-            s_activeEditId = 0;
-            ImGui::ClearActiveID();
-        }
-
-        if(ImGui::IsKeyPressed(ImGuiKey_Escape))
-        {
-            editBuf        = beforeEditValue;
-            s_activeEditId = 0;
-            ImGui::ClearActiveID();
-        }
-
-        //// Commit on focus loss
-        //if(!ImGui::IsItemActive())
-        //{
-        //    if(value != editBuf)
-        //    {
-        //        value   = editBuf;
-        //        changed = true;
-        //    }
-        //    s_activeEditId = 0;
-        //}
-    }
-    else
-    {
-        ImGui::TextUnformatted(value.c_str());
-        if(ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        if(ImGui::IsItemClicked(ImGuiMouseButton_Left))
-        {
-            s_activeEditId = myId;  // enter edit mode next frame
-        }
-    }
-
-    ImGui::PopID();
-    return changed;
-}
-
 float
 LineTrackItem::CalculateNewMetaAreaSize()
 {
@@ -360,7 +277,7 @@ LineTrackItem::CalculateNewMetaAreaSize()
         ImGui::CalcTextSize((m_min_y.CompactValue() + m_min_y.Prefix()).c_str());
 
     return std::max({ max_size.x + m_max_y.ButtonSize(), min_size.x + m_min_y.ButtonSize() }) +
-           6 * m_metadata_padding.x; // Harcoded padding for posible label size
+           6 * m_metadata_padding.x; // TODO: Harcoded padding for posible label size
                                      // Think later how it can be calculated or store as default values
 }
 

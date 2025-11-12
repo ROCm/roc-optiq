@@ -49,17 +49,18 @@ class LineTrackItem : public TrackItem
         void               Render();
         float              ButtonSize() const;
         const std::string& Prefix();
+
     private:
-        void UpdateValue(double value);
+        void        UpdateValue(double value);
         std::string FormatValue(double value);
         double      ProcessUserInput(std::string_view input);
 
-        double            m_value;
-        double            m_default_value;
-        std::string       m_formatted_default;
+        double      m_value;
+        double      m_default_value;
+        std::string m_formatted_default;
 
-        std::string       m_formatted_str;
-        std::string       m_compact_str;
+        std::string m_formatted_str;
+        std::string m_compact_str;
 
         std::string       m_prefix;
         EditableTextField m_text_field;
@@ -71,19 +72,20 @@ public:
                   float max_meta_area_width);
     ~LineTrackItem();
 
-    bool ReleaseData() override;
+    bool          ReleaseData() override;
     virtual float CalculateNewMetaAreaSize() override;
 
 protected:
-    virtual void  RenderMetaAreaScale() override;
-    virtual void  RenderChart(float graph_width) override;
-    virtual void  RenderMetaAreaOptions() override;
+    virtual void RenderMetaAreaScale() override;
+    virtual void RenderChart(float graph_width) override;
+    virtual void RenderMetaAreaOptions() override;
 
     void UpdateYScaleExtents();
 
 private:
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
-                   double scale_x, float scale_y, double padded_min_y, double padded_max_y);
+                   double scale_x, float scale_y, double padded_min_y,
+                   double padded_max_y);
     bool   ExtractPointsFromData();
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
     void   LineTrackRender(float graph_width);
@@ -97,10 +99,10 @@ private:
     VerticalLimits m_min_y;
     VerticalLimits m_max_y;
 
-    bool                                 m_is_color_value_existant;
-    DataProvider&                        m_dp;
-    bool                                 m_show_boxplot;
-    LineTrackProjectSettings             m_project_settings;
+    bool                     m_is_color_value_existant;
+    DataProvider&            m_dp;
+    bool                     m_show_boxplot;
+    LineTrackProjectSettings m_project_settings;
 };
 
 }  // namespace View

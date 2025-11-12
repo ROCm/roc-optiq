@@ -172,6 +172,28 @@ RocProfVis::View::nanosecond_to_formatted_str(double time_point_ns, TimeFormat f
     }
 }
 
+std::string
+RocProfVis::View::nanosecond_str_to_formatted_str(const std::string& time_str, double offset_ns,
+                                TimeFormat time_format, bool include_units)
+{
+    if(time_str.empty())
+    {
+        return time_str;
+    }
+
+    // convert string to double
+    double time_ns = 0;
+    try
+    {
+        time_ns = std::stod(time_str);
+    } catch(const std::exception&)
+    {
+        return time_str;
+    }
+
+    return nanosecond_to_formatted_str(time_ns - offset_ns, time_format, include_units);
+}
+
 double 
 RocProfVis::View::calculate_nice_interval(double view_range, int target_divisions) 
 {
@@ -274,8 +296,18 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
 std::string
 RocProfVis::View::compact_number_format(float number)
 {
-    const char* suffixes[] = { "", "K", "M", "B", "T" };
+    if(!std::isfinite(number))
+    {
+        if(std::isnan(number)) return "NaN";
+        return std::signbit(number) ? "-Inf" : "+Inf";
+    }
+
+    bool   negative = std::signbit(number);
+    double value        = std::fabs(static_cast<double>(number));
+
+    const char* suffixes[] = { "", "K", "M", "B", "T", "P", "E" };
     uint32_t    magnitude  = 0;
+    constexpr size_t max_suffix = std::size(suffixes) - 1;
 
     while(std::fabs(number) >= 1000.0 && magnitude < std::size(suffixes) - 1)
     {
@@ -284,6 +316,15 @@ RocProfVis::View::compact_number_format(float number)
     }
 
     std::ostringstream output;
+    if(magnitude == max_suffix && value >= 1000.0)
+    {
+        int    exp  = static_cast<int>(std::floor(std::log10(value)));
+        double base = value / std::pow(10.0, exp);
+        output << (negative ? "-" : "") << std::fixed << std::setprecision(0) << base
+               << "e" << (exp >= 0 ? "+" : "") << exp;
+        return output.str();
+    }
+
     output << std::fixed << std::setprecision(number >= 100 ? 0 : (number >= 10 ? 1 : 2))
         << number
         << suffixes[magnitude];

@@ -705,24 +705,60 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
 void
 AppWindow::RenderAboutDialog()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
-    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize))
-    {
-        ImGui::Text("RocProfiler Visualizer");
-        ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR,
-                    ROCPROFVIS_VERSION_MINOR, ROCPROFVIS_VERSION_PATCH);
-        ImGui::Text(
-            "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
+   
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
 
-        if(ImGui::Button("Close"))
+        if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::CloseCurrentPopup();
+            ImFont* large_font =
+                SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
+            if(large_font) ImGui::PushFont(large_font);
+
+            ImGui::SetCursorPosX(
+                (ImGui::GetWindowSize().x - ImGui::CalcTextSize("ROCm (TM) Optiq").x) * 0.5f);
+            ImGui::Text("ROCm (TM) Optiq");
+            if(large_font) ImGui::PopFont();
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::SetCursorPosX(
+                (ImGui::GetWindowSize().x - ImGui::CalcTextSize("Version 00.00.00").x) *
+                0.5f);
+            ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR,
+                        ROCPROFVIS_VERSION_MINOR, ROCPROFVIS_VERSION_PATCH);
+
+            ImGui::Spacing();
+
+            ImGui::SetCursorPosX(
+                (ImGui::GetWindowSize().x -
+                 ImGui::CalcTextSize("Copyright (C) 2025 Advanced Micro Devices, Inc. "
+                                     "All rights reserved.")
+                     .x) *
+                0.5f);
+            ImGui::Text(
+                "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            float button_width =
+                ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2;
+            ImGui::SetCursorPosX(ImGui::GetWindowSize().x - button_width -
+                                 ImGui::GetStyle().ItemSpacing.x);
+            if(ImGui::Button("Close"))
+            {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
         }
-        ImGui::EndPopup();
-    }
-    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
+        ImGui::PopStyleVar(2);
+    
 }
 
 #ifdef USE_NATIVE_FILE_DIALOG

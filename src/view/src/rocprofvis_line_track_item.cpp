@@ -1,30 +1,33 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-#include "rocprofvis_utils.h"
 
 #include <algorithm>
+#include <sstream>
+#include <iomanip>
+#include <charconv>
 
 namespace RocProfVis
 {
 namespace View
 {
 
-LineTrackItem::LineTrackItem(DataProvider& dp, int id, std::string name, float zoom,
+LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                              double time_offset_ns, double& min_x, double& max_x,
                              double scale_x, float max_meta_area_width)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
-, m_min_y(0)
-, m_max_y(0)
 , m_data({})
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
 , m_dp(dp)
 , m_show_boxplot(false)
 , m_project_settings(dp.GetTraceFilePath(), *this)
+, m_min_y(0, "edit_min", "Min: ")
+, m_max_y(0, "edit_max", "Max: ")
 {
     m_meta_area_scale_width = max_meta_area_width;
     m_track_height = 90.0f;
@@ -45,23 +48,18 @@ void LineTrackItem::UpdateYScaleExtents() {
     const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
     if(track_info)
     {
-        m_min_y = track_info->min_value;
-        m_max_y = track_info->max_value;
+        m_min_y.SetValue(track_info->min_value);
+        m_max_y.SetValue(track_info->max_value);
     }
     else
     {
         spdlog::warn("Track info not found for track ID: {}", m_id);
     }
     // Ensure that min and max are not equal to allow rendering
-    if(m_max_y == m_min_y)
+    if(m_min_y.Value() == m_max_y.Value())
     {
-        m_max_y = m_min_y + 1.0;
+        m_max_y.SetValue(m_min_y.Value() + 1.0);
     }
-    std::string flt = std::to_string(m_min_y);
-    m_min_y_str     = flt.substr(0, flt.find('.') + 2);
-    flt             = std::to_string(m_max_y);
-    m_max_y_str     = flt.substr(0, flt.find('.') + 2);
-
     m_meta_area_scale_width = CalculateNewMetaAreaSize();
 }
 
@@ -75,7 +73,8 @@ LineTrackItem::LineTrackRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
-    float scale_y = static_cast<float>(content_size.y / (m_max_y - m_min_y));
+    float scale_y =
+        static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
 
     double tooltip_x     = 0;
     float tooltip_y     = 0;
@@ -83,17 +82,18 @@ LineTrackItem::LineTrackRender(float graph_width)
     ImU32 generic_black = m_settings.GetColor(Colors::kLineChartColor);
     ImU32 generic_red   = m_settings.GetColor(Colors::kGridRed);
 
-    const float line_thickness = 2.0f;
+    const float line_thickness = 2.0f;  // FIXME: hardcoded value
 
     for(int i = 1; i < m_data.size(); i++)
     {
         ImVec2 point_1 =
             MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
-                                      ImVec2(point_1.x + 10, point_1.y + 10)))
+                                      ImVec2(point_1.x + 10, point_1.y + 10)) &&
+           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = m_data[i - 1].x_value - m_min_x;
-            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y);
+            tooltip_y = static_cast<float>(m_data[i - 1].y_value - m_min_y.Value());
             show_tooltip = true;
         }
 
@@ -130,7 +130,7 @@ LineTrackItem::LineTrackRender(float graph_width)
                 {
                     float new_y = cursor_position.y + content_size.y -
                                   (m_color_by_value_digits.interest_1_max -
-                                   static_cast<float>(m_min_y)) *
+                                   static_cast<float>(m_min_y.Value())) *
                                       scale_y;
 
                     float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
@@ -146,7 +146,7 @@ LineTrackItem::LineTrackRender(float graph_width)
                 {
                     float new_y = cursor_position.y + content_size.y -
                                   (m_color_by_value_digits.interest_1_min -
-                                   static_cast<float>(m_min_y)) *
+                                   static_cast<float>(m_min_y.Value())) *
                                       scale_y;
                     float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                      point_2.y, new_y);
@@ -166,7 +166,7 @@ LineTrackItem::LineTrackRender(float graph_width)
 
                     float new_y = cursor_position.y + content_size.y -
                                   (m_color_by_value_digits.interest_1_max -
-                                   static_cast<float>(m_min_y)) *
+                                   static_cast<float>(m_min_y.Value())) *
                                       scale_y;
                     float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                      point_2.y, new_y);
@@ -181,7 +181,7 @@ LineTrackItem::LineTrackRender(float graph_width)
                 {
                     float new_y = cursor_position.y + content_size.y -
                                   (m_color_by_value_digits.interest_1_min -
-                                   static_cast<float>(m_min_y)) *
+                                   static_cast<float>(m_min_y.Value())) *
                                       scale_y;
                     float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
                                                      point_2.y, new_y);
@@ -196,14 +196,9 @@ LineTrackItem::LineTrackRender(float graph_width)
         }
         draw_list->AddLine(point_1, point_2, line_color, line_thickness);
     }
-    if(show_tooltip == true)
+    if(show_tooltip)
     {
-        std::string x_label = nanosecond_to_formatted_str(
-            tooltip_x, m_settings.GetUserSettings().unit_settings.time_format, true);
-        ImGui::BeginTooltip();
-        ImGui::Text("X: %s", x_label.c_str());
-        ImGui::Text("Y: %.2f", tooltip_y);
-        ImGui::EndTooltip();
+        RenderTooltip(tooltip_x, tooltip_y);
     }
     ImGui::EndChild();
 }
@@ -218,7 +213,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
-    float scale_y = static_cast<float>(content_size.y / (m_max_y - m_min_y));
+    float scale_y =
+        static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
 
     float tooltip_x     = 0;
     float tooltip_y     = 0;
@@ -229,10 +225,11 @@ LineTrackItem::BoxPlotRender(float graph_width)
         ImVec2 point_1 =
             MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
-                                      ImVec2(point_1.x + 10, point_1.y + 10)))
+                                      ImVec2(point_1.x + 10, point_1.y + 10)) &&
+           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = static_cast<float>(m_data[i - 1].x_value - m_min_x);
-            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y);
+            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y.Value());
             show_tooltip = true;
         }
 
@@ -251,29 +248,36 @@ LineTrackItem::BoxPlotRender(float graph_width)
             point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
             m_settings.GetColor(Colors::kLineChartColor), 2.0f);
     }
-    if(show_tooltip == true)
+    if(show_tooltip)
     {
-        ImGui::BeginTooltip();
-        ImGui::Text("X Value: %f", tooltip_x);
-        ImGui::Text("Y Value: %f", tooltip_y);
-        ImGui::EndTooltip();
+        RenderTooltip(tooltip_x, tooltip_y);
     }
     ImGui::EndChild();
+}
+
+void
+LineTrackItem::RenderTooltip(float tooltip_x, float tooltip_y)
+{
+    std::string x_label = nanosecond_to_formatted_str(
+        tooltip_x, m_settings.GetUserSettings().unit_settings.time_format, true);
+    ImGui::BeginTooltip();
+    ImGui::Text("X: %s", x_label.c_str());
+    ImGui::Text("Y: %.2f", tooltip_y);
+    ImGui::EndTooltip();
 }
 
 float
 LineTrackItem::CalculateNewMetaAreaSize()
 {
-    m_compact_max = compact_number_format(m_max_y);
-    m_compact_min = compact_number_format(m_min_y);
-
     ImVec2 max_size =
-        ImGui::CalcTextSize(m_compact_max.c_str()) + ImGui::CalcTextSize("Max: ");
+        ImGui::CalcTextSize((m_max_y.CompactValue() + m_max_y.Prefix()).c_str());
 
-    ImVec2 min_size = ImGui::CalcTextSize(m_compact_min.c_str());
+    ImVec2 min_size =
+        ImGui::CalcTextSize((m_min_y.CompactValue() + m_min_y.Prefix()).c_str());
 
-    return std::max({ max_size.x + 2 * m_metadata_padding.x,
-                      min_size.x + 2 * m_metadata_padding.x });
+    return std::max({ max_size.x + m_max_y.ButtonSize(), min_size.x + m_min_y.ButtonSize() }) +
+           6 * m_metadata_padding.x; // TODO: Hardcoded padding for posible label size
+                                     // Think later how it can be calculated or store as default values
 }
 
 bool
@@ -359,27 +363,17 @@ LineTrackItem::RenderMetaAreaScale()
     ImGui::SetCursorPos(
         ImVec2(content_region.x + m_metadata_padding.x - m_meta_area_scale_width,
                m_metadata_padding.y));
-    ImGui::TextUnformatted("Max: ");
+    ImGui::TextUnformatted(m_max_y.Prefix().c_str());
     ImGui::SameLine();
-    ImGui::TextUnformatted(m_compact_max.c_str());
-    if(ImGui::BeginItemTooltip())
-    {
-        ImGui::TextUnformatted(m_max_y_str.c_str());
-        ImGui::EndTooltip();
-    }
+    m_max_y.Render();
 
-    ImVec2 min_size = ImGui::CalcTextSize(m_compact_min.c_str());
+    ImVec2 min_size = ImGui::CalcTextSize(m_min_y.CompactValue().c_str());
     ImGui::SetCursorPos(
         ImVec2(content_region.x + m_metadata_padding.x - m_meta_area_scale_width,
                content_region.y - min_size.y - m_metadata_padding.y));
-    ImGui::TextUnformatted("Min: ");
+    ImGui::TextUnformatted(m_min_y.Prefix().c_str());
     ImGui::SameLine();
-    ImGui::TextUnformatted(m_compact_min.c_str());
-    if(ImGui::BeginItemTooltip())
-    {
-        ImGui::TextUnformatted(m_min_y_str.c_str());
-        ImGui::EndTooltip();
-    }
+    m_min_y.Render();
 
     ImGui::GetWindowDrawList()->AddLine(
         ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width, window_pos.y),
@@ -414,12 +408,12 @@ LineTrackItem::RenderMetaAreaOptions()
         ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
         ImGui::SliderFloat("##max", &m_color_by_value_digits.interest_1_max,
                            m_color_by_value_digits.interest_1_min,
-                           static_cast<float>(m_max_y), "%.1f");
+                           static_cast<float>(m_max_y.Value()), "%.1f");
         ImGui::TextUnformatted("Min");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
         ImGui::SliderFloat("##min", &m_color_by_value_digits.interest_1_min,
-                           static_cast<float>(m_min_y),
+                           static_cast<float>(m_min_y.Value()),
                            m_color_by_value_digits.interest_1_max, "%.1f");
     }
 }
@@ -431,7 +425,7 @@ LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
     ImVec2 container_pos = ImGui::GetWindowPos();
 
     double x = container_pos.x + (point.x_value - (m_min_x + m_time_offset_ns)) * scaleX;
-    double y = cursor_position.y + content_size.y - (point.y_value - m_min_y) * scaleY;
+    double y = cursor_position.y + content_size.y - (point.y_value - m_min_y.Value()) * scaleY;
 
     return ImVec2(static_cast<float>(x), static_cast<float>(y));
 }
@@ -493,6 +487,104 @@ LineTrackProjectSettings::HighlightRange() const
         static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX].getNumber()),
         static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN].getNumber())
     };
+}
+
+LineTrackItem::VerticalLimits::VerticalLimits(double value, std::string field_id, std::string prefix)
+: m_text_field(std::move(field_id))
+, m_prefix(std::move(prefix))
+{
+    SetValue(value);
+    m_text_field.SetOnTextCommit([this](const std::string& committed_text) {
+        // Empty string signals a revert-to-default in our usage
+        if(committed_text.empty())
+        {
+            UpdateValue(m_default_value);
+        }
+        else if(committed_text != m_compact_str)
+        {
+            double processed = ProcessUserInput(committed_text);
+            UpdateValue(processed);
+        }
+    });
+}
+
+double
+LineTrackItem::VerticalLimits::Value() const
+{
+    return m_value;
+}
+
+const std::string&
+LineTrackItem::VerticalLimits::StrValue() const
+{
+    return m_formatted_str;
+}
+
+const std::string&
+LineTrackItem::VerticalLimits::CompactValue() const
+{
+    return m_compact_str;
+}
+
+float
+LineTrackItem::VerticalLimits::ButtonSize() const
+{
+    return m_text_field.ButtonSize();
+}
+
+const std::string&
+LineTrackItem::VerticalLimits::Prefix()
+{
+    return m_prefix;
+}
+
+void
+LineTrackItem::VerticalLimits::SetValue(double value)
+{
+    m_default_value = value;
+    m_formatted_default = FormatValue(value);
+    UpdateValue(value);
+}
+
+void LineTrackItem::VerticalLimits::Render()
+{
+    m_text_field.Render();
+}
+
+void
+LineTrackItem::VerticalLimits::UpdateValue(double value)
+{
+    m_text_field.ShowResetButton(value != m_default_value);
+    m_value = value;
+    m_formatted_str = FormatValue(value);
+    m_compact_str  = compact_number_format(value);
+    m_text_field.SetText(m_compact_str, m_formatted_str, m_formatted_default);
+}
+
+std::string
+LineTrackItem::VerticalLimits::FormatValue(double value)
+{
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << value;
+    return oss.str();
+}
+
+double
+LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
+{
+    double      result = 0.0;
+    const char* first = input.data();
+    const char* last  = input.data() + input.size();
+    auto [ptr, error_code] = std::from_chars(first, last, result, std::chars_format::general);
+    if(error_code == std::errc{} && std::isfinite(result) && ptr == last)
+    {
+        return result;
+    }
+    else
+    {
+        m_text_field.RevertToDefault();
+        return m_default_value;
+    }
 }
 
 }  // namespace View

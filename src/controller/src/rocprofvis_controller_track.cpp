@@ -342,8 +342,18 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                     result = SetObject(
                                         kRPVControllerTrackEntry, index++,
                                         (rocprofvis_handle_t*) new_event);
-                                    ROCPROFVIS_ASSERT(result ==
-                                                        kRocProfVisResultSuccess);
+                                    if( result == kRocProfVisResultOutOfRange)
+                                    {
+                                        spdlog::warn(
+                                            "Track::FetchFromDataModel: Skipping Event "
+                                            "id {} on track id {}, event is out of range",
+                                            event_id, m_id);
+                                    }
+                                    else
+                                    {
+                                        ROCPROFVIS_ASSERT(result ==
+                                                          kRocProfVisResultSuccess);
+                                    }
                                 }
                                 else
                                 {

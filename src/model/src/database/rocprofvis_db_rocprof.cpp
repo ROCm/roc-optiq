@@ -652,7 +652,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
            ExecuteQueryForAllTracksAsync(
                kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks | split_flag , kRPVQuerySliceByTrackSliceQuery,
                "SELECT MIN(startTs), MAX(endTs), MIN(level), MAX(level), ",
-               "", &CallbackGetTrackProperties,
+               "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
                [](rocprofvis_dm_track_params_t* params) {}))
         {
             break;
@@ -1120,7 +1120,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
                    (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
                    &CallbackAddExtInfo))
                 break;
-            query = m_query_factory.GetRocprofEssentialInfoQueryForRegionEvent(event_id.bitfield.event_id);
+            query = m_query_factory.GetRocprofEssentialInfoQueryForRegionEvent(event_id.bitfield.event_id, event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
 
         } else

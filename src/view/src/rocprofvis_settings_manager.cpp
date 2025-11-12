@@ -465,18 +465,12 @@ SettingsManager::InitStyling()
     style.FrameBorderSize   = 0.0f;
     style.WindowBorderSize  = 1.0f;
     style.TabBorderSize     = 0.0f;
-    style.FrameRounding     = 6.0f;
-    style.GrabRounding      = 6.0f;
-    style.TabRounding       = 6.0f;
-    style.WindowRounding    = 8.0f;
-    style.ScrollbarRounding = 8.0f;
-
-    // Rounding the windows to look modern
     style.FrameRounding     = 8.0f;
     style.GrabRounding      = 6.0f;
     style.TabRounding       = 6.0f;
     style.WindowRounding    = 8.0f;
     style.ScrollbarRounding = 8.0f;
+
     style.FramePadding      = ImVec2(10, 6);
     style.ItemSpacing       = ImVec2(10, 8);
     style.WindowPadding     = ImVec2(4, 4);

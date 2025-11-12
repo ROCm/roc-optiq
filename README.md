@@ -1,4 +1,4 @@
-# rocprofiler-visualizer
+# roc-optiq
 A visualizer for the ROCm Profiler Tools. 
 
 ## Install

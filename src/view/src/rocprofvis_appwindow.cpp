@@ -264,6 +264,13 @@ AppWindow::OpenFileDialog(const std::string& title, const std::string& file_filt
     m_is_file_dialog_open       = true;
     m_open_file_dialog_callback = callback;
 
+#ifdef JSON_TRACE_SUPPORT
+    trace_types += ",.json";
+#endif
+#ifdef COMPUTE_UI_SUPPORT
+    trace_types += ",.csv";
+#endif
+
     m_open_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
         NFD_Init();
         nfdu8char_t*          outPath    = nullptr;

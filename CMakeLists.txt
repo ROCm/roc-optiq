@@ -19,7 +19,7 @@ option(JSON_TRACE_SUPPORT "Build with support for JSON traces" OFF)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" ON)
-option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" OFF)
+option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 
 if(JSON_TRACE_SUPPORT) 
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DJSON_TRACE_SUPPORT")

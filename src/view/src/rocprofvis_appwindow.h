@@ -40,15 +40,14 @@ public:
     void ShowConfirmationDialog(const std::string& title, const std::string& message,
                                 std::function<void()> on_confirm_callback) const;
     void ShowMessageDialog(const std::string& title, const std::string& message) const;
-    void SaveFileDialog(const std::string& title, const std::string& file_filter,
-                        const std::string&               initial_path,
-                        std::function<void(std::string)> callback);
-    void OpenFileDialog(const std::string& title, const std::string& file_filter,
-                        const std::string&               initial_path,
-                        std::function<void(std::string)> callback);
-    void ShowFileDialog(const std::string& title, const std::string& file_filter,
-                        const std::string& initial_path, const bool& confirm_overwrite,
-                        std::function<void(std::string)> callback);
+
+    void ShowSaveFileDialog(const std::string& title, const std::string& file_filter,
+                            const std::string&               initial_path,
+                            std::function<void(std::string)> callback);
+
+    void ShowOpenFileDialog(const std::string& title, const std::string& file_filter,
+                            const std::string&               initial_path,
+                            std::function<void(std::string)> callback);
 
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();
@@ -71,7 +70,24 @@ private:
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
+    void HandleOpenFile();
+    void HandleSaveAsFile();
 
+ #ifdef USE_NATIVE_FILE_DIALOG
+    void UpdateNativeFileDialog();
+
+    void ShowNativeSaveFileDialog(const std::string&               file_filter,
+                                  const std::string&               initial_path,
+                                  std::function<void(std::string)> callback);
+
+    void ShowNativeOpenFileDialog(const std::string&               file_filter,
+                                  const std::string&               initial_path,
+                                  std::function<void(std::string)> callback);
+#else
+    void ShowFileDialog(const std::string& title, const std::string& file_filter,
+                        const std::string& initial_path, const bool& confirm_overwrite,
+                        std::function<void(std::string)> callback);
+#endif
     static AppWindow* s_instance;
 
     std::shared_ptr<VFixedContainer> m_main_view;
@@ -98,7 +114,17 @@ private:
     bool m_analysis_bar_visible;
     bool m_sidebar_visible;
     bool m_histogram_visible;
-    bool m_init_file_dialog;
+
+#ifndef USE_NATIVE_FILE_DIALOG
+    bool                             m_init_file_dialog;
+    std::function<void(std::string)> m_file_dialog_callback;
+#else
+    std::atomic<bool>                m_is_native_file_dialog_open;
+    std::future<std::string>         m_open_file_dialog_future;
+    std::function<void(std::string)> m_open_file_dialog_callback;
+    std::future<std::string>         m_save_file_dialog_future;
+    std::function<void(std::string)> m_save_file_dialog_callback;
+#endif
 
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
@@ -106,14 +132,6 @@ private:
 
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
-    std::function<void(std::string)> m_file_dialog_callback;
-
-    std::future<std::string> m_open_file_dialog_future;
-    std::function<void(std::string)> m_open_file_dialog_callback;
-    std::future<std::string> m_save_file_dialog_future;
-    std::function<void(std::string)> m_save_file_dialog_callback;
-
-    std::atomic<bool> m_is_file_dialog_open;
 };
 
 }  // namespace View

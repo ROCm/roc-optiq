@@ -1,9 +1,14 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_appwindow.h"
-#include "ImGuiFileDialog.h"
 #include "imgui.h"
 #include "implot.h"
+#ifdef USE_NATIVE_FILE_DIALOG
+#    include "nfd.h"
+#else
+#    include "ImGuiFileDialog.h"
+#endif
+
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
@@ -14,7 +19,6 @@
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
 #endif
-#include "nfd.h"
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_view_module.h"
@@ -83,8 +87,11 @@ AppWindow::AppWindow()
 , m_histogram_visible(true)
 , m_sidebar_visible(true)
 , m_analysis_bar_visible(true)
+#ifndef USE_NATIVE_FILE_DIALOG
 , m_init_file_dialog(false)
-, m_is_file_dialog_open(false)
+#else
+, m_is_native_file_dialog_open(false)
+#endif
 {}
 
 AppWindow::~AppWindow()
@@ -217,111 +224,29 @@ AppWindow::ShowMessageDialog(const std::string& title, const std::string& messag
 }
 
 void
-AppWindow::SaveFileDialog(const std::string& title, const std::string& file_filter,
-                          const std::string&               initial_path,
-                          std::function<void(std::string)> callback)
+AppWindow::ShowSaveFileDialog(const std::string& title, const std::string& file_filter,
+                              const std::string&               initial_path,
+                              std::function<void(std::string)> callback)
 {
-#if USE_OS_FILE_DIALOG
-    if(m_is_file_dialog_open)
-    {
-        return;
-    }
-    m_is_file_dialog_open       = true;
-    m_save_file_dialog_callback = callback;
-
-    m_save_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
-        NFD_Init();
-        nfdu8char_t*          outPath    = nullptr;
-        nfdu8filteritem_t     filterItem = { "File", file_filter.c_str() };
-        nfdsavedialogu8args_t args       = {};
-        args.filterList                  = &filterItem;
-        args.filterCount                 = 1;
-        nfdresult_t result               = NFD_SaveDialogU8_With(&outPath, &args);
-        std::string file_path;
-        if(result == NFD_OKAY)
-        {
-            file_path = outPath;
-            NFD_FreePathU8(outPath);
-        }
-
-        else
-        {
-            printf("Error: %s\n", NFD_GetError());
-        }
-        NFD_Quit();
-        return file_path;
-    });
-#else
-
-    m_file_dialog_callback = callback;
-    m_init_file_dialog     = true;
-    IGFD::FileDialogConfig config;
-    config.path  = initial_path;
-    config.flags = true
-                       ? ImGuiFileDialogFlags_Default
-                       : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
-    ImGuiFileDialog::Instance()->OpenDialog(
-        FILE_DIALOG_NAME, title, (std::string(".") + file_filter).c_str(),
-        config);  // Need to add . infront of file filter for ImGuiFileDialog
-#endif
+    #ifdef USE_NATIVE_FILE_DIALOG
+    (void)title;
+    ShowNativeSaveFileDialog(file_filter, initial_path, callback);
+    #else
+    ShowFileDialog(title, file_filter, initial_path, true, callback);
+    #endif
 }
 
 void
-AppWindow::OpenFileDialog(const std::string& title, const std::string& file_filter,
-                          const std::string&               initial_path,
-                          std::function<void(std::string)> callback)
+AppWindow::ShowOpenFileDialog(const std::string& title, const std::string& file_filter,
+                              const std::string&               initial_path,
+                              std::function<void(std::string)> callback)
 {
-#if USE_OS_FILE_DIALOG
-    if(m_is_file_dialog_open)
-    {
-        return;
-    }
-    m_is_file_dialog_open       = true;
-    m_open_file_dialog_callback = callback;
-
-    m_open_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
-        NFD_Init();
-        nfdu8char_t*          outPath    = nullptr;
-        nfdu8filteritem_t     filterItem = { "Supported Files", file_filter.c_str() };
-        nfdopendialogu8args_t args       = {};
-        args.filterList                  = &filterItem;
-        args.filterCount                 = 1;
-        nfdresult_t result               = NFD_OpenDialogU8_With(&outPath, &args);
-        std::string file_path;
-        if(result == NFD_OKAY)
-        {
-            file_path = outPath;
-            NFD_FreePathU8(outPath);
-        }
-
-        else
-        {
-            printf("Error: %s\n", NFD_GetError());
-        }
-        NFD_Quit();
-        return file_path;
-    });
-#else
-    std::string trace_types = ".db,.rpd";
-#    ifdef JSON_TRACE_SUPPORT
-    trace_types += ",.json";
-#    endif
-#    ifdef COMPUTE_UI_SUPPORT
-    trace_types += ",.csv";
-#    endif
-    std::string filters = "All (.rpv," + trace_types + "){.rpv," + trace_types +
-                          "},Projects (.rpv){.rpv},Traces (" + trace_types + "){" +
-                          trace_types + "}";
-    m_file_dialog_callback = callback;
-    m_init_file_dialog     = true;
-    IGFD::FileDialogConfig config;
-    config.path  = initial_path;
-    config.flags = false
-                       ? ImGuiFileDialogFlags_Default
-                       : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
-    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, filters.c_str(),
-                                            config);
-#endif
+    #ifdef USE_NATIVE_FILE_DIALOG
+    (void)title;
+    ShowNativeOpenFileDialog(file_filter, initial_path, callback);
+    #else
+    ShowFileDialog(title, file_filter, initial_path, false, callback);
+    #endif
 }
 
 Project*
@@ -350,35 +275,9 @@ AppWindow::GetCurrentProject()
 void
 AppWindow::Update()
 {
-    if(m_is_file_dialog_open)
-    {
-        if(m_open_file_dialog_future.valid() &&
-           m_open_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
-               std::future_status::ready)
-        {
-            std::string file_path = m_open_file_dialog_future.get();
-            if(!file_path.empty() && m_open_file_dialog_callback)
-            {
-                m_open_file_dialog_callback(file_path);
-            }
-            m_is_file_dialog_open       = false;
-            m_open_file_dialog_callback = nullptr;
-        }
-
-        if(m_save_file_dialog_future.valid() &&
-           m_save_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
-               std::future_status::ready)
-        {
-            std::string file_path = m_save_file_dialog_future.get();
-            if(!file_path.empty() && m_save_file_dialog_callback)
-            {
-                m_save_file_dialog_callback(file_path);
-            }
-            m_is_file_dialog_open       = false;
-            m_save_file_dialog_callback = nullptr;
-        }
-    }
-
+#ifdef USE_NATIVE_FILE_DIALOG
+    UpdateNativeFileDialog();
+#endif
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
@@ -449,7 +348,9 @@ AppWindow::Render()
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
-    RenderFileDialog();
+#ifndef USE_NATIVE_FILE_DIALOG    
+     RenderFileDialog();
+#endif
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
@@ -458,6 +359,7 @@ AppWindow::Render()
     NotificationManager::GetInstance().Render();
 }
 
+#ifndef USE_NATIVE_FILE_DIALOG
 void
 AppWindow::RenderFileDialog()
 {
@@ -496,6 +398,7 @@ AppWindow::RenderFileDialog()
     }
     ImGui::PopStyleVar(3);
 }
+#endif
 
 void
 AppWindow::OpenFile(std::string file_path)
@@ -541,31 +444,25 @@ AppWindow::OpenFile(std::string file_path)
 void
 AppWindow::RenderFileMenu(Project* project)
 {
+    bool is_open_file_dialog_open = false;
+    #ifdef USE_NATIVE_FILE_DIALOG
+    is_open_file_dialog_open = m_is_native_file_dialog_open;
+    #endif
+
     if(ImGui::BeginMenu("File"))
     {
-        if(ImGui::MenuItem("Open", nullptr, false, !m_is_file_dialog_open))
+        if(ImGui::MenuItem("Open", nullptr, false, !is_open_file_dialog_open))
         {
-            std::string trace_types = "db,rpd,rpv";
-#ifdef JSON_TRACE_SUPPORT
-            trace_types += ",json";
-#endif
-#ifdef COMPUTE_UI_SUPPORT
-            trace_types += ",csv";
-#endif
-
-            OpenFileDialog("Choose File", trace_types, ".",
-                           [this](std::string file_path) { this->OpenFile(file_path); });
+            HandleOpenFile();
         }
         if(ImGui::MenuItem("Save", nullptr, false,
-                           !m_is_file_dialog_open && (project && project->IsProject())))
+                           !is_open_file_dialog_open && (project && project->IsProject())))
         {
             project->Save();
         }
-        if(ImGui::MenuItem("Save As", nullptr, false, project || !m_is_file_dialog_open))
+        if(ImGui::MenuItem("Save As", nullptr, false, project || !is_open_file_dialog_open))
         {
-            SaveFileDialog(
-                "Save as Project", "rpv", "",
-                [project](std::string file_path) { project->SaveAs(file_path); });
+            HandleSaveAsFile();
         }
         ImGui::Separator();
         const std::list<std::string> recent_files =
@@ -612,7 +509,7 @@ AppWindow::RenderEditMenu(Project* project)
         if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
                            project && project->IsTrimSaveAllowed()))
         {
-            SaveFileDialog("Save Trace Selection", ".db,.rpd", "",
+            ShowSaveFileDialog("Save Trace Selection", ".db,.rpd", "",
                            [project](std::string file_path) -> void {
                                project->TrimSave(file_path);
                            });
@@ -691,6 +588,54 @@ AppWindow::RenderHelpMenu()
             m_open_about_dialog = true;
         }
         ImGui::EndMenu();
+    }
+}
+
+void
+AppWindow::HandleOpenFile()
+{
+#ifdef USE_NATIVE_FILE_DIALOG
+    std::string default_path = "";
+    std::string filters = "db,rpd,rpv";
+#    ifdef JSON_TRACE_SUPPORT
+    filters += ",json";
+#    endif
+#    ifdef COMPUTE_UI_SUPPORT
+    filters += ",csv";
+#    endif
+#else
+    std::string default_path = ".";
+    std::string trace_types = ".db,.rpd";
+#    ifdef JSON_TRACE_SUPPORT
+    trace_types += ",.json";
+#    endif
+#    ifdef COMPUTE_UI_SUPPORT
+    trace_types += ",.csv";
+    std::string filters = "All (.rpv," + trace_types + "){.rpv," + trace_types +
+                          "},Projects (.rpv){.rpv},Traces (" + trace_types + "){" +
+                          trace_types + "}";
+#    endif
+#endif
+    ShowOpenFileDialog(
+        "Choose File", filters, default_path,
+        [this](std::string file_path) -> void { this->OpenFile(file_path); });
+}
+
+void
+AppWindow::HandleSaveAsFile()
+{    
+    Project* project = GetCurrentProject();
+    if(project)
+    {
+        #ifdef USE_NATIVE_FILE_DIALOG
+        std::string filters = "rpv";
+        #else
+        std::string filters = "Projects (.rpv){.rpv}";
+        #endif
+
+        ShowSaveFileDialog(
+            "Save as Project", filters, "",
+            [project](std::string file_path) { project->SaveAs(file_path); });
     }
 }
 
@@ -780,6 +725,147 @@ AppWindow::RenderAboutDialog()
     ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
 }
 
+#ifdef USE_NATIVE_FILE_DIALOG
+void
+AppWindow::UpdateNativeFileDialog()
+{
+    if(m_is_native_file_dialog_open)
+    {
+        if(m_open_file_dialog_future.valid() &&
+           m_open_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
+               std::future_status::ready)
+        {
+            std::string file_path = m_open_file_dialog_future.get();
+            if(!file_path.empty() && m_open_file_dialog_callback)
+            {
+                m_open_file_dialog_callback(file_path);
+            }
+            m_is_native_file_dialog_open = false;
+            m_open_file_dialog_callback  = nullptr;
+        }
+
+        if(m_save_file_dialog_future.valid() &&
+           m_save_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
+               std::future_status::ready)
+        {
+            std::string file_path = m_save_file_dialog_future.get();
+            if(!file_path.empty() && m_save_file_dialog_callback)
+            {
+                m_save_file_dialog_callback(file_path);
+            }
+            m_is_native_file_dialog_open = false;
+            m_save_file_dialog_callback  = nullptr;
+        }
+    }
+}    
+
+void
+AppWindow::ShowNativeSaveFileDialog(const std::string&               file_filter,
+                                    const std::string&               initial_path,
+                                    std::function<void(std::string)> callback)
+{
+    if(m_is_native_file_dialog_open)
+    {
+        return;
+    }
+    m_is_native_file_dialog_open = true;
+    m_save_file_dialog_callback  = callback;
+
+    m_save_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
+        NFD_Init();
+        nfdu8char_t*          outPath    = nullptr;
+        nfdu8filteritem_t     filterItem = { "File", file_filter.c_str() };
+        nfdsavedialogu8args_t args       = {};
+        args.filterList                  = &filterItem;
+        args.filterCount                 = 1;
+        args.defaultPath                 = initial_path.c_str();
+        nfdresult_t result               = NFD_SaveDialogU8_With(&outPath, &args);
+        std::string file_path;
+        if(result == NFD_OKAY)
+        {
+            file_path = outPath;
+            if(outPath)
+            {
+                NFD_FreePathU8(outPath);
+            }
+        }
+        else
+        {
+            spdlog::error("Error opening dialog: {}", NFD_GetError());
+            if(outPath)
+            {
+                NFD_FreePathU8(outPath);
+            }
+            NFD_ClearError();
+        }
+        NFD_Quit();
+        return file_path;
+    });
+}
+
+void
+AppWindow::ShowNativeOpenFileDialog(const std::string&               file_filter,
+                                    const std::string&               initial_path,
+                                    std::function<void(std::string)> callback)
+{
+    if(m_is_native_file_dialog_open)
+    {
+        return;
+    }
+    m_is_native_file_dialog_open = true;
+    m_open_file_dialog_callback  = callback;
+
+    m_open_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
+        NFD_Init();
+        nfdu8char_t*          outPath    = nullptr;
+        nfdu8filteritem_t     filterItem = { "Supported Files", file_filter.c_str() };
+        nfdopendialogu8args_t args       = {};
+        args.filterList                  = &filterItem;
+        args.filterCount                 = 1;
+        args.defaultPath                 = initial_path.c_str();
+        nfdresult_t result               = NFD_OpenDialogU8_With(&outPath, &args);
+        std::string file_path;
+        if(result == NFD_OKAY)
+        {
+            file_path = outPath;
+            if(outPath)
+            {
+                NFD_FreePathU8(outPath);
+            }
+        }
+        else
+        {
+            spdlog::error("Error opening dialog: {}", NFD_GetError());
+            if(outPath)
+            {
+                NFD_FreePathU8(outPath);
+            }
+            NFD_ClearError();
+        }
+        NFD_Quit();
+        return file_path;
+    });
+}
+#endif
+
+#ifndef USE_NATIVE_FILE_DIALOG
+void
+AppWindow::ShowFileDialog(const std::string& title, const std::string& file_filter,
+                          const std::string& initial_path, const bool& confirm_overwrite,
+                          std::function<void(std::string)> callback)
+{
+    m_file_dialog_callback = callback;
+    m_init_file_dialog     = true;
+    IGFD::FileDialogConfig config;
+    config.path  = initial_path;
+    config.flags = confirm_overwrite
+                       ? ImGuiFileDialogFlags_Default
+                       : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
+    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, file_filter.c_str(),
+                                            config);
+}
+#endif
+
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void
 AppWindow::RenderDeveloperMenu()
@@ -803,16 +889,26 @@ AppWindow::RenderDeveloperMenu()
         // Open a file to test the DataProvider
         if(ImGui::MenuItem("Test Provider", nullptr))
         {
-            IGFD::FileDialogConfig config;
-            config.path                      = ".";
+#    ifdef USE_NATIVE_FILE_DIALOG
+            std::string default_path         = "";
+            std::string supported_extensions = "db,rpd";
+#        ifdef JSON_TRACE_SUPPORT
+            supported_extensions += ",json";
+#        endif
+#    else
             std::string supported_extensions = ".db,.rpd";
-#    ifdef JSON_TRACE_SUPPORT
+#        ifdef JSON_TRACE_SUPPORT
             supported_extensions += ",.json";
+#        endif
+            std::string default_path = ".";
 #    endif
-            ImGuiFileDialog::Instance()->OpenDialog("DebugFile", "Choose File",
-                                                    supported_extensions.c_str(), config);
+            ShowOpenFileDialog("Choose File", supported_extensions, default_path,
+                               [this](std::string file_path) -> void {
+                                   this->m_test_data_provider.FetchTrace(file_path);
+                                   spdlog::info("Opening file: {}", file_path);
+                                   m_show_provider_test_widow = true;
+                               });
         }
-
         ImGui::EndMenu();
     }
 }
@@ -938,25 +1034,6 @@ RenderProviderTest(DataProvider& provider)
 void
 AppWindow::RenderDebugOuput()
 {
-    ImGui::SetNextWindowPos(
-        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
-        ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
-    if(ImGuiFileDialog::Instance()->Display("DebugFile"))
-    {
-        if(ImGuiFileDialog::Instance()->IsOk())
-        {
-            std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-
-            m_test_data_provider.FetchTrace(file_path);
-            spdlog::info("Opening file: {}", file_path);
-
-            m_show_provider_test_widow = true;
-        }
-
-        ImGuiFileDialog::Instance()->Close();
-    }
-
     if(m_show_metrics)
     {
         ImGui::ShowMetricsWindow(&m_show_metrics);

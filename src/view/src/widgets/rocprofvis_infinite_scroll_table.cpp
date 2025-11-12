@@ -758,7 +758,7 @@ InfiniteScrollTable::FormatTimeColumns() const
 void
 InfiniteScrollTable::ExportToFile() const
 {
-    AppWindow::GetInstance()->SaveFileDialog(
+    AppWindow::GetInstance()->ShowSaveFileDialog(
         "Export Table", "csv", "", [this](std::string file_path) -> void {
             std::shared_ptr<TableRequestParams> table_params =
                 m_data_provider.GetTableParams(m_table_type);

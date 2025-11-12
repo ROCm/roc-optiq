@@ -520,7 +520,7 @@ AppWindow::RenderFileMenu(Project* project)
                            [this](std::string file_path) { this->OpenFile(file_path); });
         }
         if(ImGui::MenuItem("Save", nullptr, false,
-                           !m_is_file_dialog_open || (project && project->IsProject())))
+                           !m_is_file_dialog_open && (project && project->IsProject())))
         {
             project->Save();
         }

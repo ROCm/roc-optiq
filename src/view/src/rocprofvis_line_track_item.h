@@ -6,6 +6,8 @@
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
+#include "widgets/rocprofvis_widget.h"
+
 #include <string>
 #include <vector>
 
@@ -36,6 +38,33 @@ class LineTrackItem : public TrackItem
 {
     friend LineTrackProjectSettings;
 
+    class VerticalLimits
+    {
+    public:
+        VerticalLimits(double value, std::string field_id, std::string prefix);
+        double             Value() const;
+        const std::string& StrValue() const;
+        const std::string& CompactValue() const;
+        void               SetValue(double value);
+        void               Render();
+        float              ButtonSize() const;
+        const std::string& Prefix();
+    private:
+        void UpdateValue(double value);
+        std::string FormatValue(double value);
+        double      ProcessUserInput(std::string_view input);
+
+        double            m_value;
+        double            m_default_value;
+        std::string       m_formatted_default;
+
+        std::string       m_formatted_str;
+        std::string       m_compact_str;
+
+        std::string       m_prefix;
+        EditableTextField m_text_field;
+    };
+
 public:
     LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                   double time_offset_ns, double& min_x, double& max_x, double scale_x,
@@ -63,12 +92,10 @@ private:
 
     std::vector<rocprofvis_data_point_t> m_data;
     rocprofvis_color_by_value_t          m_color_by_value_digits;
-    double                               m_min_y;
-    double                               m_max_y;
-    std::string                          m_min_y_str;
-    std::string                          m_max_y_str;
-    std::string                          m_compact_max;
-    std::string                          m_compact_min;
+
+    VerticalLimits m_min_y;
+    VerticalLimits m_max_y;
+
     bool                                 m_is_color_value_existant;
     DataProvider&                        m_dp;
     bool                                 m_show_boxplot;

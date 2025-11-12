@@ -73,8 +73,11 @@ LineTrackItem::LineTrackRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
+    double padded_min_y, padded_max_y;
+    GetPaddedYRange(padded_min_y, padded_max_y);
+
     float scale_y =
-        static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
+        static_cast<float>(content_size.y / (padded_max_y - padded_min_y));
 
     double tooltip_x     = 0;
     float tooltip_y     = 0;
@@ -87,7 +90,7 @@ LineTrackItem::LineTrackRender(float graph_width)
     for(int i = 1; i < m_data.size(); i++)
     {
         ImVec2 point_1 =
-            MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
+            MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y, padded_min_y, padded_max_y);
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
                                       ImVec2(point_1.x + 10, point_1.y + 10)) &&
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
@@ -98,7 +101,7 @@ LineTrackItem::LineTrackRender(float graph_width)
         }
 
         ImVec2 point_2 =
-            MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
+            MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y, padded_min_y, padded_max_y);
         ImU32 line_color = generic_black;
 
         if(point_2.x < container_pos.x || point_1.x > container_pos.x + content_size.x)
@@ -213,8 +216,11 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
+    double padded_min_y, padded_max_y;
+    GetPaddedYRange(padded_min_y, padded_max_y);
+
     float scale_y =
-        static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
+        static_cast<float>(content_size.y / (padded_max_y - padded_min_y));
 
     float tooltip_x     = 0;
     float tooltip_y     = 0;
@@ -223,7 +229,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
     for(int i = 1; i < m_data.size(); i++)
     {
         ImVec2 point_1 =
-            MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
+            MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y, padded_min_y, padded_max_y);
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
                                       ImVec2(point_1.x + 10, point_1.y + 10)) &&
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
@@ -234,7 +240,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
         }
 
         ImVec2 point_2 =
-            MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y);
+            MapToUI(m_data[i], cursor_position, content_size, m_scale_x, scale_y, padded_min_y, padded_max_y);
 
         if(point_2.x < container_pos.x || point_1.x > container_pos.x + content_size.x)
         {
@@ -420,12 +426,13 @@ LineTrackItem::RenderMetaAreaOptions()
 
 ImVec2
 LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
-                       ImVec2& content_size, double scaleX, float scaleY)
+                       ImVec2& content_size, double scaleX, float scaleY,
+                       double padded_min_y, double padded_max_y)
 {
     ImVec2 container_pos = ImGui::GetWindowPos();
 
     double x = container_pos.x + (point.x_value - (m_min_x + m_time_offset_ns)) * scaleX;
-    double y = cursor_position.y + content_size.y - (point.y_value - m_min_y.Value()) * scaleY;
+    double y = cursor_position.y + content_size.y - (point.y_value - padded_min_y) * scaleY;
 
     return ImVec2(static_cast<float>(x), static_cast<float>(y));
 }
@@ -585,6 +592,20 @@ LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
         m_text_field.RevertToDefault();
         return m_default_value;
     }
+}
+
+void
+LineTrackItem::GetPaddedYRange(double& padded_min, double& padded_max) const
+{
+    const double min_val = m_min_y.Value();
+    const double max_val = m_max_y.Value();
+    const double range = max_val - min_val;
+    
+    // Add 5% padding on each side to ensure lines at min/max are visible
+    const double padding = range * 0.05;
+    
+    padded_min = min_val - padding;
+    padded_max = max_val + padding;
 }
 
 }  // namespace View

@@ -83,12 +83,13 @@ protected:
 
 private:
     ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
-                   double scale_x, float scale_y);
+                   double scale_x, float scale_y, double padded_min_y, double padded_max_y);
     bool   ExtractPointsFromData();
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
     void   LineTrackRender(float graph_width);
     void   BoxPlotRender(float graph_width);
     void   RenderTooltip(float tooltip_x, float tooltip_y);
+    void   GetPaddedYRange(double& padded_min, double& padded_max) const;
 
     std::vector<rocprofvis_data_point_t> m_data;
     rocprofvis_color_by_value_t          m_color_by_value_digits;

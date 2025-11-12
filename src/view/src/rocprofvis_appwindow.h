@@ -46,6 +46,9 @@ public:
     void OpenFileDialog(const std::string& title, const std::string& file_filter,
                         const std::string&               initial_path,
                         std::function<void(std::string)> callback);
+    void ShowFileDialog(const std::string& title, const std::string& file_filter,
+                        const std::string& initial_path, const bool& confirm_overwrite,
+                        std::function<void(std::string)> callback);
 
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();

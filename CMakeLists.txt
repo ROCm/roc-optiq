@@ -19,7 +19,7 @@ option(JSON_TRACE_SUPPORT "Build with support for JSON traces" OFF)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" ON)
-
+option(USE_OS_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 # Add third-party libraries, core, and model BEFORE controller
 add_subdirectory(thirdparty)
 
@@ -117,6 +117,8 @@ add_executable(rocprof-visualizer
     src/app/src/rocprofvis_imgui_vulkan.cpp 
     src/app/src/main.cpp
     ${VIEW_FILES})
+
+target_compile_definitions(rocprof-visualizer PRIVATE USE_OS_FILE_DIALOG=$<BOOL:${USE_OS_FILE_DIALOG}>)
 
 add_dependencies(rocprof-visualizer generate_icon_header)
 

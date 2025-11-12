@@ -221,6 +221,7 @@ AppWindow::SaveFileDialog(const std::string& title, const std::string& file_filt
                           const std::string&               initial_path,
                           std::function<void(std::string)> callback)
 {
+#if USE_OS_FILE_DIALOG
     if(m_is_file_dialog_open)
     {
         return;
@@ -250,6 +251,19 @@ AppWindow::SaveFileDialog(const std::string& title, const std::string& file_filt
         NFD_Quit();
         return file_path;
     });
+#else
+
+    m_file_dialog_callback = callback;
+    m_init_file_dialog     = true;
+    IGFD::FileDialogConfig config;
+    config.path  = initial_path;
+    config.flags = true
+                       ? ImGuiFileDialogFlags_Default
+                       : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
+    ImGuiFileDialog::Instance()->OpenDialog(
+        FILE_DIALOG_NAME, title, (std::string(".") + file_filter).c_str(),
+        config);  // Need to add . infront of file filter for ImGuiFileDialog
+#endif
 }
 
 void
@@ -257,6 +271,7 @@ AppWindow::OpenFileDialog(const std::string& title, const std::string& file_filt
                           const std::string&               initial_path,
                           std::function<void(std::string)> callback)
 {
+#if USE_OS_FILE_DIALOG
     if(m_is_file_dialog_open)
     {
         return;
@@ -286,6 +301,27 @@ AppWindow::OpenFileDialog(const std::string& title, const std::string& file_filt
         NFD_Quit();
         return file_path;
     });
+#else
+    std::string trace_types = ".db,.rpd";
+#    ifdef JSON_TRACE_SUPPORT
+    trace_types += ",.json";
+#    endif
+#    ifdef COMPUTE_UI_SUPPORT
+    trace_types += ",.csv";
+#    endif
+    std::string filters = "All (.rpv," + trace_types + "){.rpv," + trace_types +
+                          "},Projects (.rpv){.rpv},Traces (" + trace_types + "){" +
+                          trace_types + "}";
+    m_file_dialog_callback = callback;
+    m_init_file_dialog     = true;
+    IGFD::FileDialogConfig config;
+    config.path  = initial_path;
+    config.flags = false
+                       ? ImGuiFileDialogFlags_Default
+                       : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
+    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, filters.c_str(),
+                                            config);
+#endif
 }
 
 Project*
@@ -516,7 +552,6 @@ AppWindow::RenderFileMenu(Project* project)
 #ifdef COMPUTE_UI_SUPPORT
             trace_types += ",csv";
 #endif
- 
 
             OpenFileDialog("Choose File", trace_types, ".",
                            [this](std::string file_path) { this->OpenFile(file_path); });

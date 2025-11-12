@@ -246,12 +246,14 @@ class EditableTextField
 {
 public:
     EditableTextField(std::string id);
+    ~EditableTextField() = default;
     void        SetText(std::string text, std::string tooltip = "",
                         std::string reset_tooltip = "");
-    std::string Render();
+    void        Render();
     float       ButtonSize() const;
     void        RevertToDefault();
     void        ShowResetButton(bool is_button_shown);
+    void        SetOnTextCommit(const std::function<void(const std::string&)>& cb);
 
 private:
     void DrawPlainText();
@@ -266,6 +268,7 @@ private:
     std::string m_reset_tooltip;
     std::string m_tooltip_text;    
     std::string m_edit_buf;
+    std::function<void(const std::string&)> m_on_text_commit;
 };
 
 }  // namespace View

@@ -320,7 +320,6 @@ RocProfVis::View::compact_number_format(float number)
     {
         int    exp  = static_cast<int>(std::floor(std::log10(value)));
         double base = value / std::pow(10.0, exp);
-        // Show two significant digits for the base (like "1.23e+30")
         output << (negative ? "-" : "") << std::fixed << std::setprecision(0) << base
                << "e" << (exp >= 0 ? "+" : "") << exp;
         return output.str();

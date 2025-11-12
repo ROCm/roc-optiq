@@ -277,7 +277,7 @@ LineTrackItem::CalculateNewMetaAreaSize()
         ImGui::CalcTextSize((m_min_y.CompactValue() + m_min_y.Prefix()).c_str());
 
     return std::max({ max_size.x + m_max_y.ButtonSize(), min_size.x + m_min_y.ButtonSize() }) +
-           6 * m_metadata_padding.x; // TODO: Harcoded padding for posible label size
+           6 * m_metadata_padding.x; // TODO: Hardcoded padding for posible label size
                                      // Think later how it can be calculated or store as default values
 }
 
@@ -495,6 +495,18 @@ LineTrackItem::VerticalLimits::VerticalLimits(double value, std::string field_id
 , m_prefix(std::move(prefix))
 {
     SetValue(value);
+    m_text_field.SetOnTextCommit([this](const std::string& committed_text) {
+        // Empty string signals a revert-to-default in our usage
+        if(committed_text.empty())
+        {
+            UpdateValue(m_default_value);
+        }
+        else if(committed_text != m_compact_str)
+        {
+            double processed = ProcessUserInput(committed_text);
+            UpdateValue(processed);
+        }
+    });
 }
 
 double
@@ -503,13 +515,13 @@ LineTrackItem::VerticalLimits::Value() const
     return m_value;
 }
 
-std::string
+const std::string&
 LineTrackItem::VerticalLimits::StrValue() const
 {
     return m_formatted_str;
 }
 
-std::string
+const std::string&
 LineTrackItem::VerticalLimits::CompactValue() const
 {
     return m_compact_str;
@@ -537,15 +549,7 @@ LineTrackItem::VerticalLimits::SetValue(double value)
 
 void LineTrackItem::VerticalLimits::Render()
 {
-    std::string new_value = m_text_field.Render();
-    if(new_value.empty())
-    {
-        UpdateValue(m_default_value);
-    }
-    else if(new_value != m_compact_str)
-    {
-        UpdateValue(ProcessUserInput(new_value));
-    }
+    m_text_field.Render();
 }
 
 void

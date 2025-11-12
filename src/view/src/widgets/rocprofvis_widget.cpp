@@ -738,7 +738,7 @@ EditableTextField::EditableTextField(std::string id)
 : m_id(std::move(id))
 {}
 
-std::string
+void
 EditableTextField::Render()
 {
     ImGui::PushID(m_id.c_str());
@@ -751,7 +751,6 @@ EditableTextField::Render()
         DrawPlainText();
     }
     ImGui::PopID();
-    return m_text;
 }
 
 void
@@ -760,6 +759,10 @@ EditableTextField::RevertToDefault()
     // FIXME: Assuming default is an empty string
     // Think about best way to handle revert button pressed
     m_text   = "";
+    if(m_on_text_commit)
+    {
+        m_on_text_commit(m_text);
+    }
 }
 
 void
@@ -912,6 +915,15 @@ EditableTextField::AcceptEdit()
 {
     m_editing_mode = false;
     m_text         = m_edit_buf;
+    if(m_on_text_commit)
+    {
+        m_on_text_commit(m_text);
+    }
+}
+void
+EditableTextField::SetOnTextCommit(const std::function<void(const std::string&)>& cb)
+{
+    m_on_text_commit = cb;
 }
 
 }  // namespace View

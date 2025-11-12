@@ -5,7 +5,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-#include "icons/rocprovfis_icon_defines.h"
 
 #include <algorithm>
 #include <sstream>

@@ -8,10 +8,12 @@
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_widget.h"
 
+#ifdef USE_NATIVE_FILE_DIALOG
 #include <atomic>
 #include <future>
 #include <thread>
 #include <chrono>
+#endif
 
 namespace RocProfVis
 {

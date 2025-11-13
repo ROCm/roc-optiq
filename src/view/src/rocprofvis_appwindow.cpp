@@ -509,7 +509,12 @@ AppWindow::RenderEditMenu(Project* project)
         if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
                            project && project->IsTrimSaveAllowed()))
         {
-            ShowSaveFileDialog("Save Trace Selection", ".db,.rpd", "",
+            #ifdef USE_NATIVE_FILE_DIALOG
+            std::string filters = "db,rpd";
+            #else
+            std::string filters = "Traces (.db,.rpd){.db,.rpd}";
+            #endif            
+            ShowSaveFileDialog("Save Trace Selection", filters, "",
                            [project](std::string file_path) -> void {
                                project->TrimSave(file_path);
                            });
@@ -611,10 +616,10 @@ AppWindow::HandleOpenFile()
 #    endif
 #    ifdef COMPUTE_UI_SUPPORT
     trace_types += ",.csv";
+#    endif
     std::string filters = "All (.rpv," + trace_types + "){.rpv," + trace_types +
                           "},Projects (.rpv){.rpv},Traces (" + trace_types + "){" +
                           trace_types + "}";
-#    endif
 #endif
     ShowOpenFileDialog(
         "Choose File", filters, default_path,

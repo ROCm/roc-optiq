@@ -73,6 +73,11 @@ LineTrackItem::LineTrackRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
+    // Apply vertical padding to prevent data lines from touching track boundaries
+    constexpr float kVerticalPadding = 2.0f;
+    cursor_position.y += kVerticalPadding;
+    content_size.y -= (kVerticalPadding * 2.0f);
+
     float scale_y =
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
 
@@ -212,6 +217,11 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
+
+    // Apply vertical padding to prevent data lines from touching track boundaries
+    constexpr float kVerticalPadding = 2.0f;
+    cursor_position.y += kVerticalPadding;
+    content_size.y -= (kVerticalPadding * 2.0f);
 
     float scale_y =
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));

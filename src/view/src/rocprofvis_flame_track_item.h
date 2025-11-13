@@ -33,6 +33,7 @@ public:
     bool Valid() const override;
 
     EventColorMode ColorEvents() const;
+    bool           CompactMode() const;
 
 private:
     FlameTrackItem& m_track_item;
@@ -54,6 +55,7 @@ public:
     // Called to calculate max event label width for all flame track items.
     // Call after font size or style changes.
     static void CalculateMaxEventLabelWidth();
+    bool        IsCompactMode() const override { return m_compact_mode; }
 
 protected:
     void RenderChart(float graph_width) override;
@@ -88,6 +90,7 @@ private:
     bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
 
     void RenderTooltip(ChartItem& chart_item, int color_index);
+    void RecalculateTrackHeight();
 
     std::vector<ChartItem>             m_chart_items;
     EventColorMode                     m_event_color_mode;
@@ -95,7 +98,7 @@ private:
     float                              m_level_height;
     std::vector<uint64_t>              m_selected_event_id;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
-    FlameTrackProjectSettings          m_project_settings;
+    FlameTrackProjectSettings          m_flame_track_project_settings;
     float                              m_min_level;
     float                              m_max_level;
     // Used to enforce one click handling per render cycle.
@@ -107,6 +110,9 @@ private:
 
     static float             s_max_event_label_width;
     static const std::string s_child_info_separator;
+
+    bool        m_is_expanded;
+    bool        m_compact_mode;
 };
 
 }  // namespace View

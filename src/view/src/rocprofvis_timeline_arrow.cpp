@@ -41,17 +41,18 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                       const std::unordered_map<uint64_t, float>& track_position_y,
                       const std::shared_ptr<std::vector<rocprofvis_graph_t>>     graphs) const
 {
-    if(m_flow_display_mode == FlowDisplayMode::kHide) return;   
+    if(m_flow_display_mode == FlowDisplayMode::kHide)
+        return;
 
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            color        = settings.GetColor(Colors::kArrowColor);
     float            thickness    = 2.0f;
     float            head_size    = 8.0f;
     float            level_height = settings.GetEventLevelHeight();
-
     for(const event_info_t* event : m_selected_event_data)
     {
-        if(!event || event->flow_info.size() < 2) continue;
+        if(!event || event->flow_info.size() < 2)
+            continue;
 
         const std::vector<event_flow_data_t>& flows = event->flow_info;
 
@@ -61,12 +62,17 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
             const event_flow_data_t& origin = flows[0];
             const track_info_t*      origin_track_info =
                 m_data_provider.GetTrackInfo(origin.track_id);
-            if(!origin_track_info) continue;
+            if(!origin_track_info)
+                continue;
             const rocprofvis_graph_t& origin_track = (*graphs)[origin_track_info->index];
+            if(origin_track.chart->IsCompactMode())
+            {
+                level_height = settings.GetEventLevelCompactHeight();
+            }
 
             float origin_x = (origin.end_timestamp - v_min_x) * pixels_per_ns;
             float origin_y = track_position_y.at(origin.track_id) +
-                             std::min(level_height * origin.level,
+                             std::min(level_height * origin.level - level_height / 2,
                                       origin_track.chart->GetTrackHeight());
             ImVec2 p_origin = ImVec2(window.x + origin_x, window.y + origin_y);
 
@@ -75,24 +81,27 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 const event_flow_data_t& target = flows[i];
                 const track_info_t*      target_track_info =
                     m_data_provider.GetTrackInfo(target.track_id);
-                if(!target_track_info) continue;
+                if(!target_track_info)
+                    continue;
                 const rocprofvis_graph_t& target_track = (*graphs)[target_track_info->index];
-                if(!target_track.display) continue;
+                if(!target_track.display)
+                    continue;
 
                 float target_x = (target.start_timestamp - v_min_x) * pixels_per_ns;
                 float target_y = track_position_y.at(target.track_id) +
-                                 std::min(level_height * target.level,
+                                 std::min(level_height * target.level - level_height / 2,
                                           target_track.chart->GetTrackHeight());
                 ImVec2 p_target = ImVec2(window.x + target_x, window.y + target_y);
 
-                if(p_origin.x == p_target.x && p_origin.y == p_target.y) continue;
+                if(p_origin.x == p_target.x && p_origin.y == p_target.y)
+                    continue;
 
                 float  curve_offset = 0.25f * (p_target.x - p_origin.x);
                 ImVec2 p_ctrl1      = ImVec2(p_origin.x + curve_offset, p_origin.y);
                 ImVec2 p_ctrl2      = ImVec2(p_target.x - curve_offset, p_target.y);
 
                 draw_list->AddBezierCubic(p_origin, p_ctrl1, p_ctrl2, p_target, color,
-                                          thickness, 32);
+                                          thickness, 32); //TODO: 32 - magic value should be a constant
 
                 ImVec2 dir = ImVec2(p_target.x - p_ctrl2.x, p_target.y - p_ctrl2.y);
                 float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
@@ -139,12 +148,14 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                     m_data_provider.GetTrackInfo(from.track_id);
                 const track_info_t* to_track_info =
                     m_data_provider.GetTrackInfo(to.track_id);
-                if(!from_track_info || !to_track_info) continue;
+                if(!from_track_info || !to_track_info)
+                    continue;
 
                 const rocprofvis_graph_t& from_track = (*graphs)[from_track_info->index];
                 const rocprofvis_graph_t& to_track   = (*graphs)[to_track_info->index];
 
-                if(!from_track.display || !to_track.display) continue;
+                if(!from_track.display || !to_track.display)
+                    continue;
 
                 float from_x = (from.end_timestamp - v_min_x) * pixels_per_ns;
                 float from_y = track_position_y.at(from.track_id) +
@@ -158,7 +169,8 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                     std::min(level_height * to.level, to_track.chart->GetTrackHeight());
                 ImVec2 p_to = ImVec2(window.x + to_x, window.y + to_y);
 
-                if(p_from.x == p_to.x && p_from.y == p_to.y) continue;
+                if(p_from.x == p_to.x && p_from.y == p_to.y)
+                    continue;
 
                 float  curve_offset = 0.25f * (p_to.x - p_from.x);
                 ImVec2 p_ctrl1      = ImVec2(p_from.x + curve_offset, p_from.y);

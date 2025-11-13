@@ -123,9 +123,10 @@ const std::vector<ImU32> FLAME_COLORS = {
     IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
     IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
 };
-constexpr const char* SETTINGS_FILE_NAME = "settings_application.json";
-constexpr size_t      RECENT_FILES_LIMIT = 5;
-constexpr float       EVENT_LEVEL_HEIGHT = 40.0f;
+inline constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
+inline constexpr size_t       RECENT_FILES_LIMIT = 5;
+inline constexpr float        EVENT_LEVEL_HEIGHT = 40.0f;
+inline constexpr float        COMPACT_EVENT_HEIGHT = 6.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -565,6 +566,12 @@ const float
 SettingsManager::GetEventLevelHeight() const
 {
     return EVENT_LEVEL_HEIGHT;
+}
+
+const float
+SettingsManager::GetEventLevelCompactHeight() const
+{
+    return COMPACT_EVENT_HEIGHT;
 }
 
 }  // namespace View

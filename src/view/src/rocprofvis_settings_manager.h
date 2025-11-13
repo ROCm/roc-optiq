@@ -148,6 +148,7 @@ public:
 
     // Constant for event height;
     const float GetEventLevelHeight() const;
+    const float GetEventLevelCompactHeight() const;
 
 private:
     SettingsManager();

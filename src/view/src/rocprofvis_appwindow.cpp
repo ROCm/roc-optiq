@@ -819,8 +819,11 @@ AppWindow::ShowNativeSaveFileDialog(const std::string&               file_filter
         nfdsavedialogu8args_t args       = {};
         args.filterList                  = &filterItem;
         args.filterCount                 = 1;
-        args.defaultPath                 = initial_path.c_str();
-        nfdresult_t result               = NFD_SaveDialogU8_With(&outPath, &args);
+        if(!initial_path.empty()) 
+        {
+            args.defaultPath = initial_path.c_str();
+        }
+        nfdresult_t result = NFD_SaveDialogU8_With(&outPath, &args);
         std::string file_path;
         if(result == NFD_OKAY)
         {
@@ -863,8 +866,11 @@ AppWindow::ShowNativeOpenFileDialog(const std::string&               file_filter
         nfdopendialogu8args_t args       = {};
         args.filterList                  = &filterItem;
         args.filterCount                 = 1;
-        args.defaultPath                 = initial_path.c_str();
-        nfdresult_t result               = NFD_OpenDialogU8_With(&outPath, &args);
+        if(!initial_path.empty()) 
+        {
+            args.defaultPath = initial_path.c_str();
+        }
+        nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
         std::string file_path;
         if(result == NFD_OKAY)
         {

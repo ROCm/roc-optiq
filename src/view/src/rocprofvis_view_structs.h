@@ -14,15 +14,7 @@ typedef struct rocprofvis_color_by_value_t
 {
     float interest_1_max;
     float interest_1_min;
-    ImU32 interest_1_color;
 
-    float interest_2_max;
-    float interest_2_min;
-    ImU32 interest_2_color;
-
-    float interest_3_max;
-    float interest_3_min;
-    ImU32 interest_3_color;
 } rocprofvis_color_by_value_t;
 
 typedef struct rocprofvis_data_point_t

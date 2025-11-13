@@ -25,7 +25,6 @@ public:
     ~LineTrackProjectSettings() override;
     void ToJson() override;
     bool Valid() const override;
-
     bool                        BoxPlot() const;
     bool                        Highlight() const;
     rocprofvis_color_by_value_t HighlightRange() const;

@@ -86,48 +86,6 @@ LineTrackItem::LineTrackRender(float graph_width)
 
     const float line_thickness = 2.0f;  // FIXME: hardcoded value
 
-    if(m_is_color_value_existant)
-    {
-        struct
-        {
-            float min, max;
-            ImU32 color;
-        } bands[3] = { { m_color_by_value_digits.interest_1_min,
-                         m_color_by_value_digits.interest_1_max,
-                         m_color_by_value_digits.interest_1_color },
-                       { m_color_by_value_digits.interest_2_min,
-                         m_color_by_value_digits.interest_2_max,
-                         m_color_by_value_digits.interest_2_color },
-                       { m_color_by_value_digits.interest_3_min,
-                         m_color_by_value_digits.interest_3_max,
-                         m_color_by_value_digits.interest_3_color } };
-
-        for(const auto& band : bands)
-        {
-            if(band.min < band.max)
-            {
-                float highlight_y_max =
-                    cursor_position.y + content_size.y -
-                    (band.max - static_cast<float>(m_min_y.Value())) * scale_y;
-                float highlight_y_min =
-                    cursor_position.y + content_size.y -
-                    (band.min - static_cast<float>(m_min_y.Value())) * scale_y;
-
-                highlight_y_max = std::max(
-                    cursor_position.y,
-                    std::min(cursor_position.y + content_size.y, highlight_y_max));
-                highlight_y_min = std::max(
-                    cursor_position.y,
-                    std::min(cursor_position.y + content_size.y, highlight_y_min));
-
-                draw_list->AddRectFilled(
-                    ImVec2(cursor_position.x, highlight_y_max),
-                    ImVec2(cursor_position.x + content_size.x, highlight_y_min),
-                    band.color);
-            }
-        }
-    }
-
     for(int i = 1; i < m_data.size(); i++)
     {
         ImVec2 point_1 =
@@ -152,6 +110,29 @@ LineTrackItem::LineTrackRender(float graph_width)
         }
 
         draw_list->AddLine(point_1, point_2, line_color, line_thickness);
+    }
+    if(m_is_color_value_existant)
+    {
+        float highlight_y_max = cursor_position.y + content_size.y -
+                                (m_color_by_value_digits.interest_1_max -
+                                 static_cast<float>(m_min_y.Value())) *
+                                    scale_y;
+        float highlight_y_min = cursor_position.y + content_size.y -
+                                (m_color_by_value_digits.interest_1_min -
+                                 static_cast<float>(m_min_y.Value())) *
+                                    scale_y;
+
+        highlight_y_max =
+            std::max(cursor_position.y,
+                     std::min(cursor_position.y + content_size.y, highlight_y_max));
+        highlight_y_min =
+            std::max(cursor_position.y,
+                     std::min(cursor_position.y + content_size.y, highlight_y_min));
+
+        draw_list->AddRectFilled(
+            ImVec2(cursor_position.x, highlight_y_max),
+            ImVec2(cursor_position.x + content_size.x, highlight_y_min),
+            IM_COL32(255, 0, 0, 64));
     }
     if(show_tooltip)
     {
@@ -361,65 +342,60 @@ LineTrackItem::RenderMetaAreaOptions()
 {
     ImGui::Checkbox("Show as Box Plot", &m_show_boxplot);
     ImGui::Checkbox("Highlight Y Range", &m_is_color_value_existant);
+
     if(m_is_color_value_existant)
     {
-        float width = ImGui::GetItemRectSize().x;
+        float min_limit = static_cast<float>(m_min_y.Value());
+        float max_limit = static_cast<float>(m_max_y.Value());
 
-        // Band 1
-        ImGui::TextUnformatted("Band 1");
-        ImGui::SameLine();
-        ImGui::ColorEdit4("##color1", (float*) &m_color_by_value_digits.interest_1_color,
-                          ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-        ImGui::TextUnformatted("Max");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
-        ImGui::SliderFloat("##max1", &m_color_by_value_digits.interest_1_max,
-                           m_color_by_value_digits.interest_1_min,
-                           static_cast<float>(m_max_y.Value()), "%.1f");
-        ImGui::TextUnformatted("Min");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
-        ImGui::SliderFloat("##min1", &m_color_by_value_digits.interest_1_min,
-                           static_cast<float>(m_min_y.Value()),
-                           m_color_by_value_digits.interest_1_max, "%.1f");
-
-        // Band 2
         ImGui::Separator();
-        ImGui::TextUnformatted("Band 2");
-        ImGui::SameLine();
-        ImGui::ColorEdit4("##color2", (float*) &m_color_by_value_digits.interest_2_color,
-                          ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-        ImGui::TextUnformatted("Max");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
-        ImGui::SliderFloat("##max2", &m_color_by_value_digits.interest_2_max,
-                           m_color_by_value_digits.interest_2_min,
-                           static_cast<float>(m_max_y.Value()), "%.1f");
-        ImGui::TextUnformatted("Min");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
-        ImGui::SliderFloat("##min2", &m_color_by_value_digits.interest_2_min,
-                           static_cast<float>(m_min_y.Value()),
-                           m_color_by_value_digits.interest_2_max, "%.1f");
+        ImGui::TextUnformatted("Highlight Band");
+        ImGui::Spacing();
 
-        // Band 3
-        ImGui::Separator();
-        ImGui::TextUnformatted("Band 3");
-        ImGui::SameLine();
-        ImGui::ColorEdit4("##color3", (float*) &m_color_by_value_digits.interest_3_color,
-                          ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-        ImGui::TextUnformatted("Max");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
-        ImGui::SliderFloat("##max3", &m_color_by_value_digits.interest_3_max,
-                           m_color_by_value_digits.interest_3_min,
-                           static_cast<float>(m_max_y.Value()), "%.1f");
+        float slider_height = 80.0f;
+        float slider_width  = 18.0f;
+        float input_width   = 80.0f;
+        float spacing       = 32.0f;
+
+        ImGui::BeginGroup();
+        ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Min");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
-        ImGui::SliderFloat("##min3", &m_color_by_value_digits.interest_3_min,
-                           static_cast<float>(m_min_y.Value()),
-                           m_color_by_value_digits.interest_3_max, "%.1f");
+        ImGui::VSliderFloat("##min_vslider", ImVec2(slider_width, slider_height),
+                            &m_color_by_value_digits.interest_1_min, min_limit, max_limit,
+                            "");
+        ImGui::SetNextItemWidth(input_width);
+        if(ImGui::InputFloat("##min_input", &m_color_by_value_digits.interest_1_min, 0.0f,
+                             0.0f, "%.2f"))
+        {
+            m_color_by_value_digits.interest_1_min =
+                std::clamp(m_color_by_value_digits.interest_1_min, min_limit, max_limit);
+        }
+        if(m_color_by_value_digits.interest_1_min >
+           m_color_by_value_digits.interest_1_max)
+            m_color_by_value_digits.interest_1_max =
+                m_color_by_value_digits.interest_1_min;
+        ImGui::EndGroup();
+
+        ImGui::SameLine(90.0f);
+
+        ImGui::BeginGroup();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Max");
+        ImGui::VSliderFloat("##max_vslider", ImVec2(slider_width, slider_height),
+                            &m_color_by_value_digits.interest_1_max, min_limit, max_limit,
+                            "");
+        ImGui::SetNextItemWidth(input_width);
+        if(ImGui::InputFloat("##max_input", &m_color_by_value_digits.interest_1_max, 0.0f,
+                             0.0f, "%.2f"))
+        {
+            m_color_by_value_digits.interest_1_max =
+                std::clamp(m_color_by_value_digits.interest_1_max, min_limit, max_limit);
+        }
+        if(m_color_by_value_digits.interest_1_max <
+           m_color_by_value_digits.interest_1_min)
+            m_color_by_value_digits.interest_1_min =
+                m_color_by_value_digits.interest_1_max;
+        ImGui::EndGroup();
     }
 }
 

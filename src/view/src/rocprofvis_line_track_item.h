@@ -100,6 +100,7 @@ private:
     DataProvider&                        m_dp;
     bool                                 m_show_boxplot;
     LineTrackProjectSettings             m_project_settings;
+    float                                m_vertical_padding;
 };
 
 }  // namespace View

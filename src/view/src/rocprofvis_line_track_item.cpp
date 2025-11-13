@@ -16,6 +16,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
+
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                              double time_offset_ns, double& min_x, double& max_x,
                              double scale_x, float max_meta_area_width)
@@ -28,6 +30,7 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 , m_project_settings(dp.GetTraceFilePath(), *this)
 , m_min_y(0, "edit_min", "Min: ")
 , m_max_y(0, "edit_max", "Max: ")
+, m_vertical_padding(DEFAULT_VERTICAL_PADDING)
 {
     m_meta_area_scale_width = max_meta_area_width;
     m_track_height = 90.0f;
@@ -74,9 +77,8 @@ LineTrackItem::LineTrackRender(float graph_width)
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
     // Apply vertical padding to prevent data lines from touching track boundaries
-    constexpr float kVerticalPadding = 2.0f;
-    cursor_position.y += kVerticalPadding;
-    content_size.y -= (kVerticalPadding * 2.0f);
+    cursor_position.y += m_vertical_padding;
+    content_size.y -= (m_vertical_padding * 2.0f);
 
     float scale_y =
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
@@ -219,9 +221,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
     // Apply vertical padding to prevent data lines from touching track boundaries
-    constexpr float kVerticalPadding = 2.0f;
-    cursor_position.y += kVerticalPadding;
-    content_size.y -= (kVerticalPadding * 2.0f);
+    cursor_position.y += m_vertical_padding;
+    content_size.y -= (m_vertical_padding * 2.0f);
 
     float scale_y =
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));

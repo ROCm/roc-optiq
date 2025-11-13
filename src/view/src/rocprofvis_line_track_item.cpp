@@ -1,15 +1,15 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_click_manager.h"
 #include "rocprofvis_line_track_item.h"
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
-#include <sstream>
-#include <iomanip>
 #include <charconv>
+#include <iomanip>
+#include <sstream>
 
 namespace RocProfVis
 {
@@ -30,7 +30,7 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 , m_max_y(0, "edit_max", "Max: ")
 {
     m_meta_area_scale_width = max_meta_area_width;
-    m_track_height = 90.0f;
+    m_track_height          = 90.0f;
 
     UpdateYScaleExtents();
 
@@ -44,7 +44,9 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 
 LineTrackItem::~LineTrackItem() {}
 
-void LineTrackItem::UpdateYScaleExtents() {
+void
+LineTrackItem::UpdateYScaleExtents()
+{
     const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
     if(track_info)
     {
@@ -77,12 +79,54 @@ LineTrackItem::LineTrackRender(float graph_width)
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
 
     double tooltip_x     = 0;
-    float tooltip_y     = 0;
-    bool  show_tooltip  = false;
-    ImU32 generic_black = m_settings.GetColor(Colors::kLineChartColor);
-    ImU32 generic_red   = m_settings.GetColor(Colors::kGridRed);
+    float  tooltip_y     = 0;
+    bool   show_tooltip  = false;
+    ImU32  generic_black = m_settings.GetColor(Colors::kLineChartColor);
+    ImU32  generic_red   = m_settings.GetColor(Colors::kGridRed);
 
     const float line_thickness = 2.0f;  // FIXME: hardcoded value
+
+    if(m_is_color_value_existant)
+    {
+        struct
+        {
+            float min, max;
+            ImU32 color;
+        } bands[3] = { { m_color_by_value_digits.interest_1_min,
+                         m_color_by_value_digits.interest_1_max,
+                         m_color_by_value_digits.interest_1_color },
+                       { m_color_by_value_digits.interest_2_min,
+                         m_color_by_value_digits.interest_2_max,
+                         m_color_by_value_digits.interest_2_color },
+                       { m_color_by_value_digits.interest_3_min,
+                         m_color_by_value_digits.interest_3_max,
+                         m_color_by_value_digits.interest_3_color } };
+
+        for(const auto& band : bands)
+        {
+            if(band.min < band.max)
+            {
+                float highlight_y_max =
+                    cursor_position.y + content_size.y -
+                    (band.max - static_cast<float>(m_min_y.Value())) * scale_y;
+                float highlight_y_min =
+                    cursor_position.y + content_size.y -
+                    (band.min - static_cast<float>(m_min_y.Value())) * scale_y;
+
+                highlight_y_max = std::max(
+                    cursor_position.y,
+                    std::min(cursor_position.y + content_size.y, highlight_y_max));
+                highlight_y_min = std::max(
+                    cursor_position.y,
+                    std::min(cursor_position.y + content_size.y, highlight_y_min));
+
+                draw_list->AddRectFilled(
+                    ImVec2(cursor_position.x, highlight_y_max),
+                    ImVec2(cursor_position.x + content_size.x, highlight_y_min),
+                    band.color);
+            }
+        }
+    }
 
     for(int i = 1; i < m_data.size(); i++)
     {
@@ -93,7 +137,7 @@ LineTrackItem::LineTrackRender(float graph_width)
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = m_data[i - 1].x_value - m_min_x;
-            tooltip_y = static_cast<float>(m_data[i - 1].y_value - m_min_y.Value());
+            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y.Value());
             show_tooltip = true;
         }
 
@@ -107,93 +151,6 @@ LineTrackItem::LineTrackRender(float graph_width)
             continue;
         }
 
-        if(m_is_color_value_existant)
-        {
-            // Code below enables user to define problematic regions in LineChart.
-            // Add to struct if more regions needed.
-
-            bool point_1_in =
-                (m_color_by_value_digits.interest_1_max > m_data[i - 1].y_value &&
-                 m_color_by_value_digits.interest_1_min < m_data[i - 1].y_value);
-            bool point_2_in =
-                (m_color_by_value_digits.interest_1_max > m_data[i].y_value &&
-                 m_color_by_value_digits.interest_1_min < m_data[i].y_value);
-
-            if(point_1_in && point_2_in)
-            {
-                line_color = generic_red;
-            }
-
-            else if(!point_1_in && point_2_in)
-            {
-                if(m_color_by_value_digits.interest_1_max < m_data[i - 1].y_value)
-                {
-                    float new_y = cursor_position.y + content_size.y -
-                                  (m_color_by_value_digits.interest_1_max -
-                                   static_cast<float>(m_min_y.Value())) *
-                                      scale_y;
-
-                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    line_color        = generic_black;
-                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
-                    line_color = generic_red;
-                    point_1   = new_point;
-                }
-                else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].y_value)
-                {
-                    float new_y = cursor_position.y + content_size.y -
-                                  (m_color_by_value_digits.interest_1_min -
-                                   static_cast<float>(m_min_y.Value())) *
-                                      scale_y;
-                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    line_color        = generic_black;
-                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
-                    line_color = generic_red;
-                    point_1   = new_point;
-                }
-            }
-            else if(point_1_in && !point_2_in)
-            {
-                if(m_color_by_value_digits.interest_1_max < m_data[i].y_value)
-                {
-                    // if greater than upper max.
-
-                    float new_y = cursor_position.y + content_size.y -
-                                  (m_color_by_value_digits.interest_1_max -
-                                   static_cast<float>(m_min_y.Value())) *
-                                      scale_y;
-                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    line_color        = generic_red;
-                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
-                    line_color = generic_black;
-                    point_1   = new_point;
-                }
-                else if(m_color_by_value_digits.interest_1_min > m_data[i].y_value)
-                {
-                    float new_y = cursor_position.y + content_size.y -
-                                  (m_color_by_value_digits.interest_1_min -
-                                   static_cast<float>(m_min_y.Value())) *
-                                      scale_y;
-                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    line_color        = generic_red;
-                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
-                    line_color = generic_black;
-                    point_1   = new_point;
-                }
-            }
-        }
         draw_list->AddLine(point_1, point_2, line_color, line_thickness);
     }
     if(show_tooltip)
@@ -216,9 +173,9 @@ LineTrackItem::BoxPlotRender(float graph_width)
     float scale_y =
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
 
-    float tooltip_x     = 0;
-    float tooltip_y     = 0;
-    bool  show_tooltip  = false;
+    float tooltip_x    = 0;
+    float tooltip_y    = 0;
+    bool  show_tooltip = false;
 
     for(int i = 1; i < m_data.size(); i++)
     {
@@ -275,18 +232,20 @@ LineTrackItem::CalculateNewMetaAreaSize()
     ImVec2 min_size =
         ImGui::CalcTextSize((m_min_y.CompactValue() + m_min_y.Prefix()).c_str());
 
-    return std::max({ max_size.x + m_max_y.ButtonSize(), min_size.x + m_min_y.ButtonSize() }) +
-           6 * m_metadata_padding.x; // TODO: Hardcoded padding for posible label size
-                                     // Think later how it can be calculated or store as default values
+    return std::max(
+               { max_size.x + m_max_y.ButtonSize(), min_size.x + m_min_y.ButtonSize() }) +
+           6 * m_metadata_padding
+                   .x;  // TODO: Hardcoded padding for posible label size
+                        // Think later how it can be calculated or store as default values
 }
 
 bool
 LineTrackItem::ReleaseData()
 {
     if(TrackItem::ReleaseData())
-    {       
+    {
         m_data.clear();
-        m_data  = {};
+        m_data = {};
 
         return true;
     }
@@ -317,7 +276,8 @@ LineTrackItem::ExtractPointsFromData()
         return false;
     }
 
-    if(sample_track->AllDataReady()) {
+    if(sample_track->AllDataReady())
+    {
         m_request_state = TrackDataRequestState::kIdle;
     }
 
@@ -333,7 +293,8 @@ LineTrackItem::ExtractPointsFromData()
     m_data.reserve(count);
     for(uint64_t i = 0; i < count; i++)
     {
-        m_data.emplace_back(rocprofvis_data_point_t{track_data[i].m_start_ts, track_data[i].m_value});
+        m_data.emplace_back(
+            rocprofvis_data_point_t{ track_data[i].m_start_ts, track_data[i].m_value });
     }
     return true;
 }
@@ -401,20 +362,64 @@ LineTrackItem::RenderMetaAreaOptions()
     ImGui::Checkbox("Show as Box Plot", &m_show_boxplot);
     ImGui::Checkbox("Highlight Y Range", &m_is_color_value_existant);
     if(m_is_color_value_existant)
-    {        
+    {
         float width = ImGui::GetItemRectSize().x;
+
+        // Band 1
+        ImGui::TextUnformatted("Band 1");
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##color1", (float*) &m_color_by_value_digits.interest_1_color,
+                          ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
         ImGui::TextUnformatted("Max");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
-        ImGui::SliderFloat("##max", &m_color_by_value_digits.interest_1_max,
+        ImGui::SliderFloat("##max1", &m_color_by_value_digits.interest_1_max,
                            m_color_by_value_digits.interest_1_min,
                            static_cast<float>(m_max_y.Value()), "%.1f");
         ImGui::TextUnformatted("Min");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
-        ImGui::SliderFloat("##min", &m_color_by_value_digits.interest_1_min,
+        ImGui::SliderFloat("##min1", &m_color_by_value_digits.interest_1_min,
                            static_cast<float>(m_min_y.Value()),
                            m_color_by_value_digits.interest_1_max, "%.1f");
+
+        // Band 2
+        ImGui::Separator();
+        ImGui::TextUnformatted("Band 2");
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##color2", (float*) &m_color_by_value_digits.interest_2_color,
+                          ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+        ImGui::TextUnformatted("Max");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
+        ImGui::SliderFloat("##max2", &m_color_by_value_digits.interest_2_max,
+                           m_color_by_value_digits.interest_2_min,
+                           static_cast<float>(m_max_y.Value()), "%.1f");
+        ImGui::TextUnformatted("Min");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
+        ImGui::SliderFloat("##min2", &m_color_by_value_digits.interest_2_min,
+                           static_cast<float>(m_min_y.Value()),
+                           m_color_by_value_digits.interest_2_max, "%.1f");
+
+        // Band 3
+        ImGui::Separator();
+        ImGui::TextUnformatted("Band 3");
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##color3", (float*) &m_color_by_value_digits.interest_3_color,
+                          ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+        ImGui::TextUnformatted("Max");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
+        ImGui::SliderFloat("##max3", &m_color_by_value_digits.interest_3_max,
+                           m_color_by_value_digits.interest_3_min,
+                           static_cast<float>(m_max_y.Value()), "%.1f");
+        ImGui::TextUnformatted("Min");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
+        ImGui::SliderFloat("##min3", &m_color_by_value_digits.interest_3_min,
+                           static_cast<float>(m_min_y.Value()),
+                           m_color_by_value_digits.interest_3_max, "%.1f");
     }
 }
 
@@ -425,7 +430,8 @@ LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
     ImVec2 container_pos = ImGui::GetWindowPos();
 
     double x = container_pos.x + (point.x_value - (m_min_x + m_time_offset_ns)) * scaleX;
-    double y = cursor_position.y + content_size.y - (point.y_value - m_min_y.Value()) * scaleY;
+    double y =
+        cursor_position.y + content_size.y - (point.y_value - m_min_y.Value()) * scaleY;
 
     return ImVec2(static_cast<float>(x), static_cast<float>(y));
 }
@@ -489,7 +495,8 @@ LineTrackProjectSettings::HighlightRange() const
     };
 }
 
-LineTrackItem::VerticalLimits::VerticalLimits(double value, std::string field_id, std::string prefix)
+LineTrackItem::VerticalLimits::VerticalLimits(double value, std::string field_id,
+                                              std::string prefix)
 : m_text_field(std::move(field_id))
 , m_prefix(std::move(prefix))
 {
@@ -541,12 +548,13 @@ LineTrackItem::VerticalLimits::Prefix()
 void
 LineTrackItem::VerticalLimits::SetValue(double value)
 {
-    m_default_value = value;
+    m_default_value     = value;
     m_formatted_default = FormatValue(value);
     UpdateValue(value);
 }
 
-void LineTrackItem::VerticalLimits::Render()
+void
+LineTrackItem::VerticalLimits::Render()
 {
     m_text_field.Render();
 }
@@ -555,9 +563,9 @@ void
 LineTrackItem::VerticalLimits::UpdateValue(double value)
 {
     m_text_field.ShowResetButton(value != m_default_value);
-    m_value = value;
+    m_value         = value;
     m_formatted_str = FormatValue(value);
-    m_compact_str  = compact_number_format(value);
+    m_compact_str   = compact_number_format(value);
     m_text_field.SetText(m_compact_str, m_formatted_str, m_formatted_default);
 }
 
@@ -573,9 +581,10 @@ double
 LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
 {
     double      result = 0.0;
-    const char* first = input.data();
-    const char* last  = input.data() + input.size();
-    auto [ptr, error_code] = std::from_chars(first, last, result, std::chars_format::general);
+    const char* first  = input.data();
+    const char* last   = input.data() + input.size();
+    auto [ptr, error_code] =
+        std::from_chars(first, last, result, std::chars_format::general);
     if(error_code == std::errc{} && std::isfinite(result) && ptr == last)
     {
         return result;

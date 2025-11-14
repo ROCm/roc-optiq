@@ -92,6 +92,7 @@ AppWindow::AppWindow()
 #else
 , m_is_native_file_dialog_open(false)
 #endif
+, m_disable_app_interaction(false)
 {}
 
 AppWindow::~AppWindow()
@@ -357,6 +358,8 @@ AppWindow::Render()
 
     // render notifications last
     NotificationManager::GetInstance().Render();
+
+    RenderDisableScreen();
 }
 
 #ifndef USE_NATIVE_FILE_DIALOG
@@ -438,6 +441,34 @@ AppWindow::OpenFile(std::string file_path)
             SettingsManager::GetInstance().RemoveRecentFile(file_path);
             break;
         }
+    }
+}
+
+void
+AppWindow::RenderDisableScreen()
+{
+    if(m_disable_app_interaction)
+    {
+        ImGui::OpenPopup("GhostModal");
+    }
+
+    // Use a modal popup to disable interaction with the rest of the UI
+    if(ImGui::IsPopupOpen("GhostModal"))
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        if(ImGui::BeginPopupModal("GhostModal", NULL,
+                                  ImGuiWindowFlags_NoDecoration |
+                                      ImGuiWindowFlags_NoBackground))
+        {
+            ImGui::SetWindowSize(ImVec2(1, 1));  // As small as possible
+            if(!m_disable_app_interaction)
+            {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
     }
 }
 
@@ -776,6 +807,7 @@ AppWindow::UpdateNativeFileDialog()
            m_open_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
                std::future_status::ready)
         {
+            m_disable_app_interaction = false;
             std::string file_path = m_open_file_dialog_future.get();
             if(!file_path.empty() && m_open_file_dialog_callback)
             {
@@ -789,6 +821,7 @@ AppWindow::UpdateNativeFileDialog()
            m_save_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
                std::future_status::ready)
         {
+            m_disable_app_interaction = false;
             std::string file_path = m_save_file_dialog_future.get();
             if(!file_path.empty() && m_save_file_dialog_callback)
             {
@@ -811,7 +844,7 @@ AppWindow::ShowNativeSaveFileDialog(const std::string&               file_filter
     }
     m_is_native_file_dialog_open = true;
     m_save_file_dialog_callback  = callback;
-
+    m_disable_app_interaction    = true;
     m_save_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
         NFD_Init();
         nfdu8char_t*          outPath    = nullptr;
@@ -858,7 +891,7 @@ AppWindow::ShowNativeOpenFileDialog(const std::string&               file_filter
     }
     m_is_native_file_dialog_open = true;
     m_open_file_dialog_callback  = callback;
-
+    m_disable_app_interaction    = true;
     m_open_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
         NFD_Init();
         nfdu8char_t*          outPath    = nullptr;

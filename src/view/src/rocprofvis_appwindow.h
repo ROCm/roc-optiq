@@ -62,6 +62,7 @@ private:
     AppWindow();
     ~AppWindow();
 
+    void RenderDisableScreen();
     void RenderFileMenu(Project* project);
     void RenderEditMenu(Project* project);
     void RenderViewMenu(Project* project);
@@ -116,6 +117,7 @@ private:
     bool m_analysis_bar_visible;
     bool m_sidebar_visible;
     bool m_histogram_visible;
+    bool m_disable_app_interaction;
 
 #ifndef USE_NATIVE_FILE_DIALOG
     bool                             m_init_file_dialog;

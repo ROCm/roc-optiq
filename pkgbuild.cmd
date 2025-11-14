@@ -37,19 +37,19 @@ if %theBType%=="test" GOTO TESTSET
 if %theBType%=="release" GOTO RELEASESET
 
 :ALPHASET
-SET PROJECT_NAME=ROCm-Visualizer-Beta Alpha
+SET PROJECT_NAME=ROCm-Optiq-Beta Alpha
 GOTO CONTINUE
 
 :BETASET
-SET PROJECT_NAME=ROCm-Visualizer-Beta Beta
+SET PROJECT_NAME=ROCm-Optiq-Beta Beta
 GOTO CONTINUE
 
 :TESTSET
-SET PROJECT_NAME=ROCm-Visualizer-Beta NOT FOR DISTRIBUTION
+SET PROJECT_NAME=ROCm-Optiq-Beta NOT FOR DISTRIBUTION
 GOTO CONTINUE
 
 :RELEASESET
-SET PROJECT_NAME=ROCm-Visualizer-Beta
+SET PROJECT_NAME=ROCm-Optiq-Beta
 GOTO CONTINUE
 
 :CONTINUE
@@ -104,7 +104,7 @@ if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
 :POST_PROCESS
 Echo PkgBuild.cmd: Copy Internal release into BOM folder
-copy /y "%DEVROOT%\Temp\Internal\ROCm-Visualizer-Beta.exe" "%DEVROOT%\Bom\Internal\ROCm-Visualizer-Beta.exe"
+copy /y "%DEVROOT%\Temp\Internal\ROCm-Optic.exe" "%DEVROOT%\Bom\Internal\ROCm-Optic.exe"
 Echo PkgBuild.cmd: Error is %ERRORLEVEL%
 if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
@@ -115,7 +115,7 @@ if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
 :POST_PROCESS
 Echo PkgBuild.cmd: Copy NDA release into BOM folder
-copy /y "%DEVROOT%\Temp\NDA\ROCm-Visualizer-Beta.exe" "%DEVROOT%\Bom\NDA\ROCm-Visualizer-Beta.exe"
+copy /y "%DEVROOT%\Temp\NDA\ROCm-Optic.exe" "%DEVROOT%\Bom\NDA\ROCm-Optic.exe"
 Echo PkgBuild.cmd: Error is %ERRORLEVEL%
 if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 

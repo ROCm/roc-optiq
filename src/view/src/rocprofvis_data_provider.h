@@ -527,6 +527,10 @@ public:
      * Gets the end timestamp of the trace
      */
     double GetEndTime();
+    /*
+    Rebuilds histogram when chart is hidden
+    */
+    void RebuildHistogram();
 
     /*
      * Get access to the raw track data.  The returned pointer should only be

@@ -671,8 +671,8 @@ AppWindow::HandleSaveAsFile()
     if(project)
     {
         FileFilter trace_filter;
-        trace_filter.m_name = "Traces";
-        trace_filter.m_extensions = { "db", "rpd" };
+        trace_filter.m_name = "Projects";
+        trace_filter.m_extensions = { "rpv" };
 
         std::vector<FileFilter> filters;
         filters.push_back(trace_filter);

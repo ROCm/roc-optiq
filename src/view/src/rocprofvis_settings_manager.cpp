@@ -65,6 +65,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(100, 10, 10, 255),    // Colors::kBgError
     IM_COL32(10, 100, 0, 255),     // Colors::kBgSuccess
     IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
+    IM_COL32(230, 240, 255, 255),  // Colors::kLineChartColorAlt
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
@@ -114,6 +115,8 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
     IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
+    IM_COL32(20, 30, 50, 255),     // Colors::kLineChartColor
+
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> FLAME_COLORS = {
@@ -123,9 +126,9 @@ const std::vector<ImU32> FLAME_COLORS = {
     IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
     IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
 };
-constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
-constexpr size_t RECENT_FILES_LIMIT = 5;
-constexpr float  EVENT_LEVEL_HEIGHT = 40.0f;
+constexpr const char* SETTINGS_FILE_NAME = "settings_application.json";
+constexpr size_t      RECENT_FILES_LIMIT = 5;
+constexpr float       EVENT_LEVEL_HEIGHT = 40.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -363,7 +366,7 @@ SettingsManager ::GetDPI()
 void
 SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
 {
-    (void)old_settings; //currently unused
+    (void) old_settings;  // currently unused
     if(m_usersettings.display_settings.use_dark_mode)
     {
         m_color_store = &DARK_THEME_COLORS;
@@ -387,8 +390,7 @@ void
 SettingsManager::ApplyUserUnitSettings(const UserSettings& old_settings)
 {
     // notify that time format has changed
-    if(old_settings.unit_settings.time_format !=
-       m_usersettings.unit_settings.time_format)
+    if(old_settings.unit_settings.time_format != m_usersettings.unit_settings.time_format)
     {
         EventManager::GetInstance()->AddEvent(
             std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTimeFormatChanged)));
@@ -406,8 +408,6 @@ SettingsManager::GetColorWheel()
 {
     return FLAME_COLORS;
 }
-
- 
 
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
@@ -471,9 +471,9 @@ SettingsManager::InitStyling()
     style.WindowRounding    = 8.0f;
     style.ScrollbarRounding = 8.0f;
 
-    style.FramePadding      = ImVec2(10, 6);
-    style.ItemSpacing       = ImVec2(10, 8);
-    style.WindowPadding     = ImVec2(4, 4);
+    style.FramePadding  = ImVec2(10, 6);
+    style.ItemSpacing   = ImVec2(10, 8);
+    style.WindowPadding = ImVec2(4, 4);
 
     m_default_style = style;  // Store the our customized style
 }

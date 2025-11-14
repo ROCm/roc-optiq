@@ -5,7 +5,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-
 #include <algorithm>
 #include <charconv>
 #include <iomanip>
@@ -24,7 +23,7 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 , m_color_by_value_digits()
 , m_is_color_value_existant(false)
 , m_dp(dp)
-, m_show_boxplot(false)
+, m_show_boxplot(true)
 , m_project_settings(dp.GetTraceFilePath(), *this)
 , m_min_y(0, "edit_min", "Min: ")
 , m_max_y(0, "edit_max", "Max: ")
@@ -182,9 +181,41 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
         float bottom_of_chart = cursor_position.y + content_size.y;
 
+        ImU32 shift_color =
+            m_settings
+                .GetColor(Colors::kLineChartColor);
+     
+        if(i % 2 == 0)
+        {
+            shift_color = m_settings.GetColor(Colors::kLineChartColorAlt);
+        }
+
         draw_list->AddRectFilled(
             point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
-            m_settings.GetColor(Colors::kLineChartColor), 2.0f);
+            shift_color, 2.0f);
+    }
+    if(m_is_color_value_existant)
+    {
+        float highlight_y_max = cursor_position.y + content_size.y -
+                                (m_color_by_value_digits.interest_1_max -
+                                 static_cast<float>(m_min_y.Value())) *
+                                    scale_y;
+        float highlight_y_min = cursor_position.y + content_size.y -
+                                (m_color_by_value_digits.interest_1_min -
+                                 static_cast<float>(m_min_y.Value())) *
+                                    scale_y;
+
+        highlight_y_max =
+            std::max(cursor_position.y,
+                     std::min(cursor_position.y + content_size.y, highlight_y_max));
+        highlight_y_min =
+            std::max(cursor_position.y,
+                     std::min(cursor_position.y + content_size.y, highlight_y_min));
+
+        draw_list->AddRectFilled(
+            ImVec2(cursor_position.x, highlight_y_max),
+            ImVec2(cursor_position.x + content_size.x, highlight_y_min),
+            IM_COL32(255, 0, 0, 64));
     }
     if(show_tooltip)
     {

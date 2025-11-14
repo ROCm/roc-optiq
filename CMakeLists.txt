@@ -181,18 +181,13 @@ set(EXTENDED_PACKAGE_DESCRIPTION
 
 include(GNUInstallDirs)
 
-# Set runtime dependencies for generated packages
-if(UNIX AND NOT APPLE)
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libglfw3")
-    set(CPACK_RPM_PACKAGE_REQUIRES "glfw")
-endif()
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 set(CPACK_GENERATOR "TGZ;DEB;RPM" CACHE STRING "package types to be produced")
 
-#Default Value is 99999, this value will be used
+#Default Value is 0, this value will be used
 #When ROCM LibPatch Version when not explicitly set
-set(ROCM_VERSION_FOR_PACKAGE "99999")
+set(ROCM_VERSION_FOR_PACKAGE "0")
 if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
   set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
 endif()
@@ -236,7 +231,8 @@ set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
 message(STATUS "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}")
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(DEB_VULKAN_DEPENDS_STRING "libvulkan1")
-set(DEB_DEPENDS_STRING "${DEB_VULKAN_DEPENDS_STRING}, libc6")
+set(DEB_GLFW_DEPENDS_STRING "libglfw3")
+set(DEB_DEPENDS_STRING "${DEB_VULKAN_DEPENDS_STRING}, ${DEB_GLFW_DEPENDS_STRING}, libc6")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/rocprofiler-visualizer")
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
@@ -265,9 +261,10 @@ endif()
 message(STATUS "Using CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
 
-#TODO - To Review RPM Runtime package Dependencies for Vulkan, Others
-# Once Support is confirmed for non UB/Deb platforms
-set ( RPM_DEPENDS_STRING "")
+# TODO - To Review RPM Runtime package Dependencies for Vulkan, Others
+set ( RPM_VULKAN_DEPENDS_STRING "vulkan" )
+set ( RPM_GLFW_DEPENDS_STRING "glfw" )
+set ( RPM_DEPENDS_STRING "${RPM_VULKAN_DEPENDS_STRING} ${RPM_GLFW_DEPENDS_STRING}" )
 set ( CPACK_RPM_PACKAGE_REQUIRES ${RPM_DEPENDS_STRING} )
 set ( CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}" )
 

@@ -32,6 +32,8 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
     m_meta_area_scale_width = max_meta_area_width;
     m_track_height = 90.0f;
 
+    m_min_y.SetValue(0.0);  // Want to start at 0 by default.
+
     UpdateYScaleExtents();
 
     if(m_project_settings.Valid())
@@ -48,7 +50,7 @@ void LineTrackItem::UpdateYScaleExtents() {
     const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
     if(track_info)
     {
-        m_min_y.SetValue(track_info->min_value);
+        m_min_y.SetValue(0.0);  // Want to start at 0 by default.
         m_max_y.SetValue(track_info->max_value);
     }
     else

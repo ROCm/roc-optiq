@@ -369,10 +369,42 @@ DataProvider::GetHistogram()
     return m_histogram;
 }
 
-const std::map<int, std::vector<double>>&
+const std::map<uint64_t, std::tuple<std::vector<double>, bool>>&
 DataProvider::GetMiniMap()
 {
     return m_mini_map;
+}
+void
+DataProvider::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add)
+{
+    for(const auto& id : interest_id)
+    {
+        auto it = m_mini_map.find(id);
+        if(it != m_mini_map.end())
+        {
+            bool                       is_included = std::get<1>(it->second);
+            const std::vector<double>& mini_data   = std::get<0>(it->second);
+
+            if(add && !is_included)
+            {
+                // Add this track's data to the histogram
+                for(size_t i = 0; i < mini_data.size(); i++)
+                {
+                    if(i < m_histogram.size()) m_histogram[i] += mini_data[i];
+                }
+                m_mini_map[id] = std::make_tuple(mini_data, true);
+            }
+            else if(!add && is_included)
+            {
+                // Remove this track's data from the histogram
+                for(size_t i = 0; i < mini_data.size(); i++)
+                {
+                    if(i < m_histogram.size()) m_histogram[i] -= mini_data[i];
+                }
+                m_mini_map[id] = std::make_tuple(mini_data, false);
+            }
+        }
+    }
 }
 
 void
@@ -527,11 +559,9 @@ DataProvider::HandleLoadTrace()
             result               = rocprofvis_controller_get_uint64(
                 m_trace_controller, kRPVControllerGetHistogramBucketsNumber, 0,
                 &num_buckets);
-
-            const int                          target_bins = 300;
-            std::map<int, std::vector<double>> histogram_minimap;
-            m_histogram.resize(target_bins, 0);
-
+ 
+            std::map<uint64_t, std::tuple<std::vector<double>, bool>> histogram_minimap;
+ 
             if(result == kRocProfVisResultSuccess && m_trace_timeline)
             {
                 m_num_graphs = 0;
@@ -557,7 +587,8 @@ DataProvider::HandleLoadTrace()
                         histogram_track[bin_num] = binval;
                         m_histogram[bin_num] += binval;
                     }
-                    histogram_minimap[graphs] = histogram_track;
+
+                    histogram_minimap[graphs] = std::make_tuple(histogram_track, true);
                 }
                 m_mini_map = histogram_minimap;
 
@@ -603,17 +634,17 @@ DataProvider::HandleLoadTrace()
         else
         {
             // timed out, do nothing and try again later
-            uint64_t            progress_percent;
+            uint64_t progress_percent;
             result = rocprofvis_controller_get_uint64(
                 m_trace_controller, kRPVControllerGetDmProgress, 0, &progress_percent);
             if(result == kRocProfVisResultSuccess)
             {
                 if(progress_percent != m_progress_percent)
                 {
-                    uint32_t            length = 0;
-                    result = rocprofvis_controller_get_string(
-                        m_trace_controller, kRPVControllerGetDmMessage, 0, nullptr,
-                        &length);
+                    uint32_t length = 0;
+                    result          = rocprofvis_controller_get_string(m_trace_controller,
+                                                                       kRPVControllerGetDmMessage,
+                                                                       0, nullptr, &length);
                     if(result == kRocProfVisResultSuccess)
                     {
                         length++;
@@ -1174,7 +1205,8 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
         {
             rocprofvis_handle_t* track_future = rocprofvis_controller_future_alloc();
             rocprofvis_controller_array_t* track_array =
-                rocprofvis_controller_array_alloc(static_cast<uint32_t>(metadata->num_entries));
+                rocprofvis_controller_array_alloc(
+                    static_cast<uint32_t>(metadata->num_entries));
             rocprofvis_handle_t* track_handle = nullptr;
             rocprofvis_result_t  result       = rocprofvis_controller_get_object(
                 m_trace_controller, kRPVControllerTrackById, track_id, &track_handle);
@@ -1193,7 +1225,7 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
                 request_info.request_future     = track_future;
                 request_info.request_obj_handle = track_handle;
                 request_info.request_args       = nullptr;
-                request_info.request_id         = request_id;  
+                request_info.request_id         = request_id;
                 request_info.loading_state      = ProviderState::kLoading;
                 request_info.request_type       = RequestType::kFetchTrack;
 
@@ -1794,7 +1826,7 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
             return false;
         }
         // prepare to fetch the table
-        rocprofvis_controller_array_t* array = nullptr;
+        rocprofvis_controller_array_t*  array  = nullptr;
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future != nullptr);
 
@@ -2184,11 +2216,11 @@ DataProvider::HandleRequests()
             // the response is ready
             if(result == kRocProfVisResultSuccess)
             {
-                req.loading_state      = ProviderState::kReady;
-                req.response_code      = kRocProfVisResultSuccess;
-                result = rocprofvis_controller_get_uint64(req.request_future,
-                                                          kRPVControllerFutureResult, 0,
-                                                          &req.response_code);
+                req.loading_state = ProviderState::kReady;
+                req.response_code = kRocProfVisResultSuccess;
+                result            = rocprofvis_controller_get_uint64(req.request_future,
+                                                                     kRPVControllerFutureResult, 0,
+                                                                     &req.response_code);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
                 rocprofvis_controller_future_free(req.request_future);
@@ -2370,8 +2402,7 @@ DataProvider::ProcessEventExtendedRequest(data_req_info_t& req)
                     }
                 }
                 break;
-                default: 
-                break;
+                default: break;
             }
         }
     }
@@ -2474,7 +2505,7 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
         }
 
         // Add the event itself as part of the flow and sort by timestamp
-        if(prop_count > 0) 
+        if(prop_count > 0)
         {
             // TODO: basic info might not be ready yet as some fields may
             // come from extended data, need to ensure that is handled properly
@@ -2485,16 +2516,16 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
             flow.name      = event_info_for_requester->basic_info.m_name;
             flow.start_timestamp =
                 static_cast<uint64_t>(event_info_for_requester->basic_info.m_start_ts);
-            flow.track_id  = event_info_for_requester->track_id;
+            flow.track_id = event_info_for_requester->track_id;
             flow.end_timestamp =
                 static_cast<uint64_t>(event_info_for_requester->basic_info.m_start_ts +
-                                    event_info_for_requester->basic_info.m_duration);
+                                      event_info_for_requester->basic_info.m_duration);
             event_info.flow_info.push_back(flow);
 
             std::sort(event_info.flow_info.begin(), event_info.flow_info.end(),
-                    [](const event_flow_data_t& a, const event_flow_data_t& b) {
-                        return a.start_timestamp < b.start_timestamp;
-                    });    
+                      [](const event_flow_data_t& a, const event_flow_data_t& b) {
+                          return a.start_timestamp < b.start_timestamp;
+                      });
         }
     }
 
@@ -3202,7 +3233,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
 bool
 DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
 {
-    m_event_data[event_id] = {};
+    m_event_data[event_id]          = {};
     m_event_data[event_id].track_id = track_id;
     const RawTrackEventData* event_track =
         dynamic_cast<const RawTrackEventData*>(GetRawTrackData(track_id));
@@ -3212,15 +3243,15 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
         {
             if(event.m_id == event_id)
             {
-                m_event_data[event_id].basic_info.m_id = event.m_id;
-                m_event_data[event_id].basic_info.m_start_ts = event.m_start_ts;
+                m_event_data[event_id].basic_info.m_id          = event.m_id;
+                m_event_data[event_id].basic_info.m_start_ts    = event.m_start_ts;
                 m_event_data[event_id].basic_info.m_child_count = event.m_child_count;
-                //only set values below if this is single event, not a combined event
-                if(event.m_child_count == 1) 
+                // only set values below if this is single event, not a combined event
+                if(event.m_child_count == 1)
                 {
                     m_event_data[event_id].basic_info.m_duration = event.m_duration;
-                    m_event_data[event_id].basic_info.m_level = event.m_level;
-                    m_event_data[event_id].basic_info.m_name = event.m_name;
+                    m_event_data[event_id].basic_info.m_level    = event.m_level;
+                    m_event_data[event_id].basic_info.m_name     = event.m_name;
                 }
                 break;
             }

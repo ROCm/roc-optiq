@@ -18,6 +18,7 @@
 #include "rocprofvis_font_manager.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
+
 namespace RocProfVis
 {
 namespace View
@@ -1270,20 +1271,100 @@ TimelineView::RenderHistogram()
 
     const float kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
     const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
-    ImVec2      window_size           = ImGui::GetWindowSize();
+    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
 
+    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
-    ImGui::BeginChild("Histogram", ImVec2(window_size.x, kHistogramTotalHeight), false,
+    ImGui::BeginChild("Histogram", ImVec2(m_graph_size.x, kHistogramTotalHeight), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    // Ruler area
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kRulerBgColor));
+    ImGui::BeginChild("Histogram Ruler", ImVec2(m_graph_size.x, m_ruler_height), false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
+    ImDrawList* draw_list_ruler = ImGui::GetWindowDrawList();
+    ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
+    float       ruler_width     = m_graph_size.x;
+    float       tick_top        = ruler_pos.y + 2.0f;
+    float       tick_bottom     = ruler_pos.y + 7.0f;
+    ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
+    float       label_font_size = font->FontSize;
+
+    // Interval calculation
+    // measure the size of the label to determine the step size
+    std::string label = nanosecond_to_formatted_str(m_range_x, time_format, true) + "gap";
+    ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
+
+    // calculate the number of intervals based on the graph width and label width
+    // reserve space for first and last label
+    int interval_count =
+        static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
+    if(interval_count < 1) interval_count = 1;
+
+    double pixels_per_ns = m_graph_size.x / m_range_x;
+    double interval_ns   = calculate_nice_interval(m_range_x, interval_count);
+    double step_size_px  = interval_ns * pixels_per_ns;
+    int    pad_amount    = 2;  // +2 for the first and last label
+
+    // If the step size is smaller than the label size, try to adjust the interval count
+    while(step_size_px < label_size.x)
+    {
+        interval_count--;
+        interval_ns  = calculate_nice_interval(m_range_x, interval_count);
+        step_size_px = interval_ns * pixels_per_ns;
+        // If the interval count is too small break out
+        if(interval_count <= 0)
+        {
+            break;
+        }
+    }
+
+    const int num_ticks          = interval_count + pad_amount;
+    double    grid_line_start_ns = 0;
+    ImVec2    window_pos         = ImGui::GetWindowPos();
+
+    for(int i = 0; i < num_ticks; i++)
+    {
+        double tick_ns = grid_line_start_ns + (i * interval_ns);
+        float  tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
+        std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
+        label_size             = ImGui::CalcTextSize(tick_label.c_str());
+
+        float label_x;
+        if(i == 0)
+        {
+            label_x = tick_x + ImGui::CalcTextSize("0").x;
+        }
+        else
+        {
+            label_x = tick_x;
+        }
+
+        ImVec2 label_pos(label_x, tick_top);   
+        draw_list_ruler->AddText(font, label_font_size, label_pos,
+                                 m_settings.GetColor(Colors::kRulerTextColor),
+                                 tick_label.c_str());
+
+        // Draw tick below the label
+        float tick_label_bottom = label_pos.y + label_size.y + 2.0f;  // 2.0f is padding
+        float tick_length       = 5.0f;  // Length of the tick mark
+        draw_list_ruler->AddLine(ImVec2(tick_x, tick_label_bottom),
+                                 ImVec2(tick_x, tick_label_bottom + tick_length),
+                                 m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+   
     // Histogram bars area
-    ImGui::BeginChild("Histogram Bars", ImVec2(window_size.x, kHistogramBarHeight), false,
+    ImGui::BeginChild("Histogram Bars", ImVec2(m_graph_size.x, kHistogramBarHeight),
+                      false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list   = ImGui::GetWindowDrawList();
     ImVec2      bars_pos    = ImGui::GetCursorScreenPos();
-    float       bars_width  = window_size.x;
+    float       bars_width  = m_graph_size.x;
     float       bars_height = kHistogramBarHeight;
     size_t      bin_count   = m_histogram->size();
 
@@ -1325,8 +1406,7 @@ TimelineView::RenderHistogram()
     float y0           = bars_pos.y;
     float y1           = bars_pos.y + bars_height;
 
-    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
-
+ 
     // Left overlay
     if(x_view_start > bars_pos.x)
     {
@@ -1365,83 +1445,9 @@ TimelineView::RenderHistogram()
     if(!m_resize_activity && !m_stop_user_interaction) HandleHistogramTouch();
 
     ImGui::EndChild();  // Histogram Bars
-
-    // Ruler area
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kRulerBgColor));
-    ImGui::BeginChild("Histogram Ruler", ImVec2(window_size.x, m_ruler_height), false,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-    ImDrawList* draw_list_ruler = ImGui::GetWindowDrawList();
-    ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
-    float       ruler_width     = window_size.x;
-    float       tick_top        = ruler_pos.y + 2.0f;
-    float       tick_bottom     = ruler_pos.y + 7.0f;
-    ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
-    float       label_font_size = font->FontSize;
-
-    // Interval calculation
-    // measure the size of the label to determine the step size
-    std::string label = nanosecond_to_formatted_str(m_range_x, time_format, true) + "gap";
-    ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
-
-    // calculate the number of intervals based on the graph width and label width
-    // reserve space for first and last label
-    int interval_count =
-        static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
-    if(interval_count < 1) interval_count = 1;
-
-    double pixels_per_ns = window_size.x / m_range_x;
-    double interval_ns   = calculate_nice_interval(m_range_x, interval_count);
-    double step_size_px  = interval_ns * pixels_per_ns;
-    int    pad_amount    = 2;  // +2 for the first and last label
-
-    // If the step size is smaller than the label size, try to adjust the interval count
-    while(step_size_px < label_size.x)
-    {
-        interval_count--;
-        interval_ns  = calculate_nice_interval(m_range_x, interval_count);
-        step_size_px = interval_ns * pixels_per_ns;
-        // If the interval count is too small break out
-        if(interval_count <= 0)
-        {
-            break;
-        }
-    }
-
-    const int num_ticks          = interval_count + pad_amount;
-    double    grid_line_start_ns = 0;
-    ImVec2    window_pos         = ImGui::GetWindowPos();
-
-    for(int i = 0; i < num_ticks; i++)
-    {
-        double tick_ns = grid_line_start_ns + (i * interval_ns);
-        float  tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
-        draw_list_ruler->AddLine(ImVec2(tick_x, tick_top), ImVec2(tick_x, tick_bottom),
-                                 m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
-
-        std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
-        label_size             = ImGui::CalcTextSize(tick_label.c_str());
-
-        float label_x;
-        if(i == 0)
-        {
-            label_x = tick_x + ImGui::CalcTextSize("0").x;
-        }
-        else
-        {
-            label_x = tick_x;
-        }
-
-        ImVec2 label_pos(label_x, tick_bottom + 1.0f);
-        draw_list_ruler->AddText(font, label_font_size, label_pos,
-                                 m_settings.GetColor(Colors::kRulerTextColor),
-                                 tick_label.c_str());
-    }
-
     ImGui::EndChild();
     ImGui::PopStyleColor();
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
+   
 
     // Check if mouse is inside histogram area
     window_pos         = ImGui::GetWindowPos();
@@ -1452,9 +1458,9 @@ TimelineView::RenderHistogram()
 
     ImVec2 mouse_position = io.MousePos;
     bool   mouse_inside   = mouse_position.x >= window_pos.x &&
-                        mouse_position.x <= window_pos.x + window_size.x &&
+                        mouse_position.x <= window_pos.x + m_graph_size.x &&
                         mouse_position.y >= window_pos.y &&
-                        mouse_position.y <= window_pos.y + window_size.y;
+                        mouse_position.y <= window_pos.y + m_graph_size.y;
 
     // Update pseudo focus state based on mouse interaction
     if(mouse_any)

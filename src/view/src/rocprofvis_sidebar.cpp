@@ -130,6 +130,15 @@ SideBar::RenderTrackItem(const int& index)
         graph.display         = !graph.display;
         graph.display_changed = true;
         state_changed         = true;
+        if(!graph.display)
+        {
+            m_data_provider.UpdateHistogram({ graph.chart->GetID() }, false);
+        }
+        else
+        {
+            m_data_provider.UpdateHistogram({ graph.chart->GetID() }, true);
+        }
+
     }
     ImGui::PopFont();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
@@ -234,6 +243,7 @@ SideBar::HideAllSubItems(const std::vector<IterableModel>& container)
 {
     if(m_graphs && !m_graphs->empty())
     {
+        std::vector<uint64_t> ids_to_remove;
         for(const IterableModel& elem : container)
         {
             rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
@@ -241,7 +251,12 @@ SideBar::HideAllSubItems(const std::vector<IterableModel>& container)
             {
                 graph.display         = false;
                 graph.display_changed = true;
+                ids_to_remove.push_back(graph.chart->GetID());
             }
+        }
+        if(!ids_to_remove.empty())
+        {
+            m_data_provider.UpdateHistogram(ids_to_remove, false);
         }
     }
 }
@@ -251,6 +266,7 @@ SideBar::HideAllUncategorizedItems(const std::vector<uint64_t>& indices)
 {
     if(m_graphs && !m_graphs->empty())
     {
+        std::vector<uint64_t> ids_to_remove;
         for(const uint64_t& index : indices)
         {
             rocprofvis_graph_t& graph = (*m_graphs)[index];
@@ -258,7 +274,12 @@ SideBar::HideAllUncategorizedItems(const std::vector<uint64_t>& indices)
             {
                 graph.display         = false;
                 graph.display_changed = true;
+                ids_to_remove.push_back(graph.chart->GetID());
             }
+        }
+        if(!ids_to_remove.empty())
+        {
+            m_data_provider.UpdateHistogram(ids_to_remove, false);
         }
     }
 }
@@ -268,6 +289,7 @@ SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
 {
     if(m_graphs && !m_graphs->empty())
     {
+        std::vector<uint64_t> ids_to_add;
         for(const uint64_t& index : indices)
         {
             rocprofvis_graph_t& graph = (*m_graphs)[index];
@@ -275,7 +297,12 @@ SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
             {
                 graph.display         = true;
                 graph.display_changed = true;
+                ids_to_add.push_back(graph.chart->GetID());
             }
+        }
+        if(!ids_to_add.empty())
+        {
+            m_data_provider.UpdateHistogram(ids_to_add, true);
         }
     }
 }
@@ -285,6 +312,7 @@ SideBar::UnhideAllSubItems(const std::vector<IterableModel>& container)
 {
     if(m_graphs && !m_graphs->empty())
     {
+        std::vector<uint64_t> ids_to_add;
         for(const IterableModel& elem : container)
         {
             rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
@@ -292,10 +320,16 @@ SideBar::UnhideAllSubItems(const std::vector<IterableModel>& container)
             {
                 graph.display         = true;
                 graph.display_changed = true;
+                ids_to_add.push_back(graph.chart->GetID());
             }
+        }
+        if(!ids_to_add.empty())
+        {
+            m_data_provider.UpdateHistogram(ids_to_add, true);
         }
     }
 }
+
 
 SideBar::EyeButtonState
 SideBar::DrawTopology(const TopologyModel& topology,

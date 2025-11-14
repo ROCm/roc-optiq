@@ -341,61 +341,59 @@ void
 LineTrackItem::RenderMetaAreaOptions()
 {
     ImGui::Checkbox("Show as Box Plot", &m_show_boxplot);
-    ImGui::Checkbox("Highlight Y Range", &m_is_color_value_existant);
+    if(ImGui::Checkbox("Highlight Y Range", &m_is_color_value_existant))
+    {
+        float min_limit                        = static_cast<float>(m_min_y.Value());
+        float max_limit                        = static_cast<float>(m_max_y.Value());
+        m_color_by_value_digits.interest_1_min = min_limit;
+        m_color_by_value_digits.interest_1_max = max_limit;
+        if(min_limit == max_limit)
+        {
+            max_limit = min_limit + 1.0f;
+        }
+    }
 
     if(m_is_color_value_existant)
     {
         float min_limit = static_cast<float>(m_min_y.Value());
         float max_limit = static_cast<float>(m_max_y.Value());
+        ImGui::BeginTable("HighlightBandTable", 2, ImGuiTableFlags_SizingFixedFit);
+        ImGui::TableNextRow();
 
-        ImGui::Separator();
-        ImGui::TextUnformatted("Highlight Band");
-        ImGui::Spacing();
-
-        float slider_height = 80.0f;
-        float slider_width  = 18.0f;
-        float input_width   = 80.0f;
-        float spacing       = 32.0f;
-
+        ImGui::TableSetColumnIndex(0);
         ImGui::BeginGroup();
         ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Min");
-        ImGui::VSliderFloat("##min_vslider", ImVec2(slider_width, slider_height),
-                            &m_color_by_value_digits.interest_1_min, min_limit, max_limit,
-                            "");
-        ImGui::SetNextItemWidth(input_width);
-        if(ImGui::InputFloat("##min_input", &m_color_by_value_digits.interest_1_min, 0.0f,
-                             0.0f, "%.2f"))
-        {
-            m_color_by_value_digits.interest_1_min =
-                std::clamp(m_color_by_value_digits.interest_1_min, min_limit, max_limit);
-        }
+        ImGui::TextUnformatted("Min:");
+        ImGui::SetNextItemWidth(120.0f);
+        ImGui::DragFloat("##min_drag", &m_color_by_value_digits.interest_1_min, 0.1f,
+                         min_limit, max_limit);
+        ImGui::EndGroup();
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::BeginGroup();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Max:");
+        ImGui::SetNextItemWidth(120.0f);
+        ImGui::DragFloat("##max_drag", &m_color_by_value_digits.interest_1_max, 0.1f,
+                         min_limit, max_limit);
+        ImGui::EndGroup();
+
+        ImGui::EndTable();
+
+        // Clamp and sync values only after user interaction
+        m_color_by_value_digits.interest_1_min =
+            std::clamp(m_color_by_value_digits.interest_1_min, min_limit, max_limit);
+        m_color_by_value_digits.interest_1_max =
+            std::clamp(m_color_by_value_digits.interest_1_max, min_limit, max_limit);
+
         if(m_color_by_value_digits.interest_1_min >
            m_color_by_value_digits.interest_1_max)
             m_color_by_value_digits.interest_1_max =
                 m_color_by_value_digits.interest_1_min;
-        ImGui::EndGroup();
-
-        ImGui::SameLine(90.0f);
-
-        ImGui::BeginGroup();
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Max");
-        ImGui::VSliderFloat("##max_vslider", ImVec2(slider_width, slider_height),
-                            &m_color_by_value_digits.interest_1_max, min_limit, max_limit,
-                            "");
-        ImGui::SetNextItemWidth(input_width);
-        if(ImGui::InputFloat("##max_input", &m_color_by_value_digits.interest_1_max, 0.0f,
-                             0.0f, "%.2f"))
-        {
-            m_color_by_value_digits.interest_1_max =
-                std::clamp(m_color_by_value_digits.interest_1_max, min_limit, max_limit);
-        }
         if(m_color_by_value_digits.interest_1_max <
            m_color_by_value_digits.interest_1_min)
             m_color_by_value_digits.interest_1_min =
                 m_color_by_value_digits.interest_1_max;
-        ImGui::EndGroup();
     }
 }
 

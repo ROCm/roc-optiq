@@ -24,6 +24,12 @@ class ConfirmationDialog;
 class MessageDialog;
 class Project;
 
+struct FileFilter
+{
+    std::string m_name;
+    std::vector<std::string> m_extensions;
+};
+
 class AppWindow : public RocWidget
 {
 public:
@@ -43,11 +49,13 @@ public:
                                 std::function<void()> on_confirm_callback) const;
     void ShowMessageDialog(const std::string& title, const std::string& message) const;
 
-    void ShowSaveFileDialog(const std::string& title, const std::string& file_filter,
+    void ShowSaveFileDialog(const std::string&               title,
+                            const std::vector<FileFilter>&   file_filters,
                             const std::string&               initial_path,
                             std::function<void(std::string)> callback);
 
-    void ShowOpenFileDialog(const std::string& title, const std::string& file_filter,
+    void ShowOpenFileDialog(const std::string&               title,
+                            const std::vector<FileFilter>&   file_filters,
                             const std::string&               initial_path,
                             std::function<void(std::string)> callback);
 
@@ -76,18 +84,16 @@ private:
     void HandleOpenFile();
     void HandleSaveAsFile();
 
- #ifdef USE_NATIVE_FILE_DIALOG
+#ifdef USE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
 
-    void ShowNativeSaveFileDialog(const std::string&               file_filter,
-                                  const std::string&               initial_path,
-                                  std::function<void(std::string)> callback);
-
-    void ShowNativeOpenFileDialog(const std::string&               file_filter,
-                                  const std::string&               initial_path,
-                                  std::function<void(std::string)> callback);
+    void ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
+                              const std::string&               initial_path,
+                              std::function<void(std::string)> callback,
+                              bool                             save_dialog);
 #else
-    void ShowFileDialog(const std::string& title, const std::string& file_filter,
+    void ShowImGuiFileDialog(const std::string&             title,
+                        const std::vector<FileFilter>& file_filters,
                         const std::string& initial_path, const bool& confirm_overwrite,
                         std::function<void(std::string)> callback);
 #endif
@@ -121,15 +127,12 @@ private:
 
 #ifndef USE_NATIVE_FILE_DIALOG
     bool                             m_init_file_dialog;
-    std::function<void(std::string)> m_file_dialog_callback;
 #else
     std::atomic<bool>                m_is_native_file_dialog_open;
-    std::future<std::string>         m_open_file_dialog_future;
-    std::function<void(std::string)> m_open_file_dialog_callback;
-    std::future<std::string>         m_save_file_dialog_future;
-    std::function<void(std::string)> m_save_file_dialog_callback;
+    std::future<std::string>         m_file_dialog_future;
 #endif
 
+    std::function<void(std::string)>    m_file_dialog_callback;
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;

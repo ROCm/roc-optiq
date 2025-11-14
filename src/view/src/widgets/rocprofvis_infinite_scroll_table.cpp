@@ -758,14 +758,14 @@ InfiniteScrollTable::FormatTimeColumns() const
 void
 InfiniteScrollTable::ExportToFile() const
 {
-    #ifdef USE_NATIVE_FILE_DIALOG
-    std::string filter = "csv";
-    #else
-    std::string filter = "CSV Files (.csv){.csv}";
-    #endif
+    std::vector<FileFilter> file_filters;
+    FileFilter trace_filter;
+    trace_filter.m_name       = "CSV Files";
+    trace_filter.m_extensions = { "csv" };
+    file_filters.push_back(trace_filter);
 
     AppWindow::GetInstance()->ShowSaveFileDialog(
-        "Export Table", filter, "", [this](std::string file_path) -> void {
+        "Export Table", file_filters, "", [this](std::string file_path) -> void {
             std::shared_ptr<TableRequestParams> table_params =
                 m_data_provider.GetTableParams(m_table_type);
             if(table_params &&

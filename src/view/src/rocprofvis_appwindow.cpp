@@ -7,6 +7,7 @@
 #    include "nfd.h"
 #else
 #    include "ImGuiFileDialog.h"
+#    include <sstream>
 #endif
 
 #include "rocprofvis_controller.h"
@@ -225,28 +226,28 @@ AppWindow::ShowMessageDialog(const std::string& title, const std::string& messag
 }
 
 void
-AppWindow::ShowSaveFileDialog(const std::string& title, const std::string& file_filter,
+AppWindow::ShowSaveFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback)
 {
     #ifdef USE_NATIVE_FILE_DIALOG
     (void)title;
-    ShowNativeSaveFileDialog(file_filter, initial_path, callback);
+    ShowNativeFileDialog(file_filters, initial_path, callback, true);
     #else
-    ShowFileDialog(title, file_filter, initial_path, true, callback);
+    ShowImGuiFileDialog(title, file_filters, initial_path, true, callback);
     #endif
 }
 
 void
-AppWindow::ShowOpenFileDialog(const std::string& title, const std::string& file_filter,
+AppWindow::ShowOpenFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback)
 {
     #ifdef USE_NATIVE_FILE_DIALOG
     (void)title;
-    ShowNativeOpenFileDialog(file_filter, initial_path, callback);
+    ShowNativeFileDialog(file_filters, initial_path, callback, false);
     #else
-    ShowFileDialog(title, file_filter, initial_path, false, callback);
+    ShowImGuiFileDialog(title, file_filters, initial_path, false, callback);
     #endif
 }
 
@@ -540,11 +541,13 @@ AppWindow::RenderEditMenu(Project* project)
         if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
                            project && project->IsTrimSaveAllowed()))
         {
-            #ifdef USE_NATIVE_FILE_DIALOG
-            std::string filters = "db,rpd";
-            #else
-            std::string filters = "Traces (.db,.rpd){.db,.rpd}";
-            #endif            
+            FileFilter trace_filter;
+            trace_filter.m_name = "Traces";
+            trace_filter.m_extensions = { "db", "rpd" };
+
+            std::vector<FileFilter> filters;
+            filters.push_back(trace_filter);
+
             ShowSaveFileDialog("Save Trace Selection", filters, "",
                            [project](std::string file_path) -> void {
                                project->TrimSave(file_path);
@@ -630,30 +633,34 @@ AppWindow::RenderHelpMenu()
 void
 AppWindow::HandleOpenFile()
 {
-#ifdef USE_NATIVE_FILE_DIALOG
-    std::string default_path = "";
-    std::string filters = "db,rpd,rpv";
-#    ifdef JSON_TRACE_SUPPORT
-    filters += ",json";
-#    endif
-#    ifdef COMPUTE_UI_SUPPORT
-    filters += ",csv";
-#    endif
-#else
-    std::string default_path = ".";
-    std::string trace_types = ".db,.rpd";
-#    ifdef JSON_TRACE_SUPPORT
-    trace_types += ",.json";
-#    endif
-#    ifdef COMPUTE_UI_SUPPORT
-    trace_types += ",.csv";
-#    endif
-    std::string filters = "All (.rpv," + trace_types + "){.rpv," + trace_types +
-                          "},Projects (.rpv){.rpv},Traces (" + trace_types + "){" +
-                          trace_types + "}";
+    std::vector<FileFilter> file_filters;
+
+    FileFilter all_filter;
+    all_filter.m_name = "All Supported";
+    all_filter.m_extensions = { "db", "rpd", "rpv" };
+
+    FileFilter trace_filter;
+    trace_filter.m_name = "Traces";
+    trace_filter.m_extensions = { "db", "rpd" };
+
+#ifdef JSON_TRACE_SUPPORT
+    all_filter.m_extensions.push_back("json");
+    trace_filter.m_extensions.push_back("json");
+#endif 
+#ifdef COMPUTE_UI_SUPPORT
+    all_filter.m_extensions.push_back("csv");
+    trace_filter.m_extensions.push_back("csv");
 #endif
+    FileFilter project_filter;
+    project_filter.m_name = "Projects";
+    project_filter.m_extensions = { "rpv" };
+
+    file_filters.push_back(all_filter);
+    file_filters.push_back(trace_filter);
+    file_filters.push_back(project_filter);
+
     ShowOpenFileDialog(
-        "Choose File", filters, default_path,
+        "Choose File", file_filters, "",
         [this](std::string file_path) -> void { this->OpenFile(file_path); });
 }
 
@@ -663,11 +670,12 @@ AppWindow::HandleSaveAsFile()
     Project* project = GetCurrentProject();
     if(project)
     {
-        #ifdef USE_NATIVE_FILE_DIALOG
-        std::string filters = "rpv";
-        #else
-        std::string filters = "Projects (.rpv){.rpv}";
-        #endif
+        FileFilter trace_filter;
+        trace_filter.m_name = "Traces";
+        trace_filter.m_extensions = { "db", "rpd" };
+
+        std::vector<FileFilter> filters;
+        filters.push_back(trace_filter);
 
         ShowSaveFileDialog(
             "Save as Project", filters, "",
@@ -803,60 +811,84 @@ AppWindow::UpdateNativeFileDialog()
 {
     if(m_is_native_file_dialog_open)
     {
-        if(m_open_file_dialog_future.valid() &&
-           m_open_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
+        if(m_file_dialog_future.valid() &&
+           m_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
                std::future_status::ready)
         {
             m_disable_app_interaction = false;
-            std::string file_path = m_open_file_dialog_future.get();
-            if(!file_path.empty() && m_open_file_dialog_callback)
+            std::string file_path     = m_file_dialog_future.get();
+            if(!file_path.empty() && m_file_dialog_callback)
             {
-                m_open_file_dialog_callback(file_path);
+                m_file_dialog_callback(file_path);
             }
             m_is_native_file_dialog_open = false;
-            m_open_file_dialog_callback  = nullptr;
-        }
-
-        if(m_save_file_dialog_future.valid() &&
-           m_save_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
-               std::future_status::ready)
-        {
-            m_disable_app_interaction = false;
-            std::string file_path = m_save_file_dialog_future.get();
-            if(!file_path.empty() && m_save_file_dialog_callback)
-            {
-                m_save_file_dialog_callback(file_path);
-            }
-            m_is_native_file_dialog_open = false;
-            m_save_file_dialog_callback  = nullptr;
+            m_file_dialog_callback       = nullptr;
         }
     }
-}    
+}
 
 void
-AppWindow::ShowNativeSaveFileDialog(const std::string&               file_filter,
-                                    const std::string&               initial_path,
-                                    std::function<void(std::string)> callback)
+AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
+                                const std::string&               initial_path,
+                                std::function<void(std::string)> callback,
+                                bool                             save_dialog)
 {
     if(m_is_native_file_dialog_open)
     {
         return;
     }
     m_is_native_file_dialog_open = true;
-    m_save_file_dialog_callback  = callback;
+    m_file_dialog_callback       = callback;
     m_disable_app_interaction    = true;
-    m_save_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
+
+    m_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
         NFD_Init();
-        nfdu8char_t*          outPath    = nullptr;
-        nfdu8filteritem_t     filterItem = { "File", file_filter.c_str() };
-        nfdsavedialogu8args_t args       = {};
-        args.filterList                  = &filterItem;
-        args.filterCount                 = 1;
-        if(!initial_path.empty()) 
+        nfdu8char_t* outPath = nullptr;
+
+        nfdu8filteritem_t*       filters = new nfdu8filteritem_t[file_filters.size()];
+        std::vector<std::string> extension_stings;
+        for(size_t i = 0; i < file_filters.size(); ++i)
         {
-            args.defaultPath = initial_path.c_str();
+            std::string extensions_str;
+            for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
+            {
+                extensions_str += file_filters[i].m_extensions[j];
+                if(j < file_filters[i].m_extensions.size() - 1)
+                {
+                    extensions_str += ",";
+                }
+            }
+            extension_stings.push_back(std::move(extensions_str));
         }
-        nfdresult_t result = NFD_SaveDialogU8_With(&outPath, &args);
+        for(size_t i = 0; i < file_filters.size(); ++i)
+        {
+            filters[i] = { file_filters[i].m_name.c_str(), extension_stings[i].c_str() };
+        }
+
+        nfdresult_t result;
+        if(save_dialog)
+        {
+            nfdsavedialogu8args_t args = {};
+            args.filterList            = filters;
+            args.filterCount = static_cast<nfdfiltersize_t>(file_filters.size());
+            if(!initial_path.empty())
+            {
+                args.defaultPath = initial_path.c_str();
+            }
+            result = NFD_SaveDialogU8_With(&outPath, &args);
+        }
+        else
+        {
+            nfdopendialogu8args_t args = {};
+            args.filterList            = filters;
+            args.filterCount = static_cast<nfdfiltersize_t>(file_filters.size());
+            if(!initial_path.empty())
+            {
+                args.defaultPath = initial_path.c_str();
+            }
+            result = NFD_OpenDialogU8_With(&outPath, &args);
+        }
+        delete[] filters;
         std::string file_path;
         if(result == NFD_OKAY)
         {
@@ -880,69 +912,45 @@ AppWindow::ShowNativeSaveFileDialog(const std::string&               file_filter
     });
 }
 
-void
-AppWindow::ShowNativeOpenFileDialog(const std::string&               file_filter,
-                                    const std::string&               initial_path,
-                                    std::function<void(std::string)> callback)
-{
-    if(m_is_native_file_dialog_open)
-    {
-        return;
-    }
-    m_is_native_file_dialog_open = true;
-    m_open_file_dialog_callback  = callback;
-    m_disable_app_interaction    = true;
-    m_open_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
-        NFD_Init();
-        nfdu8char_t*          outPath    = nullptr;
-        nfdu8filteritem_t     filterItem = { "Supported Files", file_filter.c_str() };
-        nfdopendialogu8args_t args       = {};
-        args.filterList                  = &filterItem;
-        args.filterCount                 = 1;
-        if(!initial_path.empty()) 
-        {
-            args.defaultPath = initial_path.c_str();
-        }
-        nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
-        std::string file_path;
-        if(result == NFD_OKAY)
-        {
-            file_path = outPath;
-            if(outPath)
-            {
-                NFD_FreePathU8(outPath);
-            }
-        }
-        else
-        {
-            spdlog::error("Error opening dialog: {}", NFD_GetError());
-            if(outPath)
-            {
-                NFD_FreePathU8(outPath);
-            }
-            NFD_ClearError();
-        }
-        NFD_Quit();
-        return file_path;
-    });
-}
 #endif
 
 #ifndef USE_NATIVE_FILE_DIALOG
 void
-AppWindow::ShowFileDialog(const std::string& title, const std::string& file_filter,
+AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
                           const std::string& initial_path, const bool& confirm_overwrite,
                           std::function<void(std::string)> callback)
 {
     m_file_dialog_callback = callback;
     m_init_file_dialog     = true;
+
+    std::stringstream filter_stream;
+    for(const auto& filter : file_filters)
+    {
+        std::stringstream extensions;
+        for(size_t i = 0; i < filter.m_extensions.size(); ++i)
+        {
+            extensions << "." << filter.m_extensions[i];
+            if(i < filter.m_extensions.size() - 1)
+            {
+                extensions << ",";
+            }
+        }
+
+        filter_stream << filter.m_name << " (" << extensions.str() << "){"
+                      << extensions.str() << "}";
+        if(&filter != &file_filters.back())
+        {
+            filter_stream << ",";
+        }
+    }
+
     IGFD::FileDialogConfig config;
     config.path  = initial_path;
     config.flags = confirm_overwrite
                        ? ImGuiFileDialogFlags_Default
                        : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
-    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, file_filter.c_str(),
-                                            config);
+    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title,
+                                            filter_stream.str().c_str(), config);
 }
 #endif
 
@@ -969,20 +977,14 @@ AppWindow::RenderDeveloperMenu()
         // Open a file to test the DataProvider
         if(ImGui::MenuItem("Test Provider", nullptr))
         {
-#    ifdef USE_NATIVE_FILE_DIALOG
-            std::string default_path         = "";
-            std::string supported_extensions = "db,rpd";
-#        ifdef JSON_TRACE_SUPPORT
-            supported_extensions += ",json";
-#        endif
-#    else
-            std::string supported_extensions = ".db,.rpd";
-#        ifdef JSON_TRACE_SUPPORT
-            supported_extensions += ",.json";
-#        endif
-            std::string default_path = ".";
+            std::vector<FileFilter> file_filters;
+            FileFilter trace_filter;
+            trace_filter.m_name       = "Traces";
+            trace_filter.m_extensions = { "db", "rpd" };
+#    ifdef JSON_TRACE_SUPPORT
+            trace_filter.m_extensions.push_back("json");
 #    endif
-            ShowOpenFileDialog("Choose File", supported_extensions, default_path,
+            ShowOpenFileDialog("Choose File", file_filters, "",
                                [this](std::string file_path) -> void {
                                    this->m_test_data_provider.FetchTrace(file_path);
                                    spdlog::info("Opening file: {}", file_path);

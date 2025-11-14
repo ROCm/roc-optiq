@@ -224,6 +224,28 @@ TrackItem::RenderMetaArea()
         ImVec2 container_pos  = ImGui::GetWindowPos() + ImVec2(m_reorder_grip_width, 0);
         ImVec2 container_size = ImGui::GetWindowSize();
 
+          if(m_request_state != TrackDataRequestState::kIdle)
+        {
+            ImGuiStyle& style = ImGui::GetStyle();
+
+            float  dot_radius  = 10.0f;
+            int    num_dots    = 3;
+            float  dot_spacing = 5.0f;
+            float  anim_speed  = 7.0f;
+            ImVec2 dot_size =
+                MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
+
+            ImVec2 cursor_pos = ImGui::GetCursorPos();
+            ImGui::SetCursorPos(
+                ImVec2(cursor_pos.x + (content_size.x - dot_size.x) * 0.5f,
+                       cursor_pos.y + (content_size.y - dot_size.y) * 0.5f));
+
+            RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
+                                       m_settings.GetColor(Colors::kScrollBarColor),
+                                       anim_speed);
+        }
+
+
         // Reordering grip decoration
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - ImGui::CalcTextSize(ICON_GRID).x) / 2,
@@ -265,27 +287,7 @@ TrackItem::RenderMetaArea()
 
         ImGui::PopTextWrapPos();
 
-        if(m_request_state != TrackDataRequestState::kIdle)
-        {
-            ImGuiStyle& style = ImGui::GetStyle();
-
-            float  dot_radius  = 10.0f;
-            int    num_dots    = 3;
-            float  dot_spacing = 5.0f;
-            float  anim_speed  = 7.0f;
-            ImVec2 dot_size =
-                MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
-
-            ImVec2 cursor_pos = ImGui::GetCursorPos();
-            ImGui::SetCursorPos(
-                ImVec2(cursor_pos.x + (content_size.x - dot_size.x) * 0.5f,
-                       cursor_pos.y + style.ItemSpacing.y));
-
-            RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                                       m_settings.GetColor(Colors::kScrollBarColor),
-                                       anim_speed);
-        }
-
+      
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
                                    0));

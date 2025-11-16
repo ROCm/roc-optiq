@@ -222,7 +222,7 @@ Graph::GenerateLODEvent(std::vector<Event*> & events, uint32_t lod_to_generate, 
         event->SetUInt64(kRPVControllerEventLevel, 0, level);
         event->SetString(kRPVControllerEventName, 0, combined_name.c_str());
         event->SetUInt64(kRPVControllerEventLevel, 0, level);
-        event->SetUInt64(kRPVControllerEventTopCombinedName, 0, max_duration_str_index);    
+        event->SetUInt64(kRPVControllerEventTopCombinedNameStrIndex, 0, max_duration_str_index);    
         event->SetUInt64(kRPVControllerEventNumChildren, 0, events.size());
         for(uint32_t e_idx = 0; e_idx < events.size(); e_idx++)
         {

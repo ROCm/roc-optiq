@@ -471,6 +471,12 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerEventTopCombinedNameStrIndex:
+            {
+                *value = m_combined_top_name;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             default:
             {
                 result = UnhandledProperty(property);
@@ -593,7 +599,7 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerEventTopCombinedName:
+        case kRPVControllerEventTopCombinedNameStrIndex:
         {
             // Set string index for top combined name
             m_combined_top_name = static_cast<size_t>(value);

@@ -678,6 +678,8 @@ typedef enum rocprofvis_controller_event_properties_t : uint32_t
     kRPVControllerEventDuration,
     // Name of top combined event
     kRPVControllerEventTopCombinedName,
+    // Name of top combined event string index
+    kRPVControllerEventTopCombinedNameStrIndex,
 
     __kRPVControllerEventPropertiesLast
 } rocprofvis_controller_event_properties_t;

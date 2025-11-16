@@ -670,6 +670,15 @@ typedef enum rocprofvis_controller_event_properties_t : uint32_t
     kRPVControllerEventCallstackEntryIndexed,
     // Category for the event
     kRPVControllerEventCategory,
+    // Name of the event string index
+    kRPVControllerEventNameStrIndex,
+    // Category for the event string index
+    kRPVControllerEventCategoryStrIndex,
+    // Duration of the event
+    kRPVControllerEventDuration,
+    // Name of top combined event
+    kRPVControllerEventTopCombinedName,
+
     __kRPVControllerEventPropertiesLast
 } rocprofvis_controller_event_properties_t;
 /* JSON: RPVEvent

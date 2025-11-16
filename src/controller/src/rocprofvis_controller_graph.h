@@ -32,7 +32,7 @@ public:
     rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index, Future* future);
 
     rocprofvis_controller_object_type_t GetType(void) final;
-    rocprofvis_result_t                 CombineEventNames(std::vector<Event*>& events, std::string& combined_name);
+    rocprofvis_result_t                 CombineEventInfo(std::vector<Event*>& events, std::string& combined_name, size_t &max_duration_str_index);
     rocprofvis_result_t                 GenerateLODEvent(std::vector<Event*>& events,
                                                          uint32_t lod_to_generate, uint32_t level,
                                                          double event_min, double event_max);

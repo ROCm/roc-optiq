@@ -240,7 +240,7 @@ FlameTrackItem::ParseChildInfo(const std::string& combined_name, ChildEventInfo&
                 // Extract count, duration and name (format: "<count>|<duration>|<name>")
                 size_t count = std::stoul(combined_name.substr(0, pos1));
                 size_t duration_start = pos1 + s_child_info_separator.size();
-                size_t duration = std::stoul(combined_name.substr(duration_start, pos2 - duration_start));
+                size_t duration = std::stoull(combined_name.substr(duration_start, pos2 - duration_start));
                 std::string name = combined_name.substr(pos2 + s_child_info_separator.size());
                 out_info = { name, std::hash<std::string>{}(name), count, duration };
                 return true;

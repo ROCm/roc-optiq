@@ -190,7 +190,7 @@ Graph::CombineEventInfo(std::vector<Event*>& events, std::string& combined_name,
 
     // Build the combined name string and find max duration
     double   max_duration       = 0.0;
-    uint64_t max_duration_index = static_cast<uint64_t>(-1);
+    uint64_t max_duration_index = UINT64_MAX;
     for(const auto& [name_index, info] : info_accumulator)
     {
         if(combined_name.size() > 0)
@@ -209,7 +209,7 @@ Graph::CombineEventInfo(std::vector<Event*>& events, std::string& combined_name,
         }
         else
         {
-            combined_name += "";
+            combined_name += "Unknown Name";
             spdlog::warn("String for index {} not found when combining event info.",
                          name_index);
         }
@@ -223,7 +223,7 @@ Graph::CombineEventInfo(std::vector<Event*>& events, std::string& combined_name,
     }
 
     max_duration_str_index = max_duration_index;
-    return result;
+    return kRocProfVisResultSuccess;
 }
 
 rocprofvis_result_t
@@ -232,7 +232,7 @@ Graph::GenerateLODEvent(std::vector<Event*> & events, uint32_t lod_to_generate, 
     if(events.size())
     {
         std::string combined_name = "";
-        size_t max_duration_str_index = UINT64_MAX;
+        uint64_t max_duration_str_index = UINT64_MAX;
         rocprofvis_result_t result = CombineEventInfo(events, combined_name, max_duration_str_index);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 

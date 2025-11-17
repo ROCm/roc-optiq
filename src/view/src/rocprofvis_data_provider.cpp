@@ -3176,7 +3176,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
         result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
                                                   nullptr, &length);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
+        
         if(length >= str_buffer_length)
         {
             delete[] str_buffer;
@@ -3195,6 +3195,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
             // get top combined event name
             result = rocprofvis_controller_get_string(
                 event, kRPVControllerEventTopCombinedName, 0, nullptr, &length);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             if(length >= str_buffer_length)
             {

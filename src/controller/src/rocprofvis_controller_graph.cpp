@@ -117,26 +117,49 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
 
 rocprofvis_result_t
 Graph::CombineEventInfo(std::vector<Event*>& events, std::string& combined_name,
-                        size_t& max_duration_str_index)
+                        uint64_t& max_duration_str_index)
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(events.size() == 0)
+    {
+        spdlog::warn("No events provided to CombineEventInfo.");
+        return kRocProfVisResultInvalidArgument;
+    }
+    if(events.size() == 1)
+    {
+        // If only one event, return its name directly
+        uint32_t len = 0;
+        result       = events[0]->GetString(kRPVControllerEventName, 0, nullptr, &len);
+        if(result == kRocProfVisResultSuccess)
+        {
+            combined_name.clear();
+            combined_name.resize(len);
+            result = events[0]->GetString(kRPVControllerEventName, 0,
+                                          const_cast<char*>(combined_name.c_str()), &len);
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = events[0]->GetUInt64(kRPVControllerEventNameStrIndex, 0,
+                                              &max_duration_str_index);
+            }
+        }
+        return result;
+    }
+
     std::unordered_map<uint64_t, CombinedEventInfo> info_accumulator;
     std::unordered_map<uint64_t, std::string>       string_cache;
-
-    std::string name;
+    std::string                                     name;
     for(auto event : events)
     {
         uint64_t name_index = 0;
         uint32_t len        = 0;
-
-        double duration = 0.0;
-        result          = event->GetDouble(kRPVControllerEventDuration, 0, &duration);
+        double   duration   = 0.0;
+        result              = event->GetDouble(kRPVControllerEventDuration, 0, &duration);
         if(result == kRocProfVisResultSuccess)
         {
             result = event->GetUInt64(kRPVControllerEventNameStrIndex, 0, &name_index);
             if(result == kRocProfVisResultSuccess)
             {
-                // Try to insert or update the count and  duration
+                // Try to insert or update the count and duration
                 auto [it, inserted] = info_accumulator.emplace(
                     name_index, CombinedEventInfo{ 1, duration });
                 if(!inserted)  // Key already exists
@@ -165,42 +188,41 @@ Graph::CombineEventInfo(std::vector<Event*>& events, std::string& combined_name,
         }
     }
 
-    // Find max count and max duration for formatting
-    uint32_t max_count        = 0;
-    double   max_duration     = 0.0;
-    uint64_t max_duration_key = static_cast<uint64_t>(-1);
-    for(const auto& [key, info] : info_accumulator)
-    {
-        if(info.total_count > max_count)
-        {
-            max_count = info.total_count;
-        }
-        if(info.total_duration > max_duration)
-        {
-            max_duration     = info.total_duration;
-            max_duration_key = key;
-        }
-    }
-
-    max_duration_str_index = max_duration_key;
-
+    // Build the combined name string and find max duration
+    double   max_duration       = 0.0;
+    uint64_t max_duration_index = static_cast<uint64_t>(-1);
     for(const auto& [name_index, info] : info_accumulator)
     {
-        if(info_accumulator.size() > 1)
+        if(combined_name.size() > 0)
         {
-            if(combined_name.size() > 0)
-            {
-                combined_name += "\n";
-            }
-            std::string count_string = std::to_string(info.total_count);
-            count_string += "|";
-            count_string += std::to_string(static_cast<uint64_t>(info.total_duration));
-            count_string += "|";
-            combined_name += count_string;
+            combined_name += "\n";
+        }
+        std::string count_string = std::to_string(info.total_count);
+        count_string += "|";
+        count_string += std::to_string(static_cast<uint64_t>(info.total_duration));
+        count_string += "|";
+        combined_name += count_string;
+        auto it = string_cache.find(name_index);
+        if(it != string_cache.end())
+        {
+            combined_name += it->second;
+        }
+        else
+        {
+            combined_name += "";
+            spdlog::warn("String for index {} not found when combining event info.",
+                         name_index);
         }
 
-        combined_name += string_cache[name_index];
+        // Update max values
+        if(info.total_duration > max_duration)
+        {
+            max_duration       = info.total_duration;
+            max_duration_index = name_index;
+        }
     }
+
+    max_duration_str_index = max_duration_index;
     return result;
 }
 
@@ -210,8 +232,9 @@ Graph::GenerateLODEvent(std::vector<Event*> & events, uint32_t lod_to_generate, 
     if(events.size())
     {
         std::string combined_name = "";
-        size_t max_duration_str_index = 0;
-        CombineEventInfo(events, combined_name, max_duration_str_index);
+        size_t max_duration_str_index = UINT64_MAX;
+        rocprofvis_result_t result = CombineEventInfo(events, combined_name, max_duration_str_index);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         uint64_t event_id = 0;
         events[0]->GetUInt64(kRPVControllerEventId, 0, &event_id);
@@ -221,8 +244,8 @@ Graph::GenerateLODEvent(std::vector<Event*> & events, uint32_t lod_to_generate, 
         ROCPROFVIS_ASSERT(level != UINT64_MAX);
         event->SetUInt64(kRPVControllerEventLevel, 0, level);
         event->SetString(kRPVControllerEventName, 0, combined_name.c_str());
-        event->SetUInt64(kRPVControllerEventLevel, 0, level);
-        event->SetUInt64(kRPVControllerEventTopCombinedNameStrIndex, 0, max_duration_str_index);    
+        event->SetUInt64(kRPVControllerEventTopCombinedNameStrIndex, 0,
+                         max_duration_str_index);
         event->SetUInt64(kRPVControllerEventNumChildren, 0, events.size());
         for(uint32_t e_idx = 0; e_idx < events.size(); e_idx++)
         {

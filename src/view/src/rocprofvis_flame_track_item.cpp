@@ -213,6 +213,9 @@ FlameTrackItem::ExtractChildInfo(ChartItem& item)
                                         std::hash<std::string>{}(item.event.m_name),
                                         item.event.m_child_count,
                                         static_cast<uint64_t>(item.event.m_duration) });
+            spdlog::warn("Failed to parse child info for event ID {}. "
+                         "Falling back to full event name.",
+                         item.event.m_id);
         }
     }
     else
@@ -242,7 +245,7 @@ FlameTrackItem::ParseChildInfo(const std::string& combined_name, ChildEventInfo&
                 out_info = { name, std::hash<std::string>{}(name), count, duration };
                 return true;
             }
-            catch(const std::invalid_argument&)
+            catch(const std::exception&)
             {
                 spdlog::warn("Failed to parse child event info from string: {}",
                              combined_name);
@@ -461,7 +464,8 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 
                 // Duration column
                 ImGui::TableNextColumn();
-                std::string duration_str = nanosecond_to_formatted_str(child.duration, time_format, true);
+                std::string duration_str = nanosecond_to_formatted_str(
+                    static_cast<double>(child.duration), time_format, true);
                 ImGui::Text("%s", duration_str.c_str());
 
                 current_height += row_height;

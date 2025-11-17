@@ -25,6 +25,7 @@ Event::Event(uint64_t id, double start_ts, double end_ts)
 , m_end_timestamp(end_ts)
 , m_name(UINT64_MAX)
 , m_category(UINT64_MAX)
+, m_combined_top_name(UINT64_MAX)
 , m_level(0)
 , m_retain_counter(0)
 {}

@@ -93,7 +93,7 @@ if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
 :POST_PROCESS
 Echo PkgBuild.cmd: Copy Public release into BOM folder
-copy /y "%DEVROOT%\Temp\Public\ROCm-Optiq-Beta.exe" "%DEVROOT%\Bom\Public\ROCm-Optiq.exe"
+copy /y "%DEVROOT%\Temp\Public\\ROCm-Visualizer-Beta.exe" "%DEVROOT%\Bom\Public\ROCm-Optiq.exe"
 Echo PkgBuild.cmd: Error is %ERRORLEVEL%
 if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
@@ -104,7 +104,7 @@ if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
 :POST_PROCESS
 Echo PkgBuild.cmd: Copy Internal release into BOM folder
-copy /y "%DEVROOT%\Temp\Internal\ROCm-Optiq-Beta.exe" "%DEVROOT%\Bom\Internal\ROCm-Optiq.exe"
+copy /y "%DEVROOT%\Temp\Internal\\ROCm-Visualizer-Beta.exe" "%DEVROOT%\Bom\Internal\ROCm-Optiq.exe"
 Echo PkgBuild.cmd: Error is %ERRORLEVEL%
 if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
@@ -115,7 +115,7 @@ if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
 :POST_PROCESS
 Echo PkgBuild.cmd: Copy NDA release into BOM folder
-copy /y "%DEVROOT%\Temp\NDA\ROCm-Optiq-Beta.exe" "%DEVROOT%\Bom\NDA\ROCm-Optiq.exe"
+copy /y "%DEVROOT%\Temp\NDA\\ROCm-Visualizer-Beta.exe" "%DEVROOT%\Bom\NDA\ROCm-Optiq.exe"
 Echo PkgBuild.cmd: Error is %ERRORLEVEL%
 if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 

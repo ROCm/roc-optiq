@@ -67,6 +67,7 @@ private:
         std::string name;
         size_t      name_hash;
         size_t      count;
+        uint64_t    duration;
     };
     
     struct ChartItem

@@ -616,6 +616,10 @@ private:
     void CreateRawSampleData(const TrackRequestParams& params,
                              const data_req_info_t&    req);
 
+    rocprofvis_result_t GetString(rocprofvis_handle_t*  handle,
+                                  rocprofvis_property_t property, uint64_t index,
+                                  std::string& out_string);
+
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                           uint64_t index);
 

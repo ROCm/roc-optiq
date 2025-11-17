@@ -3189,7 +3189,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_name.assign(str_buffer);
 
-        length = 0;        
+        length = 0;
         if(trace_event.m_child_count > 1)
         {
             // get top combined event name
@@ -3203,8 +3203,8 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
                 str_buffer        = new char[str_buffer_length];
             }
             length += 1;
-            result = rocprofvis_controller_get_string(event, kRPVControllerEventTopCombinedName, 0,
-                                                    str_buffer, &length);
+            result = rocprofvis_controller_get_string(
+                event, kRPVControllerEventTopCombinedName, 0, str_buffer, &length);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             trace_event.m_top_combined_name.assign(str_buffer);
         }

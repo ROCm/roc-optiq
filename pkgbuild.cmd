@@ -86,16 +86,16 @@ Echo PkgBuild.cmd: Including files through automated way.
 %CMDROOTDIRECTORY%\cscript InstallerAutomation.vbs
 if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
-REM :Build_Package
-REM Echo PkgBuild.cmd: Building %PKG_SCRIPT_PATH%\%SCRIPT_NAME% Public
-REM "C:\Program Files (x86)\InstallShield\2023 SAB\System\IsCmdBld.exe" -p %SCRIPT_NAME% -b "%DEVROOT%\Temp\Public" -r "Public_Compressed" -licCheckTimeOut 1999
-REM if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
+:Build_Package
+Echo PkgBuild.cmd: Building %PKG_SCRIPT_PATH%\%SCRIPT_NAME% Public
+"C:\Program Files (x86)\InstallShield\2023 SAB\System\IsCmdBld.exe" -p %SCRIPT_NAME% -b "%DEVROOT%\Temp\Public" -r "Public_Compressed" -licCheckTimeOut 1999
+if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
-REM :POST_PROCESS
-REM Echo PkgBuild.cmd: Copy Public release into BOM folder
-REM copy /y "%DEVROOT%\Temp\Public\ROCm-Visualizer-Beta.exe" "%DEVROOT%\Bom\Public\ROCm-Visualizer-Beta.exe"
-REM Echo PkgBuild.cmd: Error is %ERRORLEVEL%
-REM if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
+:POST_PROCESS
+Echo PkgBuild.cmd: Copy Public release into BOM folder
+copy /y "%DEVROOT%\Temp\Public\ROCm-Optiq-Beta.exe" "%DEVROOT%\Bom\Public\ROCm-Optiq.exe"
+Echo PkgBuild.cmd: Error is %ERRORLEVEL%
+if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
 :Build_Package
 Echo PkgBuild.cmd: Building %PKG_SCRIPT_PATH%\%SCRIPT_NAME% Internal
@@ -104,7 +104,7 @@ if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
 :POST_PROCESS
 Echo PkgBuild.cmd: Copy Internal release into BOM folder
-copy /y "%DEVROOT%\Temp\Internal\ROCm-Optiq.exe" "%DEVROOT%\Bom\Internal\ROCm-Optiq.exe"
+copy /y "%DEVROOT%\Temp\Internal\ROCm-Optiq-Beta.exe" "%DEVROOT%\Bom\Internal\ROCm-Optiq.exe"
 Echo PkgBuild.cmd: Error is %ERRORLEVEL%
 if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
@@ -115,7 +115,7 @@ if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 
 :POST_PROCESS
 Echo PkgBuild.cmd: Copy NDA release into BOM folder
-copy /y "%DEVROOT%\Temp\NDA\ROCm-Optiq.exe" "%DEVROOT%\Bom\NDA\ROCm-Optiq.exe"
+copy /y "%DEVROOT%\Temp\NDA\ROCm-Optiq-Beta.exe" "%DEVROOT%\Bom\NDA\ROCm-Optiq.exe"
 Echo PkgBuild.cmd: Error is %ERRORLEVEL%
 if %ERRORLEVEL% NEQ 0 del /Q /F %DevRoot%\pkgsuccess
 

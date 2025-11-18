@@ -1276,9 +1276,6 @@ TimelineView::RenderHistogram()
     // Vertical splitter
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
     ImGui::BeginChild("HistogramSplitter", ImVec2(5.0f, kHistogramTotalHeight), false);
-    ImGui::Selectable("##HistogramSplitterHandle", false, 0,
-                      ImVec2(5.0f, kHistogramTotalHeight));
-
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();

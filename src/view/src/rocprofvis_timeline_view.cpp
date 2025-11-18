@@ -3,19 +3,17 @@
 #include "rocprofvis_timeline_view.h"
 #include "imgui.h"
 #include "rocprofvis_annotations.h"
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_track_item.h"
+#include "rocprofvis_font_manager.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
-#include "rocprofvis_click_manager.h"   
-#include <algorithm>
-#include <GLFW/glfw3.h>
-#include "rocprofvis_font_manager.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
 
@@ -142,7 +140,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
 
     m_graphs = std::make_shared<std::vector<rocprofvis_graph_t>>();
-    
+
     // force initial calculation of flame track label width
     FlameTrackItem::CalculateMaxEventLabelWidth();
 }
@@ -816,7 +814,7 @@ TimelineView::RenderGrid()
         std::string label;
         for(auto i = 0; i < m_grid_interval_count; i++)
         {
-            double grid_line_ns = grid_line_start_ns + (i * m_grid_interval_ns);
+            double grid_line_ns     = grid_line_start_ns + (i * m_grid_interval_ns);
             float  normalized_start = static_cast<float>(
                 child_win.x + (grid_line_ns - m_view_time_offset_ns) * m_pixels_per_ns);
 
@@ -1274,6 +1272,17 @@ TimelineView::RenderHistogram()
     const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+
+    // Vertical splitter
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
+    ImGui::BeginChild("HistogramSplitter", ImVec2(5.0f, kHistogramTotalHeight), false);
+    ImGui::Selectable("##HistogramSplitterHandle", false, 0,
+                      ImVec2(5.0f, kHistogramTotalHeight));
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
     ImGui::BeginChild("Histogram", ImVec2(m_graph_size.x, kHistogramTotalHeight), false,
@@ -1326,8 +1335,8 @@ TimelineView::RenderHistogram()
 
     for(int i = 0; i < num_ticks; i++)
     {
-        double tick_ns = grid_line_start_ns + (i * interval_ns);
-        float  tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
+        double      tick_ns = grid_line_start_ns + (i * interval_ns);
+        float       tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
         std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
         label_size             = ImGui::CalcTextSize(tick_label.c_str());
 
@@ -1341,7 +1350,7 @@ TimelineView::RenderHistogram()
             label_x = tick_x;
         }
 
-        ImVec2 label_pos(label_x, tick_top);   
+        ImVec2 label_pos(label_x, tick_top);
         draw_list_ruler->AddText(font, label_font_size, label_pos,
                                  m_settings.GetColor(Colors::kRulerTextColor),
                                  tick_label.c_str());
@@ -1356,7 +1365,7 @@ TimelineView::RenderHistogram()
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
-   
+
     // Histogram bars area
     ImGui::BeginChild("Histogram Bars", ImVec2(m_graph_size.x, kHistogramBarHeight),
                       false,
@@ -1400,7 +1409,6 @@ TimelineView::RenderHistogram()
     float y0           = bars_pos.y;
     float y1           = bars_pos.y + bars_height;
 
- 
     // Left overlay
     if(x_view_start > bars_pos.x)
     {
@@ -1441,7 +1449,6 @@ TimelineView::RenderHistogram()
     ImGui::EndChild();  // Histogram Bars
     ImGui::EndChild();
     ImGui::PopStyleColor();
-   
 
     // Check if mouse is inside histogram area
     window_pos         = ImGui::GetWindowPos();
@@ -1489,15 +1496,13 @@ TimelineView::RenderTraceView()
 
     m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
- 
     RenderGrid();
- 
+
     RenderGraphView();
     RenderSplitter();
     RenderInteractiveUI();
 
     RenderScrubber(screen_pos);
-  
 
     if(!m_resize_activity && !m_stop_user_interaction)
     {
@@ -1518,10 +1523,10 @@ TimelineView::RenderTraceView()
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
     ImGui::SameLine();
 
-    float available_width = subcomponent_size_main.x - m_sidebar_size;
+    float  available_width = subcomponent_size_main.x - m_sidebar_size;
     double view_width      = std::min(m_v_width, m_range_x);
     double max_offset      = m_range_x - view_width;
-    float view_offset =
+    float  view_offset =
         static_cast<float>(std::clamp(m_view_time_offset_ns, 0.0, max_offset));
 
     float min_grab = 4.0f;
@@ -1613,7 +1618,8 @@ TimelineView::HandleHistogramTouch()
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 
-        float user_requested_move = static_cast<float>((drag / m_graph_size.x) * m_range_x);
+        float user_requested_move =
+            static_cast<float>((drag / m_graph_size.x) * m_range_x);
 
         if(user_requested_move <= 0)
         {
@@ -1696,7 +1702,8 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel_h = io.MouseWheelH;
         if(scroll_wheel_h != 0.0f)
         {
-            float move_amount = static_cast<float>(scroll_wheel_h * m_v_width * zoom_speed);
+            float move_amount =
+                static_cast<float>(scroll_wheel_h * m_v_width * zoom_speed);
             m_view_time_offset_ns -= move_amount;
         }
 
@@ -1833,7 +1840,8 @@ TimelineView::HandleTopSurfaceTouch()
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 
-        float user_requested_move = static_cast<float>((drag / m_graph_size.x) * view_width);
+        float user_requested_move =
+            static_cast<float>((drag / m_graph_size.x) * view_width);
 
         m_view_time_offset_ns -= user_requested_move;
     }

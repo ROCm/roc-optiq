@@ -442,7 +442,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Collecting track histogram",
             kRPVDbBusy, future);
 
-        constexpr uint64_t desired_bins = 300;
+        constexpr uint64_t desired_bins = 500;
         uint64_t           trace_length =
             TraceProperties()->end_time - TraceProperties()->start_time;
 

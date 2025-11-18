@@ -1359,7 +1359,6 @@ TimelineView::RenderHistogram()
                                  ImVec2(tick_x, tick_label_bottom + tick_length),
                                  m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
     }
-
     ImGui::EndChild();
     ImGui::PopStyleColor();
 

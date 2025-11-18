@@ -378,6 +378,12 @@ DataProvider::GetMiniMap()
 void
 DataProvider::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add)
 {
+
+    /*
+    This function updates m_histogram and m_mini_map based on the interest_id list (which
+    is a list of track IDs to add or remove from the histogram).
+    */
+
     // Update visibility flags in m_mini_map
     for(const auto& id : interest_id)
     {
@@ -579,7 +585,10 @@ DataProvider::HandleLoadTrace()
             result               = rocprofvis_controller_get_uint64(
                 m_trace_controller, kRPVControllerGetHistogramBucketsNumber, 0,
                 &num_buckets);
- 
+
+            // Ensure m_histogram is properly sized before 
+            m_histogram.resize(num_buckets, 0.0);
+
             std::map<uint64_t, std::tuple<std::vector<double>, bool>> histogram_minimap;
  
             if(result == kRocProfVisResultSuccess && m_trace_timeline)
@@ -604,6 +613,8 @@ DataProvider::HandleLoadTrace()
                         result = rocprofvis_controller_get_double(
                             track, kRPVControllerTrackHistogramBucketValueIndexed,
                             bin_num, &binval);
+
+
                         histogram_track[bin_num] = binval;
                         m_histogram[bin_num] += binval;
                     }

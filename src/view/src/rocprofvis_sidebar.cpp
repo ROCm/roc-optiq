@@ -140,6 +140,7 @@ SideBar::RenderTrackItem(const int& index)
         }
 
     }
+
     ImGui::PopFont();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
     if(ImGui::BeginItemTooltip())

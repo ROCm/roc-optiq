@@ -1371,8 +1371,6 @@ TimelineView::RenderHistogram()
     // Draw histogram bars
     if(bin_count > 0)
     {
-        double max_bin_value =
-            *std::max_element(m_histogram->begin(), m_histogram->end());
         float bin_width = bars_width / static_cast<float>(bin_count);
 
         for(size_t i = 0; i < bin_count; ++i)
@@ -1381,19 +1379,15 @@ TimelineView::RenderHistogram()
             float x1 = x0 + bin_width;
             float y0 = bars_pos.y;
             float y1 = y0 + bars_height;
-            float bar_height =
-                (max_bin_value > 0)
-                    ? (static_cast<float>((*m_histogram)[i] / max_bin_value) *
-                       bars_height)
-                    : 0.0f;
-            float y_bar = y1 - bar_height;
+            // Use the normalized value directly (assumed in [0, 1])
+            float bar_height = static_cast<float>((*m_histogram)[i]) * bars_height;
+            float y_bar      = y1 - bar_height;
             draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
                                      i % 2 == 0
                                          ? m_settings.GetColor(Colors::kAccentRedActive)
                                          : m_settings.GetColor(Colors::kAccentRed));
         }
     }
-
     // Draw view range overlays and labels
     float view_start_frac = static_cast<float>(m_view_time_offset_ns / m_range_x);
     float view_end_frac =

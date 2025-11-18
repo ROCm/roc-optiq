@@ -374,38 +374,58 @@ DataProvider::GetMiniMap()
 {
     return m_mini_map;
 }
+
 void
 DataProvider::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add)
 {
+    // Update visibility flags in m_mini_map
     for(const auto& id : interest_id)
     {
         auto it = m_mini_map.find(id);
         if(it != m_mini_map.end())
         {
-            bool                       is_included = std::get<1>(it->second);
             const std::vector<double>& mini_data   = std::get<0>(it->second);
-
+            bool                       is_included = std::get<1>(it->second);
             if(add && !is_included)
             {
-                // Add this track's data to the histogram
-                for(size_t i = 0; i < mini_data.size(); i++)
-                {
-                    if(i < m_histogram.size()) m_histogram[i] += mini_data[i];
-                }
-                m_mini_map[id] = std::make_tuple(mini_data, true);
+                it->second = std::make_tuple(mini_data, true);
             }
             else if(!add && is_included)
             {
-                // Remove this track's data from the histogram
-                for(size_t i = 0; i < mini_data.size(); i++)
+                it->second = std::make_tuple(mini_data, false);
+            }
+        }
+    }
+
+    // Recompute histogram from all visible tracks
+    if(!m_histogram.empty())
+    {
+        std::fill(m_histogram.begin(), m_histogram.end(), 0.0);
+        for(const auto& kv : m_mini_map)
+        {
+            const std::vector<double>& mini_data   = std::get<0>(kv.second);
+            bool                       is_included = std::get<1>(kv.second);
+            if(is_included)
+            {
+                for(size_t i = 0; i < mini_data.size() && i < m_histogram.size(); ++i)
                 {
-                    if(i < m_histogram.size()) m_histogram[i] -= mini_data[i];
+                    m_histogram[i] += mini_data[i];
                 }
-                m_mini_map[id] = std::make_tuple(mini_data, false);
+            }
+        }
+
+        // Normalize m_histogram to [0, 1]
+        double max_value = *std::max_element(m_histogram.begin(), m_histogram.end());
+        if(max_value > 0.0)
+        {
+            for(auto& val : m_histogram)
+            {
+                val /= max_value;
             }
         }
     }
 }
+
 
 void
 DataProvider::SetSaveTraceCallback(const std::function<void(bool)>& callback)
@@ -591,6 +611,18 @@ DataProvider::HandleLoadTrace()
                     histogram_minimap[graphs] = std::make_tuple(histogram_track, true);
                 }
                 m_mini_map = histogram_minimap;
+
+
+                // Normalize m_histogram to [0, 1]
+                double max_value =
+                    *std::max_element(m_histogram.begin(), m_histogram.end());
+                if(max_value > 0.0)
+                {
+                    for(auto& val : m_histogram)
+                    {
+                        val /= max_value;
+                    }
+                }
 
                 m_min_ts = 0;
                 result   = rocprofvis_controller_get_double(

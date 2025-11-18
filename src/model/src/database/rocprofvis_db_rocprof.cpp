@@ -663,7 +663,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             kRPVDbBusy, future);
 
 
-        constexpr uint64_t desired_bins = 600;
+        constexpr uint64_t desired_bins = 300;
         uint64_t           trace_length =
             TraceProperties()->end_time - TraceProperties()->start_time;
 

@@ -112,32 +112,36 @@ LineTrackItem::LineTrackRender(float graph_width)
     }
     if(m_is_color_value_existant)
     {
-        float highlight_y_max = cursor_position.y + content_size.y -
-                                (m_color_by_value_digits.interest_1_max -
-                                 static_cast<float>(m_min_y.Value())) *
-                                    scale_y;
-        float highlight_y_min = cursor_position.y + content_size.y -
-                                (m_color_by_value_digits.interest_1_min -
-                                 static_cast<float>(m_min_y.Value())) *
-                                    scale_y;
-
-        highlight_y_max =
-            std::max(cursor_position.y,
-                     std::min(cursor_position.y + content_size.y, highlight_y_max));
-        highlight_y_min =
-            std::max(cursor_position.y,
-                     std::min(cursor_position.y + content_size.y, highlight_y_min));
-
-        draw_list->AddRectFilled(
-            ImVec2(cursor_position.x, highlight_y_max),
-            ImVec2(cursor_position.x + content_size.x, highlight_y_min),
-            IM_COL32(255, 0, 0, 64));
+        RenderHighlightBand(draw_list, cursor_position, content_size, scale_y);
     }
     if(show_tooltip)
     {
         RenderTooltip(tooltip_x, tooltip_y);
     }
     ImGui::EndChild();
+}
+
+void
+LineTrackItem::RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
+                                   const ImVec2& content_size, float scale_y)
+{
+    float highlight_y_max =
+        cursor_position.y + content_size.y -
+        (m_color_by_value_digits.interest_1_max - static_cast<float>(m_min_y.Value())) *
+            scale_y;
+    float highlight_y_min =
+        cursor_position.y + content_size.y -
+        (m_color_by_value_digits.interest_1_min - static_cast<float>(m_min_y.Value())) *
+            scale_y;
+
+    highlight_y_max = std::max(
+        cursor_position.y, std::min(cursor_position.y + content_size.y, highlight_y_max));
+    highlight_y_min = std::max(
+        cursor_position.y, std::min(cursor_position.y + content_size.y, highlight_y_min));
+
+    draw_list->AddRectFilled(ImVec2(cursor_position.x, highlight_y_max),
+                             ImVec2(cursor_position.x + content_size.x, highlight_y_min),
+                             m_settings.GetColor(Colors::kTrackColorWarningBand));
 }
 
 void
@@ -181,10 +185,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
         float bottom_of_chart = cursor_position.y + content_size.y;
 
-        ImU32 shift_color =
-            m_settings
-                .GetColor(Colors::kLineChartColor);
-     
+        ImU32 shift_color = m_settings.GetColor(Colors::kLineChartColor);
+
         if(i % 2 == 0)
         {
             shift_color = m_settings.GetColor(Colors::kLineChartColorAlt);
@@ -196,26 +198,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
     }
     if(m_is_color_value_existant)
     {
-        float highlight_y_max = cursor_position.y + content_size.y -
-                                (m_color_by_value_digits.interest_1_max -
-                                 static_cast<float>(m_min_y.Value())) *
-                                    scale_y;
-        float highlight_y_min = cursor_position.y + content_size.y -
-                                (m_color_by_value_digits.interest_1_min -
-                                 static_cast<float>(m_min_y.Value())) *
-                                    scale_y;
-
-        highlight_y_max =
-            std::max(cursor_position.y,
-                     std::min(cursor_position.y + content_size.y, highlight_y_max));
-        highlight_y_min =
-            std::max(cursor_position.y,
-                     std::min(cursor_position.y + content_size.y, highlight_y_min));
-
-        draw_list->AddRectFilled(
-            ImVec2(cursor_position.x, highlight_y_max),
-            ImVec2(cursor_position.x + content_size.x, highlight_y_min),
-            IM_COL32(255, 0, 0, 64));
+        RenderHighlightBand(draw_list, cursor_position, content_size, scale_y);
     }
     if(show_tooltip)
     {
@@ -378,10 +361,6 @@ LineTrackItem::RenderMetaAreaOptions()
         float max_limit                        = static_cast<float>(m_max_y.Value());
         m_color_by_value_digits.interest_1_min = min_limit;
         m_color_by_value_digits.interest_1_max = max_limit;
-        if(min_limit == max_limit)
-        {
-            max_limit = min_limit + 1.0f;
-        }
     }
 
     if(m_is_color_value_existant)

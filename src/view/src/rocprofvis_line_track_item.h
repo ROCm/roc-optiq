@@ -88,6 +88,8 @@ private:
     void   LineTrackRender(float graph_width);
     void   BoxPlotRender(float graph_width);
     void   RenderTooltip(float tooltip_x, float tooltip_y);
+    void   RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
+                               const ImVec2& content_size, float scale_y);
 
     std::vector<rocprofvis_data_point_t> m_data;
     rocprofvis_color_by_value_t          m_color_by_value_digits;

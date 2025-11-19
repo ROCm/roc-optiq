@@ -47,7 +47,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            color        = settings.GetColor(Colors::kArrowColor);
     float            thickness    = 2.0f;
-    float            head_size    = 8.0f;
+    float            head_size    = 6.0f;
     float            level_height = settings.GetEventLevelHeight();
     for(const event_info_t* event : m_selected_event_data)
     {
@@ -69,10 +69,14 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
             {
                 level_height = settings.GetEventLevelCompactHeight();
             }
+            else 
+            {
+                level_height = settings.GetEventLevelHeight();
+            }
 
             float origin_x = (origin.end_timestamp - v_min_x) * pixels_per_ns;
             float origin_y = track_position_y.at(origin.track_id) +
-                             std::min(level_height * origin.level - level_height / 2,
+                             std::min(level_height * origin.level + level_height / 2,
                                       origin_track.chart->GetTrackHeight());
             ImVec2 p_origin = ImVec2(window.x + origin_x, window.y + origin_y);
 
@@ -87,9 +91,18 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 if(!target_track.display)
                     continue;
 
+                if(target_track.chart->IsCompactMode())
+                {
+                    level_height = settings.GetEventLevelCompactHeight();
+                }
+                else 
+                {
+                    level_height = settings.GetEventLevelHeight();
+                }
+
                 float target_x = (target.start_timestamp - v_min_x) * pixels_per_ns;
                 float target_y = track_position_y.at(target.track_id) +
-                                 std::min(level_height * target.level - level_height / 2,
+                                 std::min(level_height * target.level + level_height / 2,
                                           target_track.chart->GetTrackHeight());
                 ImVec2 p_target = ImVec2(window.x + target_x, window.y + target_y);
 
@@ -157,16 +170,34 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 if(!from_track.display || !to_track.display)
                     continue;
 
+                if(from_track.chart->IsCompactMode())
+                {
+                    level_height = settings.GetEventLevelCompactHeight();
+                }
+                else 
+                {
+                    level_height = settings.GetEventLevelHeight();
+                }
+
                 float from_x = (from.end_timestamp - v_min_x) * pixels_per_ns;
                 float from_y = track_position_y.at(from.track_id) +
-                               std::min(level_height * from.level,
+                               std::min(level_height * from.level + level_height / 2,
                                         from_track.chart->GetTrackHeight());
                 ImVec2 p_from = ImVec2(window.x + from_x, window.y + from_y);
 
+                if(to_track.chart->IsCompactMode())
+                {
+                    level_height = settings.GetEventLevelCompactHeight();
+                }
+                else 
+                {
+                    level_height = settings.GetEventLevelHeight();
+                }
+
                 float to_x = (to.start_timestamp - v_min_x) * pixels_per_ns;
-                float to_y =
-                    track_position_y.at(to.track_id) +
-                    std::min(level_height * to.level, to_track.chart->GetTrackHeight());
+                float to_y = track_position_y.at(to.track_id) +
+                             std::min(level_height * to.level + level_height / 2,
+                                      to_track.chart->GetTrackHeight());
                 ImVec2 p_to = ImVec2(window.x + to_x, window.y + to_y);
 
                 if(p_from.x == p_to.x && p_from.y == p_to.y)

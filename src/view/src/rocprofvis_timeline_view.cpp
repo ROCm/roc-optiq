@@ -1273,20 +1273,25 @@ TimelineView::RenderHistogram()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
+    int splitter_size = 5;
+
     // Vertical splitter
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
-    ImGui::BeginChild("HistogramSplitter", ImVec2(5.0f, kHistogramTotalHeight), false);
+    ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
+                      false);
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();
 
+    float histogram_width = m_graph_size.x - splitter_size;
+
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
-    ImGui::BeginChild("Histogram", ImVec2(m_graph_size.x, kHistogramTotalHeight), false,
+    ImGui::BeginChild("Histogram", ImVec2(histogram_width, kHistogramTotalHeight), false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     // Ruler area
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kRulerBgColor));
-    ImGui::BeginChild("Histogram Ruler", ImVec2(m_graph_size.x, m_ruler_height), false,
+    ImGui::BeginChild("Histogram Ruler", ImVec2(histogram_width, m_ruler_height), false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list_ruler = ImGui::GetWindowDrawList();
@@ -1363,7 +1368,7 @@ TimelineView::RenderHistogram()
     ImGui::PopStyleColor();
 
     // Histogram bars area
-    ImGui::BeginChild("Histogram Bars", ImVec2(m_graph_size.x, kHistogramBarHeight),
+    ImGui::BeginChild("Histogram Bars", ImVec2(histogram_width, kHistogramBarHeight),
                       false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 

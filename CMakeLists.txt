@@ -23,27 +23,29 @@ option(JSON_TRACE_SUPPORT "Build with support for JSON traces" OFF)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" ON)
+option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 
-# Add third-party libraries, core, and model BEFORE controller
-add_subdirectory(thirdparty)
-
-add_subdirectory(src/core)
-add_subdirectory(src/model)
-add_subdirectory(src/controller)
-
-set(rocprofvis_source_files)
 if(JSON_TRACE_SUPPORT) 
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_TRACE_SUPPORT")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DJSON_TRACE_SUPPORT")
 endif(JSON_TRACE_SUPPORT)
 if(COMPUTE_UI_SUPPORT) 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
 endif(ROCPROFVIS_DEVELOPER_MODE)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
+if(USE_NATIVE_FILE_DIALOG)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NATIVE_FILE_DIALOG")
+endif(USE_NATIVE_FILE_DIALOG)
+
+# Add third-party libraries, core, and model BEFORE controller
+add_subdirectory(thirdparty)
+add_subdirectory(src/core)
+add_subdirectory(src/model)
+add_subdirectory(src/controller)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 
@@ -139,7 +141,6 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
 target_link_libraries(${TARGET_NAME} PRIVATE imgui)
 target_link_libraries(${TARGET_NAME} PRIVATE implot)
-target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
 target_link_libraries(${TARGET_NAME} PRIVATE glfw)
 target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-controller)
 target_link_libraries(${TARGET_NAME} PRIVATE datamodel)
@@ -148,6 +149,16 @@ target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
+# === NativeFileDialog Extended ===
+if(USE_NATIVE_FILE_DIALOG)
+  set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
+  add_subdirectory(thirdparty/nativefiledialog-extended)
+  target_link_libraries(${TARGET_NAME} PRIVATE nfd)
+endif()
+# === ImGuiFileDialog ===
+if(NOT USE_NATIVE_FILE_DIALOG)
+  target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
+endif()
 
 # === Vulkan ===
 find_package(Vulkan REQUIRED)
@@ -181,18 +192,13 @@ set(EXTENDED_PACKAGE_DESCRIPTION
 
 include(GNUInstallDirs)
 
-# Set runtime dependencies for generated packages
-if(UNIX AND NOT APPLE)
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libglfw3")
-    set(CPACK_RPM_PACKAGE_REQUIRES "glfw")
-endif()
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 set(CPACK_GENERATOR "TGZ;DEB;RPM" CACHE STRING "package types to be produced")
 
-#Default Value is 99999, this value will be used
+#Default Value is 0, this value will be used
 #When ROCM LibPatch Version when not explicitly set
-set(ROCM_VERSION_FOR_PACKAGE "99999")
+set(ROCM_VERSION_FOR_PACKAGE "0")
 if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
   set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
 endif()
@@ -236,7 +242,8 @@ set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
 message(STATUS "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}")
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(DEB_VULKAN_DEPENDS_STRING "libvulkan1")
-set(DEB_DEPENDS_STRING "${DEB_VULKAN_DEPENDS_STRING}, libc6")
+set(DEB_GLFW_DEPENDS_STRING "libglfw3")
+set(DEB_DEPENDS_STRING "${DEB_VULKAN_DEPENDS_STRING}, ${DEB_GLFW_DEPENDS_STRING}, libc6")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/rocprofiler-visualizer")
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
@@ -265,9 +272,10 @@ endif()
 message(STATUS "Using CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
 
-#TODO - To Review RPM Runtime package Dependencies for Vulkan, Others
-# Once Support is confirmed for non UB/Deb platforms
-set ( RPM_DEPENDS_STRING "")
+# TODO - To Review RPM Runtime package Dependencies for Vulkan, Others
+set ( RPM_VULKAN_DEPENDS_STRING "vulkan" )
+set ( RPM_GLFW_DEPENDS_STRING "glfw" )
+set ( RPM_DEPENDS_STRING "${RPM_VULKAN_DEPENDS_STRING} ${RPM_GLFW_DEPENDS_STRING}" )
 set ( CPACK_RPM_PACKAGE_REQUIRES ${RPM_DEPENDS_STRING} )
 set ( CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}" )
 

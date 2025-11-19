@@ -1772,7 +1772,7 @@ namespace DataModel
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("K2.kernel_id"),
                             Builder::QParam("L.level"),
-                            Builder::QParam("R.end"),
+                            Builder::QParam("K2.end"),
 
                         },
                     {

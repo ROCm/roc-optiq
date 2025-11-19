@@ -15,6 +15,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
+
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                              double time_offset_ns, double& min_x, double& max_x,
                              double scale_x, float max_meta_area_width)
@@ -27,9 +29,11 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 , m_project_settings(dp.GetTraceFilePath(), *this)
 , m_min_y(0, "edit_min", "Min: ")
 , m_max_y(0, "edit_max", "Max: ")
+, m_vertical_padding(DEFAULT_VERTICAL_PADDING)
 {
     m_meta_area_scale_width = max_meta_area_width;
     m_track_height          = 90.0f;
+
 
     UpdateYScaleExtents();
 
@@ -49,7 +53,7 @@ LineTrackItem::UpdateYScaleExtents()
     const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
     if(track_info)
     {
-        m_min_y.SetValue(track_info->min_value);
+        m_min_y.SetValue(0.0);  // Want to start at 0 by default.
         m_max_y.SetValue(track_info->max_value);
     }
     else
@@ -74,6 +78,10 @@ LineTrackItem::LineTrackRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
+    // Apply vertical padding to prevent data lines from touching track boundaries
+    cursor_position.y += m_vertical_padding;
+    content_size.y -= (m_vertical_padding * 2.0f);
+
     float scale_y =
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
 
@@ -94,7 +102,7 @@ LineTrackItem::LineTrackRender(float graph_width)
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = m_data[i - 1].x_value - m_min_x;
-            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y.Value());
+            tooltip_y = static_cast<float>(m_data[i - 1].y_value);
             show_tooltip = true;
         }
 
@@ -154,6 +162,10 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
     ImVec2 container_pos   = ImGui::GetWindowPos();
 
+    // Apply vertical padding to prevent data lines from touching track boundaries
+    cursor_position.y += m_vertical_padding;
+    content_size.y -= (m_vertical_padding * 2.0f);
+
     float scale_y =
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
 
@@ -170,7 +182,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = static_cast<float>(m_data[i - 1].x_value - m_min_x);
-            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y.Value());
+            tooltip_y    = static_cast<float>(m_data[i - 1].y_value);
             show_tooltip = true;
         }
 

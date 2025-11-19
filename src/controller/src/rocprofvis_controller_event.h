@@ -50,6 +50,7 @@ private:
     double m_end_timestamp;
     size_t m_name;
     size_t m_category;
+    size_t m_combined_top_name;
     uint8_t m_level;
     uint8_t m_retain_counter;
 

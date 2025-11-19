@@ -527,6 +527,10 @@ public:
      * Gets the end timestamp of the trace
      */
     double GetEndTime();
+    /*
+    Rebuilds histogram when chart is hidden
+    */
+    void RebuildHistogram();
 
     /*
      * Get access to the raw track data.  The returned pointer should only be
@@ -611,6 +615,10 @@ private:
     void CreateRawEventData(const TrackRequestParams& params, const data_req_info_t& req);
     void CreateRawSampleData(const TrackRequestParams& params,
                              const data_req_info_t&    req);
+
+    rocprofvis_result_t GetString(rocprofvis_handle_t*  handle,
+                                  rocprofvis_property_t property, uint64_t index,
+                                  std::string& out_string);
 
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                           uint64_t index);

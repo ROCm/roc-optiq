@@ -350,7 +350,6 @@ LineTrackItem::RenderChart(float graph_width)
         LineTrackRender(graph_width);
     }
 }
-
 void
 LineTrackItem::RenderMetaAreaOptions()
 {
@@ -367,28 +366,61 @@ LineTrackItem::RenderMetaAreaOptions()
     {
         float min_limit = static_cast<float>(m_min_y.Value());
         float max_limit = static_cast<float>(m_max_y.Value());
-        ImGui::BeginTable("HighlightBandTable", 2, ImGuiTableFlags_SizingFixedFit);
-        ImGui::TableNextRow();
 
-        ImGui::TableSetColumnIndex(0);
+        float min_percent = (m_color_by_value_digits.interest_1_min - min_limit) /
+                            (max_limit - min_limit);
+        float max_percent = (m_color_by_value_digits.interest_1_max - min_limit) /
+                            (max_limit - min_limit);
+
         ImGui::BeginGroup();
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Min:");
-        ImGui::SetNextItemWidth(120.0f);
-        ImGui::DragFloat("##min_drag", &m_color_by_value_digits.interest_1_min, 0.1f,
-                         min_limit, max_limit);
+        ImGui::TextUnformatted("Min Value");
+        ImGui::SetNextItemWidth(110);
+        if(ImGui::SliderFloat("##min_drag", &min_percent, 0.0f, 1.0f, "",
+                              ImGuiSliderFlags_None))
+        {
+            m_color_by_value_digits.interest_1_min =
+                min_limit + (max_limit - min_limit) * min_percent;
+        }
+        ImGui::SetNextItemWidth(110);
+        if(ImGui::InputFloat("##min_input", &m_color_by_value_digits.interest_1_min))
+        {
+            m_color_by_value_digits.interest_1_min =
+                std::clamp(m_color_by_value_digits.interest_1_min, min_limit, max_limit);
+        }
+        ImGui::EndGroup();
+        ImGui::SameLine();
+        ImGui::Dummy(ImVec2(3.0f, 0.0f));
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                              m_settings.GetColor(Colors::kSplitterColor));
+
+        ImGui::BeginChild("Splitter For Max/Min", ImVec2(1, 75), ImGuiChildFlags_None);
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::Dummy(ImVec2(3.0f, 0.0f));
+        ImGui::SameLine();
+
+        ImGui::BeginGroup();
+        ImGui::TextUnformatted("Max Value");
+        ImGui::SetNextItemWidth(110);
+        if(ImGui::SliderFloat("##max_drag", &max_percent, 0.0f, 1.0f, "",
+                              ImGuiSliderFlags_None))
+        {
+            m_color_by_value_digits.interest_1_max =
+                min_limit + (max_limit - min_limit) * max_percent;
+        }
+        ImGui::SetNextItemWidth(110);
+        if(ImGui::InputFloat("##max_input", &m_color_by_value_digits.interest_1_max))
+        {
+            m_color_by_value_digits.interest_1_max =
+                std::clamp(m_color_by_value_digits.interest_1_max, min_limit, max_limit);
+        }
         ImGui::EndGroup();
 
-        ImGui::TableSetColumnIndex(1);
-        ImGui::BeginGroup();
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Max:");
-        ImGui::SetNextItemWidth(120.0f);
-        ImGui::DragFloat("##max_drag", &m_color_by_value_digits.interest_1_max, 0.1f,
-                         min_limit, max_limit);
-        ImGui::EndGroup();
-
-        ImGui::EndTable();
+        // Optional: Add vertical space below controls
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
         // Clamp and sync values only after user interaction
         m_color_by_value_digits.interest_1_min =

@@ -233,7 +233,8 @@ MultiTrackTable::Update()
         }
     }
 
-    if(m_data_changed) {
+    if(m_data_changed)
+    {
         const std::vector<std::string>& column_names =
             m_data_provider.GetTableHeader(m_table_type);
 
@@ -259,7 +260,7 @@ MultiTrackTable::Update()
                         continue;  // Skip empty or internal columns
                     }
                     // skip id column too
-                    if(i == m_important_column_idxs[ImportantColumns::kId]) 
+                    if(i == m_important_column_idxs[ImportantColumns::kId])
                     {
                         continue;
                     }
@@ -275,7 +276,7 @@ MultiTrackTable::Update()
                 m_group_by_selection_index        = 1;
             }
             m_group_by_choices_ptr.resize(m_group_by_choices.size());
-            for(int i = 0; i < m_group_by_choices.size(); i++)
+            for(size_t i = 0; i < m_group_by_choices.size(); i++)
             {
                 m_group_by_choices_ptr[i] = m_group_by_choices[i].c_str();
             }

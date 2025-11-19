@@ -47,6 +47,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_horizontal_scroll(0.0f)
 , m_time_column_indices(
       { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
+, m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
 {
     auto new_table_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTableData(e);

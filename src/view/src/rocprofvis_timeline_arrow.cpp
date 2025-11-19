@@ -11,6 +11,10 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr int   BEZIER_CURVE_SEGMENTS = 32;
+constexpr float ARROW_HEAD_SIZE       = 6.0f;
+constexpr float LINE_THICKNESS        = 2.0f;
+
 void
 TimelineArrow::SetFlowDisplayMode(FlowDisplayMode mode)
 {
@@ -46,8 +50,8 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
 
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            color        = settings.GetColor(Colors::kArrowColor);
-    float            thickness    = 2.0f;
-    float            head_size    = 6.0f;
+    float            thickness    = LINE_THICKNESS;
+    float            head_size    = ARROW_HEAD_SIZE;
     float            level_height = settings.GetEventLevelHeight();
     for(const event_info_t* event : m_selected_event_data)
     {
@@ -69,7 +73,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
             {
                 level_height = settings.GetEventLevelCompactHeight();
             }
-            else 
+            else
             {
                 level_height = settings.GetEventLevelHeight();
             }
@@ -95,7 +99,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 {
                     level_height = settings.GetEventLevelCompactHeight();
                 }
-                else 
+                else
                 {
                     level_height = settings.GetEventLevelHeight();
                 }
@@ -114,7 +118,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 ImVec2 p_ctrl2      = ImVec2(p_target.x - curve_offset, p_target.y);
 
                 draw_list->AddBezierCubic(p_origin, p_ctrl1, p_ctrl2, p_target, color,
-                                          thickness, 32); //TODO: 32 - magic value should be a constant
+                                          thickness, BEZIER_CURVE_SEGMENTS);
 
                 ImVec2 dir = ImVec2(p_target.x - p_ctrl2.x, p_target.y - p_ctrl2.y);
                 float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
@@ -174,7 +178,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 {
                     level_height = settings.GetEventLevelCompactHeight();
                 }
-                else 
+                else
                 {
                     level_height = settings.GetEventLevelHeight();
                 }
@@ -189,7 +193,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 {
                     level_height = settings.GetEventLevelCompactHeight();
                 }
-                else 
+                else
                 {
                     level_height = settings.GetEventLevelHeight();
                 }
@@ -208,7 +212,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 ImVec2 p_ctrl2      = ImVec2(p_to.x - curve_offset, p_to.y);
 
                 draw_list->AddBezierCubic(p_from, p_ctrl1, p_ctrl2, p_to, color,
-                                          thickness, 32);
+                                          thickness, BEZIER_CURVE_SEGMENTS);
 
                 ImVec2 dir = ImVec2(p_to.x - p_ctrl2.x, p_to.y - p_ctrl2.y);
                 float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);

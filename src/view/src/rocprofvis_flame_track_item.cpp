@@ -539,7 +539,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 
 void
 FlameTrackItem::RecalculateTrackHeight()
-{ 
+{
     m_track_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
                               m_track_default_height);
     m_track_height_changed = true;
@@ -694,7 +694,7 @@ FlameTrackProjectSettings::ToJson()
                        static_cast<int>(m_track_item.m_event_color_mode);
 
     m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                   [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE] = 
+                   [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE] =
                        m_track_item.m_compact_mode;
 }
 
@@ -733,7 +733,9 @@ FlameTrackProjectSettings::ColorEvents() const
     }
     return color_mode;
 }
-bool FlameTrackProjectSettings::CompactMode() const
+
+bool 
+FlameTrackProjectSettings::CompactMode() const
 {
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                           [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]

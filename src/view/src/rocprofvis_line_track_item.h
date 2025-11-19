@@ -92,12 +92,12 @@ private:
                                const ImVec2& content_size, float scale_y);
 
     std::vector<rocprofvis_data_point_t> m_data;
-    rocprofvis_color_by_value_t          m_color_by_value_digits;
+    rocprofvis_color_by_value_t          m_highlight_y_limits;
 
     VerticalLimits m_min_y;
     VerticalLimits m_max_y;
 
-    bool                                 m_is_color_value_existant;
+    bool                                 m_highlight_y_range;
     DataProvider&                        m_dp;
     bool                                 m_show_boxplot;
     LineTrackProjectSettings             m_project_settings;

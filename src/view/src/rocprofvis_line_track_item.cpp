@@ -20,8 +20,8 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
                              double scale_x, float max_meta_area_width)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_data({})
-, m_color_by_value_digits()
-, m_is_color_value_existant(false)
+, m_highlight_y_limits()
+, m_highlight_y_range(false)
 , m_dp(dp)
 , m_show_boxplot(true)
 , m_project_settings(dp.GetTraceFilePath(), *this)
@@ -36,8 +36,8 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
     if(m_project_settings.Valid())
     {
         m_show_boxplot            = m_project_settings.BoxPlot();
-        m_is_color_value_existant = m_project_settings.Highlight();
-        m_color_by_value_digits   = m_project_settings.HighlightRange();
+        m_highlight_y_range = m_project_settings.Highlight();
+        m_highlight_y_limits   = m_project_settings.HighlightRange();
     }
 }
 
@@ -110,7 +110,7 @@ LineTrackItem::LineTrackRender(float graph_width)
 
         draw_list->AddLine(point_1, point_2, line_color, line_thickness);
     }
-    if(m_is_color_value_existant)
+    if(m_highlight_y_range)
     {
         RenderHighlightBand(draw_list, cursor_position, content_size, scale_y);
     }
@@ -127,11 +127,11 @@ LineTrackItem::RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_p
 {
     float highlight_y_max =
         cursor_position.y + content_size.y -
-        (m_color_by_value_digits.interest_1_max - static_cast<float>(m_min_y.Value())) *
+        (m_highlight_y_limits.interest_1_max - static_cast<float>(m_min_y.Value())) *
             scale_y;
     float highlight_y_min =
         cursor_position.y + content_size.y -
-        (m_color_by_value_digits.interest_1_min - static_cast<float>(m_min_y.Value())) *
+        (m_highlight_y_limits.interest_1_min - static_cast<float>(m_min_y.Value())) *
             scale_y;
 
     highlight_y_max = std::max(
@@ -196,7 +196,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
             point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
             shift_color, 2.0f);
     }
-    if(m_is_color_value_existant)
+    if(m_highlight_y_range)
     {
         RenderHighlightBand(draw_list, cursor_position, content_size, scale_y);
     }
@@ -354,38 +354,38 @@ void
 LineTrackItem::RenderMetaAreaOptions()
 {
     ImGui::Checkbox("Show as Box Plot", &m_show_boxplot);
-    if(ImGui::Checkbox("Highlight Y Range", &m_is_color_value_existant))
+    if(ImGui::Checkbox("Highlight Y Range", &m_highlight_y_range))
     {
         float min_limit                        = static_cast<float>(m_min_y.Value());
         float max_limit                        = static_cast<float>(m_max_y.Value());
-        m_color_by_value_digits.interest_1_min = min_limit;
-        m_color_by_value_digits.interest_1_max = max_limit;
+        m_highlight_y_limits.interest_1_min = min_limit;
+        m_highlight_y_limits.interest_1_max = max_limit;
     }
 
-    if(m_is_color_value_existant)
+    if(m_highlight_y_range)
     {
         float min_limit = static_cast<float>(m_min_y.Value());
         float max_limit = static_cast<float>(m_max_y.Value());
 
-        float min_percent = (m_color_by_value_digits.interest_1_min - min_limit) /
+        float min_percent = (m_highlight_y_limits.interest_1_min - min_limit) /
                             (max_limit - min_limit);
-        float max_percent = (m_color_by_value_digits.interest_1_max - min_limit) /
+        float max_percent = (m_highlight_y_limits.interest_1_max - min_limit) /
                             (max_limit - min_limit);
 
         ImGui::BeginGroup();
         ImGui::TextUnformatted("Min Value");
-        ImGui::SetNextItemWidth(110);
+        ImGui::SetNextItemWidth(120);
         if(ImGui::SliderFloat("##min_drag", &min_percent, 0.0f, 1.0f, "",
                               ImGuiSliderFlags_None))
         {
-            m_color_by_value_digits.interest_1_min =
+            m_highlight_y_limits.interest_1_min =
                 min_limit + (max_limit - min_limit) * min_percent;
         }
-        ImGui::SetNextItemWidth(110);
-        if(ImGui::InputFloat("##min_input", &m_color_by_value_digits.interest_1_min))
+        ImGui::SetNextItemWidth(120);
+        if(ImGui::InputFloat("##min_input", &m_highlight_y_limits.interest_1_min))
         {
-            m_color_by_value_digits.interest_1_min =
-                std::clamp(m_color_by_value_digits.interest_1_min, min_limit, max_limit);
+            m_highlight_y_limits.interest_1_min =
+                std::clamp(m_highlight_y_limits.interest_1_min, min_limit, max_limit);
         }
         ImGui::EndGroup();
         ImGui::SameLine();
@@ -404,35 +404,35 @@ LineTrackItem::RenderMetaAreaOptions()
 
         ImGui::BeginGroup();
         ImGui::TextUnformatted("Max Value");
-        ImGui::SetNextItemWidth(110);
+        ImGui::SetNextItemWidth(120);
         if(ImGui::SliderFloat("##max_drag", &max_percent, 0.0f, 1.0f, "",
                               ImGuiSliderFlags_None))
         {
-            m_color_by_value_digits.interest_1_max =
+            m_highlight_y_limits.interest_1_max =
                 min_limit + (max_limit - min_limit) * max_percent;
         }
-        ImGui::SetNextItemWidth(110);
-        if(ImGui::InputFloat("##max_input", &m_color_by_value_digits.interest_1_max))
+        ImGui::SetNextItemWidth(120);
+        if(ImGui::InputFloat("##max_input", &m_highlight_y_limits.interest_1_max))
         {
-            m_color_by_value_digits.interest_1_max =
-                std::clamp(m_color_by_value_digits.interest_1_max, min_limit, max_limit);
+            m_highlight_y_limits.interest_1_max =
+                std::clamp(m_highlight_y_limits.interest_1_max, min_limit, max_limit);
         }
         ImGui::EndGroup();
 
         // Clamp and sync values only after user interaction
-        m_color_by_value_digits.interest_1_min =
-            std::clamp(m_color_by_value_digits.interest_1_min, min_limit, max_limit);
-        m_color_by_value_digits.interest_1_max =
-            std::clamp(m_color_by_value_digits.interest_1_max, min_limit, max_limit);
+        m_highlight_y_limits.interest_1_min =
+            std::clamp(m_highlight_y_limits.interest_1_min, min_limit, max_limit);
+        m_highlight_y_limits.interest_1_max =
+            std::clamp(m_highlight_y_limits.interest_1_max, min_limit, max_limit);
 
-        if(m_color_by_value_digits.interest_1_min >
-           m_color_by_value_digits.interest_1_max)
-            m_color_by_value_digits.interest_1_max =
-                m_color_by_value_digits.interest_1_min;
-        if(m_color_by_value_digits.interest_1_max <
-           m_color_by_value_digits.interest_1_min)
-            m_color_by_value_digits.interest_1_min =
-                m_color_by_value_digits.interest_1_max;
+        if(m_highlight_y_limits.interest_1_min >
+           m_highlight_y_limits.interest_1_max)
+            m_highlight_y_limits.interest_1_max =
+                m_highlight_y_limits.interest_1_min;
+        if(m_highlight_y_limits.interest_1_max <
+           m_highlight_y_limits.interest_1_min)
+            m_highlight_y_limits.interest_1_min =
+                m_highlight_y_limits.interest_1_max;
     }
 }
 
@@ -463,11 +463,11 @@ LineTrackProjectSettings::ToJson()
     jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                                      [m_track_item.GetID()];
     track[JSON_KEY_TIMELINE_TRACK_BOX_PLOT] = m_track_item.m_show_boxplot;
-    track[JSON_KEY_TIMELINE_TRACK_COLOR]    = m_track_item.m_is_color_value_existant;
+    track[JSON_KEY_TIMELINE_TRACK_COLOR]    = m_track_item.m_highlight_y_range;
     track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN] =
-        m_track_item.m_color_by_value_digits.interest_1_min;
+        m_track_item.m_highlight_y_limits.interest_1_min;
     track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX] =
-        m_track_item.m_color_by_value_digits.interest_1_max;
+        m_track_item.m_highlight_y_limits.interest_1_max;
 }
 
 bool

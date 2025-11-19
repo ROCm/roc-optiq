@@ -266,7 +266,7 @@
 		<row><td>NewBinary16</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\InstallFirstUse.ico</td></row>
 		<row><td>NewBinary17</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\InstallPartial.ico</td></row>
 		<row><td>NewBinary18</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\InstallStateMenu.ico</td></row>
-		<row><td>NewBinary19</td><td/><td>&lt;ISProjectFolder&gt;\ROCm™_Optiq_CustomActions.vbs</td></row>
+		<row><td>NewBinary19</td><td/><td>&lt;ISProjectFolder&gt;\ROCm_Optiq_CustomActions.vbs</td></row>
 		<row><td>NewBinary2</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\New.ibd</td></row>
 		<row><td>NewBinary3</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\Up.ibd</td></row>
 		<row><td>NewBinary4</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\WarningIcon.ibd</td></row>
@@ -1272,7 +1272,7 @@
 		<row><td>QTQUICK.2</td><td>MODERN_STANDBY</td><td>QTQUIC~1|QtQuick.2</td><td/><td>0</td><td/></row>
 		<row><td>README</td><td>DOCUMENTATION</td><td>ReadMe</td><td/><td>0</td><td/></row>
 		<row><td>ROCM_VISUALIZER</td><td>AMD</td><td>ROCM_-~1|ROCm™-Optiq</td><td/><td>0</td><td/></row>
-		<row><td>ROCM_VISUALIZER_BETA</td><td>AMD</td><td>ROCM-V~1|ROCm-Visualizer-Beta</td><td/><td>0</td><td/></row>
+		<row><td>ROCM_VISUALIZER_BETA</td><td>AMD</td><td>ROCM-V~1|ROCm™-Optiq-Beta</td><td/><td>0</td><td/></row>
 		<row><td>ROOT_CIMV2</td><td>OMIREGISTER</td><td>ROOT-C~1|root-cimv2</td><td/><td>0</td><td/></row>
 		<row><td>ROOT_CIMV21</td><td>OMIREGISTER1</td><td>ROOT-C~1|root-cimv2</td><td/><td>0</td><td/></row>
 		<row><td>S0I3DRIVER</td><td>INSTALLDIR</td><td>S0I3DR~1|s0i3driver</td><td/><td>0</td><td/></row>
@@ -2550,20 +2550,20 @@
 		<col key="yes" def="s72">Property</col>
 		<col def="L255">Value</col>
 		<row><td>Internal</td><td>IncludeActionHelp</td><td>1</td></row>
-		<row><td>Internal</td><td>MSIPackageFileName</td><td>ROCm™-Optiq-Beta</td></row>
+		<row><td>Internal</td><td>MSIPackageFileName</td><td>ROCm-Optiq-Beta</td></row>
 		<row><td>Internal</td><td>ProductName</td><td>ROCm™-Optiq-Beta</td></row>
 		<row><td>Internal</td><td>Setup64bitLauncher</td><td>1</td></row>
-		<row><td>Internal</td><td>SetupFileName</td><td>ROCm™-Optiq-Beta</td></row>
+		<row><td>Internal</td><td>SetupFileName</td><td>ROCm-Optiq-Beta</td></row>
 		<row><td>NDA</td><td>IncludeActionHelp</td><td>1</td></row>
-		<row><td>NDA</td><td>MSIPackageFileName</td><td>ROCm™-Optiq-Beta</td></row>
+		<row><td>NDA</td><td>MSIPackageFileName</td><td>ROCm-Optiq-Beta</td></row>
 		<row><td>NDA</td><td>ProductName</td><td>ROCm™-Optiq-Beta</td></row>
 		<row><td>NDA</td><td>Setup64bitLauncher</td><td>1</td></row>
-		<row><td>NDA</td><td>SetupFileName</td><td>ROCm™-Optiq-Beta</td></row>
+		<row><td>NDA</td><td>SetupFileName</td><td>ROCm-Optiq-Beta</td></row>
 		<row><td>Public</td><td>IncludeActionHelp</td><td>1</td></row>
-		<row><td>Public</td><td>MSIPackageFileName</td><td>ROCm™-Optiq-Beta</td></row>
+		<row><td>Public</td><td>MSIPackageFileName</td><td>ROCm-Optiq-Beta</td></row>
 		<row><td>Public</td><td>ProductName</td><td>ROCm™-Optiq-Beta</td></row>
 		<row><td>Public</td><td>Setup64bitLauncher</td><td>1</td></row>
-		<row><td>Public</td><td>SetupFileName</td><td>ROCm™-Optiq-Beta</td></row>
+		<row><td>Public</td><td>SetupFileName</td><td>ROCm-Optiq-Beta</td></row>
 	</table>
 
 	<table name="ISRelease">
@@ -2597,9 +2597,9 @@
 		<col def="S255">DotNetBuildConfiguration</col>
 		<col def="S255">MsiCommandLine</col>
 		<col def="I4">ISSetupPrerequisiteLocation</col>
-		<row><td>Internal_Compressed</td><td>Internal</td><td>C:\Clone\CloneRepo\Temp\Internal</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>Internal,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="INTGO" /l*v "%userprofile%\ROCm™-Optiq-Beta.log"</td><td>1</td></row>
-		<row><td>NDA_Compressed</td><td>NDA</td><td>C:\Clone\CloneRepo\Temp\NDA</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>NDA,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="NDAGO" /l*v "%userprofile%\ROCm™-Optiq-Beta.log"</td><td>1</td></row>
-		<row><td>Public_Compressed</td><td>Public</td><td>C:\Clone\CloneRepo\Temp\Public</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>Public,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="PUBLICGO" /l*v "%userprofile%\ROCm™-Optiq-Beta.log"</td><td>1</td></row>
+		<row><td>Internal_Compressed</td><td>Internal</td><td>C:\Clone\CloneRepo\Temp\Internal</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>Internal,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="INTGO" /l*v "%userprofile%\ROCm-Optiq-Beta.log"</td><td>1</td></row>
+		<row><td>NDA_Compressed</td><td>NDA</td><td>C:\Clone\CloneRepo\Temp\NDA</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>NDA,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="NDAGO" /l*v "%userprofile%\ROCm-Optiq-Beta.log"</td><td>1</td></row>
+		<row><td>Public_Compressed</td><td>Public</td><td>C:\Clone\CloneRepo\Temp\Public</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>Public,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="PUBLICGO" /l*v "%userprofile%\ROCm-Optiq-Beta.log"</td><td>1</td></row>
 	</table>
 
 	<table name="ISReleaseASPublishInfo">

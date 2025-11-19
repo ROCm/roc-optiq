@@ -11,7 +11,7 @@ Sub iLogMessage(message)
 	Dim objShell, logFolderName, logFileName, logFilePath
 	Set objShell = CreateObject("WScript.Shell")					'Prepare log file name
 	logFolderName = objShell.ExpandEnvironmentStrings("%USERPROFILE%")
-	logFileName = "\ROCm™-Optiq-Beta_Install.log"
+	logFileName = "\ROCm-Optiq-Beta_Install.log"
 	logFilePath = logFolderName & logFileName	
 	
 	Dim objFSO, objTextFile, currentDate
@@ -46,7 +46,7 @@ Function SetFolPermission()
 	
 	Dim ParentFol : ParentFol = strInst
 	ParentFol_up = Left(ParentFol, InStrRev(ParentFol, "\") - 1)
-	Dim Svcexe : Svcexe = strInst & "rocprof-optiq.exe"
+	Dim Svcexe : Svcexe = strInst & "roc-optiq.exe"
 	Dim TakeOwnSvcexe : TakeOwnSvcexe = chr(34) & StrDir & "\System32\takeown.exe" & chr(34) & " /a /f " & chr(34) & Svcexe & chr(34)
 	
 	If Instr(strInst, "\Program Files\") > 0 OR Instr(strInst, "\Program Files (x86)\") > 0 Then

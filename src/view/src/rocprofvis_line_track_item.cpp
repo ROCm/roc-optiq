@@ -101,7 +101,7 @@ LineTrackItem::LineTrackRender(float graph_width)
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = m_data[i - 1].x_value - m_min_x;
-            tooltip_y = static_cast<float>(m_data[i - 1].y_value - m_min_y.Value());
+            tooltip_y = static_cast<float>(m_data[i - 1].y_value);
             show_tooltip = true;
         }
 
@@ -241,7 +241,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = static_cast<float>(m_data[i - 1].x_value - m_min_x);
-            tooltip_y    = static_cast<float>(m_data[i - 1].y_value - m_min_y.Value());
+            tooltip_y    = static_cast<float>(m_data[i - 1].y_value);
             show_tooltip = true;
         }
 

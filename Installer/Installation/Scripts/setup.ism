@@ -4968,8 +4968,8 @@ SQBuAHQAZQByAG4AYQBsAF8AQwBvAG0AcAByAGUAcwBzAGUAZAABAEkAbgB0AGUAcgBuAGEAbAA=
 		<col def="S255">ISComments</col>
 		<col def="S255">ISShortcutName</col>
 		<col def="I4">ISAttributes</col>
-		<row><td>NewShortcut1</td><td>DesktopFolder</td><td>##ID_STRING59##</td><td>DesktopShortcut</td><td>[INSTALLDIR]rocprof-optiq.exe</td><td/><td/><td/><td>NewShortcut1_5F96D189269143409E37512B84451F20.exe</td><td>0</td><td>1</td><td>INSTALLDIR</td><td/><td/><td/><td/><td/><td/><td>0</td></row>
-		<row><td>NewShortcut11</td><td>newfolder2</td><td>##ID_STRING65##</td><td>StartMenuShortcut</td><td>[INSTALLDIR]rocprof-optiq.exe</td><td/><td/><td/><td>NewShortcut1_5F96D189269143409E37512B84451F20.exe</td><td>0</td><td>1</td><td>INSTALLDIR</td><td/><td/><td/><td/><td/><td/><td>0</td></row>
+		<row><td>NewShortcut1</td><td>DesktopFolder</td><td>##ID_STRING59##</td><td>DesktopShortcut</td><td>[INSTALLDIR]roc-optiq.exe</td><td/><td/><td/><td>NewShortcut1_5F96D189269143409E37512B84451F20.exe</td><td>0</td><td>1</td><td>INSTALLDIR</td><td/><td/><td/><td/><td/><td/><td>0</td></row>
+		<row><td>NewShortcut11</td><td>newfolder2</td><td>##ID_STRING65##</td><td>StartMenuShortcut</td><td>[INSTALLDIR]roc-optiq.exe</td><td/><td/><td/><td>NewShortcut1_5F96D189269143409E37512B84451F20.exe</td><td>0</td><td>1</td><td>INSTALLDIR</td><td/><td/><td/><td/><td/><td/><td>0</td></row>
 	</table>
 
 	<table name="Signature">

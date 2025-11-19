@@ -65,6 +65,8 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(160, 60, 60, 255),    // kBgError
     IM_COL32(60, 160, 60, 255),    // kBgSuccess
     IM_COL32(220, 180, 40, 255),   // kStickyNoteYellow
+    IM_COL32(230, 240, 255, 255),  // Colors::kLineChartColorAlt
+    IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
@@ -114,6 +116,10 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
     IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
+    IM_COL32(20, 30, 50, 255),     // Colors::kLineChartColorAlt
+    IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
+
+
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> FLAME_COLORS = {

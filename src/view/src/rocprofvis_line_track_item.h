@@ -25,10 +25,9 @@ public:
     ~LineTrackProjectSettings() override;
     void ToJson() override;
     bool Valid() const override;
-
     bool                        BoxPlot() const;
     bool                        Highlight() const;
-    rocprofvis_color_by_value_t HighlightRange() const;
+    HighlightYRange HighlightRange() const;
 
 private:
     LineTrackItem& m_track_item;
@@ -89,14 +88,16 @@ private:
     void   LineTrackRender(float graph_width);
     void   BoxPlotRender(float graph_width);
     void   RenderTooltip(float tooltip_x, float tooltip_y);
+    void   RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
+                               const ImVec2& content_size, float scale_y);
 
     std::vector<rocprofvis_data_point_t> m_data;
-    rocprofvis_color_by_value_t          m_color_by_value_digits;
+    HighlightYRange          m_highlight_y_limits;
 
     VerticalLimits m_min_y;
     VerticalLimits m_max_y;
 
-    bool                                 m_is_color_value_existant;
+    bool                                 m_highlight_y_range;
     DataProvider&                        m_dp;
     bool                                 m_show_boxplot;
     LineTrackProjectSettings             m_project_settings;

@@ -1,15 +1,14 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
-#include "rocprofvis_click_manager.h"
 #include "rocprofvis_line_track_item.h"
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-
 #include <algorithm>
-#include <sstream>
-#include <iomanip>
 #include <charconv>
+#include <iomanip>
+#include <sstream>
 
 namespace RocProfVis
 {
@@ -23,17 +22,17 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
                              double scale_x, float max_meta_area_width)
 : TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_data({})
-, m_color_by_value_digits()
-, m_is_color_value_existant(false)
+, m_highlight_y_limits()
+, m_highlight_y_range(false)
 , m_dp(dp)
-, m_show_boxplot(false)
+, m_show_boxplot(true)
 , m_project_settings(dp.GetTraceFilePath(), *this)
 , m_min_y(0, "edit_min", "Min: ")
 , m_max_y(0, "edit_max", "Max: ")
 , m_vertical_padding(DEFAULT_VERTICAL_PADDING)
 {
     m_meta_area_scale_width = max_meta_area_width;
-    m_track_height = 90.0f;
+    m_track_height          = 90.0f;
 
 
     UpdateYScaleExtents();
@@ -41,14 +40,16 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
     if(m_project_settings.Valid())
     {
         m_show_boxplot            = m_project_settings.BoxPlot();
-        m_is_color_value_existant = m_project_settings.Highlight();
-        m_color_by_value_digits   = m_project_settings.HighlightRange();
+        m_highlight_y_range = m_project_settings.Highlight();
+        m_highlight_y_limits   = m_project_settings.HighlightRange();
     }
 }
 
 LineTrackItem::~LineTrackItem() {}
 
-void LineTrackItem::UpdateYScaleExtents() {
+void
+LineTrackItem::UpdateYScaleExtents()
+{
     const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
     if(track_info)
     {
@@ -85,10 +86,10 @@ LineTrackItem::LineTrackRender(float graph_width)
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
 
     double tooltip_x     = 0;
-    float tooltip_y     = 0;
-    bool  show_tooltip  = false;
-    ImU32 generic_black = m_settings.GetColor(Colors::kLineChartColor);
-    ImU32 generic_red   = m_settings.GetColor(Colors::kGridRed);
+    float  tooltip_y     = 0;
+    bool   show_tooltip  = false;
+    ImU32  generic_black = m_settings.GetColor(Colors::kLineChartColor);
+    ImU32  generic_red   = m_settings.GetColor(Colors::kGridRed);
 
     const float line_thickness = 2.0f;  // FIXME: hardcoded value
 
@@ -115,100 +116,40 @@ LineTrackItem::LineTrackRender(float graph_width)
             continue;
         }
 
-        if(m_is_color_value_existant)
-        {
-            // Code below enables user to define problematic regions in LineChart.
-            // Add to struct if more regions needed.
-
-            bool point_1_in =
-                (m_color_by_value_digits.interest_1_max > m_data[i - 1].y_value &&
-                 m_color_by_value_digits.interest_1_min < m_data[i - 1].y_value);
-            bool point_2_in =
-                (m_color_by_value_digits.interest_1_max > m_data[i].y_value &&
-                 m_color_by_value_digits.interest_1_min < m_data[i].y_value);
-
-            if(point_1_in && point_2_in)
-            {
-                line_color = generic_red;
-            }
-
-            else if(!point_1_in && point_2_in)
-            {
-                if(m_color_by_value_digits.interest_1_max < m_data[i - 1].y_value)
-                {
-                    float new_y = cursor_position.y + content_size.y -
-                                  (m_color_by_value_digits.interest_1_max -
-                                   static_cast<float>(m_min_y.Value())) *
-                                      scale_y;
-
-                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    line_color        = generic_black;
-                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
-                    line_color = generic_red;
-                    point_1   = new_point;
-                }
-                else if(m_color_by_value_digits.interest_1_min > m_data[i - 1].y_value)
-                {
-                    float new_y = cursor_position.y + content_size.y -
-                                  (m_color_by_value_digits.interest_1_min -
-                                   static_cast<float>(m_min_y.Value())) *
-                                      scale_y;
-                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    line_color        = generic_black;
-                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
-                    line_color = generic_red;
-                    point_1   = new_point;
-                }
-            }
-            else if(point_1_in && !point_2_in)
-            {
-                if(m_color_by_value_digits.interest_1_max < m_data[i].y_value)
-                {
-                    // if greater than upper max.
-
-                    float new_y = cursor_position.y + content_size.y -
-                                  (m_color_by_value_digits.interest_1_max -
-                                   static_cast<float>(m_min_y.Value())) *
-                                      scale_y;
-                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    line_color        = generic_red;
-                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
-                    line_color = generic_black;
-                    point_1   = new_point;
-                }
-                else if(m_color_by_value_digits.interest_1_min > m_data[i].y_value)
-                {
-                    float new_y = cursor_position.y + content_size.y -
-                                  (m_color_by_value_digits.interest_1_min -
-                                   static_cast<float>(m_min_y.Value())) *
-                                      scale_y;
-                    float new_x = CalculateMissingX(point_1.x, point_1.y, point_2.x,
-                                                     point_2.y, new_y);
-
-                    ImVec2 new_point = ImVec2(new_x, new_y);
-                    line_color        = generic_red;
-                    draw_list->AddLine(point_1, new_point, line_color, line_thickness);
-                    line_color = generic_black;
-                    point_1   = new_point;
-                }
-            }
-        }
         draw_list->AddLine(point_1, point_2, line_color, line_thickness);
+    }
+    if(m_highlight_y_range)
+    {
+        RenderHighlightBand(draw_list, cursor_position, content_size, scale_y);
     }
     if(show_tooltip)
     {
         RenderTooltip(tooltip_x, tooltip_y);
     }
     ImGui::EndChild();
+}
+
+void
+LineTrackItem::RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
+                                   const ImVec2& content_size, float scale_y)
+{
+    float highlight_y_max =
+        cursor_position.y + content_size.y -
+        (m_highlight_y_limits.max_limit - static_cast<float>(m_min_y.Value())) *
+            scale_y;
+    float highlight_y_min =
+        cursor_position.y + content_size.y -
+        (m_highlight_y_limits.min_limit - static_cast<float>(m_min_y.Value())) *
+            scale_y;
+
+    highlight_y_max = std::max(
+        cursor_position.y, std::min(cursor_position.y + content_size.y, highlight_y_max));
+    highlight_y_min = std::max(
+        cursor_position.y, std::min(cursor_position.y + content_size.y, highlight_y_min));
+
+    draw_list->AddRectFilled(ImVec2(cursor_position.x, highlight_y_max),
+                             ImVec2(cursor_position.x + content_size.x, highlight_y_min),
+                             m_settings.GetColor(Colors::kTrackColorWarningBand));
 }
 
 void
@@ -228,9 +169,9 @@ LineTrackItem::BoxPlotRender(float graph_width)
     float scale_y =
         static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
 
-    float tooltip_x     = 0;
-    float tooltip_y     = 0;
-    bool  show_tooltip  = false;
+    float tooltip_x    = 0;
+    float tooltip_y    = 0;
+    bool  show_tooltip = false;
 
     for(int i = 1; i < m_data.size(); i++)
     {
@@ -256,9 +197,20 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
         float bottom_of_chart = cursor_position.y + content_size.y;
 
+        ImU32 shift_color = m_settings.GetColor(Colors::kLineChartColor);
+
+        if(i % 2 == 0)
+        {
+            shift_color = m_settings.GetColor(Colors::kLineChartColorAlt);
+        }
+
         draw_list->AddRectFilled(
             point_1, ImVec2(point_1.x + (point_2.x - point_1.x), bottom_of_chart),
-            m_settings.GetColor(Colors::kLineChartColor), 2.0f);
+            shift_color, 2.0f);
+    }
+    if(m_highlight_y_range)
+    {
+        RenderHighlightBand(draw_list, cursor_position, content_size, scale_y);
     }
     if(show_tooltip)
     {
@@ -287,18 +239,20 @@ LineTrackItem::CalculateNewMetaAreaSize()
     ImVec2 min_size =
         ImGui::CalcTextSize((m_min_y.CompactValue() + m_min_y.Prefix()).c_str());
 
-    return std::max({ max_size.x + m_max_y.ButtonSize(), min_size.x + m_min_y.ButtonSize() }) +
-           6 * m_metadata_padding.x; // TODO: Hardcoded padding for posible label size
-                                     // Think later how it can be calculated or store as default values
+    return std::max(
+               { max_size.x + m_max_y.ButtonSize(), min_size.x + m_min_y.ButtonSize() }) +
+           6 * m_metadata_padding
+                   .x;  // TODO: Hardcoded padding for posible label size
+                        // Think later how it can be calculated or store as default values
 }
 
 bool
 LineTrackItem::ReleaseData()
 {
     if(TrackItem::ReleaseData())
-    {       
+    {
         m_data.clear();
-        m_data  = {};
+        m_data = {};
 
         return true;
     }
@@ -329,7 +283,8 @@ LineTrackItem::ExtractPointsFromData()
         return false;
     }
 
-    if(sample_track->AllDataReady()) {
+    if(sample_track->AllDataReady())
+    {
         m_request_state = TrackDataRequestState::kIdle;
     }
 
@@ -345,7 +300,8 @@ LineTrackItem::ExtractPointsFromData()
     m_data.reserve(count);
     for(uint64_t i = 0; i < count; i++)
     {
-        m_data.emplace_back(rocprofvis_data_point_t{track_data[i].m_start_ts, track_data[i].m_value});
+        m_data.emplace_back(
+            rocprofvis_data_point_t{ track_data[i].m_start_ts, track_data[i].m_value });
     }
     return true;
 }
@@ -406,27 +362,89 @@ LineTrackItem::RenderChart(float graph_width)
         LineTrackRender(graph_width);
     }
 }
-
 void
 LineTrackItem::RenderMetaAreaOptions()
 {
     ImGui::Checkbox("Show as Box Plot", &m_show_boxplot);
-    ImGui::Checkbox("Highlight Y Range", &m_is_color_value_existant);
-    if(m_is_color_value_existant)
-    {        
-        float width = ImGui::GetItemRectSize().x;
-        ImGui::TextUnformatted("Max");
+    if(ImGui::Checkbox("Highlight Y Range", &m_highlight_y_range))
+    {
+        float min_limit                        = static_cast<float>(m_min_y.Value());
+        float max_limit                        = static_cast<float>(m_max_y.Value());
+        m_highlight_y_limits.min_limit = min_limit;
+        m_highlight_y_limits.max_limit = max_limit;
+    }
+
+    if(m_highlight_y_range)
+    {
+        float min_limit = static_cast<float>(m_min_y.Value());
+        float max_limit = static_cast<float>(m_max_y.Value());
+
+        float min_percent = (m_highlight_y_limits.min_limit - min_limit) /
+                            (max_limit - min_limit);
+        float max_percent = (m_highlight_y_limits.max_limit - min_limit) /
+                            (max_limit - min_limit);
+
+        ImGui::BeginGroup();
+        ImGui::TextUnformatted("Min Value");
+        ImGui::SetNextItemWidth(120);
+        if(ImGui::SliderFloat("##min_drag", &min_percent, 0.0f, 1.0f, "",
+                              ImGuiSliderFlags_None))
+        {
+            m_highlight_y_limits.min_limit =
+                min_limit + (max_limit - min_limit) * min_percent;
+        }
+        ImGui::SetNextItemWidth(120);
+        if(ImGui::InputFloat("##min_input", &m_highlight_y_limits.min_limit))
+        {
+            m_highlight_y_limits.min_limit =
+                std::clamp(m_highlight_y_limits.min_limit, min_limit, max_limit);
+        }
+        ImGui::EndGroup();
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Max").x);
-        ImGui::SliderFloat("##max", &m_color_by_value_digits.interest_1_max,
-                           m_color_by_value_digits.interest_1_min,
-                           static_cast<float>(m_max_y.Value()), "%.1f");
-        ImGui::TextUnformatted("Min");
+        ImGui::Dummy(ImVec2(3.0f, 0.0f));
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(width - ImGui::CalcTextSize("Min").x);
-        ImGui::SliderFloat("##min", &m_color_by_value_digits.interest_1_min,
-                           static_cast<float>(m_min_y.Value()),
-                           m_color_by_value_digits.interest_1_max, "%.1f");
+        ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                              m_settings.GetColor(Colors::kSplitterColor));
+
+        ImGui::BeginChild("Splitter For Max/Min", ImVec2(1, 75), ImGuiChildFlags_None);
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::Dummy(ImVec2(3.0f, 0.0f));
+        ImGui::SameLine();
+
+        ImGui::BeginGroup();
+        ImGui::TextUnformatted("Max Value");
+        ImGui::SetNextItemWidth(120);
+        if(ImGui::SliderFloat("##max_drag", &max_percent, 0.0f, 1.0f, "",
+                              ImGuiSliderFlags_None))
+        {
+            m_highlight_y_limits.max_limit =
+                min_limit + (max_limit - min_limit) * max_percent;
+        }
+        ImGui::SetNextItemWidth(120);
+        if(ImGui::InputFloat("##max_input", &m_highlight_y_limits.max_limit))
+        {
+            m_highlight_y_limits.max_limit =
+                std::clamp(m_highlight_y_limits.max_limit, min_limit, max_limit);
+        }
+        ImGui::EndGroup();
+
+        // Clamp and sync values only after user interaction
+        m_highlight_y_limits.min_limit =
+            std::clamp(m_highlight_y_limits.min_limit, min_limit, max_limit);
+        m_highlight_y_limits.max_limit =
+            std::clamp(m_highlight_y_limits.max_limit, min_limit, max_limit);
+
+        if(m_highlight_y_limits.min_limit >
+           m_highlight_y_limits.max_limit)
+            m_highlight_y_limits.max_limit =
+                m_highlight_y_limits.min_limit;
+        if(m_highlight_y_limits.max_limit <
+           m_highlight_y_limits.min_limit)
+            m_highlight_y_limits.min_limit =
+                m_highlight_y_limits.max_limit;
     }
 }
 
@@ -437,7 +455,8 @@ LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
     ImVec2 container_pos = ImGui::GetWindowPos();
 
     double x = container_pos.x + (point.x_value - (m_min_x + m_time_offset_ns)) * scaleX;
-    double y = cursor_position.y + content_size.y - (point.y_value - m_min_y.Value()) * scaleY;
+    double y =
+        cursor_position.y + content_size.y - (point.y_value - m_min_y.Value()) * scaleY;
 
     return ImVec2(static_cast<float>(x), static_cast<float>(y));
 }
@@ -456,11 +475,11 @@ LineTrackProjectSettings::ToJson()
     jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                                      [m_track_item.GetID()];
     track[JSON_KEY_TIMELINE_TRACK_BOX_PLOT] = m_track_item.m_show_boxplot;
-    track[JSON_KEY_TIMELINE_TRACK_COLOR]    = m_track_item.m_is_color_value_existant;
+    track[JSON_KEY_TIMELINE_TRACK_COLOR]    = m_track_item.m_highlight_y_range;
     track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN] =
-        m_track_item.m_color_by_value_digits.interest_1_min;
+        m_track_item.m_highlight_y_limits.min_limit;
     track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX] =
-        m_track_item.m_color_by_value_digits.interest_1_max;
+        m_track_item.m_highlight_y_limits.max_limit;
 }
 
 bool
@@ -490,18 +509,19 @@ LineTrackProjectSettings::Highlight() const
                               .getBool();
 }
 
-rocprofvis_color_by_value_t
+HighlightYRange
 LineTrackProjectSettings::HighlightRange() const
 {
     jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                                      [m_track_item.GetID()];
-    return rocprofvis_color_by_value_t{
+    return HighlightYRange{
         static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX].getNumber()),
         static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN].getNumber())
     };
 }
 
-LineTrackItem::VerticalLimits::VerticalLimits(double value, std::string field_id, std::string prefix)
+LineTrackItem::VerticalLimits::VerticalLimits(double value, std::string field_id,
+                                              std::string prefix)
 : m_text_field(std::move(field_id))
 , m_prefix(std::move(prefix))
 {
@@ -553,12 +573,13 @@ LineTrackItem::VerticalLimits::Prefix()
 void
 LineTrackItem::VerticalLimits::SetValue(double value)
 {
-    m_default_value = value;
+    m_default_value     = value;
     m_formatted_default = FormatValue(value);
     UpdateValue(value);
 }
 
-void LineTrackItem::VerticalLimits::Render()
+void
+LineTrackItem::VerticalLimits::Render()
 {
     m_text_field.Render();
 }
@@ -567,9 +588,9 @@ void
 LineTrackItem::VerticalLimits::UpdateValue(double value)
 {
     m_text_field.ShowResetButton(value != m_default_value);
-    m_value = value;
+    m_value         = value;
     m_formatted_str = FormatValue(value);
-    m_compact_str  = compact_number_format(value);
+    m_compact_str   = compact_number_format(value);
     m_text_field.SetText(m_compact_str, m_formatted_str, m_formatted_default);
 }
 
@@ -585,9 +606,10 @@ double
 LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
 {
     double      result = 0.0;
-    const char* first = input.data();
-    const char* last  = input.data() + input.size();
-    auto [ptr, error_code] = std::from_chars(first, last, result, std::chars_format::general);
+    const char* first  = input.data();
+    const char* last   = input.data() + input.size();
+    auto [ptr, error_code] =
+        std::from_chars(first, last, result, std::chars_format::general);
     if(error_code == std::errc{} && std::isfinite(result) && ptr == last)
     {
         return result;

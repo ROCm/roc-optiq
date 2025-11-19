@@ -419,9 +419,6 @@ LineTrackItem::RenderMetaAreaOptions()
         }
         ImGui::EndGroup();
 
-        // Optional: Add vertical space below controls
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
-
         // Clamp and sync values only after user interaction
         m_color_by_value_digits.interest_1_min =
             std::clamp(m_color_by_value_digits.interest_1_min, min_limit, max_limit);

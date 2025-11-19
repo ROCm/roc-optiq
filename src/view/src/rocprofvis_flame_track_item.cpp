@@ -26,7 +26,6 @@ inline constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
 inline constexpr float TOOLTIP_OFFSET           = 16.0f;
 inline constexpr int   MAX_CHARACTERS_PER_LINE  = 40;
 inline constexpr float MAX_TABLE_HEIGHT         = 300.0f;
-inline constexpr float COMPACT_EVENT_HEIGHT     = 6.0f;
 
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
@@ -78,7 +77,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
         m_compact_mode     = m_flame_track_project_settings.CompactMode();
         if(m_compact_mode)
         {
-            m_level_height = COMPACT_EVENT_HEIGHT;
+            m_level_height = m_settings.GetEventLevelCompactHeight();
         }
     }
 }
@@ -661,11 +660,11 @@ FlameTrackItem::RenderMetaAreaOptions()
     {
         if(m_compact_mode)
         {
-            m_level_height = COMPACT_EVENT_HEIGHT;
+            m_level_height = m_settings.GetEventLevelCompactHeight();
         }
         else
         {
-            m_level_height = SettingsManager::GetInstance().GetEventLevelHeight();
+            m_level_height = m_settings.GetEventLevelHeight();
             if(m_is_expanded)
             {
                 RecalculateTrackHeight();

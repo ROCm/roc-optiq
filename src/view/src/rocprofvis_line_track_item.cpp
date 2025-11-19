@@ -127,11 +127,11 @@ LineTrackItem::RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_p
 {
     float highlight_y_max =
         cursor_position.y + content_size.y -
-        (m_highlight_y_limits.interest_1_max - static_cast<float>(m_min_y.Value())) *
+        (m_highlight_y_limits.max_limit - static_cast<float>(m_min_y.Value())) *
             scale_y;
     float highlight_y_min =
         cursor_position.y + content_size.y -
-        (m_highlight_y_limits.interest_1_min - static_cast<float>(m_min_y.Value())) *
+        (m_highlight_y_limits.min_limit - static_cast<float>(m_min_y.Value())) *
             scale_y;
 
     highlight_y_max = std::max(
@@ -358,8 +358,8 @@ LineTrackItem::RenderMetaAreaOptions()
     {
         float min_limit                        = static_cast<float>(m_min_y.Value());
         float max_limit                        = static_cast<float>(m_max_y.Value());
-        m_highlight_y_limits.interest_1_min = min_limit;
-        m_highlight_y_limits.interest_1_max = max_limit;
+        m_highlight_y_limits.min_limit = min_limit;
+        m_highlight_y_limits.max_limit = max_limit;
     }
 
     if(m_highlight_y_range)
@@ -367,9 +367,9 @@ LineTrackItem::RenderMetaAreaOptions()
         float min_limit = static_cast<float>(m_min_y.Value());
         float max_limit = static_cast<float>(m_max_y.Value());
 
-        float min_percent = (m_highlight_y_limits.interest_1_min - min_limit) /
+        float min_percent = (m_highlight_y_limits.min_limit - min_limit) /
                             (max_limit - min_limit);
-        float max_percent = (m_highlight_y_limits.interest_1_max - min_limit) /
+        float max_percent = (m_highlight_y_limits.max_limit - min_limit) /
                             (max_limit - min_limit);
 
         ImGui::BeginGroup();
@@ -378,14 +378,14 @@ LineTrackItem::RenderMetaAreaOptions()
         if(ImGui::SliderFloat("##min_drag", &min_percent, 0.0f, 1.0f, "",
                               ImGuiSliderFlags_None))
         {
-            m_highlight_y_limits.interest_1_min =
+            m_highlight_y_limits.min_limit =
                 min_limit + (max_limit - min_limit) * min_percent;
         }
         ImGui::SetNextItemWidth(120);
-        if(ImGui::InputFloat("##min_input", &m_highlight_y_limits.interest_1_min))
+        if(ImGui::InputFloat("##min_input", &m_highlight_y_limits.min_limit))
         {
-            m_highlight_y_limits.interest_1_min =
-                std::clamp(m_highlight_y_limits.interest_1_min, min_limit, max_limit);
+            m_highlight_y_limits.min_limit =
+                std::clamp(m_highlight_y_limits.min_limit, min_limit, max_limit);
         }
         ImGui::EndGroup();
         ImGui::SameLine();
@@ -408,31 +408,31 @@ LineTrackItem::RenderMetaAreaOptions()
         if(ImGui::SliderFloat("##max_drag", &max_percent, 0.0f, 1.0f, "",
                               ImGuiSliderFlags_None))
         {
-            m_highlight_y_limits.interest_1_max =
+            m_highlight_y_limits.max_limit =
                 min_limit + (max_limit - min_limit) * max_percent;
         }
         ImGui::SetNextItemWidth(120);
-        if(ImGui::InputFloat("##max_input", &m_highlight_y_limits.interest_1_max))
+        if(ImGui::InputFloat("##max_input", &m_highlight_y_limits.max_limit))
         {
-            m_highlight_y_limits.interest_1_max =
-                std::clamp(m_highlight_y_limits.interest_1_max, min_limit, max_limit);
+            m_highlight_y_limits.max_limit =
+                std::clamp(m_highlight_y_limits.max_limit, min_limit, max_limit);
         }
         ImGui::EndGroup();
 
         // Clamp and sync values only after user interaction
-        m_highlight_y_limits.interest_1_min =
-            std::clamp(m_highlight_y_limits.interest_1_min, min_limit, max_limit);
-        m_highlight_y_limits.interest_1_max =
-            std::clamp(m_highlight_y_limits.interest_1_max, min_limit, max_limit);
+        m_highlight_y_limits.min_limit =
+            std::clamp(m_highlight_y_limits.min_limit, min_limit, max_limit);
+        m_highlight_y_limits.max_limit =
+            std::clamp(m_highlight_y_limits.max_limit, min_limit, max_limit);
 
-        if(m_highlight_y_limits.interest_1_min >
-           m_highlight_y_limits.interest_1_max)
-            m_highlight_y_limits.interest_1_max =
-                m_highlight_y_limits.interest_1_min;
-        if(m_highlight_y_limits.interest_1_max <
-           m_highlight_y_limits.interest_1_min)
-            m_highlight_y_limits.interest_1_min =
-                m_highlight_y_limits.interest_1_max;
+        if(m_highlight_y_limits.min_limit >
+           m_highlight_y_limits.max_limit)
+            m_highlight_y_limits.max_limit =
+                m_highlight_y_limits.min_limit;
+        if(m_highlight_y_limits.max_limit <
+           m_highlight_y_limits.min_limit)
+            m_highlight_y_limits.min_limit =
+                m_highlight_y_limits.max_limit;
     }
 }
 
@@ -465,9 +465,9 @@ LineTrackProjectSettings::ToJson()
     track[JSON_KEY_TIMELINE_TRACK_BOX_PLOT] = m_track_item.m_show_boxplot;
     track[JSON_KEY_TIMELINE_TRACK_COLOR]    = m_track_item.m_highlight_y_range;
     track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN] =
-        m_track_item.m_highlight_y_limits.interest_1_min;
+        m_track_item.m_highlight_y_limits.min_limit;
     track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX] =
-        m_track_item.m_highlight_y_limits.interest_1_max;
+        m_track_item.m_highlight_y_limits.max_limit;
 }
 
 bool
@@ -497,12 +497,12 @@ LineTrackProjectSettings::Highlight() const
                               .getBool();
 }
 
-rocprofvis_color_by_value_t
+HighlightYRange
 LineTrackProjectSettings::HighlightRange() const
 {
     jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                                      [m_track_item.GetID()];
-    return rocprofvis_color_by_value_t{
+    return HighlightYRange{
         static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX].getNumber()),
         static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN].getNumber())
     };

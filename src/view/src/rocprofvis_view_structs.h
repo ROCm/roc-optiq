@@ -10,10 +10,10 @@ namespace View
 
 class TrackItem;
 
-typedef struct rocprofvis_color_by_value_t
+typedef struct HighlightYRange
 {
-    float interest_1_max;
-    float interest_1_min;
+    float max_limit;
+    float min_limit;
 
 } rocprofvis_color_by_value_t;
 

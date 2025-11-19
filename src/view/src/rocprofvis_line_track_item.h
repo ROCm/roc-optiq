@@ -27,7 +27,7 @@ public:
     bool Valid() const override;
     bool                        BoxPlot() const;
     bool                        Highlight() const;
-    rocprofvis_color_by_value_t HighlightRange() const;
+    HighlightYRange HighlightRange() const;
 
 private:
     LineTrackItem& m_track_item;
@@ -92,7 +92,7 @@ private:
                                const ImVec2& content_size, float scale_y);
 
     std::vector<rocprofvis_data_point_t> m_data;
-    rocprofvis_color_by_value_t          m_highlight_y_limits;
+    HighlightYRange          m_highlight_y_limits;
 
     VerticalLimits m_min_y;
     VerticalLimits m_max_y;

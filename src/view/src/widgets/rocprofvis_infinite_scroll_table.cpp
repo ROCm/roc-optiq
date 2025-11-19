@@ -38,8 +38,8 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
       table_type == TableType::kEventSearchTable ? kRPVControllerTableTypeSearchResults
       : table_type == TableType::kEventTable     ? kRPVControllerTableTypeEvents
                                                  : kRPVControllerTableTypeSamples)
-, m_filter_options({ 0, "", "" })
-, m_pending_filter_options({ 0, "", "" })
+, m_filter_options({ "", "", "" })
+, m_pending_filter_options({ "", "", "" })
 , m_data_changed(true)
 , m_filter_requested(false)
 , m_selected_row(-1)
@@ -47,6 +47,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_horizontal_scroll(0.0f)
 , m_time_column_indices(
       { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
+, m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
 {
     auto new_table_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTableData(e);
@@ -108,46 +109,6 @@ InfiniteScrollTable::Update()
 {
     if(m_data_changed)
     {
-        const std::vector<std::string>& column_names =
-            m_data_provider.GetTableHeader(m_table_type);
-
-        if(m_table_type == TableType::kEventTable)
-        {
-            if(m_filter_options.column_index == 0)
-            {
-                m_column_names.clear();
-                // Create a combo box for selecting the group column
-                // populate the combo box with column names but filter out empty and
-                // internal columns (those starting with '_')
-                m_column_names.reserve(column_names.size() + 1);
-                m_column_names.push_back("-- None --");
-
-                for(size_t i = 0; i < column_names.size(); i++)
-                {
-                    const auto& col = column_names[i];
-                    if(col.empty() || col[0] == '_')
-                    {
-                        continue;  // Skip empty or internal columns
-                    }
-                    m_column_names.push_back(col);
-                }
-            }
-            else
-            {
-                std::string selected_option =
-                    m_column_names[m_filter_options.column_index];
-                m_column_names.resize(2);
-                m_column_names[1]                     = selected_option;
-                m_filter_options.column_index         = 1;
-                m_pending_filter_options.column_index = 1;
-            }
-            m_column_names_ptr.resize(m_column_names.size());
-            for(int i = 0; i < m_column_names.size(); i++)
-            {
-                m_column_names_ptr[i] = m_column_names[i].c_str();
-            }
-        }
-
         FormatData();
         m_data_changed = false;
     }
@@ -502,7 +463,7 @@ InfiniteScrollTable::Render()
         {
             FilterOptions& filter =
                 m_filter_requested ? m_pending_filter_options : m_filter_options;
-            if(filter.column_index == 0)
+            if(filter.group_by == "")
             {
                 filter.group_columns[0] = '\0';
             }
@@ -515,8 +476,7 @@ InfiniteScrollTable::Render()
                 table_params->m_sort_column_index = sort_column_index;
                 table_params->m_sort_order        = sort_order;
                 table_params->m_filter            = filter.filter;
-                table_params->m_group =
-                    (filter.column_index == 0) ? "" : m_column_names[filter.column_index];
+                table_params->m_group = filter.group_by;
                 table_params->m_group_columns = filter.group_columns;
 
                 // if filtering changed reset the start row as current row

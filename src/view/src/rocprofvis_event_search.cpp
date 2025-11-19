@@ -21,7 +21,6 @@ constexpr const char* NAME_COLUMN_NAME      = "name";
 
 EventSearch::EventSearch(DataProvider& dp)
 : InfiniteScrollTable(dp, TableType::kEventSearchTable)
-, m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
 , m_should_open(false)
 , m_should_close(false)
 , m_open_context_menu(false)

@@ -25,6 +25,7 @@ Event::Event(uint64_t id, double start_ts, double end_ts)
 , m_end_timestamp(end_ts)
 , m_name(UINT64_MAX)
 , m_category(UINT64_MAX)
+, m_combined_top_name(UINT64_MAX)
 , m_level(0)
 , m_retain_counter(0)
 {}
@@ -459,6 +460,24 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerEventNameStrIndex:
+            {
+                *value = m_name;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerEventCategoryStrIndex:
+            {
+                *value = m_category;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerEventTopCombinedNameStrIndex:
+            {
+                *value = m_combined_top_name;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             default:
             {
                 result = UnhandledProperty(property);
@@ -488,6 +507,12 @@ rocprofvis_result_t Event::GetDouble(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerEventDuration:
+            {
+                *value = m_end_timestamp - m_start_timestamp;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             default:
             {
                 result = UnhandledProperty(property);
@@ -514,6 +539,12 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
         {
             char const* category = StringTable::Get().GetString(m_category);
             result = GetStringImpl(value, length, category, static_cast<uint32_t>(strlen(category)));
+            break;
+        }
+        case kRPVControllerEventTopCombinedName:
+        {
+            char const* combined_name = StringTable::Get().GetString(m_combined_top_name);
+            result = GetStringImpl(value, length, combined_name, static_cast<uint32_t>(strlen(combined_name)));
             break;
         }
         default:
@@ -563,8 +594,16 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         {
             // Currently the level should be an 8bit unsigned integer
             // Anything beyond 255 will probably not display well.
+            // TODO: review this
             ROCPROFVIS_ASSERT(value < 256);
             m_level = std::min( static_cast<uint8_t>(value), static_cast<uint8_t>(255));
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerEventTopCombinedNameStrIndex:
+        {
+            // Set string index for top combined name
+            m_combined_top_name = static_cast<size_t>(value);
             result = kRocProfVisResultSuccess;
             break;
         }

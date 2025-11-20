@@ -20,12 +20,12 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float MIN_LABEL_WIDTH          = 40.0f;
-constexpr float HIGHLIGHT_THICKNESS      = 4.0f;
-constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
-constexpr float TOOLTIP_OFFSET           = 16.0f;
-constexpr int   MAX_CHARACTERS_PER_LINE  = 40;
-constexpr float MAX_TABLE_HEIGHT         = 300.0f;
+inline constexpr float MIN_LABEL_WIDTH          = 40.0f;
+inline constexpr float HIGHLIGHT_THICKNESS      = 4.0f;
+inline constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
+inline constexpr float TOOLTIP_OFFSET           = 16.0f;
+inline constexpr int   MAX_CHARACTERS_PER_LINE  = 40;
+inline constexpr float MAX_TABLE_HEIGHT         = 300.0f;
 
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
@@ -33,7 +33,7 @@ issues (rectangle being too big or too small).
 */
 constexpr float ANTI_ALIASING_WORKAROUND = 1.0f;
 
-const std::string FlameTrackItem::s_child_info_separator  = " of ";
+const std::string FlameTrackItem::s_child_info_separator  = "|";
 float             FlameTrackItem::s_max_event_label_width = 0.0f;
 
 void
@@ -57,9 +57,11 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_max_level(level_max)
 , m_deferred_click_handled(false)
 , m_has_drawn_tool_tip(false)
-, m_project_settings(dp.GetTraceFilePath(), *this)
+, m_flame_track_project_settings(dp.GetTraceFilePath(), *this)
 , m_selected_chart_items({})
 , m_tooltip_size(0.0f, 0.0f)
+, m_is_expanded(false)
+, m_compact_mode(false)
 {
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
@@ -69,9 +71,14 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         time_line_selection_changed_handler);
 
-    if(m_project_settings.Valid())
+    if(m_flame_track_project_settings.Valid())
     {
-        m_event_color_mode = m_project_settings.ColorEvents();
+        m_event_color_mode = m_flame_track_project_settings.ColorEvents();
+        m_compact_mode     = m_flame_track_project_settings.CompactMode();
+        if(m_compact_mode)
+        {
+            m_level_height = m_settings.GetEventLevelCompactHeight();
+        }
     }
 }
 
@@ -93,8 +100,8 @@ FlameTrackItem::RenderMetaAreaExpand()
     {
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
-            m_track_height         = m_max_level * m_level_height + m_level_height + 2.0f;
-            m_track_height_changed = true;
+            RecalculateTrackHeight();
+            m_is_expanded = true;
         }
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to see all events");
     }
@@ -107,6 +114,7 @@ FlameTrackItem::RenderMetaAreaExpand()
             m_track_height =
                 m_track_default_height;  // Default track height defined in parent class.
             m_track_height_changed = true;
+            m_is_expanded          = false;
         }
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to default height");
     }
@@ -174,7 +182,14 @@ FlameTrackItem::ExtractPointsFromData()
         const rocprofvis_trace_event_t& event = events_data[i];
         m_chart_items[i].event                = event;
         m_chart_items[i].selected  = m_timeline_selection->EventSelected(event.m_id);
-        m_chart_items[i].name_hash = std::hash<std::string>{}(event.m_name);
+        if(m_chart_items[i].event.m_child_count > 1)
+        {
+            m_chart_items[i].name_hash = std::hash<std::string>{}(event.m_top_combined_name);
+        }
+        else
+        {
+            m_chart_items[i].name_hash = std::hash<std::string>{}(event.m_name);
+        }
         m_chart_items[i].child_info.clear();
     }
     return true;
@@ -204,7 +219,11 @@ FlameTrackItem::ExtractChildInfo(ChartItem& item)
             item.child_info.clear();
             item.child_info.push_back({ item.event.m_name,
                                         std::hash<std::string>{}(item.event.m_name),
-                                        item.event.m_child_count });
+                                        item.event.m_child_count,
+                                        static_cast<uint64_t>(item.event.m_duration) });
+            spdlog::warn("Failed to parse child info for event ID {}. "
+                         "Falling back to full event name.",
+                         item.event.m_id);
         }
     }
     else
@@ -218,22 +237,30 @@ FlameTrackItem::ExtractChildInfo(ChartItem& item)
 bool
 FlameTrackItem::ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info)
 {
-    size_t pos = combined_name.find(s_child_info_separator);
-    if(pos != std::string::npos)
+    size_t pos1 = combined_name.find(s_child_info_separator);
+    if(pos1 != std::string::npos)
     {
-        try
+        size_t pos2 = combined_name.find(s_child_info_separator, pos1 + 1);
+        if(pos2 != std::string::npos)
         {
-            size_t      count = std::stoul(combined_name.substr(0, pos));
-            std::string name  = combined_name.substr(pos + s_child_info_separator.size());
-            out_info          = { name, std::hash<std::string>{}(name), count };
-            return true;
-        } catch(const std::invalid_argument&)
-        {
-            spdlog::warn("Failed to parse child event info from string: {}",
-                         combined_name);
+            try
+            {
+                // Extract count, duration and name (format: "<count>|<duration>|<name>")
+                size_t count = std::stoul(combined_name.substr(0, pos1));
+                size_t duration_start = pos1 + s_child_info_separator.size();
+                size_t duration = std::stoull(combined_name.substr(duration_start, pos2 - duration_start));
+                std::string name = combined_name.substr(pos2 + s_child_info_separator.size());
+                out_info = { name, std::hash<std::string>{}(name), count, duration };
+                return true;
+            }
+            catch(const std::exception&)
+            {
+                spdlog::warn("Failed to parse child event info from string: {}",
+                             combined_name);
+            }
         }
     }
-    out_info = { "", 0, 0 };  // Default if parsing fails
+    out_info = { "", 0, 0, 0 };  // Default if parsing fails
     return false;
 }
 
@@ -387,7 +414,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall));
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
                             ImVec2(ImGui::GetStyle().CellPadding.x, 0.0f));
-        if(ImGui::BeginTable("ChildEventsTable", 2,
+        if(ImGui::BeginTable("ChildEventsTable", 3,
                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
         {
             // Calculate max name width for auto-fit up to s_max_event_label_width
@@ -406,6 +433,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed,
                                     name_col_width);
             ImGui::TableSetupColumn("Count");
+            ImGui::TableSetupColumn("Duration");
             ImGui::TableHeadersRow();
 
             // Table rows
@@ -442,6 +470,12 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
                 const ChildEventInfo& child = chart_item.child_info[i];
                 ImGui::Text("%zu", child.count);
 
+                // Duration column
+                ImGui::TableNextColumn();
+                std::string duration_str = nanosecond_to_formatted_str(
+                    static_cast<double>(child.duration), time_format, true);
+                ImGui::Text("%s", duration_str.c_str());
+
                 current_height += row_height;
                 num_shown++;
             }
@@ -451,7 +485,9 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
                 ImGui::TableNextColumn();
                 ImGui::Text("(%zu rows hidden)", size - num_shown);
                 ImGui::TableNextColumn();
-                // Empty
+                // Empty for count
+                ImGui::TableNextColumn();
+                // Empty for duration
             }
             ImGui::EndTable();
         }
@@ -463,7 +499,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         ImGui::Text("Start: %s", label.c_str());
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
-        ImGui::Text("Combined Duration: %s", label.c_str());
+        ImGui::Text("Combined Range: %s", label.c_str());
     }
     else
     {
@@ -499,6 +535,14 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();
     ImGui::End();
+}
+
+void
+FlameTrackItem::RecalculateTrackHeight()
+{
+    m_track_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
+                              m_track_default_height);
+    m_track_height_changed = true;
 }
 
 void
@@ -611,6 +655,27 @@ FlameTrackItem::RenderMetaAreaOptions()
         mode = EventColorMode::kNone;
 
     m_event_color_mode = mode;
+
+    if(ImGui::Checkbox("Compact Mode", &m_compact_mode))
+    {
+        if(m_compact_mode)
+        {
+            m_level_height = m_settings.GetEventLevelCompactHeight();
+        }
+        else
+        {
+            m_level_height = m_settings.GetEventLevelHeight();
+            if(m_is_expanded)
+            {
+                RecalculateTrackHeight();
+            }
+        }
+        if (m_track_height > std::max(m_max_level * m_level_height + m_level_height,
+            m_track_default_height))
+        {
+            RecalculateTrackHeight();
+        }
+    }
 }
 
 FlameTrackProjectSettings::FlameTrackProjectSettings(const std::string& project_id,
@@ -627,14 +692,30 @@ FlameTrackProjectSettings::ToJson()
     m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                    [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR] =
                        static_cast<int>(m_track_item.m_event_color_mode);
+
+    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                   [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE] =
+                       m_track_item.m_compact_mode;
 }
 
 bool
 FlameTrackProjectSettings::Valid() const
 {
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
-                              .isNumber();
+    if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                      [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
+                      .isNumber())
+    {
+        return false;
+    }
+
+    if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                      [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
+                      .isBool())
+    {
+        return false;
+    }
+
+    return true;
 }
 
 EventColorMode
@@ -651,6 +732,14 @@ FlameTrackProjectSettings::ColorEvents() const
         color_mode = static_cast<EventColorMode>(color_mode_raw);
     }
     return color_mode;
+}
+
+bool 
+FlameTrackProjectSettings::CompactMode() const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
+                              .getBool();
 }
 
 }  // namespace View

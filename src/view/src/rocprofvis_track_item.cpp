@@ -42,11 +42,11 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_group_id_counter(0)
 , m_chunk_duration_ns(TimeConstants::ns_per_s *
                       30)  // Default chunk duration
-, m_project_settings(m_data_provider.GetTraceFilePath(), *this)
+, m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
-    if(m_project_settings.Valid())
+    if(m_track_project_settings.Valid())
     {
-        m_track_height = m_project_settings.Height();
+        m_track_height = m_track_project_settings.Height();
     }
 }
 

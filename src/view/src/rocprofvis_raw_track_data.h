@@ -25,6 +25,7 @@ typedef struct rocprofvis_trace_event_t
     double      m_duration;
     uint32_t    m_level;
     uint32_t    m_child_count;
+    std::string m_top_combined_name;
 } rocprofvis_trace_event_t;
 
 typedef struct rocprofvis_trace_counter_t

@@ -29,16 +29,6 @@ public:
     void HandleTrackSelectionChanged();
 
 private:
-    // Important columns in the table
-    enum ImportantColumns
-    {
-        kId,
-        kName,
-        kTrackId,
-        kStreamId,
-        kNumImportantColumns
-    };
-
     void FormatData() const override;
     void IndexColumns() override;
     void RowSelected(const ImGuiMouseButton mouse_button) override;
@@ -51,9 +41,11 @@ private:
     // Keep track of currently selected tracks for this table type
     std::vector<uint64_t> m_selected_tracks;
 
-    bool m_open_context_menu;
+    std::vector<std::string> m_group_by_choices;
+    std::vector<const char*> m_group_by_choices_ptr;
+    int                      m_group_by_selection_index;
 
-    std::vector<size_t> m_important_column_idxs;
+    bool m_open_context_menu;
 };
 
 }  // namespace View

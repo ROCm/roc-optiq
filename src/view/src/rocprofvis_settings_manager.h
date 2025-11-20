@@ -89,6 +89,8 @@ enum class Colors
     kBgError,
     kBgSuccess,
     kStickyNote,
+    kLineChartColorAlt,
+    kTrackColorWarningBand,
 
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
@@ -148,6 +150,7 @@ public:
 
     // Constant for event height;
     const float GetEventLevelHeight() const;
+    const float GetEventLevelCompactHeight() const;
 
 private:
     SettingsManager();

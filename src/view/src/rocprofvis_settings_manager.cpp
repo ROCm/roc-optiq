@@ -19,52 +19,54 @@ namespace View
 {
 
 constexpr std::array DARK_THEME_COLORS = {
-    IM_COL32(35, 35, 35, 255),     // Colors::kMetaDataColor
-    IM_COL32(28, 28, 28, 255),     // Colors::kMetaDataColorSelected
-    IM_COL32(70, 70, 70, 255),     // Colors::kMetaDataSeparator
-    IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
-    IM_COL32(220, 38, 38, 255),    // Colors::kTextError
-    IM_COL32(0, 255, 0, 255),      // Colors::kTextSuccess
-    IM_COL32(160, 160, 160, 255),  // Colors::kFlameChartColor
-    IM_COL32(200, 200, 200, 60),   // Colors::kGridColor
-    IM_COL32(220, 38, 38, 255),    // Colors::kGridRed
-    IM_COL32(255, 71, 87, 255),    // Colors::kSelectionBorder
-    IM_COL32(220, 38, 38, 80),     // Colors::kSelection
-    IM_COL32(160, 160, 160, 255),  // Colors::kBoundBox
-    IM_COL32(18, 18, 18, 255),     // Colors::kFillerColor
-    IM_COL32(64, 64, 64, 255),     // Colors::kScrollBarColor
-    IM_COL32(255, 71, 87, 100),    // Colors::kHighlightChart
-    IM_COL32(40, 40, 40, 255),     // Colors::kRulerBgColor
-    IM_COL32(250, 250, 250, 255),  // Colors::kRulerTextColor
-    IM_COL32(255, 255, 255, 255),  // Colors::kScrubberNumberColor
-    IM_COL32(220, 38, 38, 180),    // Colors::kArrowColor
-    IM_COL32(40, 40, 40, 255),     // Colors::kBorderColor
-    IM_COL32(64, 64, 64, 255),     // Colors::kSplitterColor
-    IM_COL32(18, 18, 18, 255),     // Colors::kBgMain
-    IM_COL32(28, 28, 28, 255),     // Colors::kBgPanel
-    IM_COL32(38, 38, 38, 255),     // Colors::kBgFrame
-    IM_COL32(219, 38, 38, 255),    // Colors::kAccentRed
-    IM_COL32(255, 71, 87, 255),    // Colors::kAccentRedHover
-    IM_COL32(181, 30, 30, 255),    // Colors::kAccentRedActive
-    IM_COL32(41, 41, 41, 255),     // Colors::kBorderGray
-    IM_COL32(255, 255, 255, 255),  // Colors::kTextMain
-    IM_COL32(161, 161, 161, 255),  // Colors::kTextDim
-    IM_COL32(33, 33, 33, 255),     // Colors::kScrollBg
-    IM_COL32(64, 64, 64, 255),     // Colors::kScrollGrab
-    IM_COL32(41, 41, 41, 255),     // Colors::kTableHeaderBg
-    IM_COL32(51, 51, 51, 255),     // Colors::kTableBorderStrong
-    IM_COL32(33, 33, 33, 255),     // Colors::kTableBorderLight
-    IM_COL32(33, 33, 33, 255),     // Colors::kTableRowBg
-    IM_COL32(38, 38, 38, 255),     // Colors::kTableRowBgAlt
-    IM_COL32(0, 200, 255, 180),    // Colors::kEventHighlight
-    IM_COL32(250, 250, 250, 255),  // Colors::kLineChartColor
-    IM_COL32(60, 60, 60, 255),     // Colors::kButton
-    IM_COL32(90, 90, 90, 255),     // Colors::kButtonHovered
-    IM_COL32(120, 120, 120, 255),  // Colors::kButtonActive
-    IM_COL32(100, 100, 10, 255),   // Colors::kBgWarning
-    IM_COL32(100, 10, 10, 255),    // Colors::kBgError
-    IM_COL32(10, 100, 0, 255),     // Colors::kBgSuccess
-    IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
+    IM_COL32(52, 54, 58, 255),     // kMetaDataColor
+    IM_COL32(44, 46, 50, 255),     // kMetaDataColorSelected
+    IM_COL32(68, 70, 74, 255),     // kMetaDataSeparator
+    IM_COL32(0, 0, 0, 0),          // kTransparent
+    IM_COL32(224, 62, 62, 255),    // kTextError
+    IM_COL32(90, 200, 120, 255),   // kTextSuccess
+    IM_COL32(200, 200, 210, 255),  // kFlameChartColor
+    IM_COL32(180, 180, 190, 60),   // kGridColor
+    IM_COL32(224, 62, 62, 255),    // kGridRed
+    IM_COL32(255, 120, 120, 255),  // kSelectionBorder
+    IM_COL32(224, 62, 62, 100),    // kSelection
+    IM_COL32(170, 170, 180, 255),  // kBoundBox
+    IM_COL32(36, 38, 42, 255),     // kFillerColor
+    IM_COL32(90, 90, 100, 255),    // kScrollBarColor
+    IM_COL32(255, 140, 140, 120),  // kHighlightChart
+    IM_COL32(62, 64, 68, 255),     // kRulerBgColor
+    IM_COL32(220, 220, 220, 255),  // kRulerTextColor
+    IM_COL32(220, 220, 220, 255),  // kScrubberNumberColor
+    IM_COL32(224, 62, 62, 180),    // kArrowColor
+    IM_COL32(62, 64, 68, 255),     // kBorderColor
+    IM_COL32(90, 90, 100, 255),    // kSplitterColor
+    IM_COL32(28, 30, 34, 255),     // kBgMain
+    IM_COL32(38, 40, 44, 255),     // kBgPanel
+    IM_COL32(52, 54, 58, 255),     // kBgFrame
+    IM_COL32(224, 62, 62, 255),    // kAccentRed
+    IM_COL32(255, 140, 140, 255),  // kAccentRedHover
+    IM_COL32(181, 40, 40, 255),    // kAccentRedActive
+    IM_COL32(80, 80, 90, 255),     // kBorderGray
+    IM_COL32(235, 235, 240, 255),  // kTextMain
+    IM_COL32(170, 170, 180, 255),  // kTextDim
+    IM_COL32(52, 54, 58, 255),     // kScrollBg
+    IM_COL32(100, 100, 110, 255),  // kScrollGrab
+    IM_COL32(80, 80, 90, 255),     // kTableHeaderBg
+    IM_COL32(100, 100, 110, 255),  // kTableBorderStrong
+    IM_COL32(62, 64, 68, 255),     // kTableBorderLight
+    IM_COL32(52, 54, 58, 255),     // kTableRowBg
+    IM_COL32(58, 60, 64, 255),     // kTableRowBgAlt
+    IM_COL32(0, 200, 255, 160),    // kEventHighlight
+    IM_COL32(235, 235, 240, 255),  // kLineChartColor
+    IM_COL32(100, 100, 110, 255),  // kButton
+    IM_COL32(130, 130, 140, 255),  // kButtonHovered
+    IM_COL32(160, 160, 170, 255),  // kButtonActive
+    IM_COL32(180, 160, 60, 255),   // kBgWarning
+    IM_COL32(160, 60, 60, 255),    // kBgError
+    IM_COL32(60, 160, 60, 255),    // kBgSuccess
+    IM_COL32(220, 180, 40, 255),   // kStickyNoteYellow
+    IM_COL32(230, 240, 255, 255),  // Colors::kLineChartColorAlt
+    IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
@@ -114,6 +116,10 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
     IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
+    IM_COL32(20, 30, 50, 255),     // Colors::kLineChartColorAlt
+    IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
+
+
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> FLAME_COLORS = {
@@ -123,9 +129,10 @@ const std::vector<ImU32> FLAME_COLORS = {
     IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
     IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
 };
-constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
-constexpr size_t RECENT_FILES_LIMIT = 5;
-constexpr float  EVENT_LEVEL_HEIGHT = 40.0f;
+inline constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
+inline constexpr size_t       RECENT_FILES_LIMIT = 5;
+inline constexpr float        EVENT_LEVEL_HEIGHT = 40.0f;
+inline constexpr float        COMPACT_EVENT_HEIGHT = 6.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -363,7 +370,7 @@ SettingsManager ::GetDPI()
 void
 SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
 {
-    (void)old_settings; //currently unused
+    (void) old_settings;  // currently unused
     if(m_usersettings.display_settings.use_dark_mode)
     {
         m_color_store = &DARK_THEME_COLORS;
@@ -387,8 +394,7 @@ void
 SettingsManager::ApplyUserUnitSettings(const UserSettings& old_settings)
 {
     // notify that time format has changed
-    if(old_settings.unit_settings.time_format !=
-       m_usersettings.unit_settings.time_format)
+    if(old_settings.unit_settings.time_format != m_usersettings.unit_settings.time_format)
     {
         EventManager::GetInstance()->AddEvent(
             std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTimeFormatChanged)));
@@ -406,8 +412,6 @@ SettingsManager::GetColorWheel()
 {
     return FLAME_COLORS;
 }
-
- 
 
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
@@ -471,9 +475,9 @@ SettingsManager::InitStyling()
     style.WindowRounding    = 8.0f;
     style.ScrollbarRounding = 8.0f;
 
-    style.FramePadding      = ImVec2(10, 6);
-    style.ItemSpacing       = ImVec2(10, 8);
-    style.WindowPadding     = ImVec2(4, 4);
+    style.FramePadding  = ImVec2(10, 6);
+    style.ItemSpacing   = ImVec2(10, 8);
+    style.WindowPadding = ImVec2(4, 4);
 
     m_default_style = style;  // Store the our customized style
 }
@@ -568,6 +572,12 @@ const float
 SettingsManager::GetEventLevelHeight() const
 {
     return EVENT_LEVEL_HEIGHT;
+}
+
+const float
+SettingsManager::GetEventLevelCompactHeight() const
+{
+    return COMPACT_EVENT_HEIGHT;
 }
 
 }  // namespace View

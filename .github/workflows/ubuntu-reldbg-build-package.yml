@@ -29,7 +29,8 @@ jobs:
             cmake build-essential \
             libwayland-bin \
             libwayland-dev libxkbcommon-dev wayland-protocols \
-            pkg-config
+            pkg-config \
+            libdbus-1-dev
           echo "✅ Dependencies Installed!"
       
       - name: Install Vulkan SDK

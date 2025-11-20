@@ -684,20 +684,8 @@ DataProvider::HandleLoadTrace()
             {
                 if(progress_percent != m_progress_percent)
                 {
-                    uint32_t length = 0;
-                    result          = rocprofvis_controller_get_string(m_trace_controller,
-                                                                       kRPVControllerGetDmMessage,
-                                                                       0, nullptr, &length);
-                    if(result == kRocProfVisResultSuccess)
-                    {
-                        length++;
-                        char* str_buffer = new char[length];
-                        result           = rocprofvis_controller_get_string(
-                            m_trace_controller, kRPVControllerGetDmMessage, 0, str_buffer,
-                            &length);
-                        m_progress_mesage = std::string(str_buffer);
-                        delete[] str_buffer;
-                    }
+                    GetString(m_trace_controller, kRPVControllerGetDmMessage, 0,
+                              m_progress_mesage);
                 }
                 m_progress_percent = progress_percent;
             }
@@ -967,9 +955,6 @@ DataProvider::HandleLoadTrackMetaData()
     m_track_metadata.clear();
     FreeAllTracks();
 
-    size_t str_buffer_length = 128;
-    char*  str_buffer        = new char[str_buffer_length];
-
     for(uint64_t i = 0; i < m_num_graphs; i++)
     {
         rocprofvis_handle_t* graph  = nullptr;
@@ -1004,22 +989,8 @@ DataProvider::HandleLoadTrackMetaData()
                                         : kRPVControllerTrackTypeEvents;
 
             // get track name
-            uint32_t length = 0;
-            result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
-                                                      nullptr, &length);
+            result = GetString(track, kRPVControllerTrackName, 0, track_info.name);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            if(length >= str_buffer_length)
-            {
-                delete[] str_buffer;
-                str_buffer_length = length + 1;
-                str_buffer        = new char[str_buffer_length];
-            }
-            length += 1;
-            result = rocprofvis_controller_get_string(track, kRPVControllerTrackName, 0,
-                                                      str_buffer, &length);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            track_info.name = std::string(str_buffer);
 
             result = rocprofvis_controller_get_double(
                 track, kRPVControllerTrackMinTimestamp, 0, &track_info.min_ts);
@@ -1169,8 +1140,6 @@ DataProvider::HandleLoadTrackMetaData()
             spdlog::debug("Error getting track meta data for track at index: {}", i);
         }
     }
-
-    delete[] str_buffer;
 
     spdlog::info("Track meta data loaded");
 }
@@ -3191,9 +3160,6 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
     std::vector<rocprofvis_trace_event_t> buffer;
     buffer.reserve(count);
 
-    size_t str_buffer_length = 128;
-    char*  str_buffer        = new char[str_buffer_length];
-
     std::unordered_set event_set = raw_event_data->GetWritableIdSet();
 
     size_t real_count = 0;
@@ -3242,25 +3208,19 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
         uint64_t child_count = 0;
         result = rocprofvis_controller_get_uint64(event, kRPVControllerEventNumChildren,
                                                   0, &child_count);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_child_count = static_cast<uint32_t>(child_count);
 
         // get event name
-        uint32_t length = 0;
-        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
-                                                  nullptr, &length);
+        result = GetString(event, kRPVControllerEventName, 0, trace_event.m_name);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-        if(length >= str_buffer_length)
+        if(trace_event.m_child_count > 1)
         {
-            delete[] str_buffer;
-            str_buffer_length = length + 1;
-            str_buffer        = new char[str_buffer_length];
+            result = GetString(event, kRPVControllerEventTopCombinedName, 0,
+                               trace_event.m_top_combined_name);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         }
-        length += 1;
-        result = rocprofvis_controller_get_string(event, kRPVControllerEventName, 0,
-                                                  str_buffer, &length);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        trace_event.m_name.assign(str_buffer);
+
         real_count++;
     }
 
@@ -3268,8 +3228,6 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
     spdlog::debug("Adding {} event entries to track id {}", real_count,
                   params.m_track_id);
     raw_event_data->AddChunk(params.m_chunk_index, std::move(buffer));
-    delete[] str_buffer;
-
     m_raw_trackdata[params.m_track_id] = raw_event_data;
 }
 
@@ -3437,26 +3395,35 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
     }
 }
 
+rocprofvis_result_t
+DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
+                        uint64_t index, std::string& out_string)
+{
+    uint32_t length = 0;
+    out_string.clear();
+
+    rocprofvis_result_t result =
+        rocprofvis_controller_get_string(handle, property, index, nullptr, &length);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    if(length == 0)
+    {
+        return result;
+    }
+
+    out_string.resize(length);
+    result = rocprofvis_controller_get_string(
+        handle, property, index, const_cast<char*>(out_string.c_str()), &length);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    return result;
+}
+
 std::string
 DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                         uint64_t index)
 {
-    uint32_t            length = 0;
-    rocprofvis_result_t result =
-        rocprofvis_controller_get_string(handle, property, index, nullptr, &length);
+    std::string         str;
+    rocprofvis_result_t result = GetString(handle, property, index, str);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-    if(length == 0)
-    {
-        return std::string();
-    }
-
-    std::string str;
-    str.resize(length);
-    result = rocprofvis_controller_get_string(handle, property, index,
-                                              const_cast<char*>(str.c_str()), &length);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
     return str;
 }
 

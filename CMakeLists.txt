@@ -23,27 +23,29 @@ option(JSON_TRACE_SUPPORT "Build with support for JSON traces" OFF)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" ON)
+option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 
-# Add third-party libraries, core, and model BEFORE controller
-add_subdirectory(thirdparty)
-
-add_subdirectory(src/core)
-add_subdirectory(src/model)
-add_subdirectory(src/controller)
-
-set(rocprofvis_source_files)
 if(JSON_TRACE_SUPPORT) 
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_TRACE_SUPPORT")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DJSON_TRACE_SUPPORT")
 endif(JSON_TRACE_SUPPORT)
 if(COMPUTE_UI_SUPPORT) 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
 endif(ROCPROFVIS_DEVELOPER_MODE)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
+if(USE_NATIVE_FILE_DIALOG)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NATIVE_FILE_DIALOG")
+endif(USE_NATIVE_FILE_DIALOG)
+
+# Add third-party libraries, core, and model BEFORE controller
+add_subdirectory(thirdparty)
+add_subdirectory(src/core)
+add_subdirectory(src/model)
+add_subdirectory(src/controller)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 
@@ -139,7 +141,6 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
 target_link_libraries(${TARGET_NAME} PRIVATE imgui)
 target_link_libraries(${TARGET_NAME} PRIVATE implot)
-target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
 target_link_libraries(${TARGET_NAME} PRIVATE glfw)
 target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-controller)
 target_link_libraries(${TARGET_NAME} PRIVATE datamodel)
@@ -148,6 +149,16 @@ target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
+# === NativeFileDialog Extended ===
+if(USE_NATIVE_FILE_DIALOG)
+  set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
+  add_subdirectory(thirdparty/nativefiledialog-extended)
+  target_link_libraries(${TARGET_NAME} PRIVATE nfd)
+endif()
+# === ImGuiFileDialog ===
+if(NOT USE_NATIVE_FILE_DIALOG)
+  target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
+endif()
 
 # === Vulkan ===
 find_package(Vulkan REQUIRED)

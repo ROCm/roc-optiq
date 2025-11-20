@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_click_manager.h"

@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"

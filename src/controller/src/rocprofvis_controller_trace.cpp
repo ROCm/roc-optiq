@@ -513,6 +513,10 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackNodeIdUInt64, 0);
+                                        if (type == kRPVControllerTrackTypeSamples)
+                                        {
+                                            max_ts = end_time;
+                                        }
                                         track->SetDouble(kRPVControllerTrackMinTimestamp,
                                                          0, min_ts);
                                         track->SetDouble(kRPVControllerTrackMaxTimestamp,

@@ -2980,10 +2980,10 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     buffer.reserve(count);
 
     std::unordered_set timepoint_set = raw_sample_data->GetWritableIdSet();
-
+    rocprofvis_controller_sample_t* sample = nullptr;
     for(uint64_t i = 0; i < count; i++)
     {
-        rocprofvis_controller_sample_t* sample = nullptr;
+        
         rocprofvis_result_t             result = rocprofvis_controller_get_object(
             track_data, kRPVControllerArrayEntryIndexed, i, &sample);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
@@ -3012,6 +3012,23 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
 
         trace_counter.m_start_ts = start_ts;
         trace_counter.m_value    = value;
+    }
+    if (sample != nullptr)
+    {
+        // Construct final rocprofvis_trace_counter_t item
+        buffer.emplace_back();
+        rocprofvis_trace_counter_t& trace_counter = buffer.back();
+
+        double last_value = 0;
+        double last_ts = 0;
+        rocprofvis_result_t result = rocprofvis_controller_get_double(sample, kRPVControllerSampleNextValue, 0, &last_value);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleNextTimestamp, 0, &last_ts);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        trace_counter.m_start_ts = last_ts;
+        trace_counter.m_value = last_value;
     }
 
     raw_sample_data->AddChunk(params.m_chunk_index, std::move(buffer));

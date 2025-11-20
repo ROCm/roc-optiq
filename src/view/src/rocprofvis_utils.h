@@ -205,10 +205,11 @@ constexpr uint64_t minute_in_s  = 60;
 constexpr uint64_t minute_in_ns = minute_in_s * ns_per_s;
 }  // namespace TimeConstants
 
-std::string get_application_config_path(bool create_dirs);
+std::string 
+get_application_config_path(bool create_dirs);
 
 std::string
-compact_number_format(float number);
+compact_number_format(double number);
 
 }  // namespace View
 }  // namespace RocProfVis

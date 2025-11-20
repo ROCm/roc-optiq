@@ -294,7 +294,7 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
 }
 
 std::string
-RocProfVis::View::compact_number_format(float number)
+RocProfVis::View::compact_number_format(double number)
 {
     if(!std::isfinite(number))
     {
@@ -303,7 +303,7 @@ RocProfVis::View::compact_number_format(float number)
     }
 
     bool   negative = std::signbit(number);
-    double value        = std::fabs(static_cast<double>(number));
+    double value    = std::fabs(number);
 
     const char* suffixes[] = { "", "K", "M", "B", "T", "P", "E" };
     uint32_t    magnitude  = 0;

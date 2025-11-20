@@ -154,24 +154,24 @@ typedef struct process_info_t
 
 typedef struct iterable_info_t
 {
-    uint64_t id;
+    uint64_t    id;
     std::string name;
 } iterable_info_t;
 
 typedef struct thread_info_t : public iterable_info_t
 {
-    double      start_time;
-    double      end_time;
+    double start_time;
+    double end_time;
 } thread_info_t;
 
 typedef struct queue_info_t : public iterable_info_t
 {
-    uint64_t    device_id;  // ID of owning device.
+    uint64_t device_id;  // ID of owning device.
 } queue_info_t;
 
 typedef struct stream_info_t : public iterable_info_t
 {
-    uint64_t    device_id;  // ID of owning device.
+    uint64_t device_id;  // ID of owning device.
 } stream_info_t;
 
 typedef struct counter_info_t : public iterable_info_t
@@ -230,11 +230,12 @@ public:
     uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
     std::string                        m_filter;
-    std::vector<std::string>           m_string_table_filters; // strings to use for string table filtering.
-    std::string                        m_group;
-    std::string                        m_group_columns;
-    std::string                        m_export_to_file_path;
-    bool                               m_summary;
+    std::vector<std::string>
+                m_string_table_filters;  // strings to use for string table filtering.
+    std::string m_group;
+    std::string m_group_columns;
+    std::string m_export_to_file_path;
+    bool        m_summary;
 
     TableRequestParams(const TableRequestParams& table_params)            = default;
     TableRequestParams& operator=(const TableRequestParams& table_params) = default;
@@ -298,7 +299,7 @@ typedef struct formatted_column_data_t
 {
     // this column needs formatting
     bool needs_formatting;
-    //only populated if needs_formatting is true
+    // only populated if needs_formatting is true
     std::vector<std::string> formatted_row_value;
 } formatted_column_info_t;
 
@@ -308,8 +309,8 @@ typedef struct table_info_t
     std::vector<std::string>              table_header;
     std::vector<std::vector<std::string>> table_data;
     // formatted version of the table data but only for columns that need formatting
-    std::vector<formatted_column_info_t>  formatted_column_data;
-    uint64_t                              total_row_count;
+    std::vector<formatted_column_info_t> formatted_column_data;
+    uint64_t                             total_row_count;
 } table_info_t;
 
 class DataProvider
@@ -508,10 +509,16 @@ public:
     Gets a histogram of all tracks in the controller.
     */
     const std::vector<double>& GetHistogram();
+
+    /*
+    Updates histogram as tracks are hidden or shown by user.
+    */
+    void UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add);
+
     /*
      Gets a Minimap of all tracks individually in the controller.
      */
-    const std::map<int, std::vector<double>>& GetMiniMap();
+    const std::map<uint64_t, std::tuple<std::vector<double>, bool>>& GetMiniMap();
 
     /*
      * Performs all data processing.  Call this from the "game loop".
@@ -565,8 +572,7 @@ public:
     uint64_t                                     GetTableTotalRowCount(TableType type);
     void                                         ClearTable(TableType type);
     const std::vector<formatted_column_info_t>&  GetFormattedTableData(TableType type);
-    std::vector<formatted_column_info_t>&        GetMutableFormattedTableData(TableType type);
-
+    std::vector<formatted_column_info_t>& GetMutableFormattedTableData(TableType type);
 
     const char* GetProgressMessage();
 
@@ -580,7 +586,8 @@ public:
     void SetTraceLoadedCallback(
         const std::function<void(const std::string&, uint64_t)>& callback);
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
-    void SetExportTableCallback(const std::function<void(const std::string&, bool)>& callback);
+    void SetExportTableCallback(
+        const std::function<void(const std::string&, bool)>& callback);
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -655,8 +662,8 @@ private:
     // Global Histogram Vector
     std::vector<double> m_histogram;
     // Minimap per track.
-    std::map<int, std::vector<double>> m_mini_map;
-
+    std::map<uint64_t, std::tuple<std::vector<double>, bool>>
+        m_mini_map;  // bool is for determining if track is visible.
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;
     // Called when table data has changed

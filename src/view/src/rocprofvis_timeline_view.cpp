@@ -3,21 +3,20 @@
 #include "rocprofvis_timeline_view.h"
 #include "imgui.h"
 #include "rocprofvis_annotations.h"
+#include "rocprofvis_click_manager.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_track_item.h"
+#include "rocprofvis_font_manager.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_debug_window.h"
-#include "rocprofvis_click_manager.h"   
-#include <algorithm>
-#include <GLFW/glfw3.h>
-#include "rocprofvis_font_manager.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
+
 namespace RocProfVis
 {
 namespace View
@@ -141,7 +140,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
 
     m_graphs = std::make_shared<std::vector<rocprofvis_graph_t>>();
-    
+
     // force initial calculation of flame track label width
     FlameTrackItem::CalculateMaxEventLabelWidth();
 }
@@ -815,7 +814,7 @@ TimelineView::RenderGrid()
         std::string label;
         for(auto i = 0; i < m_grid_interval_count; i++)
         {
-            double grid_line_ns = grid_line_start_ns + (i * m_grid_interval_ns);
+            double grid_line_ns     = grid_line_start_ns + (i * m_grid_interval_ns);
             float  normalized_start = static_cast<float>(
                 child_win.x + (grid_line_ns - m_view_time_offset_ns) * m_pixels_per_ns);
 
@@ -1270,28 +1269,118 @@ TimelineView::RenderHistogram()
 
     const float kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
     const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
-    ImVec2      window_size           = ImGui::GetWindowSize();
+    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
+
+    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+
+    int splitter_size = 5;
+
+    // Vertical splitter
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
+    ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
+                      false);
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+    float histogram_width = m_graph_size.x - splitter_size;
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
-    ImGui::BeginChild("Histogram", ImVec2(window_size.x, kHistogramTotalHeight), false,
+    ImGui::BeginChild("Histogram", ImVec2(histogram_width, kHistogramTotalHeight), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    // Ruler area
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kRulerBgColor));
+    ImGui::BeginChild("Histogram Ruler", ImVec2(histogram_width, m_ruler_height), false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
+    ImDrawList* draw_list_ruler = ImGui::GetWindowDrawList();
+    ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
+    float       ruler_width     = m_graph_size.x;
+    float       tick_top        = ruler_pos.y + 2.0f;
+    float       tick_bottom     = ruler_pos.y + 7.0f;
+    ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
+    float       label_font_size = font->FontSize;
+
+    // Interval calculation
+    // measure the size of the label to determine the step size
+    std::string label = nanosecond_to_formatted_str(m_range_x, time_format, true) + "gap";
+    ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
+
+    // calculate the number of intervals based on the graph width and label width
+    // reserve space for first and last label
+    int interval_count =
+        static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
+    if(interval_count < 1) interval_count = 1;
+
+    double pixels_per_ns = m_graph_size.x / m_range_x;
+    double interval_ns   = calculate_nice_interval(m_range_x, interval_count);
+    double step_size_px  = interval_ns * pixels_per_ns;
+    int    pad_amount    = 2;  // +2 for the first and last label
+
+    // If the step size is smaller than the label size, try to adjust the interval count
+    while(step_size_px < label_size.x)
+    {
+        interval_count--;
+        interval_ns  = calculate_nice_interval(m_range_x, interval_count);
+        step_size_px = interval_ns * pixels_per_ns;
+        // If the interval count is too small break out
+        if(interval_count <= 0)
+        {
+            break;
+        }
+    }
+
+    const int num_ticks          = interval_count + pad_amount;
+    double    grid_line_start_ns = 0;
+    ImVec2    window_pos         = ImGui::GetWindowPos();
+
+    for(int i = 0; i < num_ticks; i++)
+    {
+        double      tick_ns = grid_line_start_ns + (i * interval_ns);
+        float       tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
+        std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
+        label_size             = ImGui::CalcTextSize(tick_label.c_str());
+
+        float label_x;
+        if(i == 0)
+        {
+            label_x = tick_x + ImGui::CalcTextSize("0").x;
+        }
+        else
+        {
+            label_x = tick_x;
+        }
+
+        ImVec2 label_pos(label_x, tick_top);
+        draw_list_ruler->AddText(font, label_font_size, label_pos,
+                                 m_settings.GetColor(Colors::kRulerTextColor),
+                                 tick_label.c_str());
+
+        // Draw tick below the label
+        float tick_label_bottom = label_pos.y + label_size.y + 2.0f;  // 2.0f is padding
+        float tick_length       = 5.0f;  // Length of the tick mark
+        draw_list_ruler->AddLine(ImVec2(tick_x, tick_label_bottom),
+                                 ImVec2(tick_x, tick_label_bottom + tick_length),
+                                 m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+
     // Histogram bars area
-    ImGui::BeginChild("Histogram Bars", ImVec2(window_size.x, kHistogramBarHeight), false,
+    ImGui::BeginChild("Histogram Bars", ImVec2(histogram_width, kHistogramBarHeight),
+                      false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImDrawList* draw_list   = ImGui::GetWindowDrawList();
     ImVec2      bars_pos    = ImGui::GetCursorScreenPos();
-    float       bars_width  = window_size.x;
+    float       bars_width  = m_graph_size.x;
     float       bars_height = kHistogramBarHeight;
     size_t      bin_count   = m_histogram->size();
 
     // Draw histogram bars
     if(bin_count > 0)
     {
-        double max_bin_value =
-            *std::max_element(m_histogram->begin(), m_histogram->end());
         float bin_width = bars_width / static_cast<float>(bin_count);
 
         for(size_t i = 0; i < bin_count; ++i)
@@ -1300,19 +1389,15 @@ TimelineView::RenderHistogram()
             float x1 = x0 + bin_width;
             float y0 = bars_pos.y;
             float y1 = y0 + bars_height;
-            float bar_height =
-                (max_bin_value > 0)
-                    ? (static_cast<float>((*m_histogram)[i] / max_bin_value) *
-                       bars_height)
-                    : 0.0f;
-            float y_bar = y1 - bar_height;
+            // Use the normalized value directly (assumed in [0, 1])
+            float bar_height = static_cast<float>((*m_histogram)[i]) * bars_height;
+            float y_bar      = y1 - bar_height;
             draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
                                      i % 2 == 0
                                          ? m_settings.GetColor(Colors::kAccentRedActive)
                                          : m_settings.GetColor(Colors::kAccentRed));
         }
     }
-
     // Draw view range overlays and labels
     float view_start_frac = static_cast<float>(m_view_time_offset_ns / m_range_x);
     float view_end_frac =
@@ -1324,8 +1409,6 @@ TimelineView::RenderHistogram()
     float x_view_end   = bars_pos.x + view_end_frac * bars_width;
     float y0           = bars_pos.y;
     float y1           = bars_pos.y + bars_height;
-
-    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
 
     // Left overlay
     if(x_view_start > bars_pos.x)
@@ -1365,81 +1448,6 @@ TimelineView::RenderHistogram()
     if(!m_resize_activity && !m_stop_user_interaction) HandleHistogramTouch();
 
     ImGui::EndChild();  // Histogram Bars
-
-    // Ruler area
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kRulerBgColor));
-    ImGui::BeginChild("Histogram Ruler", ImVec2(window_size.x, m_ruler_height), false,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-    ImDrawList* draw_list_ruler = ImGui::GetWindowDrawList();
-    ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
-    float       ruler_width     = window_size.x;
-    float       tick_top        = ruler_pos.y + 2.0f;
-    float       tick_bottom     = ruler_pos.y + 7.0f;
-    ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
-    float       label_font_size = font->FontSize;
-
-    // Interval calculation
-    // measure the size of the label to determine the step size
-    std::string label = nanosecond_to_formatted_str(m_range_x, time_format, true) + "gap";
-    ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
-
-    // calculate the number of intervals based on the graph width and label width
-    // reserve space for first and last label
-    int interval_count =
-        static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
-    if(interval_count < 1) interval_count = 1;
-
-    double pixels_per_ns = window_size.x / m_range_x;
-    double interval_ns   = calculate_nice_interval(m_range_x, interval_count);
-    double step_size_px  = interval_ns * pixels_per_ns;
-    int    pad_amount    = 2;  // +2 for the first and last label
-
-    // If the step size is smaller than the label size, try to adjust the interval count
-    while(step_size_px < label_size.x)
-    {
-        interval_count--;
-        interval_ns  = calculate_nice_interval(m_range_x, interval_count);
-        step_size_px = interval_ns * pixels_per_ns;
-        // If the interval count is too small break out
-        if(interval_count <= 0)
-        {
-            break;
-        }
-    }
-
-    const int num_ticks          = interval_count + pad_amount;
-    double    grid_line_start_ns = 0;
-    ImVec2    window_pos         = ImGui::GetWindowPos();
-
-    for(int i = 0; i < num_ticks; i++)
-    {
-        double tick_ns = grid_line_start_ns + (i * interval_ns);
-        float  tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
-        draw_list_ruler->AddLine(ImVec2(tick_x, tick_top), ImVec2(tick_x, tick_bottom),
-                                 m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
-
-        std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
-        label_size             = ImGui::CalcTextSize(tick_label.c_str());
-
-        float label_x;
-        if(i == 0)
-        {
-            label_x = tick_x + ImGui::CalcTextSize("0").x;
-        }
-        else
-        {
-            label_x = tick_x;
-        }
-
-        ImVec2 label_pos(label_x, tick_bottom + 1.0f);
-        draw_list_ruler->AddText(font, label_font_size, label_pos,
-                                 m_settings.GetColor(Colors::kRulerTextColor),
-                                 tick_label.c_str());
-    }
-
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
@@ -1452,9 +1460,9 @@ TimelineView::RenderHistogram()
 
     ImVec2 mouse_position = io.MousePos;
     bool   mouse_inside   = mouse_position.x >= window_pos.x &&
-                        mouse_position.x <= window_pos.x + window_size.x &&
+                        mouse_position.x <= window_pos.x + m_graph_size.x &&
                         mouse_position.y >= window_pos.y &&
-                        mouse_position.y <= window_pos.y + window_size.y;
+                        mouse_position.y <= window_pos.y + m_graph_size.y;
 
     // Update pseudo focus state based on mouse interaction
     if(mouse_any)
@@ -1489,15 +1497,13 @@ TimelineView::RenderTraceView()
 
     m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
 
- 
     RenderGrid();
- 
+
     RenderGraphView();
     RenderSplitter();
     RenderInteractiveUI();
 
     RenderScrubber(screen_pos);
-  
 
     if(!m_resize_activity && !m_stop_user_interaction)
     {
@@ -1518,10 +1524,10 @@ TimelineView::RenderTraceView()
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
     ImGui::SameLine();
 
-    float available_width = subcomponent_size_main.x - m_sidebar_size;
+    float  available_width = subcomponent_size_main.x - m_sidebar_size;
     double view_width      = std::min(m_v_width, m_range_x);
     double max_offset      = m_range_x - view_width;
-    float view_offset =
+    float  view_offset =
         static_cast<float>(std::clamp(m_view_time_offset_ns, 0.0, max_offset));
 
     float min_grab = 4.0f;
@@ -1613,7 +1619,8 @@ TimelineView::HandleHistogramTouch()
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 
-        float user_requested_move = static_cast<float>((drag / m_graph_size.x) * m_range_x);
+        float user_requested_move =
+            static_cast<float>((drag / m_graph_size.x) * m_range_x);
 
         if(user_requested_move <= 0)
         {
@@ -1696,7 +1703,8 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel_h = io.MouseWheelH;
         if(scroll_wheel_h != 0.0f)
         {
-            float move_amount = static_cast<float>(scroll_wheel_h * m_v_width * zoom_speed);
+            float move_amount =
+                static_cast<float>(scroll_wheel_h * m_v_width * zoom_speed);
             m_view_time_offset_ns -= move_amount;
         }
 
@@ -1833,7 +1841,8 @@ TimelineView::HandleTopSurfaceTouch()
         float  drag       = io.MouseDelta.x;
         double view_width = (m_range_x) / m_zoom;
 
-        float user_requested_move = static_cast<float>((drag / m_graph_size.x) * view_width);
+        float user_requested_move =
+            static_cast<float>((drag / m_graph_size.x) * view_width);
 
         m_view_time_offset_ns -= user_requested_move;
     }

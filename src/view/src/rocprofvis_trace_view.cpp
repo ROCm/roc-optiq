@@ -212,7 +212,7 @@ TraceView::CreateView()
     m_analysis_item            = LayoutItem::CreateFromWidget(analysis);
     m_analysis_item->m_visible = m_is_analysis_visible;
 
-    LayoutItem m_histogram_item(0, 120);
+    LayoutItem m_histogram_item(0, 80);
     m_histogram_item.m_item = m_histogram_widget;
     LayoutItem timeline_item(0, 0);
     timeline_item.m_item = m_timeline_view;

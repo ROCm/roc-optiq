@@ -266,7 +266,7 @@
 		<row><td>NewBinary16</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\InstallFirstUse.ico</td></row>
 		<row><td>NewBinary17</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\InstallPartial.ico</td></row>
 		<row><td>NewBinary18</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\InstallStateMenu.ico</td></row>
-		<row><td>NewBinary19</td><td/><td>&lt;ISProjectFolder&gt;\ROCm_Visualizer_CustomActions.vbs</td></row>
+		<row><td>NewBinary19</td><td/><td>&lt;ISProjectFolder&gt;\ROCm_Optiq_CustomActions.vbs</td></row>
 		<row><td>NewBinary2</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\New.ibd</td></row>
 		<row><td>NewBinary3</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\Up.ibd</td></row>
 		<row><td>NewBinary4</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\WarningIcon.ibd</td></row>
@@ -1271,8 +1271,8 @@
 		<row><td>QTQUICK</td><td>MODERN_STANDBY</td><td>QtQuick</td><td/><td>0</td><td/></row>
 		<row><td>QTQUICK.2</td><td>MODERN_STANDBY</td><td>QTQUIC~1|QtQuick.2</td><td/><td>0</td><td/></row>
 		<row><td>README</td><td>DOCUMENTATION</td><td>ReadMe</td><td/><td>0</td><td/></row>
-		<row><td>ROCM_VISUALIZER</td><td>AMD</td><td>ROCM-V~1|ROCm-Visualizer</td><td/><td>0</td><td/></row>
-		<row><td>ROCM_VISUALIZER_BETA</td><td>AMD</td><td>ROCM-V~1|ROCm-Visualizer-Beta</td><td/><td>0</td><td/></row>
+		<row><td>ROCM_VISUALIZER</td><td>AMD</td><td>ROCM_-~1|ROCm™-Optiq</td><td/><td>0</td><td/></row>
+		<row><td>ROCM_VISUALIZER_BETA</td><td>AMD</td><td>ROCM-V~1|ROCm™-Optiq-Beta</td><td/><td>0</td><td/></row>
 		<row><td>ROOT_CIMV2</td><td>OMIREGISTER</td><td>ROOT-C~1|root-cimv2</td><td/><td>0</td><td/></row>
 		<row><td>ROOT_CIMV21</td><td>OMIREGISTER1</td><td>ROOT-C~1|root-cimv2</td><td/><td>0</td><td/></row>
 		<row><td>S0I3DRIVER</td><td>INSTALLDIR</td><td>S0I3DR~1|s0i3driver</td><td/><td>0</td><td/></row>
@@ -2550,20 +2550,20 @@
 		<col key="yes" def="s72">Property</col>
 		<col def="L255">Value</col>
 		<row><td>Internal</td><td>IncludeActionHelp</td><td>1</td></row>
-		<row><td>Internal</td><td>MSIPackageFileName</td><td>ROCm-Visualizer-Beta</td></row>
-		<row><td>Internal</td><td>ProductName</td><td>ROCm-Visualizer-Beta</td></row>
+		<row><td>Internal</td><td>MSIPackageFileName</td><td>ROCm-Optiq-Beta</td></row>
+		<row><td>Internal</td><td>ProductName</td><td>ROCm™-Optiq-Beta</td></row>
 		<row><td>Internal</td><td>Setup64bitLauncher</td><td>1</td></row>
-		<row><td>Internal</td><td>SetupFileName</td><td>ROCm-Visualizer-Beta</td></row>
+		<row><td>Internal</td><td>SetupFileName</td><td>ROCm-Optiq-Beta</td></row>
 		<row><td>NDA</td><td>IncludeActionHelp</td><td>1</td></row>
-		<row><td>NDA</td><td>MSIPackageFileName</td><td>ROCm-Visualizer-Beta</td></row>
-		<row><td>NDA</td><td>ProductName</td><td>ROCm-Visualizer-Beta</td></row>
+		<row><td>NDA</td><td>MSIPackageFileName</td><td>ROCm-Optiq-Beta</td></row>
+		<row><td>NDA</td><td>ProductName</td><td>ROCm™-Optiq-Beta</td></row>
 		<row><td>NDA</td><td>Setup64bitLauncher</td><td>1</td></row>
-		<row><td>NDA</td><td>SetupFileName</td><td>ROCm-Visualizer-Beta</td></row>
+		<row><td>NDA</td><td>SetupFileName</td><td>ROCm-Optiq-Beta</td></row>
 		<row><td>Public</td><td>IncludeActionHelp</td><td>1</td></row>
-		<row><td>Public</td><td>MSIPackageFileName</td><td>ROCm-Visualizer-Beta</td></row>
-		<row><td>Public</td><td>ProductName</td><td>ROCm-Visualizer-Beta</td></row>
+		<row><td>Public</td><td>MSIPackageFileName</td><td>ROCm-Optiq-Beta</td></row>
+		<row><td>Public</td><td>ProductName</td><td>ROCm™-Optiq-Beta</td></row>
 		<row><td>Public</td><td>Setup64bitLauncher</td><td>1</td></row>
-		<row><td>Public</td><td>SetupFileName</td><td>ROCm-Visualizer-Beta</td></row>
+		<row><td>Public</td><td>SetupFileName</td><td>ROCm-Optiq-Beta</td></row>
 	</table>
 
 	<table name="ISRelease">
@@ -2597,9 +2597,9 @@
 		<col def="S255">DotNetBuildConfiguration</col>
 		<col def="S255">MsiCommandLine</col>
 		<col def="I4">ISSetupPrerequisiteLocation</col>
-		<row><td>Internal_Compressed</td><td>Internal</td><td>C:\Clone\CloneRepo\Temp\Internal</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>Internal,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="INTGO" /l*v "%userprofile%\ROCm-Visualizer-Beta.log"</td><td>1</td></row>
-		<row><td>NDA_Compressed</td><td>NDA</td><td>C:\Clone\CloneRepo\Temp\NDA</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>NDA,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="NDAGO" /l*v "%userprofile%\ROCm-Visualizer-Beta.log"</td><td>1</td></row>
-		<row><td>Public_Compressed</td><td>Public</td><td>C:\Clone\CloneRepo\Temp\Public</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>Public,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="PUBLICGO" /l*v "%userprofile%\ROCm-Visualizer-Beta.log"</td><td>1</td></row>
+		<row><td>Internal_Compressed</td><td>Internal</td><td>C:\Clone\CloneRepo\Temp\Internal</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>Internal,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="INTGO" /l*v "%userprofile%\ROCm-Optiq-Beta.log"</td><td>1</td></row>
+		<row><td>NDA_Compressed</td><td>NDA</td><td>C:\Clone\CloneRepo\Temp\NDA</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>NDA,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="NDAGO" /l*v "%userprofile%\ROCm-Optiq-Beta.log"</td><td>1</td></row>
+		<row><td>Public_Compressed</td><td>Public</td><td>C:\Clone\CloneRepo\Temp\Public</td><td>PackageName</td><td>1</td><td>1033</td><td>2</td><td>1</td><td>Intel</td><td/><td>1033</td><td>0</td><td>0</td><td>1</td><td>0</td><td>Public,Common</td><td>0</td><td/><td>MediaLocation</td><td/><td>http://</td><td/><td/><td/><td>(C) 2022 Advanced Micro Devices, Inc.</td><td>109816845</td><td/><td/><td>GONOGO="PUBLICGO" /l*v "%userprofile%\ROCm-Optiq-Beta.log"</td><td>1</td></row>
 	</table>
 
 	<table name="ISReleaseASPublishInfo">
@@ -2814,6 +2814,8 @@
 		<col def="S255">StartDate</col>
 		<col def="S255">EndDate</col>
 		<col def="I4">Attributes</col>
+		<col def="I4">RepeatInterval</col>
+		<col def="I4">DurationInterval</col>
 	</table>
 
 	<table name="ISScriptFile">
@@ -4040,8 +4042,8 @@
 		<row><td>ID_STRING13</td><td>1033</td><td>{&amp;MSSansBold8}Create Desktop Shortcut Dailog</td><td>0</td><td/><td>-1867727482</td></row>
 		<row><td>ID_STRING14</td><td>1033</td><td>Please select the checkbox for creating a shortcut on Desktop</td><td>0</td><td/><td>-1867774490</td></row>
 		<row><td>ID_STRING15</td><td>1033</td><td>[ProductName] - InstallShield Wizard</td><td>0</td><td/><td>622471887</td></row>
-		<row><td>ID_STRING16</td><td>1033</td><td>ROCm-Visualizer-Beta</td><td>0</td><td/><td>-189928629</td></row>
-		<row><td>ID_STRING17</td><td>1033</td><td>ROCm-Visualizer-Beta</td><td>0</td><td/><td>-189930677</td></row>
+		<row><td>ID_STRING16</td><td>1033</td><td>ROCm™-Optiq-Beta</td><td>0</td><td/><td>-1783769982</td></row>
+		<row><td>ID_STRING17</td><td>1033</td><td>ROCm™-Optiq-Beta</td><td>0</td><td/><td>-1783778174</td></row>
 		<row><td>ID_STRING18</td><td>1033</td><td>NDA</td><td>0</td><td/><td>-1793340150</td></row>
 		<row><td>ID_STRING19</td><td>1033</td><td>AMD</td><td>0</td><td/><td>1696219597</td></row>
 		<row><td>ID_STRING2</td><td>1033</td><td>&amp;Next &gt;</td><td>0</td><td/><td>354084365</td></row>
@@ -4087,16 +4089,16 @@
 		<row><td>ID_STRING56</td><td>1033</td><td>=-*AMDKVMViewer_64</td><td>0</td><td/><td>-1372854648</td></row>
 		<row><td>ID_STRING57</td><td>1033</td><td>[~];[INSTALLDIR]</td><td>0</td><td/><td>-1372860888</td></row>
 		<row><td>ID_STRING58</td><td>1033</td><td>&amp;Print</td><td>0</td><td/><td>-701775099</td></row>
-		<row><td>ID_STRING59</td><td>1033</td><td>ROCM-V~1|ROCm-Visualizer</td><td>0</td><td/><td>-189961237</td></row>
+		<row><td>ID_STRING59</td><td>1033</td><td>ROCM-O~1|ROCm™-Optiq</td><td>0</td><td/><td>-1783794526</td></row>
 		<row><td>ID_STRING6</td><td>1033</td><td>The following information describes this installation.</td><td>0</td><td/><td>354061901</td></row>
 		<row><td>ID_STRING60</td><td>1033</td><td>AMDPLA~1|AMD Power Monitor Tool</td><td>0</td><td/><td>-1045577947</td></row>
 		<row><td>ID_STRING61</td><td>1033</td><td>AMDPLA~1|AMD Power Monitor Tool</td><td>0</td><td/><td>170755798</td></row>
 		<row><td>ID_STRING62</td><td>1033</td><td>Binaries Selection</td><td>0</td><td/><td>-911383401</td></row>
 		<row><td>ID_STRING63</td><td>1033</td><td>AMD</td><td>0</td><td/><td>1512933411</td></row>
-		<row><td>ID_STRING64</td><td>1033</td><td>ROCM-V~1|ROCm-Visualizer</td><td>0</td><td/><td>-189957141</td></row>
-		<row><td>ID_STRING65</td><td>1033</td><td>ROCM-V~1|ROCm-Visualizer</td><td>0</td><td/><td>-189967349</td></row>
+		<row><td>ID_STRING64</td><td>1033</td><td>ROCM-O~1|ROCm™-Optiq</td><td>0</td><td/><td>-1783804766</td></row>
+		<row><td>ID_STRING65</td><td>1033</td><td>ROCM-O~1|ROCm™-Optiq</td><td>0</td><td/><td>-1783798622</td></row>
 		<row><td>ID_STRING7</td><td>1033</td><td>[ProductName] - InstallShield Wizard</td><td>0</td><td/><td>354084365</td></row>
-		<row><td>ID_STRING8</td><td>1033</td><td>ROCm-Visualizer-Beta</td><td>0</td><td/><td>-189975701</td></row>
+		<row><td>ID_STRING8</td><td>1033</td><td>ROCm™-Optiq-Beta</td><td>0</td><td/><td>-1783763838</td></row>
 		<row><td>ID_STRING9</td><td>1033</td><td>&amp;Next &gt;</td><td>0</td><td/><td>622471887</td></row>
 		<row><td>IIDS_UITEXT_FeatureUninstalled</td><td>1033</td><td>This feature will remain uninstalled.</td><td>0</td><td/><td>-1969565269</td></row>
 		<row><td>IS_PREVENT_DOWNGRADE_EXIT</td><td>1033</td><td>A newer version of this application is already installed on this computer. If you wish to install this version, please uninstall the newer version first. Click OK to exit the wizard.</td><td>0</td><td/><td>-258122134</td></row>
@@ -4377,8 +4379,8 @@
 		<row><td>ActiveLanguage</td><td>1033</td></row>
 		<row><td>ApplicationType</td><td>Standard Windows Application</td></row>
 		<row><td>Comments</td><td>This is the template for AMD applications using AMD Tools drivers.</td></row>
-		<row><td>CurrentMedia</td><td dt:dt="bin.base64" md5="43eca3bbe178b7640bd514c314324d14">
-TgBEAEEAXwBDAG8AbQBwAHIAZQBzAHMAZQBkAAEATgBEAEEA
+		<row><td>CurrentMedia</td><td dt:dt="bin.base64" md5="8a7868a38d3f6623a98f8943c70b2794">
+SQBuAHQAZQByAG4AYQBsAF8AQwBvAG0AcAByAGUAcwBzAGUAZAABAEkAbgB0AGUAcgBuAGEAbAA=
 			</td></row>
 		<row><td>ISCompilerOption_CompileBeforeBuild</td><td>1</td></row>
 		<row><td>ISCompilerOption_Debug</td><td>0</td></row>
@@ -4402,7 +4404,7 @@ TgBEAEEAXwBDAG8AbQBwAHIAZQBzAHMAZQBkAAEATgBEAEEA
 		<row><td>SaveAsSchema</td><td/></row>
 		<row><td>SccEnabled</td><td>0</td></row>
 		<row><td>SccPath</td><td/></row>
-		<row><td>SchemaVersion</td><td>788</td></row>
+		<row><td>SchemaVersion</td><td>791</td></row>
 		<row><td>Type</td><td>MSI</td></row>
 		<row><td>YahooEnabled</td><td>0</td></row>
 	</table>
@@ -4790,7 +4792,7 @@ TgBEAEEAXwBDAG8AbQBwAHIAZQBzAHMAZQBkAAEATgBEAEEA
 		<row><td>ProductCode</td><td>{1C5EF63C-1C4B-4681-99E9-A1D342E849CC}</td><td/></row>
 		<row><td>ProductID</td><td>none</td><td/></row>
 		<row><td>ProductLanguage</td><td>1033</td><td/></row>
-		<row><td>ProductName</td><td>ROCm-Visualizer-Beta</td><td/></row>
+		<row><td>ProductName</td><td>ROCm™-Optiq-Beta</td><td/></row>
 		<row><td>ProductVersion</td><td>0.6.0.0</td><td/></row>
 		<row><td>ProgressType0</td><td>install</td><td/></row>
 		<row><td>ProgressType1</td><td>Installing</td><td/></row>
@@ -4880,7 +4882,7 @@ TgBEAEEAXwBDAG8AbQBwAHIAZQBzAHMAZQBkAAEATgBEAEEA
 		<col def="L255">FileName</col>
 		<col def="s72">DirProperty</col>
 		<col def="i2">InstallMode</col>
-		<row><td>NewShortcut11</td><td>DesktopShortcut</td><td/><td>newfolder2</td><td>2</td></row>
+		<row><td>NewShortcut11</td><td>StartMenuShortcut</td><td/><td>newfolder2</td><td>2</td></row>
 	</table>
 
 	<table name="RemoveIniFile">
@@ -4966,8 +4968,8 @@ TgBEAEEAXwBDAG8AbQBwAHIAZQBzAHMAZQBkAAEATgBEAEEA
 		<col def="S255">ISComments</col>
 		<col def="S255">ISShortcutName</col>
 		<col def="I4">ISAttributes</col>
-		<row><td>NewShortcut1</td><td>DesktopFolder</td><td>##ID_STRING59##</td><td>DesktopShortcut</td><td>[INSTALLDIR]rocprof-visualizer.exe</td><td/><td/><td/><td>NewShortcut1_5F96D189269143409E37512B84451F20.exe</td><td>0</td><td>1</td><td>INSTALLDIR</td><td/><td/><td/><td/><td/><td/><td>0</td></row>
-		<row><td>NewShortcut11</td><td>newfolder2</td><td>##ID_STRING65##</td><td>DesktopShortcut</td><td>[INSTALLDIR]rocprof-visualizer.exe</td><td/><td/><td/><td>NewShortcut1_5F96D189269143409E37512B84451F20.exe</td><td>0</td><td>1</td><td>INSTALLDIR</td><td/><td/><td/><td/><td/><td/><td>0</td></row>
+		<row><td>NewShortcut1</td><td>DesktopFolder</td><td>##ID_STRING59##</td><td>DesktopShortcut</td><td>[INSTALLDIR]roc-optiq.exe</td><td/><td/><td/><td>NewShortcut1_5F96D189269143409E37512B84451F20.exe</td><td>0</td><td>1</td><td>INSTALLDIR</td><td/><td/><td/><td/><td/><td/><td>0</td></row>
+		<row><td>NewShortcut11</td><td>newfolder2</td><td>##ID_STRING65##</td><td>StartMenuShortcut</td><td>[INSTALLDIR]roc-optiq.exe</td><td/><td/><td/><td>NewShortcut1_5F96D189269143409E37512B84451F20.exe</td><td>0</td><td>1</td><td>INSTALLDIR</td><td/><td/><td/><td/><td/><td/><td>0</td></row>
 	</table>
 
 	<table name="Signature">
@@ -5770,12 +5772,14 @@ TgBEAEEAXwBDAG8AbQBwAHIAZQBzAHMAZQBkAAEATgBEAEEA
 		<row><td>ISScheduledTasks</td><td>Comments</td><td>Y</td><td/><td/><td/><td/><td>Text</td><td/><td>The optional comment about the task.</td></row>
 		<row><td>ISScheduledTasks</td><td>Component_</td><td>N</td><td/><td/><td>Component</td><td>1</td><td>Identifier</td><td/><td>Required foreign key into the Component Table.</td></row>
 		<row><td>ISScheduledTasks</td><td>Days</td><td>Y</td><td/><td/><td/><td/><td>Text</td><td/><td>A value that specifies the day of the week to run the task. Valid values are: MON, TUE, WED, THU, FRI, SAT, SUN and for MONTHLY schedules 1 - 31 (days of the month). The wildcard character (*) specifies all days.</td></row>
+		<row><td>ISScheduledTasks</td><td>DurationInterval</td><td>Y</td><td/><td/><td/><td/><td/><td/><td>A value that specifies Number of minutes after the task starts that the trigger will remain active.</td></row>
 		<row><td>ISScheduledTasks</td><td>EndDate</td><td>Y</td><td/><td/><td/><td/><td>Text</td><td/><td>Specifies the last date that the task is scheduled to run.</td></row>
 		<row><td>ISScheduledTasks</td><td>ISScheduledTasks</td><td>N</td><td/><td/><td/><td/><td>Identifier</td><td/><td>Primary key used to identify a particular ISScheduledTasks record.</td></row>
 		<row><td>ISScheduledTasks</td><td>IdleTime</td><td>Y</td><td/><td/><td/><td/><td/><td/><td>A value that specifies the amount of idle time to wait before running a scheduled ONIDLE task. The valid range is 1 - 999 minutes.</td></row>
 		<row><td>ISScheduledTasks</td><td>Modifier</td><td>Y</td><td/><td/><td/><td/><td>Text</td><td/><td>A value that refines the schedule type to allow for finer control over the schedule recurrence.</td></row>
 		<row><td>ISScheduledTasks</td><td>Months</td><td>Y</td><td/><td/><td/><td/><td>Text</td><td/><td>A value that specifies months of the year. Defaults to the first day of the month. Valid values are: JAN, FEB, MAR, APR, MAY, JUN, JUL, AUG, SEP, OCT, NOV, and DEC. The wildcard character (*) specifies all months.</td></row>
 		<row><td>ISScheduledTasks</td><td>Password</td><td>Y</td><td/><td/><td/><td/><td>Formatted</td><td/><td>A value that specifies the password for the user specified with the UserName column.</td></row>
+		<row><td>ISScheduledTasks</td><td>RepeatInterval</td><td>Y</td><td/><td/><td/><td/><td/><td/><td>A value that specifies Number of minutes between consecutive task executions. This number is counted from the start of the previous scheduled task.</td></row>
 		<row><td>ISScheduledTasks</td><td>Schedule</td><td>N</td><td/><td/><td/><td/><td>Text</td><td/><td>A value that specifies the schedule frequency. Valid values are: MINUTE, HOURLY, DAILY, WEEKLY, MONTHLY, ONCE, ONLOGON, ONIDLE, and ONEVENT.</td></row>
 		<row><td>ISScheduledTasks</td><td>StartDate</td><td>Y</td><td/><td/><td/><td/><td>Text</td><td/><td>Specifies the date that the task starts in MM/DD/YYYY format.</td></row>
 		<row><td>ISScheduledTasks</td><td>StartTime</td><td>Y</td><td/><td/><td/><td/><td>Text</td><td/><td>A value that specifies the start time to run the scheduled task.</td></row>

@@ -1,5 +1,5 @@
 '**************************************************************************************
-'This file includes VB Script custom actions written for AMD ROCm Visualizer product..
+'This file includes VB Script custom actions written for AMD ROCm™ Optiq product..
 '**************************************************************************************
 Const ForAppending = 8, ForWriting = 2, ForReading = 1
 Const TristateFalse = 0, TristateTrue = 1, TristateUseDefault = 2
@@ -11,7 +11,7 @@ Sub iLogMessage(message)
 	Dim objShell, logFolderName, logFileName, logFilePath
 	Set objShell = CreateObject("WScript.Shell")					'Prepare log file name
 	logFolderName = objShell.ExpandEnvironmentStrings("%USERPROFILE%")
-	logFileName = "\ROCm-Visualizer-Beta_Install.log"
+	logFileName = "\ROCm-Optiq-Beta_Install.log"
 	logFilePath = logFolderName & logFileName	
 	
 	Dim objFSO, objTextFile, currentDate
@@ -46,7 +46,7 @@ Function SetFolPermission()
 	
 	Dim ParentFol : ParentFol = strInst
 	ParentFol_up = Left(ParentFol, InStrRev(ParentFol, "\") - 1)
-	Dim Svcexe : Svcexe = strInst & "rocprof-visualizer.exe"
+	Dim Svcexe : Svcexe = strInst & "roc-optiq.exe"
 	Dim TakeOwnSvcexe : TakeOwnSvcexe = chr(34) & StrDir & "\System32\takeown.exe" & chr(34) & " /a /f " & chr(34) & Svcexe & chr(34)
 	
 	If Instr(strInst, "\Program Files\") > 0 OR Instr(strInst, "\Program Files (x86)\") > 0 Then
@@ -87,7 +87,7 @@ End Function
 
 
 '***********************************************************************************************************************
-'Function to redirect installation directory always to ROCm-Visualizer-Beta subdirectory in case of custom installation.
+'Function to redirect installation directory always to ROCm™ Optiq-Beta subdirectory in case of custom installation.
 '***********************************************************************************************************************
 Function Redirect_INSTALLDIR()
 
@@ -105,7 +105,7 @@ Function Redirect_INSTALLDIR()
 			strInstallPath = strInstallPath & "\"
 		End If 
 		
-		Session.Property("INSTALLDIR") = strInstallPath & "ROCm-Visualizer\"
+		Session.Property("INSTALLDIR") = strInstallPath & "ROCm" & ChrW(&H2122) & " Optiq\"
 		Call iLogMessage("Redirect_INSTALLDIR : Installation directory updated")
 	End If
 

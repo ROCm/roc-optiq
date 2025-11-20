@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 $build = $ENV{'BNumber'};
-$version = "0.6.2.$build";
+$version = "0.1.0.$build";
 
 open(CMD, "> AMDVersion.cmd") or die "can't open $newfile: $!";
 print(CMD "SET PKG_VERSION=$version\n");

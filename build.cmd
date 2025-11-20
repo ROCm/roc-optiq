@@ -11,7 +11,7 @@ IF NOT EXIST "%DEVROOT%\build" mkdir "%DEVROOT%\build"
 
 REM Run cmake build commands
 
-cmake --preset "x64-release"
+cmake --preset "x64-release" -D ROCPROFVIS_ENABLE_INTERNAL_BANNER=OFF
 cmake --build %DEVROOT%\build\x64-release --preset "Windows Release Build" --parallel 4
 IF NOT EXIST "%DEVROOT%\build\x64-release\Release\%VISUALIZER_FILE_NAME%.exe" (
     ECHO ❌ %VISUALIZER_FILE_NAME% was not built!

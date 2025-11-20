@@ -171,7 +171,7 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
         }
         else {
             record.pmc.timestamp = db->Sqlite3ColumnInt64(func, stmt, azColName, 1);
-            record.pmc.value = db->Sqlite3ColumnInt(func, stmt, azColName,2);
+            record.pmc.value = db->Sqlite3ColumnDouble(func, stmt, azColName,2);
         }
         if(db->BindObject()->FuncAddRecord(
                (*(slice_array_t*) callback_params->handle)[callback_params->track_id],

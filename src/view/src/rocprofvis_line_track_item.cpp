@@ -26,22 +26,19 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 , m_highlight_y_range(false)
 , m_dp(dp)
 , m_show_boxplot(true)
-, m_project_settings(dp.GetTraceFilePath(), *this)
+, m_linetrack_project_settings(dp.GetTraceFilePath(), *this)
 , m_min_y(0, "edit_min", "Min: ")
 , m_max_y(0, "edit_max", "Max: ")
 , m_vertical_padding(DEFAULT_VERTICAL_PADDING)
 {
     m_meta_area_scale_width = max_meta_area_width;
-    m_track_height          = 90.0f;
-
-
     UpdateYScaleExtents();
 
-    if(m_project_settings.Valid())
+    if(m_linetrack_project_settings.Valid())
     {
-        m_show_boxplot            = m_project_settings.BoxPlot();
-        m_highlight_y_range = m_project_settings.Highlight();
-        m_highlight_y_limits   = m_project_settings.HighlightRange();
+        m_show_boxplot            = m_linetrack_project_settings.BoxPlot();
+        m_highlight_y_range = m_linetrack_project_settings.Highlight();
+        m_highlight_y_limits   = m_linetrack_project_settings.HighlightRange();
     }
 }
 
@@ -82,14 +79,12 @@ LineTrackItem::LineTrackRender(float graph_width)
     cursor_position.y += m_vertical_padding;
     content_size.y -= (m_vertical_padding * 2.0f);
 
-    float scale_y =
-        static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
+    double scale_y = content_size.y / (m_max_y.Value() - m_min_y.Value());
 
     double tooltip_x     = 0;
-    float  tooltip_y     = 0;
+    double tooltip_y     = 0;
     bool   show_tooltip  = false;
     ImU32  generic_black = m_settings.GetColor(Colors::kLineChartColor);
-    ImU32  generic_red   = m_settings.GetColor(Colors::kGridRed);
 
     const float line_thickness = 2.0f;  // FIXME: hardcoded value
 
@@ -102,7 +97,7 @@ LineTrackItem::LineTrackRender(float graph_width)
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = m_data[i - 1].x_value - m_min_x;
-            tooltip_y = static_cast<float>(m_data[i - 1].y_value);
+            tooltip_y    = m_data[i - 1].y_value;
             show_tooltip = true;
         }
 
@@ -131,16 +126,14 @@ LineTrackItem::LineTrackRender(float graph_width)
 
 void
 LineTrackItem::RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
-                                   const ImVec2& content_size, float scale_y)
+                                   const ImVec2& content_size, double scale_y)
 {
-    float highlight_y_max =
+    float highlight_y_max = static_cast<float>(
         cursor_position.y + content_size.y -
-        (m_highlight_y_limits.max_limit - static_cast<float>(m_min_y.Value())) *
-            scale_y;
-    float highlight_y_min =
+        (m_highlight_y_limits.max_limit - static_cast<float>(m_min_y.Value())) * scale_y);
+    float highlight_y_min = static_cast<float>(
         cursor_position.y + content_size.y -
-        (m_highlight_y_limits.min_limit - static_cast<float>(m_min_y.Value())) *
-            scale_y;
+        (m_highlight_y_limits.min_limit - static_cast<float>(m_min_y.Value())) * scale_y);
 
     highlight_y_max = std::max(
         cursor_position.y, std::min(cursor_position.y + content_size.y, highlight_y_max));
@@ -166,11 +159,11 @@ LineTrackItem::BoxPlotRender(float graph_width)
     cursor_position.y += m_vertical_padding;
     content_size.y -= (m_vertical_padding * 2.0f);
 
-    float scale_y =
-        static_cast<float>(content_size.y / (m_max_y.Value() - m_min_y.Value()));
+    double scale_y =
+        content_size.y / (m_max_y.Value() - m_min_y.Value());
 
-    float tooltip_x    = 0;
-    float tooltip_y    = 0;
+    double tooltip_x    = 0;
+    double tooltip_y    = 0;
     bool  show_tooltip = false;
 
     for(int i = 1; i < m_data.size(); i++)
@@ -181,8 +174,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
                                       ImVec2(point_1.x + 10, point_1.y + 10)) &&
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
-            tooltip_x    = static_cast<float>(m_data[i - 1].x_value - m_min_x);
-            tooltip_y    = static_cast<float>(m_data[i - 1].y_value);
+            tooltip_x    = m_data[i - 1].x_value - m_min_x;
+            tooltip_y    = m_data[i - 1].y_value;
             show_tooltip = true;
         }
 
@@ -220,7 +213,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
 }
 
 void
-LineTrackItem::RenderTooltip(float tooltip_x, float tooltip_y)
+LineTrackItem::RenderTooltip(double tooltip_x, double tooltip_y)
 {
     std::string x_label = nanosecond_to_formatted_str(
         tooltip_x, m_settings.GetUserSettings().unit_settings.time_format, true);
@@ -450,7 +443,7 @@ LineTrackItem::RenderMetaAreaOptions()
 
 ImVec2
 LineTrackItem::MapToUI(rocprofvis_data_point_t& point, ImVec2& cursor_position,
-                       ImVec2& content_size, double scaleX, float scaleY)
+                       ImVec2& content_size, double scaleX, double scaleY)
 {
     ImVec2 container_pos = ImGui::GetWindowPos();
 

@@ -13,16 +13,18 @@ typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectType
 
 Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
 : Handle(__kRPVControllerSamplePropertiesFirst, __kRPVControllerSamplePropertiesLast)
-, m_data(type)
-, m_id(id)
+, m_data(0)
+, m_next_data(0)
+, m_next_timestamp(0)
 , m_timestamp(timestamp)
 {}
 
 Sample& Sample::operator=(Sample&& other)
 {
-    m_id              = other.m_id;
     m_data            = other.m_data;
-    m_timestamp       = other.m_timestamp;   
+    m_timestamp       = other.m_timestamp;
+    m_next_data       = other.m_next_data;
+    m_next_timestamp  = other.m_next_timestamp;
     return *this;
 }
 
@@ -51,19 +53,14 @@ rocprofvis_result_t Sample::GetUInt64(rocprofvis_property_t property, uint64_t i
             }
             case kRPVControllerSampleId:
             {
-                *value = m_id;
+                *value = m_timestamp;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleType:
             {
-                *value = m_data.GetType();
+                *value = kRPVControllerPrimitiveTypeDouble;
                 result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerSampleValue:
-            {
-                result = m_data.GetUInt64(value);
                 break;
             }
             case kRPVControllerSampleNumChildren:
@@ -135,7 +132,20 @@ rocprofvis_result_t Sample::GetDouble(rocprofvis_property_t property, uint64_t i
             }
             case kRPVControllerSampleValue:
             {
-                result = m_data.GetDouble(value);
+                *value = m_data;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerSampleNextTimestamp:
+            {
+                *value = m_next_timestamp;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerSampleNextValue:
+            {
+                *value = m_next_data;
+                result = kRocProfVisResultSuccess;
                 break;
             }
             default:
@@ -171,7 +181,8 @@ rocprofvis_result_t Sample::GetObject(rocprofvis_property_t property, uint64_t i
             }
             case kRPVControllerSampleValue:
             {
-                result = m_data.GetObject(value);
+                *value = nullptr;
+                result = kRocProfVisResultNotSupported;
                 break;
             }
             default:
@@ -192,11 +203,6 @@ rocprofvis_result_t Sample::GetString(rocprofvis_property_t property, uint64_t i
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerSampleValue:
-        {
-            result = m_data.GetString(value, length);
-            break;
-        }
         default:
         {
             result = UnhandledProperty(property);
@@ -214,16 +220,6 @@ rocprofvis_result_t Sample::SetUInt64(rocprofvis_property_t property, uint64_t i
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerSampleValue:
-        {
-            result = m_data.SetUInt64(value);
-            break;
-        }
-        case kRPVControllerSampleId:
-        {
-            result = kRocProfVisResultReadOnlyError;
-            break;
-        }
         default:
         {
             result = UnhandledProperty(property);
@@ -242,7 +238,20 @@ rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t i
     {
         case kRPVControllerSampleValue:
         {
-            result = m_data.SetDouble(value);
+            m_data = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerSampleNextValue:
+        {
+            m_next_data = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerSampleNextTimestamp:
+        {
+            m_next_timestamp = value;
+            result = kRocProfVisResultSuccess;
             break;
         }
         default:
@@ -264,11 +273,6 @@ Sample::SetObject(rocprofvis_property_t property, uint64_t index,
     {
         switch(property)
         {
-            case kRPVControllerSampleValue:
-            {
-                result = m_data.SetObject(value);
-                break;
-            }
             default:
             {
                 result = UnhandledProperty(property);
@@ -289,11 +293,6 @@ Sample::SetString(rocprofvis_property_t property, uint64_t index,
     {
         switch(property)
         {
-            case kRPVControllerSampleValue:
-            {
-                result = m_data.SetString(value);
-                break;
-            }
             default:
             {
                 result = UnhandledProperty(property);

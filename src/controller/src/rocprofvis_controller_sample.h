@@ -42,9 +42,10 @@ public:
                                   char const* value) override;
 
 protected:
-    Data         m_data;
-    uint64_t     m_id;
+    double       m_data;
     double       m_timestamp;
+    double       m_next_data;
+    double       m_next_timestamp;
 };
 
 }

@@ -77,6 +77,10 @@ SettingsPanel::Render()
             {
                 m_category = Units;
             }
+            if(ImGui::Selectable("Other", m_category == Units))
+            {
+                m_category = Other;
+            }
             ImGui::EndChild();
 
             ImGui::SameLine();
@@ -94,6 +98,10 @@ SettingsPanel::Render()
                 {
                     RenderUnitOptions();
                     break;
+                }
+                case Other:
+                {
+                    RenderOtherSettings();
                 }
                 break;
             }
@@ -274,6 +282,17 @@ SettingsPanel::RenderUnitOptions()
             static_cast<TimeFormat>(time_format_index);
         m_settings_changed = true;
     }
+}
+
+void
+SettingsPanel::RenderOtherSettings()
+{
+    ImGui::TextUnformatted("Closing options");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+    ImGui::Checkbox("Ask before exiting application", &m_usersettings.ask_before_exiting);
+    ImGui::Checkbox("Ask before closing tabs", &m_usersettings.ask_before_closing_tabs);
+    m_settings_changed = true;
 }
 
 void

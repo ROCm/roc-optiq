@@ -644,6 +644,7 @@ TabContainer::RemoveTab(int index)
 {
     if(index >= 0 && index < static_cast<int>(m_tabs.size()))
     {
+        auto user_settings = SettingsManager::GetInstance().GetUserSettings();
         if(m_enable_send_close_event)
         {
             // notify the event manager of the tab removal

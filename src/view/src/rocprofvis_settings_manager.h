@@ -34,6 +34,8 @@ typedef struct UserSettings
 {
     DisplaySettings display_settings;
     UnitSettings    unit_settings;
+    bool            ask_before_closing_tabs;
+    bool            ask_before_exiting;
 } UserSettings;
 
 typedef struct InternalSettings

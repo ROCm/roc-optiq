@@ -55,6 +55,6 @@ extensions = [
     "rocm_docs", 
 ] 
 
-html_title = f"{project} {version_number} documentation"
+html_title = f"{project} {version} documentation"
 
 external_projects_current_project = "ROCm™ Optiq (Beta)"

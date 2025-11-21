@@ -1,6 +1,6 @@
 .. meta::
-  :description: The standard End User License Agreement for ROCm-Optiq
-  :keywords: ROCm-Optiq, ROCm, license
+  :description: The standard MIT License Agreement for ROCm Optiq
+  :keywords: ROCm Optiq, ROCm, license
 
 *******
 License

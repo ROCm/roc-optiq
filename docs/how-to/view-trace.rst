@@ -1,12 +1,15 @@
 .. meta::
-  :description: Component how-to
-  :keywords: Component, ROCm, API, how-to 
+  :description: Learn how to view your trace data in ROCm Optiq
+  :keywords: Optiq, ROCm, trace, data, events, tracks, timeline
 
-*****************************
-View trace data in ROCm-Optiq
-*****************************
+******************************
+View trace data in ROCm™ Optiq
+******************************
 
-ROCm-Optiq allows you to inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage, and system telemetry data for applications running on the ROCm stack.
+.. |scroll| image:: ../images/scroll-to.png
+.. |eye| image:: ../images/eye.png
+
+ROCm™ Optiq allows you to inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage, and system telemetry data for applications running on the ROCm stack.
 
 The application provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata. It captures what happened, when it happened, and often how long it took.
 
@@ -43,10 +46,25 @@ Open a trace by going to **File** > **Open**. You can also open files by draggin
 
   If the trace file isn't opening, the file may be in an unsupported format. Convert the file to a supported format (``.db`` or ``.rpd``) using ROCm scripts.
 
+Search for events
+=================
+
+Search for events using the search box on the main Toolbar.
+
+.. image:: ../images/search.png
+   :width: 800
+
+-	To search, type in your search string and press **Enter**.
+-	Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`.
+-	Clicking **X** clears the search results.
+-	The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks (for example: ``“term1” ”term2”``).
+
 View trace data
 ===============
 
-Once you open a trace file, you can view its data from the **System Topology View** and the **Timeline View**.
+Once you open a trace file, you can view its data from the :ref:`topology` and the :ref:`timeline`.
+
+.. _topology:
 
 System Topology View
 --------------------
@@ -54,13 +72,21 @@ System Topology View
 The **System Topology View** displays a hierarchical representation of the hardware or system components such as nodes, processes and the GPU queues, memory operations, threads, and more that belong to them.
 
 .. image:: ../images/topology.png
+   :width: 800
+   :align: center
+
+- Click the |eye| icon to show or hide tracks. 
+- Click **Scroll To Track** |scroll| to go to the track in the :ref:`timeline`. 
+- When hovering over the **Description** area of the track, the scroll wheel will scroll through the track list.
+
+.. _timeline:
 
 Timeline View
 -------------
 
 .. |grip| image:: ../images/grip.png
 
-The **Timeline View** Displays CPU and GPU activities, events, and performance metrics chronologically. You can:
+The **Timeline View** displays CPU and GPU activities, events, and performance metrics chronologically. You can:
 
 - See Event tracks such as API calls, kernel dispatches, and more.
 - See sample performance Counter tracks as charts displaying the data points.
@@ -69,6 +95,8 @@ The **Timeline View** Displays CPU and GPU activities, events, and performance m
 The **Timeline View** has a **Description** area that describes a specific category of events or metrics within a profiling trace, and a **Graph** area where events and counter graphs are plotted:
 
 .. image:: ../images/timeline-details.png
+   :width: 800
+   :align: center
 
 Use the Timeline View
 ~~~~~~~~~~~~~~~~~~~~~
@@ -86,8 +114,8 @@ The **WASD** and arrow keys can be also used to zoom and pan the view:
 
 When hovering over the **Description** area, the scroll wheel will scroll through the track list. When hovering over the **Graph** area, the scroll when zooms the view in and out.
 
-Select a track
-^^^^^^^^^^^^^^
+Select a track or event
+^^^^^^^^^^^^^^^^^^^^^^^
 
 Clicking in the **Description** area will select or deselect the Counter track or Event track.
 
@@ -97,6 +125,8 @@ Clicking in the **Description** area will select or deselect the Counter track o
 Additionally, depending on the track type, the **Event Table** or **Sample Table** tabs in the **Advanced Details** section will be populated by the contents of the track.
 
 .. image:: ../images/selected-tracks.png
+   :width: 800
+   :align: center
 
 Resize or reorder tracks
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -110,6 +140,13 @@ Histogram
 The **Histogram** shows an event-density visual representation of the trace data.
 
 .. image:: ../images/histogram.png
+   :width: 800
+   :align: center
+
+When the **Timeline View** is zoomed in, the area currently in view is highlighted on the **Histogram**. 
+The highlighted area in the **Histogram** can be dragged to scroll the **Timeline View**.
+
+.. _advanced:
 
 Advanced Details
 ~~~~~~~~~~~~~~~~
@@ -118,12 +155,28 @@ The **Advanced Details** section provides an in-depth view of profiling data, en
 This section provides an interface for multiple data perspectives, offering granular insights through these components:
 
 - **Event Table**: Displays all events within the selected tracks. Users can refine their analysis by applying time-range selection or executing customized SQL-like queries, ensuring targeted event exploration.
+
+  - Right-click on the column headers to show/hide columns.
+  - In the **Event Table** tab, there is a drop-down box that allows the events grouped by a column to display aggregated metrics.
+  - Right-click on a table row and select **Go to event** to navigate to the **Timeline View** to the highlighted event.
+  - :ref:`time-range-filter` using the **Timeline View** filters the rows displayed in the table to be contained within the selected time range.
+  - SQL-like statements can be entered into the **Filter** input box to filter the data. For example, ``“min_duration > 2000”`` will filter all events shorter than 2000 ns.
+  - The **Group By** drop-down groups the results by the selected column and displays the default aggregations shown in the **Group Columns** box.
+  - Custom SQL aggregation statements can be entered into the **Group Columns** input box
+  - Click **Submit** to perform the filtering or grouping operations.
+
+  .. image:: ../images/event-table.png
+    :width: 800
+    :align: center
+
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the Event Table, it supports time-range selection and SQL-like query capabilities for detailed performance analysis.
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the event table. It shows raw database such as timestamps, duration, associated queue/stream, correlation IDs and API method parameters. It also shows Flow and Call stack information, if available.
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and it's details, the process it belongs to, the type of track (Thread, Counter, Queue, etc.).
 - **Annotations**: Displays user-created annotations, allowing for easier navigating across critical points within large traces, enhancing collaboration and sharing knowledge.
 
 .. image:: ../images/advanced.png
+   :width: 800
+   :align: center
 
 Save a project file
 ===================

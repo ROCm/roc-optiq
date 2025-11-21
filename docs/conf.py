@@ -17,7 +17,7 @@ html_theme_options = {"flavor": "rocm-docs-home"}
 
 # This section turns on/off article info
 setting_all_article_info = True
-all_article_info_os = ["linux"]
+all_article_info_os = ["windows", "linux"]
 all_article_info_author = ""
 
 # Dynamically extract component version
@@ -30,7 +30,7 @@ with open('../CMakeLists.txt', encoding='utf-8') as f:
     version_number = match[1]
 
 # for PDF output on Read the Docs
-project = "ROCm-Optiq (beta)"
+project = "ROCm™ Optiq (Beta)"
 author = "Advanced Micro Devices, Inc."
 copyright = "Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved."
 version = version_number
@@ -57,4 +57,4 @@ extensions = [
 
 html_title = f"{project} {version_number} documentation"
 
-external_projects_current_project = "ROCm-Optiq (beta)"
+external_projects_current_project = "ROCm™ Optiq (Beta)"

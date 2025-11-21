@@ -1,0 +1,25 @@
+defaults:
+  numbered: False
+  maxdepth: 6
+root: index
+
+subtrees:
+- entries:
+  - file: what-is-optiq.rst
+    title: What is ROCm-Optiq?
+
+- caption: Install
+  entries:
+  - file: install/optiq-install
+    title: ROCm-Optiq installation
+
+- caption: How to
+  entries:
+  - file: how-to/view-trace
+    title: View trace data
+  - file: how-to/customize-views
+    title: Customize a ROCm-Optiq project
+
+- caption: About
+  entries:
+  - file: license.rst

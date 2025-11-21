@@ -20,6 +20,15 @@ setting_all_article_info = True
 all_article_info_os = ["windows", "linux"]
 all_article_info_author = ""
 
+# Dynamically extract component version
+#with open('../CMakeLists.txt', encoding='utf-8') as f:
+#    pattern = r'.*\brocm_setup_version\(VERSION\s+([0-9.]+)[^0-9.]+' # Update according to each component's CMakeLists.txt
+#    match = re.search(pattern,
+#                      f.read())
+#    if not match:
+#        raise ValueError("VERSION not found!")
+#    version_number = match[1]
+
 # for PDF output on Read the Docs
 project = "ROCm™ Optiq (Beta)"
 author = "Advanced Micro Devices, Inc."
@@ -46,6 +55,6 @@ extensions = [
     "rocm_docs", 
 ] 
 
-html_title = f"{project} {0.1.0} documentation"
+html_title = f"{project} {version_number} documentation"
 
 external_projects_current_project = "ROCm™ Optiq (Beta)"

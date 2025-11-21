@@ -471,6 +471,8 @@ TabContainer::TabContainer()
 , m_allow_tool_tips(true)
 , m_enable_send_close_event(false)
 , m_enable_send_change_event(false)
+, m_index_to_remove(-1)
+, m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
 {
     m_widget_name = GenUniqueName("TabContainer");
 }
@@ -501,6 +503,17 @@ TabContainer::EnableSendChangeEvent(bool enable)
     m_enable_send_change_event = enable;
 }
 
+void
+TabContainer::ShowCloseTabConfirm(int tab_index)
+{
+    m_confirmation_dialog->Show(
+        "Confirm Closing tab",
+        "Are you sure you want to close the Tab <TODO: PUT TAB NAME>? Any "
+        "unsaved data will be lost.",
+        [this, tab_index]() {
+            m_index_to_remove           = static_cast<int>(tab_index);
+        });
+}
 void
 TabContainer::Update()
 {

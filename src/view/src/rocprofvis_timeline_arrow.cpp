@@ -1,4 +1,6 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"

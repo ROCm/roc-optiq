@@ -3089,6 +3089,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
             sample, kRPVControllerSampleNextTimestamp, 0, &end_ts);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+
         trace_counter.m_start_ts = start_ts;
         trace_counter.m_end_ts   = end_ts;
         trace_counter.m_value    = value;
@@ -3108,6 +3109,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         trace_counter.m_start_ts = last_ts;
+        trace_counter.m_end_ts   = last_ts;
         trace_counter.m_value = last_value;
     }
 

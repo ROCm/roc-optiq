@@ -16,6 +16,7 @@ namespace View
 {
 
 constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
+constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                              double time_offset_ns, double& min_x, double& max_x,
@@ -109,20 +110,13 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImU32 outline_color     = alt_fill_color;
     ImU32 accent_red        = m_settings.GetColor(Colors::kAccentRed);
 
-    if(m_data.empty())
-    {
-        ImGui::EndChild();
-        return;
-    }
-
     int hovered_idx = -1;
-    for(size_t i = 0; i < m_data.size() - 1; ++i)
+    for(size_t i = 0; i < m_data.size(); ++i)
     {
         ImVec2 point_start = MapToUI(m_data[i].m_start_ts, m_data[i].m_value,
                                      cursor_position, content_size, m_scale_x, scale_y);
-        ImVec2 point_end =
-            MapToUI(m_data[i].m_end_ts, m_data[i].m_value, cursor_position, content_size,
-                    m_scale_x, scale_y);
+        ImVec2 point_end = MapToUI(m_data[i].m_end_ts, m_data[i].m_value, cursor_position,
+                                   content_size, m_scale_x, scale_y);
 
         ImU32 fill_color = (!m_show_boxplot)                          ? transparent_color
                            : (m_show_boxplot_stripes && (i % 2 == 0)) ? alt_fill_color
@@ -130,7 +124,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
         draw_list->AddRectFilled(ImVec2(point_start.x, point_start.y),
                                  ImVec2(point_end.x, bottom_of_chart), fill_color);
-        draw_list->AddLine(point_start, point_end, outline_color, 1);
+        draw_list->AddLine(point_start, point_end, outline_color, DEFAULT_LINE_THICKNESS);
 
         if(i + 1 < m_data.size())
         {
@@ -139,7 +133,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
                 MapToUI(m_data[i + 1].m_start_ts, m_data[i + 1].m_value, cursor_position,
                         content_size, m_scale_x, scale_y);
 
-            draw_list->AddLine(point_end, next_point_start, outline_color, 1);
+            draw_list->AddLine(point_end, next_point_start, outline_color,
+                               DEFAULT_LINE_THICKNESS);
         }
 
         if(ImGui::IsMouseHoveringRect(ImVec2(point_start.x - 10, point_start.y - 10),
@@ -158,7 +153,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
         auto& d = m_data[hovered_idx];
         ImGui::BeginTooltip();
         ImGui::Text("Start: %.2f ns", d.m_start_ts - m_min_x);
-        ImGui::Text("End:   %.2f ns", d.m_end_ts - d.m_start_ts);
+        ImGui::Text("Duration:   %.2f ns", d.m_end_ts - d.m_start_ts);
         ImGui::Text("Value: %.2f", d.m_value);
         ImGui::EndTooltip();
 
@@ -172,22 +167,11 @@ LineTrackItem::BoxPlotRender(float graph_width)
         draw_list->AddCircle(start_point, 4.0f, accent_red, 12, 3);
 
         // Draw a line from start to end
-        draw_list->AddLine(start_point, end_point, accent_red, 3.0f);
+        draw_list->AddLine(start_point, end_point, accent_red,
+                           DEFAULT_LINE_THICKNESS * 3);
     }
 
-
     ImGui::EndChild();
-}
-
-void
-LineTrackItem::RenderTooltip(double tooltip_x, double tooltip_y)
-{
-    std::string x_label = nanosecond_to_formatted_str(
-        tooltip_x, m_settings.GetUserSettings().unit_settings.time_format, true);
-    ImGui::BeginTooltip();
-    ImGui::Text("X: %s", x_label.c_str());
-    ImGui::Text("Y: %.2f", tooltip_y);
-    ImGui::EndTooltip();
 }
 
 float
@@ -259,6 +243,7 @@ LineTrackItem::ExtractPointsFromData()
     m_data.clear();
     m_data.reserve(count);
     m_data = track_data;
+
     return true;
 }
 

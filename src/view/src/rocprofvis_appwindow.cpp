@@ -17,6 +17,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
+#include "rocprofvis_utils.h"
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
 #endif
@@ -785,6 +786,17 @@ AppWindow::RenderAboutDialog()
                 0.5f);
             ImGui::Text(
                 "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
+
+            ImGui::Spacing();
+
+            ImGui::SetCursorPosX(
+                (ImGui::GetWindowSize().x - ImGui::CalcTextSize("Visit ROCm Documentation").x) *
+                0.5f);
+            ImGui::TextLink("Visit ROCm Documentation");
+            if(ImGui::IsItemClicked())
+            {
+                open_url("https://rocm.docs.amd.com/en/latest/");
+            }
 
             ImGui::Spacing();
             ImGui::Separator();

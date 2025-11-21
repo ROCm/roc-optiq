@@ -27,14 +27,14 @@ all_article_info_author = ""
 #                      f.read())
 #    if not match:
 #        raise ValueError("VERSION not found!")
-#    version_number = match[1]
+version_number = "0.1.0"
 
 # for PDF output on Read the Docs
 project = "ROCm™ Optiq (Beta)"
 author = "Advanced Micro Devices, Inc."
 copyright = "Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved."
-version = 0.1
-release = 0.1
+version = version_number
+release = version_number
 
 external_toc_path = "./sphinx/_toc.yml" # Defines Table of Content structure definition path
 
@@ -55,6 +55,6 @@ extensions = [
     "rocm_docs", 
 ] 
 
-html_title = f"{project} {version} documentation"
+html_title = f"{project} {version_number} documentation"
 
 external_projects_current_project = "ROCm™ Optiq (Beta)"

@@ -373,10 +373,10 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                     slice, kRPVDMTimestampUInt64Indexed, 0);
                             double value = rocprofvis_dm_get_property_as_double(
                                 slice, kRPVDMPmcValueDoubleIndexed, 0);
-                            double last_timestamp = m_start_timestamp;
+                            double last_timestamp = timestamp;
                             double last_value = value;
                             std::string str;
-                            for(int i = 1; i <= num_records; i++)
+                            for(int i = 1; i < num_records; i++)
                             {
                                 if(future->IsCancelled()) break;
                                 timestamp = (i == num_records) ? last_timestamp :
@@ -385,7 +385,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                 value = (i == num_records) ? last_value : 
                                     rocprofvis_dm_get_property_as_double(
                                     slice, kRPVDMPmcValueDoubleIndexed, i);
-                                if (timestamp <= last_timestamp && i < num_records)
+                                if (timestamp <= last_timestamp)
                                 {
                                     continue;
                                 }
@@ -880,15 +880,8 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                     }
                                     else
                                     {
-                                        double segment_start_value = value.first + (value.second - value.first) * ((segment_start - timestamp.first) / (timestamp.second - timestamp.first));
-                                        double segment_end_value = value.first + (value.second - value.first) * ((segment_end - timestamp.first) / (timestamp.second - timestamp.first));
                                         if (current_segment == range.first)
                                         {
-                                            object->SetDouble(
-                                                kRPVControllerSampleNextTimestamp, 0, segment_end);
-                                            
-                                            object->SetDouble(
-                                                kRPVControllerSampleNextValue, 0, segment_end_value);
                                             segment->Insert(timestamp.first, level, object);
                                         } else
                                         {                                            
@@ -898,11 +891,11 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                             if(new_sample)
                                             {
                                                 new_sample->SetDouble(
-                                                    kRPVControllerSampleValue, 0, segment_start_value);
+                                                    kRPVControllerSampleValue, 0, value.first);
                                                 new_sample->SetDouble(
-                                                    kRPVControllerSampleNextTimestamp, 0, current_segment == range.second ? timestamp.second : segment_end);
+                                                    kRPVControllerSampleNextTimestamp, 0, range.second);
                                                 new_sample->SetDouble(
-                                                    kRPVControllerSampleNextValue, 0, current_segment == range.second ? value.second : segment_end_value);
+                                                    kRPVControllerSampleNextValue, 0, value.second);
                                                 segment->Insert(segment_start, level, new_sample);
                                             }
                                             else

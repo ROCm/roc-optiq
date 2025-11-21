@@ -109,6 +109,8 @@ class ProfileDatabase : public SqliteDatabase
     // @return SQLITE_OK if successful
         static int CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
+        void BuildSliceQueryMap(slice_query_t& slice_query_map, rocprofvis_dm_track_params_t* props);
+
     protected:
 
     // method to build a query to read time slice of records for single track 
@@ -137,6 +139,17 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_db_track_selection_t tracks,
                             rocprofvis_dm_string_t& query,
                             slice_array_t& slices) override;
+
+        rocprofvis_dm_result_t BuildCounterSliceLeftNeighbourQuery(
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end, 
+            rocprofvis_dm_index_t track_index, 
+            rocprofvis_dm_string_t& query);
+        rocprofvis_dm_result_t BuildCounterSliceRightNeighbourQuery(
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end, 
+            rocprofvis_dm_index_t track_index, 
+            rocprofvis_dm_string_t& query);
 
         rocprofvis_dm_result_t BuildTableQuery(
                             rocprofvis_dm_timestamp_t start, 

@@ -32,6 +32,7 @@ typedef struct rocprofvis_trace_counter_t
 {
     double m_start_ts;
     double m_value;
+    double m_duration;
 } rocprofvis_trace_counter_t;
 
 typedef union

@@ -21,6 +21,7 @@ typedef struct rocprofvis_data_point_t
 {
     double x_value;
     double y_value;
+    double x2_value;
 } rocprofvis_data_point_t;
 
 typedef struct rocprofvis_graph_t

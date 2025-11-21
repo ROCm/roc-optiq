@@ -20,21 +20,12 @@ setting_all_article_info = True
 all_article_info_os = ["windows", "linux"]
 all_article_info_author = ""
 
-# Dynamically extract component version
-with open('../CMakeLists.txt', encoding='utf-8') as f:
-    pattern = 0.1.0
-    match = re.search(pattern,
-                      f.read())
-    if not match:
-        raise ValueError("VERSION not found!")
-    version_number = match[1]
-
 # for PDF output on Read the Docs
 project = "ROCm™ Optiq (Beta)"
 author = "Advanced Micro Devices, Inc."
 copyright = "Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved."
-version = version_number
-release = version_number
+version = 0.1.0
+release = 0.1.0
 
 external_toc_path = "./sphinx/_toc.yml" # Defines Table of Content structure definition path
 
@@ -55,6 +46,6 @@ extensions = [
     "rocm_docs", 
 ] 
 
-html_title = f"{project} {version_number} documentation"
+html_title = f"{project} {0.1.0} documentation"
 
 external_projects_current_project = "ROCm™ Optiq (Beta)"

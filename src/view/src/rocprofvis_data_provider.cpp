@@ -3090,7 +3090,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         trace_counter.m_start_ts = start_ts;
-        trace_counter.m_duration = end_ts - start_ts;
+        trace_counter.m_end_ts   = end_ts;
         trace_counter.m_value    = value;
     }
     if (sample != nullptr)

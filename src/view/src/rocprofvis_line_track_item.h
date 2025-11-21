@@ -83,7 +83,7 @@ protected:
     void UpdateYScaleExtents();
 
 private:
-    ImVec2 MapToUI(rocprofvis_data_point_t& point, ImVec2& c_position, ImVec2& c_size,
+    ImVec2 MapToUI(double x, double y, ImVec2& c_position, ImVec2& c_size,
                    double scale_x, double scale_y);
     bool   ExtractPointsFromData();
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
@@ -93,12 +93,11 @@ private:
     void   RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
                                const ImVec2& content_size, double scale_y);
 
-    std::vector<rocprofvis_data_point_t> m_data;
+    std::vector<rocprofvis_trace_counter_t> m_data;
     HighlightYRange                      m_highlight_y_limits;
 
     VerticalLimits           m_min_y;
     VerticalLimits           m_max_y;
-    bool                     m_is_tooltip_active;
     bool                     m_highlight_y_range;
     DataProvider&            m_dp;
     bool                     m_show_boxplot;

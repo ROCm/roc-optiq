@@ -211,5 +211,8 @@ get_application_config_path(bool create_dirs);
 std::string
 compact_number_format(double number);
 
+void 
+open_url(const std::string& url);
+
 }  // namespace View
 }  // namespace RocProfVis

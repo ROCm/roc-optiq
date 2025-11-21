@@ -33,8 +33,8 @@ all_article_info_author = ""
 project = "ROCm™ Optiq (Beta)"
 author = "Advanced Micro Devices, Inc."
 copyright = "Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved."
-version = 0.1.0
-release = 0.1.0
+version = 0.1
+release = 0.1
 
 external_toc_path = "./sphinx/_toc.yml" # Defines Table of Content structure definition path
 
@@ -43,12 +43,12 @@ Doxygen Settings
 Ensure Doxyfile is located at docs/doxygen.
 If the component does not need doxygen, delete this section for optimal build time
 '''
-doxygen_root = "doxygen"
-doxysphinx_enabled = True
-doxygen_project = {
-    "name": "doxygen",
-    "path": "doxygen/xml",
-}
+#doxygen_root = "doxygen"
+#doxysphinx_enabled = True
+#doxygen_project = {
+#    "name": "doxygen",
+#    "path": "doxygen/xml",
+#}
 
 # Add more addtional package accordingly
 extensions = [

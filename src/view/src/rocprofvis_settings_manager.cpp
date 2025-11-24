@@ -58,7 +58,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(52, 54, 58, 255),     // kTableRowBg
     IM_COL32(58, 60, 64, 255),     // kTableRowBgAlt
     IM_COL32(0, 200, 255, 160),    // kEventHighlight
-    IM_COL32(235, 235, 240, 255),  // kLineChartColor
+    IM_COL32(235, 235, 240, 69),  // kLineChartColor
     IM_COL32(100, 100, 110, 255),  // kButton
     IM_COL32(130, 130, 140, 255),  // kButtonHovered
     IM_COL32(160, 160, 170, 255),  // kButtonActive
@@ -66,7 +66,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(160, 60, 60, 255),    // kBgError
     IM_COL32(60, 160, 60, 255),    // kBgSuccess
     IM_COL32(220, 180, 40, 255),   // kStickyNoteYellow
-    IM_COL32(230, 240, 255, 255),  // Colors::kLineChartColorAlt
+    IM_COL32(230, 240, 255, 140),  // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
     // This must follow the ordering of Colors enum.
 };
@@ -109,7 +109,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(255, 253, 250, 255),  // Colors::kTableRowBg
     IM_COL32(252, 250, 248, 255),  // Colors::kTableRowBgAlt
     IM_COL32(0, 140, 200, 180),    // Colors::kEventHighlight
-    IM_COL32(0, 0, 0, 255),        // Colors::kLineChartColor
+    IM_COL32(0, 0, 0, 69),        // Colors::kLineChartColor
     IM_COL32(230, 230, 230, 255),  // Colors::kButton
     IM_COL32(210, 210, 210, 255),  // Colors::kButtonHovered
     IM_COL32(180, 180, 180, 255),  // Colors::kButtonActive
@@ -117,7 +117,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
     IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
-    IM_COL32(20, 30, 50, 255),     // Colors::kLineChartColorAlt
+    IM_COL32(20, 30, 50, 140),     // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
 
 

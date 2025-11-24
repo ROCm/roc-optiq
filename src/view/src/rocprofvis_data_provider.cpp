@@ -3085,7 +3085,14 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
                                                   &value);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+        double end_ts = 0;
+        result        = rocprofvis_controller_get_double(
+            sample, kRPVControllerSampleNextTimestamp, 0, &end_ts);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+
         trace_counter.m_start_ts = start_ts;
+        trace_counter.m_end_ts   = end_ts;
         trace_counter.m_value    = value;
     }
     if (sample != nullptr)
@@ -3103,6 +3110,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         trace_counter.m_start_ts = last_ts;
+        trace_counter.m_end_ts   = last_ts;
         trace_counter.m_value = last_value;
     }
 

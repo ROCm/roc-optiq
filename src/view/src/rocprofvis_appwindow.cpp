@@ -18,6 +18,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
+#include "rocprofvis_utils.h"
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
 #endif
@@ -29,6 +30,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
+#include <sstream>
 
 namespace RocProfVis
 {
@@ -750,60 +752,75 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
 void
 AppWindow::RenderAboutDialog()
 {
-   
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    static constexpr char* NAME_LABEL = "ROCm (TM) Optiq";
+    static constexpr char* COPYRIGHT_LABEL =
+        "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.";
+    static constexpr char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
+    static constexpr char* DOC_URL =
+        "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/";
+    static const std::string VERSION_LABEL = []() {
+        std::stringstream ss;
+        ss << "Version " << ROCPROFVIS_VERSION_MAJOR << "." << ROCPROFVIS_VERSION_MINOR
+           << "." << ROCPROFVIS_VERSION_PATCH;
+        return ss.str();
+    }();
 
-        if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
-                                  ImGuiWindowFlags_AlwaysAutoResize))
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+
+    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImFont* large_font =
+            SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
+        if(large_font) ImGui::PushFont(large_font);
+
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(NAME_LABEL).x) * 0.5f);
+        ImGui::TextUnformatted(NAME_LABEL);
+        if(large_font) ImGui::PopFont();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(VERSION_LABEL.c_str()).x) *
+            0.5f);
+        ImGui::TextUnformatted(VERSION_LABEL.c_str());
+
+        ImGui::Spacing();
+
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(COPYRIGHT_LABEL).x) * 0.5f);
+        ImGui::TextUnformatted(COPYRIGHT_LABEL);
+
+        ImGui::Spacing();
+
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(DOC_LABEL).x) * 0.5f);
+        ImGui::TextLink(DOC_LABEL);
+        if(ImGui::IsItemClicked())
         {
-            ImFont* large_font =
-                SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
-            if(large_font) ImGui::PushFont(large_font);
-
-            ImGui::SetCursorPosX(
-                (ImGui::GetWindowSize().x - ImGui::CalcTextSize("ROCm (TM) Optiq").x) * 0.5f);
-            ImGui::Text("ROCm (TM) Optiq");
-            if(large_font) ImGui::PopFont();
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            ImGui::SetCursorPosX(
-                (ImGui::GetWindowSize().x - ImGui::CalcTextSize("Version 00.00.00").x) *
-                0.5f);
-            ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR,
-                        ROCPROFVIS_VERSION_MINOR, ROCPROFVIS_VERSION_PATCH);
-
-            ImGui::Spacing();
-
-            ImGui::SetCursorPosX(
-                (ImGui::GetWindowSize().x -
-                 ImGui::CalcTextSize("Copyright (C) 2025 Advanced Micro Devices, Inc. "
-                                     "All rights reserved.")
-                     .x) *
-                0.5f);
-            ImGui::Text(
-                "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            float button_width =
-                ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2;
-            ImGui::SetCursorPosX(ImGui::GetWindowSize().x - button_width -
-                                 ImGui::GetStyle().ItemSpacing.x);
-            if(ImGui::Button("Close"))
-            {
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
+            open_url(DOC_URL);
         }
-        ImGui::PopStyleVar(2);
-    
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float button_width =
+            ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2;
+        ImGui::SetCursorPosX(ImGui::GetWindowSize().x - button_width -
+                             ImGui::GetStyle().ItemSpacing.x);
+        if(ImGui::Button("Close"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar(2);
 }
 
 #ifdef USE_NATIVE_FILE_DIALOG

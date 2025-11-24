@@ -792,10 +792,10 @@ AppWindow::RenderAboutDialog()
             ImGui::SetCursorPosX(
                 (ImGui::GetWindowSize().x - ImGui::CalcTextSize("Visit ROCm Documentation").x) *
                 0.5f);
-            ImGui::TextLink("Visit ROCm Documentation");
+            ImGui::TextLink("ROCm (TM) Optiq Documentation");
             if(ImGui::IsItemClicked())
             {
-                open_url("https://rocm.docs.amd.com/en/latest/");
+                open_url("https://rocm.docs.amd.com/projects/roc-optiq/en/latest/");
             }
 
             ImGui::Spacing();

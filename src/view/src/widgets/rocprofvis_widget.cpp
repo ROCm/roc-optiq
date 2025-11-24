@@ -504,14 +504,18 @@ TabContainer::EnableSendChangeEvent(bool enable)
 }
 
 void
-TabContainer::ShowCloseTabConfirm(int tab_index)
+TabContainer::ShowCloseTabConfirm(int removing_tab_index)
 {
+    //mess, make it clear
+    TabItem& removing_tab = m_tabs[removing_tab_index];
+    m_index_to_remove = -1;
     m_confirmation_dialog->Show(
         "Confirm Closing tab",
-        "Are you sure you want to close the Tab <TODO: PUT TAB NAME>? Any "
+        "Are you sure you want to close the Tab" + removing_tab.m_label + "? Any "
         "unsaved data will be lost.",
-        [this, tab_index]() {
-            m_index_to_remove           = static_cast<int>(tab_index);
+                                [this, removing_tab_index]() {
+                                    RemoveTab(removing_tab_index);
+
         });
 }
 void
@@ -533,14 +537,14 @@ TabContainer::Render()
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
 
     int new_selected_tab = m_active_tab_index;
-    int index_to_remove  = -1;
     if(!m_tabs.empty())
     {
+        m_confirmation_dialog->Render();
         if(ImGui::BeginTabBar("Tabs"))
         {
             for(size_t i = 0; i < m_tabs.size(); ++i)
             {
-                const TabItem&    tab = m_tabs[i];
+                TabItem&    tab = m_tabs[i];
                 ImGuiTabItemFlags flags =
                     (i == m_set_active_tab_index) ? ImGuiTabItemFlags_SetSelected : 0;
 
@@ -582,7 +586,7 @@ TabContainer::Render()
 
                 if(p_open && !is_open)
                 {
-                    index_to_remove = static_cast<int>(i);
+                    m_index_to_remove   = static_cast<int>(i);
                 }
             }
             ImGui::EndTabBar();
@@ -606,13 +610,17 @@ TabContainer::Render()
         m_set_active_tab_index = -1;
 
         // Remove the tab if it was closed
-        if(index_to_remove != -1)
+        if(m_index_to_remove != -1)
         {
-            RemoveTab(index_to_remove);
-            if(m_active_tab_index == index_to_remove)
+            const TabItem& removing_tab = m_tabs[m_index_to_remove];
+            if(SettingsManager::GetInstance()
+                   .GetUserSettings().ask_before_closing_tabs)
             {
-                // If the active tab was closed, reset to -1
-                m_active_tab_index = -1;
+                ShowCloseTabConfirm(m_index_to_remove);
+            }
+            else
+            {
+                RemoveTab(m_index_to_remove);
             }
         }
     }
@@ -668,6 +676,11 @@ TabContainer::RemoveTab(int index)
         }
 
         m_tabs.erase(m_tabs.begin() + index);
+        if(m_active_tab_index == index)
+        {
+            // If the active tab was closed, reset to -1
+            m_active_tab_index = -1;
+        }
     }
 }
 

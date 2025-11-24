@@ -335,15 +335,25 @@ RocProfVis::View::compact_number_format(double number)
     return output.str();
 }
 
-void RocProfVis::View::open_url(const std::string& url)
+bool RocProfVis::View::open_url(const std::string& url)
 {
+    if (url.empty()) {
+        return false;
+    }
+
 #ifdef _WIN32
-    ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    HINSTANCE result = ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    if ((uintptr_t)result <= 32) {
+        return false;
+    }
+    return true;
 #elif defined(__APPLE__)
     std::string command = "open " + url;
-    system(command.c_str());
+    int status = system(command.c_str());
+    return status == 0;
 #else
     std::string command = "xdg-open " + url;
-    system(command.c_str());
+    int status = system(command.c_str());
+    return status == 0;
 #endif
 }

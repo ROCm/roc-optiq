@@ -150,17 +150,22 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
     if(hovered_idx != -1)
     {
-        auto& d = m_data[hovered_idx];
+        auto&       hovered_item           = m_data[hovered_idx];
+        const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
+        std::string start_str =
+            nanosecond_to_formatted_str(hovered_item.m_start_ts - m_min_x, time_format, true);
+        std::string dur_str =
+            nanosecond_to_formatted_str(hovered_item.m_end_ts - hovered_item.m_start_ts, time_format, true);
         ImGui::BeginTooltip();
-        ImGui::Text("Start: %.2f ns", d.m_start_ts - m_min_x);
-        ImGui::Text("Duration:   %.2f ns", d.m_end_ts - d.m_start_ts);
-        ImGui::Text("Value: %.2f", d.m_value);
+        ImGui::Text("Start: %s", start_str.c_str());
+        ImGui::Text("Duration: %s", dur_str.c_str());
+        ImGui::Text("Value: %.2f", hovered_item.m_value);
         ImGui::EndTooltip();
 
         // Map start and end points
-        ImVec2 start_point = MapToUI(d.m_start_ts, d.m_value, cursor_position,
+        ImVec2 start_point = MapToUI(hovered_item.m_start_ts, hovered_item.m_value, cursor_position,
                                      content_size, m_scale_x, scale_y);
-        ImVec2 end_point   = MapToUI(d.m_end_ts, d.m_value, cursor_position, content_size,
+        ImVec2 end_point   = MapToUI(hovered_item.m_end_ts, hovered_item.m_value, cursor_position, content_size,
                                      m_scale_x, scale_y);
 
         // Draw a circle at the start
@@ -240,8 +245,6 @@ LineTrackItem::ExtractPointsFromData()
     const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
     uint64_t                                      count      = track_data.size();
 
-    m_data.clear();
-    m_data.reserve(count);
     m_data = track_data;
 
     return true;

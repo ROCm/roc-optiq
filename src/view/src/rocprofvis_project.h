@@ -1,3 +1,6 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include "json.h"
 #include <list>
@@ -143,6 +146,7 @@ constexpr const char* JSON_KEY_TIMELINE_TRACK                 = "tracks";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_ORDER           = "order";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_DISPLAY         = "display";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_HEIGHT          = "height";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_COMPACT_MODE    = "compact_mode";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR           = "color";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN = "color_min";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX = "color_max";

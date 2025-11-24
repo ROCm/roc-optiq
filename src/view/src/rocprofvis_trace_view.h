@@ -1,3 +1,6 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_data_provider.h"

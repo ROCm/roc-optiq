@@ -1,5 +1,9 @@
+# Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
+set(TARGET_NAME roc-optiq)
+
 cmake_minimum_required(VERSION 3.15)
-project(rocprof-visualizer)
+project(${TARGET_NAME})
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
@@ -19,27 +23,29 @@ option(JSON_TRACE_SUPPORT "Build with support for JSON traces" OFF)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" ON)
+option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 
-# Add third-party libraries, core, and model BEFORE controller
-add_subdirectory(thirdparty)
-
-add_subdirectory(src/core)
-add_subdirectory(src/model)
-add_subdirectory(src/controller)
-
-set(rocprofvis_source_files)
 if(JSON_TRACE_SUPPORT) 
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_TRACE_SUPPORT")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DJSON_TRACE_SUPPORT")
 endif(JSON_TRACE_SUPPORT)
 if(COMPUTE_UI_SUPPORT) 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
 endif(ROCPROFVIS_DEVELOPER_MODE)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
+if(USE_NATIVE_FILE_DIALOG)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NATIVE_FILE_DIALOG")
+endif(USE_NATIVE_FILE_DIALOG)
+
+# Add third-party libraries, core, and model BEFORE controller
+add_subdirectory(thirdparty)
+add_subdirectory(src/core)
+add_subdirectory(src/model)
+add_subdirectory(src/controller)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 
@@ -57,6 +63,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_annotations.cpp
     src/view/src/rocprofvis_settings_panel.cpp 
     src/view/src/rocprofvis_stickynote.cpp
+    src/view/src/rocprofvis_click_manager.cpp
     src/view/src/rocprofvis_analysis_view.cpp 
     src/view/src/rocprofvis_trace_view.cpp 
     src/view/src/rocprofvis_line_track_item.cpp 
@@ -112,43 +119,56 @@ if(WIN32)
         )
 endif(WIN32)
 
-add_executable(rocprof-visualizer 
+add_executable(${TARGET_NAME} 
     src/app/src/rocprofvis_imgui_vulkan.cpp 
     src/app/src/main.cpp
     ${VIEW_FILES})
 
-add_dependencies(rocprof-visualizer generate_icon_header)
+add_dependencies(${TARGET_NAME} generate_icon_header)
 
 if(WIN32)
-    set_target_properties(rocprof-visualizer PROPERTIES WIN32_EXECUTABLE TRUE)
-    set_target_properties(rocprof-visualizer PROPERTIES LINK_FLAGS "/ENTRY:mainCRTStartup")
+    set_target_properties(${TARGET_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
+    set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "/ENTRY:mainCRTStartup")
 endif(WIN32)
 
-target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
-target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
-target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
-target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
-target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIRS})
-target_include_directories(rocprof-visualizer PRIVATE ${Vulkan_INCLUDE_DIR})
-target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
-target_include_directories(rocprof-visualizer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
-target_link_libraries(rocprof-visualizer PRIVATE imgui)
-target_link_libraries(rocprof-visualizer PRIVATE implot)
-target_link_libraries(rocprof-visualizer PRIVATE ImGuiFileDialog)
-target_link_libraries(rocprof-visualizer PRIVATE glfw)
-target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-controller)
-target_link_libraries(rocprof-visualizer PRIVATE datamodel)
-target_link_libraries(rocprof-visualizer PRIVATE rocprof-visualizer-core)
-target_link_libraries(rocprof-visualizer PRIVATE spdlog)
-target_link_libraries(rocprof-visualizer PRIVATE sqlite3)
-target_link_libraries(rocprof-visualizer PRIVATE json)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
+target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
+
+target_link_libraries(${TARGET_NAME} PRIVATE imgui)
+target_link_libraries(${TARGET_NAME} PRIVATE implot)
+target_link_libraries(${TARGET_NAME} PRIVATE glfw)
+target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-controller)
+target_link_libraries(${TARGET_NAME} PRIVATE datamodel)
+target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
+target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
+target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
+target_link_libraries(${TARGET_NAME} PRIVATE json)
+
+# === NativeFileDialog Extended ===
+if(USE_NATIVE_FILE_DIALOG)
+  set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
+  add_subdirectory(thirdparty/nativefiledialog-extended)
+  target_link_libraries(${TARGET_NAME} PRIVATE nfd)
+endif()
+# === ImGuiFileDialog ===
+if(NOT USE_NATIVE_FILE_DIALOG)
+  target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
+endif()
+
+# === Vulkan ===
 find_package(Vulkan REQUIRED)
-target_link_libraries(rocprof-visualizer PRIVATE "${Vulkan_LIBRARIES}")
+target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")
 
 # Csv parser enables coverage in debug builds so we need to enable it too
 if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX) AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE)))
-    message(STATUS "Adding --coverage to linker flags for rocprof-visualizer due to potential gcov symbols from dependencies.")
-    target_link_options(rocprof-visualizer PRIVATE --coverage)
+    message(STATUS "Adding --coverage to linker flags for roc-optiq due to potential gcov symbols from dependencies.")
+    target_link_options(${TARGET_NAME} PRIVATE --coverage)
 endif()
 
 #CPACK Packaging Enabling
@@ -163,28 +183,23 @@ if( NOT DEFINED BUILD_ID )
 endif()
 
 #Package Maintainer Name and Email
-set(PKG_MAINTAINER_NM  "ROCm Visualizer Support")
-set(PKG_MAINTAINER_EMAIL  "rocm-visualizer-support@amd.com")
+set(PKG_MAINTAINER_NM  "ROCm Optiq Support")
+set(PKG_MAINTAINER_EMAIL  "rocm-optiq@amd.com")
 
 set(RUNTIME_COMP_TYPE "RV_RUNTIME")
 set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")
 set(EXTENDED_PACKAGE_DESCRIPTION
-	"This package provides `rocprof-visualizer` which helps in post analysis of ROCm Systems profiling data.")
+	"This package provides `roc-optiq` which helps in post analysis of ROCm Systems profiling data.")
 
 include(GNUInstallDirs)
 
-# Set runtime dependencies for generated packages
-if(UNIX AND NOT APPLE)
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libglfw3")
-    set(CPACK_RPM_PACKAGE_REQUIRES "glfw")
-endif()
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 set(CPACK_GENERATOR "TGZ;DEB;RPM" CACHE STRING "package types to be produced")
 
-#Default Value is 99999, this value will be used
+#Default Value is 0, this value will be used
 #When ROCM LibPatch Version when not explicitly set
-set(ROCM_VERSION_FOR_PACKAGE "99999")
+set(ROCM_VERSION_FOR_PACKAGE "0")
 if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
   set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
 endif()
@@ -217,7 +232,7 @@ install(FILES ${LICENSE_FILE}
        COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
-install(PROGRAMS ${BUILD_DIR}/rocprof-visualizer
+install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
         DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT ${RUNTIME_COMP_TYPE} )
 
@@ -228,7 +243,8 @@ set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
 message(STATUS "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}")
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(DEB_VULKAN_DEPENDS_STRING "libvulkan1")
-set(DEB_DEPENDS_STRING "${DEB_VULKAN_DEPENDS_STRING}, libc6")
+set(DEB_GLFW_DEPENDS_STRING "libglfw3")
+set(DEB_DEPENDS_STRING "${DEB_VULKAN_DEPENDS_STRING}, ${DEB_GLFW_DEPENDS_STRING}, libc6")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/rocprofiler-visualizer")
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
@@ -257,9 +273,10 @@ endif()
 message(STATUS "Using CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
 
-#TODO - To Review RPM Runtime package Dependencies for Vulkan, Others
-# Once Support is confirmed for non UB/Deb platforms
-set ( RPM_DEPENDS_STRING "")
+# TODO - To Review RPM Runtime package Dependencies for Vulkan, Others
+set ( RPM_VULKAN_DEPENDS_STRING "vulkan" )
+set ( RPM_GLFW_DEPENDS_STRING "glfw" )
+set ( RPM_DEPENDS_STRING "${RPM_VULKAN_DEPENDS_STRING} ${RPM_GLFW_DEPENDS_STRING}" )
 set ( CPACK_RPM_PACKAGE_REQUIRES ${RPM_DEPENDS_STRING} )
 set ( CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}" )
 
@@ -268,10 +285,10 @@ include(CPack)
 
 if(WIN32)
     add_custom_command(
-        TARGET rocprof-visualizer POST_BUILD
+        TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_RUNTIME_DLLS:rocprof-visualizer>"
-            "$<TARGET_FILE_DIR:rocprof-visualizer>"
+            "$<TARGET_RUNTIME_DLLS:${TARGET_NAME}>"
+            "$<TARGET_FILE_DIR:${TARGET_NAME}>"
         COMMENT "Copying dependent DLLs to executable directory"
     )
 endif()

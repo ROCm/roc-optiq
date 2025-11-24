@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_segment.h"
 #include "rocprofvis_controller_array.h"
@@ -158,7 +159,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 (rocprofvis_controller_properties_t) ((m_type ==
                                                         kRPVControllerTrackTypeEvents)
                                                             ? kRPVControllerEventEndTimestamp
-                                                            : kRPVControllerSampleTimestamp);
+                                                            : kRPVControllerSampleNextTimestamp);
 
             std::map<double, Handle*>::iterator lower = entries.end();
             for(auto it = entries.begin(); it != entries.end(); ++it)

@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_controller_arguments.h"
@@ -513,11 +514,10 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackNodeIdUInt64, 0);
-                                        if (min_ts == max_ts)
+                                        if (type == kRPVControllerTrackTypeSamples)
                                         {
-                                            max_ts = min_ts + 1;
+                                            max_ts = end_time;
                                         }
-
                                         track->SetDouble(kRPVControllerTrackMinTimestamp,
                                                          0, min_ts);
                                         track->SetDouble(kRPVControllerTrackMaxTimestamp,
@@ -2368,7 +2368,8 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
             (void) future;
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos || 
-                filepath.find(".db", filepath.size() - 3) != std::string::npos)
+                filepath.find(".db", filepath.size() - 3) != std::string::npos ||
+                filepath.find(".yaml", filepath.size() - 5) != std::string::npos)
             {
 
                 result = LoadRocpd(filepath.c_str());

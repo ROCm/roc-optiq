@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -19,10 +20,10 @@ enum class TimeFormat;
 
 typedef struct DisplaySettings
 {
-    bool  use_dark_mode;
-    bool  dpi_based_scaling;
-    int   font_size_index;
- 
+    bool use_dark_mode;
+    bool dpi_based_scaling;
+    int  font_size_index;
+
 } DisplaySettings;
 
 typedef struct UnitSettings
@@ -88,6 +89,10 @@ enum class Colors
     kBgWarning,
     kBgError,
     kBgSuccess,
+    kStickyNote,
+    kLineChartColorAlt,
+    kTrackColorWarningBand,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -146,6 +151,7 @@ public:
 
     // Constant for event height;
     const float GetEventLevelHeight() const;
+    const float GetEventLevelCompactHeight() const;
 
 private:
     SettingsManager();

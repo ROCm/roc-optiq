@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -127,7 +128,7 @@ private:
     std::pair<double, double>           m_highlighted_region;
     SettingsManager&                    m_settings;
     double                              m_last_data_req_view_time_offset_ns;
-    int                                 m_artificial_scrollbar_height;
+    float                               m_artificial_scrollbar_height;
     ImVec2                              m_graph_size;
     double                              m_grid_interval_ns;
     int                                 m_grid_interval_count;

@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_infinite_scroll_table.h"
 #include "icons/rocprovfis_icon_defines.h"
@@ -18,8 +19,8 @@ namespace View
 {
 
 constexpr uint64_t    FETCH_CHUNK_SIZE               = 1000;
-constexpr const char* START_TS_COLUMN_NAME           = "start";
-constexpr const char* END_TS_COLUMN_NAME             = "end";
+constexpr const char* START_TS_COLUMN_NAME           = "startTs";
+constexpr const char* END_TS_COLUMN_NAME             = "endTs";
 constexpr const char* DURATION_COLUMN_NAME           = "duration";
 constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
@@ -29,8 +30,8 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
 , m_last_total_row_count(0)
-, m_fetch_chunk_size(FETCH_CHUNK_SIZE)      // Number of items to fetch in one go
-, m_fetch_pad_items(30)        // Number of items to pad the fetch range
+, m_fetch_chunk_size(FETCH_CHUNK_SIZE)  // Number of items to fetch in one go
+, m_fetch_pad_items(30)                 // Number of items to pad the fetch range
 , m_fetch_threshold_items(10)  // Number of items from the edge to trigger a fetch
 , m_last_table_size(0, 0)
 , m_settings(SettingsManager::GetInstance())
@@ -38,8 +39,8 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
       table_type == TableType::kEventSearchTable ? kRPVControllerTableTypeSearchResults
       : table_type == TableType::kEventTable     ? kRPVControllerTableTypeEvents
                                                  : kRPVControllerTableTypeSamples)
-, m_filter_options({ 0, "", "" })
-, m_pending_filter_options({ 0, "", "" })
+, m_filter_options({ "", "", "" })
+, m_pending_filter_options({ "", "", "" })
 , m_data_changed(true)
 , m_filter_requested(false)
 , m_selected_row(-1)
@@ -47,6 +48,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_horizontal_scroll(0.0f)
 , m_time_column_indices(
       { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
+, m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
 {
     auto new_table_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTableData(e);
@@ -108,46 +110,6 @@ InfiniteScrollTable::Update()
 {
     if(m_data_changed)
     {
-        const std::vector<std::string>& column_names =
-            m_data_provider.GetTableHeader(m_table_type);
-
-        if(m_table_type == TableType::kEventTable)
-        {
-            if(m_filter_options.column_index == 0)
-            {
-                m_column_names.clear();
-                // Create a combo box for selecting the group column
-                // populate the combo box with column names but filter out empty and
-                // internal columns (those starting with '_')
-                m_column_names.reserve(column_names.size() + 1);
-                m_column_names.push_back("-- None --");
-
-                for(size_t i = 0; i < column_names.size(); i++)
-                {
-                    const auto& col = column_names[i];
-                    if(col.empty() || col[0] == '_')
-                    {
-                        continue;  // Skip empty or internal columns
-                    }
-                    m_column_names.push_back(col);
-                }
-            }
-            else
-            {
-                std::string selected_option =
-                    m_column_names[m_filter_options.column_index];
-                m_column_names.resize(2);
-                m_column_names[1]                     = selected_option;
-                m_filter_options.column_index         = 1;
-                m_pending_filter_options.column_index = 1;
-            }
-            m_column_names_ptr.resize(m_column_names.size());
-            for(int i = 0; i < m_column_names.size(); i++)
-            {
-                m_column_names_ptr[i] = m_column_names[i].c_str();
-            }
-        }
-
         FormatData();
         m_data_changed = false;
     }
@@ -249,9 +211,9 @@ InfiniteScrollTable::Render()
             int visible_rows   = static_cast<int>(outer_size.y / row_height);
             m_fetch_pad_items  = std::clamp(visible_rows / 2, 10, 30);
             m_fetch_chunk_size = std::max(static_cast<uint64_t>(visible_rows * 4 +
-                                        m_fetch_threshold_items +
-                                        m_fetch_pad_items),
-                                        FETCH_CHUNK_SIZE);
+                                                                m_fetch_threshold_items +
+                                                                m_fetch_pad_items),
+                                          FETCH_CHUNK_SIZE);
             m_last_table_size  = outer_size;
 
             spdlog::debug("Recalculated fetch chunk size: {}, fetch pad items: {}, "
@@ -261,8 +223,8 @@ InfiniteScrollTable::Render()
         }
 
         if(column_names.size() &&
-           ImGui::BeginTable("Event Data Table", static_cast<int>(column_names.size()), table_flags,
-                             outer_size))
+           ImGui::BeginTable("Event Data Table", static_cast<int>(column_names.size()),
+                             table_flags, outer_size))
         {
             if(m_skip_data_fetch && ImGui::GetScrollY() > 0.0f)
             {
@@ -334,7 +296,7 @@ InfiniteScrollTable::Render()
                     for(const auto& col : table_data[row_n])
                     {
                         ImGui::TableSetColumnIndex(column);
-                        const std::string *display_value = &col;
+                        const std::string* display_value = &col;
                         // Check if this column needs formatting
                         if(column < formatted_table_data.size())
                         {
@@ -438,7 +400,8 @@ InfiniteScrollTable::Render()
                             (end_row != total_row_count - 1) && (scroll_max_y > 0.0f))
                     {
                         // fetch data for the end row
-                        uint64_t new_start_pos = static_cast<uint64_t>(scroll_y / row_height);
+                        uint64_t new_start_pos =
+                            static_cast<uint64_t>(scroll_y / row_height);
 
                         // Ensure start position does not go below zero
                         // (this can happen if the start_row is close to the beginning
@@ -501,7 +464,7 @@ InfiniteScrollTable::Render()
         {
             FilterOptions& filter =
                 m_filter_requested ? m_pending_filter_options : m_filter_options;
-            if(filter.column_index == 0)
+            if(filter.group_by == "")
             {
                 filter.group_columns[0] = '\0';
             }
@@ -514,8 +477,7 @@ InfiniteScrollTable::Render()
                 table_params->m_sort_column_index = sort_column_index;
                 table_params->m_sort_order        = sort_order;
                 table_params->m_filter            = filter.filter;
-                table_params->m_group =
-                    (filter.column_index == 0) ? "" : m_column_names[filter.column_index];
+                table_params->m_group = filter.group_by;
                 table_params->m_group_columns = filter.group_columns;
 
                 // if filtering changed reset the start row as current row
@@ -673,7 +635,7 @@ InfiniteScrollTable::SelectedRowToClipboard() const
 
 void
 InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
-                                     size_t stream_id_column_index) const
+                                              size_t stream_id_column_index) const
 {
     const std::vector<std::vector<std::string>>& table_data =
         m_data_provider.GetTableData(m_table_type);
@@ -757,8 +719,14 @@ InfiniteScrollTable::FormatTimeColumns() const
 void
 InfiniteScrollTable::ExportToFile() const
 {
-    AppWindow::GetInstance()->ShowFileDialog(
-        "Export Table", ".csv", "", true, [this](std::string file_path) -> void {
+    std::vector<FileFilter> file_filters;
+    FileFilter trace_filter;
+    trace_filter.m_name       = "CSV Files";
+    trace_filter.m_extensions = { "csv" };
+    file_filters.push_back(trace_filter);
+
+    AppWindow::GetInstance()->ShowSaveFileDialog(
+        "Export Table", file_filters, "", [this](std::string file_path) -> void {
             std::shared_ptr<TableRequestParams> table_params =
                 m_data_provider.GetTableParams(m_table_type);
             if(table_params &&

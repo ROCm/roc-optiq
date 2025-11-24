@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_event_search.h"
 #include "icons/rocprovfis_icon_defines.h"
@@ -21,7 +22,6 @@ constexpr const char* NAME_COLUMN_NAME      = "name";
 
 EventSearch::EventSearch(DataProvider& dp)
 : InfiniteScrollTable(dp, TableType::kEventSearchTable)
-, m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
 , m_should_open(false)
 , m_should_close(false)
 , m_open_context_menu(false)

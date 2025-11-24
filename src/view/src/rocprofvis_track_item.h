@@ -1,3 +1,6 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_project.h"
@@ -64,7 +67,7 @@ public:
     virtual std::tuple<double, double> GetMinMax();
 
     bool        TrackHeightChanged();
-    static void SetSidebarSize(int sidebar_size);
+    static void SetSidebarSize(float sidebar_size);
 
     virtual bool  HasData();
     virtual bool  ReleaseData();
@@ -72,6 +75,7 @@ public:
     virtual bool  HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
     virtual bool  HasPendingRequests() const;
     virtual float CalculateNewMetaAreaSize();
+    virtual bool  IsCompactMode() const { return false; }
 
     TrackDataRequestState GetRequestState() const { return m_request_state; }
 
@@ -81,6 +85,7 @@ public:
 
     float GetMetaAreaScaleWidth() { return m_meta_area_scale_width; }
     void  UpdateMaxMetaAreaSize(float newSize);
+
 
 protected:
     virtual void RenderMetaArea();
@@ -101,7 +106,7 @@ protected:
     uint64_t              m_id;
     float                 m_track_height;
     float                 m_track_content_height;
-    float                 m_track_default_height;
+    float                 m_track_default_height; //TODO: It should be a constant, we don't need store it for each track
     float                 m_min_track_height;
     bool                  m_track_height_changed;
     bool                  m_is_in_view_vertical;
@@ -125,7 +130,7 @@ protected:
     static float                                     s_metadata_width;
 
 private:
-    TrackProjectSettings m_project_settings;
+    TrackProjectSettings m_track_project_settings;
 };
 
 }  // namespace View

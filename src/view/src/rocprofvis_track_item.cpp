@@ -1,3 +1,6 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #include "rocprofvis_track_item.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_font_manager.h"
@@ -40,11 +43,11 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_group_id_counter(0)
 , m_chunk_duration_ns(TimeConstants::ns_per_s *
                       30)  // Default chunk duration
-, m_project_settings(m_data_provider.GetTraceFilePath(), *this)
+, m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
-    if(m_project_settings.Valid())
+    if(m_track_project_settings.Valid())
     {
-        m_track_height = m_project_settings.Height();
+        m_track_height = m_track_project_settings.Height();
     }
 }
 
@@ -74,9 +77,9 @@ TrackItem::GetID()
 }
 
 void
-TrackItem::SetSidebarSize(int sidebar_size)
+TrackItem::SetSidebarSize(float sidebar_size)
 {
-    s_metadata_width = static_cast<float>(sidebar_size);
+    s_metadata_width = sidebar_size;
 }
 
 bool
@@ -222,6 +225,28 @@ TrackItem::RenderMetaArea()
         ImVec2 container_pos  = ImGui::GetWindowPos() + ImVec2(m_reorder_grip_width, 0);
         ImVec2 container_size = ImGui::GetWindowSize();
 
+          if(m_request_state != TrackDataRequestState::kIdle)
+        {
+            ImGuiStyle& style = ImGui::GetStyle();
+
+            float  dot_radius  = 10.0f;
+            int    num_dots    = 3;
+            float  dot_spacing = 5.0f;
+            float  anim_speed  = 7.0f;
+            ImVec2 dot_size =
+                MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
+
+            ImVec2 cursor_pos = ImGui::GetCursorPos();
+            ImGui::SetCursorPos(
+                ImVec2(cursor_pos.x + (content_size.x - dot_size.x) * 0.5f,
+                       cursor_pos.y + (content_size.y - dot_size.y) * 0.5f));
+
+            RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
+                                       m_settings.GetColor(Colors::kScrollBarColor),
+                                       anim_speed);
+        }
+
+
         // Reordering grip decoration
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - ImGui::CalcTextSize(ICON_GRID).x) / 2,
@@ -263,27 +288,7 @@ TrackItem::RenderMetaArea()
 
         ImGui::PopTextWrapPos();
 
-        if(m_request_state != TrackDataRequestState::kIdle)
-        {
-            ImGuiStyle& style = ImGui::GetStyle();
-
-            float  dot_radius  = 10.0f;
-            int    num_dots    = 3;
-            float  dot_spacing = 5.0f;
-            float  anim_speed  = 7.0f;
-            ImVec2 dot_size =
-                MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
-
-            ImVec2 cursor_pos = ImGui::GetCursorPos();
-            ImGui::SetCursorPos(
-                ImVec2(cursor_pos.x + (content_size.x - dot_size.x) * 0.5f,
-                       cursor_pos.y + style.ItemSpacing.y));
-
-            RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                                       m_settings.GetColor(Colors::kScrollBarColor),
-                                       anim_speed);
-        }
-
+      
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
                                    0));

@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 namespace RocProfVis
 {
@@ -19,6 +20,7 @@ constexpr ImWchar icon_ranges[] = {
     0xF2D7, 0xF2D7, 
     0xF1FE, 0xF1FE, 
     0xF33F, 0xF33F,
+    0xF37E, 0xF37E,
     0
 };
 
@@ -36,6 +38,7 @@ constexpr const char* ICON_RIGHT_ARROW   = u8"\uF30F";
 constexpr const char* ICON_DELETE        = u8"\uF2D7";
 constexpr const char* ICON_CHAIN         = u8"\uF1FE";
 constexpr const char* ICON_TREE          = u8"\uF33F";
+constexpr const char* ICON_EDIT          = u8"\uF37E";
 
 }  // namespace View
 }  // namespace RocProfVis

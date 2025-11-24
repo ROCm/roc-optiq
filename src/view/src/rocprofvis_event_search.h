@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -30,15 +31,6 @@ public:
     float  Width() const;
 
 private:
-    enum ImportantColumns
-    {
-        kId,
-        kName,
-        kTrackId,
-        kStreamId,
-        kNumImportantColumns
-    };
-
     void FormatData() const override;
     void IndexColumns() override;
     void RowSelected(const ImGuiMouseButton mouse_button) override;
@@ -56,8 +48,6 @@ private:
     float m_width;
 
     char m_text_input[256];
-
-    std::vector<size_t> m_important_column_idxs;
 };
 
 }  // namespace View

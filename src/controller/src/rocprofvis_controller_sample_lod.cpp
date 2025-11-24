@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_sample_lod.h"
 #include "rocprofvis_controller_reference.h"
@@ -91,7 +92,6 @@ SampleLOD::SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, d
 SampleLOD& SampleLOD::operator=(SampleLOD&& other)
 {
     m_children  = std::move(other.m_children);
-    m_id = other.m_id;
     m_data = other.m_data;
     m_timestamp = other.m_timestamp;
     m_child_min = 0;
@@ -208,6 +208,8 @@ rocprofvis_result_t SampleLOD::GetDouble(rocprofvis_property_t property, uint64_
             case kRPVControllerSampleType:
             case kRPVControllerSampleNumChildren:
             case kRPVControllerSampleChildIndex:
+            case kRPVControllerSampleNextTimestamp:
+            case kRPVControllerSampleNextValue:
             case kRPVControllerSampleTrack:
             {
                 result = Sample::GetDouble(property, index, value);
@@ -365,6 +367,8 @@ rocprofvis_result_t SampleLOD::SetDouble(rocprofvis_property_t property, uint64_
         case kRPVControllerSampleNumChildren:
         case kRPVControllerSampleChildIndex:
         case kRPVControllerSampleTimestamp:
+        case kRPVControllerSampleNextTimestamp:
+        case kRPVControllerSampleNextValue:
         case kRPVControllerSampleTrack:
         {
             result = Sample::SetDouble(property, index, value);

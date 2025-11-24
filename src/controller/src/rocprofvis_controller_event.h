@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -50,6 +51,7 @@ private:
     double m_end_timestamp;
     size_t m_name;
     size_t m_category;
+    size_t m_combined_top_name;
     uint8_t m_level;
     uint8_t m_retain_counter;
 

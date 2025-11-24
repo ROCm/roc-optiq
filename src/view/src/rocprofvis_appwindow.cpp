@@ -1,9 +1,16 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_appwindow.h"
-#include "ImGuiFileDialog.h"
 #include "imgui.h"
 #include "implot.h"
+#ifdef USE_NATIVE_FILE_DIALOG
+#    include "nfd.h"
+#else
+#    include "ImGuiFileDialog.h"
+#    include <sstream>
+#endif
+
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
@@ -12,15 +19,15 @@
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #ifdef COMPUTE_UI_SUPPORT
-    #include "rocprofvis_navigation_manager.h"
+#    include "rocprofvis_navigation_manager.h"
 #endif
 #include "rocprofvis_root_view.h"
+#include "rocprofvis_trace_view.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "rocprofvis_trace_view.h"
 #include <filesystem>
 
 namespace RocProfVis
@@ -28,10 +35,10 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr ImVec2 FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
-constexpr const char*  FILE_DIALOG_NAME       = "ChooseFileDlgKey";
-constexpr const char*  TAB_CONTAINER_SRC_NAME = "MainTabContainer";
-constexpr const char*  ABOUT_DIALOG_NAME      = "About##_dialog";
+constexpr ImVec2      FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
+constexpr const char* FILE_DIALOG_NAME       = "ChooseFileDlgKey";
+constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
+constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
 
@@ -82,7 +89,12 @@ AppWindow::AppWindow()
 , m_histogram_visible(true)
 , m_sidebar_visible(true)
 , m_analysis_bar_visible(true)
+#ifndef USE_NATIVE_FILE_DIALOG
 , m_init_file_dialog(false)
+#else
+, m_is_native_file_dialog_open(false)
+#endif
+, m_disable_app_interaction(false)
 {}
 
 AppWindow::~AppWindow()
@@ -102,15 +114,15 @@ AppWindow::Init()
 {
     std::string config_path = get_application_config_path(true);
 
-    std::filesystem::path ini_path = std::filesystem::path(config_path) / "imgui.ini";
-    ImGuiIO& io = ImGui::GetIO();
-    static std::string ini_path_str = ini_path.string();
-    io.IniFilename = ini_path_str.c_str();
+    std::filesystem::path ini_path     = std::filesystem::path(config_path) / "imgui.ini";
+    ImGuiIO&              io           = ImGui::GetIO();
+    static std::string    ini_path_str = ini_path.string();
+    io.IniFilename                     = ini_path_str.c_str();
 
     ImPlot::CreateContext();
 
     SettingsManager& settings = SettingsManager::GetInstance();
-    bool result = settings.Init();
+    bool             result   = settings.Init();
     if(result)
     {
         m_settings_panel = std::make_unique<SettingsPanel>(settings);
@@ -215,19 +227,29 @@ AppWindow::ShowMessageDialog(const std::string& title, const std::string& messag
 }
 
 void
-AppWindow::ShowFileDialog(const std::string& title, const std::string& file_filter,
-                          const std::string& initial_path, const bool& confirm_overwrite,
-                          std::function<void(std::string)> callback)
+AppWindow::ShowSaveFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
+                              const std::string&               initial_path,
+                              std::function<void(std::string)> callback)
 {
-    m_file_dialog_callback = callback;
-    m_init_file_dialog     = true;
-    IGFD::FileDialogConfig config;
-    config.path  = initial_path;
-    config.flags = confirm_overwrite
-                       ? ImGuiFileDialogFlags_Default
-                       : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
-    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, file_filter.c_str(),
-                                            config);
+    #ifdef USE_NATIVE_FILE_DIALOG
+    (void)title;
+    ShowNativeFileDialog(file_filters, initial_path, callback, true);
+    #else
+    ShowImGuiFileDialog(title, file_filters, initial_path, true, callback);
+    #endif
+}
+
+void
+AppWindow::ShowOpenFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
+                              const std::string&               initial_path,
+                              std::function<void(std::string)> callback)
+{
+    #ifdef USE_NATIVE_FILE_DIALOG
+    (void)title;
+    ShowNativeFileDialog(file_filters, initial_path, callback, false);
+    #else
+    ShowImGuiFileDialog(title, file_filters, initial_path, false, callback);
+    #endif
 }
 
 Project*
@@ -256,6 +278,9 @@ AppWindow::GetCurrentProject()
 void
 AppWindow::Update()
 {
+#ifdef USE_NATIVE_FILE_DIALOG
+    UpdateNativeFileDialog();
+#endif
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
@@ -270,7 +295,7 @@ AppWindow::Render()
     Update();
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
-    DrawInternalBuildBanner("Dev Branch");
+    DrawInternalBuildBanner();
 #endif
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -326,15 +351,20 @@ AppWindow::Render()
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
-    RenderFileDialog();
+#ifndef USE_NATIVE_FILE_DIALOG    
+     RenderFileDialog();
+#endif
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
 
     // render notifications last
     NotificationManager::GetInstance().Render();
+
+    RenderDisableScreen();
 }
 
+#ifndef USE_NATIVE_FILE_DIALOG
 void
 AppWindow::RenderFileDialog()
 {
@@ -373,6 +403,7 @@ AppWindow::RenderFileDialog()
     }
     ImGui::PopStyleVar(3);
 }
+#endif
 
 void
 AppWindow::OpenFile(std::string file_path)
@@ -384,17 +415,19 @@ AppWindow::OpenFile(std::string file_path)
     {
         case Project::OpenResult::Success:
         {
-            TabItem tab = TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
+            TabItem tab =
+                TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
 
             // Set initial visibility to save the same settings in different tabs
-            auto trace_view_tab = std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab.m_widget);
-            if (trace_view_tab)
+            auto trace_view_tab =
+                std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab.m_widget);
+            if(trace_view_tab)
             {
                 trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
                 trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
             }
 
-            m_tab_container->AddTab(std::move(tab)); 
+            m_tab_container->AddTab(std::move(tab));
             m_projects[project->GetID()] = std::move(project);
             SettingsManager::GetInstance().AddRecentFile(file_path);
             break;
@@ -414,36 +447,55 @@ AppWindow::OpenFile(std::string file_path)
 }
 
 void
+AppWindow::RenderDisableScreen()
+{
+    if(m_disable_app_interaction)
+    {
+        ImGui::OpenPopup("GhostModal");
+    }
+
+    // Use a modal popup to disable interaction with the rest of the UI
+    if(ImGui::IsPopupOpen("GhostModal"))
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        if(ImGui::BeginPopupModal("GhostModal", NULL,
+                                  ImGuiWindowFlags_NoDecoration |
+                                      ImGuiWindowFlags_NoBackground))
+        {
+            ImGui::SetWindowSize(ImVec2(1, 1));  // As small as possible
+            if(!m_disable_app_interaction)
+            {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
+    }
+}
+
+void
 AppWindow::RenderFileMenu(Project* project)
 {
+    bool is_open_file_dialog_open = false;
+    #ifdef USE_NATIVE_FILE_DIALOG
+    is_open_file_dialog_open = m_is_native_file_dialog_open;
+    #endif
+
     if(ImGui::BeginMenu("File"))
     {
-        if(ImGui::MenuItem("Open", nullptr))
+        if(ImGui::MenuItem("Open", nullptr, false, !is_open_file_dialog_open))
         {
-            std::string trace_types = ".db,.rpd";
-#ifdef JSON_TRACE_SUPPORT
-            trace_types += ",.json";
-#endif
-#ifdef COMPUTE_UI_SUPPORT
-            trace_types += ",.csv";
-#endif
-            std::string filters = "All (.rpv," + trace_types + "){.rpv," + trace_types +
-                                  "},Projects (.rpv){.rpv},Traces (" + trace_types +
-                                  "){" + trace_types + "}";
-
-            ShowFileDialog(
-                "Choose File", filters.c_str(), ".", false,
-                [this](std::string file_path) -> void { this->OpenFile(file_path); });
+            HandleOpenFile();
         }
-        if(ImGui::MenuItem("Save", nullptr, false, project && project->IsProject()))
+        if(ImGui::MenuItem("Save", nullptr, false,
+                           !is_open_file_dialog_open && (project && project->IsProject())))
         {
             project->Save();
         }
-        if(ImGui::MenuItem("Save As", nullptr, false, project))
+        if(ImGui::MenuItem("Save As", nullptr, false, project || !is_open_file_dialog_open))
         {
-            ShowFileDialog(
-                "Save as Project", ".rpv", "", true,
-                [project](std::string file_path) -> void { project->SaveAs(file_path); });
+            HandleSaveAsFile();
         }
         ImGui::Separator();
         const std::list<std::string> recent_files =
@@ -480,16 +532,24 @@ AppWindow::RenderEditMenu(Project* project)
         if(trace_type == Project::System)
         {
             std::shared_ptr<RootView> root_view =
-                    std::dynamic_pointer_cast<RootView>(project->GetView());
+                std::dynamic_pointer_cast<RootView>(project->GetView());
 
-            if(root_view) {
+            if(root_view)
+            {
                 root_view->RenderEditMenuOptions();
             }
         }
         if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
                            project && project->IsTrimSaveAllowed()))
         {
-            ShowFileDialog("Save Trace Selection", ".db,.rpd", "", true,
+            FileFilter trace_filter;
+            trace_filter.m_name = "Traces";
+            trace_filter.m_extensions = { "db", "rpd" };
+
+            std::vector<FileFilter> filters;
+            filters.push_back(trace_filter);
+
+            ShowSaveFileDialog("Save Trace Selection", filters, "",
                            [project](std::string file_path) -> void {
                                project->TrimSave(file_path);
                            });
@@ -511,7 +571,8 @@ AppWindow::RenderViewMenu(Project* project)
     if(ImGui::BeginMenu("View"))
     {
         LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
-        if(tool_bar_item) {
+        if(tool_bar_item)
+        {
             if(ImGui::MenuItem("Show Tool Bar", nullptr, tool_bar_item->m_visible))
             {
                 tool_bar_item->m_visible = !tool_bar_item->m_visible;
@@ -519,10 +580,11 @@ AppWindow::RenderViewMenu(Project* project)
             if(ImGui::MenuItem("Show Analysis Bar", nullptr, m_analysis_bar_visible))
             {
                 m_analysis_bar_visible = !m_analysis_bar_visible;
-                for (const auto& tab : m_tab_container->GetTabs())
+                for(const auto& tab : m_tab_container->GetTabs())
                 {
                     auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
+                            tab->m_widget);
                     if(trace_view_tab)
                         trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
                 }
@@ -533,7 +595,8 @@ AppWindow::RenderViewMenu(Project* project)
                 for(const auto& tab : m_tab_container->GetTabs())
                 {
                     auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
+                            tab->m_widget);
                     if(trace_view_tab)
                         trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
                 }
@@ -544,14 +607,14 @@ AppWindow::RenderViewMenu(Project* project)
                 for(const auto& tab : m_tab_container->GetTabs())
                 {
                     auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
+                            tab->m_widget);
                     if(trace_view_tab)
                         trace_view_tab->SetHistogramVisibility(m_histogram_visible);
                 }
-            }            
+            }
         }
         ImGui::EndMenu();
-
     }
 }
 
@@ -569,17 +632,74 @@ AppWindow::RenderHelpMenu()
 }
 
 void
+AppWindow::HandleOpenFile()
+{
+    std::vector<FileFilter> file_filters;
+
+    FileFilter all_filter;
+    all_filter.m_name = "All Supported";
+    all_filter.m_extensions = { "db", "rpd", "rpv", "yaml" };
+
+    FileFilter trace_filter;
+    trace_filter.m_name = "Traces";
+    trace_filter.m_extensions = { "db", "rpd", "yaml"};
+
+#ifdef JSON_TRACE_SUPPORT
+    all_filter.m_extensions.push_back("json");
+    trace_filter.m_extensions.push_back("json");
+#endif 
+#ifdef COMPUTE_UI_SUPPORT
+    all_filter.m_extensions.push_back("csv");
+    trace_filter.m_extensions.push_back("csv");
+#endif
+    FileFilter project_filter;
+    project_filter.m_name = "Projects";
+    project_filter.m_extensions = { "rpv" };
+
+    file_filters.push_back(all_filter);
+    file_filters.push_back(trace_filter);
+    file_filters.push_back(project_filter);
+
+    ShowOpenFileDialog(
+        "Choose File", file_filters, "",
+        [this](std::string file_path) -> void { this->OpenFile(file_path); });
+}
+
+void
+AppWindow::HandleSaveAsFile()
+{    
+    Project* project = GetCurrentProject();
+    if(project)
+    {
+        FileFilter trace_filter;
+        trace_filter.m_name = "Projects";
+        trace_filter.m_extensions = { "rpv" };
+
+        std::vector<FileFilter> filters;
+        filters.push_back(trace_filter);
+
+        ShowSaveFileDialog(
+            "Save as Project", filters, "",
+            [project](std::string file_path) { project->SaveAs(file_path); });
+    }
+}
+
+void
 AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 {
     auto tab_closed_event = std::dynamic_pointer_cast<TabEvent>(e);
     if(tab_closed_event && m_projects.count(tab_closed_event->GetTabId()) > 0)
     {
         auto activeProject = GetCurrentProject();
-        if(!activeProject) {
+        if(!activeProject)
+        {
             spdlog::debug("No active project found after tab closed");
-            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
-        } else {
-            spdlog::debug("Active project found after tab closed: {}", activeProject->GetName());
+            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
+        }
+        else
+        {
+            spdlog::debug("Active project found after tab closed: {}",
+                          activeProject->GetName());
             std::shared_ptr<RootView> root_view =
                 std::dynamic_pointer_cast<RootView>(activeProject->GetView());
             if(root_view)
@@ -603,7 +723,7 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
         // Only handle the event if the tab source is the main tab source
         if(tab_selected_event->GetSourceId() == GetMainTabSourceName())
         {
-            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;  
+            m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
 
             auto id = tab_selected_event->GetTabId();
             spdlog::debug("Tab selected: {}", id);
@@ -630,25 +750,210 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
 void
 AppWindow::RenderAboutDialog()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
-    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize))
-    {
-        ImGui::Text("RocProfiler Visualizer");
-        ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR,
-                    ROCPROFVIS_VERSION_MINOR, ROCPROFVIS_VERSION_PATCH);
-        ImGui::Text(
-            "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
+   
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
 
-        if(ImGui::Button("Close"))
+        if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::CloseCurrentPopup();
+            ImFont* large_font =
+                SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
+            if(large_font) ImGui::PushFont(large_font);
+
+            ImGui::SetCursorPosX(
+                (ImGui::GetWindowSize().x - ImGui::CalcTextSize("ROCm (TM) Optiq").x) * 0.5f);
+            ImGui::Text("ROCm (TM) Optiq");
+            if(large_font) ImGui::PopFont();
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::SetCursorPosX(
+                (ImGui::GetWindowSize().x - ImGui::CalcTextSize("Version 00.00.00").x) *
+                0.5f);
+            ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR,
+                        ROCPROFVIS_VERSION_MINOR, ROCPROFVIS_VERSION_PATCH);
+
+            ImGui::Spacing();
+
+            ImGui::SetCursorPosX(
+                (ImGui::GetWindowSize().x -
+                 ImGui::CalcTextSize("Copyright (C) 2025 Advanced Micro Devices, Inc. "
+                                     "All rights reserved.")
+                     .x) *
+                0.5f);
+            ImGui::Text(
+                "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            float button_width =
+                ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2;
+            ImGui::SetCursorPosX(ImGui::GetWindowSize().x - button_width -
+                                 ImGui::GetStyle().ItemSpacing.x);
+            if(ImGui::Button("Close"))
+            {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
         }
-        ImGui::EndPopup();
-    }
-    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
+        ImGui::PopStyleVar(2);
+    
 }
+
+#ifdef USE_NATIVE_FILE_DIALOG
+void
+AppWindow::UpdateNativeFileDialog()
+{
+    if(m_is_native_file_dialog_open)
+    {
+        if(m_file_dialog_future.valid() &&
+           m_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
+               std::future_status::ready)
+        {
+            m_disable_app_interaction = false;
+            std::string file_path     = m_file_dialog_future.get();
+            if(!file_path.empty() && m_file_dialog_callback)
+            {
+                m_file_dialog_callback(file_path);
+            }
+            m_is_native_file_dialog_open = false;
+            m_file_dialog_callback       = nullptr;
+        }
+    }
+}
+
+void
+AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
+                                const std::string&               initial_path,
+                                std::function<void(std::string)> callback,
+                                bool                             save_dialog)
+{
+    if(m_is_native_file_dialog_open)
+    {
+        return;
+    }
+    m_is_native_file_dialog_open = true;
+    m_file_dialog_callback       = callback;
+    m_disable_app_interaction    = true;
+
+    m_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
+        NFD_Init();
+        nfdu8char_t* outPath = nullptr;
+
+        nfdu8filteritem_t*       filters = new nfdu8filteritem_t[file_filters.size()];
+        std::vector<std::string> extension_stings;
+        for(size_t i = 0; i < file_filters.size(); ++i)
+        {
+            std::string extensions_str;
+            for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
+            {
+                extensions_str += file_filters[i].m_extensions[j];
+                if(j < file_filters[i].m_extensions.size() - 1)
+                {
+                    extensions_str += ",";
+                }
+            }
+            extension_stings.push_back(std::move(extensions_str));
+        }
+        for(size_t i = 0; i < file_filters.size(); ++i)
+        {
+            filters[i] = { file_filters[i].m_name.c_str(), extension_stings[i].c_str() };
+        }
+
+        nfdresult_t result;
+        if(save_dialog)
+        {
+            nfdsavedialogu8args_t args = {};
+            args.filterList            = filters;
+            args.filterCount = static_cast<nfdfiltersize_t>(file_filters.size());
+            if(!initial_path.empty())
+            {
+                args.defaultPath = initial_path.c_str();
+            }
+            result = NFD_SaveDialogU8_With(&outPath, &args);
+        }
+        else
+        {
+            nfdopendialogu8args_t args = {};
+            args.filterList            = filters;
+            args.filterCount = static_cast<nfdfiltersize_t>(file_filters.size());
+            if(!initial_path.empty())
+            {
+                args.defaultPath = initial_path.c_str();
+            }
+            result = NFD_OpenDialogU8_With(&outPath, &args);
+        }
+        delete[] filters;
+        std::string file_path;
+        if(result == NFD_OKAY)
+        {
+            file_path = outPath;
+            if(outPath)
+            {
+                NFD_FreePathU8(outPath);
+            }
+        }
+        else
+        {
+            spdlog::error("Error opening dialog: {}", NFD_GetError());
+            if(outPath)
+            {
+                NFD_FreePathU8(outPath);
+            }
+            NFD_ClearError();
+        }
+        NFD_Quit();
+        return file_path;
+    });
+}
+
+#endif
+
+#ifndef USE_NATIVE_FILE_DIALOG
+void
+AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
+                          const std::string& initial_path, const bool& confirm_overwrite,
+                          std::function<void(std::string)> callback)
+{
+    m_file_dialog_callback = callback;
+    m_init_file_dialog     = true;
+
+    std::stringstream filter_stream;
+    for(const auto& filter : file_filters)
+    {
+        std::stringstream extensions;
+        for(size_t i = 0; i < filter.m_extensions.size(); ++i)
+        {
+            extensions << "." << filter.m_extensions[i];
+            if(i < filter.m_extensions.size() - 1)
+            {
+                extensions << ",";
+            }
+        }
+
+        filter_stream << filter.m_name << " (" << extensions.str() << "){"
+                      << extensions.str() << "}";
+        if(&filter != &file_filters.back())
+        {
+            filter_stream << ",";
+        }
+    }
+
+    IGFD::FileDialogConfig config;
+    config.path  = initial_path;
+    config.flags = confirm_overwrite
+                       ? ImGuiFileDialogFlags_Default
+                       : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
+    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title,
+                                            filter_stream.str().c_str(), config);
+}
+#endif
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void
@@ -673,16 +978,20 @@ AppWindow::RenderDeveloperMenu()
         // Open a file to test the DataProvider
         if(ImGui::MenuItem("Test Provider", nullptr))
         {
-            IGFD::FileDialogConfig config;
-            config.path                      = ".";
-            std::string supported_extensions = ".db,.rpd";
+            std::vector<FileFilter> file_filters;
+            FileFilter trace_filter;
+            trace_filter.m_name       = "Traces";
+            trace_filter.m_extensions = { "db", "rpd" };
 #    ifdef JSON_TRACE_SUPPORT
-            supported_extensions += ",.json";
+            trace_filter.m_extensions.push_back("json");
 #    endif
-            ImGuiFileDialog::Instance()->OpenDialog("DebugFile", "Choose File",
-                                                    supported_extensions.c_str(), config);
+            ShowOpenFileDialog("Choose File", file_filters, "",
+                               [this](std::string file_path) -> void {
+                                   this->m_test_data_provider.FetchTrace(file_path);
+                                   spdlog::info("Opening file: {}", file_path);
+                                   m_show_provider_test_widow = true;
+                               });
         }
-
         ImGui::EndMenu();
     }
 }
@@ -692,9 +1001,9 @@ RenderProviderTest(DataProvider& provider)
 {
     ImGui::Begin("Data Provider Test Window", nullptr, ImGuiWindowFlags_None);
 
-    static char     track_index_buffer[64]     = "0";
-    static char     end_track_index_buffer[64] = "1";  // for setting table track range
-    static uint8_t  group_id_counter           = 0;
+    static char    track_index_buffer[64]     = "0";
+    static char    end_track_index_buffer[64] = "1";  // for setting table track range
+    static uint8_t group_id_counter           = 0;
 
     // Callback function to filter non-numeric characters
     auto NumericFilter = [](ImGuiInputTextCallbackData* data) -> int {
@@ -808,25 +1117,6 @@ RenderProviderTest(DataProvider& provider)
 void
 AppWindow::RenderDebugOuput()
 {
-    ImGui::SetNextWindowPos(
-        ImVec2(m_default_spacing.x, m_default_spacing.y + ImGui::GetFrameHeight()),
-        ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(FILE_DIALOG_SIZE, ImGuiCond_Appearing);
-    if(ImGuiFileDialog::Instance()->Display("DebugFile"))
-    {
-        if(ImGuiFileDialog::Instance()->IsOk())
-        {
-            std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-
-            m_test_data_provider.FetchTrace(file_path);
-            spdlog::info("Opening file: {}", file_path);
-
-            m_show_provider_test_widow = true;
-        }
-
-        ImGuiFileDialog::Instance()->Close();
-    }
-
     if(m_show_metrics)
     {
         ImGui::ShowMetricsWindow(&m_show_metrics);

@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -31,6 +32,16 @@ public:
 
     void HandleNewTableData(std::shared_ptr<RocEvent> e);
 
+    // Important columns in the table
+    enum ImportantColumns
+    {
+        kId,
+        kName,
+        kTrackId,
+        kStreamId,
+        kNumImportantColumns
+    };
+
 protected:
     enum TimeColumns
     {
@@ -41,9 +52,9 @@ protected:
     };
     struct FilterOptions
     {
-        int  column_index;
-        char group_columns[256];
-        char filter[256];
+        std::string group_by;
+        char        group_columns[256];
+        char        filter[256];
     };
 
     virtual void FormatData() const;
@@ -60,10 +71,9 @@ protected:
                                                            size_t stream_id_column_index) const;
     void                          ExportToFile() const;
 
-    std::vector<std::string> m_column_names;
-    std::vector<const char*> m_column_names_ptr;
     FilterOptions            m_filter_options;
     FilterOptions            m_pending_filter_options;
+    std::vector<size_t>      m_important_column_idxs;
 
     std::vector<int> m_hidden_column_indices;  // This must be sorted in increasing order.
     std::array<size_t, kNumTimeColumns> m_time_column_indices;

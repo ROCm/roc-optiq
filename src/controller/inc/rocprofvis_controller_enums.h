@@ -1,4 +1,5 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -529,6 +530,10 @@ typedef enum rocprofvis_controller_sample_properties_t : uint32_t
     kRPVControllerSampleTimestamp,
     // Sample value
     kRPVControllerSampleValue,
+    // Sample vector end timestamp
+    kRPVControllerSampleNextTimestamp,
+    // Sample vector end value
+    kRPVControllerSampleNextValue,
 
     // When a LOD is generated the sample will be synthetic and coalesce several real
     // samples These properties allow access to the contains samples.
@@ -670,6 +675,17 @@ typedef enum rocprofvis_controller_event_properties_t : uint32_t
     kRPVControllerEventCallstackEntryIndexed,
     // Category for the event
     kRPVControllerEventCategory,
+    // Name of the event string index
+    kRPVControllerEventNameStrIndex,
+    // Category for the event string index
+    kRPVControllerEventCategoryStrIndex,
+    // Duration of the event
+    kRPVControllerEventDuration,
+    // Name of top combined event
+    kRPVControllerEventTopCombinedName,
+    // Name of top combined event string index
+    kRPVControllerEventTopCombinedNameStrIndex,
+
     __kRPVControllerEventPropertiesLast
 } rocprofvis_controller_event_properties_t;
 /* JSON: RPVEvent

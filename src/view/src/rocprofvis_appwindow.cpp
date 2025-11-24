@@ -579,7 +579,7 @@ AppWindow::RenderViewMenu(Project* project)
             {
                 tool_bar_item->m_visible = !tool_bar_item->m_visible;
             }
-            if(ImGui::MenuItem("Show Analysis Bar", nullptr, m_analysis_bar_visible))
+            if(ImGui::MenuItem("Show Advanced Details Panel", nullptr, m_analysis_bar_visible))
             {
                 m_analysis_bar_visible = !m_analysis_bar_visible;
                 for(const auto& tab : m_tab_container->GetTabs())
@@ -591,7 +591,7 @@ AppWindow::RenderViewMenu(Project* project)
                         trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
                 }
             }
-            if(ImGui::MenuItem("Show Side Bar", nullptr, m_sidebar_visible))
+            if(ImGui::MenuItem("Show System Topology Panel", nullptr, m_sidebar_visible))
             {
                 m_sidebar_visible = !m_sidebar_visible;
                 for(const auto& tab : m_tab_container->GetTabs())

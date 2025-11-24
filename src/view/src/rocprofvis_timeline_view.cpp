@@ -1283,8 +1283,8 @@ TimelineView::RenderHistogram()
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();
-
-    float histogram_width = m_graph_size.x - splitter_size;
+    float scrollbar_size  = ImGui::GetStyle().ScrollbarSize;
+    float histogram_width = m_graph_size.x - splitter_size - scrollbar_size;
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
@@ -1297,7 +1297,7 @@ TimelineView::RenderHistogram()
 
     ImDrawList* draw_list_ruler = ImGui::GetWindowDrawList();
     ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
-    float       ruler_width     = m_graph_size.x;
+    float       ruler_width     = histogram_width;
     float       tick_top        = ruler_pos.y + 2.0f;
     float       tick_bottom     = ruler_pos.y + 7.0f;
     ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
@@ -1314,7 +1314,7 @@ TimelineView::RenderHistogram()
         static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
     if(interval_count < 1) interval_count = 1;
 
-    double pixels_per_ns = m_graph_size.x / m_range_x;
+    double pixels_per_ns = histogram_width / m_range_x;
     double interval_ns   = calculate_nice_interval(m_range_x, interval_count);
     double step_size_px  = interval_ns * pixels_per_ns;
     int    pad_amount    = 2;  // +2 for the first and last label
@@ -1375,7 +1375,7 @@ TimelineView::RenderHistogram()
 
     ImDrawList* draw_list   = ImGui::GetWindowDrawList();
     ImVec2      bars_pos    = ImGui::GetCursorScreenPos();
-    float       bars_width  = m_graph_size.x;
+    float       bars_width  = histogram_width;
     float       bars_height = kHistogramBarHeight;
     size_t      bin_count   = m_histogram->size();
 
@@ -1399,6 +1399,8 @@ TimelineView::RenderHistogram()
                                          : m_settings.GetColor(Colors::kAccentRed));
         }
     }
+    
+
     // Draw view range overlays and labels
     float view_start_frac = static_cast<float>(m_view_time_offset_ns / m_range_x);
     float view_end_frac =
@@ -1406,8 +1408,8 @@ TimelineView::RenderHistogram()
     view_start_frac = std::clamp(view_start_frac, 0.0f, 1.0f);
     view_end_frac   = std::clamp(view_end_frac, 0.0f, 1.0f);
 
-    float x_view_start = bars_pos.x + view_start_frac * bars_width;
-    float x_view_end   = bars_pos.x + view_end_frac * bars_width;
+    float x_view_start = bars_pos.x + view_start_frac * histogram_width;
+    float x_view_end   = bars_pos.x + view_end_frac * histogram_width;
     float y0           = bars_pos.y;
     float y1           = bars_pos.y + bars_height;
 
@@ -1429,28 +1431,31 @@ TimelineView::RenderHistogram()
     }
 
     // Right overlay
-    if(x_view_end < bars_pos.x + bars_width)
+    if(x_view_end < bars_pos.x + histogram_width)
     {
         draw_list->AddRectFilled(ImVec2(x_view_end, y0),
-                                 ImVec2(bars_pos.x + bars_width, y1),
+                                 ImVec2(bars_pos.x + histogram_width, y1),
                                  m_settings.GetColor(Colors::kGridColor));
         draw_list->AddLine(ImVec2(x_view_end, y0), ImVec2(x_view_end, y1),
                            m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
         std::string vmax_label =
             nanosecond_to_formatted_str(m_v_max_x - m_min_x, time_format, true);
         ImVec2 vmax_label_size = ImGui::CalcTextSize(vmax_label.c_str());
-        float  vmax_label_x =
-            std::min(x_view_end + 6, bars_pos.x + bars_width - vmax_label_size.x - 2);
+        float  vmax_label_x    = std::min(x_view_end + 6, bars_pos.x + histogram_width -
+                                                              vmax_label_size.x - 2);
         ImVec2 vmax_label_pos(vmax_label_x, y0 + (bars_height - vmax_label_size.y));
         draw_list->AddText(vmax_label_pos, m_settings.GetColor(Colors::kRulerTextColor),
                            vmax_label.c_str());
     }
+
 
     if(!m_resize_activity && !m_stop_user_interaction) HandleHistogramTouch();
 
     ImGui::EndChild();  // Histogram Bars
     ImGui::EndChild();
     ImGui::PopStyleColor();
+
+     
 
     // Check if mouse is inside histogram area
     window_pos         = ImGui::GetWindowPos();
@@ -1473,6 +1478,15 @@ TimelineView::RenderHistogram()
         else
             m_histogram_pseudo_focus = false;
     }
+
+    ImGui::SameLine();
+
+    // Occupy space for scrollbar
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
+    ImGui::BeginChild("HistogramSplitterEnd",
+                      ImVec2(scrollbar_size, kHistogramTotalHeight), false);
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
 
 void

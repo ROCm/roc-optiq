@@ -1,22 +1,5 @@
-// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -139,6 +122,8 @@ class ProfileDatabase : public SqliteDatabase
         static int CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
        
         static rocprofvis_dm_event_operation_t GetTableQueryOperation(std::string query);
+        
+        void BuildSliceQueryMap(slice_query_t& slice_query_map, rocprofvis_dm_track_params_t* props);
 
     protected:
 
@@ -169,6 +154,16 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_string_t& query,
                             slice_array_t& slices) override;
 
+        rocprofvis_dm_result_t BuildCounterSliceLeftNeighbourQuery(
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end, 
+            rocprofvis_dm_index_t track_index, 
+            rocprofvis_dm_string_t& query);
+        rocprofvis_dm_result_t BuildCounterSliceRightNeighbourQuery(
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end, 
+            rocprofvis_dm_index_t track_index, 
+            rocprofvis_dm_string_t& query);
         rocprofvis_dm_result_t BuildTableQuery(
                             rocprofvis_dm_timestamp_t start, 
                             rocprofvis_dm_timestamp_t end,

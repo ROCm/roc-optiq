@@ -1,22 +1,5 @@
-// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_db_expression_filter.h"
@@ -283,7 +266,7 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
         }
         else {
             record.pmc.timestamp = db->Sqlite3ColumnInt64(func, stmt, azColName, 1);
-            record.pmc.value = db->Sqlite3ColumnInt(func, stmt, azColName,2);
+            record.pmc.value = db->Sqlite3ColumnDouble(func, stmt, azColName,2);
         }
         if(db->BindObject()->FuncAddRecord(
                (*(slice_array_t*) callback_params->handle)[callback_params->track_id],
@@ -769,47 +752,100 @@ ProfileDatabase::ExecuteQueriesAsync(
     return result;
 }
 
+void ProfileDatabase::BuildSliceQueryMap(slice_query_t& slice_query_map, rocprofvis_dm_track_params_t* props)
+{
+    int slice_query_category = props->process.category ==  kRocProfVisDmStreamTrack? kRPVQuerySliceByStream : kRPVQuerySliceByQueue;
+
+    for (int j = 0; j < props->query[slice_query_category].size(); j++) {
+        std::string q = props->query[slice_query_category][j]; 
+
+        std::string tuple = "(";
+        for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+            if (props->process.tag[k] != "const") {
+                if (tuple.length() > 1) tuple += ",";
+                tuple += props->process.tag[k];
+            }
+        }
+        tuple += ")";
+        q += " where ";
+        if (props->process.category == kRocProfVisDmRegionMainTrack)
+        {
+            q += "SAMPLE.id IS NULL and ";
+        }
+        q += tuple;
+        q += " IN (";
+        tuple = "(";
+        for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
+            if (props->process.tag[k] != "const") {
+                if (tuple.length() > 1) tuple += ",";
+                std::string id = props->process.is_numeric[k] ? std::to_string(props->process.id[k]) : std::string("'") + props->process.name[k] + "'";
+                tuple += id;
+
+            }
+        }
+        tuple += ")";
+        if (slice_query_map[q].length() > 0) slice_query_map[q] += ", ";
+        slice_query_map[q] += tuple ;
+    }
+}
+
+rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceLeftNeighbourQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_index_t track_index, rocprofvis_dm_string_t& query) {
+    slice_query_t slice_query_map;
+    bool timed_query = false;
+
+    rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track_index);
+    BuildSliceQueryMap(slice_query_map, props);
+
+    for (auto it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
+        query += "SELECT * FROM ( ";
+        query += it_query->first;
+        query += it_query->second;
+        query += ") and ";
+        query += Builder::START_SERVICE_NAME;
+        query += " < ";
+        query += std::to_string(start);
+        query += std::string(" ORDER BY ") + Builder::START_SERVICE_NAME + " DESC LIMIT 1 )";
+        break;
+    }
+    return kRocProfVisDmResultSuccess;
+
+}
+
+rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceRightNeighbourQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_index_t track_index, rocprofvis_dm_string_t& query) {
+    slice_query_t slice_query_map;
+    bool timed_query = false;
+
+    rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track_index);
+    BuildSliceQueryMap(slice_query_map, props);
+
+    for (auto it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
+        query += "SELECT * FROM ( ";
+        query += it_query->first;
+        query += it_query->second;
+        query += ") and ";
+        query += Builder::START_SERVICE_NAME;
+        query += " > ";
+        query += std::to_string(end);
+        query += std::string(" ORDER BY ") + Builder::START_SERVICE_NAME + " ASC LIMIT 1 )";
+        break;
+    }
+    return kRocProfVisDmResultSuccess;
+
+}
 
 rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_string_t& query, slice_array_t& slices) {
     slice_query_t slice_query_map;
     bool timed_query = false;
+    bool pmc_query = false;
     for (int i = 0; i < num; i++){
         slices[tracks[i]]=BindObject()->FuncAddSlice(BindObject()->trace_object, tracks[i], start, end);
         rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
-        int slice_query_category = props->process.category ==  kRocProfVisDmStreamTrack? kRPVQuerySliceByStream : kRPVQuerySliceByQueue;
-        for (int j = 0; j < props->query[slice_query_category].size(); j++) {
-            std::string q = props->query[slice_query_category][j]; 
-
-            std::string tuple = "(";
-            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process.tag[k] != "const") {
-                    if (tuple.length() > 1) tuple += ",";
-                    tuple += props->process.tag[k];
-                }
-            }
-            tuple += ")";
-            q += " where ";
-            if (props->process.category == kRocProfVisDmRegionMainTrack)
-            {
-                q += "SAMPLE.id IS NULL and ";
-            }
-            q += tuple;
-            q += " IN (";
-            tuple = "(";
-            for (int k = 0; k < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; k++) {
-                if (props->process.tag[k] != "const") {
-                    if (tuple.length() > 1) tuple += ",";
-                    std::string id = props->process.is_numeric[k] ? std::to_string(props->process.id[k]) : std::string("'") + props->process.name[k] + "'";
-                    tuple += id;
-                      
-                }
-            }
-            tuple += ")";
-            if (slice_query_map[q].length() > 0) slice_query_map[q] += ", ";
-            slice_query_map[q] += tuple ;
+        if (props->process.category == kRocProfVisDmPmcTrack)
+        {
+            pmc_query = true;
         }
-        if (start > TrackPropertiesAt(tracks[i])->min_ts ||
-            end < TrackPropertiesAt(tracks[i])->max_ts)
+        BuildSliceQueryMap(slice_query_map, props);
+        if (start > props->min_ts || end < props->max_ts)
         {
             timed_query = true;
         }
@@ -824,18 +860,32 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
         if(timed_query)
         {
             query += " and ";
-            query += Builder::START_SERVICE_NAME;
-            query += " < ";
-            query += std::to_string(end);
-            query += " and ";
-            query += Builder::END_SERVICE_NAME;
-            query += " > ";
-            query += std::to_string(start);
+            if (pmc_query)
+            {
+                query += Builder::START_SERVICE_NAME;
+                query += " BETWEEN ";
+                query += std::to_string(start);
+                query += " and ";
+                query += std::to_string(end);
+            }
+            else
+            {
+                query += Builder::START_SERVICE_NAME;
+                query += " < ";
+                query += std::to_string(end);
+                query += " and ";
+                query += Builder::END_SERVICE_NAME;
+                query += " > ";
+                query += std::to_string(start);
+            }
         }
     }
     query += (slice_query_map.size() > 1) ? ")" : "";
     query += std::string(" ORDER BY ") + Builder::START_SERVICE_NAME;
-    query += std::string(", ") + Builder::EVENT_LEVEL_SERVICE_NAME;
+    if (!pmc_query)
+    {
+        query += std::string(", ") + Builder::EVENT_LEVEL_SERVICE_NAME;
+    }
     query += ";";
     return kRocProfVisDmResultSuccess;
 
@@ -1049,16 +1099,52 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
 
-        std::string query;
+        std::string slice_query;
         slice_array_t slices;
-        if (BuildSliceQuery(start, end, num, tracks, query, slices) != kRocProfVisDmResultSuccess) break;
-        ShowProgress(100, query.c_str(), kRPVDbBusy, future);
-        rocprofvis_dm_result_t result =
-            ExecuteSQLQuery(future, query.c_str(), &slices, &CallbackAddAnyRecord);
-        for(int i = 0; i < num; i++)
+        rocprofvis_dm_result_t result = BuildSliceQuery(start, end, num, tracks, slice_query, slices);
+        std::string query;
+
+        if (result == kRocProfVisDmResultSuccess)
         {
-            BindObject()->FuncCompleteSlice(slices[tracks[i]]);
+            for (int i = 0; i < num; i++)
+            {
+                rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
+                if (props->process.category == kRocProfVisDmPmcTrack)
+                {
+                    result = BuildCounterSliceLeftNeighbourQuery(start, end, tracks[i], query);
+                    if (result != kRocProfVisDmResultSuccess) break;
+                    result = ExecuteSQLQuery(future, query.c_str(), &slices, &CallbackAddAnyRecord);
+                    if (result != kRocProfVisDmResultSuccess) break;
+                }
+            }
+
+
+            if (result == kRocProfVisDmResultSuccess)
+            {
+
+                result = ExecuteSQLQuery(future, slice_query.c_str(), &slices, &CallbackAddAnyRecord);
+
+                if (result == kRocProfVisDmResultSuccess)
+                {
+                    query = "";
+                    for (int i = 0; i < num; i++)
+                    {
+                        rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
+                        if (props->process.category == kRocProfVisDmPmcTrack)
+                        {
+                            if (BuildCounterSliceRightNeighbourQuery(start, end, tracks[i], query) != kRocProfVisDmResultSuccess) break;
+                            if (ExecuteSQLQuery(future, query.c_str(), &slices, &CallbackAddAnyRecord) != kRocProfVisDmResultSuccess) break;
+                        }
+                    }
+                }
+
+                for (int i = 0; i < num; i++)
+                {
+                    BindObject()->FuncCompleteSlice(slices[tracks[i]]);
+                }
+            }
         }
+
         if(kRocProfVisDmResultSuccess != result)
         {
             for(int i = 0; i < num; i++)

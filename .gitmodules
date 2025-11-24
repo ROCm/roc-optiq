@@ -26,3 +26,6 @@
 [submodule "thirdparty/ionicons"]
 	path = thirdparty/ionicons
 	url = https://github.com/ionic-team/ionicons.git
+[submodule "thirdparty/nativefiledialog-extended"]
+	path = thirdparty/nativefiledialog-extended
+	url = https://github.com/btzy/nativefiledialog-extended.git

@@ -2,6 +2,8 @@
   :description: Learn how to customize your ROCm Optiq project
   :keywords: Optiq, ROCm, customize, filter, bookmarks, annotations
 
+.. _customize:
+
 **********************************
 Customize your ROCm™ Optiq project
 **********************************
@@ -140,7 +142,7 @@ Customize display options for each track by clicking the gear icon in the track'
 - For sample counter tracks, you can set the min and max when showing the tracks: 
 
   - Click on the value beside the min and max to set/change the scale range. 
-  - Click the reset button |reset| to restore the values to their default.
+  - Click the reset |reset| button to restore the values to their default.
 
   .. image:: ../images/min-max.png
      :width: 800

@@ -13,10 +13,10 @@ ROCm™ Optiq allows you to inspect CPU-GPU interactions, ROCm API calls, kernel
 
 The application provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata. It captures what happened, when it happened, and often how long it took.
 
-Traces are comprised of Event tracks and Counter tracks:
+Traces are comprised of event tracks and counter tracks:
 
-- An Event track is a horizontal lane in the profiler's timeline view that displays individual events such as API calls (e.g., ROCm functions), Kernel dispatches on the GPU, CPU function calls or other execution units. Each event is shown as a bar positioned according to its start and end timestamps, allowing you to visualize execution order and duration.
-- A Counter track is a timeline track that displays hardware metrics collected during the application execution. These counters (or telemetry) come from the GPU, CPU, NIC (for host or device, these can also include network traffic) and represent low-level events or states, such as:
+- An event track is a horizontal lane in the profiler's timeline view that displays individual events such as API calls (e.g., ROCm functions), Kernel dispatches on the GPU, CPU function calls or other execution units. Each event is shown as a bar positioned according to its start and end timestamps, allowing you to visualize execution order and duration.
+- A counter track is a timeline track that displays hardware metrics collected during the application execution. These counters (or telemetry) come from the GPU, CPU, NIC (for host or device, these can also include network traffic) and represent low-level events or states, such as:
 
   - Clock frequency (GPU/CPU operating speed)
   - Power consumption
@@ -67,8 +67,8 @@ The **System Topology View** displays a hierarchical representation of the hardw
    :width: 800
    :align: center
 
-- Click the |eye| icon to show or hide tracks. 
-- Click **Scroll To Track** |scroll| to go to the track in the :ref:`timeline`. 
+- Click the eye |eye| icon to show or hide tracks. 
+- Click the scroll |scroll| button to go to the track in the :ref:`timeline`. 
 
 .. _timeline:
 
@@ -153,7 +153,7 @@ Advanced Details
 The **Advanced Details** section provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. 
 This section provides an interface for multiple data perspectives, offering granular insights through these components:
 
-- **Event Table**: Displays all events within the selected tracks. Users can refine their analysis by applying time-range selection or executing customized SQL-like queries, ensuring targeted event exploration.
+- **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or executing customized SQL-like queries, ensuring targeted event exploration.
 
   - Right-click on the column headers to show/hide columns.
   - In the **Event Table** tab, there is a drop-down box that allows the events grouped by a column to display aggregated metrics.
@@ -162,7 +162,6 @@ This section provides an interface for multiple data perspectives, offering gran
   - SQL-like statements can be entered into the **Filter** input box to filter the data. For example, ``“min_duration > 2000”`` will filter all events shorter than 2000 ns.
   - The **Group By** drop-down groups the results by the selected column and displays the default aggregations shown in the **Group Columns** box.
   - Custom SQL aggregation statements can be entered into the **Group Columns** input box
-  - Click **Submit** to perform the filtering or grouping operations.
 
   .. image:: ../images/event-table.png
     :width: 800
@@ -181,7 +180,7 @@ Save a project file
 ===================
 
 Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project (``.rpv`` file). 
-Upon opening a project file, the associated trace file and previous customizations will be recalled.
+See :ref:`customize` for more information on these features.
 
 - Go to **File** > **Save** As to create a new project.
 - Go to **File** > **Save** to overwrite the currently opened project.

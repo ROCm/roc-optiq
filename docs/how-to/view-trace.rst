@@ -155,26 +155,22 @@ This section provides an interface for multiple data perspectives, offering gran
 
 - **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or executing customized SQL-like queries, ensuring targeted event exploration.
 
-  - Right-click on the column headers to show/hide columns.
-  - In the **Event Table** tab, there is a drop-down box that allows the events grouped by a column to display aggregated metrics.
-  - Right-click on a table row and select **Go to event** to navigate to the **Timeline View** to the highlighted event.
-  - :ref:`time-range-filter` using the **Timeline View** filters the rows displayed in the table to be contained within the selected time range.
-  - SQL-like statements can be entered into the **Filter** input box to filter the data. For example, ``“min_duration > 2000”`` will filter all events shorter than 2000 ns.
-  - The **Group By** drop-down groups the results by the selected column and displays the default aggregations shown in the **Group Columns** box.
-  - Custom SQL aggregation statements can be entered into the **Group Columns** input box
-
-  .. image:: ../images/event-table.png
+  .. image:: ../images/advanced.png
     :width: 800
     :align: center
+
+  - **Group By**: This drop-down groups the results by the selected column and displays the default aggregations shown in the **Group Columns** box.
+  - **Group Columns**: Enter custom SQL aggregation statements.
+  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“min_duration > 2000”`` will filter all events shorter than 2000 ns.
+  
+    - Right-click on the column headers to show/hide columns.
+    - Right-click on a table row and select **Go to event** to navigate to the **Timeline View** to the highlighted event.
+    - :ref:`time-range-filter` using the **Timeline View** filters the rows displayed in the table to be contained within the selected time range.
 
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the Event Table, it supports time-range selection and SQL-like query capabilities for detailed performance analysis.
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the event table. It shows raw database such as timestamps, duration, associated queue/stream, correlation IDs and API method parameters. It also shows Flow and Call stack information, if available.
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, the type of track (Thread, Counter, Queue, etc.).
 - **Annotations**: Displays user-created annotations, allowing for easier navigating across critical points within large traces, enhancing collaboration and sharing knowledge. See :ref:`annotation` for more info.
-
-.. image:: ../images/advanced.png
-   :width: 800
-   :align: center
 
 Save a project file
 ===================

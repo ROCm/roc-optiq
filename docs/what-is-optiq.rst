@@ -8,7 +8,7 @@ What is ROCm™ Optiq?
 
 ROCm™ Optiq allows you to inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage and system telemetry data for applications running on the ROCm stack.
 
-.. image:: /images/ui_sections.png
+.. image:: /images/optiq.png
    :width: 800
 
 Since ROCm Optiq does not have any dependencies with the ROCm stack, trace files captured by the ROCm Systems Profiler can be visualized with the ROCm Optiq GUI on any machine that has: 

@@ -18,16 +18,54 @@ TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topo
 : m_data_provider(dp)
 , m_track_topology(topology)
 , m_timeline_selection(timeline_selection)
-, m_selection_dirty(false)
-, m_detail_item_id(0)
-{}
+    , m_selection_dirty(false)
+    , m_detail_item_id(0)
+    , m_topology_changed_event_token(EventManager::InvalidSubscriptionToken)
+    , m_track_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
+    , m_data_valid(false)
+    {
+        auto topology_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
+            if(event)
+            {
+                if(m_data_provider.GetTraceFilePath() == event->GetSourceId())
+                {
+                    m_selection_dirty = true;
+                }
+            }
+        };
 
-TrackDetails::~TrackDetails() {}
+        m_topology_changed_event_token = EventManager::GetInstance()->Subscribe(
+            static_cast<int>(RocEvents::kTopologyChanged), topology_changed_event_handler);
+
+        auto metadata_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
+            if(event)
+            {
+                if(m_data_provider.GetTraceFilePath() == event->GetSourceId())
+                {
+                    m_data_valid = false;
+                }
+            }
+        };
+
+        m_track_metadata_changed_event_token = EventManager::GetInstance()->Subscribe(
+            static_cast<int>(RocEvents::kTrackMetadataChanged),
+            metadata_changed_event_handler);
+    }
+
+TrackDetails::~TrackDetails() {
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTopologyChanged),
+        m_topology_changed_event_token);
+
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTrackMetadataChanged),
+        m_track_metadata_changed_event_token);
+}
 
 void
 TrackDetails::Render()
 {
-    if(!m_selection_dirty && !m_track_topology->Dirty())
+    if(m_data_valid && !m_selection_dirty && !m_track_topology->Dirty())
     {
         ImGui::BeginChild("track_details", ImVec2(0, 0), ImGuiChildFlags_Borders);
         if(m_track_details.empty())
@@ -177,6 +215,7 @@ TrackDetails::Update()
             m_track_details.remove(item);
         }
         m_selection_dirty = false;
+        m_data_valid = true;
     }
 }
 

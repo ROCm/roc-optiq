@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include <list>
 
@@ -57,6 +58,10 @@ private:
     bool                               m_selection_dirty;
     std::list<DetailItem>              m_track_details;
     int                                m_detail_item_id;
+    bool                               m_data_valid;
+
+    EventManager::SubscriptionToken m_topology_changed_event_token;
+    EventManager::SubscriptionToken m_track_metadata_changed_event_token;
 };
 
 }  // namespace View

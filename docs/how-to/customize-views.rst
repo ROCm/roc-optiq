@@ -74,7 +74,7 @@ To add an annotation:
 
 .. tip::
 
-  - The annotation can be edited or deleted by clicking |pen|.
+  - The annotation can be edited or deleted by clicking the pencil |pen| icon.
   - A complete list of annotations can be viewed in the **Annotations** tab of the :ref:`advanced` section.
   - Check the **Visibility** option in the **Annotations** tab to toggle the visibility of individual annotations.
   - Clicking on a row in the annotations list will bring the selected annotation into view.
@@ -97,7 +97,9 @@ Or:
 Delete bookmarks
 ----------------
 
-To delete a bookmark, click **X** to delete a bookmark from the |book| drop-down menu. Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
+To delete a bookmark, click **X** to delete a bookmark from the |book| drop-down menu. 
+
+Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
 
 Change display settings
 =======================
@@ -107,13 +109,13 @@ You can change these global display settings for ROCm Optiq from the **Settings*
 The application theme display (Light or Dark mode) or the font scaling: either automatic based on the display DPI, or customized using the font size control.
 
 .. image:: ../images/settings.png
-   :width: 800
+   :width: 600
    :align: center
 
 The time unit settings displayed on the **Timeline View**.
 
 .. image:: ../images/units.png
-   :width: 800
+   :width: 600
    :align: center
 
 Customize timeline display options
@@ -122,7 +124,7 @@ Customize timeline display options
 Customize display options for each track by clicking the gear icon in the track's **Description** in the :ref:`timeline`:
 
 .. image:: ../images/track-gear.png
-   :width: 800
+   :width: 600
    :align: center
 
 - For event tracks, you can toggle between **Color by name** and **Compact mode**.
@@ -157,13 +159,13 @@ Use the **Flow** buttons on the **Toolbar** to show and hide flow information on
 Chain mode displays events in a linked sequence, emphasizing dependencies and execution order. This is useful when analyzing how operations are chained together across queues or streams.
 
 .. image:: ../images/chain-mode.png
-   :width: 800
+   :width: 600
    :align: center
 
 Render mode Shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
 
 .. image:: ../images/fan-mode.png
-   :width: 800
+   :width: 600
    :align: center
 
 .. note::

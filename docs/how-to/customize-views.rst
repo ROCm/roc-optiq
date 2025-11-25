@@ -21,18 +21,15 @@ Set a time range filter
 =======================
 
 Set a time range filter in the :ref:`timeline` to limit that data displayed to a specific period. 
-
 To set a time range filter, double-click a range in the **Timeline View**.
 
 .. image:: ../images/filter.png
-   :width: 800
-   :align: center
+   :width: 600
 
 Double-click in the **Timeline View** again to clear the selection.
 
 .. image:: ../images/time-range-filter.gif
-   :width: 800
-   :align: center
+   :width: 600
 
 The active time range filter applies to Event and sample Counter details in the :ref:`advanced` section.
 
@@ -97,9 +94,8 @@ Or:
 Delete bookmarks
 ----------------
 
-To delete a bookmark, click **X** to delete a bookmark from the |book| drop-down menu. 
-
-Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
+- To delete a bookmark, click **X** to delete a bookmark from the |book| drop-down menu. 
+- Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
 
 Change display settings
 =======================

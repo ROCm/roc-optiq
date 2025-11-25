@@ -352,6 +352,9 @@ TrackTopology::UpdateTopology()
         }
         FormatCells();
         m_topology_dirty = false;
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTopologyChanged),
+                                       m_data_provider.GetTraceFilePath()));
     }
 }
 

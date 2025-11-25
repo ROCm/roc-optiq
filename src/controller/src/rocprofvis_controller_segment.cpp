@@ -159,7 +159,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 (rocprofvis_controller_properties_t) ((m_type ==
                                                         kRPVControllerTrackTypeEvents)
                                                             ? kRPVControllerEventEndTimestamp
-                                                            : kRPVControllerSampleNextTimestamp);
+                                                            : kRPVControllerSampleEndTimestamp);
 
             std::map<double, Handle*>::iterator lower = entries.end();
             for(auto it = entries.begin(); it != entries.end(); ++it)

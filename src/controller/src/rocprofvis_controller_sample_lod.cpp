@@ -208,8 +208,7 @@ rocprofvis_result_t SampleLOD::GetDouble(rocprofvis_property_t property, uint64_
             case kRPVControllerSampleType:
             case kRPVControllerSampleNumChildren:
             case kRPVControllerSampleChildIndex:
-            case kRPVControllerSampleNextTimestamp:
-            case kRPVControllerSampleNextValue:
+            case kRPVControllerSampleEndTimestamp:
             case kRPVControllerSampleTrack:
             {
                 result = Sample::GetDouble(property, index, value);
@@ -367,8 +366,7 @@ rocprofvis_result_t SampleLOD::SetDouble(rocprofvis_property_t property, uint64_
         case kRPVControllerSampleNumChildren:
         case kRPVControllerSampleChildIndex:
         case kRPVControllerSampleTimestamp:
-        case kRPVControllerSampleNextTimestamp:
-        case kRPVControllerSampleNextValue:
+        case kRPVControllerSampleEndTimestamp:
         case kRPVControllerSampleTrack:
         {
             result = Sample::SetDouble(property, index, value);

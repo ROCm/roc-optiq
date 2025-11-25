@@ -10,12 +10,16 @@ ROCm™ Optiq installation
 System requirements
 ===================
 
-Your system must have at least 16GB of RAM while running one of these operating systems:
+Your system must be running one of these operating systems:
 
 -	Windows 11
 -	Ubuntu 22.04 / Ubuntu 24.04
 -	Oracle Linux 9 / Oracle Linux 10
 -	RHEL 9 / RHEL 10
+
+.. note::
+
+   It's recommended to have at least 16GB of RAM to run large traces.
 
 
 Install on Windows

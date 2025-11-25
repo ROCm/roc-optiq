@@ -9,8 +9,9 @@ Customize your ROCm™ Optiq project
 .. |book| image:: ../images/bookmarks.png
 .. |pen| image:: ../images/pencil.png
 .. |flow| image:: ../images/flow-change.png
+.. |reset| image:: ../images/reset.png
 
-You can customize the data views of opened trace files in ROCm Optiq such as display settings, saved trace selections, added bookmarks / annotations, and more.
+You can customize the data views of an opened trace file in ROCm Optiq such as display settings, saved trace selections, added bookmarks / annotations, and more.
 
 .. _time-range-filter:
 
@@ -42,6 +43,8 @@ When there's an active time range filter, the trace can be trimmed from the **Ed
    :width: 200
 
 This creates a new trace file containing only the events in the filter.
+
+.. _annotation:
 
 Add an annotation
 =================
@@ -120,8 +123,27 @@ Customize display options for each track by clicking the gear icon in the track'
    :width: 800
    :align: center
 
--	For Event tracks, you can change the coloring method used to color the events.
--	For sample Counter tracks, you can toggle between line plot and box plot mode. Set threshold limits so you can highlight which points are in a danger zone.
+- For event tracks, you can toggle between **Color by name** and **Compact mode**.
+
+  - **Color by name**: Change the coloring method used to color the events.
+  - **Compact Mode**: Shrink the event heights so that tall flame graphs can be displayed in a smaller area.
+
+- For sample counter tracks, you can toggle between **Show Counter Boxes**, **Alternate Counter Coloring**, and **Highlight Y Range**:
+
+  - **Show Counter Boxes**: Display as a line only, or fill the area under the line as well.
+  - **Alternate Counter Coloring**: If the area under the line is filled, alternate the fill color for each sample.
+  - **Highlight Y Range**: Select an area of the graph to highlight. Choose the min and max range that you want to highlight. The tool highlights these values on the track region.
+
+    .. image:: ../images/timeline-display-options.png
+       :width: 800  
+  
+- For sample counter tracks, you can set the min and max when showing the tracks: 
+
+  - Click on the value beside the min and max to set/change the scale range. 
+  - Click the reset button |reset| to restore the values to their default.
+
+  .. image:: ../images/min-max.png
+     :width: 800
 
 Set the flow rendering display mode
 ===================================

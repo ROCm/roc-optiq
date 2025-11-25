@@ -23,14 +23,14 @@ Correlating GPU workloads with in-application CPU events and performance with ha
 
 ROCm Optiq is structured around several key panels that work together to deliver a comprehensive profiling experience:
 
-- **System Topology Tree**: Displays a hierarchical view of processes, queues, streams, and threads which enables quick navigation and selective visibility of tracks.
-- **Timeline View**: Displays CPU and GPU activities, events, and performance metrics chronologically. It has:
+- :ref:`topology`: Displays a hierarchical view of processes, queues, streams, and threads which enables quick navigation and selective visibility of tracks.
+- :ref:`timeline`: Displays CPU and GPU activities, events, and performance metrics chronologically. It has:
   
   - Event tracks such as API calls, kernel dispatches, and more. 
   - Sample performance Counter tracks in the form of charts displaying the data points. 
   - Tools for zooming, filtering, and bookmarking for detailed analysis.
 
-- **Advanced Details**: This section provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. This section provides a unified interface for multiple data perspectives, offering granular insights. See :ref:`advanced` for more information.
+- :ref:`advanced`: This section provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. This section provides a unified interface for multiple data perspectives, offering granular insights.
 
 
 

@@ -29,13 +29,13 @@ Install on Windows
    
    .. image:: ../images/wizard.png
       :width: 600
-      :align: center
+      :align: left
 
 2. Accept the agreement to install, then follow the installation instructions.
 
    .. image:: ../images/agreement.png
       :width: 600
-      :align: center
+      :align: left
   
 3. Launch **roc-optiq.exe** from the installation directory.
 

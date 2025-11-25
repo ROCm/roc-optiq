@@ -104,17 +104,17 @@ Change display settings
 
 You can change these global display settings for ROCm Optiq from the **Settings** menu:
 
-- The application theme display (Light or Dark mode) or the font scaling: either automatic based on the display DPI, or customized using the font size control.
+The application theme display (Light or Dark mode) or the font scaling: either automatic based on the display DPI, or customized using the font size control.
 
-  .. image:: ../images/settings.png
-     :width: 800
-     :align: center
+.. image:: ../images/settings.png
+   :width: 800
+   :align: center
 
-- The time unit settings displayed on the **Timeline View**.
+The time unit settings displayed on the **Timeline View**.
 
-  .. image:: ../images/units.png
-     :width: 800
-     :align: center
+.. image:: ../images/units.png
+   :width: 800
+   :align: center
 
 Customize timeline display options
 ----------------------------------
@@ -137,7 +137,7 @@ Customize display options for each track by clicking the gear icon in the track'
   - **Highlight Y Range**: Select an area of the graph to highlight. Choose the min and max range that you want to highlight. The tool highlights these values on the track region.
 
     .. image:: ../images/timeline-display-options.png
-       :width: 800  
+       :width: 400  
   
 - For sample counter tracks, you can set the min and max when showing the tracks: 
 
@@ -145,7 +145,7 @@ Customize display options for each track by clicking the gear icon in the track'
   - Click the reset |reset| button to restore the values to their default.
 
   .. image:: ../images/min-max.png
-     :width: 800
+     :width: 400
 
 Set the flow rendering display mode
 ===================================
@@ -154,17 +154,17 @@ Use the **Flow** buttons on the **Toolbar** to show and hide flow information on
 
 |flow|
 
-- Chain mode displays events in a linked sequence, emphasizing dependencies and execution order. This is useful when analyzing how operations are chained together across queues or streams.
+Chain mode displays events in a linked sequence, emphasizing dependencies and execution order. This is useful when analyzing how operations are chained together across queues or streams.
 
-  .. image:: ../images/chain-mode.png
-     :width: 800
-     :align: center
+.. image:: ../images/chain-mode.png
+   :width: 800
+   :align: center
 
-- Render mode Shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
+Render mode Shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
 
-  .. image:: ../images/fan-mode.png
-     :width: 800
-     :align: center
+.. image:: ../images/fan-mode.png
+   :width: 800
+   :align: center
 
 .. note::
 

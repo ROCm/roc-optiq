@@ -167,7 +167,7 @@ This section provides an interface for multiple data perspectives, offering gran
 
      - Right-click on the column headers to show/hide columns.
      - Right-click on a table row and select **Go to event** to navigate to the **Timeline View** to the highlighted event.
-     - :ref:`time-range-filter` using the **Timeline View** filters the rows displayed in the table to be contained within the selected time range.
+     - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the Event Table, it supports time-range selection and SQL-like query capabilities for detailed performance analysis.
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the event table. It shows raw database such as timestamps, duration, associated queue/stream, correlation IDs and API method parameters. It also shows Flow and Call stack information, if available.

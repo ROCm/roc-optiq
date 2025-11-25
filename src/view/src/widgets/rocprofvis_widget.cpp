@@ -472,6 +472,7 @@ TabContainer::TabContainer()
 , m_enable_send_close_event(false)
 , m_enable_send_change_event(false)
 , m_index_to_remove(-1)
+, m_additional_flags(0)
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
 {
     m_widget_name = GenUniqueName("TabContainer");
@@ -509,13 +510,15 @@ TabContainer::ShowCloseTabConfirm(int removing_tab_index)
     //mess, make it clear
     TabItem& removing_tab = m_tabs[removing_tab_index];
     m_index_to_remove = -1;
+    //m_dialog_opened   = true;
     m_confirmation_dialog->Show(
         "Confirm Closing tab",
         "Are you sure you want to close the Tab" + removing_tab.m_label + "? Any "
         "unsaved data will be lost.",
-                                [this, removing_tab_index]() {
-                                    RemoveTab(removing_tab_index);
-
+        [this, removing_tab_index]()
+        {
+            m_additional_flags = 0;
+            RemoveTab(removing_tab_index);
         });
 }
 void
@@ -536,7 +539,7 @@ TabContainer::Render()
 {
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
 
-    int new_selected_tab = m_active_tab_index;
+    int new_selected_tab = m_active_tab_index; //TODO active tab index should reworcked couse it pizdec
     if(!m_tabs.empty())
     {
         m_confirmation_dialog->Render();
@@ -547,6 +550,7 @@ TabContainer::Render()
                 TabItem&    tab = m_tabs[i];
                 ImGuiTabItemFlags flags =
                     (i == m_set_active_tab_index) ? ImGuiTabItemFlags_SetSelected : 0;
+                //flags |= m_additional_flags;
 
                 bool  is_open = true;
                 bool* p_open  = &is_open;
@@ -612,10 +616,10 @@ TabContainer::Render()
         // Remove the tab if it was closed
         if(m_index_to_remove != -1)
         {
-            const TabItem& removing_tab = m_tabs[m_index_to_remove];
             if(SettingsManager::GetInstance()
                    .GetUserSettings().ask_before_closing_tabs)
             {
+                m_additional_flags |= ImGuiTabBarFlags_AutoSelectNewTabs;
                 ShowCloseTabConfirm(m_index_to_remove);
             }
             else
@@ -681,6 +685,7 @@ TabContainer::RemoveTab(int index)
             // If the active tab was closed, reset to -1
             m_active_tab_index = -1;
         }
+        m_index_to_remove = -1;
     }
 }
 

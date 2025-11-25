@@ -290,7 +290,7 @@ SettingsPanel::RenderOtherSettings()
     ImGui::TextUnformatted("Closing options");
     ImGui::Separator();
     ImGui::AlignTextToFramePadding();
-    ImGui::Checkbox("Ask before exiting application", &m_usersettings.ask_before_exiting);
+    ImGui::Checkbox("Ask before exiting application", &m_usersettings.ask_before_exit);
     ImGui::Checkbox("Ask before closing tabs", &m_usersettings.ask_before_closing_tabs);
     m_settings_changed = true;
 }

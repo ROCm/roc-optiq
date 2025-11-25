@@ -314,6 +314,7 @@ SettingsManager::SaveSettingsJson()
     SerializeInternalSettings(settings_json);
     SerializeDisplaySettings(settings_json);
     SerializeUnitSettings(settings_json);
+    SerializeOtherSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -341,6 +342,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeInternalSettings(result.second);
         DeserializeDisplaySettings(result.second);
         DeserializeUnitSettings(result.second);
+        DeserializeOtherSettings(result.second);
     }
     else
     {
@@ -546,6 +548,31 @@ SettingsManager::DeserializeInternalSettings(jt::Json& json)
                 m_internalsettings.recent_files.emplace_back(entry.getString());
             }
         }
+    }
+}
+
+void
+SettingsManager::SerializeOtherSettings(jt::Json& json)
+{
+    jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
+
+    os[JSON_KEY_SETTINGS_ASK_BEFOR_EXIT] = m_usersettings.ask_before_exit;
+    os[JSON_KEY_SETTINGS_ASK_BEFOR_TAB_CLOSE] = m_usersettings.ask_before_closing_tabs;
+}
+
+void
+SettingsManager::DeserializeOtherSettings(jt::Json& json)
+{
+    jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
+    if(os[JSON_KEY_SETTINGS_ASK_BEFOR_EXIT].isBool())
+    {
+        m_usersettings.ask_before_exit =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_ASK_BEFOR_EXIT].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_ASK_BEFOR_TAB_CLOSE].isBool())
+    {
+        m_usersettings.ask_before_closing_tabs =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_ASK_BEFOR_TAB_CLOSE].getBool());
     }
 }
 

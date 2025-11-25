@@ -82,6 +82,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_pseudo_focus(false)
 , m_histogram_pseudo_focus(false)
 , m_max_meta_area_size(0.0f)
+, m_scrollbar_present_in_graphs(false)
 {
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -872,6 +873,9 @@ TimelineView::RenderGraphView()
 
     // Prevent choppy behavior by preventing constant rerender.
     float temp_scroll_position = ImGui::GetScrollY();
+    m_scrollbar_present_in_graphs = m_content_max_y_scroll > 0.0f;
+
+
     if(m_previous_scroll_position != temp_scroll_position)
     {
         m_previous_scroll_position = temp_scroll_position;
@@ -1283,8 +1287,16 @@ TimelineView::RenderHistogram()
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();
-    float scrollbar_size  = ImGui::GetStyle().ScrollbarSize;
-    float histogram_width = m_graph_size.x - splitter_size - scrollbar_size;
+
+    float scrollbar_size;
+
+    if (m_scrollbar_present_in_graphs == true) {
+        scrollbar_size = ImGui::GetStyle().ScrollbarSize;
+    }
+    else {
+        scrollbar_size = 0.0f;
+    }
+     float histogram_width = m_graph_size.x - splitter_size - scrollbar_size;
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));

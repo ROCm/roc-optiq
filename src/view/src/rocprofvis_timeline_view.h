@@ -111,6 +111,7 @@ private:
     double                              m_min_y;
     double                              m_max_y;
     float                               m_zoom;
+    bool                                m_scrollbar_present_in_graphs;
     float                               m_sidebar_size;
     double                              m_view_time_offset_ns;
     double                              m_v_width;

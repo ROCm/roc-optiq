@@ -79,8 +79,8 @@ To add an annotation:
   - Check the **Visibility** option in the **Annotations** tab to toggle the visibility of individual annotations.
   - Clicking on a row in the annotations list will bring the selected annotation into view.
 
-Create and use bookmarks
-========================
+Create bookmarks
+================
 
 The current view on the timeline (scroll and zoom position) can be saved to a bookmark for quick navigation.
 

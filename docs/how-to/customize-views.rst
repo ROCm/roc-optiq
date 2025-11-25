@@ -110,13 +110,11 @@ The application theme display (Light or Dark mode) or the font scaling: either a
 
 .. image:: ../images/settings.png
    :width: 600
-   :align: center
 
 The time unit settings displayed on the **Timeline View**.
 
 .. image:: ../images/units.png
    :width: 600
-   :align: center
 
 Customize timeline display options
 ----------------------------------
@@ -125,7 +123,6 @@ Customize display options for each track by clicking the gear icon in the track'
 
 .. image:: ../images/track-gear.png
    :width: 600
-   :align: center
 
 - For event tracks, you can toggle between **Color by name** and **Compact mode**.
 
@@ -160,13 +157,11 @@ Chain mode displays events in a linked sequence, emphasizing dependencies and ex
 
 .. image:: ../images/chain-mode.png
    :width: 600
-   :align: center
 
 Render mode Shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
 
 .. image:: ../images/fan-mode.png
    :width: 600
-   :align: center
 
 .. note::
 

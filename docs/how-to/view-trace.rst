@@ -46,7 +46,7 @@ Once you open a trace file, you can view its data from the :ref:`topology` and t
 Search for events
 -----------------
 
-Search for events using the search box on the main Toolbar.
+Search for events using the search box on the main **Toolbar**.
 
 .. image:: ../images/search.png
    :width: 800

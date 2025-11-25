@@ -19,7 +19,7 @@ Your system must be running one of these operating systems:
 
 .. note::
 
-   It's recommended to have at least 16GB of RAM to run large traces.
+   It's recommended to have at least 16GB of RAM to run large traces in ROCm Optiq.
 
 
 Install on Windows

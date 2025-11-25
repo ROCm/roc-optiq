@@ -9,7 +9,7 @@
 #if defined(_DEBUG) && !defined(NDEBUG)
 #define ROCPROFVIS_ASSERT_LOG(msg) spdlog::critical(msg)
 #else
-#define ROCPROFVIS_ASSERT_LOG(msg) 
+#define ROCPROFVIS_ASSERT_LOG(msg) ((void)0)
 #endif
 
 #define ROCPROFVIS_ASSERT(cond) if (!(cond)) ROCPROFVIS_ASSERT_LOG(#cond); assert(cond) 

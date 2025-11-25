@@ -29,7 +29,7 @@
             },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_CXX_FLAGS": "/W4",
+                "CMAKE_CXX_FLAGS": "/W4 /EHsc",
                 "JSON_SUPPORT": "ON",
                 "COMPUTE_UI_SUPPORT": "ON",
                 "ROCPROFVIS_DEVELOPER_MODE": "ON"
@@ -41,7 +41,8 @@
             "description": "Configure ROCm Optiq for Windows (64-bit) with Visual Studio, optimized for speed and efficiency.",
             "inherits": "windows-base",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS": "/EHsc"
             }
         },
         {

@@ -13,7 +13,7 @@ Customize your ROCm™ Optiq project
 .. |flow| image:: ../images/flow-change.png
 .. |reset| image:: ../images/reset.png
 
-You can customize the data views of an opened trace file in ROCm Optiq such as display settings, saved trace selections, added bookmarks / annotations, and more.
+You can customize the data views of an opened trace file in ROCm Optiq such as display settings, saved trace selections, added bookmarks/annotations, and more.
 
 .. _time-range-filter:
 
@@ -163,8 +163,8 @@ Render mode Shows events in a fan-out style, highlighting parallelism and branch
 
   Chain mode and Render mode are visualization modes for relations; they don't represent the actual kernel scheduling flow.
 
-Show/hide Optiq panels
-======================
+Show/hide panels
+================
 
 The **View** menu can be used to show/hide the various panels of the application.
 

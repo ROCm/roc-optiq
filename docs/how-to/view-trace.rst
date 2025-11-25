@@ -103,7 +103,8 @@ The **WASD** and arrow keys can be also used to zoom and pan the view:
 - **A** or **Left Arrow** / **D** or **Right Arrow**: Pan left and right, respectively.
 - **Up Arrow** / **Down Arrow**: Scroll the track list up and down.
 
-When hovering over the **Description** area, the scroll wheel will scroll through the track list. When hovering over the **Graph** area, the scroll when zooms the view in and out.
+When hovering over the **Description** area, the scroll wheel will scroll through the track list. 
+When hovering over the **Graph** area, the scroll wheel zooms the view in and out.
 
 Select a track
 ^^^^^^^^^^^^^^

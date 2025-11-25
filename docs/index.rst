@@ -10,13 +10,6 @@ ROCm™ Optiq is AMD's tool designed to provide deep insights into system-level 
 
 It serves as the GUI to visualize traces collected by ROCm profiling tools, specifically ROCm Systems Profiler, enabling developers to analyze traces, identify bottlenecks, optimize workloads, and efficiently scale applications across CPUs and GPUs. 
 
-ROCm Optiq does not have any direct dependencies with the ROCm stack, enabling you to visualize traces on any machine that has: 
-
--	Windows 11
--	Ubuntu 22.04 / Ubuntu 24.04
--	Oracle Linux 9 / Oracle Linux 10
--	RHEL 9 / RHEL 10
-
 The component public repository is located at `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_.
 
 .. grid:: 2

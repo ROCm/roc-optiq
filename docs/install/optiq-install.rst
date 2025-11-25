@@ -28,14 +28,12 @@ Install on Windows
 1. Download the **ROCm-Optiq-Beta.exe** installer from `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_ and follow the instructions in the install wizard.
    
    .. image:: ../images/wizard.png
-      :width: 800
-      :align: center
+      :width: 500
 
 2. Accept the agreement to install, then follow the installation instructions.
 
    .. image:: ../images/agreement.png
-      :width: 800
-      :align: center
+      :width: 500
   
 3. Launch **roc-optiq.exe** from the installation directory.
 

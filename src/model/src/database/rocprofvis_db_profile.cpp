@@ -972,6 +972,10 @@ ProfileDatabase::BuildTableQuery(
             track = TABLE_QUERY_UNPACK_OP_TYPE(track);
             slice_query_map_array[i][GetEventOperationQuery((rocprofvis_dm_event_operation_t)track)] = " WHERE " + string_id_filter_map.at((rocprofvis_dm_event_operation_t)track);
         }
+        else
+        {
+            continue;
+        }
         if(string_filter_result == kRocProfVisDmResultSuccess && slice_query_map_array[i].empty())
         {
             return kRocProfVisDmResultSuccess;

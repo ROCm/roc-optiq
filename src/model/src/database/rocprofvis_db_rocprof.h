@@ -72,7 +72,7 @@ public:
                                         const rocprofvis_dm_event_operation_t operation) override;
 
     rocprofvis_dm_result_t StringIndexToId(
-                                        rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id) override;
+                                        rocprofvis_dm_index_t index, std::vector<rocprofvis_dm_id_t>& id) override;
 
     rocprofvis_dm_result_t BuildTableSummaryClause(
                                         bool sample_query,

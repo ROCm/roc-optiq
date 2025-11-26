@@ -407,7 +407,7 @@ class Database
         virtual rocprofvis_dm_result_t RemapStringIds(
                                                                 rocprofvis_db_flow_data_t& record) {return kRocProfVisDmResultSuccess;};
         virtual rocprofvis_dm_result_t  StringIndexToId(        
-                                                                rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id) {return kRocProfVisDmResultSuccess;};
+                                                                rocprofvis_dm_index_t index, std::vector<rocprofvis_dm_id_t>& id) {return kRocProfVisDmResultSuccess;};
 
         // return suffix to process name for provided track category ('PID', 'Agent')
         // @param category - track category

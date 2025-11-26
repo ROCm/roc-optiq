@@ -885,16 +885,16 @@ rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_
         std::string kernel_ids;
         for(const rocprofvis_dm_index_t& index : string_indices)
         {
-            rocprofvis_dm_id_t string_id;
-            result = StringIndexToId(index, string_id);
-            ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
+            std::vector<rocprofvis_dm_id_t> string_id_array;
+            result = StringIndexToId(index, string_id_array);
+            ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess && string_id_array.size() > 0, result);
             if(index > m_symbols_offset)
             {
-                kernel_ids += kernel_ids.empty() ? std::to_string(string_id) : ", " + std::to_string(string_id);
+                kernel_ids += kernel_ids.empty() ? std::to_string(string_id_array[0]) : ", " + std::to_string(string_id_array[0]);
             }
             else
             {
-                string_ids += string_ids.empty() ? std::to_string(string_id) : ", " + std::to_string(string_id);
+                string_ids += string_ids.empty() ? std::to_string(string_id_array[0]) : ", " + std::to_string(string_id_array[0]);
             }
         }
         if(!string_ids.empty())
@@ -946,9 +946,9 @@ rocprofvis_dm_string_t RocprofDatabase::GetEventOperationQuery(const rocprofvis_
     }
 }
 
-rocprofvis_dm_result_t RocprofDatabase::StringIndexToId(rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id)
+rocprofvis_dm_result_t RocprofDatabase::StringIndexToId(rocprofvis_dm_index_t index, std::vector<rocprofvis_dm_id_t>& ids)
 {
-    id = (index >= m_symbols_offset) ? index - m_symbols_offset : index;
+    ids.push_back( (index >= m_symbols_offset) ? index - m_symbols_offset : index);
     return kRocProfVisDmResultSuccess;
 }
 

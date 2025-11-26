@@ -136,7 +136,7 @@ int RocpdDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, c
     
     for (uint64_t id; ids >> id;) {   
         db->m_string_index_map[id] = string_id;
-        db->m_string_id_map[string_id] = id;
+        db->m_string_id_map[string_id].push_back(id);
         if (ids.peek() == ',') ids.ignore();
     }
     callback_params->future->CountThisRow();
@@ -608,12 +608,15 @@ rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num
         std::string string;
         for(const rocprofvis_dm_index_t& index : string_indices)
         {
-            uint64_t id = 0;
-            if (kRocProfVisDmResultSuccess == StringIndexToId(index, id))
+            std::vector<uint64_t> ids;
+            if (kRocProfVisDmResultSuccess == StringIndexToId(index, ids))
             {
-                if (!string.empty())
-                    string += ", ";
+                for (auto id : ids)
+                {
+                    if (!string.empty())
+                        string += ", ";
                     string += std::to_string(id);
+                }
             }
         }
         if(!string.empty())
@@ -725,7 +728,7 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventTrackQuery(const rocprofvis_dm_tra
     }
 }
 
-rocprofvis_dm_result_t RocpdDatabase::StringIndexToId(rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id)
+rocprofvis_dm_result_t RocpdDatabase::StringIndexToId(rocprofvis_dm_index_t index, std::vector<rocprofvis_dm_id_t>& id)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
     if(m_string_id_map.count(index) > 0)

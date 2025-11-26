@@ -17,7 +17,7 @@ class RocpdDatabase : public ProfileDatabase
 {
     // type of map array for string indexes remapping
     typedef std::unordered_map<uint64_t, uint32_t> string_index_map_t;
-    typedef std::unordered_map<rocprofvis_dm_index_t, rocprofvis_dm_id_t> string_id_map_t;
+    typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_dm_id_t>> string_id_map_t;
 
     // map array for fast non-PMC track ID search
     typedef std::map<uint32_t, uint32_t> sub_process_map_t;
@@ -81,7 +81,7 @@ public:
                                         const rocprofvis_dm_event_operation_t operation) override;
 
     rocprofvis_dm_result_t StringIndexToId(
-                                        rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id) override;
+                                        rocprofvis_dm_index_t index, std::vector<rocprofvis_dm_id_t>& id) override;
 
     rocprofvis_dm_string_t GetEventTrackQuery( const rocprofvis_dm_track_category_t category);
 

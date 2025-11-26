@@ -67,7 +67,8 @@ The **Timeline View** displays CPU and GPU activities, events, and performance m
 
 - See events such as API calls, kernel dispatches, and more.
 - See performance counter data as charts displaying the data points.
-- Zoom, filter, and bookmark data for detailed analysis. This is useful for correlating GPU workloads with in-application CPU events and performance with hardware resource usage, allowing for performance blockers to be easily identified and remedied.
+- Zoom, filter, and bookmark data for detailed analysis. 
+- Correlate GPU workloads with in-application CPU events and performance with hardware resource usage, allowing for performance blockers to be easily identified and remedied.
 
 The **Timeline View** has a **Description** area that describes a specific category of events or metrics within a profiling trace, and a **Graph** area where events and counter graphs are plotted:
 

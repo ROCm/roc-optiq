@@ -6,7 +6,7 @@
 ROCm™ Optiq documentation
 *************************
 
-ROCm™ Optiq is AMD's tool designed to provide deep insights into system-level performance for applications running on the ROCm stack. 
+:doc:`ROCm™ Optiq <what-is-optiq>` is AMD's tool designed to provide deep insights into system-level performance for applications running on the ROCm stack. 
 
 It serves as the GUI to visualize traces collected by ROCm profiling tools, specifically ROCm Systems Profiler, enabling developers to analyze traces, identify bottlenecks, optimize workloads, and efficiently scale applications across CPUs and GPUs. 
 

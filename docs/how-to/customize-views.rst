@@ -31,7 +31,7 @@ Double-click in the **Timeline View** again to clear the selection.
 .. image:: ../images/time-range-filter.gif
    :width: 600
 
-The active time range filter applies to Event and sample Counter details in the :ref:`advanced` section.
+The active time range filter applies to Event and sample counter details in the :ref:`advanced` section.
 
 Save trace selections
 ---------------------
@@ -170,3 +170,12 @@ The **View** menu can be used to show/hide the various panels of the application
 
 .. image:: ../images/view.png
   :width: 300
+
+Save a project file
+===================
+
+Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project (``.rpv`` file). 
+See :ref:`customize` for more information on these features.
+
+- Go to **File** > **Save As** to create a new project.
+- Go to **File** > **Save** to overwrite the currently opened project.

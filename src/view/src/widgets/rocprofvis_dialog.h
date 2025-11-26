@@ -12,7 +12,8 @@ namespace View
 
 class ConfirmationDialog {
 public:
-    ConfirmationDialog(bool& setting_option): m_setting_option(setting_option)
+    ConfirmationDialog(bool& skip_dialog_setting)
+    : m_setting_option(skip_dialog_setting)
     {};
     void Show(const std::string& title, const std::string& message,
               std::function<void()> on_confirm_callback,
@@ -26,7 +27,7 @@ private:
     std::function<void()> m_on_confirm;
     std::function<void()> m_on_cancel;
     bool                  m_should_open = false;
-    bool&                 m_setting_option;
+    bool&                 m_skip_dialog_setting;
 };
 
 class MessageDialog {

@@ -77,7 +77,7 @@ SettingsPanel::Render()
             {
                 m_category = Units;
             }
-            if(ImGui::Selectable("Other", m_category == Units))
+            if(ImGui::Selectable("Other", m_category == Other))
             {
                 m_category = Other;
             }

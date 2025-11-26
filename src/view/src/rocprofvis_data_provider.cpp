@@ -3087,7 +3087,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
 
         double end_ts = 0;
         result        = rocprofvis_controller_get_double(
-            sample, kRPVControllerSampleNextTimestamp, 0, &end_ts);
+            sample, kRPVControllerSampleEndTimestamp, 0, &end_ts);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
 

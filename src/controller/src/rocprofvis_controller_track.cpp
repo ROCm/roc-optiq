@@ -398,9 +398,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                     new_sample->SetDouble(
                                         kRPVControllerSampleValue, 0, last_value);
                                     new_sample->SetDouble(
-                                        kRPVControllerSampleNextTimestamp, 0, timestamp);
-                                    new_sample->SetDouble(
-                                        kRPVControllerSampleNextValue, 0, value);
+                                        kRPVControllerSampleEndTimestamp, 0, timestamp);
                                     SetObject(
                                         kRPVControllerTrackEntry, index++,
                                         (rocprofvis_handle_t*) new_sample);
@@ -412,27 +410,6 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                                 }
                                 last_value = value;
                                 last_timestamp = timestamp;
-                            }
-
-                            Sample* new_sample = m_ctx->GetMemoryManager()->NewSample(
-                                kRPVControllerPrimitiveTypeDouble,
-                                sample_id++, last_timestamp, GetSegments());
-                            if(new_sample)
-                            {
-                                new_sample->SetDouble(
-                                    kRPVControllerSampleValue, 0, last_value);
-                                new_sample->SetDouble(
-                                    kRPVControllerSampleNextTimestamp, 0, m_end_timestamp);
-                                new_sample->SetDouble(
-                                    kRPVControllerSampleNextValue, 0, value);
-                                SetObject(
-                                    kRPVControllerTrackEntry, index++,
-                                    (rocprofvis_handle_t*) new_sample);
-                            }
-                            else
-                            {
-                                result = kRocProfVisResultMemoryAllocError;
-                                break;
                             }
 
                             break;
@@ -784,7 +761,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                     uint64_t              event_id = 0;
 
                     std::pair<double, double> timestamp = { 0,0 };
-                    std::pair<double, double> value = { 0,0 };
+                    double value = 0.0;
                     if (object_type == kRPVControllerObjectTypeEvent)
                     {  
                         result = object->GetUInt64(kRPVControllerEventLevel, 0, &level);
@@ -800,14 +777,10 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                         result = object->GetDouble(kRPVControllerSampleTimestamp, 0, &timestamp.first);
                         if (result == kRocProfVisResultSuccess)
                         {
-                            result = object->GetDouble(kRPVControllerSampleNextTimestamp, 0, &timestamp.second);
+                            result = object->GetDouble(kRPVControllerSampleEndTimestamp, 0, &timestamp.second);
                             if (result == kRocProfVisResultSuccess)
                             {
-                                result = object->GetDouble(kRPVControllerSampleValue, 0, &value.first);
-                                if (result == kRocProfVisResultSuccess)
-                                {
-                                    result = object->GetDouble(kRPVControllerSampleNextValue, 0, &value.second);
-                                }
+                                result = object->GetDouble(kRPVControllerSampleValue, 0, &value);
                             }
                         }
                     }
@@ -892,11 +865,9 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                             if(new_sample)
                                             {
                                                 new_sample->SetDouble(
-                                                    kRPVControllerSampleValue, 0, value.first);
+                                                    kRPVControllerSampleValue, 0, value);
                                                 new_sample->SetDouble(
-                                                    kRPVControllerSampleNextTimestamp, 0, range.second);
-                                                new_sample->SetDouble(
-                                                    kRPVControllerSampleNextValue, 0, value.second);
+                                                    kRPVControllerSampleEndTimestamp, 0, range.second);
                                                 segment->Insert(segment_start, level, new_sample);
                                             }
                                             else

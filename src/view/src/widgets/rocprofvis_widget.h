@@ -192,6 +192,7 @@ struct TabItem
     std::string                m_id;
     std::shared_ptr<RocWidget> m_widget;
     bool                       m_can_close;
+    bool                       m_is_open;
 };
 
 class TabContainer : public RocWidget
@@ -232,6 +233,7 @@ private:
     int                  m_active_tab_index;  // index of the currently active tab
     int  m_set_active_tab_index;      // used to programmatically set the active tab
     int  m_index_to_remove;
+    int  m_pending_to_remove;
     ImGuiTabItemFlags m_additional_flags;
     bool m_allow_tool_tips;           // whether to show tooltips for tabs
     bool m_enable_send_close_event;   // enable sending close tab events

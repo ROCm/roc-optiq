@@ -104,6 +104,7 @@ void
 AnalysisView::Render()
 {
     m_tab_container->Render();
+    //m_tab_container->NewRender();
 }
 
 void

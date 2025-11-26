@@ -472,6 +472,7 @@ TabContainer::TabContainer()
 , m_enable_send_close_event(false)
 , m_enable_send_change_event(false)
 , m_index_to_remove(-1)
+, m_pending_to_remove(-1)
 , m_additional_flags(0)
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
 {
@@ -508,18 +509,19 @@ void
 TabContainer::ShowCloseTabConfirm(int removing_tab_index)
 {
     //mess, make it clear
+
+    auto confirm = [this, removing_tab_index]() {
+        m_pending_to_remove = -1;
+        RemoveTab(removing_tab_index);
+    };
+    auto cancel = [this, removing_tab_index]() { m_pending_to_remove = -1;};
+
     TabItem& removing_tab = m_tabs[removing_tab_index];
-    m_index_to_remove = -1;
-    //m_dialog_opened   = true;
     m_confirmation_dialog->Show(
         "Confirm Closing tab",
         "Are you sure you want to close the Tab" + removing_tab.m_label + "? Any "
         "unsaved data will be lost.",
-        [this, removing_tab_index]()
-        {
-            m_additional_flags = 0;
-            RemoveTab(removing_tab_index);
-        });
+        confirm, cancel);
 }
 void
 TabContainer::Update()
@@ -549,8 +551,9 @@ TabContainer::Render()
             {
                 TabItem&    tab = m_tabs[i];
                 ImGuiTabItemFlags flags =
-                    (i == m_set_active_tab_index) ? ImGuiTabItemFlags_SetSelected : 0;
-                //flags |= m_additional_flags;
+                    (i == m_set_active_tab_index || i == m_pending_to_remove)
+                        ? ImGuiTabItemFlags_SetSelected
+                        : 0;
 
                 bool  is_open = true;
                 bool* p_open  = &is_open;
@@ -590,7 +593,15 @@ TabContainer::Render()
 
                 if(p_open && !is_open)
                 {
-                    m_index_to_remove   = static_cast<int>(i);
+                    
+                    if(SettingsManager::GetInstance().GetUserSettings().ask_before_closing_tabs) //TODO: Do it wance
+                    {
+                        m_pending_to_remove = static_cast<int>(i);
+                    }
+                    else
+                    {
+                        m_index_to_remove = static_cast<int>(i);
+                    }
                 }
             }
             ImGui::EndTabBar();
@@ -616,16 +627,11 @@ TabContainer::Render()
         // Remove the tab if it was closed
         if(m_index_to_remove != -1)
         {
-            if(SettingsManager::GetInstance()
-                   .GetUserSettings().ask_before_closing_tabs)
-            {
-                m_additional_flags |= ImGuiTabBarFlags_AutoSelectNewTabs;
-                ShowCloseTabConfirm(m_index_to_remove);
-            }
-            else
-            {
-                RemoveTab(m_index_to_remove);
-            }
+            RemoveTab(m_index_to_remove);
+        }
+        if(m_pending_to_remove != -1)
+        {
+            ShowCloseTabConfirm(m_pending_to_remove);
         }
     }
     ImGui::EndChild();

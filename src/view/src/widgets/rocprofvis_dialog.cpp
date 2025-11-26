@@ -8,11 +8,12 @@ namespace View
 
 void
 ConfirmationDialog::Show(const std::string& title, const std::string& message,
-                         std::function<void()> on_confirm_callback)
+                         std::function<void()> on_confirm_callback, std::function<void()> on_cancel_callback)
 {
     m_title       = title;
     m_message     = message;
     m_on_confirm  = on_confirm_callback;
+    m_on_cancel   = on_cancel_callback;
     m_should_open = true;
 }
 
@@ -56,6 +57,10 @@ ConfirmationDialog::Render()
 
             if(ImGui::Button("Cancel"))
             {
+                if(m_on_cancel)
+                {
+                    m_on_cancel();
+                }
                 ImGui::CloseCurrentPopup();
             }
 

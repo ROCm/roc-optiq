@@ -40,7 +40,7 @@ ConfirmationDialog::Render()
         {
             ImGui::NewLine();
 
-            // Add mesage text with padding
+            // Add message text with padding
             ImGui::Dummy(ImVec2(5.0f, 0.0f));
             ImGui::SameLine();
             ImGui::TextUnformatted(m_message.c_str());

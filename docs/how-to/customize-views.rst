@@ -31,7 +31,7 @@ Double-click in the **Timeline View** again to clear the selection.
 .. image:: ../images/time-range-filter.gif
    :width: 600
 
-The active time range filter applies to Event and sample counter details in the :ref:`advanced` section.
+The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
 
 Save trace selections
 ---------------------

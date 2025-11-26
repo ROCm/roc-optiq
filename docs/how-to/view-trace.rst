@@ -110,7 +110,7 @@ Select an event
 Clicking on an event in the **Graph** area selects or deselects an event. 
 When selected, details for the event can be seen in the **Event Details** tab of the **Advanced Details** section.
 
-.. tip:
+.. tip::
 
    When you hover over a region with high-density events, the application displays the total number of events in each category.
 
@@ -146,9 +146,9 @@ This section provides an interface for multiple data perspectives, offering gran
     :width: 800
     :align: center
 
-  - **Group By**: This drop-down groups the results by the selected column and displays the default aggregations shown in the **Group Columns** box.
-  - **Group Columns**: Enter custom SQL aggregation statements.
-  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“min_duration > 2000”`` will filter all events shorter than 2000 ns.
+  - **Group By**: This drop-down groups the results by the selected column and displays the default aggregations shown in the **Group Columns** box. Click **Submit** to group the results.
+  - **Group Columns**: Enter custom SQL aggregation statements. Click **Submit** to group the columns by your SQL statements.
+  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“min_duration > 2000”`` will filter all events shorter than 2000 ns. Click **Submit** to filter the data.
   
   .. tip::
 
@@ -158,7 +158,7 @@ This section provides an interface for multiple data perspectives, offering gran
 
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the Event Table, it supports time-range selection and SQL-like query capabilities for detailed performance analysis.
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the Event Table. It shows raw database such as timestamps, duration, associated queue/stream, correlation IDs and API method parameters. It also shows Flow and Call stack information, if available.
-- **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, the type of track (thread, counter, queue, etc.).
+- **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the type of track (thread, counter, queue, etc.).
 - **Annotations**: Displays user-created annotations, allowing for easier navigating across critical points within large traces, enhancing collaboration and sharing knowledge. See :ref:`annotation` for more info.
 
 Search for events

@@ -587,6 +587,10 @@ namespace DataModel
                                     std::lock_guard<std::mutex> lock(mtx);
                                     m_filter_lookup.insert(row_index);
                                 }
+                                else
+                                {
+                                    break;
+                                }
                             }
                             };
 

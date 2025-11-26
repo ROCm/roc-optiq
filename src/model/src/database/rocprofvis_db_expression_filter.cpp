@@ -40,7 +40,8 @@ namespace DataModel
         case Type::ConstantString: return std::get<std::string>(m_data);
         case Type::Column: {
             auto it = row.find(std::get<std::string>(m_data));
-            if (it == row.end()) return 0.0;
+            if (it == row.end()) 
+                throw std::runtime_error("Unknown column name");
             return it->second;
         }
         case Type::Add:

@@ -13,7 +13,7 @@ namespace View
 class ConfirmationDialog {
 public:
     ConfirmationDialog(bool& skip_dialog_setting)
-    : m_setting_option(skip_dialog_setting)
+    : m_skip_dialog_setting(skip_dialog_setting)
     {};
     void Show(const std::string& title, const std::string& message,
               std::function<void()> on_confirm_callback,

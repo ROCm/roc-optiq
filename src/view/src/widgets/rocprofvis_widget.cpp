@@ -573,7 +573,7 @@ TabContainer::Render()
                 if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags))
                 {
                     tab_visible = true;
-                    // show tooltip for the active tab if header is hovered
+                    // Show tooltip for the active tab if header is hovered
                     if(m_allow_tool_tips && ImGui::IsItemHovered())
                     {
                         ImGui::SetTooltip("%s", tab.m_id.c_str());
@@ -588,7 +588,7 @@ TabContainer::Render()
                 }
                 ImGui::PopID();
 
-                // show tooltip for inactive tabs if header is hovered
+                // Show tooltip for inactive tabs if header is hovered
                 if(!tab_visible && ImGui::IsItemHovered())
                 {
                     if(m_allow_tool_tips)
@@ -624,7 +624,7 @@ TabContainer::Render()
             }
         }
 
-        // clear the set active tab index
+        // Clear the set active tab index
         m_set_active_tab_index = s_invalid_index;
 
         // Remove the tab if it was closed
@@ -633,7 +633,7 @@ TabContainer::Render()
             RemoveTab(m_index_to_remove);
         }
 
-        //Show confirm dialog if user option set
+        // Show confirm dialog if user option set
         if(m_pending_to_remove != s_invalid_index)
         {
             ShowCloseTabConfirm(m_pending_to_remove);

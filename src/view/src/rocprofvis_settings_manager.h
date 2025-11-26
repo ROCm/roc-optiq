@@ -34,8 +34,8 @@ typedef struct UserSettings
 {
     DisplaySettings display_settings;
     UnitSettings    unit_settings;
-    bool            ask_before_closing_tabs;
-    bool            ask_before_exit;
+    bool            dont_ask_before_tab_closing;
+    bool            dont_ask_before_exit;
 } UserSettings;
 
 typedef struct InternalSettings
@@ -114,8 +114,8 @@ constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
 
-constexpr const char* JSON_KEY_SETTINGS_ASK_BEFOR_EXIT = "ask_befor_exit";
-constexpr const char* JSON_KEY_SETTINGS_ASK_BEFOR_TAB_CLOSE = "ask_before_tab_close";
+constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
+constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
 
 class SettingsManager
 {

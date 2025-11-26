@@ -556,23 +556,23 @@ SettingsManager::SerializeOtherSettings(jt::Json& json)
 {
     jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
 
-    os[JSON_KEY_SETTINGS_ASK_BEFOR_EXIT] = m_usersettings.ask_before_exit;
-    os[JSON_KEY_SETTINGS_ASK_BEFOR_TAB_CLOSE] = m_usersettings.ask_before_closing_tabs;
+    os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT] = m_usersettings.dont_ask_before_exit;
+    os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE] = m_usersettings.dont_ask_before_tab_closing;
 }
 
 void
 SettingsManager::DeserializeOtherSettings(jt::Json& json)
 {
     jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
-    if(os[JSON_KEY_SETTINGS_ASK_BEFOR_EXIT].isBool())
+    if(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT].isBool())
     {
-        m_usersettings.ask_before_exit =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_ASK_BEFOR_EXIT].getBool());
+        m_usersettings.dont_ask_before_exit =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT].getBool());
     }
-    if(os[JSON_KEY_SETTINGS_ASK_BEFOR_TAB_CLOSE].isBool())
+    if(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].isBool())
     {
-        m_usersettings.ask_before_closing_tabs =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_ASK_BEFOR_TAB_CLOSE].getBool());
+        m_usersettings.dont_ask_before_tab_closing =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].getBool());
     }
 }
 

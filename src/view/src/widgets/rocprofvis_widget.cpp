@@ -466,15 +466,16 @@ VSplitContainer::GetItemSize()
 
 //------------------------------------------------------------------
 TabContainer::TabContainer()
-: m_active_tab_index(-1)
-, m_set_active_tab_index(-1)
+: m_active_tab_index(s_invalid_index)
+, m_set_active_tab_index(s_invalid_index)
 , m_allow_tool_tips(true)
 , m_enable_send_close_event(false)
 , m_enable_send_change_event(false)
-, m_index_to_remove(-1)
-, m_pending_to_remove(-1)
+, m_index_to_remove(s_invalid_index)
+, m_pending_to_remove(s_invalid_index)
 , m_additional_flags(0)
-, m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
+, m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
+      SettingsManager::GetInstance().GetUserSettings().dont_ask_before_tab_closing))
 {
     m_widget_name = GenUniqueName("TabContainer");
 }
@@ -511,10 +512,10 @@ TabContainer::ShowCloseTabConfirm(int removing_tab_index)
     //mess, make it clear
 
     auto confirm = [this, removing_tab_index]() {
-        m_pending_to_remove = -1;
+        m_pending_to_remove = s_invalid_index;
         RemoveTab(removing_tab_index);
     };
-    auto cancel = [this, removing_tab_index]() { m_pending_to_remove = -1;};
+    auto cancel = [this, removing_tab_index]() { m_pending_to_remove = s_invalid_index; };
 
     TabItem& removing_tab = m_tabs[removing_tab_index];
     m_confirmation_dialog->Show(
@@ -593,14 +594,13 @@ TabContainer::Render()
 
                 if(p_open && !is_open)
                 {
-                    
-                    if(SettingsManager::GetInstance().GetUserSettings().ask_before_closing_tabs) //TODO: Do it wance
+                    if(SettingsManager::GetInstance().GetUserSettings().dont_ask_before_tab_closing)
                     {
-                        m_pending_to_remove = static_cast<int>(i);
+                        m_index_to_remove   = static_cast<int>(i);
                     }
                     else
                     {
-                        m_index_to_remove = static_cast<int>(i);
+                        m_pending_to_remove = static_cast<int>(i);
                     }
                 }
             }
@@ -622,14 +622,15 @@ TabContainer::Render()
         }
 
         // clear the set active tab index
-        m_set_active_tab_index = -1;
+        m_set_active_tab_index = s_invalid_index;
 
         // Remove the tab if it was closed
-        if(m_index_to_remove != -1)
+        if(m_index_to_remove != s_invalid_index)
         {
             RemoveTab(m_index_to_remove);
         }
-        if(m_pending_to_remove != -1)
+        //Show confirm dialog if user option set
+        if(m_pending_to_remove != s_invalid_index)
         {
             ShowCloseTabConfirm(m_pending_to_remove);
         }
@@ -688,10 +689,10 @@ TabContainer::RemoveTab(int index)
         m_tabs.erase(m_tabs.begin() + index);
         if(m_active_tab_index == index)
         {
-            // If the active tab was closed, reset to -1
-            m_active_tab_index = -1;
+            // If the active tab was closed, reset to invalid index
+            m_active_tab_index = s_invalid_index;
         }
-        m_index_to_remove = -1;
+        m_index_to_remove = s_invalid_index;
     }
 }
 

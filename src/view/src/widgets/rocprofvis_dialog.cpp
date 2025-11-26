@@ -63,6 +63,8 @@ ConfirmationDialog::Render()
                 }
                 ImGui::CloseCurrentPopup();
             }
+            ImGui::SameLine();
+            ImGui::Checkbox("Do not ask me again", &m_setting_option);
 
             ImGui::EndPopup();
         }

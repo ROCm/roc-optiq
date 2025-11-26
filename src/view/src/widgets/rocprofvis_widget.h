@@ -244,6 +244,7 @@ private:
     std::string m_event_source_name;
 
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
+    static constexpr int                s_invalid_index = -1;
 };
 
 void

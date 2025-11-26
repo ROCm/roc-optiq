@@ -82,7 +82,8 @@ AppWindow::AppWindow()
 , m_show_provider_test_widow(false)
 , m_show_metrics(false)
 #endif
-, m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
+, m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
+      SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit))
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
 , m_histogram_visible(true)

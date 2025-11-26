@@ -19,7 +19,7 @@ Since ROCm Optiq does not have any dependencies with the ROCm stack, trace files
 -	RHEL 9 / RHEL 10
 
 ROCm Optiq helps you identify stalls, memory bandwidth issues, and inefficient kernel launches. 
-Correlating GPU workloads with in-application CPU events and performance with hardware resource usage provides a holistic view for optimization.
+It correlates GPU workloads with in-application CPU events and performance with hardware resource usage provides a holistic view for optimization.
 
 ROCm Optiq is structured around several key panels that work together to deliver a comprehensive profiling experience:
 

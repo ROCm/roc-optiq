@@ -175,7 +175,6 @@ Save a project file
 ===================
 
 Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project (``.rpv`` file). 
-See :ref:`customize` for more information on these features.
 
 - Go to **File** > **Save As** to create a new project.
 - Go to **File** > **Save** to overwrite the currently opened project.

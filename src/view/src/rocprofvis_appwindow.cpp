@@ -913,6 +913,13 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
             file_path = outPath;
             if(outPath)
             {
+                // Append default extension if none provided (used to prevent linux from saving files with no extension).
+                std::filesystem::path p(file_path);
+                if(!p.has_extension())
+                {
+                    file_path += "." + file_filters[0].m_extensions[0];
+                }
+
                 NFD_FreePathU8(outPath);
             }
         }

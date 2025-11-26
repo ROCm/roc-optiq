@@ -20,6 +20,7 @@ public:
     void Render();
 
 private:
+    void                  DrawCheckboxOption();
     std::string           m_title;
     std::string           m_message;
     std::function<void()> m_on_confirm;

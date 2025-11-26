@@ -34,12 +34,19 @@ ConfirmationDialog::Render()
 
         // Todo: get rid of magic numbers
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));        
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
 
         if(ImGui::BeginPopupModal(m_title.c_str(), NULL, ImGuiWindowFlags_AlwaysAutoResize))
         {
             ImGui::NewLine();
+
+            // Add mesage text with padding
+            ImGui::Dummy(ImVec2(5.0f, 0.0f));
+            ImGui::SameLine();
             ImGui::TextUnformatted(m_message.c_str());
+            ImGui::SameLine();
+            ImGui::Dummy(ImVec2(5.0f, 0.0f));
+
             ImGui::NewLine();
             ImGui::Separator();
 
@@ -47,7 +54,7 @@ ConfirmationDialog::Render()
             {
                 if(m_on_confirm)
                 {
-                    m_on_confirm();  // Execute the action
+                    m_on_confirm();
                 }
                 ImGui::CloseCurrentPopup();
             }
@@ -64,13 +71,29 @@ ConfirmationDialog::Render()
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            ImGui::Checkbox("Do not ask me again", &m_setting_option);
+            DrawCheckboxOption();
 
             ImGui::EndPopup();
         }
 
         ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_WindowPadding, ImGuiStyleVar_ItemSpacing
     }
+}
+
+void
+ConfirmationDialog::DrawCheckboxOption()
+{
+    const char* cb_label  = "Don't ask me again";
+    ImGuiStyle& style     = ImGui::GetStyle();
+    float window_width    = ImGui::GetWindowSize().x;
+    float text_width      = ImGui::CalcTextSize(cb_label).x;
+    float checkbox_square = ImGui::GetFrameHeight();
+    float total_width =
+        checkbox_square + style.ItemInnerSpacing.x + text_width + style.FramePadding.x;
+
+    float pos_x = window_width - style.WindowPadding.x - total_width;
+    ImGui::SetCursorPosX(pos_x);
+    ImGui::Checkbox(cb_label, &m_setting_option);
 }
 
 void

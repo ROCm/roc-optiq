@@ -3,7 +3,7 @@
   :keywords: Optiq, ROCm, trace, data, events, tracks, timeline
 
 ******************************
-View trace data in ROCm™ Optiq
+View trace data in ROCm Optiq
 ******************************
 
 .. |scroll| image:: ../images/scroll-to.png

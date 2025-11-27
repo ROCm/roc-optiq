@@ -5,7 +5,7 @@
 .. _customize:
 
 **********************************
-Customize your ROCm™ Optiq project
+Customize your ROCm Optiq project
 **********************************
 
 .. |book| image:: ../images/bookmarks.png

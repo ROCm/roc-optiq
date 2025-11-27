@@ -3,16 +3,19 @@
   :keywords: ROCm Optiq, ROCm, install, profiler
 
 ************************
-ROCm™ Optiq installation
+ROCm Optiq installation
 ************************
 
+Install ROCm™ Optiq for Windows or Linux using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
+
+.. _requirements:
 
 System requirements
 ===================
 
 Your system must be running one of these operating systems:
 
--	Windows 11
+-	Microsoft Windows 11
 -	Ubuntu 22.04 / Ubuntu 24.04
 -	Oracle Linux 9 / Oracle Linux 10
 -	RHEL 9 / RHEL 10

@@ -667,6 +667,9 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
             lod++;
         }
 
+        // calculate data for LOD 1 even LOD 0 is requested
+        lod = std::max(lod, (uint32_t)1);
+
         result = GenerateLOD(lod, start, end, future);
 
         auto it = m_lods.find(lod);

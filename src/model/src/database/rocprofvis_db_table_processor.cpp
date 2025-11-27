@@ -424,9 +424,15 @@ namespace DataModel
         auto aggr_spec = m_merged_table.GetAggregationSpec();
         for (auto param : aggr_spec)
         {  
-            if (param.command == FilterExpression::SqlCommand::Group) continue;
-            auto data = r.second.result[param.public_name];
+            auto it = r.second.result.find(param.public_name);
+            if (it == r.second.result.end())
+                continue;
+            auto data = it->second;
             std::string cell;
+            if (data.type == NotNumeric)
+            {
+                cell = m_merged_table.GetAggregationStringByIndex(data.numeric.data.u64);
+            } else
             if (data.type == NumericUInt64)
             {
                 cell = std::to_string(data.numeric.data.u64);

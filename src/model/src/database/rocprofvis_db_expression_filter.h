@@ -234,7 +234,7 @@ namespace DataModel
 
         enum class Operator { Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual, Like };
         enum class LogicOp { None, And, Or, Not };
-        enum class SqlCommand { Group, Count, Avg, Min, Max, Sum};
+        enum class SqlCommand { Column, Count, Avg, Min, Max, Sum};
 
         struct SqlAggregation {
             std::string column;       
@@ -271,6 +271,7 @@ namespace DataModel
         bool Evaluate(const std::unordered_map<std::string, Value>& row) const;
         static void RegisterFunction(const std::string& name, FunctionHandler handler);
         static std::vector<SqlAggregation> ParseAggregationSpec(const std::string& line);
+        static bool StartsWithSubstring(const std::string& input, std::string expected);
 
     private:
         std::unique_ptr<Node> m_root;

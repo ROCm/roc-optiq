@@ -490,6 +490,17 @@ namespace DataModel
         return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
     }
 
+
+    bool FilterExpression::StartsWithSubstring(const std::string& input, std::string expected) {
+        std::istringstream ss(input);
+        std::string token;
+
+        if (std::getline(ss, token, ',')) {     
+            return trim(token) == expected;
+        }
+        return false;
+    }
+
     FilterExpression::SqlCommand FilterExpression::ParseAggrCommand(const std::string& cmd) {
         std::string upper;
         upper.reserve(cmd.size());
@@ -500,7 +511,7 @@ namespace DataModel
         if (upper == "MIN")   return SqlCommand::Min;
         if (upper == "MAX")   return SqlCommand::Max;
         if (upper == "SUM")   return SqlCommand::Sum;
-        return SqlCommand::Group;
+        return SqlCommand::Column;
     }
 
     std::string FilterExpression::AggrCommandToString(SqlCommand cmd) {
@@ -536,7 +547,7 @@ namespace DataModel
                 agg.public_name = match[3].matched ? match[3].str()
                     : AggrCommandToString(agg.command) + "_" + agg.column;
             } else {
-                agg.command = SqlCommand::Group;
+                agg.command = SqlCommand::Column;
                 agg.column = token;
                 agg.public_name = token;
             }

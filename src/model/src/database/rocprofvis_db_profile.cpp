@@ -1035,6 +1035,11 @@ ProfileDatabase::BuildTableQuery(
         query += "-- CMD: GROUP ";
         if (!group_by_select.empty())
         {
+            if (!FilterExpression::StartsWithSubstring(group_by_select, group_by))
+            {
+                query += group_by;
+                query += ", ";
+            }
             query += group_by_select;
         }
         else

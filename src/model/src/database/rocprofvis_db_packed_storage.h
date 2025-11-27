@@ -71,7 +71,8 @@ namespace DataModel
 
     typedef enum NumericType {
         NumericUInt64,
-        NumericDouble
+        NumericDouble,
+        NotNumeric
     } NumericType;
 
     typedef struct Numeric {
@@ -93,15 +94,6 @@ namespace DataModel
         std::unordered_map<std::string, NumericWithType> result;
     };
 
-    struct Aggregation
-    {
-        std::unordered_map<std::string, MergedColumnDef> column_def;
-        std::vector<FilterExpression::SqlAggregation> agg_params;
-        std::vector<std::unordered_map<double, ColumnAggr>> aggregation_maps;
-        std::vector<std::pair<std::string, ColumnAggr>> result;
-        std::vector<uint32_t> sort_order;
-    };
-
 
     class StringTable 
     {
@@ -113,6 +105,16 @@ namespace DataModel
         mutable std::shared_mutex m_mutex;
         std::unordered_map<std::string, uint32_t> m_str_to_id;
         std::vector<rocprofvis_dm_string_t> m_id_to_str;
+    };
+
+    struct Aggregation
+    {
+        std::unordered_map<std::string, MergedColumnDef> column_def;
+        std::vector<FilterExpression::SqlAggregation> agg_params;
+        std::vector<std::unordered_map<double, ColumnAggr>> aggregation_maps;
+        std::vector<std::pair<std::string, ColumnAggr>> result;
+        std::vector<uint32_t> sort_order;
+        StringTable m_string_data;
     };
 
     class ProfileDatabase;
@@ -178,6 +180,7 @@ namespace DataModel
         size_t AggregationRowCount() const { return m_aggregation.result.size(); }
         uint8_t GetRowSize() { return m_rowSize; }
         std::pair<std::string, ColumnAggr>& GetAggreagationRow(int index) { return m_aggregation.result[m_aggregation.sort_order[index]]; };
+        std::string GetAggregationStringByIndex(uint32_t index) { return m_aggregation.m_string_data.ToString(index); }
         const std::vector<ColumnDef>& GetColumns() const { return m_columns; }
         const std::vector<FilterExpression::SqlAggregation>& GetAggregationSpec() const { return m_aggregation.agg_params; }
         const std::vector<MergedColumnDef>& GetMergedColumns() const { return m_merged_columns; }

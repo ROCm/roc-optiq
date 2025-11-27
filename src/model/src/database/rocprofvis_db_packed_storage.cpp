@@ -253,9 +253,7 @@ namespace DataModel
             if (agg_params.size() == 0) return false;
             m_aggregation.agg_params = agg_params;
             m_aggregation.column_def = column_def;
-            if (m_aggregation.agg_params[0].command != FilterExpression::SqlCommand::Group) return false;
-            for (int i=1; i < m_aggregation.agg_params.size();i++)
-                if (m_aggregation.agg_params[i].command == FilterExpression::SqlCommand::Group) return false;
+            if (m_aggregation.agg_params[0].command != FilterExpression::SqlCommand::Column) return false;
 
             m_aggregation.aggregation_maps.resize(num_threads);
             return true;
@@ -279,8 +277,12 @@ namespace DataModel
                     it->second.count = val.count;
                     for (auto param : m_aggregation.agg_params)
                     {
-                        it->second.result[param.public_name].numeric.data.u64 = val.result[param.public_name].numeric.data.u64;
-                        it->second.result[param.public_name].type = val.result[param.public_name].type;
+                        auto it_src = val.result.find(param.public_name);
+                        if (it_src != val.result.end())
+                        {
+                            it->second.result[param.public_name].numeric.data.u64 = it_src->second.numeric.data.u64;
+                            it->second.result[param.public_name].type = it_src->second.type;
+                        }
                     }
                 } else
                 { 
@@ -391,38 +393,70 @@ namespace DataModel
             it->second.count = 0;
             for (auto param : m_aggregation.agg_params)
             {
-                if (param.command == FilterExpression::SqlCommand::Group) continue;
-                switch (param.command)
+                if (param.command == FilterExpression::SqlCommand::Column)
                 {
-                case FilterExpression::SqlCommand::Count:
-                    it->second.result[param.public_name].numeric.data.d = 0;
-                    it->second.result[param.public_name].type = NumericUInt64;
-                    break;
-                case FilterExpression::SqlCommand::Avg:
-                    it->second.result[param.public_name].numeric.data.d = 0;
-                    it->second.result[param.public_name].type = NumericDouble;
-                    break;
-                case FilterExpression::SqlCommand::Min:
-                    it->second.result[param.public_name].numeric.data.d = DBL_MAX;
-                    it->second.result[param.public_name].type = NumericDouble;
-                    break;
-                case FilterExpression::SqlCommand::Max:
-                    it->second.result[param.public_name].numeric.data.d = DBL_MIN;
-                    it->second.result[param.public_name].type = NumericDouble;
-                    break;
-                case FilterExpression::SqlCommand::Sum:
-                    it->second.result[param.public_name].numeric.data.d = 0;
-                    it->second.result[param.public_name].type = NumericDouble;
-                    break;
-                default:
-                    break;
+                    if (group_by == param.column) continue;
+                    std::string column = param.column;
+                    MergedColumnDef& column_info = m_aggregation.column_def[column];
+                    uint8_t size = ColumnTypeSize(column_info.m_type[op]);
+                    if (size > 0)
+                    {
+                        value = column_info.m_type[op] == ColumnType::Double ?  r->Get<double>(column_info.m_offset[op]) :  r->Get<uint64_t>(column_info.m_offset[op], size);
+                    }
+                    bool numeric_string = false;
+                    const char* str =  PackedTable::ConvertTableIndexToString(db, column_info.m_schema_index[op], value, numeric_string);
+                    if (str == nullptr){
+                        if (column_info.m_type[op] == ColumnType::Double)
+                        {
+                            it->second.result[param.public_name].numeric.data.d = value;
+                            it->second.result[param.public_name].type = NumericDouble;
+                        }
+                        else
+                        {
+                            it->second.result[param.public_name].numeric.data.u64 = value;
+                            it->second.result[param.public_name].type = NumericUInt64;
+                        }
+                    }
+                    else
+                    {
+                        it->second.result[param.public_name].type = NotNumeric;
+                        it->second.result[param.public_name].numeric.data.u64 = m_aggregation.m_string_data.ToInt(str);
+                    }
+                }
+                else
+                {
+                    switch (param.command)
+                    {
+                    case FilterExpression::SqlCommand::Count:
+                        it->second.result[param.public_name].numeric.data.u64 = 0;
+                        it->second.result[param.public_name].type = NumericUInt64;
+                        break;
+                    case FilterExpression::SqlCommand::Avg:
+                        it->second.result[param.public_name].numeric.data.d = 0;
+                        it->second.result[param.public_name].type = NumericDouble;
+                        break;
+                    case FilterExpression::SqlCommand::Min:
+                        it->second.result[param.public_name].numeric.data.d = DBL_MAX;
+                        it->second.result[param.public_name].type = NumericDouble;
+                        break;
+                    case FilterExpression::SqlCommand::Max:
+                        it->second.result[param.public_name].numeric.data.d = DBL_MIN;
+                        it->second.result[param.public_name].type = NumericDouble;
+                        break;
+                    case FilterExpression::SqlCommand::Sum:
+                        it->second.result[param.public_name].numeric.data.d = 0;
+                        it->second.result[param.public_name].type = NumericDouble;
+                        break;
+                    default:
+                        break;
+                    }
                 }
             }
         }
         it->second.count++;
         for (auto param : m_aggregation.agg_params)
         {
-            if (param.command == FilterExpression::SqlCommand::Group) continue;
+            if (param.command == FilterExpression::SqlCommand::Column) continue;
             auto it_val = it->second.result.find(param.public_name);
             if (it_val != it->second.result.end())
             { 

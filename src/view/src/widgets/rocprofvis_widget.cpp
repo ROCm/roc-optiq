@@ -554,7 +554,7 @@ TabContainer::Render()
         {
             for(size_t i = 0; i < m_tabs.size(); ++i)
             {
-                TabItem&    tab = m_tabs[i];
+                const TabItem&     tab = m_tabs[i];
                 ImGuiTabItemFlags flags =
                     (i == m_set_active_tab_index || i == m_pending_to_remove)
                         ? ImGuiTabItemFlags_SetSelected

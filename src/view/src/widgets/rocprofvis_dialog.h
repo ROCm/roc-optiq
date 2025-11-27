@@ -4,6 +4,7 @@
 #include "imgui.h"
 #include <string>
 #include <functional>
+#include <optional>
 
 namespace RocProfVis
 {
@@ -12,6 +13,7 @@ namespace View
 
 class ConfirmationDialog {
 public:
+    ConfirmationDialog() = default;
     ConfirmationDialog(bool& skip_dialog_setting)
     : m_skip_dialog_setting(skip_dialog_setting)
     {};
@@ -21,13 +23,13 @@ public:
     void Render();
 
 private:
-    void                  DrawCheckboxOption();
-    std::string           m_title;
-    std::string           m_message;
-    std::function<void()> m_on_confirm;
-    std::function<void()> m_on_cancel;
-    bool                  m_should_open = false;
-    bool&                 m_skip_dialog_setting;
+    void                                              DrawCheckboxOption();
+    std::string                                       m_title;
+    std::string                                       m_message;
+    std::function<void()>                             m_on_confirm;
+    std::function<void()>                             m_on_cancel;
+    bool                                              m_should_open = false;
+    const std::optional<std::reference_wrapper<bool>> m_skip_dialog_setting;
 };
 
 class MessageDialog {

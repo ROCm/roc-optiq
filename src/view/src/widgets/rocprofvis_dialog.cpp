@@ -70,8 +70,12 @@ ConfirmationDialog::Render()
                 }
                 ImGui::CloseCurrentPopup();
             }
-            ImGui::SameLine();
-            DrawCheckboxOption();
+
+            if(m_skip_dialog_setting.has_value())
+            {
+                ImGui::SameLine();
+                DrawCheckboxOption();
+            }
 
             ImGui::EndPopup();
         }
@@ -93,7 +97,7 @@ ConfirmationDialog::DrawCheckboxOption()
 
     float pos_x = window_width - style.WindowPadding.x - total_width;
     ImGui::SetCursorPosX(pos_x);
-    ImGui::Checkbox(cb_label, &m_skip_dialog_setting);
+    ImGui::Checkbox(cb_label, &m_skip_dialog_setting->get());
 }
 
 void

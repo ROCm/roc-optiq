@@ -515,7 +515,7 @@ TabContainer::ShowCloseTabConfirm(int removing_tab_index)
     auto cancel = [this]() { m_pending_to_remove = s_invalid_index; };
 
     m_confirmation_dialog->Show("Confirm Closing tab",
-                                "Are you sure you want to close the Tab: " +
+                                "Are you sure you want to close the tab: " +
                                 m_tabs[removing_tab_index].m_label +
                                 "? Any unsaved data will be lost.",
                                 confirm, cancel);

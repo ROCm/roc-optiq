@@ -11,8 +11,7 @@ Use ROCm™ Optiq to inspect CPU-GPU interactions, ROCm API calls, kernel execut
 .. image:: /images/optiq.png
    :width: 800
 
-Since ROCm Optiq doesn't have any dependencies with the ROCm stack, trace files captured by the ROCm Systems Profiler can be visualized with the ROCm Optiq GUI on any machine running a Microsoft Windows or Linux operating system.
-See :ref:`requirements` for more information.
+Since ROCm Optiq doesn't have any dependencies with the ROCm stack, trace files captured by the ROCm Systems Profiler can be visualized with the ROCm Optiq GUI on any machine running a Microsoft Windows or Linux operating system (see :ref:`requirements` for more information).
 
 ROCm Optiq helps you identify stalls, memory bandwidth issues, and inefficient kernel launches. 
 It correlates GPU workloads with in-application CPU events and performance with hardware resource usage, providing a holistic view for optimization.

@@ -6,12 +6,12 @@ root: index
 subtrees:
 - entries:
   - file: what-is-optiq.rst
-    title: What is ROCm™ Optiq?
+    title: What is ROCm Optiq?
 
 - caption: Install
   entries:
   - file: install/optiq-install
-    title: ROCm™ Optiq installation
+    title: ROCm Optiq installation
 
 - caption: How to
   entries:

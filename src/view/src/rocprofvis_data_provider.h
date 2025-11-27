@@ -39,7 +39,8 @@ enum class RequestType
     kFetchEventFlowDetails,
     kFetchEventCallStack,
     kSaveTrimmedTrace,
-    kTableExport
+    kTableExport,
+    kFetchTrace
 };
 
 enum class TableType
@@ -347,6 +348,7 @@ public:
     static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
+    static const uint64_t FETCH_TRACE_REQUEST_ID;
 
     DataProvider();
     ~DataProvider();
@@ -603,12 +605,12 @@ public:
     bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
 
 private:
-    void HandleLoadTrace();
     void HandleLoadSystemTopology();
     void HandleLoadTrackMetaData();
     void HandleRequests();
 
     void ProcessRequest(data_req_info_t& req);
+    void ProcessLoadTrace(data_req_info_t& req);
     void ProcessEventExtendedRequest(data_req_info_t& req);
     void ProcessEventFlowDetailsRequest(data_req_info_t& req);
     void ProcessEventCallStackRequest(data_req_info_t& req);
@@ -632,7 +634,6 @@ private:
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                           uint64_t index);
 
-    rocprofvis_controller_future_t*   m_trace_future;
     rocprofvis_controller_t*          m_trace_controller;
     rocprofvis_controller_timeline_t* m_trace_timeline;
 

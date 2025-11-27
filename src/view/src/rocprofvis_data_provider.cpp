@@ -110,24 +110,31 @@ DataProvider::SetSelectedState(const std::string& id)
 void
 DataProvider::FreeRequests()
 {
-    for(auto item : m_requests)
+    for (auto item : m_requests)
     {
         data_req_info_t& req = item.second;
-
-        if(req.request_future)
+        if (req.request_future)
         {
-            spdlog::debug("FreeRequests: cancelling request {} of type {}",
-                          req.request_id, static_cast<int>(req.request_type));
+            spdlog::warn("FreeRequests: cancelling request {} of type {}",
+                req.request_id, static_cast<int>(req.request_type));
 
             rocprofvis_result_t result =
                 rocprofvis_controller_future_cancel(req.request_future);
             if(result != kRocProfVisResultSuccess)
             {
                 spdlog::warn("Failed to cancel request {}: {}", req.request_id,
-                             static_cast<int>(result));
+                    static_cast<int>(result));
             }
+        }
+    }
+    for(auto item : m_requests)
+    {
+        data_req_info_t& req = item.second;
 
-            result = rocprofvis_controller_future_wait(req.request_future, FLT_MAX);
+        if(req.request_future)
+        {
+
+            rocprofvis_result_t result = rocprofvis_controller_future_wait(req.request_future, FLT_MAX);
             if(result != kRocProfVisResultSuccess)
             {
                 spdlog::warn("Failed to wait for request {}: {}", req.request_id,

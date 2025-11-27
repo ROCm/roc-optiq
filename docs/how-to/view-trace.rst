@@ -114,7 +114,7 @@ When selected, event details are displayed in the **Event Details** tab of the *
 
 .. tip::
 
-   When you hover over a region with high-density events, the application displays the total number of events in each category.
+   When you hold the mouse pointer over a region with high-density events, the application displays the total number of events in each category.
 
 Resize or reorder tracks
 ^^^^^^^^^^^^^^^^^^^^^^^^

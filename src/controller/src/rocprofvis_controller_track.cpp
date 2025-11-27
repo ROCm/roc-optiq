@@ -274,7 +274,6 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
 
     for(int i = 0; i < futures.size(); i++)
     {  
-        if(future->IsCancelled()) break;
         rocprofvis_dm_result_t dm_result = rocprofvis_db_future_wait(futures[i], UINT64_MAX);
         if(kRocProfVisDmResultSuccess == dm_result)
         {

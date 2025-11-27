@@ -275,7 +275,7 @@ Process::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t valu
         }
         case kRPVControllerProcessNodeId:
         {
-            m_node_id =  static_cast<uint32_t>(value);
+            m_node_id = value;
             result    = kRocProfVisResultSuccess;
             break;
         }

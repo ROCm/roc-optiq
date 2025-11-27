@@ -37,10 +37,11 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_settings(SettingsManager::GetInstance())
 , m_req_table_type(
       table_type == TableType::kEventSearchTable ? kRPVControllerTableTypeSearchResults
-      : table_type == TableType::kEventTable     ? kRPVControllerTableTypeEvents
-                                                 : kRPVControllerTableTypeSamples)
-, m_filter_options({ "", "", "" })
-, m_pending_filter_options({ "", "", "" })
+      : table_type == TableType::kSummaryKernelTable ? kRPVControllerTableTypeSummaryKernelInstances
+      : table_type == TableType::kEventTable         ? kRPVControllerTableTypeEvents
+                                                     : kRPVControllerTableTypeSamples)
+, m_filter_options({"", "", "", "" })
+, m_pending_filter_options({"", "", "", "" })
 , m_data_changed(true)
 , m_filter_requested(false)
 , m_selected_row(-1)
@@ -97,6 +98,10 @@ InfiniteScrollTable::GetRequestID() const
         case TableType::kEventSearchTable:
         {
             return DataProvider::EVENT_SEARCH_REQUEST_ID;
+        }
+        case TableType::kSummaryKernelTable:
+        {
+            return DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
         }
         default:
         {
@@ -388,8 +393,8 @@ InfiniteScrollTable::Render()
                         m_data_provider.FetchTable(TableRequestParams(
                             m_req_table_type, table_params->m_track_ids,
                             table_params->m_op_types, table_params->m_start_ts,
-                            table_params->m_end_ts, table_params->m_filter.c_str(),
-                            table_params->m_group.c_str(),
+                            table_params->m_end_ts, table_params->m_where.c_str(),
+                            table_params->m_filter.c_str(), table_params->m_group.c_str(),
                             table_params->m_group_columns.c_str(),
                             table_params->m_string_table_filters, new_start_pos,
                             m_fetch_chunk_size, table_params->m_sort_column_index,
@@ -425,8 +430,8 @@ InfiniteScrollTable::Render()
                         m_data_provider.FetchTable(TableRequestParams(
                             m_req_table_type, table_params->m_track_ids,
                             table_params->m_op_types, table_params->m_start_ts,
-                            table_params->m_end_ts, table_params->m_filter.c_str(),
-                            table_params->m_group.c_str(),
+                            table_params->m_end_ts, table_params->m_where.c_str(),
+                            table_params->m_filter.c_str(), table_params->m_group.c_str(),
                             table_params->m_group_columns.c_str(),
                             table_params->m_string_table_filters, new_start_pos,
                             m_fetch_chunk_size, table_params->m_sort_column_index,
@@ -493,8 +498,8 @@ InfiniteScrollTable::Render()
                 m_data_provider.FetchTable(TableRequestParams(
                     m_req_table_type, table_params->m_track_ids, table_params->m_op_types,
                     table_params->m_start_ts, table_params->m_end_ts,
-                    table_params->m_filter.c_str(), table_params->m_group.c_str(),
-                    table_params->m_group_columns.c_str(),
+                    table_params->m_where.c_str(), table_params->m_filter.c_str(),
+                    table_params->m_group.c_str(), table_params->m_group_columns.c_str(),
                     table_params->m_string_table_filters, table_params->m_start_row,
                     table_params->m_req_row_count, table_params->m_sort_column_index,
                     table_params->m_sort_order));
@@ -733,8 +738,8 @@ InfiniteScrollTable::ExportToFile() const
                m_data_provider.FetchTable(TableRequestParams(
                    m_req_table_type, table_params->m_track_ids, table_params->m_op_types,
                    table_params->m_start_ts, table_params->m_end_ts,
-                   table_params->m_filter.c_str(), table_params->m_group.c_str(),
-                   table_params->m_group_columns.c_str(),
+                   table_params->m_where.c_str(), table_params->m_filter.c_str(),
+                   table_params->m_group.c_str(), table_params->m_group_columns.c_str(),
                    table_params->m_string_table_filters, INVALID_UINT64_INDEX,
                    INVALID_UINT64_INDEX, table_params->m_sort_column_index,
                    table_params->m_sort_order, file_path)))

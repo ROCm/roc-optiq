@@ -89,9 +89,6 @@ AppWindow::AppWindow()
       SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit))
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
-, m_histogram_visible(true)
-, m_sidebar_visible(true)
-, m_analysis_bar_visible(true)
 #ifndef USE_NATIVE_FILE_DIALOG
 , m_init_file_dialog(false)
 #else
@@ -422,16 +419,6 @@ AppWindow::OpenFile(std::string file_path)
         {
             TabItem tab =
                 TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
-
-            // Set initial visibility to save the same settings in different tabs
-            auto trace_view_tab =
-                std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab.m_widget);
-            if(trace_view_tab)
-            {
-                trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
-                trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
-            }
-
             m_tab_container->AddTab(std::move(tab));
             m_projects[project->GetID()] = std::move(project);
             SettingsManager::GetInstance().AddRecentFile(file_path);
@@ -575,50 +562,49 @@ AppWindow::RenderViewMenu(Project* project)
 
     if(ImGui::BeginMenu("View"))
     {
-        LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
-        if(tool_bar_item)
+        AppWindowSettings& settings =
+            SettingsManager::GetInstance().GetAppWindowSettings();
+        if(ImGui::MenuItem("Show Tool Bar", nullptr, &settings.show_toolbar))
         {
-            if(ImGui::MenuItem("Show Tool Bar", nullptr, tool_bar_item->m_visible))
+            LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
+            if(tool_bar_item)
             {
-                tool_bar_item->m_visible = !tool_bar_item->m_visible;
-            }
-            if(ImGui::MenuItem("Show Advanced Details Panel", nullptr, m_analysis_bar_visible))
-            {
-                m_analysis_bar_visible = !m_analysis_bar_visible;
-                for(const auto& tab : m_tab_container->GetTabs())
-                {
-                    auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
-                            tab->m_widget);
-                    if(trace_view_tab)
-                        trace_view_tab->SetAnalysisViewVisibility(m_analysis_bar_visible);
-                }
-            }
-            if(ImGui::MenuItem("Show System Topology Panel", nullptr, m_sidebar_visible))
-            {
-                m_sidebar_visible = !m_sidebar_visible;
-                for(const auto& tab : m_tab_container->GetTabs())
-                {
-                    auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
-                            tab->m_widget);
-                    if(trace_view_tab)
-                        trace_view_tab->SetSidebarViewVisibility(m_sidebar_visible);
-                }
-            }
-            if(ImGui::MenuItem("Show Histogram", nullptr, m_histogram_visible))
-            {
-                m_histogram_visible = !m_histogram_visible;
-                for(const auto& tab : m_tab_container->GetTabs())
-                {
-                    auto trace_view_tab =
-                        std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
-                            tab->m_widget);
-                    if(trace_view_tab)
-                        trace_view_tab->SetHistogramVisibility(m_histogram_visible);
-                }
+                tool_bar_item->m_visible = settings.show_toolbar;
             }
         }
+        if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
+                           &settings.show_details_panel))
+        {
+            for(const auto& tab : m_tab_container->GetTabs())
+            {
+                auto trace_view_tab =
+                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                if(trace_view_tab)
+                    trace_view_tab->SetAnalysisViewVisibility(
+                        settings.show_details_panel);
+            }
+        }
+        if(ImGui::MenuItem("Show System Topology Panel", nullptr, &settings.show_sidebar))
+        {
+            for(const auto& tab : m_tab_container->GetTabs())
+            {
+                auto trace_view_tab =
+                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                if(trace_view_tab)
+                    trace_view_tab->SetSidebarViewVisibility(settings.show_sidebar);
+            }
+        }
+        if(ImGui::MenuItem("Show Histogram", nullptr, &settings.show_histogram))
+        {
+            for(const auto& tab : m_tab_container->GetTabs())
+            {
+                auto trace_view_tab =
+                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                if(trace_view_tab)
+                    trace_view_tab->SetHistogramVisibility(settings.show_histogram);
+            }
+        }
+        ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
         ImGui::EndMenu();
     }
 }

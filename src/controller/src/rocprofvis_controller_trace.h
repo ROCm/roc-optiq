@@ -28,6 +28,8 @@ class Event;
 class Table;
 class Node;
 class SystemTable;
+class Summary;
+class SummaryMetrics;
 #ifdef COMPUTE_UI_SUPPORT
 class Plot;
 class ComputeTrace;
@@ -64,6 +66,9 @@ public:
     rocprofvis_result_t TableExportCSV(Table& table, Arguments& args, Future& future, 
                                        const char* path);
 
+    rocprofvis_result_t AsyncFetch(Summary& summary, Arguments& args, Future& future,
+                                   SummaryMetrics& output);
+
 #ifdef COMPUTE_UI_SUPPORT
     rocprofvis_result_t AsyncFetch(Plot& plot, Arguments& args, Future& future,
                                    Array& array);
@@ -92,6 +97,7 @@ private:
     SystemTable*          m_event_table;
     SystemTable*          m_sample_table;
     SystemTable*          m_search_table;
+    Summary*              m_summary;
     rocprofvis_dm_trace_t m_dm_handle;
     MemoryManager*        m_mem_mgmt;
     Data                  m_dm_message;

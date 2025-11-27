@@ -92,7 +92,8 @@ MultiTrackTable::HandleTrackSelectionChanged()
         // Fetch table data for the selected tracks
         TableRequestParams table_params(
             m_req_table_type, filtered_tracks, {}, start_ns, end_ns,
-            m_filter_options.filter,
+            m_filter_options.where,
+			m_filter_options.filter,
             m_filter_options.group_by.c_str(),
             m_filter_options.group_columns, {}, 0, m_fetch_chunk_size);
 

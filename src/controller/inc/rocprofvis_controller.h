@@ -53,6 +53,12 @@ rocprofvis_controller_array_t* rocprofvis_controller_array_alloc(uint32_t initia
 rocprofvis_controller_arguments_t* rocprofvis_controller_arguments_alloc(void);
 
 /*
+* Allocate a summary metrics container.
+* @returns A valid summary metrics container object, or nullptr.
+*/
+rocprofvis_controller_summary_metrics_t* rocprofvis_controller_summary_metrics_alloc(void);
+
+/*
 * Gets the property value from the provided object or returns an error.
 * @param object The object to access.
 * @param property The property to access.
@@ -234,6 +240,18 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controlle
 rocprofvis_result_t rocprofvis_controller_table_export_csv(rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, char const* path);
 
 /*
+* Setup the summary based on the values in 'args' and fetch data.
+* @param controller The controller.
+* @param table The summary controller to fetch data from
+* @param args The arguments that setup the summary
+* @param result The future to wait on
+* @param output The summary metrics container to write to
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_summary_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_summary_t* summary, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_summary_metrics_t* output);
+
+#ifdef COMPUTE_UI_SUPPORT
+/*
 * Setup and fetches data for a plot, populating the passed in array with PlotSeries objects.
 * Data within PlotSeries can be accessed using GetUInt64/GetDouble/GetString.
 * @param controller The controller.
@@ -244,6 +262,7 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(rocprofvis_controller
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_controller_plot_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_plot_t* plot, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output);
+#endif
 
 /*
 * Get indexed properties from an object.
@@ -271,6 +290,12 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_
     type: rocprofvis_controller_object_type_t
 }
 */
+
+/*
+* Frees the provided summary metrics container object
+* @param object The object to free.
+*/
+void rocprofvis_controller_summary_metric_free(rocprofvis_controller_summary_metrics_t* object);
 
 void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* args);
 

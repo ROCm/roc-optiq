@@ -326,7 +326,8 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         draw_list->PopClipRect();
     }
     if(ImGui::IsMouseHoveringRect(rectMin, rectMax) &&
-       !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
+       ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
+                              ImGuiHoveredFlags_NoPopupHierarchy))
     {
         // Select on click
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))

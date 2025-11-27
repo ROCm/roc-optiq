@@ -101,6 +101,9 @@ private:
  
     bool FormatTimeCell(const std::string& raw, std::string& formatted_out);
 
+    std::string DeviceTypeString(
+        const rocprofvis_controller_processor_type_t& device_type) const;
+
     DataProvider&                   m_data_provider;
     bool                            m_topology_dirty;
     bool                            m_graphs_dirty;

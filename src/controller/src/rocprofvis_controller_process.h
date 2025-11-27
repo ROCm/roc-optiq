@@ -58,7 +58,7 @@ private:
     double               m_start_time;
     double               m_end_time;
     uint32_t             m_id;
-    uint32_t             m_node_id;
+    uint64_t             m_node_id;
     uint32_t             m_parent_id;
 };
 

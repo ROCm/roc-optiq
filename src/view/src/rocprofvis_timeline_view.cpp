@@ -235,8 +235,8 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                             window_position.y + m_graph_size.y + m_scroll_position_y);
 
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
-       ImGui::IsMouseHoveringRect(win_min, win_max) &&
-       !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
+       ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
+                              ImGuiHoveredFlags_NoPopupHierarchy))
     {
         ImGui::OpenPopup("StickyNoteContextMenu");
     }
@@ -1446,7 +1446,12 @@ TimelineView::RenderHistogram()
                            vmax_label.c_str());
     }
 
-    if(!m_resize_activity && !m_stop_user_interaction) HandleHistogramTouch();
+    m_stop_user_interaction |= !ImGui::IsWindowHovered(
+        ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
+    if(!m_resize_activity && !m_stop_user_interaction)
+    {
+        HandleHistogramTouch();
+    }
 
     ImGui::EndChild();  // Histogram Bars
     ImGui::EndChild();
@@ -1496,7 +1501,8 @@ TimelineView::RenderTraceView()
     m_v_max_x       = m_v_min_x + m_v_width;
     m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
 
-    m_stop_user_interaction |= ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
+    m_stop_user_interaction |= !ImGui::IsWindowHovered(
+        ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
 
     RenderGrid();
 

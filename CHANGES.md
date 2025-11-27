@@ -35,6 +35,11 @@
   - Fix: Sample track tooltip value displayed wrong value
   - Fix: Don't allow grouping table data by Id
   - Fix: Ignore event with invalid time values
+  - Fix: Extension not appended when saving on Linux
+  - Fix: Counter tracks not trimmed when saving trimmed trace
+  - Fix: No data when scrolling at highest zoom
+  - Fix: Samples overlap on track
+  - Fix: Crash when re-ordering tracks and view track details
 
 ## Alpha 0.6.3
 

@@ -24,4 +24,4 @@ For the code review focus on:
 Provide concise, actionable feedback. If there are no significant issues state "No major issues found." 
 Do not modify any code! 
 Structure your feedback clearly.
-If you need to refer to specific lines in the code, use the format `file:line_number` (e.g., `src/main.py:42`).
+If you need to refer to specific lines in the code, use the format `file:line_number` (for example,, `src/main.py:42`).

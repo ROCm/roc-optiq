@@ -13,14 +13,14 @@ Customize your ROCm Optiq project
 .. |flow| image:: ../images/flow-change.png
 .. |reset| image:: ../images/reset.png
 
-You can customize the data views of an opened trace file in ROCm Optiq such as display settings, saved trace selections, added bookmarks/annotations, and more.
+You can customize the data views of an open trace file in ROCm Optiq, including display settings, saved trace selections, added bookmarks/annotations, and more.
 
 .. _time-range-filter:
 
 Set a time range filter
 =======================
 
-Set a time range filter in the :ref:`timeline` to limit that data displayed to a specific period. 
+Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
 To set a time range filter, double-click a range in the **Timeline View**.
 
 .. image:: ../images/filter.png
@@ -59,7 +59,7 @@ To add an annotation:
 
    Annotations can also be added by right-clicking on the **Timeline View** and clicking the **Add Annotation** context menu option.
 
-2. The **Annotation** modal displays. Provide a title and your note, then click **Save** to create the annotation.
+2. The **Annotation** dialog displays. Provide a title and your note, then click **Save** to create the annotation.
 
    .. image:: ../images/save-annotation.png
       :width: 500
@@ -71,10 +71,10 @@ To add an annotation:
 
 .. tip::
 
-  - The annotation can be edited or deleted by clicking the pencil |pen| icon.
-  - A complete list of annotations can be viewed in the **Annotations** tab of the :ref:`advanced` section.
+  - Edit or delete the annotation by clicking the pencil |pen| icon.
+  - View the complete list of annotations in the **Annotations** tab of the :ref:`advanced` section.
   - Check the **Visibility** option in the **Annotations** tab to toggle the visibility of individual annotations.
-  - Clicking on a row in the annotations list will bring the selected annotation into view.
+  - Clicking on a row in the annotations list brings the selected annotation into view.
 
 Create bookmarks
 ================
@@ -84,7 +84,7 @@ The current view on the timeline (scroll and zoom position) can be saved to a bo
 To create and use a bookmark:
 
 1. Click **+** on the |book| drop-down menu from the main **Toolbar**.
-2. Select the bookmark number to navigate to the selected bookmark.
+2. Select the bookmark number to navigate to it.
    
 Or:
 
@@ -166,7 +166,7 @@ Render mode Shows events in a fan-out style, highlighting parallelism and branch
 Show/hide panels
 ================
 
-The **View** menu can be used to show/hide the various panels of the application.
+The **View** menu can be used to show and hide application panels.
 
 .. image:: ../images/view.png
   :width: 300
@@ -176,5 +176,5 @@ Save a project file
 
 Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project (``.rpv`` file). 
 
-- Go to **File** > **Save As** to create a new project.
-- Go to **File** > **Save** to overwrite the currently opened project.
+- Select **File** > **Save As** to create a new project.
+- Select **File** > **Save** to overwrite the currently opened project.

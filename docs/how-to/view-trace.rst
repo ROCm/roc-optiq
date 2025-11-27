@@ -54,8 +54,8 @@ The **System Topology View** displays a hierarchical representation of the hardw
    :width: 800
    :align: center
 
-- Click the eye |eye| icon to show or hide tracks. 
-- Click the scroll |scroll| button to go to the track in the :ref:`timeline`. 
+- Click |eye| to show or hide tracks. 
+- Click |scroll| to go to the track in the :ref:`timeline`. 
 
 .. _timeline:
 
@@ -120,7 +120,7 @@ Resize or reorder tracks
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 - Resize tracks by dragging the separator lines between tracks.
-- Reorder tracks by clicking and dragging the grip button |grip| on the left side of the **Description** area.
+- Reorder tracks by clicking and dragging |grip| on the left side of the **Description** area.
 
 Histogram
 ~~~~~~~~~

@@ -36,7 +36,7 @@ The active time range filter applies to event and sample counter details in the 
 Save trace selections
 ---------------------
 
-When there's an active time range filter, the trace can be trimmed from the **Edit** > **Save Trace Selection** menu option:
+When there's an active time range filter, select **Edit** > **Save Trace Selection** to trim the trace:
 
 .. image:: ../images/save-trace.png
    :width: 200
@@ -71,7 +71,7 @@ To add an annotation:
 
 .. tip::
 
-  - Edit or delete the annotation by clicking the pencil |pen| icon.
+  - Edit or delete the annotation by clicking |pen|.
   - View the complete list of annotations in the **Annotations** tab of the :ref:`advanced` section.
   - Check the **Visibility** option in the **Annotations** tab to toggle the visibility of individual annotations.
   - Clicking on a row in the annotations list brings the selected annotation into view.
@@ -83,7 +83,7 @@ The current view on the timeline (scroll and zoom position) can be saved to a bo
 
 To create and use a bookmark:
 
-1. Click **+** on the |book| drop-down menu from the main **Toolbar**.
+1. Click **+** in the |book| menu from the main **Toolbar**.
 2. Select the bookmark number to navigate to it.
    
 Or:
@@ -94,7 +94,7 @@ Or:
 Delete bookmarks
 ----------------
 
-- To delete a bookmark, click **X** to delete a bookmark from the |book| drop-down menu. 
+- To delete a bookmark, click **X** to delete a bookmark from the |book| menu. 
 - Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
 
 Change display settings
@@ -137,7 +137,7 @@ Customize display options for each track by clicking the gear icon in the track'
 - For sample counter tracks, you can set the min and max when showing the tracks: 
 
   - Click on the value beside the min and max to set/change the scale range. 
-  - Click the reset |reset| button to restore the values to their default.
+  - Click |reset| to restore the values to their default.
 
   .. image:: ../images/min-max.png
      :width: 400

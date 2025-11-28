@@ -723,11 +723,11 @@ ProfileDatabase::BuildTableQuery(
         query += Builder::END_SERVICE_NAME;
         query += " <= ";
         query += std::to_string(end);
-		if(where && strlen(where))
-		{
-			query += " AND ";
-			query += where;
-		}
+        if(where && strlen(where))
+        {
+            query += " AND ";
+            query += where;
+        }
     }
     if (!group_by.empty())
     {

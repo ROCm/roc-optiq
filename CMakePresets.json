@@ -82,7 +82,6 @@
             "description": "Base settings for Linux GCC builds of ROCm Optiq",
             "generator": "Unix Makefiles",
             "binaryDir": "${sourceDir}/build/${presetName}",
-            "installDir": "${sourceDir}/build/install/${presetName}",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc",
                 "CMAKE_CXX_COMPILER": "g++",

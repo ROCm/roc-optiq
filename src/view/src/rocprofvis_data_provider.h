@@ -679,10 +679,10 @@ private:
 
     rocprofvis_result_t GetString(rocprofvis_handle_t*  handle,
                                   rocprofvis_property_t property, uint64_t index,
-                                  std::string& out_string, bool assert_sucess = true);
+                                  std::string& out_string);
 
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
-                          uint64_t index, bool assert_sucess = true);
+                          uint64_t index);
 
     rocprofvis_controller_t*          m_trace_controller;
     rocprofvis_controller_timeline_t* m_trace_timeline;

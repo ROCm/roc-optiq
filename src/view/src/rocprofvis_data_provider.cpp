@@ -2794,7 +2794,7 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                 output.id = uint64_data;
             }
             result = GetString(metrics_handle, kRPVControllerSummaryMetricPropertyName, 0,
-                               str_data, false);
+                               str_data);
             if(result == kRocProfVisResultSuccess)
             {
                 output.name = str_data;
@@ -3710,18 +3710,14 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
 
 rocprofvis_result_t
 DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
-                        uint64_t index, std::string& out_string, bool assert_sucess)
+                        uint64_t index, std::string& out_string)
 {
     uint32_t length = 0;
     out_string.clear();
 
     rocprofvis_result_t result =
         rocprofvis_controller_get_string(handle, property, index, nullptr, &length);
-    if(assert_sucess)
-    {
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    }
-    if(length == 0)
+    if(result != kRocProfVisResultSuccess || length == 0) 
     {
         return result;
     }
@@ -3729,23 +3725,16 @@ DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t prope
     out_string.resize(length);
     result = rocprofvis_controller_get_string(
         handle, property, index, const_cast<char*>(out_string.c_str()), &length);
-    if(assert_sucess)
-    {
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    }
     return result;
 }
 
 std::string
 DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
-                        uint64_t index, bool assert_sucess)
+                        uint64_t index)
 {
     std::string         str;
-    rocprofvis_result_t result = GetString(handle, property, index, str, assert_sucess);
-    if(assert_sucess)
-    {
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    }
+    rocprofvis_result_t result = GetString(handle, property, index, str);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     return str;
 }
 

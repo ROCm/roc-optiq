@@ -3,7 +3,9 @@ run-name: rocprofiler-visualizer-release-oracle-build-package
 
 on:
   workflow_dispatch:
-  
+  repository_dispatch:
+      types: [trigger-release-build]
+
 defaults:
   run:
     shell: bash

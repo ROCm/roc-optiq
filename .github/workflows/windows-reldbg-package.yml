@@ -3,6 +3,8 @@ run-name: rocprofiler-visualizer-windows-relwithdbg-build-package
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+      types: [trigger-release-build]
 
 env:
   VISUALIZER_FILE_NAME: "roc-optiq"

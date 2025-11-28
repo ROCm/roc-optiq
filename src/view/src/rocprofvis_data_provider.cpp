@@ -35,10 +35,11 @@ const uint64_t DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID =
     MakeRequestId(RequestType::kSaveTrimmedTrace);
 const uint64_t DataProvider::TABLE_EXPORT_REQUEST_ID =
     MakeRequestId(RequestType::kTableExport);
+const uint64_t DataProvider::FETCH_TRACE_REQUEST_ID =
+    MakeRequestId(RequestType::kFetchTrace);
 
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
-, m_trace_future(nullptr)
 , m_trace_controller(nullptr)
 , m_trace_timeline(nullptr)
 , m_track_data_ready_callback(nullptr)
@@ -72,11 +73,6 @@ DataProvider::GetEventInfo(uint64_t event_id) const
 void
 DataProvider::CloseController()
 {
-    if(m_trace_future)
-    {
-        rocprofvis_controller_future_free(m_trace_future);
-        m_trace_future = nullptr;
-    }
     if(m_trace_timeline)
     {
         m_trace_timeline = nullptr;
@@ -511,25 +507,36 @@ DataProvider::FetchTrace(const std::string& file_path)
     m_trace_controller = rocprofvis_controller_alloc();
     if(m_trace_controller)
     {
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-        m_trace_future             = rocprofvis_controller_future_alloc();
-        if(m_trace_future)
+        rocprofvis_result_t             result = kRocProfVisResultUnknownError;
+        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        if(future)
         {
             result = rocprofvis_controller_load_async(m_trace_controller,
-                                                      file_path.c_str(), m_trace_future);
+                                                      file_path.c_str(), future);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            if(result != kRocProfVisResultSuccess)
+            if(result == kRocProfVisResultSuccess)
             {
-                rocprofvis_controller_future_free(m_trace_future);
-                m_trace_future = nullptr;
+                data_req_info_t request_info;
+                request_info.request_array      = nullptr;
+                request_info.request_future     = future;
+                request_info.request_obj_handle = nullptr;
+                request_info.request_args       = nullptr;
+                request_info.request_id         = FETCH_TRACE_REQUEST_ID;
+                request_info.loading_state      = ProviderState::kLoading;
+                request_info.request_type       = RequestType::kFetchTrace;
+
+                m_requests.emplace(request_info.request_id, request_info);
             }
-        }
-        if(result != kRocProfVisResultSuccess)
-        {
-            rocprofvis_controller_free(m_trace_controller);
-            m_trace_controller = nullptr;
-            return false;
+            else
+            {
+                rocprofvis_controller_future_free(future);
+                future = nullptr;
+
+                rocprofvis_controller_free(m_trace_controller);
+                m_trace_controller = nullptr;
+                return false;
+            }
         }
 
         m_state = ProviderState::kLoading;
@@ -544,160 +551,119 @@ DataProvider::FetchTrace(const std::string& file_path)
 void
 DataProvider::Update()
 {
-    // process initial controller loading state
-    if(m_state == ProviderState::kLoading)
-    {
-        HandleLoadTrace();
-    }
-    else if(m_state == ProviderState::kReady)
+    if(m_state == ProviderState::kLoading || m_state == ProviderState::kReady)
     {
         HandleRequests();
     }
 }
 
 void
-DataProvider::HandleLoadTrace()
+DataProvider::ProcessLoadTrace(data_req_info_t& req)
 {
-    if(m_trace_future)
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
+
+    if(req.response_code != kRocProfVisResultSuccess)
     {
-        rocprofvis_result_t result = rocprofvis_controller_future_wait(m_trace_future, 0);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
-                          result == kRocProfVisResultTimeout);
-        if(result == kRocProfVisResultSuccess)
+        spdlog::error("Failed to load trace file: {}, error code: {}", m_trace_file_path,
+                      req.response_code);
+
+        m_state = ProviderState::kError;
+        if(m_trace_data_ready_callback)
         {
-            uint64_t uint64_result = 0;
-            result                 = rocprofvis_controller_get_uint64(
-                m_trace_future, kRPVControllerFutureResult, 0, &uint64_result);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            m_trace_data_ready_callback(m_trace_file_path, req.response_code);
+        }
+        return;
+    }
 
-            if(uint64_result != kRocProfVisResultSuccess)
-            {
-                spdlog::error("Failed to load trace file: {}, error code: {}",
-                              m_trace_file_path, uint64_result);
-                m_state = ProviderState::kError;
-                if(m_trace_data_ready_callback)
-                {
-                    m_trace_data_ready_callback(m_trace_file_path, uint64_result);
-                }
-                return;
-            }
+    // Load the system topology
+    HandleLoadSystemTopology();
 
-            // Load the system topology
-            HandleLoadSystemTopology();
+    result = rocprofvis_controller_get_object(m_trace_controller, kRPVControllerTimeline,
+                                              0, &m_trace_timeline);
 
+    // Minimap and histogram load
+    uint64_t num_buckets = 0;
+    result               = rocprofvis_controller_get_uint64(
+        m_trace_controller, kRPVControllerGetHistogramBucketsNumber, 0, &num_buckets);
+
+    // Ensure m_histogram is properly sized before
+    m_histogram.resize(num_buckets, 0.0);
+
+    std::map<uint64_t, std::tuple<std::vector<double>, bool>> histogram_minimap;
+
+    if(result == kRocProfVisResultSuccess && m_trace_timeline)
+    {
+        m_num_graphs = 0;
+        result       = rocprofvis_controller_get_uint64(
+            m_trace_timeline, kRPVControllerTimelineNumGraphs, 0, &m_num_graphs);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        m_histogram.assign(num_buckets, 0.0);
+
+        for(int graphs = 0; graphs < m_num_graphs; graphs++)
+        {
+            rocprofvis_handle_t* track;
             result = rocprofvis_controller_get_object(
-                m_trace_controller, kRPVControllerTimeline, 0, &m_trace_timeline);
+                m_trace_controller, kRPVControllerTrackIndexed, graphs, &track);
+            std::vector<double> histogram_track(num_buckets, 0.0);
 
-            // Minimap and histogram load
-            uint64_t num_buckets = 0;
-            result               = rocprofvis_controller_get_uint64(
-                m_trace_controller, kRPVControllerGetHistogramBucketsNumber, 0,
-                &num_buckets);
-
-            // Ensure m_histogram is properly sized before 
-            m_histogram.resize(num_buckets, 0.0);
-
-            std::map<uint64_t, std::tuple<std::vector<double>, bool>> histogram_minimap;
- 
-            if(result == kRocProfVisResultSuccess && m_trace_timeline)
+            for(int bin_num = 0; bin_num < num_buckets; bin_num++)
             {
-                m_num_graphs = 0;
-                result       = rocprofvis_controller_get_uint64(
-                    m_trace_timeline, kRPVControllerTimelineNumGraphs, 0, &m_num_graphs);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                double binval;
+                result = rocprofvis_controller_get_double(
+                    track, kRPVControllerTrackHistogramBucketValueIndexed, bin_num,
+                    &binval);
 
-                m_histogram.assign(num_buckets, 0.0);
-
-                for(int graphs = 0; graphs < m_num_graphs; graphs++)
-                {
-                    rocprofvis_handle_t* track;
-                    result = rocprofvis_controller_get_object(
-                        m_trace_controller, kRPVControllerTrackIndexed, graphs, &track);
-                    std::vector<double> histogram_track(num_buckets, 0.0);
-
-                    for(int bin_num = 0; bin_num < num_buckets; bin_num++)
-                    {
-                        double binval;
-                        result = rocprofvis_controller_get_double(
-                            track, kRPVControllerTrackHistogramBucketValueIndexed,
-                            bin_num, &binval);
-
-
-                        histogram_track[bin_num] = binval;
-                        m_histogram[bin_num] += binval;
-                    }
-
-                    histogram_minimap[graphs] = std::make_tuple(histogram_track, true);
-                }
-                m_mini_map = histogram_minimap;
-
-
-                // Normalize m_histogram to [0, 1]
-                double max_value =
-                    *std::max_element(m_histogram.begin(), m_histogram.end());
-                if(max_value > 0.0)
-                {
-                    for(auto& val : m_histogram)
-                    {
-                        val /= max_value;
-                    }
-                }
-
-                m_min_ts = 0;
-                result   = rocprofvis_controller_get_double(
-                    m_trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &m_min_ts);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                m_max_ts = 0;
-                result   = rocprofvis_controller_get_double(
-                    m_trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &m_max_ts);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                spdlog::debug("Timeline parameters: tracks {} min ts {} max ts {}",
-                              m_num_graphs, m_min_ts, m_max_ts);
-
-                HandleLoadTrackMetaData();
-            }
-            else
-            {
-                spdlog::error("Failed to get timeline object from controller");
-                m_state = ProviderState::kError;
-                if(m_trace_data_ready_callback)
-                {
-                    m_trace_data_ready_callback(m_trace_file_path,
-                                                result == kRocProfVisResultSuccess
-                                                    ? kRocProfVisResultUnknownError
-                                                    : result);
-                }
+                histogram_track[bin_num] = binval;
+                m_histogram[bin_num] += binval;
             }
 
-            // trace loaded successfully, free the future pointer
-            rocprofvis_controller_future_free(m_trace_future);
-            m_trace_future = nullptr;
-
-            m_state = ProviderState::kReady;
-            // fire callback
-            if(m_trace_data_ready_callback)
-            {
-                m_trace_data_ready_callback(m_trace_file_path, kRocProfVisResultSuccess);
-            }
+            histogram_minimap[graphs] = std::make_tuple(histogram_track, true);
         }
-        else
+        m_mini_map = histogram_minimap;
+
+        // Normalize m_histogram to [0, 1]
+        double max_value = *std::max_element(m_histogram.begin(), m_histogram.end());
+        if(max_value > 0.0)
         {
-            // timed out, do nothing and try again later
-            uint64_t progress_percent;
-            result = rocprofvis_controller_get_uint64(
-                m_trace_controller, kRPVControllerGetDmProgress, 0, &progress_percent);
-            if(result == kRocProfVisResultSuccess)
+            for(auto& val : m_histogram)
             {
-                if(progress_percent != m_progress_percent)
-                {
-                    GetString(m_trace_controller, kRPVControllerGetDmMessage, 0,
-                              m_progress_mesage);
-                }
-                m_progress_percent = progress_percent;
+                val /= max_value;
             }
         }
+
+        m_min_ts = 0;
+        result   = rocprofvis_controller_get_double(
+            m_trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &m_min_ts);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        m_max_ts = 0;
+        result   = rocprofvis_controller_get_double(
+            m_trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &m_max_ts);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        spdlog::debug("Timeline parameters: tracks {} min ts {} max ts {}", m_num_graphs,
+                      m_min_ts, m_max_ts);
+
+        HandleLoadTrackMetaData();
+    }
+    else
+    {
+        spdlog::error("Failed to get timeline object from controller");
+        m_state = ProviderState::kError;
+        if(m_trace_data_ready_callback)
+        {
+            m_trace_data_ready_callback(m_trace_file_path,
+                                        result == kRocProfVisResultSuccess
+                                            ? kRocProfVisResultUnknownError
+                                            : result);
+        }
+    }
+    m_state = ProviderState::kReady;
+    // fire callback
+    if(m_trace_data_ready_callback)
+    {
+        m_trace_data_ready_callback(m_trace_file_path, kRocProfVisResultSuccess);
     }
 }
 
@@ -2254,6 +2220,22 @@ DataProvider::HandleRequests()
                 ++it;
             }
         }
+
+        if(m_state == ProviderState::kLoading)
+        {
+            uint64_t            progress_percent;
+            rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+                m_trace_controller, kRPVControllerGetDmProgress, 0, &progress_percent);
+            if(result == kRocProfVisResultSuccess)
+            {
+                if(progress_percent != m_progress_percent)
+                {
+                    GetString(m_trace_controller, kRPVControllerGetDmMessage, 0,
+                              m_progress_mesage);
+                }
+                m_progress_percent = progress_percent;
+            }
+        }
     }
 }
 void
@@ -2599,6 +2581,11 @@ DataProvider::ProcessRequest(data_req_info_t& req)
         case RequestType::kSaveTrimmedTrace:
         {
             ProcessSaveTrimmedTraceRequest(req);
+            break;
+        }
+        case RequestType::kFetchTrace:
+        {
+            ProcessLoadTrace(req);
             break;
         }
         default:
@@ -3275,7 +3262,6 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
     }
     return FetchEventExtData(event_id) && FetchEventFlowDetails(event_id) &&
            FetchEventCallStackData(event_id);
-    ;
 }
 
 bool

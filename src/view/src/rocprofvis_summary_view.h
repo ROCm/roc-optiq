@@ -25,8 +25,6 @@ public:
     void Update() override;
     void Render() override;
 
-    void SetOpen(bool open);
-
 private:
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;

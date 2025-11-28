@@ -488,10 +488,11 @@ TopKernels::Render()
         const ImVec2       region     = ImGui::GetContentRegionAvail();
         const ImGuiStyle&  style      = ImGui::GetStyle();
         const ImPlotStyle& plot_style = ImPlot::GetStyle();
-        ImGui::SetCursorPos(ImVec2(region.x * 0.5f - plot_style.PlotBorderSize -
-                                       ImGui::CalcTextSize("Top Kernels").x * 0.5f,
-                                   plot_style.PlotPadding.y));
-        ImGui::TextUnformatted("Top Kernels");
+        ImGui::SetCursorPos(
+            ImVec2(region.x * 0.5f - plot_style.PlotBorderSize -
+                       ImGui::CalcTextSize("Top Kernels by Execution Time").x * 0.5f,
+                   plot_style.PlotPadding.y));
+        ImGui::TextUnformatted("Top Kernels by Execution Time");
         if(m_kernels->empty())
         {
             ImGui::GetWindowDrawList()->AddRect(

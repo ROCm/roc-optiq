@@ -9,7 +9,7 @@ jobs:
     steps:
       - name: Trigger all release build packages
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }} # Your PAT with repo and workflow scopes
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }} # Personal Access Token (PAT) with repo and workflow scopes
         run: |
           curl -f -X POST \
             -H "Accept: application/vnd.github+json" \

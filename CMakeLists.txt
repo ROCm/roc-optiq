@@ -177,7 +177,7 @@ if( NOT DEFINED BUILD_ID )
     set( BUILD_ID $ENV{BUILD_ID} )
   else()
     # Default BUILD_ID for local or development builds when not explicitly set
-    set( BUILD_ID "9999")
+    set( BUILD_ID "0")
   endif()
 endif()
 
@@ -245,7 +245,7 @@ set(DEB_VULKAN_DEPENDS_STRING "libvulkan1")
 set(DEB_GLFW_DEPENDS_STRING "libglfw3")
 set(DEB_DEPENDS_STRING "${DEB_VULKAN_DEPENDS_STRING}, ${DEB_GLFW_DEPENDS_STRING}, libc6")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
-set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/rocprofiler-visualizer")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/roc-optiq")
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 

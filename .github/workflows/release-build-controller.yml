@@ -1,0 +1,14 @@
+name: Release Build Controller
+
+on:
+  workflow_dispatch:
+
+jobs:
+  trigger-all-release-builds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger all release build packages
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: trigger-release-build

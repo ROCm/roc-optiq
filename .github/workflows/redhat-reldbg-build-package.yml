@@ -49,7 +49,7 @@ jobs:
         run: |
           source /opt/vulkan/${{ matrix.vulkan-sdk }}/setup-env.sh
           mkdir build
-          cmake -B build/linux-release-symbols --preset "linux-release-symbols" --install-prefix /opt/rocprofiler-visualizer
+          cmake -B build/linux-release-symbols --preset "linux-release-symbols"
           cmake --build build/linux-release-symbols --preset "Linux Release Build with Symbols" --parallel 4 --target package
           if [ -e build/linux-release-symbols/${{ env.VISUALIZER_FILE_NAME }} ]; then
             echo "✅ {{ env.VISUALIZER_FILE_NAME }} has been successfully built!"

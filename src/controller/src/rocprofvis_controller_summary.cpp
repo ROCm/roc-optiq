@@ -121,7 +121,7 @@ rocprofvis_result_t Summary::FetchMetrics(rocprofvis_dm_trace_t dm_handle, Futur
             for(int i = 0; i < num_nodes; i ++)
             {
                 rocprofvis_handle_t* node_handle = nullptr;
-                result = m_ctx->GetObject(kRPVControllerNodeIndexed, 0, &node_handle);
+                result = m_ctx->GetObject(kRPVControllerNodeIndexed, i, &node_handle);
                 if(result == kRocProfVisResultSuccess)
                 {
                     Node* node = (Node*)node_handle;

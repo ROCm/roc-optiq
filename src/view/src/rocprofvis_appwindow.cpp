@@ -85,7 +85,8 @@ AppWindow::AppWindow()
 , m_show_provider_test_widow(false)
 , m_show_metrics(false)
 #endif
-, m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
+, m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
+      SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit))
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
 , m_histogram_visible(true)
@@ -196,7 +197,8 @@ AppWindow::SetTabLabel(const std::string& label, const std::string& id)
 void
 AppWindow::ShowCloseConfirm()
 {
-    if(m_tab_container->GetTabs().size() == 0)
+    if(m_tab_container->GetTabs().size() == 0 ||
+       SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit)
     {
         if(m_notification_callback)
             m_notification_callback(
@@ -207,7 +209,8 @@ AppWindow::ShowCloseConfirm()
     // Only show the dialog if there are open tabs
     ShowConfirmationDialog(
         "Confirm Close",
-        "Are you sure you want to close the application? Any unsaved data will be lost.",
+        "Are you sure you want to close the application? Any "
+        "unsaved data will be lost.",
         [this]() {
             if(m_notification_callback)
                 m_notification_callback(

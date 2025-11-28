@@ -35,6 +35,8 @@ typedef struct UserSettings
 {
     DisplaySettings display_settings;
     UnitSettings    unit_settings;
+    bool            dont_ask_before_tab_closing;
+    bool            dont_ask_before_exit;
 } UserSettings;
 
 typedef struct InternalSettings
@@ -102,6 +104,7 @@ constexpr const char* JSON_KEY_VERSION = "version";
 constexpr const char* JSON_KEY_GROUP_SETTINGS             = "settings";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_DISPLAY  = "display_settings";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_UNITS    = "units";
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_OTHER    = "other";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
@@ -111,6 +114,9 @@ constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
+
+constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
+constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
 
 class SettingsManager
 {
@@ -174,6 +180,9 @@ private:
 
     void SerializeInternalSettings(jt::Json& json);
     void DeserializeInternalSettings(jt::Json& json);
+
+    void SerializeOtherSettings(jt::Json& json);
+    void DeserializeOtherSettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 

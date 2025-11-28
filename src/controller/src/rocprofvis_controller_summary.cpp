@@ -99,7 +99,7 @@ rocprofvis_result_t Summary::GetObject(rocprofvis_property_t property, uint64_t 
                 break;
             }
             default:
-           {
+            {
                 result = UnhandledProperty(property);
                 break;
             }

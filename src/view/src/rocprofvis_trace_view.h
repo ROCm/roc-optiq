@@ -25,6 +25,7 @@ class MessageDialog;
 class TraceView;
 class SettingsManager;
 class EventSearch;
+class SummaryView;
 
 class SystemTraceProjectSettings : public ProjectSetting
 {
@@ -68,7 +69,6 @@ public:
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
 
-
 private:
     void HandleHotKeys();
     void RenderToolbar();
@@ -85,6 +85,7 @@ private:
     std::shared_ptr<VSplitContainer>   m_vertical_split_container;
     std::shared_ptr<VFixedContainer>   m_timeline_container;
     std::shared_ptr<EventSearch>       m_event_search;
+    std::shared_ptr<SummaryView>       m_summary_view;
 
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_analysis_item;
@@ -113,10 +114,6 @@ private:
     std::string m_save_notification_id;
 
     std::unique_ptr<SystemTraceProjectSettings> m_project_settings;
-    // Unfortunately we should store it here because the tab appears before the view is
-    // created
-    bool m_is_analysis_visible;
-    bool m_is_sidebar_visible;
 };
 
 }  // namespace View

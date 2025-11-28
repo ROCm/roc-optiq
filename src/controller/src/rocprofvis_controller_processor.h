@@ -15,6 +15,7 @@ namespace Controller
 
 class Queue;
 class Stream;
+class Counter;
 
 class Processor : public Handle
 {
@@ -42,6 +43,7 @@ public:
 private:
     std::vector<Queue*> m_queues;
     std::vector<Stream*> m_streams;
+    std::vector<Counter*> m_counters;
     std::string m_name;
     std::string m_model_name;
     std::string m_user_name;
@@ -49,12 +51,13 @@ private:
     std::string m_vendor_name;
     std::string m_ext_data;
     std::string m_uuid;
-    std::string m_type;
+    rocprofvis_controller_processor_type_t m_type;
     uint32_t    m_id;
-    uint32_t    m_node_id;
+    uint64_t    m_node_id;
     uint32_t    m_type_index;
     uint32_t    m_index;
     uint32_t    m_logical_index;
+
 };
 
 }

@@ -168,7 +168,7 @@ EventSearch::Search()
                 { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
                   kRocProfVisDmOperationLaunchSample },
                 m_data_provider.GetStartTime(), m_data_provider.GetEndTime(), "", "", "",
-                { terms }, 0, m_fetch_chunk_size));
+                "", { terms }, 0, m_fetch_chunk_size));
             m_searched        = true;
             m_should_open     = true;
         }

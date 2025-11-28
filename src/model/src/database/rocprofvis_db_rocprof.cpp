@@ -955,12 +955,13 @@ rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_
         if(!string_ids.empty())
         {
             filter[kRocProfVisDmOperationLaunch] = " SAMPLE.id IS NULL AND R.name_id IN (" + string_ids;
-            filter[kRocProfVisDmOperationDispatch] = " K.region_name_id IN (" + string_ids;
+            filter[kRocProfVisDmOperationDispatch] = " (K.region_name_id IN (" + string_ids;
             filter[kRocProfVisDmOperationLaunchSample] = "R.name_id IN (" + string_ids;
             if(!kernel_ids.empty())
             {
                 filter[kRocProfVisDmOperationDispatch] += ") OR K.kernel_id IN (" + kernel_ids;
             }
+            filter[kRocProfVisDmOperationDispatch] += ") ";
         }
         else if(!kernel_ids.empty())
         {

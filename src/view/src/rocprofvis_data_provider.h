@@ -11,6 +11,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -35,9 +36,11 @@ enum class RequestType
     kFetchTrackEventTable,
     kFetchTrackSampleTable,
     kFetchEventSearchTable,
+    kFetchSummaryKernelInstanceTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
     kFetchEventCallStack,
+    kFetchSummary,
     kSaveTrimmedTrace,
     kTableExport,
     kFetchTrace
@@ -48,6 +51,7 @@ enum class TableType
     kSampleTable,
     kEventTable,
     kEventSearchTable,
+    kSummaryKernelTable,
     __kTableTypeCount
 };
 
@@ -134,10 +138,10 @@ typedef struct node_info_t
 
 typedef struct device_info_t
 {
-    uint64_t    id;
-    std::string product_name;
-    std::string type;        // GPU/CPU
-    uint64_t    type_index;  // GPU0, GPU1...etc
+    uint64_t                               id;
+    std::string                            product_name;
+    rocprofvis_controller_processor_type_t type;        // GPU/CPU
+    uint64_t                               type_index;  // GPU0, GPU1...etc
 } device_info_t;
 
 typedef struct process_info_t
@@ -184,6 +188,39 @@ typedef struct counter_info_t : public iterable_info_t
     std::string units;
     std::string value_type;
 } counter_info_t;
+
+typedef struct summary_info_t
+{
+    struct KernelMetrics
+    {
+        std::string name;
+        uint64_t    invocations;
+        double      exec_time_sum;
+        double      exec_time_min;
+        double      exec_time_max;
+        float       exec_time_pct;
+    };
+    struct GPUMetrics
+    {
+        std::optional<float>       gfx_utilization;
+        std::optional<float>       mem_utilization;
+        std::vector<KernelMetrics> top_kernels;
+        double                     kernel_exec_time_total;
+    };
+    struct CPUMetrics
+    {};
+    struct AggregateMetrics
+    {
+        rocprofvis_controller_summary_aggregation_level_t     type;
+        std::optional<uint64_t>                               id;
+        std::optional<std::string>                            name;
+        std::optional<rocprofvis_controller_processor_type_t> device_type;
+        std::optional<uint64_t>                               device_type_index;
+        GPUMetrics                                            gpu;
+        CPUMetrics                                            cpu;
+        std::vector<AggregateMetrics>                         sub_metrics;
+    };
+} summary_info_t;
 
 class RequestParamsBase
 {
@@ -232,7 +269,8 @@ public:
     uint64_t m_req_row_count;      // number of rows requested
     uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
-    std::string                        m_filter;
+    std::string                        m_where;       // SQL where clause
+    std::string                        m_filter;      // CMD filter
     std::vector<std::string>
                 m_string_table_filters;  // strings to use for string table filtering.
     std::string m_group;
@@ -247,9 +285,10 @@ public:
         rocprofvis_controller_table_type_t                  table_type,
         const std::vector<uint64_t>&                        track_ids,
         const std::vector<rocprofvis_dm_event_operation_t>& op_types, double start_ts,
-        double end_ts, char const* filter, char const* group, char const* group_cols,
-        const std::vector<std::string> string_table_filters = {}, uint64_t start_row = -1,
-        uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
+        double end_ts, const char* where, char const* filter, char const* group,
+        char const* group_cols, const std::vector<std::string> string_table_filters = {},
+        uint64_t start_row = -1, uint64_t req_row_count = -1,
+        uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
         std::string export_to_file_path = "", bool summary = false)
     : m_table_type(table_type)
@@ -261,6 +300,7 @@ public:
     , m_req_row_count(req_row_count)
     , m_sort_column_index(sort_column_index)
     , m_sort_order(sort_order)
+    , m_where(where)
     , m_filter(filter)
     , m_group(group)
     , m_group_columns(group_cols)
@@ -349,6 +389,8 @@ public:
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
     static const uint64_t FETCH_TRACE_REQUEST_ID;
+    static const uint64_t SUMMARY_REQUEST_ID;
+    static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
 
     DataProvider();
     ~DataProvider();
@@ -469,6 +511,8 @@ public:
 
     bool FetchTable(const TableRequestParams& table_params);
 
+    bool FetchSummary();
+
     bool IsRequestPending(uint64_t request_id) const;
 
     /*
@@ -578,6 +622,8 @@ public:
     const std::vector<formatted_column_info_t>&  GetFormattedTableData(TableType type);
     std::vector<formatted_column_info_t>& GetMutableFormattedTableData(TableType type);
 
+    const summary_info_t::AggregateMetrics& GetSummaryInfo() const;
+
     const char* GetProgressMessage();
 
     void SetTrackMetadataChangedCallback(
@@ -587,6 +633,7 @@ public:
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>&
             callback);
+    void SetSummaryDataReadyCallback(const std::function<void()>& callback);
     void SetTraceLoadedCallback(
         const std::function<void(const std::string&, uint64_t)>& callback);
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
@@ -619,6 +666,7 @@ private:
     void ProcessTableRequest(data_req_info_t& req);
     void ProcessTableExportRequest(data_req_info_t& req);
     void ProcessSaveTrimmedTraceRequest(data_req_info_t& req);
+    void ProcessSummaryRequest(data_req_info_t& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
@@ -626,6 +674,8 @@ private:
     void CreateRawEventData(const TrackRequestParams& params, const data_req_info_t& req);
     void CreateRawSampleData(const TrackRequestParams& params,
                              const data_req_info_t&    req);
+    void CreateSummaryData(rocprofvis_handle_t* metrics_handle,
+                           std::vector<size_t>& sub_metrics_idx);
 
     rocprofvis_result_t GetString(rocprofvis_handle_t*  handle,
                                   rocprofvis_property_t property, uint64_t index,
@@ -660,6 +710,8 @@ private:
     // Store table_info_t for each TableType in a vector
     std::vector<table_info_t> m_table_infos;
 
+    summary_info_t::AggregateMetrics m_summary_info;
+
     std::unordered_map<int64_t, data_req_info_t> m_requests;
 
     // Global Histogram Vector
@@ -676,6 +728,8 @@ private:
         m_track_data_ready_callback;
     // Called when a new trace is loaded
     std::function<void(const std::string&, uint64_t)> m_trace_data_ready_callback;
+    // Called when summary data has changed
+    std::function<void()> m_summary_data_ready_callback;
     // Callback when trace is saved
     std::function<void(bool)> m_save_trace_callback;
     // Callback when table export has completed

@@ -103,7 +103,7 @@ TrackTopology::UpdateTopology()
                     if(device_info)
                     {
                         m_topology.nodes[i].info_table.cells.emplace_back(std::vector{
-                            InfoTable::Cell{ device_info->type + " " +
+                            InfoTable::Cell{ DeviceTypeString(device_info->type) + " " +
                                                  std::to_string(device_info->type_index),
                                              false },
                             InfoTable::Cell{ device_info->product_name, false } });
@@ -167,7 +167,8 @@ TrackTopology::UpdateTopology()
                                         .queues[k]
                                         .info_table = InfoTable{
                                         { { InfoTable::Cell{
-                                                device_info->type + " " +
+                                                DeviceTypeString(device_info->type) +
+                                                    " " +
                                                     std::to_string(
                                                         device_info->type_index),
                                                 false },
@@ -201,7 +202,8 @@ TrackTopology::UpdateTopology()
                                         .streams[k]
                                         .info_table = InfoTable{
                                         { { InfoTable::Cell{
-                                                device_info->type + " " +
+                                                DeviceTypeString(device_info->type) +
+                                                    " " +
                                                     std::to_string(
                                                         device_info->type_index),
                                                 false },
@@ -337,7 +339,8 @@ TrackTopology::UpdateTopology()
                                         .counters[k]
                                         .info_table.cells.push_back(
                                             { InfoTable::Cell{
-                                                  device_info->type + " " +
+                                                  DeviceTypeString(device_info->type) +
+                                                      " " +
                                                       std::to_string(
                                                           device_info->type_index),
                                                   false },
@@ -454,6 +457,27 @@ TrackTopology::FormatTimeCell(const std::string& raw, std::string& formatted_out
 
     formatted_out = nanosecond_to_formatted_str(std::stod(raw), time_format, true);
     return true;
+}
+
+std::string
+TrackTopology::DeviceTypeString(
+    const rocprofvis_controller_processor_type_t& device_type) const
+{
+    switch(device_type)
+    {
+        case kRPVControllerProcessorTypeGPU:
+        {
+            return "GPU";
+        }
+        case kRPVControllerProcessorTypeCPU:
+        {
+            return "CPU";
+        }
+        default:
+        {
+            return "Undefined";
+        }
+    }
 }
 
 void

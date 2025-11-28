@@ -10,6 +10,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr float PI = 3.14159265358979323846f;  // Define PI constant
+
 void
 RenderLoadingIndicatorDots(float dot_radius, int num_dots, float spacing,
                            ImU32 color, float speed);

@@ -191,7 +191,7 @@ Node::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
     {
         case kRPVControllerNodeId:
         {
-            m_id   = static_cast<uint32_t>(value);
+            m_id   = value;
             result = kRocProfVisResultSuccess;
             break;
         }

@@ -42,6 +42,7 @@ protected:
 
     std::vector<ColumnDefintion> m_columns;
     std::map<uint64_t, std::vector<Data>> m_rows;
+    std::string m_where;
     std::string m_filter;
     std::string m_group;
     std::string m_group_cols;

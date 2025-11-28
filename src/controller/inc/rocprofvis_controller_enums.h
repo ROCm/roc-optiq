@@ -105,7 +105,11 @@ typedef enum rocprofvis_controller_object_type_t
     // Stream object
     kRPVControllerObjectTypeStream = 22,
     // Counter metadata object
-    kRPVControllerObjectTypeCounter = 23
+    kRPVControllerObjectTypeCounter = 23,
+    // Summary controller object
+    kRPVControllerObjectTypeSummary = 24,
+    // Summary metrics container object
+    kRPVControllerObjectTypeSummaryMetrics = 25,
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -177,6 +181,8 @@ typedef enum rocprofvis_controller_properties_t : uint32_t
     kRPVControllerBucketDataValueIndexed,
     // Global event search table controller
     kRPVControllerSearchResultsTable,
+    // Global summary view controller
+    kRPVControllerSummary,
     __kRPVControllerPropertiesLast
 } rocprofvis_controller_properties_t;
 /* JSON: RPVController
@@ -313,8 +319,10 @@ typedef enum rocprofvis_controller_processor_properties_t : uint32_t
     kRPVControllerProcessorNodeId,
     kRPVControllerProcessorNumQueues,
     kRPVControllerProcessorNumStreams,
+    kRPVControllerProcessorNumCounters,
     kRPVControllerProcessorQueueIndexed,
     kRPVControllerProcessorStreamIndexed,
+    kRPVControllerProcessorCounterIndexed,
     kRPVControllerProcessorIndex,
     kRPVControllerProcessorLogicalIndex,
     __kRPVControllerProcessorPropertiesLast
@@ -334,6 +342,13 @@ typedef enum rocprofvis_controller_processor_properties_t : uint32_t
     node_id: Int
 }
 */
+
+typedef enum rocprofvis_controller_processor_type_t
+{
+    kRPVControllerProcessorTypeUndefined = 0,
+    kRPVControllerProcessorTypeGPU       = 1,
+    kRPVControllerProcessorTypeCPU       = 2,
+} rocprofvis_controller_processor_type_t;
 
 typedef enum rocprofvis_controller_thread_properties_t : uint32_t
 {
@@ -821,21 +836,23 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
     kRPVControllerTableArgsSortOrder                 = 0xE0000006,
     kRPVControllerTableArgsStartIndex                = 0xE0000007,
     kRPVControllerTableArgsStartCount                = 0xE0000008,
-    kRPVControllerTableArgsFilter                    = 0xE0000009,
-    kRPVControllerTableArgsGroup                     = 0xE000000A,
-    kRPVControllerTableArgsGroupColumns              = 0xE000000B,
-    kRPVControllerTableArgsNumOpTypes                = 0xE000000C,
-    kRPVControllerTableArgsOpTypesIndexed            = 0xE000000D,
-    kRPVControllerTableArgsNumStringTableFilters     = 0xE000000E,
-    kRPVControllerTableArgsStringTableFiltersIndexed = 0xE000000F,
-    kRPVControllerTableArgsSummary                   = 0xE0000010,   
+    kRPVControllerTableArgsWhere                     = 0xE0000009,
+    kRPVControllerTableArgsFilter                    = 0xE000000A,
+    kRPVControllerTableArgsGroup                     = 0xE000000B,
+    kRPVControllerTableArgsGroupColumns              = 0xE000000C,
+    kRPVControllerTableArgsNumOpTypes                = 0xE000000D,
+    kRPVControllerTableArgsOpTypesIndexed            = 0xE000000E,
+    kRPVControllerTableArgsNumStringTableFilters     = 0xE000000F,
+    kRPVControllerTableArgsStringTableFiltersIndexed = 0xE0000010,
+    kRPVControllerTableArgsSummary                   = 0xE0000011,   
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t
 {
-    kRPVControllerTableTypeEvents        = 0xF0000000,
-    kRPVControllerTableTypeSamples       = 0xF0000001,
-    kRPVControllerTableTypeSearchResults = 0xF0000002,
+    kRPVControllerTableTypeEvents                 = 0xF0000000,
+    kRPVControllerTableTypeSamples                = 0xF0000001,
+    kRPVControllerTableTypeSearchResults          = 0xF0000002,
+    kRPVControllerTableTypeSummaryKernelInstances = 0xF0000003,
 } rocprofvis_controller_table_type_t;
 
 /*
@@ -894,6 +911,74 @@ typedef enum rocprofvis_controller_extdata_properties_t : uint32_t
     value: String,
 }
 */
+
+/*
+ * Properties for the summary controller
+ */
+typedef enum rocprofvis_controller_summary_properties_t : uint32_t
+{
+    __kRPVControllerSummaryPropertiesFirst = 0xE0000000,
+    kRPVControllerSummaryPropertyKernelInstanceTable = __kRPVControllerSummaryPropertiesFirst,
+    __kRPVControllerSummaryPropertiesLast
+} rocprofvis_controller_summary_properties_t;
+
+/*
+ * Properties for the summary metrics container
+ */
+typedef enum rocprofvis_controller_summary_metric_properties_t : uint32_t
+{
+    __kRPVControllerSummaryMetricPropertiesFirst = 0xF0000000,
+    // [Mandatory] Aggregation level (rocprofvis_controller_summary_aggregation_level_t)
+    kRPVControllerSummaryMetricPropertyAggregationLevel = __kRPVControllerSummaryMetricPropertiesFirst,
+    // [Mandatory] Number of child/sub-metrics
+    kRPVControllerSummaryMetricPropertyNumSubMetrics,
+    // [Mandatory] Indexed child/sub-metrics objects
+    kRPVControllerSummaryMetricPropertySubMetricsIndexed,
+    // [Optional] Level specific id (node id, processor id)
+    kRPVControllerSummaryMetricPropertyId,
+    // [Optional] Level specific name (node name, processor name)
+    kRPVControllerSummaryMetricPropertyName,
+    // [Optional] Processor level specific type (rocprofvis_controller_processor_type_t)
+    kRPVControllerSummaryMetricPropertyProcessorType,
+    // [Optional] Processor level specific type index (GPU 0, 1, CPU 0, CPU 1...etc)
+    kRPVControllerSummaryMetricPropertyProcessorTypeIndex,
+    // [Optional] Processor level gpu specific metrics...
+    kRPVControllerSummaryMetricPropertyGpuGfxUtil,
+    kRPVControllerSummaryMetricPropertyGpuMemUtil,
+    // [Optional, Mandatory if GPU processor level] Number of top kernels
+    kRPVControllerSummaryMetricPropertyNumKernels,
+    // [Optional, Mandatory if GPU processor level] Total execution time for all kernels
+    kRPVControllerSummaryMetricPropertyKernelsExecTimeTotal,
+    // [Optional, Mandatory if GPU processor level] Indexed top kernel properties/metrics...
+    kRPVControllerSummaryMetricPropertyKernelNameIndexed,
+    kRPVControllerSummaryMetricPropertyKernelInvocationsIndexed,
+    kRPVControllerSummaryMetricPropertyKernelExecTimeSumIndexed,
+    kRPVControllerSummaryMetricPropertyKernelExecTimeMinIndexed,
+    kRPVControllerSummaryMetricPropertyKernelExecTimeMaxIndexed,
+    kRPVControllerSummaryMetricPropertyKernelExecTimePctIndexed,
+    __kRPVControllerSummaryMetricPropertiesLast
+} rocprofvis_controller_summary_metric_properties_t;
+
+/*
+ * Aggregation levels for summary metrics container
+ */
+typedef enum rocprofvis_controller_summary_aggregation_level_t : uint32_t
+{
+    __kRPVControllerSummaryAggregationLevelFirst = 0x11000000,
+    kRPVControllerSummaryAggregationLevelTrace = __kRPVControllerSummaryAggregationLevelFirst,
+    kRPVControllerSummaryAggregationLevelNode,
+    kRPVControllerSummaryAggregationLevelProcessor,
+    __kRPVControllerSummaryAggregationLevelLast
+} rocprofvis_controller_summary_aggregation_level_t;
+
+/*
+ * Arguments to fetch summary metrics from the summary controller
+ */
+typedef enum rocprofvis_controller_summary_arguments_t : uint32_t
+{
+    kRPVControllerSummaryArgsStartTimestamp = 0x12000000,
+    kRPVControllerSummaryArgsEndTimestamp,
+} rocprofvis_controller_summary_arguments_t;
 
 typedef enum rocprofvis_controller_sort_order_t
 {

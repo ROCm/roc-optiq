@@ -11,6 +11,7 @@
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_sidebar.h"
+#include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_track_topology.h"
@@ -39,8 +40,7 @@ TraceView::TraceView()
 , m_annotations(nullptr)
 , m_settings_manager(SettingsManager::GetInstance())
 , m_event_search(nullptr)
-, m_is_sidebar_visible(true)
-, m_is_analysis_visible(true)
+, m_summary_view(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -133,6 +133,11 @@ TraceView::TraceView()
 TraceView::~TraceView()
 {
     m_data_provider.SetTrackDataReadyCallback(nullptr);
+    m_data_provider.SetTrackMetadataChangedCallback(nullptr);
+    m_data_provider.SetTableDataReadyCallback(nullptr);
+    m_data_provider.SetTraceLoadedCallback(nullptr);
+    m_data_provider.SetSaveTraceCallback(nullptr);
+
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
     EventManager::GetInstance()->Unsubscribe(
@@ -185,6 +190,10 @@ TraceView::Update()
     {
         m_event_search->Update();
     }
+    if(m_summary_view)
+    {
+        m_summary_view->Update();
+    }
 }
 
 void
@@ -196,6 +205,8 @@ TraceView::CreateView()
     m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection, m_annotations);
+    m_event_search          = std::make_shared<EventSearch>(m_data_provider);
+    m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
         [this]() { m_timeline_view->RenderHistogram(); });
 
@@ -204,17 +215,18 @@ TraceView::CreateView()
                                   m_timeline_view->GetGraphs(), m_data_provider);
     auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                    m_timeline_selection, m_annotations);
-    m_event_search = std::make_shared<EventSearch>(m_data_provider);
 
-    m_sidebar_item                 = LayoutItem::CreateFromWidget(sidebar);
-    m_sidebar_item->m_visible      = m_is_sidebar_visible;
+    m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);
+    m_sidebar_item->m_visible = m_settings_manager.GetAppWindowSettings().show_sidebar;
     m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
-    m_analysis_item            = LayoutItem::CreateFromWidget(analysis);
-    m_analysis_item->m_visible = m_is_analysis_visible;
+    m_analysis_item = LayoutItem::CreateFromWidget(analysis);
+    m_analysis_item->m_visible =
+        m_settings_manager.GetAppWindowSettings().show_details_panel;
 
     LayoutItem m_histogram_item(0, 80);
     m_histogram_item.m_item = m_histogram_widget;
+    m_histogram_item.m_visible = m_settings_manager.GetAppWindowSettings().show_histogram;
     LayoutItem timeline_item(0, 0);
     timeline_item.m_item = m_timeline_view;
 
@@ -339,6 +351,11 @@ TraceView::Render()
             ImGui::EndPopup();
         }
     }
+
+    if(m_summary_view)
+    {
+        m_summary_view->Render();
+    }
 }
 
 void
@@ -351,7 +368,9 @@ TraceView::HandleHotKeys()
     // Don’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
     // InputText) or a pop up is open
     if(io.WantTextInput || ImGui::IsAnyItemActive() ||
-       ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
+       !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) ||
+       ImGui::IsPopupOpen("",
+                          ImGuiPopupFlags_AnyPopup | ImGuiHoveredFlags_NoPopupHierarchy))
     {
         return;
     }
@@ -470,7 +489,7 @@ std::shared_ptr<RocWidget>
 TraceView::GetToolbar()
 {
     return m_tool_bar;
-};
+}
 
 void
 TraceView::RenderEditMenuOptions()
@@ -501,15 +520,19 @@ TraceView::RenderEditMenuOptions()
 void
 TraceView::SetAnalysisViewVisibility(bool visibility)
 {
-    m_is_analysis_visible = visibility;
-    if(m_analysis_item) m_analysis_item->m_visible = m_is_analysis_visible;
+    if(m_analysis_item)
+    {
+        m_analysis_item->m_visible = visibility;
+    }
 }
 
 void
 TraceView::SetSidebarViewVisibility(bool visibility)
 {
-    m_is_sidebar_visible = visibility;
-    if(m_sidebar_item) m_sidebar_item->m_visible = visibility;
+    if(m_sidebar_item)
+    {
+        m_sidebar_item->m_visible = visibility;
+    }
 }
 
 void

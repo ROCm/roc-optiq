@@ -1,4 +1,4 @@
-name: Release Build Controller
+name: Release Build Launcher
 
 on:
   workflow_dispatch:
@@ -16,4 +16,3 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
             -d '{"event_type":"trigger-release-build"}'
-

@@ -52,6 +52,7 @@ protected:
     };
     struct FilterOptions
     {
+		char        where[256];
         std::string group_by;
         char        group_columns[256];
         char        filter[256];

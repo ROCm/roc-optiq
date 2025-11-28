@@ -7,8 +7,6 @@
 #include <cmath>
 #include <algorithm>
 
-constexpr float PI = 3.14159265358979323846f;  // Define PI constant
-
 ImVec2
 RocProfVis::View::MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
                                               float spacing)
@@ -72,7 +70,7 @@ RocProfVis::View::IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
     }
     if(frameless)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, 0);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
         ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(0, 0, 0, 0));

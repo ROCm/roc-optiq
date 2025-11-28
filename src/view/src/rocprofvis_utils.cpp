@@ -15,7 +15,7 @@ RocProfVis::View::nanosecond_to_str(double time_point_ns, bool include_units) {
     oss << static_cast<uint64_t>(time_point_ns);
     if(include_units)
     {
-        oss << " ns";
+        oss << " " << timeformat_sufix(TimeFormat::kNanoseconds);
     }
     return oss.str();
 }
@@ -31,7 +31,7 @@ RocProfVis::View::nanosecond_to_us_str(double ns, bool include_units)
     oss << us_uint << '.' << std::setw(3) << std::setfill('0') << ns_rem;
     if(include_units)
     {
-        oss << " us";
+        oss << " " << timeformat_sufix(TimeFormat::kMicroseconds);
     }
     return oss.str();
 }
@@ -47,7 +47,7 @@ RocProfVis::View::nanosecond_to_ms_str(double ns, bool include_units)
     oss << ms_uint << '.' << std::setw(6) << std::setfill('0') << ns_rem;
     if(include_units)
     {
-        oss << " ms";
+        oss << " " << timeformat_sufix(TimeFormat::kMilliseconds);
     }
     return oss.str();
 }
@@ -63,7 +63,7 @@ RocProfVis::View::nanosecond_to_s_str(double ns, bool include_units)
     oss << s_uint << '.' << std::setw(9) << std::setfill('0') << ns_rem;
     if(include_units)
     { 
-        oss << " s";
+        oss << " " << timeformat_sufix(TimeFormat::kSeconds);
     }
     return oss.str();
 }
@@ -193,6 +193,26 @@ RocProfVis::View::nanosecond_str_to_formatted_str(const std::string& time_str, d
     }
 
     return nanosecond_to_formatted_str(time_ns - offset_ns, time_format, include_units);
+}
+
+std::string
+RocProfVis::View::timeformat_sufix(TimeFormat format)
+{
+    switch(format)
+    {
+        case TimeFormat::kTimecode:
+        case TimeFormat::kTimecodeCondensed:
+            return "timecode";
+        case TimeFormat::kSeconds:
+            return "s";
+        case TimeFormat::kMilliseconds:
+            return "ms";
+        case TimeFormat::kMicroseconds:
+            return "us";
+        case TimeFormat::kNanoseconds:
+        default: 
+            return "ns";
+    }
 }
 
 double 

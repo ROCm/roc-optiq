@@ -137,6 +137,7 @@ main(int, char**)
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+                io.ConfigWindowsMoveFromTitleBarOnly = true;
 
                 ImGui::StyleColorsLight();
 

@@ -39,6 +39,7 @@ void SystemTable::Reset()
     m_columns.clear();
     m_rows.clear();
     m_tracks.clear();
+    m_where.clear();
     m_filter.clear();
     m_group.clear();
     m_group_cols.clear();
@@ -59,7 +60,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
 
         char* fetch_query = nullptr;
         rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
-            db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), sort_column,
+            db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_where.c_str(),  m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), sort_column,
             (rocprofvis_dm_sort_order_t)m_sort_order, m_string_table_filters_ptr.size(), m_string_table_filters_ptr.data(), 
             count, index, false, m_summary, &fetch_query);
         rocprofvis_dm_table_id_t table_id = 0;
@@ -216,9 +217,9 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
         m_sort_column = query_args.m_sort_column;
         m_sort_order  = (rocprofvis_controller_sort_order_t)query_args.m_sort_order;
         if(m_tracks.size() == query_args.m_tracks.size() && m_start_ts == query_args.m_start_ts &&
-           m_end_ts == query_args.m_end_ts && m_filter == query_args.m_filter && m_group == query_args.m_group &&
-           m_group_cols == query_args.m_group_cols && m_string_table_filters == query_args.m_string_table_filters &&
-           m_summary == query_args.m_summary)
+           m_end_ts == query_args.m_end_ts && m_where == query_args.m_where && m_filter == query_args.m_filter && 
+           m_group == query_args.m_group && m_group_cols == query_args.m_group_cols && 
+           m_string_table_filters == query_args.m_string_table_filters && m_summary == query_args.m_summary)
         {
             bool tracks_all_same = true;
             for (int i = 0; i < query_args.m_tracks.size(); i++)
@@ -241,6 +242,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
         m_start_ts    = query_args.m_start_ts;
         m_end_ts      = query_args.m_end_ts;
         m_track_type  = query_args.m_track_type;
+        m_where       = query_args.m_where;
         m_filter      = query_args.m_filter;
         m_group       = query_args.m_group;
         m_group_cols  = query_args.m_group_cols;
@@ -262,7 +264,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
 
             char*                  count_query = nullptr;
             rocprofvis_dm_result_t dm_result   = rocprofvis_db_build_table_query(
-                db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), nullptr,
+                db, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_where.c_str(), m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), nullptr,
                 (rocprofvis_dm_sort_order_t) m_sort_order, m_string_table_filters_ptr.size(), m_string_table_filters_ptr.data(), 
                 0, 0, true, m_summary, &count_query);
             rocprofvis_dm_table_id_t table_id = 0;
@@ -377,9 +379,9 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
 
             char* query = nullptr;
             rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
-                db, query_args.m_start_ts, query_args.m_end_ts, (rocprofvis_db_num_of_tracks_t)query_args.m_tracks.size(), query_args.m_tracks.data(), query_args.m_filter.c_str(), query_args.m_group.c_str(), query_args.m_group_cols.c_str(), sort_column,
-                (rocprofvis_dm_sort_order_t)query_args.m_sort_order, (rocprofvis_dm_num_string_table_filters_t)string_table_filters_ptr.size(), string_table_filters_ptr.data(), 
-                0, 0, false, query_args.m_summary, &query);
+                db, query_args.m_start_ts, query_args.m_end_ts, (rocprofvis_db_num_of_tracks_t)query_args.m_tracks.size(), query_args.m_tracks.data(), query_args.m_where.c_str(), 
+                query_args.m_filter.c_str(), query_args.m_group.c_str(), query_args.m_group_cols.c_str(), sort_column, (rocprofvis_dm_sort_order_t)query_args.m_sort_order, 
+                (rocprofvis_dm_num_string_table_filters_t)string_table_filters_ptr.size(), string_table_filters_ptr.data(), 0, 0, false, query_args.m_summary, &query);
             if(dm_result == kRocProfVisDmResultSuccess)
             {
                 dm_result = rocprofvis_db_export_table_csv_async(db, query, path, object2wait);
@@ -482,6 +484,7 @@ SystemTable::UnpackArguments(Arguments& args, QueryArguments& out) const
     uint64_t num_op_types = 0;
     double   end_ts     = 0;
     double   start_ts   = 0;
+    std::string where;
     std::string filter;
     std::string group;
     std::string group_cols;
@@ -499,6 +502,7 @@ SystemTable::UnpackArguments(Arguments& args, QueryArguments& out) const
         {
             case kRPVControllerTableTypeEvents:
             case kRPVControllerTableTypeSearchResults:
+            case kRPVControllerTableTypeSummaryKernelInstances:
             {
                 track_type = kRPVControllerTrackTypeEvents;
 
@@ -521,7 +525,8 @@ SystemTable::UnpackArguments(Arguments& args, QueryArguments& out) const
     if(result == kRocProfVisResultSuccess &&
        (table_type == kRPVControllerTableTypeEvents ||
         table_type == kRPVControllerTableTypeSamples ||
-        table_type == kRPVControllerTableTypeSearchResults))
+        table_type == kRPVControllerTableTypeSearchResults ||
+        table_type == kRPVControllerTableTypeSummaryKernelInstances))
     {
         if(result == kRocProfVisResultSuccess)
         {
@@ -600,6 +605,16 @@ SystemTable::UnpackArguments(Arguments& args, QueryArguments& out) const
     if(result == kRocProfVisResultSuccess)
     {
         uint32_t length = 0;
+        result = args.GetString(kRPVControllerTableArgsWhere, 0, nullptr, &length);
+        if(result == kRocProfVisResultSuccess)
+        {
+            where.resize(length);
+            result = args.GetString(kRPVControllerTableArgsWhere, 0, where.data(), &length);
+        }
+    }
+    if(result == kRocProfVisResultSuccess)
+    {
+        uint32_t length = 0;
         result = args.GetString(kRPVControllerTableArgsFilter, 0, nullptr, &length);
         if(result == kRocProfVisResultSuccess)
         {
@@ -659,7 +674,7 @@ SystemTable::UnpackArguments(Arguments& args, QueryArguments& out) const
         }
     }
 
-    out = {filter, group, group_cols, sort_column, (rocprofvis_controller_sort_order_t)sort_order, tracks, track_type, std::move(string_table_filters), summary, start_ts, end_ts};
+    out = {where, filter, group, group_cols, sort_column, (rocprofvis_controller_sort_order_t)sort_order, tracks, track_type, std::move(string_table_filters), summary, start_ts, end_ts};
     
 	return result;
 }

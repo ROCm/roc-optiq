@@ -172,7 +172,9 @@ LineTrackItem::BoxPlotRender(float graph_width)
         ImVec2 point_1 =
             MapToUI(m_data[i - 1], cursor_position, content_size, m_scale_x, scale_y);
         if(ImGui::IsMouseHoveringRect(ImVec2(point_1.x - 10, point_1.y - 10),
-                                      ImVec2(point_1.x + 10, point_1.y + 10)) &&
+                                      ImVec2(point_1.x + 10, point_1.y + 10)) && 
+		   ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
+                                  ImGuiHoveredFlags_NoPopupHierarchy) &&
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             tooltip_x    = m_data[i - 1].x_value - m_min_x;

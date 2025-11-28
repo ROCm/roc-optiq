@@ -41,6 +41,7 @@ public:
 private:
     struct QueryArguments
     {
+        std::string m_where;
         std::string m_filter;
         std::string m_group;
         std::string m_group_cols;

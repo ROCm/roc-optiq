@@ -419,6 +419,7 @@ SettingsManager::SettingsManager()
 , m_usersettings_default(
       { DisplaySettings{ false, true, 6 }, UnitSettings{ TimeFormat::kTimecode } })
 , m_usersettings(m_usersettings_default)
+, m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_display_dpi(1.5f)
 , m_json_path(GetStandardConfigPath())
 {}
@@ -481,6 +482,16 @@ SettingsManager::InitStyling()
     style.WindowPadding = ImVec2(4, 4);
 
     m_default_style = style;  // Store the our customized style
+
+    std::vector<ImU32> colormap;
+    for(const ImU32& flame_color : GetColorWheel())
+    {
+        colormap.push_back(255 << IM_COL32_A_SHIFT | flame_color);
+    }
+    colormap.push_back(IM_COL32(220, 50, 50, 255));
+    ImPlot::AddColormap("flame", colormap.data(), colormap.size());
+    colormap = { IM_COL32(255, 255, 255, 255), IM_COL32(255, 255, 255, 255) };
+    ImPlot::AddColormap("white", colormap.data(), colormap.size());
 }
 
 const ImGuiStyle&
@@ -499,6 +510,12 @@ InternalSettings&
 SettingsManager::GetInternalSettings()
 {
     return m_internalsettings;
+}
+
+AppWindowSettings&
+SettingsManager::GetAppWindowSettings()
+{
+    return m_appwindowsettings;
 }
 
 void

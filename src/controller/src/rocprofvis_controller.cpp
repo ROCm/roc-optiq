@@ -18,6 +18,8 @@
 #include "rocprofvis_controller_table.h"
 #include "rocprofvis_controller_plot.h"
 #include "rocprofvis_controller_json_trace.h"
+#include "rocprofvis_controller_summary.h"
+#include "rocprofvis_controller_summary_metrics.h"
 #include "rocprofvis_core_assert.h"
 
 #include <cstring>
@@ -36,6 +38,8 @@ typedef Reference<rocprofvis_controller_future_t, Future, kRPVControllerObjectTy
 typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectTypeGraph> GraphRef;
 typedef Reference<rocprofvis_controller_table_t, Table, kRPVControllerObjectTypeTable> TableRef;
 typedef Reference<rocprofvis_controller_arguments_t, Arguments, kRPVControllerObjectTypeArguments> ArgumentsRef;
+typedef Reference<rocprofvis_controller_table_t, Summary, kRPVControllerObjectTypeSummary> SummaryRef;
+typedef Reference<rocprofvis_controller_summary_metrics_t, SummaryMetrics, kRPVControllerObjectTypeSummaryMetrics> SummaryMetricsRef;
 #ifdef COMPUTE_UI_SUPPORT
 typedef Reference<rocprofvis_controller_plot_t, Plot, kRPVControllerObjectTypePlot> PlotRef;
 #endif
@@ -192,6 +196,11 @@ rocprofvis_controller_arguments_t* rocprofvis_controller_arguments_alloc(void)
     rocprofvis_controller_arguments_t* args = (rocprofvis_controller_arguments_t*)new RocProfVis::Controller::Arguments();
     return args;
 }
+rocprofvis_controller_summary_metrics_t* rocprofvis_controller_summary_metrics_alloc(void)
+{
+    rocprofvis_controller_summary_metrics_t* args = (rocprofvis_controller_summary_metrics_t*)new RocProfVis::Controller::SummaryMetrics();
+    return args;
+}
 rocprofvis_result_t rocprofvis_controller_future_wait(rocprofvis_controller_future_t* object, float timeout)
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
@@ -285,6 +294,7 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
     }
     return error;
 }
+
 rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table,
     rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result,
@@ -322,6 +332,25 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(
     return error;
 }
 
+rocprofvis_result_t rocprofvis_controller_summary_fetch_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_summary_t* summary,
+    rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result,
+    rocprofvis_controller_summary_metrics_t* output)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::SummaryRef summary_ref(summary);
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::SummaryMetricsRef output_ref(output);
+    if (trace.IsValid() && summary_ref.IsValid() && args_ref.IsValid() && future.IsValid() &&
+        output_ref.IsValid())
+    {
+        error = trace->AsyncFetch(*summary_ref, *args_ref, *future, *output_ref);
+    }
+    return error;
+}
+
 #ifdef COMPUTE_UI_SUPPORT
 rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_plot_t* plot,
@@ -342,6 +371,15 @@ rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
     return error;
 }
 #endif
+
+void rocprofvis_controller_summary_metric_free(rocprofvis_controller_summary_metrics_t* object)
+{
+    RocProfVis::Controller::SummaryMetricsRef summary_metrics(object);
+    if(summary_metrics.IsValid())
+    {
+        delete summary_metrics.Get();
+    }
+}
 
 void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* args)
 {

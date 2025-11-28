@@ -4,6 +4,7 @@
 #include "rocprofvis_controller_processor.h"
 #include "rocprofvis_controller_stream.h"
 #include "rocprofvis_controller_queue.h"
+#include "rocprofvis_controller_counter.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
 
@@ -16,10 +17,13 @@ typedef Reference<rocprofvis_controller_queue_t, Queue, kRPVControllerObjectType
     QueueRef;
 typedef Reference<rocprofvis_controller_stream_t, Stream, kRPVControllerObjectTypeStream>
     StreamRef;
+typedef Reference<rocprofvis_controller_counter_t, Counter, kRPVControllerObjectTypeCounter>
+    CounterRef;
 
 Processor::Processor()
 : Handle(__kRPVControllerProcessorPropertiesFirst,
          __kRPVControllerProcessorPropertiesLast)
+, m_type(kRPVControllerProcessorTypeUndefined)
 {}
 
 Processor::~Processor() {}
@@ -81,6 +85,18 @@ Processor::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* v
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerProcessorNumCounters:
+            {
+                *value = m_counters.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerProcessorType:
+            {
+                *value = static_cast<uint64_t>(m_type);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             default:
             {
                 result = UnhandledProperty(property);
@@ -118,6 +134,19 @@ Processor::GetObject(rocprofvis_property_t property, uint64_t index,
                 if(index < m_streams.size())
                 {
                     *value = (rocprofvis_handle_t*) m_streams[index];
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerProcessorCounterIndexed:
+            {
+                if(index < m_counters.size())
+                {
+                    *value = (rocprofvis_handle_t*) m_counters[index];
                     result = kRocProfVisResultSuccess;
                 }
                 else
@@ -179,11 +208,6 @@ Processor::GetString(rocprofvis_property_t property, uint64_t index, char* value
             result = GetStdStringImpl(value, length, m_uuid);
             break;
         }
-        case kRPVControllerProcessorType:
-        {
-            result = GetStdStringImpl(value, length, m_type);
-            break;
-        }
         default:
         {
             result = UnhandledProperty(property);
@@ -226,7 +250,7 @@ Processor::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t va
         }
         case kRPVControllerProcessorNodeId:
         {
-            m_node_id = static_cast<uint32_t>(value);;
+            m_node_id = value;
             result    = kRocProfVisResultSuccess;
             break;
         }
@@ -266,6 +290,31 @@ Processor::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t va
             {
                 result = kRocProfVisResultSuccess;
             }
+            break;
+        }
+        case kRPVControllerProcessorNumCounters:
+        {
+            if(m_counters.size() != value)
+            {
+                for(uint64_t i = value; i < m_counters.size(); i++)
+                {
+                    delete m_counters[i];
+                    m_counters[i] = nullptr;
+                }
+                m_counters.resize(value);
+                result = m_counters.size() == value ? kRocProfVisResultSuccess
+                                                   : kRocProfVisResultMemoryAllocError;
+            }
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerProcessorType:
+        {
+            m_type = static_cast<rocprofvis_controller_processor_type_t>(value);
+            result = kRocProfVisResultSuccess;
             break;
         }
         default:
@@ -313,6 +362,23 @@ Processor::SetObject(rocprofvis_property_t property, uint64_t index,
                     {
                         m_streams[index] = ref.Get();
                         result          = kRocProfVisResultSuccess;
+                    }
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerProcessorCounterIndexed:
+            {
+                if(index < m_counters.size())
+                {
+                    CounterRef ref(value);
+                    if(ref.IsValid())
+                    {
+                        m_counters[index] = ref.Get();
+                        result           = kRocProfVisResultSuccess;
                     }
                 }
                 else
@@ -379,12 +445,6 @@ Processor::SetString(rocprofvis_property_t property, uint64_t index, char const*
             case kRPVControllerProcessorUUID:
             {
                 m_uuid = value;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerProcessorType:
-            {
-                m_type = value;
                 result = kRocProfVisResultSuccess;
                 break;
             }

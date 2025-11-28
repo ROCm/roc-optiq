@@ -103,6 +103,7 @@ public:
     virtual void Render() override;
 
     void SetSplit(float ratio) { m_split_ratio = ratio; };
+    float GetMinSize();
 
 protected:
     virtual float  GetAvailableSize(const ImVec2& total_size) = 0;

@@ -168,6 +168,8 @@ std::string
 nanosecond_str_to_formatted_str(const std::string& time_ns_str, double offset_ns,
                                 TimeFormat time_format, bool include_units);
 
+std::string
+timeformat_sufix(TimeFormat format);
 
 /**
  * @brief Calculates a "nice" grid interval for a timeline.

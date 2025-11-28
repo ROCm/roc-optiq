@@ -169,6 +169,7 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_timestamp_t end,
                             rocprofvis_db_num_of_tracks_t num,
                             rocprofvis_db_track_selection_t tracks,
+                            rocprofvis_dm_charptr_t where,
                             rocprofvis_dm_charptr_t filter,
                             rocprofvis_dm_charptr_t group,
                             rocprofvis_dm_charptr_t group_cols, 

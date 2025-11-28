@@ -42,6 +42,15 @@ typedef struct InternalSettings
     std::list<std::string> recent_files;
 } InternalSettings;
 
+typedef struct AppWindowSettings
+{
+    bool show_toolbar;
+    bool show_details_panel;
+    bool show_sidebar;
+    bool show_histogram;
+    bool show_summary;
+} AppWindowSettings;
+
 enum class Colors
 {
     kMetaDataColor,
@@ -149,6 +158,8 @@ public:
     void              AddRecentFile(const std::string& file_path);
     void              RemoveRecentFile(const std::string& file_path);
 
+    AppWindowSettings& GetAppWindowSettings();
+
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
@@ -184,6 +195,7 @@ private:
     const UserSettings m_usersettings_default;
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;
+    AppWindowSettings  m_appwindowsettings;
 
     std::filesystem::path m_json_path;
 };

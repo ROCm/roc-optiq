@@ -520,344 +520,24 @@ TopKernels::Render()
             {
                 case Pie:
                 {
-                    ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-                    ImPlot::PushStyleColor(ImPlotCol_PlotBg,
-                                           ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-                    ImPlot::PushStyleColor(ImPlotCol_FrameBg,
-                                           m_settings.GetColor(Colors::kTransparent));
-                    if(ImPlot::BeginPlot(
-                           "##Pie",
-                           ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
-                                          plot_style.PlotPadding.y),
-                           ImPlotFlags_Equal | ImPlotFlags_NoFrame |
-                               ImPlotFlags_CanvasOnly))
-                    {
-                        ImPlot::SetupAxes(
-                            nullptr, nullptr,
-                            ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoDecorations |
-                                ImPlotAxisFlags_NoHighlight,
-                            ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoDecorations |
-                                ImPlotAxisFlags_NoHighlight);
-                        hovered_idx = PlotHoverIdx();
-                        ImPlot::PlotPieChart(
-                            m_kernel_pie.labels.data(), m_kernel_pie.exec_time_pct.data(),
-                            m_kernel_pie.exec_time_pct.size(), 0.0, 0.0, PIE_CHART_RADIUS,
-                            [](double value, char* buff, int size,
-                               void* user_data) -> int {
-                                if(value * 100.0 > 10.0)
-                                {
-                                    snprintf(buff, size, "%.1f%%", value * 100.0);
-                                }
-                                else
-                                {
-                                    buff[0] = '\0';
-                                }
-                                return 0;
-                            });
-                        if(m_hovered_idx)
-                        {
-                            ImPlot::PushColormap("white");
-                            ImGui::PushID(1);
-                            ImPlot::PlotPieChart(
-                                &m_kernel_pie.labels[m_hovered_idx.value()],
-                                &m_kernel_pie.exec_time_pct[m_hovered_idx.value()], 1,
-                                0.0, 0.0, PIE_CHART_RADIUS,
-                                [](double value, char* buff, int size,
-                                   void* user_data) -> int {
-                                    if(value)
-                                    {
-                                        snprintf(buff, size, "%.1f%%", value * 100.0);
-                                    }
-                                    else
-                                    {
-                                        buff[0] = '\0';
-                                    }
-                                    return 0;
-                                },
-                                nullptr,
-                                m_kernel_pie.slices[m_hovered_idx.value()].angle + 90);
-                            ImGui::PopID();
-                            ImPlot::PopColormap();
-                        }
-                        ImPlot::EndPlot();
-                        ImPlot::PopStyleColor(2);
-                        ImPlot::PopStyleVar();
-                    }
-                    PlotInputHandler();
+                    RenderPieChart(region, plot_style, hovered_idx);
                     break;
                 }
                 case Bar:
                 {
-                    ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-                    ImPlot::PushStyleColor(ImPlotCol_PlotBg,
-                                           ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-                    ImPlot::PushStyleColor(ImPlotCol_FrameBg,
-                                           m_settings.GetColor(Colors::kTransparent));
-                    if(ImPlot::BeginPlot(
-                           "##Bar",
-                           ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
-                                          plot_style.PlotPadding.y),
-                           ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
-                               ImPlotFlags_CanvasOnly))
-                    {
-                        ImPlot::SetupAxes(
-                            nullptr,
-                            std::string("Total Duration (" +
-                                        timeformat_sufix(time_format) + ")")
-                                .c_str(),
-                            ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoDecorations |
-                                ImPlotAxisFlags_NoHighlight,
-                            ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoHighlight);
-                        ImPlot::SetupAxisFormat(
-                            ImAxis_Y1,
-                            [](double value, char* buff, int size,
-                               void* user_data) -> int {
-                                if(value && user_data)
-                                {
-                                    const std::string fmt = nanosecond_to_formatted_str(
-                                        value, *static_cast<TimeFormat*>(user_data));
-                                    const size_t len_fmt = std::min(
-                                        fmt.length(), static_cast<size_t>(size - 1));
-                                    std::memcpy(buff, fmt.c_str(), len_fmt);
-                                    buff[len_fmt] = '\0';
-                                }
-                                else
-                                {
-                                    buff[0] = '\0';
-                                }
-                                return 0;
-                            },
-                            &time_format);
-                        hovered_idx = PlotHoverIdx();
-                        for(size_t i = 0; i < (*m_kernels).size(); i++)
-                        {
-                            if(i == m_hovered_idx)
-                            {
-                                ImPlot::PushColormap("white");
-                            }
-                            ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(i));
-                            ImPlot::PlotBars((*m_kernels)[i].name.c_str(),
-                                             &(*m_kernels)[i].exec_time_sum, 1,
-                                             BAR_CHART_THICKNESS, i);
-                            if(i == m_hovered_idx)
-                            {
-                                ImPlot::PopColormap();
-                            }
-                        }
-                        ImPlot::EndPlot();
-                    }
-                    ImPlot::PopStyleColor(2);
-                    ImPlot::PopStyleVar();
-                    PlotInputHandler();
+                    RenderBarChart(region, plot_style, time_format, hovered_idx);
                     break;
                 }
                 case Table:
                 {
-                    ImGui::SetCursorPos(ImVec2(
-                        plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                        ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                            plot_style.PlotPadding.y + 2 * plot_style.LabelPadding.y));
-                    if(ImGui::BeginTable("Table", 5,
-                                         ImGuiTableFlags_ScrollY |
-                                             ImGuiTableFlags_Borders |
-                                             ImGuiTableFlags_Resizable,
-                                         ImGui::GetContentRegionAvail() -
-                                             ImVec2(plot_style.PlotBorderSize +
-                                                        plot_style.PlotPadding.x,
-                                                    ImGui::GetFrameHeightWithSpacing() +
-                                                        2 * plot_style.PlotPadding.y +
-                                                        plot_style.PlotBorderSize)))
-                    {
-                        ImGui::TableSetupScrollFreeze(0, 1);
-                        ImGui::TableSetupColumn("Name");
-                        ImGui::TableSetupColumn("Invocations");
-                        ImGui::TableSetupColumn(
-                            std::string("Total Duration (" +
-                                        timeformat_sufix(time_format) + ")")
-                                .c_str());
-                        ImGui::TableSetupColumn(
-                            std::string("Max Duration (" + timeformat_sufix(time_format) +
-                                        ")")
-                                .c_str());
-                        ImGui::TableSetupColumn(
-                            std::string("Min Duration (" + timeformat_sufix(time_format) +
-                                        ")")
-                                .c_str());
-                        ImGui::TableHeadersRow();
-                        for(size_t i = 0; i < m_kernels->size(); i++)
-                        {
-                            ImGui::TableNextRow();
-                            ImGui::TableSetColumnIndex(0);
-                            if(ImGui::Selectable(
-                                   (*m_kernels)[i].name.c_str(), m_selected_idx == i,
-                                   ImGuiSelectableFlags_SpanAllColumns |
-                                       ImGuiSelectableFlags_AllowItemOverlap))
-                            {
-                                ToggleSelectKernel(i);
-                            }
-                            ImGui::TableSetColumnIndex(1);
-                            ImGui::TextUnformatted(
-                                i == m_padded_idx
-                                    ? "-"
-                                    : std::to_string((*m_kernels)[i].invocations)
-                                          .c_str());
-                            ImGui::TableSetColumnIndex(2);
-                            ImGui::TextUnformatted(
-                                nanosecond_to_formatted_str((*m_kernels)[i].exec_time_sum,
-                                                            time_format)
-                                    .c_str());
-                            ImGui::TableSetColumnIndex(3);
-                            ImGui::TextUnformatted(
-                                i == m_padded_idx
-                                    ? "-"
-                                    : nanosecond_to_formatted_str(
-                                          (*m_kernels)[i].exec_time_max, time_format)
-                                          .c_str());
-                            ImGui::TableSetColumnIndex(4);
-                            ImGui::TextUnformatted(
-                                i == m_padded_idx
-                                    ? "-"
-                                    : nanosecond_to_formatted_str(
-                                          (*m_kernels)[i].exec_time_min, time_format)
-                                          .c_str());
-                        }
-                        ImGui::EndTable();
-                    }
+                    RenderTable(plot_style, time_format);
                     break;
                 }
             }
             // Legend...
             if(m_display_mode == Pie || m_display_mode == Bar)
             {
-                ImVec2 legend_pos =
-                    ImVec2(0.75f * region.x - 2 * plot_style.PlotPadding.x,
-                           ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                               3 * plot_style.PlotPadding.y);
-                if(m_show_legend)
-                {
-                    ImGui::SetCursorPos(legend_pos -
-                                        ImVec2(ImGui::GetFrameHeightWithSpacing(), 0.0f));
-                    if(ImGui::ArrowButton("hide_legend", ImGuiDir_Right))
-                    {
-                        m_show_legend = false;
-                    }
-                }
-                else
-                {
-                    ImGui::SetCursorPos(ImVec2(region.x - 2 * plot_style.PlotPadding.x -
-                                                   ImGui::GetFrameHeightWithSpacing(),
-                                               ImGui::GetFontSize() +
-                                                   plot_style.PlotBorderSize +
-                                                   3 * plot_style.PlotPadding.y));
-                    if(ImGui::ArrowButton("show_legend", ImGuiDir_Left))
-                    {
-                        m_show_legend = true;
-                    }
-                }
-                if(m_show_legend)
-                {
-                    ImGui::SetCursorPos(legend_pos);
-                    ImGui::SetNextWindowSizeConstraints(
-                        ImVec2(region.x * 0.25f, 0),
-                        ImVec2(region.x * 0.25f, ImGui::GetContentRegionAvail().y -
-                                                     ImGui::GetFrameHeightWithSpacing() -
-                                                     3 * plot_style.PlotPadding.y -
-                                                     plot_style.PlotBorderSize));
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                        plot_style.LegendInnerPadding);
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                                          style.Colors[ImGuiCol_WindowBg]);
-                    ImGui::BeginChild("legend", ImVec2(region.x * 0.25f, 0),
-                                      ImGuiChildFlags_Border |
-                                          ImGuiChildFlags_AutoResizeY);
-                    float legend_width =
-                        ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
-                    float icon_width  = ImGui::GetFontSize();
-                    float elide_width = ImGui::CalcTextSize(" [...]").x;
-                    float scroll_bar_width =
-                        ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f;
-                    ImGui::BeginChild(
-                        "legend_scroll_view", ImVec2(legend_width - scroll_bar_width, 0),
-                        ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollWithMouse);
-                    for(size_t i = 0; i < m_kernels->size(); i++)
-                    {
-                        float text_width =
-                            ImGui::CalcTextSize((*m_kernels)[i].name.c_str()).x;
-                        ImGui::PushID(i);
-                        ImVec2 pos         = ImGui::GetCursorPos();
-                        bool   row_clicked = ImGui::Selectable(
-                            "", m_selected_idx == i,
-                            m_hovered_idx == i ? ImGuiSelectableFlags_Highlight
-                                                 : ImGuiSelectableFlags_None);
-                        bool row_hovered = ImGui::IsItemHovered();
-                        ImGui::SetCursorPos(pos);
-                        ImGui::GetWindowDrawList()->AddRectFilled(
-                            ImGui::GetCursorScreenPos() +
-                                ImVec2(2 * IMPLOT_LEGEND_ICON_SHRINK,
-                                       2 * IMPLOT_LEGEND_ICON_SHRINK),
-                            ImGui::GetCursorScreenPos() +
-                                ImVec2(icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK,
-                                       icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK),
-                            ImGui::GetColorU32(
-                                ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
-                                row_hovered ? 0.75f : 1.0f));
-                        bool elide =
-                            icon_width + text_width + scroll_bar_width > legend_width;
-                        if(elide)
-                        {
-                            ImGui::PushClipRect(
-                                ImGui::GetCursorScreenPos(),
-                                ImGui::GetCursorScreenPos() +
-                                    ImVec2(legend_width - scroll_bar_width - elide_width,
-                                           ImGui::GetFrameHeightWithSpacing()),
-                                true);
-                        }
-                        ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
-                                             ImGui::GetFontSize());
-                        ImGui::BeginDisabled(i == m_padded_idx);
-                        ImGui::TextUnformatted((*m_kernels)[i].name.c_str());
-                        if(elide)
-                        {
-                            ImGui::PopClipRect();
-                            ImGui::SameLine(legend_width - scroll_bar_width -
-                                            elide_width);
-                            ImGui::TextUnformatted(" [...]");
-                        }
-                        ImGui::EndDisabled();
-                        if(row_hovered)
-                        {
-                            hovered_idx = i;
-                            if(elide)
-                            {
-                                ImGui::PushStyleVar(
-                                    ImGuiStyleVar_WindowPadding,
-                                    m_settings.GetDefaultIMGUIStyle().WindowPadding);
-                                ImGui::PushStyleVar(
-                                    ImGuiStyleVar_WindowRounding,
-                                    m_settings.GetDefaultStyle().FrameRounding);
-                                if(ImGui::BeginItemTooltip())
-                                {
-                                    ImGui::PushTextWrapPos(region.x * 0.5f);
-                                    ImGui::TextWrapped("%s",
-                                                       (*m_kernels)[i].name.c_str());
-                                    ImGui::PopTextWrapPos();
-                                    ImGui::EndTooltip();
-                                }
-                                ImGui::PopStyleVar(2);
-                            }
-                            if(row_clicked && m_selection_callback)
-                            {
-                                ToggleSelectKernel(i);
-                            }
-                        }
-                        ImGui::PopID();
-                    }
-                    ImGui::EndChild();
-                    ImGui::EndChild();
-                    ImGui::PopStyleColor();
-                    ImGui::PopStyleVar();
-                    ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
-                }
+                RenderLegend(region, style, plot_style, hovered_idx);
             }
             ImPlot::PopColormap();
             m_hovered_idx = hovered_idx == -1 ? std::nullopt
@@ -953,6 +633,308 @@ float
 TopKernels::MinHeight() const
 {
     return m_min_size.y;
+}
+
+void
+TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
+                           int& hovered_idx)
+{
+    ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    if(ImPlot::BeginPlot("##Pie",
+                         ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
+                                        plot_style.PlotPadding.y),
+                         ImPlotFlags_Equal | ImPlotFlags_NoFrame |
+                             ImPlotFlags_CanvasOnly))
+    {
+        ImPlot::SetupAxes(nullptr, nullptr,
+                          ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoDecorations |
+                              ImPlotAxisFlags_NoHighlight,
+                          ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoDecorations |
+                              ImPlotAxisFlags_NoHighlight);
+        hovered_idx = PlotHoverIdx();
+        ImPlot::PlotPieChart(
+            m_kernel_pie.labels.data(), m_kernel_pie.exec_time_pct.data(),
+            m_kernel_pie.exec_time_pct.size(), 0.0, 0.0, PIE_CHART_RADIUS,
+            [](double value, char* buff, int size, void* user_data) -> int {
+                if(value * 100.0 > 10.0)
+                {
+                    snprintf(buff, size, "%.1f%%", value * 100.0);
+                }
+                else
+                {
+                    buff[0] = '\0';
+                }
+                return 0;
+            });
+        if(m_hovered_idx)
+        {
+            ImPlot::PushColormap("white");
+            ImGui::PushID(1);
+            ImPlot::PlotPieChart(
+                &m_kernel_pie.labels[m_hovered_idx.value()],
+                &m_kernel_pie.exec_time_pct[m_hovered_idx.value()], 1, 0.0, 0.0,
+                PIE_CHART_RADIUS,
+                [](double value, char* buff, int size, void* user_data) -> int {
+                    if(value)
+                    {
+                        snprintf(buff, size, "%.1f%%", value * 100.0);
+                    }
+                    else
+                    {
+                        buff[0] = '\0';
+                    }
+                    return 0;
+                },
+                nullptr, m_kernel_pie.slices[m_hovered_idx.value()].angle + 90);
+            ImGui::PopID();
+            ImPlot::PopColormap();
+        }
+        ImPlot::EndPlot();
+        ImPlot::PopStyleColor(2);
+        ImPlot::PopStyleVar();
+    }
+    PlotInputHandler();
+}
+
+void
+TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
+                           TimeFormat time_format, int& hovered_idx)
+{
+    ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    if(ImPlot::BeginPlot("##Bar",
+                         ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
+                                        plot_style.PlotPadding.y),
+                         ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
+                             ImPlotFlags_CanvasOnly))
+    {
+        ImPlot::SetupAxes(
+            nullptr,
+            std::string("Total Duration (" + timeformat_sufix(time_format) + ")").c_str(),
+            ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoDecorations |
+                ImPlotAxisFlags_NoHighlight,
+            ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoHighlight);
+        ImPlot::SetupAxisFormat(
+            ImAxis_Y1,
+            [](double value, char* buff, int size, void* user_data) -> int {
+                if(value && user_data)
+                {
+                    const std::string fmt = nanosecond_to_formatted_str(
+                        value, *static_cast<TimeFormat*>(user_data));
+                    const size_t len_fmt =
+                        std::min(fmt.length(), static_cast<size_t>(size - 1));
+                    std::memcpy(buff, fmt.c_str(), len_fmt);
+                    buff[len_fmt] = '\0';
+                }
+                else
+                {
+                    buff[0] = '\0';
+                }
+                return 0;
+            },
+            &time_format);
+        hovered_idx = PlotHoverIdx();
+        for(size_t i = 0; i < (*m_kernels).size(); i++)
+        {
+            if(i == m_hovered_idx)
+            {
+                ImPlot::PushColormap("white");
+            }
+            ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(i));
+            ImPlot::PlotBars((*m_kernels)[i].name.c_str(), &(*m_kernels)[i].exec_time_sum,
+                             1, BAR_CHART_THICKNESS, i);
+            if(i == m_hovered_idx)
+            {
+                ImPlot::PopColormap();
+            }
+        }
+        ImPlot::EndPlot();
+    }
+    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleVar();
+    PlotInputHandler();
+}
+
+void
+TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
+{
+    ImGui::SetCursorPos(ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
+                               ImGui::GetFontSize() + plot_style.PlotBorderSize +
+                                   plot_style.PlotPadding.y +
+                                   2 * plot_style.LabelPadding.y));
+    if(ImGui::BeginTable(
+           "Table", 5,
+           ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable,
+           ImGui::GetContentRegionAvail() -
+               ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
+                      ImGui::GetFrameHeightWithSpacing() + 2 * plot_style.PlotPadding.y +
+                          plot_style.PlotBorderSize)))
+    {
+        ImGui::TableSetupScrollFreeze(0, 1);
+        ImGui::TableSetupColumn("Name");
+        ImGui::TableSetupColumn("Invocations");
+        ImGui::TableSetupColumn(
+            std::string("Total Duration (" + timeformat_sufix(time_format) + ")")
+                .c_str());
+        ImGui::TableSetupColumn(
+            std::string("Max Duration (" + timeformat_sufix(time_format) + ")").c_str());
+        ImGui::TableSetupColumn(
+            std::string("Min Duration (" + timeformat_sufix(time_format) + ")").c_str());
+        ImGui::TableHeadersRow();
+        for(size_t i = 0; i < m_kernels->size(); i++)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            if(ImGui::Selectable((*m_kernels)[i].name.c_str(), m_selected_idx == i,
+                                 ImGuiSelectableFlags_SpanAllColumns |
+                                     ImGuiSelectableFlags_AllowItemOverlap))
+            {
+                ToggleSelectKernel(i);
+            }
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(
+                i == m_padded_idx ? "-"
+                                  : std::to_string((*m_kernels)[i].invocations).c_str());
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextUnformatted(
+                nanosecond_to_formatted_str((*m_kernels)[i].exec_time_sum, time_format)
+                    .c_str());
+            ImGui::TableSetColumnIndex(3);
+            ImGui::TextUnformatted(i == m_padded_idx
+                                       ? "-"
+                                       : nanosecond_to_formatted_str(
+                                             (*m_kernels)[i].exec_time_max, time_format)
+                                             .c_str());
+            ImGui::TableSetColumnIndex(4);
+            ImGui::TextUnformatted(i == m_padded_idx
+                                       ? "-"
+                                       : nanosecond_to_formatted_str(
+                                             (*m_kernels)[i].exec_time_min, time_format)
+                                             .c_str());
+        }
+        ImGui::EndTable();
+    }
+}
+
+void
+TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
+                         const ImPlotStyle& plot_style, int& hovered_idx)
+{
+    ImVec2 legend_pos = ImVec2(0.75f * region.x - 2 * plot_style.PlotPadding.x,
+                               ImGui::GetFontSize() + plot_style.PlotBorderSize +
+                                   3 * plot_style.PlotPadding.y);
+    if(m_show_legend)
+    {
+        ImGui::SetCursorPos(legend_pos -
+                            ImVec2(ImGui::GetFrameHeightWithSpacing(), 0.0f));
+        if(ImGui::ArrowButton("hide_legend", ImGuiDir_Right))
+        {
+            m_show_legend = false;
+        }
+    }
+    else
+    {
+        ImGui::SetCursorPos(ImVec2(region.x - 2 * plot_style.PlotPadding.x -
+                                       ImGui::GetFrameHeightWithSpacing(),
+                                   ImGui::GetFontSize() + plot_style.PlotBorderSize +
+                                       3 * plot_style.PlotPadding.y));
+        if(ImGui::ArrowButton("show_legend", ImGuiDir_Left))
+        {
+            m_show_legend = true;
+        }
+    }
+    if(m_show_legend)
+    {
+        ImGui::SetCursorPos(legend_pos);
+        ImGui::SetNextWindowSizeConstraints(
+            ImVec2(region.x * 0.25f, 0),
+            ImVec2(region.x * 0.25f,
+                   ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() -
+                       3 * plot_style.PlotPadding.y - plot_style.PlotBorderSize));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
+        ImGui::BeginChild("legend", ImVec2(region.x * 0.25f, 0),
+                          ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY);
+        float legend_width     = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
+        float icon_width       = ImGui::GetFontSize();
+        float elide_width      = ImGui::CalcTextSize(" [...]").x;
+        float scroll_bar_width = ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f;
+        ImGui::BeginChild(
+            "legend_scroll_view", ImVec2(legend_width - scroll_bar_width, 0),
+            ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollWithMouse);
+        for(size_t i = 0; i < m_kernels->size(); i++)
+        {
+            float text_width = ImGui::CalcTextSize((*m_kernels)[i].name.c_str()).x;
+            ImGui::PushID(i);
+            ImVec2 pos = ImGui::GetCursorPos();
+            bool   row_clicked =
+                ImGui::Selectable("", m_selected_idx == i,
+                                  m_hovered_idx == i ? ImGuiSelectableFlags_Highlight
+                                                     : ImGuiSelectableFlags_None);
+            bool row_hovered = ImGui::IsItemHovered();
+            ImGui::SetCursorPos(pos);
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImGui::GetCursorScreenPos() +
+                    ImVec2(2 * IMPLOT_LEGEND_ICON_SHRINK, 2 * IMPLOT_LEGEND_ICON_SHRINK),
+                ImGui::GetCursorScreenPos() +
+                    ImVec2(icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK,
+                           icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK),
+                ImGui::GetColorU32(ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
+                                   row_hovered ? 0.75f : 1.0f));
+            bool elide = icon_width + text_width + scroll_bar_width > legend_width;
+            if(elide)
+            {
+                ImGui::PushClipRect(
+                    ImGui::GetCursorScreenPos(),
+                    ImGui::GetCursorScreenPos() +
+                        ImVec2(legend_width - scroll_bar_width - elide_width,
+                               ImGui::GetFrameHeightWithSpacing()),
+                    true);
+            }
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetFontSize());
+            ImGui::BeginDisabled(i == m_padded_idx);
+            ImGui::TextUnformatted((*m_kernels)[i].name.c_str());
+            if(elide)
+            {
+                ImGui::PopClipRect();
+                ImGui::SameLine(legend_width - scroll_bar_width - elide_width);
+                ImGui::TextUnformatted(" [...]");
+            }
+            ImGui::EndDisabled();
+            if(row_hovered)
+            {
+                hovered_idx = i;
+                if(elide)
+                {
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                        m_settings.GetDefaultIMGUIStyle().WindowPadding);
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                                        m_settings.GetDefaultStyle().FrameRounding);
+                    if(ImGui::BeginItemTooltip())
+                    {
+                        ImGui::PushTextWrapPos(region.x * 0.5f);
+                        ImGui::TextWrapped("%s", (*m_kernels)[i].name.c_str());
+                        ImGui::PopTextWrapPos();
+                        ImGui::EndTooltip();
+                    }
+                    ImGui::PopStyleVar(2);
+                }
+                if(row_clicked && m_selection_callback)
+                {
+                    ToggleSelectKernel(i);
+                }
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndChild();
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
+    }
 }
 
 int

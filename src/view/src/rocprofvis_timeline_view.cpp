@@ -236,7 +236,8 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
        ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
-                              ImGuiHoveredFlags_NoPopupHierarchy))
+                              ImGuiHoveredFlags_NoPopupHierarchy) &&
+       ImGui::IsMouseHoveringRect(win_min, win_max))
     {
         ImGui::OpenPopup("StickyNoteContextMenu");
     }

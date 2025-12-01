@@ -8,6 +8,7 @@ View trace data in ROCm Optiq
 
 .. |scroll| image:: ../images/scroll-to.png
 .. |eye| image:: ../images/eye.png
+.. |grip| image:: ../images/grip.png
 
 Use ROCm™ Optiq to inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage, and system telemetry data for applications running on the ROCm stack.
 
@@ -38,6 +39,28 @@ Select **File** > **Open** to open a trace. You can also open files by dragging 
 
   If the trace file doesn't open, the file may be in an unsupported format. Convert the file to a supported format (``.db`` or ``.rpd``) using ROCm scripts.
 
+  To generate profiling data in a compatible ROCpd format:
+
+  1. Set the configuration environment to output data in the ROCpd format:
+
+    .. code-block:: shell
+
+      export ROCPROFSYS_USE_ROCPD=ON  # enable rocpd output
+      export ROCPROFSYS_USE_TRACE=OFF # disabling default Perfetto output
+
+  2. Trace your application with call-stack sampling:
+
+    .. code-block:: shell
+
+      rocprof-sys-sample -- ./your-application
+
+  3. Instrument your application using a binary rewrite:
+
+    .. code-block:: shell
+
+      rocprof-sys-instrument -o your-application.inst -- ./your-application
+      rocprof-sys-run -- ./your-application.inst
+
 View trace data
 ===============
 
@@ -61,8 +84,6 @@ The **System Topology View** displays a hierarchical representation of the hardw
 
 Timeline View
 -------------
-
-.. |grip| image:: ../images/grip.png
 
 The **Timeline View** displays CPU and GPU activities, events, and performance metrics chronologically. You can:
 
@@ -175,6 +196,3 @@ Search for events using the search box on the main **Toolbar**.
 - Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`.
 - Clicking **X** clears the search results.
 - The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks without spaces (for example: ``“term1””term2”``).
-
-
-

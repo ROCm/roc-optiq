@@ -44,5 +44,82 @@ Install on Windows
 Install on Linux
 ================
 
-1. Install the package for the target distribution in `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_. Use the corresponding Debian, rpm, taz.gz, or binary packages available in the GitHub repo.
-2. Run the **roc-optiq** binary.
+Indentify the operating system
+------------------------------
+
+If you're unsure of the Linux distribution and version, the ``/etc/os-release`` and ``/usr/lib/os-release`` files contain this information.
+
+.. code-block:: shell
+
+   $ cat /etc/os-release
+   NAME="Ubuntu"
+   VERSION_ID="24.04"
+   VERSION="24.04.3 LTS (Noble Numbat)"
+   VERSION_CODENAME=noble
+   ID=ubuntu
+
+The relevant fields are ``ID`` and the ``VERSION_ID``.
+
+Ubuntu 22.04 /24.04 (Debian-based)
+----------------------------------
+
+1. Download the ``.deb`` package from the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_
+2. Install the ``.deb`` package:
+
+   .. code-block:: shell
+
+      sudo apt install ./<file>.deb
+
+3. Verify the installation
+
+   .. code-block:: shell
+
+      dpkg -l | grep roc-optiq
+
+Oracle Linux 9/10 and RHEL 9/10 (RPM-based)
+-------------------------------------------
+
+1. Download the ``.rpm`` package from the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_
+2. Install the ``.rpm`` package:
+
+   .. code-block:: shell
+
+      sudo dnf install ./<file>.rpm
+
+3. Verify the installation
+
+   .. code-block:: shell
+
+      rpm -qa | grep roc-optiq
+
+.. tip::
+
+   Download the latest ``.deb`` or ``.rpm`` from `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ to ensure ROCm-Optiq is up-to-date.
+
+Add ROCm binaries to your ``PATH``
+==================================
+
+Once you've installed ROCm-Optiq for your operating system, Add the ROCm binaries to your ``PATH`` if it isn't automatically configured:
+
+.. code-block:: shell
+
+   export PATH=opt/roc-optiq/bin:$PATH
+
+Check the ROCm-Optiq version
+============================
+
+Use this code to verify the ROCm-Optiq version. 
+
+- Ubuntu (Debian-based):
+
+   .. code-block:: shell
+
+      apt show roc-optiq
+
+- RPM-based systems:
+
+   .. code-block:: shell
+
+      rpm -qi roc-optiq | grep -E "Name|Version|Release"
+
+

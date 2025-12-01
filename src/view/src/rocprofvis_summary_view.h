@@ -6,6 +6,8 @@
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_widget.h"
 
+struct ImPlotStyle;
+
 namespace RocProfVis
 {
 namespace View
@@ -14,9 +16,9 @@ namespace View
 class DataProvider;
 class SettingsManager;
 class KernelInstanceTable;
-
 class HWUtilization;
 class TopKernels;
+enum class TimeFormat;
 
 class SummaryView : public RocWidget
 {
@@ -108,6 +110,14 @@ private:
         std::vector<float>       exec_time_pct;
         std::vector<Slice>       slices;
     };
+
+    void RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
+                        int& hovered_idx);
+    void RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
+                        TimeFormat time_format, int& hovered_idx);
+    void RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format);
+    void RenderLegend(const ImVec2 region, const ImGuiStyle& style,
+                      const ImPlotStyle& plot_style, int& hovered_idx);
 
     // Input handling...
     int  PlotHoverIdx() const;

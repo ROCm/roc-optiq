@@ -15,7 +15,7 @@ namespace View
 void
 init_fullscreen_state(GLFWwindow* window, FullscreenState& state)
 {
-    if(!window) 
+    if(!window)
     {
         spdlog::warn("Cannot initialize fullscreen state: Window is not valid");
         return;

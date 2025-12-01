@@ -106,7 +106,10 @@ get_current_monitor(GLFWwindow* window)
 void
 toggle_fullscreen(GLFWwindow* window, FullscreenState& state)
 {
-    if(!window) return;
+    if(!window)
+    {
+        return;
+    }
 
     if(state.is_fullscreen)
     {

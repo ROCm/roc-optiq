@@ -63,7 +63,7 @@ The relevant fields are ``ID`` and the ``VERSION_ID``.
 Ubuntu 22.04 / 24.04 (Debian-based)
 ----------------------------------
 
-1. Download the ``.deb`` package from the `ROCm-Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_.
+1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_.
 2. Install the ``.deb`` package:
 
    .. code-block:: shell
@@ -79,7 +79,7 @@ Ubuntu 22.04 / 24.04 (Debian-based)
 Oracle Linux 9/10 and RHEL 9/10 (RPM-based)
 -------------------------------------------
 
-1. Download the ``.rpm`` package from the `ROCm-Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_.
+1. Download the ``.rpm`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_.
 2. Install the ``.rpm`` package:
 
    .. code-block:: shell
@@ -94,21 +94,21 @@ Oracle Linux 9/10 and RHEL 9/10 (RPM-based)
 
 .. tip::
 
-   Download the latest ``.deb`` or ``.rpm`` from the `ROCm-Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ to ensure ROCm-Optiq is up-to-date.
+   Download the latest ``.deb`` or ``.rpm`` from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ to ensure ROCm Optiq is up-to-date.
 
 Add ROCm binaries to your ``PATH``
 ==================================
 
-Once you've installed ROCm-Optiq for your operating system, add the ROCm binaries to your ``PATH`` if it isn't automatically configured:
+Once you've installed ROCm Optiq for your operating system, add the ROCm binaries to your ``PATH`` if it isn't automatically configured:
 
 .. code-block:: shell
 
    export PATH=opt/roc-optiq/bin:$PATH
 
-Check the ROCm-Optiq version
+Check the ROCm Optiq version
 ============================
 
-Use this code to verify the ROCm-Optiq version. 
+Use this code to verify the ROCm Optiq version. 
 
 - Ubuntu (Debian-based):
 

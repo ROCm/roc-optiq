@@ -21,14 +21,8 @@ static bool g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
 
-// Fullscreen state
-static RocProfVis::View::FullscreenState g_fullscreen_state = {
-    false,  // is_fullscreen
-    0,      // windowed_xpos
-    0,      // windowed_ypos
-    1280,   // windowed_width
-    720     // windowed_height
-};
+// Fullscreen state (initialized after window creation)
+static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 
 
 static void
@@ -98,24 +92,30 @@ main(int, char**)
     int resultCode = 0;
 
     std::string config_path = rocprofvis_get_application_config_path();
-    #ifndef NDEBUG
-    std::filesystem::path log_path = std::filesystem::path(config_path) / "visualizer.debug.log";
-        rocprofvis_core_enable_log(log_path.string().c_str(),spdlog::level::debug);
-    #else
-        std::filesystem::path log_path = std::filesystem::path(config_path) / "visualizer.log";
-        rocprofvis_core_enable_log(log_path.string().c_str(),spdlog::level::info);
-    #endif
-    
+#ifndef NDEBUG
+    std::filesystem::path log_path =
+        std::filesystem::path(config_path) / "visualizer.debug.log";
+    rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::debug);
+#else
+    std::filesystem::path log_path =
+        std::filesystem::path(config_path) / "visualizer.log";
+    rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
+#endif
+
     glfwSetErrorCallback(glfw_error_callback);
     if(glfwInit())
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-#if defined(GLFW_SCALE_TO_MONITOR) // GLFW 3.3+
+#if defined(GLFW_SCALE_TO_MONITOR)  // GLFW 3.3+
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
-#endif        
-        GLFWwindow* window =
-            glfwCreateWindow(1280, 720, "ROCm(TM) Optiq Beta", nullptr, nullptr);
+#endif
+        GLFWwindow* window = glfwCreateWindow(RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
+                                              RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
+                                              "ROCm(TM) Optiq Beta", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
+
+        // Initialize fullscreen state with actual window position and size
+        RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
 
         // Drop file callback
         glfwSetDropCallback(window, drop_callback);
@@ -154,7 +154,8 @@ main(int, char**)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-                auto [image, pixels] = RocProfVis::View::create_icon(AMD_LOGO_png, AMD_LOGO_png_len);
+                auto [image, pixels] =
+                    RocProfVis::View::create_icon(AMD_LOGO_png, AMD_LOGO_png_len);
                 if(image.pixels != nullptr)
                 {
                     // Set the window icon
@@ -168,11 +169,11 @@ main(int, char**)
                 while(!glfwWindowShouldClose(window))
                 {
                     // handle dropped file signal flag from callback
-                    if (g_file_was_dropped)
+                    if(g_file_was_dropped)
                     {
                         rocprofvis_view_open_files(g_dropped_file_paths);
                         g_file_was_dropped = false;
-                    }                    
+                    }
 
                     glfwPollEvents();
 

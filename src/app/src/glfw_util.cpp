@@ -3,12 +3,46 @@
 
 #include "glfw_util.h"
 #include "rocprofvis_view_module.h"
-#define STB_IMAGE_IMPLEMENTATION
 #include "spdlog/spdlog.h"
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
 
-namespace RocProfVis::View
+namespace RocProfVis
 {
+namespace View
+{
+
+void
+init_fullscreen_state(GLFWwindow* window, FullscreenState& state)
+{
+    if(!window) 
+    {
+        spdlog::warn("Cannot initialize fullscreen state: Window is not valid");
+        return;
+    }
+    
+    // Detect if window is already in fullscreen mode
+    // glfwGetWindowMonitor returns nullptr if windowed, or monitor handle if fullscreen
+    GLFWmonitor* monitor = glfwGetWindowMonitor(window);
+    state.is_fullscreen = (monitor != nullptr);
+    
+    if(!state.is_fullscreen)
+    {
+        // Window is in windowed mode - save current position and size
+        glfwGetWindowPos(window, &state.windowed_xpos, &state.windowed_ypos);
+        glfwGetWindowSize(window, &state.windowed_width, &state.windowed_height);
+    }
+    else
+    {
+        // Window is already fullscreen - we can't retrieve windowed position/size
+        // Set reasonable defaults (will be overwritten when user exits fullscreen)
+        state.windowed_xpos = DEFAULT_WINDOWED_XPOS;
+        state.windowed_ypos = DEFAULT_WINDOWED_YPOS;
+        state.windowed_width = DEFAULT_WINDOWED_WIDTH;
+        state.windowed_height = DEFAULT_WINDOWED_HEIGHT;
+        spdlog::info("Window initialized in fullscreen mode, setting defaults for windowed mode");
+    }
+}
 
 GLFWmonitor*
 get_current_monitor(GLFWwindow* window)
@@ -136,4 +170,5 @@ free_icon(unsigned char* pixels)
     stbi_image_free(pixels);
 }
 
-}  // namespace RocProfVis::View
+}  // namespace View
+}  // namespace RocProfVis

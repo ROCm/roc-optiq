@@ -89,6 +89,7 @@ AppWindow::AppWindow()
       SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit))
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
+, m_is_fullscreen(false)
 #ifndef USE_NATIVE_FILE_DIALOG
 , m_init_file_dialog(false)
 #else
@@ -213,6 +214,18 @@ AppWindow::ShowCloseConfirm()
                 m_notification_callback(
                     rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
         });
+}
+
+void
+AppWindow::SetFullscreenState(bool is_fullscreen)
+{
+    m_is_fullscreen = is_fullscreen;
+}
+
+bool
+AppWindow::GetFullscreenState() const
+{
+    return m_is_fullscreen;
 }
 
 void
@@ -605,6 +618,18 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
+        
+        ImGui::Separator();
+        
+        if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
+        {
+            if(m_notification_callback)
+            {
+                m_notification_callback(
+                    rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen);
+            }
+        }
+        
         ImGui::EndMenu();
     }
 }

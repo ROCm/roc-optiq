@@ -66,6 +66,9 @@ public:
     void OpenFile(std::string file_path);
 
     void ShowCloseConfirm();
+    
+    void SetFullscreenState(bool is_fullscreen);
+    bool GetFullscreenState() const;
 
 private:
     AppWindow();
@@ -137,6 +140,7 @@ private:
 
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
+    bool                             m_is_fullscreen;
 };
 
 }  // namespace View

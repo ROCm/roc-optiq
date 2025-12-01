@@ -5,17 +5,15 @@
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_imgui_backend.h"
+#include "glfw_util.h"
 #define GLFW_INCLUDE_NONE
-#include "../resources/AMD_LOGO.h"
+#include "AMD_LOGO.h"
 #include "rocprofvis_view_module.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb-image/stb_image.h"
-#include <utility>
 
 // globals shared with callbacks
 static std::vector<std::string> g_dropped_file_paths;
@@ -23,28 +21,15 @@ static bool g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
 
-std::pair<GLFWimage, unsigned char*>
-glfw_create_icon()
-{
-    int            width, height, channels;
-    unsigned char* pixels = stbi_load_from_memory(AMD_LOGO_png, AMD_LOGO_png_len, &width,
-                                                  &height, &channels, STBI_rgb_alpha);
+// Fullscreen state
+static RocProfVis::View::FullscreenState g_fullscreen_state = {
+    false,  // is_fullscreen
+    0,      // windowed_xpos
+    0,      // windowed_ypos
+    1280,   // windowed_width
+    720     // windowed_height
+};
 
-    GLFWimage image;
-    if(!pixels)
-    {
-        spdlog::error("Failed to load icon image: {}", stbi_failure_reason());
-        image = { 0, 0, nullptr };
-        return { image, nullptr };
-    }
-    else
-    {
-        image.width  = width;
-        image.height = height;
-        image.pixels = pixels;
-        return { image, pixels };
-    }
-}
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -81,12 +66,30 @@ app_notification_callback(GLFWwindow* window, int notification)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+    else if(notification == static_cast<int>(rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen))
+    {
+        RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
+    }
 }
 
 static void
 glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
+}
+
+static void
+key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    // Unused parameters
+    (void)scancode;
+    (void)mods;
+
+    // Toggle fullscreen with F11
+    if (key == GLFW_KEY_F11 && action == GLFW_PRESS)
+    {
+        RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
+    }
 }
 
 int
@@ -126,6 +129,8 @@ main(int, char**)
         }
         // Window close callback
         glfwSetWindowCloseCallback(window, close_callback);
+        // Keyboard callback for fullscreen toggle
+        glfwSetKeyCallback(window, key_callback);
 
         if(window && rocprofvis_imgui_backend_setup(&backend, window))
         {
@@ -149,7 +154,7 @@ main(int, char**)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-                auto [image, pixels] = glfw_create_icon();
+                auto [image, pixels] = RocProfVis::View::create_icon(AMD_LOGO_png, AMD_LOGO_png_len);
                 if(image.pixels != nullptr)
                 {
                     // Set the window icon
@@ -157,7 +162,7 @@ main(int, char**)
                     glfwSetWindowIcon(window, 1, images);
 
                     // Free the image pixels after setting the icon
-                    stbi_image_free(pixels);
+                    RocProfVis::View::free_icon(pixels);
                 }
 
                 while(!glfwWindowShouldClose(window))

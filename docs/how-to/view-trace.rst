@@ -43,23 +43,23 @@ Select **File** > **Open** to open a trace. You can also open files by dragging 
 
   1. Set the configuration environment to output data in the ROCpd format:
 
-    .. code-block:: shell
+     .. code-block:: shell
 
-      export ROCPROFSYS_USE_ROCPD=ON  # enable rocpd output
-      export ROCPROFSYS_USE_TRACE=OFF # disabling default Perfetto output
+       export ROCPROFSYS_USE_ROCPD=ON  # enable rocpd output
+       export ROCPROFSYS_USE_TRACE=OFF # disabling default Perfetto output
 
   2. Trace your application with call-stack sampling:
 
-    .. code-block:: shell
+     .. code-block:: shell
 
-      rocprof-sys-sample -- ./your-application
+       rocprof-sys-sample -- ./your-application
 
   3. Instrument your application using a binary rewrite:
 
-    .. code-block:: shell
+     .. code-block:: shell
 
-      rocprof-sys-instrument -o your-application.inst -- ./your-application
-      rocprof-sys-run -- ./your-application.inst
+       rocprof-sys-instrument -o your-application.inst -- ./your-application
+       rocprof-sys-run -- ./your-application.inst
 
 View trace data
 ===============

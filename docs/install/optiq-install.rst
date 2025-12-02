@@ -28,7 +28,7 @@ Your system must be running one of these operating systems:
 Install on Windows
 ==================
 
-1. Download the **ROCm-Optiq-Beta.exe** installer from `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ and follow the instructions in the install wizard.
+1. Download the **ROCm-Optiq-Beta.exe** installer from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ and follow the instructions in the install wizard.
    
    .. image:: ../images/wizard.png
       :width: 500

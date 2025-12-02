@@ -4,7 +4,7 @@
 #pragma once
 
 #include "rocprofvis_utils.h"
-#include "rocprofvis_widget.h"
+#include "rocprofvis_split_containers.h"
 #include <string>
 #include <vector>
 

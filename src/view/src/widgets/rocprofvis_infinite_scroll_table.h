@@ -92,11 +92,17 @@ protected:
 
     // Track the selected row for context menu actions
     int m_selected_row;
+    int m_selected_column;
+    int m_hovered_row;
 
     bool m_horizontal_scroll;
 
 private:
     void RenderLoadingIndicator() const;
+    void RenderCell(const std::string* cell_text, int row, int column);
+    void RenderHeadCell(const std::string& cell_text, int row);
+    void ProcessSortRequest(rocprofvis_controller_sort_order_t sort_order,
+                            uint64_t sort_column_index, uint64_t frame_count);
 
     int m_fetch_pad_items;
     int m_fetch_threshold_items;

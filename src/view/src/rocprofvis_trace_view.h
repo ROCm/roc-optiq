@@ -8,7 +8,7 @@
 #include "rocprofvis_project.h"
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_timeline_view.h"
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_split_containers.h"
 #include <unordered_map>
 
 namespace RocProfVis

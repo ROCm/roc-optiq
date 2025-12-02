@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_split_containers.h"
 #include <string>
 #include <list>
 

@@ -810,6 +810,8 @@ DataProvider::HandleLoadSystemTopology()
                     result = rocprofvis_controller_get_double(thread_handle,
                                                               kRPVControllerThreadEndTime,
                                                               0, &thread_info.end_time);
+                    result = rocprofvis_controller_get_uint64(
+                        thread_handle, kRPVControllerThreadTid, 0, &thread_info.tid);
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                     if(thread_type == kRPVControllerThreadTypeInstrumented)
                     {

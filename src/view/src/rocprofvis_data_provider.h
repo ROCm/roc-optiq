@@ -164,6 +164,7 @@ typedef struct thread_info_t : public iterable_info_t
 {
     double start_time;
     double end_time;
+    uint64_t tid;
 } thread_info_t;
 
 typedef struct queue_info_t : public iterable_info_t

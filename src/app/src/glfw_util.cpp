@@ -143,6 +143,37 @@ toggle_fullscreen(GLFWwindow* window, FullscreenState& state)
     rocprofvis_view_set_fullscreen_state(state.is_fullscreen);
 }
 
+void
+sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState& state)
+{
+    if(!window) return;
+
+    // Check if window is actually in fullscreen mode according to GLFW
+    GLFWmonitor* current_monitor        = glfwGetWindowMonitor(window);
+    bool         is_actually_fullscreen = (current_monitor != nullptr);
+
+    // If state is out of sync, update it
+    if(state.is_fullscreen != is_actually_fullscreen)
+    {
+        spdlog::debug("Detected OS-initiated fullscreen change: {} -> {}",
+                     state.is_fullscreen ? "fullscreen" : "windowed",
+                     is_actually_fullscreen ? "fullscreen" : "windowed");
+
+        state.is_fullscreen = is_actually_fullscreen;
+
+        // If we exited fullscreen, save the new windowed dimensions
+        if(!is_actually_fullscreen)
+        {
+            glfwGetWindowPos(window, &state.windowed_xpos, &state.windowed_ypos);
+            state.windowed_width  = width;
+            state.windowed_height = height;
+        }
+
+        // Notify view layer
+        rocprofvis_view_set_fullscreen_state(state.is_fullscreen);
+    }
+}
+
 std::pair<GLFWimage, unsigned char*>
 create_icon(const unsigned char* icon_data, size_t icon_data_len)
 {

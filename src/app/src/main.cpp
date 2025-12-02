@@ -24,7 +24,6 @@ static rocprofvis_view_render_options_t g_render_options =
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 
-
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
 {
@@ -67,9 +66,15 @@ app_notification_callback(GLFWwindow* window, int notification)
 }
 
 static void
+window_size_change_callback(GLFWwindow* window, int width, int height)
+{
+    RocProfVis::View::sync_fullscreen_state(window, width, height, g_fullscreen_state);
+}
+
+static void
 glfw_error_callback(int error, const char* description)
 {
-    fprintf(stderr, "GLFW Error %d: %s\n", error, description);
+    spdlog::error("GLFW Error {}: {}", error, description);
 }
 
 static void
@@ -129,6 +134,8 @@ main(int, char**)
         }
         // Window close callback
         glfwSetWindowCloseCallback(window, close_callback);
+        // Window size change callback
+        glfwSetWindowSizeCallback(window, window_size_change_callback);
         // Keyboard callback for fullscreen toggle
         glfwSetKeyCallback(window, key_callback);
 
@@ -219,7 +226,7 @@ main(int, char**)
         }
         else
         {
-            fprintf(stderr, "GLFW: Failed to initialize window & graphics API\n");
+            spdlog::error("GLFW: Failed to initialize window & graphics API backend");
             resultCode = 1;
         }
 
@@ -227,7 +234,7 @@ main(int, char**)
     }
     else
     {
-        fprintf(stderr, "GLFW: Failed to initialize GLFW\n");
+        spdlog::error("GLFW: Failed to initialize GLFW library");
         resultCode = 1;
     }
 

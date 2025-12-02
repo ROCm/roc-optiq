@@ -338,7 +338,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 {
                     ROCPROFVIS_ASSERT(level == event_level || level == UINT64_MAX);
 
-                    if (event_start < end_ts && event_end > start_ts)
+                    if (event_start < end_ts && event_end >= start_ts)
                     {
                         if((event_start >= min_ts && event_start <= max_ts) &&
                             (event_end >= min_ts && event_end <= max_ts))

@@ -102,15 +102,15 @@ Change display settings
 
 You can change these global display settings for ROCm Optiq from the **Settings** menu:
 
-The application theme display (Light or Dark mode) or the font scaling: either automatic based on the display DPI, or customized using the font size control.
+- The application theme display (Light or Dark mode) or the font scaling: either automatic based on the display DPI, or customized using the font size control.
 
-.. image:: ../images/settings.png
-   :width: 600
+   .. image:: ../images/settings.png
+      :width: 600
 
-The time unit settings displayed on the **Timeline View**.
+- The time unit settings displayed on the **Timeline View**.
 
-.. image:: ../images/units.png
-   :width: 600
+   .. image:: ../images/units.png
+      :width: 600
 
 Customize timeline display options
 ----------------------------------

@@ -28,7 +28,7 @@ Your system must be running one of these operating systems:
 Install on Windows
 ==================
 
-1. Download the **ROCm-Optiq-Beta.exe** installer from `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_ and follow the instructions in the install wizard.
+1. Download the **ROCm-Optiq-Beta.exe** installer from `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ and follow the instructions in the install wizard.
    
    .. image:: ../images/wizard.png
       :width: 500
@@ -108,7 +108,7 @@ Once you've installed ROCm Optiq for your operating system, add the ROCm binarie
 Check the ROCm Optiq version
 ============================
 
-Use this code to verify the ROCm Optiq version. 
+Use these commands to verify the ROCm Optiq version. 
 
 - Ubuntu (Debian-based):
 
@@ -116,7 +116,7 @@ Use this code to verify the ROCm Optiq version.
 
      apt show roc-optiq
 
-- RPM-based systems (Oracle/RHEL):
+- Oracle/RHEL (RPM-based):
 
   .. code-block:: shell
 

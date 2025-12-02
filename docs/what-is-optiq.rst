@@ -22,7 +22,7 @@ ROCm Optiq is structured around several key panels that work together to deliver
 - :ref:`timeline`: Displays CPU and GPU activities, events, and performance metrics chronologically. It has:
   
   - Event tracks that show events such as API calls, kernel dispatches, and more.
-  - Sample performance counter tracks are displayed as charts showing the data points. 
+  - Sample performance counter tracks that are displayed as charts showing the data points. 
   - Tools for zooming, filtering, and bookmarking for detailed analysis.
 
 - :ref:`advanced`: Provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. This section provides a unified interface for multiple data perspectives, offering granular insights.

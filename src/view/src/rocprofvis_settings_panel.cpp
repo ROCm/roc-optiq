@@ -211,18 +211,20 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Font Size");
     ImGui::SameLine();
-    if(ImGui::Button("-", ImVec2(button_width, 0)) && m_font_settings.size_index > 0)
+    ImGui::BeginDisabled(m_font_settings.size_index < 1);
+    if(ImGui::Button("-", ImVec2(button_width, 0)))
     {
         m_font_settings.size_index--;
     }
+    ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("00").x + 2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     ImGui::Combo("##font_size", &m_font_settings.size_index, m_font_sizes_ptr.data(),
                  static_cast<int>(m_font_sizes_ptr.size()));
     ImGui::SameLine();
-    if(ImGui::Button("+", ImVec2(button_width, 0)) &&
-       m_font_settings.size_index < m_fonts.GetAvailableFonts().size())
+    ImGui::BeginDisabled(m_font_settings.size_index > m_fonts.GetAvailableFonts().size() - 2);
+    if(ImGui::Button("+", ImVec2(button_width, 0)))
     {
         m_font_settings.size_index++;
     }
@@ -231,7 +233,7 @@ SettingsPanel::RenderDisplayOptions()
     {
         ImGui::SetTooltip("Increase or decrease the font size for the UI.");
     }
-
+    ImGui::EndDisabled();
     // Font preview
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Preview");

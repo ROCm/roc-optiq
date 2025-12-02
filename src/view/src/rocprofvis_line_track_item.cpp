@@ -18,6 +18,7 @@ namespace View
 
 constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
+constexpr float SCALE_SEPERATOR_WIDTH    = 2.0f;
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                              double time_offset_ns, double& min_x, double& max_x,
@@ -30,12 +31,12 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 , m_show_boxplot(true)
 , m_show_boxplot_stripes(false)
 , m_linetrack_project_settings(dp.GetTraceFilePath(), *this)
-, m_min_y(0, "edit_min", "Min: ")
-, m_max_y(0, "edit_max", "Max: ")
+, m_min_y("edit_min")
+, m_max_y("edit_max")
 , m_vertical_padding(DEFAULT_VERTICAL_PADDING)
 {
     m_meta_area_scale_width = max_meta_area_width;
-    UpdateYScaleExtents();
+    UpdateMetadata();
 
     if(m_linetrack_project_settings.Valid())
     {
@@ -49,13 +50,19 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 LineTrackItem::~LineTrackItem() {}
 
 void
-LineTrackItem::UpdateYScaleExtents()
+LineTrackItem::UpdateMetadata()
 {
     const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
     if(track_info)
     {
-        m_min_y.SetValue(0.0);  // Want to start at 0 by default.
-        m_max_y.SetValue(track_info->max_value);
+        const counter_info_t* counter =
+            m_data_provider.GetCounterInfo(track_info->topology.id);
+        if(counter)
+        {
+            m_units = counter->units;
+        }
+        m_min_y.Init(0.0, m_units);  // Want to start at 0 by default.
+        m_max_y.Init(m_units == "%" ? 100.0 : track_info->max_value, m_units);
     }
     else
     {
@@ -64,7 +71,7 @@ LineTrackItem::UpdateYScaleExtents()
     // Ensure that min and max are not equal to allow rendering
     if(m_min_y.Value() == m_max_y.Value())
     {
-        m_max_y.SetValue(m_min_y.Value() + 1.0);
+        m_max_y.Init(m_min_y.Value() + 1.0, m_units);
     }
     m_meta_area_scale_width = CalculateNewMetaAreaSize();
 }
@@ -138,7 +145,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
                                DEFAULT_LINE_THICKNESS);
         }
 
-        if(ImGui::IsMouseHoveringRect(ImVec2(point_start.x - 10, point_start.y - 10),
+        if(ImGui::IsMouseHoveringRect(ImVec2(point_start.x - 10, 0.0f),
                                       ImVec2(point_end.x + 10, bottom_of_chart)) &&
            ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
                                   ImGuiHoveredFlags_NoPopupHierarchy) &&
@@ -159,11 +166,17 @@ LineTrackItem::BoxPlotRender(float graph_width)
             nanosecond_to_formatted_str(hovered_item.m_start_ts - m_min_x, time_format, true);
         std::string dur_str =
             nanosecond_to_formatted_str(hovered_item.m_end_ts - hovered_item.m_start_ts, time_format, true);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            m_settings.GetDefaultStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            m_settings.GetDefaultStyle().FrameRounding);
         ImGui::BeginTooltip();
         ImGui::Text("Start: %s", start_str.c_str());
         ImGui::Text("Duration: %s", dur_str.c_str());
-        ImGui::Text("Value: %.2f", hovered_item.m_value);
+        ImGui::Text("Value: %.2f %s", hovered_item.m_value, m_units.c_str());
         ImGui::EndTooltip();
+        ImGui::PopStyleVar(2);
 
         // Map start and end points
         ImVec2 start_point = MapToUI(hovered_item.m_start_ts, hovered_item.m_value, cursor_position,
@@ -185,11 +198,9 @@ LineTrackItem::BoxPlotRender(float graph_width)
 float
 LineTrackItem::CalculateNewMetaAreaSize()
 {
-    ImVec2 max_size =
-        ImGui::CalcTextSize((m_max_y.CompactValue() + m_max_y.Prefix()).c_str());
+    ImVec2 max_size = ImGui::CalcTextSize(m_max_y.CompactValue().c_str());
 
-    ImVec2 min_size =
-        ImGui::CalcTextSize((m_min_y.CompactValue() + m_min_y.Prefix()).c_str());
+    ImVec2 min_size = ImGui::CalcTextSize(m_min_y.CompactValue().c_str());
 
     return std::max(
                { max_size.x + m_max_y.ButtonSize(), min_size.x + m_min_y.ButtonSize() }) +
@@ -275,26 +286,22 @@ LineTrackItem::RenderMetaAreaScale()
     ImVec2 content_region = ImGui::GetContentRegionMax();
     ImVec2 window_pos     = ImGui::GetWindowPos();
 
-    ImGui::SetCursorPos(
-        ImVec2(content_region.x + m_metadata_padding.x - m_meta_area_scale_width,
-               m_metadata_padding.y));
-    ImGui::TextUnformatted(m_max_y.Prefix().c_str());
-    ImGui::SameLine();
+    ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
+                                   m_metadata_padding.x + SCALE_SEPERATOR_WIDTH,
+                               m_metadata_padding.y));
     m_max_y.Render();
 
     ImVec2 min_size = ImGui::CalcTextSize(m_min_y.CompactValue().c_str());
-    ImGui::SetCursorPos(
-        ImVec2(content_region.x + m_metadata_padding.x - m_meta_area_scale_width,
-               content_region.y - min_size.y - m_metadata_padding.y));
-    ImGui::TextUnformatted(m_min_y.Prefix().c_str());
-    ImGui::SameLine();
+    ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
+                                   m_metadata_padding.x + SCALE_SEPERATOR_WIDTH,
+                               content_region.y - min_size.y - m_metadata_padding.y));
     m_min_y.Render();
 
     ImGui::GetWindowDrawList()->AddLine(
         ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width, window_pos.y),
         ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
                window_pos.y + content_region.y),
-        m_settings.GetColor(Colors::kMetaDataSeparator), 2.0f);
+        m_settings.GetColor(Colors::kMetaDataSeparator), SCALE_SEPERATOR_WIDTH);
 }
 
 void
@@ -466,12 +473,11 @@ LineTrackProjectSettings::HighlightRange() const
     };
 }
 
-LineTrackItem::VerticalLimits::VerticalLimits(double value, std::string field_id,
-                                              std::string prefix)
-: m_text_field(std::move(field_id))
-, m_prefix(std::move(prefix))
+LineTrackItem::VerticalLimits::VerticalLimits(std::string field_id)
+: m_default_value(0.0)
+, m_value(0.0)
+, m_text_field(std::move(field_id))
 {
-    SetValue(value);
     m_text_field.SetOnTextCommit([this](const std::string& committed_text) {
         // Empty string signals a revert-to-default in our usage
         if(committed_text.empty())
@@ -510,17 +516,16 @@ LineTrackItem::VerticalLimits::ButtonSize() const
     return m_text_field.ButtonSize();
 }
 
-const std::string&
-LineTrackItem::VerticalLimits::Prefix()
-{
-    return m_prefix;
-}
-
 void
-LineTrackItem::VerticalLimits::SetValue(double value)
+LineTrackItem::VerticalLimits::Init(double value, std::string units)
 {
     m_default_value     = value;
+    m_units             = units;
     m_formatted_default = FormatValue(value);
+    if(!units.empty())
+    {
+        m_formatted_default += " " + units;
+    }
     UpdateValue(value);
 }
 
@@ -537,6 +542,12 @@ LineTrackItem::VerticalLimits::UpdateValue(double value)
     m_value         = value;
     m_formatted_str = FormatValue(value);
     m_compact_str   = compact_number_format(value);
+    m_value = value;
+    if(!m_units.empty())
+    {
+        m_formatted_str += " " + m_units;
+        m_compact_str += " " + m_units;
+    }
     m_text_field.SetText(m_compact_str, m_formatted_str, m_formatted_default);
 }
 

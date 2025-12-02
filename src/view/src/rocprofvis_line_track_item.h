@@ -42,14 +42,15 @@ class LineTrackItem : public TrackItem
     class VerticalLimits
     {
     public:
-        VerticalLimits(double value, std::string field_id, std::string prefix);
+        VerticalLimits(std::string field_id);
+        void Render();
+
+        void Init(double value, std::string unit);
+
         double             Value() const;
         const std::string& StrValue() const;
         const std::string& CompactValue() const;
-        void               SetValue(double value);
-        void               Render();
         float              ButtonSize() const;
-        const std::string& Prefix();
 
     private:
         void        UpdateValue(double value);
@@ -62,8 +63,8 @@ class LineTrackItem : public TrackItem
 
         std::string m_formatted_str;
         std::string m_compact_str;
+        std::string m_units;
 
-        std::string       m_prefix;
         EditableTextField m_text_field;
     };
 
@@ -81,14 +82,12 @@ protected:
     virtual void RenderChart(float graph_width) override;
     virtual void RenderMetaAreaOptions() override;
 
-    void UpdateYScaleExtents();
-
 private:
+    void   UpdateMetadata();
     ImVec2 MapToUI(double x, double y, ImVec2& c_position, ImVec2& c_size, double scale_x,
                    double scale_y);
     bool   ExtractPointsFromData();
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
-    void   LineTrackRender(float graph_width);
     void   BoxPlotRender(float graph_width);
     void   RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
                                const ImVec2& content_size, double scale_y);
@@ -98,6 +97,7 @@ private:
 
     VerticalLimits           m_min_y;
     VerticalLimits           m_max_y;
+    std::string              m_units;
     bool                     m_highlight_y_range;
     DataProvider&            m_dp;
     bool                     m_show_boxplot;

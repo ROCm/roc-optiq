@@ -291,18 +291,13 @@ TrackItem::RenderMetaArea()
       
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
-                                   0));
-        ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-        ImGui::Button(ICON_GEAR);
-        ImGui::PopFont();
-        ImGui::PopStyleColor(3);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, 
+                                   m_metadata_padding.y));
+        IconButton(ICON_GEAR,
+                   m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             m_settings.GetDefaultStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            m_settings.GetDefaultStyle().FrameRounding);
         if(ImGui::BeginItemTooltip())
         {
             ImGui::TextUnformatted("Track Options");
@@ -318,7 +313,7 @@ TrackItem::RenderMetaArea()
             RenderMetaAreaOptions();
             ImGui::EndPopup();
         }
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
     }

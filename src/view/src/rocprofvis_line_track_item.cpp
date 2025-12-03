@@ -145,8 +145,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
                                DEFAULT_LINE_THICKNESS);
         }
 
-        if(ImGui::IsMouseHoveringRect(ImVec2(point_start.x - 10, 0.0f),
-                                      ImVec2(point_end.x + 10, bottom_of_chart)) &&
+        if(ImGui::IsMouseHoveringRect(ImVec2(point_start.x, 0.0f),
+                                      ImVec2(point_end.x, bottom_of_chart)) &&
            ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
                                   ImGuiHoveredFlags_NoPopupHierarchy) &&
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
@@ -542,7 +542,6 @@ LineTrackItem::VerticalLimits::UpdateValue(double value)
     m_value         = value;
     m_formatted_str = FormatValue(value);
     m_compact_str   = compact_number_format(value);
-    m_value = value;
     if(!m_units.empty())
     {
         m_formatted_str += " " + m_units;

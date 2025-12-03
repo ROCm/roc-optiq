@@ -81,21 +81,6 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
             m_level_height = m_settings.GetEventLevelCompactHeight();
         }
     }
-
-
-    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
-    //check if type is instrumentedthread and if type is uint64_t id;   == uint64_t process_id; 
-    if(track_info->topology.type == track_info_t::Topology::InstrumentedThread)
-    {
-        auto s = m_data_provider.GetInstrumentedThreadInfo(track_info->topology.id) ;
-        if (s->tid == track_info->topology.process_id) {
-            //MAIN THREAD
-            std::cout << " djknfsdk";
-
-        }
- 
-    }
- 
 }
 
 void

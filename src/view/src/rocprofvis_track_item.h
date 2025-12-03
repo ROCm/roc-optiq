@@ -128,6 +128,7 @@ protected:
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;
     static float                                     s_metadata_width;
+    bool                                             m_is_main_thread;
 
 private:
     TrackProjectSettings m_track_project_settings;

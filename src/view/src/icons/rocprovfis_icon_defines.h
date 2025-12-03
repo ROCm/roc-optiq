@@ -39,6 +39,6 @@ constexpr const char* ICON_DELETE        = u8"\uF2D7";
 constexpr const char* ICON_CHAIN         = u8"\uF1FE";
 constexpr const char* ICON_TREE          = u8"\uF33F";
 constexpr const char* ICON_EDIT          = u8"\uF37E";
-
+ 
 }  // namespace View
 }  // namespace RocProfVis

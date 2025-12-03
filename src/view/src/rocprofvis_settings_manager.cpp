@@ -315,6 +315,7 @@ SettingsManager::SaveSettingsJson()
     SerializeInternalSettings(settings_json);
     SerializeDisplaySettings(settings_json);
     SerializeUnitSettings(settings_json);
+    SerializeOtherSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -342,6 +343,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeInternalSettings(result.second);
         DeserializeDisplaySettings(result.second);
         DeserializeUnitSettings(result.second);
+        DeserializeOtherSettings(result.second);
     }
     else
     {
@@ -419,6 +421,7 @@ SettingsManager::SettingsManager()
 , m_usersettings_default(
       { DisplaySettings{ false, true, 6 }, UnitSettings{ TimeFormat::kTimecode } })
 , m_usersettings(m_usersettings_default)
+, m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_display_dpi(1.5f)
 , m_json_path(GetStandardConfigPath())
 {}
@@ -481,6 +484,16 @@ SettingsManager::InitStyling()
     style.WindowPadding = ImVec2(4, 4);
 
     m_default_style = style;  // Store the our customized style
+
+    std::vector<ImU32> colormap;
+    for(const ImU32& flame_color : GetColorWheel())
+    {
+        colormap.push_back(255 << IM_COL32_A_SHIFT | flame_color);
+    }
+    colormap.push_back(IM_COL32(220, 50, 50, 255));
+    ImPlot::AddColormap("flame", colormap.data(), colormap.size());
+    colormap = { IM_COL32(255, 255, 255, 255), IM_COL32(255, 255, 255, 255) };
+    ImPlot::AddColormap("white", colormap.data(), colormap.size());
 }
 
 const ImGuiStyle&
@@ -499,6 +512,12 @@ InternalSettings&
 SettingsManager::GetInternalSettings()
 {
     return m_internalsettings;
+}
+
+AppWindowSettings&
+SettingsManager::GetAppWindowSettings()
+{
+    return m_appwindowsettings;
 }
 
 void
@@ -547,6 +566,31 @@ SettingsManager::DeserializeInternalSettings(jt::Json& json)
                 m_internalsettings.recent_files.emplace_back(entry.getString());
             }
         }
+    }
+}
+
+void
+SettingsManager::SerializeOtherSettings(jt::Json& json)
+{
+    jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
+
+    os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT] = m_usersettings.dont_ask_before_exit;
+    os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE] = m_usersettings.dont_ask_before_tab_closing;
+}
+
+void
+SettingsManager::DeserializeOtherSettings(jt::Json& json)
+{
+    jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
+    if(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT].isBool())
+    {
+        m_usersettings.dont_ask_before_exit =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].isBool())
+    {
+        m_usersettings.dont_ask_before_tab_closing =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].getBool());
     }
 }
 

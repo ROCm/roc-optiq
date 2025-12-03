@@ -29,11 +29,13 @@ private:
     enum Category
     {
         Display,
-        Units
+        Units,
+        Other
     };
 
     void RenderDisplayOptions();
     void RenderUnitOptions();
+    void RenderOtherSettings();
 
     void ResetDisplayOptions();
     void ResetUnitOptions();

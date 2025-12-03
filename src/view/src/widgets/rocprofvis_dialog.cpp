@@ -10,11 +10,12 @@ namespace View
 
 void
 ConfirmationDialog::Show(const std::string& title, const std::string& message,
-                         std::function<void()> on_confirm_callback)
+                         std::function<void()> on_confirm_callback, std::function<void()> on_cancel_callback)
 {
     m_title       = title;
     m_message     = message;
     m_on_confirm  = on_confirm_callback;
+    m_on_cancel   = on_cancel_callback;
     m_should_open = true;
 }
 
@@ -35,12 +36,19 @@ ConfirmationDialog::Render()
 
         // Todo: get rid of magic numbers
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));        
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
 
         if(ImGui::BeginPopupModal(m_title.c_str(), NULL, ImGuiWindowFlags_AlwaysAutoResize))
         {
             ImGui::NewLine();
+
+            // Add message text with padding
+            ImGui::Dummy(ImVec2(5.0f, 0.0f));
+            ImGui::SameLine();
             ImGui::TextUnformatted(m_message.c_str());
+            ImGui::SameLine();
+            ImGui::Dummy(ImVec2(5.0f, 0.0f));
+
             ImGui::NewLine();
             ImGui::Separator();
 
@@ -48,7 +56,7 @@ ConfirmationDialog::Render()
             {
                 if(m_on_confirm)
                 {
-                    m_on_confirm();  // Execute the action
+                    m_on_confirm();
                 }
                 ImGui::CloseCurrentPopup();
             }
@@ -58,7 +66,17 @@ ConfirmationDialog::Render()
 
             if(ImGui::Button("Cancel"))
             {
+                if(m_on_cancel)
+                {
+                    m_on_cancel();
+                }
                 ImGui::CloseCurrentPopup();
+            }
+
+            if(m_skip_dialog_setting.has_value())
+            {
+                ImGui::SameLine();
+                DrawCheckboxOption();
             }
 
             ImGui::EndPopup();
@@ -66,6 +84,22 @@ ConfirmationDialog::Render()
 
         ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_WindowPadding, ImGuiStyleVar_ItemSpacing
     }
+}
+
+void
+ConfirmationDialog::DrawCheckboxOption()
+{
+    const char* cb_label  = "Don't ask me again";
+    ImGuiStyle& style     = ImGui::GetStyle();
+    float window_width    = ImGui::GetWindowSize().x;
+    float text_width      = ImGui::CalcTextSize(cb_label).x;
+    float checkbox_square = ImGui::GetFrameHeight();
+    float total_width =
+        checkbox_square + style.ItemInnerSpacing.x + text_width + style.FramePadding.x;
+
+    float pos_x = window_width - style.WindowPadding.x - total_width;
+    ImGui::SetCursorPosX(pos_x);
+    ImGui::Checkbox(cb_label, &m_skip_dialog_setting->get());
 }
 
 void

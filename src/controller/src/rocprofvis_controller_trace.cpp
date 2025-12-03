@@ -20,6 +20,8 @@
 #include "rocprofvis_controller_processor.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_sample.h"
+#include "rocprofvis_controller_summary.h"
+#include "rocprofvis_controller_summary_metrics.h"
 #include "rocprofvis_controller_table_system.h"
 #include "rocprofvis_controller_timeline.h"
 #include "rocprofvis_controller_track.h"
@@ -60,6 +62,7 @@ Trace::Trace()
 , m_event_table(nullptr)
 , m_sample_table(nullptr)
 , m_search_table(nullptr)
+, m_summary(nullptr)
 , m_dm_handle(nullptr)
 , m_mem_mgmt(nullptr)
 , m_dm_progress_percent(0)
@@ -81,6 +84,8 @@ rocprofvis_result_t Trace::Init()
 
         m_search_table = new SystemTable(2);
 
+        m_summary = new Summary(this);
+
         m_mem_mgmt = new MemoryManager(m_id);
 
         result = kRocProfVisResultSuccess;
@@ -101,6 +106,7 @@ Trace::~Trace()
     delete m_event_table;
     delete m_sample_table;
     delete m_search_table;
+    delete m_summary;
     for (Track* track : m_tracks)
     {
         delete track;
@@ -961,6 +967,17 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                                 {
                                                                     processors[val] = proc;
                                                                 }
+                                                            }
+                                                            else if(columns[j] == kRPVControllerProcessorType)
+                                                            {
+                                                                if(strcmp(prop_string, "GPU") == 0)
+                                                                {
+                                                                    proc->SetUInt64(columns[j], 0, kRPVControllerProcessorTypeGPU);
+                                                                }
+                                                                else if(strcmp(prop_string, "CPU") == 0)
+                                                                {
+                                                                    proc->SetUInt64(columns[j], 0, kRPVControllerProcessorTypeCPU);
+                                                                }                                                                
                                                             }
                                                             else
                                                             {
@@ -2318,6 +2335,10 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                             counter_process->SetUInt64(kRPVControllerProcessNumCounters, 0, count+1);
                                                             counter_process->SetObject(kRPVControllerProcessCounterIndexed, count, (rocprofvis_handle_t*)counter);
 
+                                                            counter_processor->GetUInt64(kRPVControllerProcessorNumCounters, 0, &count);
+                                                            counter_processor->SetUInt64(kRPVControllerProcessorNumCounters, 0, count+1);
+                                                            counter_processor->SetObject(kRPVControllerProcessorCounterIndexed, count, (rocprofvis_handle_t*)counter);
+
                                                             counter->SetObject(kRPVControllerCounterProcessor,0,(rocprofvis_handle_t*) counter_processor);
                                                         }
 
@@ -2639,6 +2660,26 @@ Trace::TableExportCSV(Table& table, Arguments& args, Future& future, const char*
     return error;
 }
 
+rocprofvis_result_t
+Trace::AsyncFetch(Summary& summary, Arguments& args, Future& future, SummaryMetrics& output)
+{
+    rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+
+    future.Set(JobSystem::Get().IssueJob([&summary, dm_handle, &args, &output](Future* future) -> rocprofvis_result_t {
+            rocprofvis_result_t result = kRocProfVisResultUnknownError;
+            result = summary.Fetch(dm_handle, args, output, future);
+            return result;
+        }, &future));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
+
 #ifdef COMPUTE_UI_SUPPORT
 rocprofvis_result_t
 Trace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
@@ -2842,7 +2883,6 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
                 break;
             }
 #endif
-            case kRPVControllerNumNodes:
             case kRPVControllerNodeIndexed:
             {
                 if(index < m_nodes.size())
@@ -2854,6 +2894,12 @@ rocprofvis_result_t Trace::GetObject(rocprofvis_property_t property, uint64_t in
                 {
                     result = kRocProfVisResultOutOfRange;
                 }
+                break;
+            }
+            case kRPVControllerSummary:
+            {
+                *value = (rocprofvis_handle_t*)m_summary;
+                result = kRocProfVisResultSuccess;
                 break;
             }
             default:

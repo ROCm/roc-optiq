@@ -140,6 +140,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
         if(ImGui::IsMouseHoveringRect(ImVec2(point_start.x - 10, point_start.y - 10),
                                       ImVec2(point_end.x + 10, bottom_of_chart)) &&
+           ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
+                                  ImGuiHoveredFlags_NoPopupHierarchy) &&
            TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
         {
             hovered_idx = static_cast<int>(i);

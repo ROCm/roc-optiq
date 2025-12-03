@@ -236,6 +236,12 @@ void SplitContainerBase::Render()
     }
 }
 
+float
+SplitContainerBase::GetMinSize()
+{
+    return m_first_min_size + m_resize_grip_size + m_second_min_size;
+}
+
 void
 SplitContainerBase::SetFirst(LayoutItem::Ptr first)
 {
@@ -348,7 +354,8 @@ HSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_
     float mouse_x   = mouse_pos.x - window_pos.x;
     float new_ratio = (mouse_x - (m_resize_grip_size / 2)) / available_width;
     new_ratio       = std::clamp(new_ratio, m_first_min_size / available_width,
-                                 1.0f - m_second_min_size / available_width);
+                                 std::max(m_first_min_size / available_width,
+                                          1.0f - m_second_min_size / available_width));
     m_split_ratio   = new_ratio;
 }
 
@@ -429,9 +436,10 @@ VSplitContainer::GetFirstChildSize(float available_width)
     if (m_second && m_second->m_visible)
     {
         float available_size = available_width;
-        top_row_height         = available_size * m_split_ratio;
-        top_row_height         = std::clamp(top_row_height, m_first_min_size,
-                                       available_size - m_second_min_size);
+        top_row_height       = available_size * m_split_ratio;
+        top_row_height =
+            std::clamp(top_row_height, m_first_min_size,
+                       std::max(m_first_min_size, available_size - m_second_min_size));
     }
     return ImVec2(0, top_row_height);
 }
@@ -449,7 +457,7 @@ VSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_
     float mouse_y   = mouse_pos.y - window_pos.y;
     float new_ratio = (mouse_y - (m_resize_grip_size / 2)) / available_height;
     new_ratio       = std::clamp(new_ratio, m_first_min_size / available_height,
-                                 1.0f - m_second_min_size / available_height);
+                                 std::max(m_first_min_size / available_height, 1.0f - m_second_min_size / available_height));
     m_split_ratio   = new_ratio;
 }
 
@@ -467,11 +475,15 @@ VSplitContainer::GetItemSize()
 
 //------------------------------------------------------------------
 TabContainer::TabContainer()
-: m_active_tab_index(-1)
-, m_set_active_tab_index(-1)
+: m_active_tab_index(s_invalid_index)
+, m_set_active_tab_index(s_invalid_index)
 , m_allow_tool_tips(true)
 , m_enable_send_close_event(false)
 , m_enable_send_change_event(false)
+, m_index_to_remove(s_invalid_index)
+, m_pending_to_remove(s_invalid_index)
+, m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
+      SettingsManager::GetInstance().GetUserSettings().dont_ask_before_tab_closing))
 {
     m_widget_name = GenUniqueName("TabContainer");
 }
@@ -503,6 +515,31 @@ TabContainer::EnableSendChangeEvent(bool enable)
 }
 
 void
+TabContainer::ShowCloseTabConfirm(int removing_tab_index)
+{
+    auto confirm = [this, removing_tab_index]() {
+        m_pending_to_remove = s_invalid_index;
+        RemoveTab(removing_tab_index);
+    };
+    auto cancel = [this]() { m_pending_to_remove = s_invalid_index; };
+
+    m_confirmation_dialog->Show("Confirm Closing tab",
+                                "Are you sure you want to close the tab: " +
+                                m_tabs[removing_tab_index].m_label +
+                                "? Any unsaved data will be lost.",
+                                confirm, cancel);
+}
+
+void
+TabContainer::SendEvent(RocEvents event, const std::string& tab_id)
+{
+    std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
+        static_cast<int>(event), tab_id,
+        m_event_source_name.empty() ? m_widget_name : m_event_source_name);
+    EventManager::GetInstance()->AddEvent(e);
+}
+
+void
 TabContainer::Update()
 {
     // Update logic for each tab
@@ -519,18 +556,18 @@ void
 TabContainer::Render()
 {
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
-
     int new_selected_tab = m_active_tab_index;
-    int index_to_remove  = -1;
     if(!m_tabs.empty())
     {
         if(ImGui::BeginTabBar("Tabs"))
         {
             for(size_t i = 0; i < m_tabs.size(); ++i)
             {
-                const TabItem&    tab = m_tabs[i];
+                const TabItem&     tab = m_tabs[i];
                 ImGuiTabItemFlags flags =
-                    (i == m_set_active_tab_index) ? ImGuiTabItemFlags_SetSelected : 0;
+                    (i == m_set_active_tab_index || i == m_pending_to_remove)
+                        ? ImGuiTabItemFlags_SetSelected
+                        : 0;
 
                 bool  is_open = true;
                 bool* p_open  = &is_open;
@@ -545,7 +582,7 @@ TabContainer::Render()
                 if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags))
                 {
                     tab_visible = true;
-                    // show tooltip for the active tab if header is hovered
+                    // Show tooltip for the active tab if header is hovered
                     if(m_allow_tool_tips && ImGui::IsItemHovered())
                     {
                         ImGui::SetTooltip("%s", tab.m_id.c_str());
@@ -559,7 +596,8 @@ TabContainer::Render()
                     ImGui::EndTabItem();
                 }
                 ImGui::PopID();
-                // show tooltip for inactive tabs if header is hovered
+
+                // Show tooltip for inactive tabs if header is hovered
                 if(!tab_visible && ImGui::IsItemHovered())
                 {
                     if(m_allow_tool_tips)
@@ -570,11 +608,20 @@ TabContainer::Render()
 
                 if(p_open && !is_open)
                 {
-                    index_to_remove = static_cast<int>(i);
+                    if(SettingsManager::GetInstance().GetUserSettings().dont_ask_before_tab_closing)
+                    {
+                        m_index_to_remove   = static_cast<int>(i);
+                    }
+                    else
+                    {
+                        m_pending_to_remove = static_cast<int>(i);
+                    }
                 }
             }
             ImGui::EndTabBar();
         }
+
+        m_confirmation_dialog->Render();
 
         // Check if the active tab has changed
         if(m_active_tab_index != new_selected_tab)
@@ -582,26 +629,23 @@ TabContainer::Render()
             m_active_tab_index = new_selected_tab;
             if(new_selected_tab < m_tabs.size() && m_enable_send_change_event)
             {
-                std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-                    static_cast<int>(RocEvents::kTabSelected),
-                    m_tabs[new_selected_tab].m_id,
-                    m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-                EventManager::GetInstance()->AddEvent(e);
+                SendEvent(RocEvents::kTabSelected, m_tabs[new_selected_tab].m_id);
             }
         }
 
-        // clear the set active tab index
-        m_set_active_tab_index = -1;
+        // Clear the set active tab index
+        m_set_active_tab_index = s_invalid_index;
 
         // Remove the tab if it was closed
-        if(index_to_remove != -1)
+        if(m_index_to_remove != s_invalid_index)
         {
-            RemoveTab(index_to_remove);
-            if(m_active_tab_index == index_to_remove)
-            {
-                // If the active tab was closed, reset to -1
-                m_active_tab_index = -1;
-            }
+            RemoveTab(m_index_to_remove);
+        }
+
+        // Show confirm dialog if user option set
+        if(m_pending_to_remove != s_invalid_index)
+        {
+            ShowCloseTabConfirm(m_pending_to_remove);
         }
     }
     ImGui::EndChild();
@@ -619,7 +663,6 @@ TabContainer::AddTab(TabItem&& tab)
     m_tabs.push_back(std::move(tab));
 }
 
-// Remove a tab
 void
 TabContainer::RemoveTab(const std::string& id)
 {
@@ -630,12 +673,8 @@ TabContainer::RemoveTab(const std::string& id)
         if(m_enable_send_close_event)
         {
             // notify the event manager of the tab removal
-            std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-                static_cast<int>(RocEvents::kTabClosed), it->m_id,
-                m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-            EventManager::GetInstance()->AddEvent(e);
+            SendEvent(RocEvents::kTabClosed, it->m_id);
         }
-
         m_tabs.erase(it, m_tabs.end());
     }
 }
@@ -648,13 +687,16 @@ TabContainer::RemoveTab(int index)
         if(m_enable_send_close_event)
         {
             // notify the event manager of the tab removal
-            std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-                static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id,
-                m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-            EventManager::GetInstance()->AddEvent(e);
+            SendEvent(RocEvents::kTabClosed, m_tabs[index].m_id);
         }
 
         m_tabs.erase(m_tabs.begin() + index);
+        if(m_active_tab_index == index)
+        {
+            // If the active tab was closed, reset to invalid index
+            m_active_tab_index = s_invalid_index;
+        }
+        m_index_to_remove = s_invalid_index;
     }
 }
 

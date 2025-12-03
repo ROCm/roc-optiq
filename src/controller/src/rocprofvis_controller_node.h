@@ -51,7 +51,7 @@ private:
     std::string             m_os_version;
     std::string             m_hardware_name;
     uint64_t                m_hash;
-    uint32_t                m_id;
+    uint64_t                m_id;
 };
 
 }

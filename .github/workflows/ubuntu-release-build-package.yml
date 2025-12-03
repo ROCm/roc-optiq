@@ -3,6 +3,8 @@ run-name: rocprofiler-visualizer-release-ubuntu-build-package
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+      types: [trigger-release-build]
 
 env:
   VISUALIZER_FILE_NAME: "roc-optiq"
@@ -44,7 +46,7 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           mkdir build
-          cmake -B build/linux-release --preset "linux-release" --install-prefix /opt/rocprofiler-visualizer
+          cmake -B build/linux-release --preset "linux-release"
           cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --target package
           if [ -e build/linux-release/${{ env.VISUALIZER_FILE_NAME }} ]; then
             echo "✅ {{ env.VISUALIZER_FILE_NAME }} has been successfully built!"

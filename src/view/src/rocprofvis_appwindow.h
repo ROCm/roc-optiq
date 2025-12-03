@@ -121,9 +121,6 @@ private:
     bool         m_show_provider_test_widow;
 #endif
     bool m_open_about_dialog;
-    bool m_analysis_bar_visible;
-    bool m_sidebar_visible;
-    bool m_histogram_visible;
     bool m_disable_app_interaction;
 
 #ifndef USE_NATIVE_FILE_DIALOG

@@ -12,7 +12,25 @@ flavor defines the site header display, select the flavor for the corresponding 
 flavor options: rocm, rocm-docs-home, rocm-blogs, rocm-ds, instinct, ai-developer-hub, local, generic
 '''
 html_theme = "rocm_docs_theme"
-html_theme_options = {"flavor": "rocm-docs-home"}
+html_theme_options = {
+    "announcement": "This is ROCm 7.9.0 technology preview release documentation. For the latest production stream release, refer to <a id='rocm-banner' href='https://rocm.docs.amd.com/en/latest/'>ROCm documentation</a>.",
+    "flavor": "generic",
+    "header_title": "ROCm™ Optiq",
+    "header_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/",
+    "nav_secondary_items": {
+        "GitHub": "https://github.com/ROCm/ROCm",
+        "Community": "https://github.com/ROCm/ROCm/discussions",
+        "Blogs": "https://rocm.blogs.amd.com/",
+        "Instinct™ Docs": "https://instinct.docs.amd.com/",
+        "Support": "https://github.com/ROCm/ROCm/issues/new/choose",
+    },
+    "link_main_doc": False,
+    "secondary_sidebar_items": {
+        "**": ["page-toc"],
+        "install/rocm": ["selector-toc2"],
+        "compatibility/compatibility-matrix": ["selector-toc2"],
+    }
+}
 
 
 # This section turns on/off article info

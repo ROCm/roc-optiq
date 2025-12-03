@@ -23,7 +23,7 @@ html_theme_options = {
         "Instinct™ Docs": "https://instinct.docs.amd.com/",
         "Support": "https://github.com/ROCm/ROCm/issues/new/choose",
     },
-    "link_main_doc": True,
+    "link_main_doc": False,
     "secondary_sidebar_items": {
         "**": ["page-toc"],
         "install/rocm": ["selector-toc2"],

@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_widget.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_debug_window.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
-#include "icons/rocprovfis_icon_defines.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 #include <algorithm>
 #include <iostream>
@@ -817,6 +818,27 @@ EditableTextField::ShowResetButton(bool is_button_shown)
 void
 EditableTextField::DrawPlainText()
 {
+    SettingsManager& settings = SettingsManager::GetInstance();
+    if(m_show_reset_button)
+    {
+        if(IconButton(ICON_ARROWS_CYCLE,
+                      settings.GetFontManager().GetIconFont(FontType::kDefault)))
+        {
+            RevertToDefault();
+        }
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            settings.GetDefaultStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            settings.GetDefaultStyle().FrameRounding);
+        if(ImGui::BeginItemTooltip())
+        {
+            ImGui::TextUnformatted("Revert To Default");
+            ImGui::TextUnformatted(m_reset_tooltip.c_str());
+            ImGui::EndTooltip();
+        }
+        ImGui::PopStyleVar(2);
+        ImGui::SameLine();
+    }
     // Draw the text as a button to avoid the background
     // and prevent clicks from being registered.
     ImGui::PushStyleColor(ImGuiCol_Button, 0);
@@ -824,61 +846,29 @@ EditableTextField::DrawPlainText()
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
 
-    bool clicked = ImGui::Button(m_text.c_str());
+    ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                         ImGui::CalcTextSize(m_text.c_str()).x -
+                         ImGui::GetStyle().WindowPadding.x);
+    if(ImGui::Button(m_text.c_str()))
+    {
+        m_editing_mode           = true;
+        m_request_keyboard_focus = true;
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().FrameRounding);
     if(ImGui::BeginItemTooltip())
     {
         ImGui::TextUnformatted(m_tooltip_text.c_str());
         ImGui::EndTooltip();
     }
-
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
-
+    ImGui::PopStyleVar(2);
     if(ImGui::IsItemHovered())
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-    }
-    if(clicked)
-    {
-        m_editing_mode = true;
-        m_request_keyboard_focus = true;
-    }
-    if(m_show_reset_button)
-    {
-        ImGuiStyle& style = ImGui::GetStyle();
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
-        ImGui::PushFont(icon_font);
-
-        ImVec2 icon_size = ImGui::CalcTextSize(ICON_ARROWS_CYCLE);
-        float  button_w  = icon_size.x + style.FramePadding.x * 2.0f;
-        float  button_h  = icon_size.y + style.FramePadding.y * 2.0f;
-
-        ImVec2 prev_min      = ImGui::GetItemRectMin();
-        ImVec2 prev_max      = ImGui::GetItemRectMax();
-        float  prev_center_y = (prev_min.y + prev_max.y) * 0.5f;
-
-        ImVec2 window_pos      = ImGui::GetWindowPos();
-        ImVec2 content_max     = ImGui::GetContentRegionMax();
-        float  right_screen    = window_pos.x + content_max.x;
-        float  target_x_screen = right_screen - button_w - style.FramePadding.x * 4.0f;
-
-        float target_y_screen = prev_center_y - (button_h * 0.5f);
-        ImVec2 prev_screen_cursor = ImGui::GetCursorScreenPos();
-        ImGui::SetCursorScreenPos(ImVec2(target_x_screen, target_y_screen));
-        if(ImGui::Button(ICON_ARROWS_CYCLE, ImVec2(button_w, button_h)))
-        {
-            RevertToDefault();
-        }
-        // restore previous cursor so layout continues as expected
-        ImGui::SetCursorScreenPos(prev_screen_cursor);
-        ImGui::PopFont();
-        if(ImGui::BeginItemTooltip())
-        {
-            ImGui::TextUnformatted("Revert To Default");
-            ImGui::TextUnformatted(m_reset_tooltip.c_str());
-            ImGui::EndTooltip();
-        }
     }
 }
 
@@ -904,8 +894,10 @@ EditableTextField::DrawEditingText()
     ImGui::SetNextItemWidth(width);
 
     // make edit field on the same level as the textfield
-    ImVec2 prev_cursor = ImGui::GetCursorPos();
-    ImGui::SetCursorPos(ImVec2(prev_cursor.x, prev_cursor.y - 2.0f));
+    ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionMax().x -
+                                   ImGui::CalcTextSize(m_text.c_str()).x -
+                                   ImGui::GetStyle().WindowPadding.x,
+                               ImGui::GetCursorPosY() - 2.0f));
 
     if(m_request_keyboard_focus)
     {

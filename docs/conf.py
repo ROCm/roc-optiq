@@ -13,7 +13,7 @@ flavor options: rocm, rocm-docs-home, rocm-blogs, rocm-ds, instinct, ai-develope
 '''
 html_theme = "rocm_docs_theme"
 html_theme_options = {
-    "flavor": "local",
+    "flavor": "generic",
     "header_title": "ROCm™ Optiq (Beta) 0.1.0",
     "header_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/",
     "nav_secondary_items": {
@@ -23,7 +23,7 @@ html_theme_options = {
         "Instinct™ Docs": "https://instinct.docs.amd.com/",
         "Support": "https://github.com/ROCm/ROCm/issues/new/choose",
     },
-    "link_main_doc": True,
+    "link_main_doc": False,
 
 }
 

@@ -96,6 +96,7 @@ AppWindow::AppWindow()
 , m_is_native_file_dialog_open(false)
 #endif
 , m_disable_app_interaction(false)
+, m_restore_fullscreen_later(false)
 {}
 
 AppWindow::~AppWindow()
@@ -855,6 +856,18 @@ AppWindow::UpdateNativeFileDialog()
             }
             m_is_native_file_dialog_open = false;
             m_file_dialog_callback       = nullptr;
+
+            if(m_restore_fullscreen_later)
+            {
+                // toggle fullscreen on if it should be restored after dialog closes
+                if(!m_is_fullscreen && m_notification_callback)
+                {
+                    m_notification_callback(
+                        rocprofvis_view_notification_t::
+                            kRocProfVisViewNotification_Toggle_Fullscreen);
+                }
+                m_restore_fullscreen_later = false;
+            }
         }
     }
 }
@@ -872,6 +885,17 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
     m_is_native_file_dialog_open = true;
     m_file_dialog_callback       = callback;
     m_disable_app_interaction    = true;
+
+    if(m_is_fullscreen)
+    {
+        // toggle fullscreen off before opening native file dialog
+        if(m_notification_callback)
+        {
+            m_restore_fullscreen_later = true;
+            m_notification_callback(rocprofvis_view_notification_t::
+                                        kRocProfVisViewNotification_Toggle_Fullscreen);
+        }
+    }
 
     m_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
         NFD_Init();

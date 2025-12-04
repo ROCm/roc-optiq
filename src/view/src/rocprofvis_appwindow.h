@@ -141,6 +141,7 @@ private:
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
     bool                             m_is_fullscreen;
+    bool                             m_restore_fullscreen_later;
 };
 
 }  // namespace View

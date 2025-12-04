@@ -26,7 +26,8 @@
   - Use native OS file dialogs when opening or saving files
   - Improved dark theme colors
   - About Dialog now has link to documentation
-
+  - Show confirmation dialog when closing open tab
+  
 ### Fixes
 
   - Fix: Delete temporary files when application exits
@@ -40,6 +41,9 @@
   - Fix: No data when scrolling at highest zoom
   - Fix: Samples overlap on track
   - Fix: Crash when re-ordering tracks and view track details
+  - Fix: Sampled threads not trimmed correctly
+  - Fix: Crash when closing application while trace is loading
+  - Fix: Sometimes not showing events that have 0 duration
 
 ## Alpha 0.6.3
 

@@ -40,6 +40,9 @@ void toggle_fullscreen(GLFWwindow* window, FullscreenState& state);
 // Sync fullscreen state with actual window state (in case of OS-initiated changes)
 void sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState& state);
 
+// Check if the window is currently in fullscreen mode
+bool is_fullscreen_active(GLFWwindow* window);
+
 // Create a GLFW image from an icon image
 std::pair<GLFWimage, unsigned char*> create_icon(const unsigned char* icon_data, size_t icon_data_len);
 

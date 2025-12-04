@@ -148,9 +148,8 @@ sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState
 {
     if(!window) return;
 
-    // Check if window is actually in fullscreen mode according to GLFW
-    GLFWmonitor* current_monitor        = glfwGetWindowMonitor(window);
-    bool         is_actually_fullscreen = (current_monitor != nullptr);
+    // Check if window is actually in fullscreen mode (as OS may have changed it)
+    bool is_actually_fullscreen = is_fullscreen_active(window);
 
     // If state is out of sync, update it
     if(state.is_fullscreen != is_actually_fullscreen)
@@ -167,11 +166,67 @@ sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState
             glfwGetWindowPos(window, &state.windowed_xpos, &state.windowed_ypos);
             state.windowed_width  = width;
             state.windowed_height = height;
+            // Restore windowed mode (set monitor to nullptr)
+            glfwSetWindowMonitor(window, nullptr, state.windowed_xpos, state.windowed_ypos,
+                             state.windowed_width, state.windowed_height, GLFW_DONT_CARE);            
         }
 
         // Notify view layer
         rocprofvis_view_set_fullscreen_state(state.is_fullscreen);
     }
+}
+
+bool
+is_fullscreen_active(GLFWwindow* window)
+{
+    if (!window) return false;
+
+    GLFWmonitor* monitor = glfwGetWindowMonitor(window);
+    if (!monitor)
+    {
+        return false;
+    }
+
+    // If monitor is set, window should be in exclusive fullscreen mode, but
+    // if mode was changed to windowed via OS, glfw might be out of sync.
+
+    // Get current window size/pos
+    int wx = 0, wy = 0, ww = 0, wh = 0;
+    glfwGetWindowPos(window, &wx, &wy);
+    glfwGetWindowSize(window, &ww, &wh);
+
+    // Monitor video mode and workarea
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    int mx = 0, my = 0;
+#if defined(GLFW_VERSION_MAJOR) && GLFW_VERSION_MAJOR >= 3
+    // GLFW 3.4+ has workarea; older versions may not
+    int work_x = 0, work_y = 0, work_w = 0, work_h = 0;
+    glfwGetMonitorWorkarea(monitor, &work_x, &work_y, &work_w, &work_h);
+#endif
+    glfwGetMonitorPos(monitor, &mx, &my);
+
+    // Allow some tolerance for WM adjustments (borders, rounding)
+    constexpr int TOL = 2;
+
+#if defined(GLFW_VERSION_MAJOR) && GLFW_VERSION_MAJOR >= 3
+    // Try matching workarea first (accounts for taskbars, panels)
+    bool matches_workarea =
+        (std::abs(wx - work_x) <= TOL) &&
+        (std::abs(wy - work_y) <= TOL) &&
+        (std::abs(ww - work_w) <= TOL) &&
+        (std::abs(wh - work_h) <= TOL);
+#else
+    bool matches_workarea = false;
+#endif
+
+    bool matches_vidmode =
+        mode &&
+        (std::abs(wx - mx) <= TOL) &&
+        (std::abs(wy - my) <= TOL) &&
+        (std::abs(ww - mode->width) <= TOL) &&
+        (std::abs(wh - mode->height) <= TOL);
+
+    return matches_workarea || matches_vidmode;
 }
 
 std::pair<GLFWimage, unsigned char*>

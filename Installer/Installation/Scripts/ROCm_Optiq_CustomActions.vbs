@@ -105,7 +105,7 @@ Function Redirect_INSTALLDIR()
 			strInstallPath = strInstallPath & "\"
 		End If 
 		
-		Session.Property("INSTALLDIR") = strInstallPath & "ROCm" & ChrW(&H2122) & " Optiq\"
+		Session.Property("INSTALLDIR") = strInstallPath & "ROCm-Optiq\"
 		Call iLogMessage("Redirect_INSTALLDIR : Installation directory updated")
 	End If
 

@@ -17,8 +17,8 @@ Your system must be running one of these operating systems:
 
 -	Microsoft Windows 11
 -	Ubuntu 22.04 / Ubuntu 24.04
--	Oracle Linux 9 / Oracle Linux 10
--	RHEL 9 / RHEL 10
+-	Oracle Linux 9X / Oracle Linux 10X
+-	RHEL 9X / RHEL 10X
 
 .. note::
 

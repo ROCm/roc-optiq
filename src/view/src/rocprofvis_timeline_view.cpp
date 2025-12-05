@@ -150,21 +150,21 @@ void
 TimelineView::RenderInteractiveUI()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                    ImGuiWindowFlags_NoScrollWithMouse |
+                                    ImGuiWindowFlags_NoScrollbar |
                                     ImGuiWindowFlags_NoInputs;
 
-    ImGui::SetNextWindowSize(ImVec2(m_graph_size.x, m_graph_size.y - m_ruler_height -
-                                                        m_artificial_scrollbar_height),
-                             ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    ImGui::BeginChild("UI Interactive Overlay", ImVec2(m_graph_size.x, m_graph_size.y),
+    ImGui::BeginChild("UI Interactive Overlay",
+                      ImVec2(m_graph_size.x - (m_track_height_sum > m_graph_size.y
+                                                   ? ImGui::GetStyle().ScrollbarSize
+                                                   : 0),
+                             m_graph_size.y),
                       false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
     ImGui::BeginChild("UI Interactive Content",
-                      ImVec2(m_graph_size.x, m_track_height_sum), false,
-                      window_flags | ImGuiWindowFlags_NoScrollbar);
+                      ImVec2(m_graph_size.x, m_track_height_sum), false, window_flags);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();

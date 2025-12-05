@@ -32,13 +32,14 @@ jobs:
     steps:
       - name: Install Dependencies
         run: |
-          dnf groupinstall -y "Development Tools" --exclude=openssl*
           dnf config-manager --set-enabled ol${{ matrix.os-release }}_codeready_builder
-          dnf install -y --exclude=openssl* \
+          dnf install -y epel-release
+          dnf install -y gcc gcc-c++ make git \
             cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget \
             libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel
           echo "✅ Dependencies Installed!"
-          dnf list installed | grep openssl
+          # Install rpm-build last as it may break dnf due to openssl version conflicts
+          dnf install -y rpm-build
             
       - name: Install Vulkan SDK
         run: |

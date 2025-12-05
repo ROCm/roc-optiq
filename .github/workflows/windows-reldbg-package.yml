@@ -70,16 +70,6 @@ jobs:
             build/x64-release/Release/glfw3.dll
           retention-days: 2
 
-      - name: Publish GitHub Release (release)
-        if: ${{ matrix.build-type == 'release' && github.event.client_payload.publish_release == 'true' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.client_payload.release_tag }}
-          files: |
-            build/x64-release/Release/${{ env.VISUALIZER_FILE_NAME }}.exe
-            build/x64-release/Release/glfw3.dll
-          make_latest: true
-
       - name: Upload Visualizer Binary (release-symbols)
         if: matrix.build-type == 'release-symbols'
         uses: actions/upload-artifact@v4
@@ -90,14 +80,3 @@ jobs:
             build/x64-release-symbols/RelWithDebInfo/${{ env.VISUALIZER_FILE_NAME }}.pdb
             build/x64-release-symbols/RelWithDebInfo/glfw3.dll
           retention-days: 2
-
-      - name: Publish GitHub Release (release-symbols)
-        if: ${{ matrix.build-type == 'release-symbols' && github.event.client_payload.publish_release == 'true' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.client_payload.release_tag }}
-          files: |
-            build/x64-release-symbols/RelWithDebInfo/${{ env.VISUALIZER_FILE_NAME }}.exe
-            build/x64-release-symbols/RelWithDebInfo/${{ env.VISUALIZER_FILE_NAME }}.pdb
-            build/x64-release-symbols/RelWithDebInfo/glfw3.dll
-          make_latest: true

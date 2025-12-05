@@ -26,7 +26,6 @@
   - Use native OS file dialogs when opening or saving files
   - Improved dark theme colors
   - About Dialog now has link to documentation
-  - Show confirmation dialog when closing open tab
   
 ### Fixes
 

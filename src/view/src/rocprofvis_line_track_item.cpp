@@ -100,7 +100,8 @@ LineTrackItem::RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_p
 void
 LineTrackItem::BoxPlotRender(float graph_width)
 {
-    ImGui::BeginChild("LV", ImVec2(graph_width, m_track_content_height), false);
+    ImGui::BeginChild("LV", ImVec2(graph_width, m_track_content_height), false,
+                      ImGuiWindowFlags_NoMouseInputs);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();

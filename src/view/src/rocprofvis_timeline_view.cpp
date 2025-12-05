@@ -995,7 +995,8 @@ TimelineView::RenderGraphView()
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
                 ImGui::PushID(i);
                 if(ImGui::BeginChild("", ImVec2(0, track_height), false,
-                                     window_flags | ImGuiWindowFlags_NoScrollbar))
+                                     window_flags | ImGuiWindowFlags_NoScrollbar |
+                                         ImGuiWindowFlags_NoMouseInputs))
                 {
                     // call update function (TODO: move this to timeline's update
                     // function?)
@@ -1447,9 +1448,7 @@ TimelineView::RenderHistogram()
                            vmax_label.c_str());
     }
 
-    m_stop_user_interaction |= !ImGui::IsWindowHovered(
-        ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
-    if(!m_resize_activity && !m_stop_user_interaction)
+    if(!m_resize_activity && !m_stop_user_interaction && ImGui::IsWindowHovered())
     {
         HandleHistogramTouch();
     }
@@ -1503,7 +1502,7 @@ TimelineView::RenderTraceView()
     m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
 
     m_stop_user_interaction |= !ImGui::IsWindowHovered(
-        ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
+        ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
 
     RenderGrid();
 

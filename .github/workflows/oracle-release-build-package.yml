@@ -30,16 +30,18 @@ jobs:
           vulkan-sdk: [ '1.4.328.1' ]
 
     steps:
+      - name: Update System (OL10 only)
+        if: matrix.os-release == '10'
+        run: dnf update -y
+
       - name: Install Dependencies
         run: |
-          dnf config-manager --set-enabled ol${{ matrix.os-release }}_codeready_builder
-          dnf install -y gcc gcc-c++ make git \
-            cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget \
-            libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel
-          echo "✅ Dependencies Installed!"
-          # Install rpm-build last as it may break dnf due to openssl version conflicts
-          dnf install -y rpm-build
-            
+            dnf groupinstall -y "Development Tools"
+            dnf config-manager --set-enabled ol${{ matrix.os-release }}_codeready_builder
+            dnf install -y cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget
+            dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel
+            echo "✅ Dependencies Installed!"
+      
       - name: Install Vulkan SDK
         run: |
             mkdir -p /opt/vulkan

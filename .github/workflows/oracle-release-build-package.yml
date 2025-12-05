@@ -33,7 +33,6 @@ jobs:
       - name: Install Dependencies
         run: |
           dnf config-manager --set-enabled ol${{ matrix.os-release }}_codeready_builder
-          dnf install -y epel-release
           dnf install -y gcc gcc-c++ make git \
             cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget \
             libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel

@@ -48,6 +48,7 @@ jobs:
             echo "✅ Vulkan SDK Installed!"
       - uses: actions/checkout@v5
         with:
+          ref: ${{ github.event.client_payload.ref || github.ref }}
           submodules: true
 
       - name: Build, Make, and Verify Installation
@@ -64,7 +65,7 @@ jobs:
           fi
       - name: List build artifacts
         run: ls -la build/linux-release          
-      - name: Upload Visualizer Binary
+      - name: Upload Visualizer Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.VISUALIZER_FILE_NAME }}-oracle-${{ matrix.os-release }}
@@ -74,3 +75,15 @@ jobs:
             build/linux-release/*.gz
             build/linux-release/*.rpm
           retention-days: 2 # Retain artifact for 2 days
+
+      - name: Publish GitHub Release
+        if: ${{ github.event.client_payload.publish_release == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.client_payload.release_tag }}
+          files: |
+            build/linux-release/${{ env.VISUALIZER_FILE_NAME }}
+            build/linux-release/*.deb
+            build/linux-release/*.gz
+            build/linux-release/*.rpm
+          make_latest: true                          

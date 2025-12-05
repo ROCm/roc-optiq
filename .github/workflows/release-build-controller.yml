@@ -2,6 +2,15 @@ name: Release Build Launcher
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish a GitHub Release?'
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Release Tag (e.g. v1.0.0) - Required if publishing'
+        type: string
+        required: false
 
 jobs:
   trigger-all-release-builds:
@@ -15,4 +24,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type":"trigger-release-build"}'
+            -d '{"event_type":"trigger-release-build", "client_payload": {"ref": "${{ github.ref }}", "publish_release": "${{ inputs.publish_release }}", "release_tag": "${{ inputs.release_tag }}"}}'

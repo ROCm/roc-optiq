@@ -550,7 +550,8 @@ FlameTrackItem::RecalculateTrackHeight()
 void
 FlameTrackItem::RenderChart(float graph_width)
 {
-    ImGui::BeginChild("FV", ImVec2(graph_width, m_track_content_height), false);
+    ImGui::BeginChild("FV", ImVec2(graph_width, m_track_content_height), false,
+                      ImGuiWindowFlags_NoMouseInputs);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     int colorCount = static_cast<int>(m_settings.GetColorWheel().size());

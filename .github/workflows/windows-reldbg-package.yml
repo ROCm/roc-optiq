@@ -13,9 +13,13 @@ jobs:
   ubuntu:
     name: Windows • Build and Package Visualizer
     runs-on: windows-latest
-    strategy:
-      matrix:
-        build-type: [ 'release-symbols', 'release' ]
+    env:
+      PRESET_CONFIG: ${{ github.event.client_payload.enable_symbols == 'true' && 'x64-release-symbols' || 'x64-release' }}
+      PRESET_BUILD: ${{ github.event.client_payload.enable_symbols == 'true' && 'Windows Release Build with Symbols' || 'Windows Release Build' }}
+      BUILD_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'build/x64-release-symbols' || 'build/x64-release' }}
+      ARTIFACT_NAME: ${{ env.VISUALIZER_FILE_NAME }}-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
+      BIN_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'RelWithDebInfo' || 'Release' }}
+      ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
 
     steps:
       - name: Checkout Repository
@@ -37,46 +41,23 @@ jobs:
           echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
           
       - name: Build, Make, and Verify Installation
-        if: matrix.build-type == 'release'
         run: |
           mkdir build
-          cmake --preset "x64-release"
-          cmake --build build/x64-release --preset "Windows Release Build" --parallel 4
-          if (Test-Path "build/x64-release/Release/${env:VISUALIZER_FILE_NAME}.exe") {
+          cmake --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake --build ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_BUILD }}" --parallel 4
+          if (Test-Path "${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/${env:VISUALIZER_FILE_NAME}.exe") {
             Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
           } else {
             Write-Host "❌ $env:VISUALIZER_FILE_NAME was not built!"
             exit 1
           }
-      - name: Build, Make, and Verify Installation (release-symbols)
-        if: matrix.build-type == 'release-symbols'
-        run: |
-          mkdir build
-          cmake --preset "x64-release-symbols"
-          cmake --build build/x64-release-symbols --preset "Windows Release Build with Symbols" --parallel 4
-          if (Test-Path "build/x64-release-symbols/RelWithDebInfo/${env:VISUALIZER_FILE_NAME}.exe") {
-            Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
-          } else {
-            Write-Host "❌ $env:VISUALIZER_FILE_NAME was not built!"
-            exit 1
-          }
-      - name: Upload Visualizer Binary (release)
-        if: matrix.build-type == 'release'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.VISUALIZER_FILE_NAME }}-release
-          path: | 
-            build/x64-release/Release/${{ env.VISUALIZER_FILE_NAME }}.exe
-            build/x64-release/Release/glfw3.dll
-          retention-days: 2
 
-      - name: Upload Visualizer Binary (release-symbols)
-        if: matrix.build-type == 'release-symbols'
+      - name: Upload Visualizer Binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.VISUALIZER_FILE_NAME }}-release-symbols
-          path: |
-            build/x64-release-symbols/RelWithDebInfo/${{ env.VISUALIZER_FILE_NAME }}.exe
-            build/x64-release-symbols/RelWithDebInfo/${{ env.VISUALIZER_FILE_NAME }}.pdb
-            build/x64-release-symbols/RelWithDebInfo/glfw3.dll
+          name: ${{ env.ARTIFACT_NAME }}
+          path: | 
+            ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/${{ env.VISUALIZER_FILE_NAME }}.exe
+            ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/${{ env.VISUALIZER_FILE_NAME }}.pdb
+            ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/glfw3.dll
           retention-days: 2

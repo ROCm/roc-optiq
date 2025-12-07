@@ -32,6 +32,8 @@ jobs:
       matrix:
           os-release: [ '10', '9' ]
           vulkan-sdk: [ '1.4.328.1' ]
+    env:
+      ARTIFACT_NAME: ${{ env.VISUALIZER_FILE_NAME }}-oracle-${{ matrix.os-release }}-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
 
     steps:
       - name: Update System (OL10 only)
@@ -79,7 +81,7 @@ jobs:
       - name: Upload Visualizer Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.VISUALIZER_FILE_NAME }}-oracle-${{ matrix.os-release }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: |
             ${{ env.BUILD_DIR }}/${{ env.VISUALIZER_FILE_NAME }}
             ${{ env.BUILD_DIR }}/*.deb

@@ -23,7 +23,8 @@ jobs:
 
     steps:
       - name: Print Workflow Inputs
-        run: echo "Target Ref: ${{ github.event.client_payload.ref || github.ref }}"
+        run: |
+          echo "Target Ref: ${{ github.event.client_payload.ref || github.ref }}"
 
       - name: Print Build Configuration
         run: |
@@ -33,7 +34,7 @@ jobs:
           echo "ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}"
           echo "BIN_DIR: ${{ env.BIN_DIR }}"
           echo "ENABLE_INTERNAL_BANNER: ${{ env.ENABLE_INTERNAL_BANNER }}"
-                  
+
       - name: Checkout Repository
         uses: actions/checkout@v5
         with:

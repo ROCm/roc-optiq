@@ -22,6 +22,18 @@ jobs:
       ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
 
     steps:
+      - name: Print Workflow Inputs
+        run: echo "Target Ref: ${{ github.event.client_payload.ref || github.ref }}"
+
+      - name: Print Build Configuration
+        run: |
+          echo "PRESET_CONFIG: ${{ env.PRESET_CONFIG }}"
+          echo "PRESET_BUILD: ${{ env.PRESET_BUILD }}"
+          echo "BUILD_DIR: ${{ env.BUILD_DIR }}"
+          echo "ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}"
+          echo "BIN_DIR: ${{ env.BIN_DIR }}"
+          echo "ENABLE_INTERNAL_BANNER: ${{ env.ENABLE_INTERNAL_BANNER }}"
+                  
       - name: Checkout Repository
         uses: actions/checkout@v5
         with:
@@ -39,7 +51,7 @@ jobs:
           echo "VULKAN_SDK=$($vulkanRoot.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "PATH=$($vulkanRoot.FullName)\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
-          
+
       - name: Build, Make, and Verify Installation
         run: |
           mkdir build

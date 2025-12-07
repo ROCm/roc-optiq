@@ -20,7 +20,6 @@ env:
   PRESET_BUILD: ${{ github.event.client_payload.enable_symbols == 'true' && 'Linux Release Build with Symbols' || 'Linux Release Build' }}
   BUILD_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'build/linux-release-symbols' || 'build/linux-release' }}
   ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
-  ARTIFACT_NAME: roc-optiq-oracle-${{ matrix.os-release }}-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
 
 jobs:
   oracle-linux:
@@ -33,6 +32,9 @@ jobs:
       matrix:
           os-release: [ '10', '9' ]
           vulkan-sdk: [ '1.4.328.1' ]
+    env:
+      ARTIFACT_NAME: roc-optiq-oracle-${{ matrix.os-release }}-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
+
     steps:
       - name: Print Workflow Inputs
         run: |

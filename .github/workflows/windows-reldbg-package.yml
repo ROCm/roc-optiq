@@ -8,18 +8,17 @@ on:
 
 env:
   VISUALIZER_FILE_NAME: "roc-optiq"
+  PRESET_CONFIG: ${{ github.event.client_payload.enable_symbols == 'true' && 'x64-release-symbols' || 'x64-release' }}
+  PRESET_BUILD: ${{ github.event.client_payload.enable_symbols == 'true' && 'Windows Release Build with Symbols' || 'Windows Release Build' }}
+  BUILD_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'build/x64-release-symbols' || 'build/x64-release' }}
+  ARTIFACT_NAME: roc-optiq-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
+  BIN_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'RelWithDebInfo' || 'Release' }}
+  ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
 
 jobs:
   ubuntu:
     name: Windows • Build and Package Visualizer
     runs-on: windows-latest
-    env:
-      PRESET_CONFIG: ${{ github.event.client_payload.enable_symbols == 'true' && 'x64-release-symbols' || 'x64-release' }}
-      PRESET_BUILD: ${{ github.event.client_payload.enable_symbols == 'true' && 'Windows Release Build with Symbols' || 'Windows Release Build' }}
-      BUILD_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'build/x64-release-symbols' || 'build/x64-release' }}
-      ARTIFACT_NAME: ${{ env.VISUALIZER_FILE_NAME }}-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
-      BIN_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'RelWithDebInfo' || 'Release' }}
-      ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
 
     steps:
       - name: Print Workflow Inputs

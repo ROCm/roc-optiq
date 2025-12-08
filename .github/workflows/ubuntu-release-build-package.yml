@@ -8,6 +8,10 @@ on:
 
 env:
   VISUALIZER_FILE_NAME: "roc-optiq"
+  PRESET_CONFIG: ${{ github.event.client_payload.enable_symbols == 'true' && 'linux-release-symbols' || 'linux-release' }}
+  PRESET_BUILD: ${{ github.event.client_payload.enable_symbols == 'true' && 'Linux Release Build with Symbols' || 'Linux Release Build' }}
+  BUILD_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'build/linux-release-symbols' || 'build/linux-release' }}
+  ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
 
 jobs:
   ubuntu:
@@ -18,11 +22,27 @@ jobs:
           - os-release: '22.04'
             os-name: 'jammy'
           - os-release: '24.04'
-            os-name: 'noble'
+            os-name: 'noble'      
     runs-on: ubuntu-${{ matrix.os-release }}
+    env:
+      ARTIFACT_NAME: roc-optiq-ubuntu-${{ matrix.os-release }}-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
+
     steps:
+      - name: Print Workflow Inputs
+        run: |
+          echo "Target Ref: ${{ github.event.client_payload.ref || github.ref }}"
+
+      - name: Print Build Configuration
+        run: |
+          echo "PRESET_CONFIG: ${{ env.PRESET_CONFIG }}"
+          echo "PRESET_BUILD: ${{ env.PRESET_BUILD }}"
+          echo "BUILD_DIR: ${{ env.BUILD_DIR }}"
+          echo "ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}"
+          echo "ENABLE_INTERNAL_BANNER: ${{ env.ENABLE_INTERNAL_BANNER }}"
+
       - uses: actions/checkout@v5
         with:
+          ref: ${{ github.event.client_payload.ref || github.ref }}
           submodules: true
 
       - name: Install Dependencies
@@ -45,24 +65,28 @@ jobs:
 
       - name: Build, Make, and Verify Installation
         run: |
-          mkdir build
-          cmake -B build/linux-release --preset "linux-release"
-          cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --target package
-          if [ -e build/linux-release/${{ env.VISUALIZER_FILE_NAME }} ]; then
-            echo "✅ {{ env.VISUALIZER_FILE_NAME }} has been successfully built!"
+          mkdir -p ${{ env.BUILD_DIR }}
+          cmake -B ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake --build ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_BUILD }}" --parallel 4 --target package
+          
+          if [ -e ${{ env.BUILD_DIR }}/${{ env.VISUALIZER_FILE_NAME }} ]; then
+            echo "✅ ${{ env.VISUALIZER_FILE_NAME }} has been successfully built!"
           else
-            echo "❌ {{ env.VISUALIZER_FILE_NAME }} was not built!"
+            echo "❌ ${{ env.VISUALIZER_FILE_NAME }} was not built!"
             exit 1
           fi
+
       - name: List build artifacts
-        run: ls -la build/linux-release          
+        run: |
+          ls -la ${{ env.BUILD_DIR }}
+
       - name: Upload Visualizer Binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.VISUALIZER_FILE_NAME }}-ubuntu-${{ matrix.os-release }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: |
-            build/linux-release/${{ env.VISUALIZER_FILE_NAME }}
-            build/linux-release/*.deb
-            build/linux-release/*.gz
-            build/linux-release/*.rpm
+            ${{ env.BUILD_DIR }}/${{ env.VISUALIZER_FILE_NAME }}
+            ${{ env.BUILD_DIR }}/*.deb
+            ${{ env.BUILD_DIR }}/*.gz
+            ${{ env.BUILD_DIR }}/*.rpm
           retention-days: 2 # Retain artifact for 2 days

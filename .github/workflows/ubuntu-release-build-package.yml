@@ -22,9 +22,25 @@ jobs:
           - os-release: '22.04'
             os-name: 'jammy'
           - os-release: '24.04'
-            os-name: 'noble'
+            os-name: 'noble'      
     runs-on: ubuntu-${{ matrix.os-release }}
+    env:
+      ARTIFACT_NAME: roc-optiq-ubuntu-${{ matrix.os-release }}-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
+
     steps:
+      - name: Print Workflow Inputs
+        run: |
+          echo "Target Ref: ${{ github.event.client_payload.ref || github.ref }}"
+
+      - name: Print Build Configuration
+        run: |
+          echo "PRESET_CONFIG: ${{ env.PRESET_CONFIG }}"
+          echo "PRESET_BUILD: ${{ env.PRESET_BUILD }}"
+          echo "BUILD_DIR: ${{ env.BUILD_DIR }}"
+          echo "ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}"
+          echo "BIN_DIR: ${{ env.BIN_DIR }}"
+          echo "ENABLE_INTERNAL_BANNER: ${{ env.ENABLE_INTERNAL_BANNER }}"
+
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.client_payload.ref || github.ref }}
@@ -68,7 +84,7 @@ jobs:
       - name: Upload Visualizer Binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.VISUALIZER_FILE_NAME }}-ubuntu-${{ matrix.os-release }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: |
             ${{ env.BUILD_DIR }}/${{ env.VISUALIZER_FILE_NAME }}
             ${{ env.BUILD_DIR }}/*.deb

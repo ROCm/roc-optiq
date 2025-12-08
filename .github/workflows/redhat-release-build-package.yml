@@ -32,8 +32,23 @@ jobs:
       matrix:
           os-release: [ '9', '10' ]
           vulkan-sdk: [ '1.4.328.1' ]
+    env:
+      ARTIFACT_NAME: roc-optiq-rocky-${{ matrix.os-release }}-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
 
     steps:
+      - name: Print Workflow Inputs
+        run: |
+          echo "Target Ref: ${{ github.event.client_payload.ref || github.ref }}"
+
+      - name: Print Build Configuration
+        run: |
+          echo "PRESET_CONFIG: ${{ env.PRESET_CONFIG }}"
+          echo "PRESET_BUILD: ${{ env.PRESET_BUILD }}"
+          echo "BUILD_DIR: ${{ env.BUILD_DIR }}"
+          echo "ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}"
+          echo "BIN_DIR: ${{ env.BIN_DIR }}"
+          echo "ENABLE_INTERNAL_BANNER: ${{ env.ENABLE_INTERNAL_BANNER }}"
+
       - name: Install Dependencies
         run: |
             dnf groupinstall -y "Development Tools"
@@ -74,7 +89,7 @@ jobs:
       - name: Upload Visualizer Binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.VISUALIZER_FILE_NAME }}-rocky-${{ matrix.os-release }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: |
             ${{ env.BUILD_DIR }}/${{ env.VISUALIZER_FILE_NAME }}
             ${{ env.BUILD_DIR }}/*.deb

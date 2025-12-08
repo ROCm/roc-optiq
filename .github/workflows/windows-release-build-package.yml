@@ -1,4 +1,4 @@
-name: Windows Build and Package Release and Release with Debug Symbols
+name: Windows Build and Package Release
 run-name: rocprofiler-visualizer-windows-relwithdbg-build-package
 
 on:
@@ -16,7 +16,7 @@ env:
   ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
 
 jobs:
-  ubuntu:
+  windows:
     name: Windows • Build and Package Visualizer
     runs-on: windows-latest
 

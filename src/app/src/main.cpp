@@ -5,17 +5,15 @@
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_imgui_backend.h"
+#include "glfw_util.h"
 #define GLFW_INCLUDE_NONE
-#include "../resources/AMD_LOGO.h"
+#include "AMD_LOGO.h"
 #include "rocprofvis_view_module.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb-image/stb_image.h"
-#include <utility>
 
 // globals shared with callbacks
 static std::vector<std::string> g_dropped_file_paths;
@@ -23,28 +21,8 @@ static bool g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
 
-std::pair<GLFWimage, unsigned char*>
-glfw_create_icon()
-{
-    int            width, height, channels;
-    unsigned char* pixels = stbi_load_from_memory(AMD_LOGO_png, AMD_LOGO_png_len, &width,
-                                                  &height, &channels, STBI_rgb_alpha);
-
-    GLFWimage image;
-    if(!pixels)
-    {
-        spdlog::error("Failed to load icon image: {}", stbi_failure_reason());
-        image = { 0, 0, nullptr };
-        return { image, nullptr };
-    }
-    else
-    {
-        image.width  = width;
-        image.height = height;
-        image.pixels = pixels;
-        return { image, pixels };
-    }
-}
+// Fullscreen state (initialized after window creation)
+static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -81,12 +59,36 @@ app_notification_callback(GLFWwindow* window, int notification)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+    else if(notification == static_cast<int>(rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen))
+    {
+        RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
+    }
+}
+
+static void
+window_size_change_callback(GLFWwindow* window, int width, int height)
+{
+    RocProfVis::View::sync_fullscreen_state(window, width, height, g_fullscreen_state);
 }
 
 static void
 glfw_error_callback(int error, const char* description)
 {
-    fprintf(stderr, "GLFW Error %d: %s\n", error, description);
+    spdlog::error("GLFW Error {}: {}", error, description);
+}
+
+static void
+key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    // Unused parameters
+    (void)scancode;
+    (void)mods;
+
+    // Toggle fullscreen with F11
+    if (key == GLFW_KEY_F11 && action == GLFW_PRESS)
+    {
+        RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
+    }
 }
 
 int
@@ -95,24 +97,30 @@ main(int, char**)
     int resultCode = 0;
 
     std::string config_path = rocprofvis_get_application_config_path();
-    #ifndef NDEBUG
-    std::filesystem::path log_path = std::filesystem::path(config_path) / "visualizer.debug.log";
-        rocprofvis_core_enable_log(log_path.string().c_str(),spdlog::level::debug);
-    #else
-        std::filesystem::path log_path = std::filesystem::path(config_path) / "visualizer.log";
-        rocprofvis_core_enable_log(log_path.string().c_str(),spdlog::level::info);
-    #endif
-    
+#ifndef NDEBUG
+    std::filesystem::path log_path =
+        std::filesystem::path(config_path) / "visualizer.debug.log";
+    rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::debug);
+#else
+    std::filesystem::path log_path =
+        std::filesystem::path(config_path) / "visualizer.log";
+    rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
+#endif
+
     glfwSetErrorCallback(glfw_error_callback);
     if(glfwInit())
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-#if defined(GLFW_SCALE_TO_MONITOR) // GLFW 3.3+
+#if defined(GLFW_SCALE_TO_MONITOR)  // GLFW 3.3+
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
-#endif        
-        GLFWwindow* window =
-            glfwCreateWindow(1280, 720, "ROCm(TM) Optiq Beta", nullptr, nullptr);
+#endif
+        GLFWwindow* window = glfwCreateWindow(RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
+                                              RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
+                                              "ROCm(TM) Optiq Beta", nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
+
+        // Initialize fullscreen state with actual window position and size
+        RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
 
         // Drop file callback
         glfwSetDropCallback(window, drop_callback);
@@ -126,6 +134,10 @@ main(int, char**)
         }
         // Window close callback
         glfwSetWindowCloseCallback(window, close_callback);
+        // Window size change callback
+        glfwSetWindowSizeCallback(window, window_size_change_callback);
+        // Keyboard callback for fullscreen toggle
+        glfwSetKeyCallback(window, key_callback);
 
         if(window && rocprofvis_imgui_backend_setup(&backend, window))
         {
@@ -149,7 +161,8 @@ main(int, char**)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-                auto [image, pixels] = glfw_create_icon();
+                auto [image, pixels] =
+                    RocProfVis::View::create_icon(AMD_LOGO_png, AMD_LOGO_png_len);
                 if(image.pixels != nullptr)
                 {
                     // Set the window icon
@@ -157,17 +170,17 @@ main(int, char**)
                     glfwSetWindowIcon(window, 1, images);
 
                     // Free the image pixels after setting the icon
-                    stbi_image_free(pixels);
+                    RocProfVis::View::free_icon(pixels);
                 }
 
                 while(!glfwWindowShouldClose(window))
                 {
                     // handle dropped file signal flag from callback
-                    if (g_file_was_dropped)
+                    if(g_file_was_dropped)
                     {
                         rocprofvis_view_open_files(g_dropped_file_paths);
                         g_file_was_dropped = false;
-                    }                    
+                    }
 
                     glfwPollEvents();
 
@@ -213,7 +226,7 @@ main(int, char**)
         }
         else
         {
-            fprintf(stderr, "GLFW: Failed to initialize window & graphics API\n");
+            spdlog::error("GLFW: Failed to initialize window & graphics API backend");
             resultCode = 1;
         }
 
@@ -221,7 +234,7 @@ main(int, char**)
     }
     else
     {
-        fprintf(stderr, "GLFW: Failed to initialize GLFW\n");
+        spdlog::error("GLFW: Failed to initialize GLFW library");
         resultCode = 1;
     }
 

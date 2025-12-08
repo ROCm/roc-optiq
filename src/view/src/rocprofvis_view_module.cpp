@@ -68,6 +68,12 @@ rocprofvis_view_open_files(const std::vector<std::string>& file_paths)
     }
 }
 
+void
+rocprofvis_view_set_fullscreen_state(bool is_fullscreen)
+{
+    AppWindow::GetInstance()->SetFullscreenState(is_fullscreen);
+}
+
 std::string
 rocprofvis_get_application_config_path()
 {

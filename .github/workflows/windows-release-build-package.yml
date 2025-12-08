@@ -1,5 +1,5 @@
 name: Windows Build and Package Release
-run-name: rocprofiler-visualizer-windows-relwithdbg-build-package
+run-name: ${{ github.workflow }} • ${{ github.event.client_payload.enable_symbols == 'true' && 'with symbols' || 'release' }}
 
 on:
   workflow_dispatch:

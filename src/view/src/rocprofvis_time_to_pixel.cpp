@@ -3,6 +3,8 @@
 
 #include "rocprofvis_time_to_pixel.h"
 #include <algorithm>
+#include <limits>
+
 namespace RocProfVis
 {
 namespace View

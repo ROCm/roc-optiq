@@ -122,24 +122,33 @@ TimeToPixelManager::SetMinMaxX(double min_x, double max_x)
 }
 
 void
-TimeToPixelManager::SetViewTimeOffsetNs(double value)
+TimeToPixelManager::SetViewTimeOffsetNs(double view_time_offset_ns)
 {
-    m_view_time_offset_ns = value;
-    m_has_changed         = true;
+    if(view_time_offset_ns != m_view_time_offset_ns)
+    {
+        m_view_time_offset_ns = view_time_offset_ns;
+        m_has_changed         = true;
+    }
 }
 
 void
-TimeToPixelManager::SetZoom(float value)
+TimeToPixelManager::SetZoom(float zoom)
 {
-    m_zoom        = value;
-    m_has_changed = true;
+    if(zoom != m_zoom)
+    {
+        m_zoom        = zoom;
+        m_has_changed = true;
+    }
 }
 
 void
-TimeToPixelManager::SetGraphSizeX(float value)
+TimeToPixelManager::SetGraphSizeX(float graph_size_x)
 {
-    m_graph_size_x = value;
-    m_has_changed  = true;
+    if(graph_size_x != m_graph_size_x)
+    {
+        m_graph_size_x = graph_size_x;
+        m_has_changed  = true;
+    }
 }
 
 }  // namespace View

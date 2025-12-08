@@ -131,7 +131,7 @@ TrackItem::SetSelected(bool selected)
 }
 
 void
-TrackItem::UpdateMovement(float zoom, double time_offset_ns, double& min_x, double& max_x,
+TrackItem::UpdateMovement(float zoom, double time_offset_ns, double min_x, double max_x,
                           double scale_x, float y_scroll_position)
 {
     m_zoom           = zoom;

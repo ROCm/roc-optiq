@@ -38,7 +38,6 @@ jobs:
           echo "PRESET_BUILD: ${{ env.PRESET_BUILD }}"
           echo "BUILD_DIR: ${{ env.BUILD_DIR }}"
           echo "ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}"
-          echo "BIN_DIR: ${{ env.BIN_DIR }}"
           echo "ENABLE_INTERNAL_BANNER: ${{ env.ENABLE_INTERNAL_BANNER }}"
 
       - uses: actions/checkout@v5

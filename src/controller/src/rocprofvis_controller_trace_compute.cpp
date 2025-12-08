@@ -7,6 +7,8 @@
 #include "rocprofvis_controller_table_compute.h"
 #include "rocprofvis_core_assert.h"
 #include <filesystem>
+#include <iostream>
+#include <pybind11/embed.h>
 
 namespace RocProfVis
 {
@@ -95,6 +97,16 @@ rocprofvis_result_t ComputeTrace::Load(char const* const directory)
         }
         spdlog::info("ComputeTrace::Load - {}/{} Rooflines", m_plots.size() - COMPUTE_PLOT_DEFINITIONS.size(), ROOFLINE_DEFINITION.m_plots.size());
     }
+
+    pybind11::scoped_interpreter guard{};
+    pybind11::dict py_vars;
+    pybind11::exec(R"(
+        import sys
+        env_path = sys.path
+        n = 1 + 1
+    )", pybind11::globals(), py_vars);
+    spdlog::info("env_path: {}", pybind11::str(py_vars["env_path"]).cast<std::string>());
+    spdlog::info("n: {}", py_vars["n"].cast<int>());
     return result;
 }
 

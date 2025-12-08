@@ -10,9 +10,7 @@ View trace data in ROCm Optiq
 .. |eye| image:: ../images/eye.png
 .. |grip| image:: ../images/grip.png
 
-Use ROCm™ Optiq to inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage, and system telemetry data for applications running on the ROCm stack.
-
-ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata. It captures what happened, when it happened, and often how long it took.
+ROCm Optiq™ provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata. It captures what happened, when it happened, and often how long it took.
 
 Traces contain event tracks and counter tracks:
 
@@ -39,7 +37,7 @@ Select **File** > **Open** to open a trace. You can also open files by dragging 
 
   If the trace file doesn't open, the file may be in an unsupported format. Convert the file to a supported format (``.db`` or ``.rpd``) using ROCm scripts.
 
-  To generate profiling data in a compatible ROCpd format:
+  To generate profiling data in a compatible ROCpd format for ROCprof systems:
 
   1. Set the configuration environment to output data in the ROCpd format:
 

@@ -17,8 +17,8 @@ Your system must be running one of these operating systems:
 
 -	Microsoft Windows 11
 -	Ubuntu 22.04 / Ubuntu 24.04
--	Oracle Linux 9X / Oracle Linux 10X
--	RHEL 9X / RHEL 10X
+-	Oracle Linux 9.X / Oracle Linux 10.X
+-	RHEL 9.X / RHEL 10.X
 
 .. note::
 
@@ -76,7 +76,7 @@ Ubuntu 22.04 / 24.04 (Debian-based)
 
       dpkg -l | grep roc-optiq
 
-Oracle Linux 9/10 and RHEL 9/10 (RPM-based)
+Oracle Linux 9.X/10.X and RHEL 9.X/10.X (RPM-based)
 -------------------------------------------
 
 1. Download the ``.rpm`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_.

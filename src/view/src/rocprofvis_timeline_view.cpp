@@ -54,8 +54,6 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0)
 , m_last_data_req_view_time_offset_ns(0)
-, m_graph_size()
-, m_range_x(0.0f)
 , m_can_drag_to_pan(false)
 , m_artificial_scrollbar_height(30)
 , m_grid_interval_ns(0.0)
@@ -146,18 +144,21 @@ TimelineView::RenderInteractiveUI()
                                     ImGuiWindowFlags_NoScrollWithMouse |
                                     ImGuiWindowFlags_NoInputs;
 
-    ImGui::SetNextWindowSize(ImVec2(m_graph_size.x, m_graph_size.y - m_ruler_height -
-                                                        m_artificial_scrollbar_height),
+    ImGui::SetNextWindowSize(ImVec2(m_time_to_pixel_manager.GetGraphSizeX(),
+                                    m_time_to_pixel_manager.GetGraphSizeY() -
+                                        m_ruler_height - m_artificial_scrollbar_height),
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    ImGui::BeginChild("UI Interactive Overlay", ImVec2(m_graph_size.x, m_graph_size.y),
+    ImGui::BeginChild("UI Interactive Overlay",
+                      ImVec2(m_time_to_pixel_manager.GetGraphSizeX(),
+                             m_time_to_pixel_manager.GetGraphSizeY()),
                       false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
     ImGui::BeginChild("UI Interactive Content",
-                      ImVec2(m_graph_size.x, m_track_height_sum), false,
-                      window_flags | ImGuiWindowFlags_NoScrollbar);
+                      ImVec2(m_time_to_pixel_manager.GetGraphSizeX(), m_track_height_sum),
+                      false, window_flags | ImGuiWindowFlags_NoScrollbar);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
@@ -189,13 +190,9 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
             if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
 
             movement_drag |= m_annotations->GetStickyNotes()[i].HandleDrag(
-                window_position, m_time_to_pixel_manager.GetVMinX(),
-                m_time_to_pixel_manager.GetVMaxX(),
-                m_time_to_pixel_manager.GetPixelsPerNs(), m_dragged_sticky_id);
+                window_position, &m_time_to_pixel_manager, m_dragged_sticky_id);
             movement_resize |= m_annotations->GetStickyNotes()[i].HandleResize(
-                window_position, m_time_to_pixel_manager.GetVMinX(),
-                m_time_to_pixel_manager.GetVMaxX(),
-                m_time_to_pixel_manager.GetPixelsPerNs());
+                window_position, &m_time_to_pixel_manager);
         }
 
         // Rendering --> based on added order (old bottom new on top)
@@ -203,9 +200,8 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         {
             if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
 
-            m_annotations->GetStickyNotes()[i].Render(
-                draw_list, window_position, m_time_to_pixel_manager.GetVMinX(),
-                m_time_to_pixel_manager.GetPixelsPerNs());
+            m_annotations->GetStickyNotes()[i].Render(draw_list, window_position,
+                                                      &m_time_to_pixel_manager);
         }
     }
     m_stop_user_interaction |= movement_drag || movement_resize;
@@ -217,7 +213,8 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 ImVec2
 TimelineView::GetGraphSize()
 {
-    return m_graph_size;
+    return ImVec2(m_time_to_pixel_manager.GetGraphSizeX(),
+                  m_time_to_pixel_manager.GetGraphSizeY());
 }
 void
 TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
@@ -229,8 +226,9 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 
     // Use the visible area for hover detection adjusted for user scroll.
     ImVec2 win_min = window_position;
-    ImVec2 win_max = ImVec2(window_position.x + m_graph_size.x,
-                            window_position.y + m_graph_size.y + m_scroll_position_y);
+    ImVec2 win_max = ImVec2(window_position.x + m_time_to_pixel_manager.GetGraphSizeX(),
+                            window_position.y + m_time_to_pixel_manager.GetGraphSizeY() +
+                                m_scroll_position_y);
 
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
        ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
@@ -252,14 +250,13 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         if(ImGui::MenuItem("Add Annotation"))
         {
             float  x_in_chart = rel_mouse_pos.x;
-            double time_ns =
-                m_time_to_pixel_manager.GetVMinX() +
-                (x_in_chart / m_graph_size.x) * (m_time_to_pixel_manager.GetVMaxX() -
-                                                 m_time_to_pixel_manager.GetVMinX());
-            float y_offset = rel_mouse_pos.y;
+            double time_ns    = m_time_to_pixel_manager.PixelToTime(x_in_chart);
+            float  y_offset   = rel_mouse_pos.y;
             m_annotations->OpenStickyNotePopup(
                 time_ns, y_offset, m_time_to_pixel_manager.GetVMinX(),
-                m_time_to_pixel_manager.GetVMaxX(), m_graph_size);
+                m_time_to_pixel_manager.GetVMaxX(),
+                ImVec2(m_time_to_pixel_manager.GetGraphSizeX(),
+                       m_time_to_pixel_manager.GetGraphSizeY()));
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -313,8 +310,9 @@ TimelineView::MoveToPosition(double start_ns, double end_ns, double y_position,
     if(center)
     {
         m_scroll_position_y =
-            std::clamp(static_cast<float>(y_position) - m_graph_size.y * 0.5f, 0.0f,
-                       m_content_max_y_scroll);
+            std::clamp(static_cast<float>(y_position) -
+                           m_time_to_pixel_manager.GetGraphSizeY() * 0.5f,
+                       0.0f, m_content_max_y_scroll);
     }
     else
     {
@@ -344,10 +342,10 @@ TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
     if(new_width_ns < kMinWidth) new_width_ns = kMinWidth;
 
     // Compute zoom: m_v_width = m_range_x / m_zoom  =>  m_zoom = m_range_x / m_v_width
-    if(m_range_x > 0.0)
+    if(m_time_to_pixel_manager.GetRangeX() > 0.0)
     {
-        m_time_to_pixel_manager.SetZoom(
-            static_cast<float>(std::max(0.000001, m_range_x / new_width_ns)));
+        m_time_to_pixel_manager.SetZoom(static_cast<float>(
+            std::max(0.000001, m_time_to_pixel_manager.GetRangeX() / new_width_ns)));
     }
 
     // view_time_offset is relative to m_min_x
@@ -360,12 +358,14 @@ TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
                       m_time_to_pixel_manager.GetVMinX());
 
     // Ensure offsets remain within global bounds (after potential zoom computation).
-    if(m_range_x > 0.0 && m_time_to_pixel_manager.GetViewTimeOffsetNs() +
-                                  m_time_to_pixel_manager.GetVWidth() >
-                              m_range_x)
+    if(m_time_to_pixel_manager.GetRangeX() > 0.0 &&
+       m_time_to_pixel_manager.GetViewTimeOffsetNs() +
+               m_time_to_pixel_manager.GetVWidth() >
+           m_time_to_pixel_manager.GetRangeX())
     {
         m_time_to_pixel_manager.SetViewTimeOffsetNs(
-            std::max(0.0, m_range_x - m_time_to_pixel_manager.GetVWidth()));
+            std::max(0.0, m_time_to_pixel_manager.GetRangeX() -
+                              m_time_to_pixel_manager.GetVWidth()));
     }
 
     // Mark grid for recalculation since scale changed.
@@ -510,14 +510,15 @@ TimelineView::Render()
     {
         RenderGraphPoints();
     }
-    if(m_graph_size.x != m_last_graph_size.x ||
+    if(m_time_to_pixel_manager.GetGraphSizeX() != m_last_graph_size.x ||
        m_time_to_pixel_manager.GetZoom() != m_last_zoom)
     {
         m_recalculate_grid_interval = true;
     }
 
     m_last_zoom       = m_time_to_pixel_manager.GetZoom();
-    m_last_graph_size = m_graph_size;
+    m_last_graph_size = ImVec2(m_time_to_pixel_manager.GetGraphSizeX(),
+                               m_time_to_pixel_manager.GetGraphSizeY());
 }
 
 void
@@ -571,8 +572,8 @@ TimelineView::RenderSplitter()
 
     // Horizontal Splitter
     ImGui::SetNextWindowSize(ImVec2(display_size.x, 1.0f), ImGuiCond_Always);
-    ImGui::SetCursorPos(
-        ImVec2(0, m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height));
+    ImGui::SetCursorPos(ImVec2(0, m_time_to_pixel_manager.GetGraphSizeY() -
+                                      m_ruler_height - m_artificial_scrollbar_height));
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
 
@@ -593,7 +594,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     ImVec2 container_size  = ImGui::GetWindowSize();
     float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    ImGui::SetNextWindowSize(m_graph_size, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(m_time_to_pixel_manager.GetGraphSizeX(),
+                                    m_time_to_pixel_manager.GetGraphSizeY()),
+                             ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
     // overlayed windows need to have fully trasparent bg otherwise they will overlay
@@ -602,7 +605,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     ImGui::BeginChild(
         "Scrubber View",
-        ImVec2(m_graph_size.x, m_graph_size.y - m_artificial_scrollbar_height),
+        ImVec2(m_time_to_pixel_manager.GetGraphSizeX(),
+               m_time_to_pixel_manager.GetGraphSizeY() - m_artificial_scrollbar_height),
         ImGuiChildFlags_None, window_flags);
 
     ImGui::SetItemAllowOverlap();
@@ -620,10 +624,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
-        float normalized_start_box_highlighted = static_cast<float>(
+        float normalized_start_box_highlighted =
             window_position.x +
-            (m_highlighted_region.first - m_time_to_pixel_manager.GetViewTimeOffsetNs()) *
-                m_time_to_pixel_manager.GetPixelsPerNs());
+            m_time_to_pixel_manager.TimeToPixel(m_highlighted_region.first);
 
         draw_list->AddLine(ImVec2(normalized_start_box_highlighted, cursor_position.y),
                            ImVec2(normalized_start_box_highlighted,
@@ -632,11 +635,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     }
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
-        float normalized_start_box_highlighted_end = static_cast<float>(
-            window_position.x + (m_highlighted_region.second -
-                                 m_time_to_pixel_manager.GetViewTimeOffsetNs()) *
-                                    m_time_to_pixel_manager.GetPixelsPerNs());
-
+        float normalized_start_box_highlighted_end =
+            window_position.x +
+            m_time_to_pixel_manager.TimeToPixel(m_highlighted_region.second);
         draw_list->AddLine(
             ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
             ImVec2(normalized_start_box_highlighted_end,
@@ -646,14 +647,14 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
        m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
     {
-        float normalized_start_box_highlighted = static_cast<float>(
+        float normalized_start_box_highlighted =
             window_position.x +
-            (m_highlighted_region.first - m_time_to_pixel_manager.GetViewTimeOffsetNs()) *
-                m_time_to_pixel_manager.GetPixelsPerNs());
-        float normalized_start_box_highlighted_end = static_cast<float>(
-            window_position.x + (m_highlighted_region.second -
-                                 m_time_to_pixel_manager.GetViewTimeOffsetNs()) *
-                                    m_time_to_pixel_manager.GetPixelsPerNs());
+            m_time_to_pixel_manager.TimeToPixel(m_highlighted_region.first);
+
+        float normalized_start_box_highlighted_end =
+            window_position.x +
+            m_time_to_pixel_manager.TimeToPixel(m_highlighted_region.second);
+
         draw_list->AddRectFilled(
             ImVec2(normalized_start_box_highlighted, cursor_position.y),
             ImVec2(normalized_start_box_highlighted_end,
@@ -663,15 +664,18 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(
-           window_position, ImVec2(window_position.x + m_graph_size.x - scrollbar_width,
-                                   window_position.y + m_graph_size.y)) &&
+           window_position,
+           ImVec2(window_position.x + m_time_to_pixel_manager.GetGraphSizeX() -
+                      scrollbar_width,
+                  window_position.y + m_time_to_pixel_manager.GetGraphSizeY())) &&
        !m_stop_user_interaction)
     {
-        float cursor_screen_percentage =
-            (mouse_position.x - window_position.x) / m_graph_size.x;
+ 
+
+        float  cursor_screen_percentage_2 = mouse_position.x - window_position.x;
         double scrubber_position =
-            m_time_to_pixel_manager.GetViewTimeOffsetNs() +
-            (cursor_screen_percentage * m_time_to_pixel_manager.GetVWidth());
+            m_time_to_pixel_manager.PixelToTime(cursor_screen_percentage_2);
+            
 
         std::string label = nanosecond_to_formatted_str(
             scrubber_position, m_settings.GetUserSettings().unit_settings.time_format,
@@ -701,20 +705,16 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.first =
-                    m_time_to_pixel_manager.GetViewTimeOffsetNs() +
-                    (cursor_screen_percentage * m_time_to_pixel_manager.GetVWidth());
+                    m_time_to_pixel_manager.PixelToTime(cursor_screen_percentage_2);
             }
             else if(m_highlighted_region.second ==
                     TimelineSelection::INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.second =
-                    m_time_to_pixel_manager.GetViewTimeOffsetNs() +
-                    (cursor_screen_percentage * m_time_to_pixel_manager.GetVWidth());
+                    m_time_to_pixel_manager.PixelToTime(cursor_screen_percentage_2);
                 m_timeline_selection->SelectTimeRange(
-                    std::min(m_highlighted_region.first, m_highlighted_region.second) +
-                        m_time_to_pixel_manager.GetMinX(),
-                    std::max(m_highlighted_region.first, m_highlighted_region.second) +
-                        m_time_to_pixel_manager.GetMinX());
+                    std::min(m_highlighted_region.first, m_highlighted_region.second),
+                    std::max(m_highlighted_region.first, m_highlighted_region.second));
             }
             else
             {
@@ -748,7 +748,9 @@ TimelineView::CalculateGridInterval()
 
     // calculate the number of intervals based on the graph width and label width
     int interval_count =
-        label_size.x > 0 ? static_cast<int>(m_graph_size.x / label_size.x) : 0;
+        label_size.x > 0
+            ? static_cast<int>(m_time_to_pixel_manager.GetGraphSizeX() / label_size.x)
+            : 0;
 
     double interval_ns =
         calculate_nice_interval(m_time_to_pixel_manager.GetVWidth(), interval_count);
@@ -811,7 +813,8 @@ TimelineView::RenderGrid()
         // Background for the ruler area
         draw_list->AddRectFilled(
             ImVec2(container_pos.x, cursor_position.y + content_size.y - m_ruler_height),
-            ImVec2(container_pos.x + m_graph_size.x, cursor_position.y + content_size.y),
+            ImVec2(container_pos.x + m_time_to_pixel_manager.GetGraphSizeX(),
+                   cursor_position.y + content_size.y),
             m_settings.GetColor(Colors::kRulerBgColor));
 
         // Detect right mouse click in the ruler area
@@ -819,7 +822,7 @@ TimelineView::RenderGrid()
            ImGui::IsMouseHoveringRect(
                ImVec2(container_pos.x,
                       cursor_position.y + content_size.y - m_ruler_height),
-               ImVec2(container_pos.x + m_graph_size.x,
+               ImVec2(container_pos.x + m_time_to_pixel_manager.GetGraphSizeX(),
                       cursor_position.y + content_size.y)))
         {
             // Show context menu for time format selection
@@ -829,11 +832,9 @@ TimelineView::RenderGrid()
         std::string label;
         for(auto i = 0; i < m_grid_interval_count; i++)
         {
-            double grid_line_ns     = grid_line_start_ns + (i * m_grid_interval_ns);
-            float  normalized_start = static_cast<float>(
-                child_win.x +
-                (grid_line_ns - m_time_to_pixel_manager.GetViewTimeOffsetNs()) *
-                    m_time_to_pixel_manager.GetPixelsPerNs());
+            double grid_line_ns = grid_line_start_ns + (i * m_grid_interval_ns);
+            float  normalized_start =
+                child_win.x + m_time_to_pixel_manager.TimeToPixel(grid_line_ns);
 
             draw_list->AddLine(
                 ImVec2(normalized_start, cursor_position.y),
@@ -898,8 +899,7 @@ TimelineView::RenderGraphView()
         ImGui::SetScrollY(m_scroll_position_y);
     }
 
-    ImVec2 window_size  = m_graph_size;
-    bool   request_data = false;
+    bool request_data = false;
 
     // for zooming out
     if(m_time_to_pixel_manager.GetVWidth() - m_last_data_req_v_width >
@@ -964,8 +964,10 @@ TimelineView::RenderGraphView()
             float delta_top = m_scroll_position_y -
                               track_bottom;  // Positive if the track is above the view
             float delta_bottom =
-                track_top - (m_scroll_position_y +
-                             m_graph_size.y);  // Positive if the track is below the view
+                track_top -
+                (m_scroll_position_y +
+                 m_time_to_pixel_manager
+                     .GetGraphSizeY());  // Positive if the track is below the view
 
             // Save distance for book keeping
             track_item.chart->SetDistanceToView(
@@ -977,9 +979,11 @@ TimelineView::RenderGraphView()
                                  m_reorder_request.track_id == track_item.chart->GetID();
 
             // Check if the track is visible
-            bool is_visible = (track_bottom >= m_scroll_position_y &&
-                               track_top <= m_scroll_position_y + m_graph_size.y) ||
-                              is_reordering;
+            bool is_visible =
+                (track_bottom >= m_scroll_position_y &&
+                 track_top <=
+                     m_scroll_position_y + m_time_to_pixel_manager.GetGraphSizeY()) ||
+                is_reordering;
 
             track_item.chart->SetInViewVertical(is_visible);
 
@@ -1004,7 +1008,7 @@ TimelineView::RenderGraphView()
                         (m_time_to_pixel_manager.GetViewTimeOffsetNs() +
                          m_time_to_pixel_manager.GetVWidth() + buffer_distance) +
                             m_time_to_pixel_manager.GetMinX(),
-                        m_graph_size.x * 3);
+                        m_time_to_pixel_manager.GetGraphSizeX() * 3);
                 }
             }
 
@@ -1040,7 +1044,7 @@ TimelineView::RenderGraphView()
                     }
                     else
                     {
-                        track_item.chart->Render(m_graph_size.x);
+                        track_item.chart->Render(m_time_to_pixel_manager.GetGraphSizeX());
                     }
 
                     // Region for recieving reordering request.
@@ -1143,7 +1147,7 @@ TimelineView::RenderGraphView()
                                     ImGuiWindowFlags_NoFocusOnAppearing |
                                     ImGuiWindowFlags_NoBringToFrontOnFocus))
                 {
-                    track_item.chart->Render(m_graph_size.x);
+                    track_item.chart->Render(m_time_to_pixel_manager.GetGraphSizeX());
                 }
                 ImGui::End();
                 ImGui::PopStyleVar();
@@ -1209,8 +1213,6 @@ TimelineView::MakeGraphView()
 
     m_time_to_pixel_manager.SetMinMaxX(m_data_provider.GetStartTime(),
                                        m_data_provider.GetEndTime());
-
-    m_range_x = m_time_to_pixel_manager.GetMaxX() - m_time_to_pixel_manager.GetMinX();
 
     m_last_data_req_v_width = m_time_to_pixel_manager.GetVWidth();
 
@@ -1318,7 +1320,7 @@ TimelineView::RenderHistogram()
     ImGui::PopStyleColor();
     ImGui::SameLine();
 
-    float histogram_width = m_graph_size.x - splitter_size;
+    float histogram_width = m_time_to_pixel_manager.GetGraphSizeX() - splitter_size;
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
@@ -1331,7 +1333,7 @@ TimelineView::RenderHistogram()
 
     ImDrawList* draw_list_ruler = ImGui::GetWindowDrawList();
     ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
-    float       ruler_width     = m_graph_size.x;
+    float       ruler_width     = m_time_to_pixel_manager.GetGraphSizeX();
     float       tick_top        = ruler_pos.y + 2.0f;
     float       tick_bottom     = ruler_pos.y + 7.0f;
     ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
@@ -1339,8 +1341,9 @@ TimelineView::RenderHistogram()
 
     // Interval calculation
     // measure the size of the label to determine the step size
-    std::string label = nanosecond_to_formatted_str(m_range_x, time_format, true) + "gap";
-    ImVec2      label_size = ImGui::CalcTextSize(label.c_str());
+    std::string label = nanosecond_to_formatted_str(m_time_to_pixel_manager.GetRangeX(),
+                                                    time_format, true) + "gap";
+    ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
     // calculate the number of intervals based on the graph width and label width
     // reserve space for first and last label
@@ -1348,16 +1351,19 @@ TimelineView::RenderHistogram()
         static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
     if(interval_count < 1) interval_count = 1;
 
-    double pixels_per_ns = m_graph_size.x / m_range_x;
-    double interval_ns   = calculate_nice_interval(m_range_x, interval_count);
-    double step_size_px  = interval_ns * pixels_per_ns;
-    int    pad_amount    = 2;  // +2 for the first and last label
+    double pixels_per_ns =
+        m_time_to_pixel_manager.GetGraphSizeX() / m_time_to_pixel_manager.GetRangeX();
+    double interval_ns =
+        calculate_nice_interval(m_time_to_pixel_manager.GetRangeX(), interval_count);
+    double step_size_px = interval_ns * pixels_per_ns;
+    int    pad_amount   = 2;  // +2 for the first and last label
 
     // If the step size is smaller than the label size, try to adjust the interval count
     while(step_size_px < label_size.x)
     {
         interval_count--;
-        interval_ns  = calculate_nice_interval(m_range_x, interval_count);
+        interval_ns =
+            calculate_nice_interval(m_time_to_pixel_manager.GetRangeX(), interval_count);
         step_size_px = interval_ns * pixels_per_ns;
         // If the interval count is too small break out
         if(interval_count <= 0)
@@ -1373,7 +1379,7 @@ TimelineView::RenderHistogram()
     for(int i = 0; i < num_ticks; i++)
     {
         double      tick_ns = grid_line_start_ns + (i * interval_ns);
-        float       tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
+        float       tick_x  = window_pos.x + m_time_to_pixel_manager.TimeToPixel(tick_ns) ;
         std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
         label_size             = ImGui::CalcTextSize(tick_label.c_str());
 
@@ -1409,7 +1415,7 @@ TimelineView::RenderHistogram()
 
     ImDrawList* draw_list   = ImGui::GetWindowDrawList();
     ImVec2      bars_pos    = ImGui::GetCursorScreenPos();
-    float       bars_width  = m_graph_size.x;
+    float       bars_width  = m_time_to_pixel_manager.GetGraphSizeX();
     float       bars_height = kHistogramBarHeight;
     size_t      bin_count   = m_histogram->size();
 
@@ -1434,12 +1440,13 @@ TimelineView::RenderHistogram()
         }
     }
     // Draw view range overlays and labels
-    float view_start_frac =
-        static_cast<float>(m_time_to_pixel_manager.GetViewTimeOffsetNs() / m_range_x);
+    float view_start_frac = 
+        static_cast<float>(m_time_to_pixel_manager.GetViewTimeOffsetNs() /
+                           m_time_to_pixel_manager.GetRangeX());
     float view_end_frac =
         static_cast<float>((m_time_to_pixel_manager.GetViewTimeOffsetNs() +
                             m_time_to_pixel_manager.GetVWidth()) /
-                           m_range_x);
+                           m_time_to_pixel_manager.GetRangeX());
     view_start_frac = std::clamp(view_start_frac, 0.0f, 1.0f);
     view_end_frac   = std::clamp(view_end_frac, 0.0f, 1.0f);
 
@@ -1502,10 +1509,11 @@ TimelineView::RenderHistogram()
                      io.MouseDown[ImGuiMouseButton_Middle];
 
     ImVec2 mouse_position = io.MousePos;
-    bool   mouse_inside   = mouse_position.x >= window_pos.x &&
-                        mouse_position.x <= window_pos.x + m_graph_size.x &&
-                        mouse_position.y >= window_pos.y &&
-                        mouse_position.y <= window_pos.y + m_graph_size.y;
+    bool   mouse_inside =
+        mouse_position.x >= window_pos.x &&
+        mouse_position.x <= window_pos.x + m_time_to_pixel_manager.GetGraphSizeX() &&
+        mouse_position.y >= window_pos.y &&
+        mouse_position.y <= window_pos.y + m_time_to_pixel_manager.GetGraphSizeY();
 
     // Update pseudo focus state based on mouse interaction
     if(mouse_any)
@@ -1523,9 +1531,6 @@ TimelineView::RenderTraceView()
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
-    m_graph_size =
-        ImVec2(subcomponent_size_main.x - m_sidebar_size, subcomponent_size_main.y);
-
     ImGui::BeginChild("Grid View 2",
                       ImVec2(subcomponent_size_main.x,
                              subcomponent_size_main.y - m_artificial_scrollbar_height),
@@ -1534,7 +1539,8 @@ TimelineView::RenderTraceView()
 
     // Scale used in all graphs computed here
 
-    m_time_to_pixel_manager.SetGraphSizeX(m_graph_size.x);
+    m_time_to_pixel_manager.SetGraphSizeX(subcomponent_size_main.x - m_sidebar_size,
+                                          subcomponent_size_main.y);
     m_time_to_pixel_manager.ComputePixelMapping();
 
     m_stop_user_interaction |= !ImGui::IsWindowHovered(
@@ -1568,17 +1574,18 @@ TimelineView::RenderTraceView()
     ImGui::SameLine();
 
     float  available_width = subcomponent_size_main.x - m_sidebar_size;
-    double view_width      = std::min(m_time_to_pixel_manager.GetVWidth(), m_range_x);
-    double max_offset      = m_range_x - view_width;
+    double view_width      = std::min(m_time_to_pixel_manager.GetVWidth(),
+                                      m_time_to_pixel_manager.GetRangeX());
+    double max_offset      = m_time_to_pixel_manager.GetRangeX() - view_width;
     float  view_offset     = static_cast<float>(
         std::clamp(m_time_to_pixel_manager.GetViewTimeOffsetNs(), 0.0, max_offset));
 
-    float min_grab = 4.0f;
-    float max_grab = available_width;
-    float grab_fraction =
-        (m_range_x > 0.0)
-            ? static_cast<float>(m_time_to_pixel_manager.GetVWidth() / m_range_x)
-            : 1.0f;
+    float min_grab      = 4.0f;
+    float max_grab      = available_width;
+    float grab_fraction = (m_time_to_pixel_manager.GetRangeX() > 0.0)
+                              ? static_cast<float>(m_time_to_pixel_manager.GetVWidth() /
+                                                   m_time_to_pixel_manager.GetRangeX())
+                              : 1.0f;
     float grab_min_size = std::clamp(available_width * grab_fraction, min_grab, max_grab);
 
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, grab_min_size);
@@ -1637,7 +1644,8 @@ TimelineView::HandleHistogramTouch()
 
     ImVec2 histogram_area_min = ImVec2(container_pos.x, container_pos.y);
     ImVec2 histogram_area_max =
-        ImVec2(container_pos.x + m_sidebar_size + m_graph_size.x, container_pos.y + 100);
+        ImVec2(container_pos.x + m_sidebar_size + m_time_to_pixel_manager.GetGraphSizeX(),
+               container_pos.y + 100);
 
     bool is_mouse_in_graph =
         ImGui::IsMouseHoveringRect(histogram_area_min, histogram_area_max);
@@ -1663,11 +1671,13 @@ TimelineView::HandleHistogramTouch()
     {
         float drag = io.MouseDelta.x;
         float user_requested_move =
-            static_cast<float>((drag / m_graph_size.x) * m_range_x);
+            static_cast<float>((drag / m_time_to_pixel_manager.GetGraphSizeX()) *
+                               m_time_to_pixel_manager.GetRangeX());
 
         if(user_requested_move <= 0)
         {
-            if(m_time_to_pixel_manager.GetViewTimeOffsetNs() <= (m_range_x))
+            if(m_time_to_pixel_manager.GetViewTimeOffsetNs() <=
+               (m_time_to_pixel_manager.GetRangeX()))
             {
                 m_time_to_pixel_manager.SetViewTimeOffsetNs(
                     m_time_to_pixel_manager.GetViewTimeOffsetNs() + user_requested_move);
@@ -1693,11 +1703,13 @@ TimelineView::HandleTopSurfaceTouch()
     // Define sidebar and graph areas
     ImVec2 sidebar_min = container_pos;
     ImVec2 sidebar_max =
-        ImVec2(container_pos.x + m_sidebar_size, container_pos.y + m_graph_size.y);
+        ImVec2(container_pos.x + m_sidebar_size,
+               container_pos.y + m_time_to_pixel_manager.GetGraphSizeY());
 
     ImVec2 graph_area_min = ImVec2(container_pos.x + m_sidebar_size, container_pos.y);
-    ImVec2 graph_area_max = ImVec2(container_pos.x + m_sidebar_size + m_graph_size.x,
-                                   container_pos.y + m_graph_size.y);
+    ImVec2 graph_area_max =
+        ImVec2(container_pos.x + m_sidebar_size + m_time_to_pixel_manager.GetGraphSizeX(),
+               container_pos.y + m_time_to_pixel_manager.GetGraphSizeY());
 
     bool is_mouse_in_sidebar = ImGui::IsMouseHoveringRect(sidebar_min, sidebar_max);
     bool is_mouse_in_graph   = ImGui::IsMouseHoveringRect(graph_area_min, graph_area_max);
@@ -1761,7 +1773,8 @@ TimelineView::HandleTopSurfaceTouch()
             float  mouse_x_in_graph = mouse_pos.x - graph_pos.x;
 
             // 2. Calculate the world coordinate under the cursor before zoom
-            float  cursor_screen_percentage = mouse_x_in_graph / m_graph_size.x;
+            float cursor_screen_percentage =
+                mouse_x_in_graph / m_time_to_pixel_manager.GetGraphSizeX();
             double x_under_cursor =
                 m_time_to_pixel_manager.GetViewTimeOffsetNs() +
                 cursor_screen_percentage * m_time_to_pixel_manager.GetVWidth();
@@ -1783,7 +1796,7 @@ TimelineView::HandleTopSurfaceTouch()
             new_zoom = std::max(new_zoom, MAX_ZOOM_OUT_EXTENT);
 
             // 4. Calculate new view width
-            double new_v_width = m_range_x / new_zoom;
+            double new_v_width = m_time_to_pixel_manager.GetRangeX() / new_zoom;
 
             // 5. Adjust m_movement so the world_x_under_cursor stays under the cursor
             offset_ns = x_under_cursor - cursor_screen_percentage * new_v_width;
@@ -1809,19 +1822,23 @@ TimelineView::HandleTopSurfaceTouch()
 
         float pan_speed = is_shift_down ? pan_speed_sped_up : 1.0f;
 
-        float region_moved_per_click_x = 0.01f * m_graph_size.x;
+        float region_moved_per_click_x = 0.01f * m_time_to_pixel_manager.GetGraphSizeX();
         float region_moved_per_click_y = 0.01f * m_content_max_y_scroll;
 
         // A, D, left arrow, right arrow go left and right
         if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
         {
-            offset_ns -= pan_speed * ((region_moved_per_click_x / m_graph_size.x) *
-                                      m_time_to_pixel_manager.GetVWidth());
+            offset_ns -=
+                pan_speed *
+                ((region_moved_per_click_x / m_time_to_pixel_manager.GetGraphSizeX()) *
+                 m_time_to_pixel_manager.GetVWidth());
         }
         if(ImGui::IsKeyPressed(ImGuiKey_D) || ImGui::IsKeyPressed(ImGuiKey_RightArrow))
         {
-            offset_ns -= pan_speed * ((-region_moved_per_click_x / m_graph_size.x) *
-                                      m_time_to_pixel_manager.GetVWidth());
+            offset_ns -=
+                pan_speed *
+                ((-region_moved_per_click_x / m_time_to_pixel_manager.GetGraphSizeX()) *
+                 m_time_to_pixel_manager.GetVWidth());
         }
 
         float new_zoom = 0.0f;
@@ -1845,7 +1862,7 @@ TimelineView::HandleTopSurfaceTouch()
             // Center zoom at current view center
             double center_ns = m_time_to_pixel_manager.GetViewTimeOffsetNs() +
                                m_time_to_pixel_manager.GetVWidth() * 0.5;
-            double new_v_width = m_range_x / new_zoom;
+            double new_v_width = m_time_to_pixel_manager.GetRangeX() / new_zoom;
             offset_ns          = center_ns - new_v_width * 0.5;
             m_time_to_pixel_manager.SetZoom(new_zoom);
         }
@@ -1878,11 +1895,12 @@ TimelineView::HandleTopSurfaceTouch()
         float drag_y = io.MouseDelta.y;
         m_scroll_position_y =
             std::clamp(m_scroll_position_y - drag_y, 0.0f, m_content_max_y_scroll);
-        float  drag       = io.MouseDelta.x;
-        double view_width = (m_range_x) / m_time_to_pixel_manager.GetZoom();
+        float  drag = io.MouseDelta.x;
+        double view_width =
+            (m_time_to_pixel_manager.GetRangeX()) / m_time_to_pixel_manager.GetZoom();
 
-        float user_requested_move =
-            static_cast<float>((drag / m_graph_size.x) * view_width);
+        float user_requested_move = static_cast<float>(
+            (drag / m_time_to_pixel_manager.GetGraphSizeX()) * view_width);
 
         offset_ns -= user_requested_move;
     }

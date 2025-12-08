@@ -19,7 +19,7 @@
 #include <string>
 #include <utility>
 #include <vector>
-
+ 
 namespace RocProfVis
 {
 namespace View
@@ -27,7 +27,7 @@ namespace View
 
 class TimelineSelection;
 class TimelineView;
-
+ 
 typedef struct ViewCoords
 {
     double y;
@@ -116,13 +116,11 @@ private:
     bool                                m_resize_activity;
     double                              m_last_data_req_v_width;
     float                               m_unload_track_distance;
-    double                              m_range_x;
     DataProvider&                       m_data_provider;
     std::pair<double, double>           m_highlighted_region;
     SettingsManager&                    m_settings;
     double                              m_last_data_req_view_time_offset_ns;
     float                               m_artificial_scrollbar_height;
-    ImVec2                              m_graph_size;
     double                              m_grid_interval_ns;
     int                                 m_grid_interval_count;
     bool                                m_recalculate_grid_interval;

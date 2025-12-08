@@ -3,12 +3,15 @@
 
 #pragma once
 #include "imgui.h"
+#include "rocprofvis_time_to_pixel.h"
 #include <string>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+class TimeToPixelManager;
 
 class StickyNote
 {
@@ -17,13 +20,13 @@ public:
                const std::string& text, const std::string& title,
                const std::string& project_id, double v_min, double v_max);
 
-    void Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
-                double pixels_per_ns);
-    bool HandleResize(const ImVec2& window_position, double v_min_x, double v_max_x,
-                      double pixels_per_ns);
+    void Render(ImDrawList* draw_list, const ImVec2& window_position,
+                TimeToPixelManager* conversion_manager);
+    bool HandleResize(const ImVec2&       window_position,
+                      TimeToPixelManager* conversion_manager);
 
     // Drag interaction
-    bool HandleDrag(const ImVec2& window_position, double v_min_x, double v_max_x, double pixels_per_ns,
+    bool HandleDrag(const ImVec2& window_position, TimeToPixelManager* conversion_manager,
                     int& dragged_id);
     void SetTitle(std::string title);
     void SetText(std::string title);

@@ -24,6 +24,22 @@ TimeToPixelManager::TimeToPixelManager()
 {}
 TimeToPixelManager::~TimeToPixelManager() {}
 
+float
+TimeToPixelManager::TimeToPixel(double time_ns)
+{
+    return (time_ns - m_view_time_offset_ns) * m_pixels_per_ns;
+}
+
+double
+TimeToPixelManager::PixelToTime(float x_position)
+{
+    /*
+    This function gets raw time (in ns) from a pixel position in the graph area. It is not
+    accuret to the data and is in screen ns.
+    */
+    return (m_view_time_offset_ns + ((x_position / m_graph_size_x) * m_v_width));
+}
+
 void
 TimeToPixelManager::ComputePixelMapping()
 {
@@ -106,6 +122,11 @@ TimeToPixelManager::GetGraphSizeX() const
 {
     return m_graph_size_x;
 }
+float
+TimeToPixelManager::GetGraphSizeY() const
+{
+    return m_graph_size_y;
+}
 double
 TimeToPixelManager::GetPixelsPerNs() const
 {
@@ -142,11 +163,12 @@ TimeToPixelManager::SetZoom(float zoom)
 }
 
 void
-TimeToPixelManager::SetGraphSizeX(float graph_size_x)
+TimeToPixelManager::SetGraphSizeX(float graph_size_x, float graph_size_y)
 {
-    if(graph_size_x != m_graph_size_x)
+    if(graph_size_x != m_graph_size_x || graph_size_y != m_graph_size_y)
     {
         m_graph_size_x = graph_size_x;
+        m_graph_size_y = graph_size_y;
         m_has_changed  = true;
     }
 }

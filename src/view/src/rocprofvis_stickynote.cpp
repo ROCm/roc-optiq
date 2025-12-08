@@ -99,8 +99,7 @@ StickyNote::SetTitle(std::string title)
     m_title = title;
 }
 void
-StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
-                   double pixels_per_ns)
+StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, TimeToPixelManager* conversion_manager)
 {
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kFillerColor);
@@ -112,7 +111,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
     const float header_height = 32.0f;
     const float edit_btn_size = 30.0f;
 
-    float  x           = static_cast<float>((m_time_ns - v_min_x) * pixels_per_ns);
+    float  x           = conversion_manager->TimeToPixel(m_time_ns);
     float  y           = m_y_offset;
     ImVec2 sticky_pos  = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_size = m_size;
@@ -184,12 +183,12 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double 
 }
 
 bool
-StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_max_x,
-                       double pixels_per_ns, int& dragged_id)
+StickyNote::HandleDrag(const ImVec2&                               window_position,
+                       TimeToPixelManager* conversion_manager, int& dragged_id)
 {
     if(m_resizing) return false;
 
-    float  x          = static_cast<float>((m_time_ns - v_min_x) * pixels_per_ns);
+    float  x          = conversion_manager->TimeToPixel(m_time_ns);
     float  y          = m_y_offset;
     ImVec2 sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);
@@ -226,10 +225,10 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
         new_x =
             std::clamp(new_x, 0.0f, window_size.x - m_size.x);  // Limit to window width
 
-        m_time_ns  = v_min_x + (new_x / pixels_per_ns);
+        m_time_ns  = conversion_manager->PixelToTime(new_x);
         m_y_offset = new_y;
-        m_v_max_x  = v_max_x;
-        m_v_min_x  = v_min_x;
+        m_v_max_x  = conversion_manager->GetVMaxX();
+        m_v_min_x  = conversion_manager->GetVMinX();
 
         return true;
     }
@@ -245,13 +244,13 @@ StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_m
 }
 
 bool
-StickyNote::HandleResize(const ImVec2& window_position, double v_min_x, double v_max_x,
-                         double pixels_per_ns)
+StickyNote::HandleResize(const ImVec2&       window_position,
+                         TimeToPixelManager* conversion_manager)
 {
     // Only allow resize if not dragging
     if(m_dragging) return false;
 
-    float  x          = static_cast<float>((m_time_ns - v_min_x) * pixels_per_ns);
+    float  x          = conversion_manager->TimeToPixel(m_time_ns);
     float  y          = m_y_offset;
     ImVec2 sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);
@@ -283,8 +282,8 @@ StickyNote::HandleResize(const ImVec2& window_position, double v_min_x, double v
         float new_height = mouse_pos.y - sticky_pos.y - m_resize_offset.y;
         m_size.x         = std::max(new_width, 60.0f);
         m_size.y         = std::max(new_height, 40.0f);
-        m_v_max_x        = v_max_x;
-        m_v_min_x        = v_min_x;
+        m_v_max_x        = conversion_manager->GetVMaxX();
+        m_v_min_x        = conversion_manager->GetVMinX();
         return true;
     }
 

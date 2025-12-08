@@ -23,12 +23,16 @@ public:
     float  GetZoom() const;
     double GetRangeX() const;
     float  GetGraphSizeX() const;
+    float  GetGraphSizeY() const;
     double GetPixelsPerNs() const;
     void   SetMinMaxX(double min_x, double max_x);
     void   SetViewTimeOffsetNs(double value);
     void   SetZoom(float value);
-    void   SetGraphSizeX(float value);
+    void   SetGraphSizeX(float x_value, float y_value);
     void   Reset();
+    float TimeToPixel(double time_ns); //Must return float because that is what ImGui uses
+ 
+    double PixelToTime(float x_position);
 
 private:
     double m_min_x;                // This value is the min value globally across data.
@@ -40,6 +44,7 @@ private:
     float  m_zoom;     // This value is the current zoom level.
     double m_range_x;  // This value is the total range of the data (max_x - min_x).
     float  m_graph_size_x;   // This value is the size of the graph area in pixels.
+    float  m_graph_size_y;   // This value is the size of the graph area in pixels. 
     double m_pixels_per_ns;  // This value is how many pixels represent 1 ns in the
                              // current view.
     bool m_has_changed;  // This value indicates if the mapping needs to be recomputed.

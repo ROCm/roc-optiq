@@ -73,6 +73,10 @@ Ubuntu 22.04 / 24.04 (Debian-based)
 
       dpkg -l | grep roc-optiq
 
+.. tip::
+
+   Download the latest ``.deb`` from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ to ensure ROCm Optiq is up-to-date.
+
 Check the ROCm Optiq version
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

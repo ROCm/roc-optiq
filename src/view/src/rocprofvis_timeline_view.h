@@ -137,7 +137,7 @@ private:
     bool                                m_histogram_pseudo_focus;
     float                               m_max_meta_area_size;
     std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
-    TimeToPixelManager                               m_time_to_pixel_manager;
+    TimePixelTransform                               m_time_to_pixel_manager;
     struct
     {
         bool     handled;

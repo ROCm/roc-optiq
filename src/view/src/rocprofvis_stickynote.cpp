@@ -99,7 +99,7 @@ StickyNote::SetTitle(std::string title)
     m_title = title;
 }
 void
-StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, TimeToPixelManager* conversion_manager)
+StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, TimePixelTransform* conversion_manager)
 {
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kFillerColor);
@@ -184,7 +184,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, TimeToP
 
 bool
 StickyNote::HandleDrag(const ImVec2&                               window_position,
-                       TimeToPixelManager* conversion_manager, int& dragged_id)
+                       TimePixelTransform* conversion_manager, int& dragged_id)
 {
     if(m_resizing) return false;
 
@@ -245,7 +245,7 @@ StickyNote::HandleDrag(const ImVec2&                               window_positi
 
 bool
 StickyNote::HandleResize(const ImVec2&       window_position,
-                         TimeToPixelManager* conversion_manager)
+                         TimePixelTransform* conversion_manager)
 {
     // Only allow resize if not dragging
     if(m_dragging) return false;

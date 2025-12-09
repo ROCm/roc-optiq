@@ -11,7 +11,7 @@ namespace RocProfVis
 namespace View
 {
 
-class TimeToPixelManager;
+class TimePixelTransform;
 
 class StickyNote
 {
@@ -21,12 +21,12 @@ public:
                const std::string& project_id, double v_min, double v_max);
 
     void Render(ImDrawList* draw_list, const ImVec2& window_position,
-                TimeToPixelManager* conversion_manager);
+                TimePixelTransform* conversion_manager);
     bool HandleResize(const ImVec2&       window_position,
-                      TimeToPixelManager* conversion_manager);
+                      TimePixelTransform* conversion_manager);
 
     // Drag interaction
-    bool HandleDrag(const ImVec2& window_position, TimeToPixelManager* conversion_manager,
+    bool HandleDrag(const ImVec2& window_position, TimePixelTransform* conversion_manager,
                     int& dragged_id);
     void SetTitle(std::string title);
     void SetText(std::string title);

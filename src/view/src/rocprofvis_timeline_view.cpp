@@ -672,9 +672,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     {
  
 
-        float  cursor_screen_percentage_2 = mouse_position.x - window_position.x;
+        float  cursor_screen_position = mouse_position.x - window_position.x;
         double scrubber_position =
-            m_time_to_pixel_manager.PixelToTime(cursor_screen_percentage_2);
+            m_time_to_pixel_manager.PixelToTime(cursor_screen_position);
             
 
         std::string label = nanosecond_to_formatted_str(
@@ -705,13 +705,13 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.first =
-                    m_time_to_pixel_manager.PixelToTime(cursor_screen_percentage_2);
+                    m_time_to_pixel_manager.PixelToTime(cursor_screen_position);
             }
             else if(m_highlighted_region.second ==
                     TimelineSelection::INVALID_SELECTION_TIME)
             {
                 m_highlighted_region.second =
-                    m_time_to_pixel_manager.PixelToTime(cursor_screen_percentage_2);
+                    m_time_to_pixel_manager.PixelToTime(cursor_screen_position);
                 m_timeline_selection->SelectTimeRange(
                     std::min(m_highlighted_region.first, m_highlighted_region.second),
                     std::max(m_highlighted_region.first, m_highlighted_region.second));
@@ -1030,12 +1030,6 @@ TimelineView::RenderGraphView()
                     // function?)
                     track_item.chart->Update();
 
-                    track_item.chart->UpdateMovement(
-                        m_time_to_pixel_manager.GetZoom(),
-                        m_time_to_pixel_manager.GetViewTimeOffsetNs(),
-                        m_time_to_pixel_manager.GetMinX(),
-                        m_time_to_pixel_manager.GetMaxX(),
-                        m_time_to_pixel_manager.GetPixelsPerNs(), m_scroll_position_y);
 
                     if(is_reordering)
                     {
@@ -1258,23 +1252,17 @@ TimelineView::MakeGraphView()
                 // Create FlameChart
                 graph.chart = new FlameTrackItem(
                     m_data_provider, m_timeline_selection, track_info->id,
-                    track_info->name, m_time_to_pixel_manager.GetZoom(),
-                    m_time_to_pixel_manager.GetViewTimeOffsetNs(),
-                    m_time_to_pixel_manager.GetMinX(), m_time_to_pixel_manager.GetMaxX(),
-                    scale_x, static_cast<float>(track_info->min_value),
-                    static_cast<float>(track_info->max_value));
+                    track_info->name,  static_cast<float>(track_info->min_value),
+                    static_cast<float>(track_info->max_value), &m_time_to_pixel_manager);
                 graph.graph_type = rocprofvis_graph_t::TYPE_FLAMECHART;
                 break;
             }
             case kRPVControllerTrackTypeSamples:
-            {
+            { 
                 // Linechart
                 graph.chart = new LineTrackItem(
                     m_data_provider, track_info->id, track_info->name,
-                    m_time_to_pixel_manager.GetZoom(),
-                    m_time_to_pixel_manager.GetViewTimeOffsetNs(),
-                    m_time_to_pixel_manager.GetMinX(), m_time_to_pixel_manager.GetMaxX(),
-                    m_time_to_pixel_manager.GetPixelsPerNs(), m_max_meta_area_size);
+                  m_max_meta_area_size, &m_time_to_pixel_manager);
                 UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
                 graph.graph_type = rocprofvis_graph_t::TYPE_LINECHART;
                 break;

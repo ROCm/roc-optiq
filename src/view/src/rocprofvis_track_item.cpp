@@ -16,15 +16,10 @@ namespace View
 
 float            TrackItem::s_metadata_width = 400.0f;
 
-TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
-                     double time_offset_ns, double& min_x, double& max_x, double scale_x)
+TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name,
+                     TimePixelTransform* time_to_pixel_manager)
 : m_data_provider(dp)
 , m_id(id)
-, m_zoom(zoom)
-, m_time_offset_ns(time_offset_ns)
-, m_min_x(min_x)
-, m_max_x(max_x)
-, m_scale_x(scale_x)
 , m_name(name)
 , m_track_height(75.0f)
 , m_track_default_height(75.0f)
@@ -112,11 +107,6 @@ TrackItem::SetID(uint64_t id)
     m_id = id;
 }
 
-std::tuple<double, double>
-TrackItem::GetMinMax()
-{
-    return std::make_tuple(m_min_x, m_max_x);
-}
 
 bool
 TrackItem::IsSelected() const
@@ -130,17 +120,6 @@ TrackItem::SetSelected(bool selected)
     m_selected = selected;
 }
 
-void
-TrackItem::UpdateMovement(float zoom, double time_offset_ns, double min_x, double max_x,
-                          double scale_x, float y_scroll_position)
-{
-    m_zoom           = zoom;
-    m_time_offset_ns = time_offset_ns;
-    m_scale_x        = scale_x;
-    m_min_x          = min_x;
-    m_max_x          = max_x;
-    (void) y_scroll_position;
-}
 
 void
 TrackItem::Render(float width)
@@ -446,8 +425,8 @@ TrackItem::FetchHelper()
         else
         {
             spdlog::debug(
-                "Fetching from {} to {} ( {} ) at zoom {} for track {} part of group {}",
-                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_zoom, m_id,
+                "Fetching from {} to {} ( {} ) for track {} part of group {}",
+                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_id,
                 req.m_data_group_id);
 
             m_request_state = TrackDataRequestState::kRequesting;

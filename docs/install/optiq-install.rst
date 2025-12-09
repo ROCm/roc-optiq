@@ -85,12 +85,10 @@ Once you've installed ROCm Optiq for your operating system, add the ROCm binarie
 Check the ROCm Optiq version
 ============================
 
-Use these commands to verify the ROCm Optiq version. 
+Use these commands to verify the ROCm Optiq version (when installed on Ubuntu):
 
-- Ubuntu (Debian-based):
+.. code-block:: shell
 
-  .. code-block:: shell
-
-     apt show roc-optiq
+   apt show roc-optiq
 
 

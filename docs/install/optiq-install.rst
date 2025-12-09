@@ -17,7 +17,6 @@ Your system must be running one of these operating systems:
 
 - Microsoft Windows 11
 - Ubuntu 22.04 / Ubuntu 24.04
-- ROCm 7.0+ to use the data
 
 .. note::
 

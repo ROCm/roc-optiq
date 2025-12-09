@@ -1,5 +1,5 @@
 .. meta::
-  :description: ROCm Optiq install 
+  :description: Install ROCm Optiq 
   :keywords: ROCm Optiq, ROCm, install, profiler
 
 ************************
@@ -17,8 +17,6 @@ Your system must be running one of these operating systems:
 
 -	Microsoft Windows 11
 -	Ubuntu 22.04 / Ubuntu 24.04
--	Oracle Linux 9.X / Oracle Linux 10.X
--	RHEL 9.X / RHEL 10.X
 
 .. note::
 
@@ -39,7 +37,6 @@ Install on Windows
       :width: 500
   
 3. Launch **roc-optiq.exe** from the installation directory.
-
 
 Install on Linux
 ================
@@ -76,26 +73,6 @@ Ubuntu 22.04 / 24.04 (Debian-based)
 
       dpkg -l | grep roc-optiq
 
-Oracle Linux 9.X/10.X and RHEL 9.X/10.X (RPM-based)
--------------------------------------------
-
-1. Download the ``.rpm`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_.
-2. Install the ``.rpm`` package:
-
-   .. code-block:: shell
-
-      sudo dnf install ./<file>.rpm
-
-3. Verify the installation:
-
-   .. code-block:: shell
-
-      rpm -qa | grep roc-optiq
-
-.. tip::
-
-   Download the latest ``.deb`` or ``.rpm`` from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ to ensure ROCm Optiq is up-to-date.
-
 Add ROCm binaries to your ``PATH``
 ==================================
 
@@ -115,11 +92,5 @@ Use these commands to verify the ROCm Optiq version.
   .. code-block:: shell
 
      apt show roc-optiq
-
-- Oracle/RHEL (RPM-based):
-
-  .. code-block:: shell
-
-     rpm -qi roc-optiq | grep -E "Name|Version|Release"
 
 

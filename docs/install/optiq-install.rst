@@ -13,7 +13,7 @@ Install ROCm Optiq for Windows or Linux using the installation files in the `htt
 System requirements
 ===================
 
-- You must be running ROCm version 7.1+ for ROCpd file support. See :ref:`trace-file` for more info on these files.
+- You must be running ROCm version 7.1+ for ROCm database file support. See :ref:`trace-file` for more information on these files.
 - Your system must be running one of these operating systems:
 
   - Microsoft Windows 11

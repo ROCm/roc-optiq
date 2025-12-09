@@ -2,9 +2,9 @@
   :description: ROCm Optiq documentation
   :keywords: Optiq, ROCm, documentation, profiler
 
-********************
+*******************
 What is ROCm Optiq?
-********************
+*******************
 
 Use ROCm™ Optiq to inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage, and system telemetry data for applications running on the ROCm stack.
 

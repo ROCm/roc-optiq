@@ -2,9 +2,9 @@
   :description: Install ROCm Optiq 
   :keywords: ROCm Optiq, ROCm, install, profiler
 
-************************
+***********************
 ROCm Optiq installation
-************************
+***********************
 
 Install ROCm™ Optiq for Windows or Linux using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
 
@@ -58,7 +58,7 @@ If you're unsure of the Linux distribution and version, the ``/etc/os-release`` 
 The relevant fields are ``ID`` and the ``VERSION_ID``.
 
 Ubuntu 22.04 / 24.04 (Debian-based)
-----------------------------------
+-----------------------------------
 
 1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_.
 2. Install the ``.deb`` package:

@@ -2,9 +2,9 @@
   :description: ROCm Optiq documentation
   :keywords: Visualizer, ROCm, documentation, profiler
 
-*************************
+************************
 ROCm Optiq documentation
-*************************
+************************
 
 :doc:`ROCm™ Optiq <what-is-optiq>` provides deep insights into system-level performance for applications running on the ROCm stack. 
 

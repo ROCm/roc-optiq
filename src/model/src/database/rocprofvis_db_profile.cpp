@@ -894,10 +894,14 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
 rocprofvis_dm_result_t
 ProfileDatabase::BuildTableQuery(
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
-    rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_charptr_t filter,
-    rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, rocprofvis_dm_charptr_t sort_column,
-    rocprofvis_dm_sort_order_t sort_order, rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
-    uint64_t max_count, uint64_t offset, bool count_only, bool summary, rocprofvis_dm_string_t& query)
+    rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, 
+    rocprofvis_dm_charptr_t where, rocprofvis_dm_charptr_t filter,
+    rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, 
+    rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order, 
+    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
+    uint64_t max_count, uint64_t offset, 
+    bool count_only, bool summary, 
+    rocprofvis_dm_string_t& query)
 {
     std::vector<slice_query_t> slice_query_map_array;
     table_string_id_filter_map_t string_id_filter_map;
@@ -918,10 +922,10 @@ ProfileDatabase::BuildTableQuery(
     }
     else
     {
-        if(group)
+        if(group && strlen(group))
         {
             group_by = group;
-            if(group_cols)
+            if(group_cols && strlen(group_cols))
             {
                 group_by_select = group_cols;
             }
@@ -967,19 +971,25 @@ ProfileDatabase::BuildTableQuery(
                 slice_query_map_array[i][q] += tuple ;
             }
         }
-        else if(string_filter_result == kRocProfVisDmResultSuccess && string_id_filter_map.count((rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(track)) > 0)
-        {
-            track = TABLE_QUERY_UNPACK_OP_TYPE(track);
-            slice_query_map_array[i][GetEventOperationQuery((rocprofvis_dm_event_operation_t)track)] = " WHERE " + string_id_filter_map.at((rocprofvis_dm_event_operation_t)track);
-        }
         else
         {
-            continue;
+            track = TABLE_QUERY_UNPACK_OP_TYPE(track);
+            if(num_string_table_filters > 0)
+            {
+                if(string_filter_result == kRocProfVisResultSuccess && string_id_filter_map.count((rocprofvis_dm_event_operation_t)track) > 0)
+                {
+                    slice_query_map_array[i][GetEventOperationQuery((rocprofvis_dm_event_operation_t)track)] = " WHERE " + string_id_filter_map.at((rocprofvis_dm_event_operation_t)track);
+                }                
+            }
+            else
+            {
+                slice_query_map_array[i][GetEventOperationQuery((rocprofvis_dm_event_operation_t)track)];
+            }
         }
-        if(string_filter_result == kRocProfVisDmResultSuccess && slice_query_map_array[i].empty())
-        {
-            return kRocProfVisDmResultSuccess;
-        }
+    }
+    if(slice_query_map_array.empty())
+    {
+        return kRocProfVisDmResultSuccess;
     }
     query = "";
 
@@ -1008,8 +1018,15 @@ ProfileDatabase::BuildTableQuery(
             for (int j = 0; j < divider; j++)
             {
                 query += it_query->first;
-                query += it_query->second;
-                query += ") and ";
+                if(it_query->second.empty())
+                {
+                    query += " WHERE ";
+                }
+                else
+                {
+                    query += it_query->second;
+                    query += ") and ";
+                }
                 query += Builder::START_SERVICE_NAME;
                 query += " >= ";
                 query += std::to_string(begin+(step*j));
@@ -1017,7 +1034,11 @@ ProfileDatabase::BuildTableQuery(
                 query += Builder::END_SERVICE_NAME;
                 query += " < ";
                 query += std::to_string(begin+(step*j)+step);
-
+                if(where && strlen(where))
+                {
+                    query += " AND ";
+                    query += where;
+                }
                 query += ";";
                 query += std::to_string(track);
                 query += "\n";

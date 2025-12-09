@@ -35,8 +35,6 @@ const uint64_t DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID =
     MakeRequestId(RequestType::kSaveTrimmedTrace);
 const uint64_t DataProvider::TABLE_EXPORT_REQUEST_ID =
     MakeRequestId(RequestType::kTableExport);
-const uint64_t DataProvider::FETCH_TRACE_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchTrace);
 const uint64_t DataProvider::SUMMARY_REQUEST_ID =
     MakeRequestId(RequestType::kFetchSummary);
 const uint64_t DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID =

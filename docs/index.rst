@@ -12,6 +12,10 @@ It serves as the GUI for visualizing traces collected by ROCm profiling tools, s
 
 The component public repository is located at `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_.
 
+.. note::
+
+  ROCm Optiq is in beta. Running production workloads is not recommended.
+
 .. grid:: 2
   :gutter: 3
 

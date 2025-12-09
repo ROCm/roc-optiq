@@ -37,7 +37,7 @@ Select **File** > **Open** to open a trace. You can also open files by dragging 
 
   If the trace file doesn't open, the file may be in an unsupported format. Convert the file to a supported format (``.db`` or ``.rpd``) using ROCm scripts.
 
-  To generate profiling data in a compatible ROCpd format for ROCprof systems:
+  To generate profiling data in a compatible ROCpd format for ROCm Systems Profiler:
 
   1. Set the configuration environment to output data in the ROCpd format:
 

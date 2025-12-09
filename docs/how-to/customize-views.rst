@@ -155,7 +155,7 @@ Chain mode displays events in a linked sequence, emphasizing dependencies and ex
 .. image:: ../images/chain-mode.png
    :width: 600
 
-Render mode Shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
+Render mode shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
 
 .. image:: ../images/fan-mode.png
    :width: 600

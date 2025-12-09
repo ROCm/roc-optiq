@@ -73,6 +73,15 @@ Ubuntu 22.04 / 24.04 (Debian-based)
 
       dpkg -l | grep roc-optiq
 
+Check the ROCm Optiq version
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use these commands to verify the ROCm Optiq version (when installed on Ubuntu):
+
+.. code-block:: shell
+
+   apt show roc-optiq
+
 Add ROCm binaries to your ``PATH``
 ==================================
 
@@ -82,13 +91,6 @@ Once you've installed ROCm Optiq for your operating system, add the ROCm binarie
 
    export PATH=opt/roc-optiq/bin:$PATH
 
-Check the ROCm Optiq version
-============================
 
-Use these commands to verify the ROCm Optiq version (when installed on Ubuntu):
-
-.. code-block:: shell
-
-   apt show roc-optiq
 
 

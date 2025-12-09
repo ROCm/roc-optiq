@@ -10,7 +10,7 @@ View trace data in ROCm Optiq
 .. |eye| image:: ../images/eye.png
 .. |grip| image:: ../images/grip.png
 
-ROCm™ Optiq provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata. It captures what happened, when it happened, and often how long it took.
+ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata. It captures what happened, when it happened, and often how long it took.
 
 Traces contain event tracks and counter tracks:
 

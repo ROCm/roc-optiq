@@ -13,7 +13,7 @@ Customize your ROCm Optiq project
 .. |flow| image:: ../images/flow-change.png
 .. |reset| image:: ../images/reset.png
 
-You can customize the data views of an open trace file in ROCm™ Optiq, including display settings, saved trace selections, added bookmarks/annotations, and more.
+You can customize the data views of an open trace file in ROCm Optiq, including display settings, saved trace selections, added bookmarks/annotations, and more.
 
 .. _time-range-filter:
 

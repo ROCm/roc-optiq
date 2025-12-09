@@ -6,7 +6,7 @@
 ROCm Optiq installation
 ***********************
 
-Install ROCm™ Optiq for Windows or Linux using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
+Install ROCm Optiq for Windows or Linux using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
 
 .. _requirements:
 
@@ -15,8 +15,9 @@ System requirements
 
 Your system must be running one of these operating systems:
 
--	Microsoft Windows 11
--	Ubuntu 22.04 / Ubuntu 24.04
+- Microsoft Windows 11
+- Ubuntu 22.04 / Ubuntu 24.04
+- ROCm 7.0+ to use the data
 
 .. note::
 

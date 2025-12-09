@@ -28,7 +28,7 @@ The component public repository is located at `https://github.com/ROCm/roc-optiq
     * :doc:`View trace data <how-to/view-trace>`
     * :doc:`Customize your project <how-to/customize-views>`
 
-To contribute to the documentation, refer to
+To contribute to the documentation, refer to the
 `Programming Guide in the GitHub repo <https://github.com/ROCm/roc-optiq/blob/main/CODING.md>`_.
 
 You can find licensing information on the

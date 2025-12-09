@@ -23,6 +23,8 @@ Traces contain event tracks and counter tracks:
   - Instruction counts (for example, `Vector arithmetic logic unit <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/conceptual/pipeline-descriptions.html#desc-valu>`_ / `Scalar arithmetic logic unit <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/conceptual/pipeline-descriptions.html#desc-salu>`_)
   - Memory bandwidth and cache hits/misses
 
+.. _trace-file:
+
 Open a trace file
 =================
 

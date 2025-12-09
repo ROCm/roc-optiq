@@ -29,7 +29,7 @@ The component public repository is located at `https://github.com/ROCm/roc-optiq
     * :doc:`Customize your project <how-to/customize-views>`
 
 To contribute to the documentation, refer to
-`https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq/blob/main/CODING.md>`_.
+`Programming Guide in the GitHub repo <https://github.com/ROCm/roc-optiq/blob/main/CODING.md>`_.
 
 You can find licensing information on the
 :doc:`License <license>` page.

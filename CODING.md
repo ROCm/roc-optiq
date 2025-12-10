@@ -1,5 +1,5 @@
 # ROCm Optiq Programming Guide
- This document provides information for how to develop ROCm Optiq. Contibutors should ensure that they have read and understood the contents before attempting to submit code to the project.
+ This document provides information for how to develop ROCm Optiq. Contributors should ensure that they have read and understood the contents before attempting to submit code to the project.
 
 ## Project Structure
 The ROCm Optiq project is built from multiple components, including a number of open-source libraries.

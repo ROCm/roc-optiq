@@ -5,6 +5,7 @@
 #include "rocprofvis_navigation_manager.h"
 #include "rocprofvis_navigation_url.h"
 #include "widgets/rocprofvis_compute_widget.h"
+#include "widgets/rocprofvis_tab_container.h"
 #include <array>
 
 namespace RocProfVis

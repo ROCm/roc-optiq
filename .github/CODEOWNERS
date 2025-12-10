@@ -1,5 +1,5 @@
 # Default code owners
-* @tomk-amd @drchen-amd @vstempen @amokiche-amd @Sajeeth-Wimalasuriyan
+* @ROCm/roc-optiq-reviewers
 
 # Data model
 src/model @vstempen @tomk-amd @drchen-amd
@@ -12,4 +12,3 @@ src/view @tomk-amd @amokiche-amd @Sajeeth-Wimalasuriyan @drchen-amd
 
 # Documentation
 docs/ @tomk-amd @ROCm/rocm-documentation
-

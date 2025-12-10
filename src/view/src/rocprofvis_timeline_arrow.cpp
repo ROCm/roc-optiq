@@ -45,9 +45,14 @@ void
 TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                       const std::unordered_map<uint64_t, float>& track_position_y,
                       const std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
-                      TimePixelTransform*                                    tpt) const
+                      std::shared_ptr<TimePixelTransform>                    tpt) const
 {
     if(m_flow_display_mode == FlowDisplayMode::kHide) return;
+    if(!tpt)
+    {
+        spdlog::error("TimelineArrow::Render: tpt shared_ptr is null, cannot render");
+        return;
+    }
 
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            color        = settings.GetColor(Colors::kArrowColor);

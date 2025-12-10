@@ -16,6 +16,7 @@
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -136,7 +137,7 @@ private:
     bool                                m_histogram_pseudo_focus;
     float                               m_max_meta_area_size;
     std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
-    TimePixelTransform                               m_tpt;
+    std::shared_ptr<TimePixelTransform>               m_tpt;
     struct
     {
         bool     handled;

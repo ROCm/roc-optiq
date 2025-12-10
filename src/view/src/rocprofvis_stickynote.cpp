@@ -9,6 +9,8 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include <algorithm>
+#include <spdlog/spdlog.h>
+#include <spdlog/spdlog.h>
 
 namespace RocProfVis
 {
@@ -99,8 +101,13 @@ StickyNote::SetTitle(std::string title)
     m_title = title;
 }
 void
-StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, TimePixelTransform* conversion_manager)
+StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::shared_ptr<TimePixelTransform> conversion_manager)
 {
+    if(!conversion_manager)
+    {
+        spdlog::error("StickyNote::Render: conversion_manager shared_ptr is null, cannot render");
+        return;
+    }
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kFillerColor);
     ImU32            border_color = settings.GetColor(Colors::kBorderColor);
@@ -184,8 +191,13 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, TimePix
 
 bool
 StickyNote::HandleDrag(const ImVec2&                               window_position,
-                       TimePixelTransform* conversion_manager, int& dragged_id)
+                       std::shared_ptr<TimePixelTransform> conversion_manager, int& dragged_id)
 {
+    if(!conversion_manager)
+    {
+        spdlog::error("StickyNote::HandleDrag: conversion_manager shared_ptr is null");
+        return false;
+    }
     if(m_resizing) return false;
 
     float  x          = conversion_manager->TimeToPixel(m_time_ns);
@@ -245,8 +257,13 @@ StickyNote::HandleDrag(const ImVec2&                               window_positi
 
 bool
 StickyNote::HandleResize(const ImVec2&       window_position,
-                         TimePixelTransform* conversion_manager)
+                         std::shared_ptr<TimePixelTransform> conversion_manager)
 {
+    if(!conversion_manager)
+    {
+        spdlog::error("StickyNote::HandleResize: conversion_manager shared_ptr is null");
+        return false;
+    }
     // Only allow resize if not dragging
     if(m_dragging) return false;
 

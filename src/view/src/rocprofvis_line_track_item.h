@@ -9,6 +9,7 @@
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
 #include "rocprofvis_time_to_pixel.h"
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -71,7 +72,7 @@ class LineTrackItem : public TrackItem
 
 public:
     LineTrackItem(DataProvider& dp, uint64_t id, std::string name,
-                  float max_meta_area_width, TimePixelTransform* time_to_pixel_manager);
+                  float max_meta_area_width, std::shared_ptr<TimePixelTransform> time_to_pixel_manager);
     ~LineTrackItem();
 
     bool          ReleaseData() override;
@@ -104,7 +105,7 @@ private:
     bool                     m_show_boxplot_stripes;
     LineTrackProjectSettings m_linetrack_project_settings;
     float                    m_vertical_padding;
-    TimePixelTransform*      m_tpt;
+    std::shared_ptr<TimePixelTransform> m_tpt;
 };
 
 }  // namespace View

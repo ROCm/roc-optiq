@@ -47,7 +47,7 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
 FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
                                uint64_t id, std::string name, float level_min,
-                               float level_max, TimePixelTransform* tpt)
+                               float level_max, std::shared_ptr<TimePixelTransform> tpt)
 : TrackItem(dp, id, name, tpt)
 , m_event_color_mode(EventColorMode::kByEventName)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
@@ -64,6 +64,11 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_compact_mode(false)
 , m_tpt(tpt)
 {
+    if(!m_tpt)
+    {
+        spdlog::error("FlameTrackItem: m_tpt shared_ptr is null, cannot construct");
+        return;
+    }
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
     };

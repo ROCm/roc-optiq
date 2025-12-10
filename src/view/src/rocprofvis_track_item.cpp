@@ -8,6 +8,7 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include <memory>
 
 namespace RocProfVis
 {
@@ -17,7 +18,7 @@ namespace View
 float            TrackItem::s_metadata_width = 400.0f;
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name,
-                     TimePixelTransform* tpt)
+                     std::shared_ptr<TimePixelTransform> tpt)
 : m_data_provider(dp)
 , m_id(id)
 , m_name(name)

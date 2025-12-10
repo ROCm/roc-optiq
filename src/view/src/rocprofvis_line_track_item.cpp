@@ -20,8 +20,9 @@ constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 constexpr float SCALE_SEPERATOR_WIDTH    = 2.0f;
 
-LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float max_meta_area_width,
-                             TimePixelTransform* tpt)
+LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name,
+                             float                               max_meta_area_width,
+                             std::shared_ptr<TimePixelTransform> tpt)
 : TrackItem(dp, id, name, tpt)
 , m_data({})
 , m_highlight_y_limits()
@@ -35,6 +36,11 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 , m_vertical_padding(DEFAULT_VERTICAL_PADDING)
 , m_tpt(tpt)
 {
+    if(!m_tpt)
+    {
+        spdlog::error("LineTrackItem: m_tpt shared_ptr is null, cannot construct");
+        return;
+    }
     m_meta_area_scale_width = max_meta_area_width;
     UpdateMetadata();
 
@@ -164,8 +170,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
         auto&       hovered_item = m_data[hovered_idx];
         const auto& time_format  = m_settings.GetUserSettings().unit_settings.time_format;
         std::string start_str    = nanosecond_to_formatted_str(
-            hovered_item.m_start_ts - m_tpt->GetMinX(), time_format,
-            true);
+            hovered_item.m_start_ts - m_tpt->GetMinX(), time_format, true);
         std::string dur_str = nanosecond_to_formatted_str(
             hovered_item.m_end_ts - hovered_item.m_start_ts, time_format, true);
 

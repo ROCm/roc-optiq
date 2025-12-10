@@ -44,7 +44,7 @@ class TrackItem
 {
 public:
     TrackItem(DataProvider& dp, uint64_t id, std::string name,
-              TimePixelTransform* time_to_pixel_manager);
+              std::shared_ptr<TimePixelTransform> tpt);
     virtual ~TrackItem() {}
     void               SetID(uint64_t id);
     uint64_t           GetID();

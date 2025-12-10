@@ -4,6 +4,7 @@
 #include "rocprofvis_tab_container.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_event_manager.h"
+#include <algorithm>
 
 namespace RocProfVis
 {

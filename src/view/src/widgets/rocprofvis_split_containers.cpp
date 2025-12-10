@@ -3,6 +3,7 @@
 
 #include "rocprofvis_split_containers.h"
 #include "rocprofvis_settings_manager.h"
+#include <algorithm>
 namespace RocProfVis
 {
 namespace View

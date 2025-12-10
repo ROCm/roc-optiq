@@ -10,7 +10,6 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
-#include <algorithm>
 #include <iostream>
 #include <sstream>
 

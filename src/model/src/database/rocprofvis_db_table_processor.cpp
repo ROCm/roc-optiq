@@ -567,7 +567,7 @@ namespace DataModel
                     try {
                         filtered = true;
                         auto filter = FilterExpression::Parse(m_last_filter_str);
-                        int use_threads = m_merged_table.RowCount() / 10000;
+                        int use_threads = (m_merged_table.RowCount()+10000) / 10000;
                         size_t thread_count = std::thread::hardware_concurrency() - 1;
                         if (use_threads < thread_count)
                             thread_count = use_threads;
@@ -592,10 +592,6 @@ namespace DataModel
                                 {
                                     std::lock_guard<std::mutex> lock(mtx);
                                     m_filter_lookup.insert(row_index);
-                                }
-                                else
-                                {
-                                    break;
                                 }
                             }
                             };

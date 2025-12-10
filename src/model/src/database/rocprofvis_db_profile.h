@@ -125,6 +125,8 @@ class ProfileDatabase : public SqliteDatabase
         
         void BuildSliceQueryMap(slice_query_t& slice_query_map, rocprofvis_dm_track_params_t* props);
 
+        bool IsEmptyRange(uint64_t start, uint64_t end);
+
     protected:
 
     // method to build a query to read time slice of records for single track 

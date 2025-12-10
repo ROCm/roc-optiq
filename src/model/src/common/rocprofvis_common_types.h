@@ -132,6 +132,7 @@ typedef struct {
     uint64_t                  histogram_bucket_count;
     bool metadata_loaded;                           // status of metadata being fully loaded
     bool tracks_info_restored;
+    std::map<uint32_t,uint32_t> histogram;
 } rocprofvis_dm_trace_params_t;
 
 // rocprofvis_db_flow_data_t is used to pass record flow data from database to data model. Used by database query callbacks

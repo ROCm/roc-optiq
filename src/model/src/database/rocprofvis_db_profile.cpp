@@ -1017,6 +1017,9 @@ ProfileDatabase::BuildTableQuery(
             uint64_t begin = start;
             for (int j = 0; j < divider; j++)
             {
+                uint64_t fetch_start = begin + (step * j);
+                uint64_t fetch_end = begin + (step * j) + step;
+                if (IsEmptyRange(fetch_start, fetch_end)) continue;
                 query += it_query->first;
                 if(it_query->second.empty())
                 {
@@ -1027,13 +1030,14 @@ ProfileDatabase::BuildTableQuery(
                     query += it_query->second;
                     query += ") and ";
                 }
-                query += Builder::START_SERVICE_NAME;
-                query += " >= ";
-                query += std::to_string(begin+(step*j));
-                query += " and ";
+
                 query += Builder::END_SERVICE_NAME;
+                query += " >= ";
+                query += std::to_string(fetch_start);
+                query += " and ";
+                query += Builder::START_SERVICE_NAME;
                 query += " < ";
-                query += std::to_string(begin+(step*j)+step);
+                query += std::to_string(fetch_end);
                 if(where && strlen(where))
                 {
                     query += " AND ";
@@ -1115,6 +1119,26 @@ ProfileDatabase::BuildTableQuery(
     }
     
     return kRocProfVisDmResultSuccess;
+}
+
+
+bool ProfileDatabase::IsEmptyRange(uint64_t start, uint64_t end) {
+    uint64_t start_bucket =
+        (start - TraceProperties()->start_time) / TraceProperties()->histogram_bucket_size;
+
+    uint64_t end_bucket =
+        (end - TraceProperties()->start_time) / TraceProperties()->histogram_bucket_size;
+
+    auto it = TraceProperties()->histogram.lower_bound(start_bucket);
+
+    while (it != TraceProperties()->histogram.end() && it->first <= end_bucket) {
+        if (it->second > 0) {
+            return false;  
+        }
+        ++it;
+    }
+
+    return true;
 }
 
 rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice( 
@@ -1559,6 +1583,15 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                 });
         }
     }
+
+    for (int i = 0; i < NumTracks(); i++)
+    {
+        for (auto& [key, value] : TrackPropertiesAt(i)->histogram)
+        {
+            TraceProperties()->histogram[key] += value;
+        }
+    }
+
     return result;
 }
 

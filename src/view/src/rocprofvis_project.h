@@ -151,6 +151,7 @@ constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR           = "color";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN = "color_min";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX = "color_max";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_BOX_PLOT        = "box_plot";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_STRIPES         = "box_plot_stripes";
 
 constexpr const char* JSON_KEY_ANNOTATIONS                 = "annotations";
 constexpr const char* JSON_KEY_ANNOTATION_TIME_NS          = "time_ns";

@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_widget.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_debug_window.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
-#include "icons/rocprovfis_icon_defines.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 #include <algorithm>
 #include <iostream>
@@ -475,11 +476,15 @@ VSplitContainer::GetItemSize()
 
 //------------------------------------------------------------------
 TabContainer::TabContainer()
-: m_active_tab_index(-1)
-, m_set_active_tab_index(-1)
+: m_active_tab_index(s_invalid_index)
+, m_set_active_tab_index(s_invalid_index)
 , m_allow_tool_tips(true)
 , m_enable_send_close_event(false)
 , m_enable_send_change_event(false)
+, m_index_to_remove(s_invalid_index)
+, m_pending_to_remove(s_invalid_index)
+, m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
+      SettingsManager::GetInstance().GetUserSettings().dont_ask_before_tab_closing))
 {
     m_widget_name = GenUniqueName("TabContainer");
 }
@@ -511,6 +516,31 @@ TabContainer::EnableSendChangeEvent(bool enable)
 }
 
 void
+TabContainer::ShowCloseTabConfirm(int removing_tab_index)
+{
+    auto confirm = [this, removing_tab_index]() {
+        m_pending_to_remove = s_invalid_index;
+        RemoveTab(removing_tab_index);
+    };
+    auto cancel = [this]() { m_pending_to_remove = s_invalid_index; };
+
+    m_confirmation_dialog->Show("Confirm Closing tab",
+                                "Are you sure you want to close the tab: " +
+                                m_tabs[removing_tab_index].m_label +
+                                "? Any unsaved data will be lost.",
+                                confirm, cancel);
+}
+
+void
+TabContainer::SendEvent(RocEvents event, const std::string& tab_id)
+{
+    std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
+        static_cast<int>(event), tab_id,
+        m_event_source_name.empty() ? m_widget_name : m_event_source_name);
+    EventManager::GetInstance()->AddEvent(e);
+}
+
+void
 TabContainer::Update()
 {
     // Update logic for each tab
@@ -527,18 +557,18 @@ void
 TabContainer::Render()
 {
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
-
     int new_selected_tab = m_active_tab_index;
-    int index_to_remove  = -1;
     if(!m_tabs.empty())
     {
         if(ImGui::BeginTabBar("Tabs"))
         {
             for(size_t i = 0; i < m_tabs.size(); ++i)
             {
-                const TabItem&    tab = m_tabs[i];
+                const TabItem&     tab = m_tabs[i];
                 ImGuiTabItemFlags flags =
-                    (i == m_set_active_tab_index) ? ImGuiTabItemFlags_SetSelected : 0;
+                    (i == m_set_active_tab_index || i == m_pending_to_remove)
+                        ? ImGuiTabItemFlags_SetSelected
+                        : 0;
 
                 bool  is_open = true;
                 bool* p_open  = &is_open;
@@ -553,7 +583,7 @@ TabContainer::Render()
                 if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags))
                 {
                     tab_visible = true;
-                    // show tooltip for the active tab if header is hovered
+                    // Show tooltip for the active tab if header is hovered
                     if(m_allow_tool_tips && ImGui::IsItemHovered())
                     {
                         ImGui::SetTooltip("%s", tab.m_id.c_str());
@@ -567,7 +597,8 @@ TabContainer::Render()
                     ImGui::EndTabItem();
                 }
                 ImGui::PopID();
-                // show tooltip for inactive tabs if header is hovered
+
+                // Show tooltip for inactive tabs if header is hovered
                 if(!tab_visible && ImGui::IsItemHovered())
                 {
                     if(m_allow_tool_tips)
@@ -578,11 +609,20 @@ TabContainer::Render()
 
                 if(p_open && !is_open)
                 {
-                    index_to_remove = static_cast<int>(i);
+                    if(SettingsManager::GetInstance().GetUserSettings().dont_ask_before_tab_closing)
+                    {
+                        m_index_to_remove   = static_cast<int>(i);
+                    }
+                    else
+                    {
+                        m_pending_to_remove = static_cast<int>(i);
+                    }
                 }
             }
             ImGui::EndTabBar();
         }
+
+        m_confirmation_dialog->Render();
 
         // Check if the active tab has changed
         if(m_active_tab_index != new_selected_tab)
@@ -590,26 +630,23 @@ TabContainer::Render()
             m_active_tab_index = new_selected_tab;
             if(new_selected_tab < m_tabs.size() && m_enable_send_change_event)
             {
-                std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-                    static_cast<int>(RocEvents::kTabSelected),
-                    m_tabs[new_selected_tab].m_id,
-                    m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-                EventManager::GetInstance()->AddEvent(e);
+                SendEvent(RocEvents::kTabSelected, m_tabs[new_selected_tab].m_id);
             }
         }
 
-        // clear the set active tab index
-        m_set_active_tab_index = -1;
+        // Clear the set active tab index
+        m_set_active_tab_index = s_invalid_index;
 
         // Remove the tab if it was closed
-        if(index_to_remove != -1)
+        if(m_index_to_remove != s_invalid_index)
         {
-            RemoveTab(index_to_remove);
-            if(m_active_tab_index == index_to_remove)
-            {
-                // If the active tab was closed, reset to -1
-                m_active_tab_index = -1;
-            }
+            RemoveTab(m_index_to_remove);
+        }
+
+        // Show confirm dialog if user option set
+        if(m_pending_to_remove != s_invalid_index)
+        {
+            ShowCloseTabConfirm(m_pending_to_remove);
         }
     }
     ImGui::EndChild();
@@ -627,7 +664,6 @@ TabContainer::AddTab(TabItem&& tab)
     m_tabs.push_back(std::move(tab));
 }
 
-// Remove a tab
 void
 TabContainer::RemoveTab(const std::string& id)
 {
@@ -638,12 +674,8 @@ TabContainer::RemoveTab(const std::string& id)
         if(m_enable_send_close_event)
         {
             // notify the event manager of the tab removal
-            std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-                static_cast<int>(RocEvents::kTabClosed), it->m_id,
-                m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-            EventManager::GetInstance()->AddEvent(e);
+            SendEvent(RocEvents::kTabClosed, it->m_id);
         }
-
         m_tabs.erase(it, m_tabs.end());
     }
 }
@@ -656,13 +688,16 @@ TabContainer::RemoveTab(int index)
         if(m_enable_send_close_event)
         {
             // notify the event manager of the tab removal
-            std::shared_ptr<TabEvent> e = std::make_shared<TabEvent>(
-                static_cast<int>(RocEvents::kTabClosed), m_tabs[index].m_id,
-                m_event_source_name.empty() ? m_widget_name : m_event_source_name);
-            EventManager::GetInstance()->AddEvent(e);
+            SendEvent(RocEvents::kTabClosed, m_tabs[index].m_id);
         }
 
         m_tabs.erase(m_tabs.begin() + index);
+        if(m_active_tab_index == index)
+        {
+            // If the active tab was closed, reset to invalid index
+            m_active_tab_index = s_invalid_index;
+        }
+        m_index_to_remove = s_invalid_index;
     }
 }
 
@@ -783,6 +818,27 @@ EditableTextField::ShowResetButton(bool is_button_shown)
 void
 EditableTextField::DrawPlainText()
 {
+    SettingsManager& settings = SettingsManager::GetInstance();
+    if(m_show_reset_button)
+    {
+        if(IconButton(ICON_ARROWS_CYCLE,
+                      settings.GetFontManager().GetIconFont(FontType::kDefault)))
+        {
+            RevertToDefault();
+        }
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            settings.GetDefaultStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            settings.GetDefaultStyle().FrameRounding);
+        if(ImGui::BeginItemTooltip())
+        {
+            ImGui::TextUnformatted("Revert To Default");
+            ImGui::TextUnformatted(m_reset_tooltip.c_str());
+            ImGui::EndTooltip();
+        }
+        ImGui::PopStyleVar(2);
+        ImGui::SameLine();
+    }
     // Draw the text as a button to avoid the background
     // and prevent clicks from being registered.
     ImGui::PushStyleColor(ImGuiCol_Button, 0);
@@ -790,61 +846,29 @@ EditableTextField::DrawPlainText()
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
 
-    bool clicked = ImGui::Button(m_text.c_str());
+    ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                         ImGui::CalcTextSize(m_text.c_str()).x -
+                         ImGui::GetStyle().WindowPadding.x);
+    if(ImGui::Button(m_text.c_str()))
+    {
+        m_editing_mode           = true;
+        m_request_keyboard_focus = true;
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().FrameRounding);
     if(ImGui::BeginItemTooltip())
     {
         ImGui::TextUnformatted(m_tooltip_text.c_str());
         ImGui::EndTooltip();
     }
-
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
-
+    ImGui::PopStyleVar(2);
     if(ImGui::IsItemHovered())
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-    }
-    if(clicked)
-    {
-        m_editing_mode = true;
-        m_request_keyboard_focus = true;
-    }
-    if(m_show_reset_button)
-    {
-        ImGuiStyle& style = ImGui::GetStyle();
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
-        ImGui::PushFont(icon_font);
-
-        ImVec2 icon_size = ImGui::CalcTextSize(ICON_ARROWS_CYCLE);
-        float  button_w  = icon_size.x + style.FramePadding.x * 2.0f;
-        float  button_h  = icon_size.y + style.FramePadding.y * 2.0f;
-
-        ImVec2 prev_min      = ImGui::GetItemRectMin();
-        ImVec2 prev_max      = ImGui::GetItemRectMax();
-        float  prev_center_y = (prev_min.y + prev_max.y) * 0.5f;
-
-        ImVec2 window_pos      = ImGui::GetWindowPos();
-        ImVec2 content_max     = ImGui::GetContentRegionMax();
-        float  right_screen    = window_pos.x + content_max.x;
-        float  target_x_screen = right_screen - button_w - style.FramePadding.x * 4.0f;
-
-        float target_y_screen = prev_center_y - (button_h * 0.5f);
-        ImVec2 prev_screen_cursor = ImGui::GetCursorScreenPos();
-        ImGui::SetCursorScreenPos(ImVec2(target_x_screen, target_y_screen));
-        if(ImGui::Button(ICON_ARROWS_CYCLE, ImVec2(button_w, button_h)))
-        {
-            RevertToDefault();
-        }
-        // restore previous cursor so layout continues as expected
-        ImGui::SetCursorScreenPos(prev_screen_cursor);
-        ImGui::PopFont();
-        if(ImGui::BeginItemTooltip())
-        {
-            ImGui::TextUnformatted("Revert To Default");
-            ImGui::TextUnformatted(m_reset_tooltip.c_str());
-            ImGui::EndTooltip();
-        }
     }
 }
 
@@ -870,8 +894,10 @@ EditableTextField::DrawEditingText()
     ImGui::SetNextItemWidth(width);
 
     // make edit field on the same level as the textfield
-    ImVec2 prev_cursor = ImGui::GetCursorPos();
-    ImGui::SetCursorPos(ImVec2(prev_cursor.x, prev_cursor.y - 2.0f));
+    ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionMax().x -
+                                   ImGui::CalcTextSize(m_text.c_str()).x -
+                                   ImGui::GetStyle().WindowPadding.x,
+                               ImGui::GetCursorPosY() - 2.0f));
 
     if(m_request_keyboard_focus)
     {

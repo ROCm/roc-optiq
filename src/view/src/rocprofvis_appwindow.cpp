@@ -18,6 +18,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
+#include "rocprofvis_utils.h"
 #ifdef COMPUTE_UI_SUPPORT
 #    include "rocprofvis_navigation_manager.h"
 #endif
@@ -29,6 +30,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
+#include <sstream>
 
 namespace RocProfVis
 {
@@ -83,15 +85,18 @@ AppWindow::AppWindow()
 , m_show_provider_test_widow(false)
 , m_show_metrics(false)
 #endif
-, m_confirmation_dialog(std::make_unique<ConfirmationDialog>())
+, m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
+      SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit))
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
+, m_is_fullscreen(false)
 #ifndef USE_NATIVE_FILE_DIALOG
 , m_init_file_dialog(false)
 #else
 , m_is_native_file_dialog_open(false)
 #endif
 , m_disable_app_interaction(false)
+, m_restore_fullscreen_later(false)
 {}
 
 AppWindow::~AppWindow()
@@ -191,7 +196,8 @@ AppWindow::SetTabLabel(const std::string& label, const std::string& id)
 void
 AppWindow::ShowCloseConfirm()
 {
-    if(m_tab_container->GetTabs().size() == 0)
+    if(m_tab_container->GetTabs().size() == 0 ||
+       SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit)
     {
         if(m_notification_callback)
             m_notification_callback(
@@ -202,12 +208,25 @@ AppWindow::ShowCloseConfirm()
     // Only show the dialog if there are open tabs
     ShowConfirmationDialog(
         "Confirm Close",
-        "Are you sure you want to close the application? Any unsaved data will be lost.",
+        "Are you sure you want to close the application? Any "
+        "unsaved data will be lost.",
         [this]() {
             if(m_notification_callback)
                 m_notification_callback(
                     rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
         });
+}
+
+void
+AppWindow::SetFullscreenState(bool is_fullscreen)
+{
+    m_is_fullscreen = is_fullscreen;
+}
+
+bool
+AppWindow::GetFullscreenState() const
+{
+    return m_is_fullscreen;
 }
 
 void
@@ -600,6 +619,18 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
+        
+        ImGui::Separator();
+        
+        if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
+        {
+            if(m_notification_callback)
+            {
+                m_notification_callback(
+                    rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen);
+            }
+        }
+        
         ImGui::EndMenu();
     }
 }
@@ -624,11 +655,11 @@ AppWindow::HandleOpenFile()
 
     FileFilter all_filter;
     all_filter.m_name = "All Supported";
-    all_filter.m_extensions = { "db", "rpd", "rpv", "yaml" };
+    all_filter.m_extensions = { "db", "rpd", "rpv" };
 
     FileFilter trace_filter;
     trace_filter.m_name = "Traces";
-    trace_filter.m_extensions = { "db", "rpd", "yaml"};
+    trace_filter.m_extensions = { "db", "rpd" };
 
 #ifdef JSON_TRACE_SUPPORT
     all_filter.m_extensions.push_back("json");
@@ -736,60 +767,75 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
 void
 AppWindow::RenderAboutDialog()
 {
-   
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    static constexpr char* NAME_LABEL = "ROCm (TM) Optiq";
+    static constexpr char* COPYRIGHT_LABEL =
+        "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.";
+    static constexpr char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
+    static constexpr char* DOC_URL =
+        "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/";
+    static const std::string VERSION_LABEL = []() {
+        std::stringstream ss;
+        ss << "Version " << ROCPROFVIS_VERSION_MAJOR << "." << ROCPROFVIS_VERSION_MINOR
+           << "." << ROCPROFVIS_VERSION_PATCH;
+        return ss.str();
+    }();
 
-        if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
-                                  ImGuiWindowFlags_AlwaysAutoResize))
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+
+    if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImFont* large_font =
+            SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
+        if(large_font) ImGui::PushFont(large_font);
+
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(NAME_LABEL).x) * 0.5f);
+        ImGui::TextUnformatted(NAME_LABEL);
+        if(large_font) ImGui::PopFont();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(VERSION_LABEL.c_str()).x) *
+            0.5f);
+        ImGui::TextUnformatted(VERSION_LABEL.c_str());
+
+        ImGui::Spacing();
+
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(COPYRIGHT_LABEL).x) * 0.5f);
+        ImGui::TextUnformatted(COPYRIGHT_LABEL);
+
+        ImGui::Spacing();
+
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(DOC_LABEL).x) * 0.5f);
+        ImGui::TextLink(DOC_LABEL);
+        if(ImGui::IsItemClicked())
         {
-            ImFont* large_font =
-                SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
-            if(large_font) ImGui::PushFont(large_font);
-
-            ImGui::SetCursorPosX(
-                (ImGui::GetWindowSize().x - ImGui::CalcTextSize("ROCm (TM) Optiq").x) * 0.5f);
-            ImGui::Text("ROCm (TM) Optiq");
-            if(large_font) ImGui::PopFont();
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            ImGui::SetCursorPosX(
-                (ImGui::GetWindowSize().x - ImGui::CalcTextSize("Version 00.00.00").x) *
-                0.5f);
-            ImGui::Text("Version %d.%d.%d", ROCPROFVIS_VERSION_MAJOR,
-                        ROCPROFVIS_VERSION_MINOR, ROCPROFVIS_VERSION_PATCH);
-
-            ImGui::Spacing();
-
-            ImGui::SetCursorPosX(
-                (ImGui::GetWindowSize().x -
-                 ImGui::CalcTextSize("Copyright (C) 2025 Advanced Micro Devices, Inc. "
-                                     "All rights reserved.")
-                     .x) *
-                0.5f);
-            ImGui::Text(
-                "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.");
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            float button_width =
-                ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2;
-            ImGui::SetCursorPosX(ImGui::GetWindowSize().x - button_width -
-                                 ImGui::GetStyle().ItemSpacing.x);
-            if(ImGui::Button("Close"))
-            {
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
+            open_url(DOC_URL);
         }
-        ImGui::PopStyleVar(2);
-    
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float button_width =
+            ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2;
+        ImGui::SetCursorPosX(ImGui::GetWindowSize().x - button_width -
+                             ImGui::GetStyle().ItemSpacing.x);
+        if(ImGui::Button("Close"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar(2);
 }
 
 #ifdef USE_NATIVE_FILE_DIALOG
@@ -810,6 +856,18 @@ AppWindow::UpdateNativeFileDialog()
             }
             m_is_native_file_dialog_open = false;
             m_file_dialog_callback       = nullptr;
+
+            if(m_restore_fullscreen_later)
+            {
+                // toggle fullscreen on if it should be restored after dialog closes
+                if(!m_is_fullscreen && m_notification_callback)
+                {
+                    m_notification_callback(
+                        rocprofvis_view_notification_t::
+                            kRocProfVisViewNotification_Toggle_Fullscreen);
+                }
+                m_restore_fullscreen_later = false;
+            }
         }
     }
 }
@@ -827,6 +885,17 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
     m_is_native_file_dialog_open = true;
     m_file_dialog_callback       = callback;
     m_disable_app_interaction    = true;
+
+    if(m_is_fullscreen)
+    {
+        // toggle fullscreen off before opening native file dialog
+        if(m_notification_callback)
+        {
+            m_restore_fullscreen_later = true;
+            m_notification_callback(rocprofvis_view_notification_t::
+                                        kRocProfVisViewNotification_Toggle_Fullscreen);
+        }
+    }
 
     m_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
         NFD_Init();
@@ -882,6 +951,13 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
             file_path = outPath;
             if(outPath)
             {
+                // Append default extension if none provided (used to prevent linux from saving files with no extension).
+                std::filesystem::path p(file_path);
+                if(!p.has_extension())
+                {
+                    file_path += "." + file_filters[0].m_extensions[0];
+                }
+
                 NFD_FreePathU8(outPath);
             }
         }

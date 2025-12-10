@@ -1,4 +1,5 @@
-# Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 set(TARGET_NAME roc-optiq)
 
@@ -7,8 +8,8 @@ project(${TARGET_NAME})
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
-set(PROJECT_VERSION_MINOR 6)
-set(PROJECT_VERSION_PATCH 3)
+set(PROJECT_VERSION_MINOR 1)
+set(PROJECT_VERSION_PATCH 0)
 set(PROJECT_VERSION_BUILD 0)
 
 # Name and path of the icon font header
@@ -22,7 +23,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 option(JSON_TRACE_SUPPORT "Build with support for JSON traces" OFF)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
-option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" ON)
+option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 
 if(JSON_TRACE_SUPPORT) 
@@ -123,6 +124,7 @@ endif(WIN32)
 add_executable(${TARGET_NAME} 
     src/app/src/rocprofvis_imgui_vulkan.cpp 
     src/app/src/main.cpp
+    src/app/src/glfw_util.cpp
     ${VIEW_FILES})
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
@@ -133,6 +135,7 @@ if(WIN32)
 endif(WIN32)
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
@@ -140,7 +143,6 @@ target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
-
 target_link_libraries(${TARGET_NAME} PRIVATE imgui)
 target_link_libraries(${TARGET_NAME} PRIVATE implot)
 target_link_libraries(${TARGET_NAME} PRIVATE glfw)
@@ -179,7 +181,7 @@ if( NOT DEFINED BUILD_ID )
     set( BUILD_ID $ENV{BUILD_ID} )
   else()
     # Default BUILD_ID for local or development builds when not explicitly set
-    set( BUILD_ID "9999")
+    set( BUILD_ID "0")
   endif()
 endif()
 
@@ -247,7 +249,7 @@ set(DEB_VULKAN_DEPENDS_STRING "libvulkan1")
 set(DEB_GLFW_DEPENDS_STRING "libglfw3")
 set(DEB_DEPENDS_STRING "${DEB_VULKAN_DEPENDS_STRING}, ${DEB_GLFW_DEPENDS_STRING}, libc6")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
-set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/rocprofiler-visualizer")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/roc-optiq")
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
@@ -293,4 +295,3 @@ if(WIN32)
         COMMENT "Copying dependent DLLs to executable directory"
     )
 endif()
-

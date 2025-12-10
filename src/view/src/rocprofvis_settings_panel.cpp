@@ -78,6 +78,10 @@ SettingsPanel::Render()
             {
                 m_category = Units;
             }
+            if(ImGui::Selectable("Other", m_category == Other))
+            {
+                m_category = Other;
+            }
             ImGui::EndChild();
 
             ImGui::SameLine();
@@ -95,6 +99,10 @@ SettingsPanel::Render()
                 {
                     RenderUnitOptions();
                     break;
+                }
+                case Other:
+                {
+                    RenderOtherSettings();
                 }
                 break;
             }
@@ -203,18 +211,20 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Font Size");
     ImGui::SameLine();
-    if(ImGui::Button("-", ImVec2(button_width, 0)) && m_font_settings.size_index > 0)
+    ImGui::BeginDisabled(m_font_settings.size_index < 1);
+    if(ImGui::Button("-", ImVec2(button_width, 0)))
     {
         m_font_settings.size_index--;
     }
+    ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("00").x + 2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     ImGui::Combo("##font_size", &m_font_settings.size_index, m_font_sizes_ptr.data(),
                  static_cast<int>(m_font_sizes_ptr.size()));
     ImGui::SameLine();
-    if(ImGui::Button("+", ImVec2(button_width, 0)) &&
-       m_font_settings.size_index < m_fonts.GetAvailableFonts().size())
+    ImGui::BeginDisabled(m_font_settings.size_index > m_fonts.GetAvailableFonts().size() - 2);
+    if(ImGui::Button("+", ImVec2(button_width, 0)))
     {
         m_font_settings.size_index++;
     }
@@ -223,7 +233,7 @@ SettingsPanel::RenderDisplayOptions()
     {
         ImGui::SetTooltip("Increase or decrease the font size for the UI.");
     }
-
+    ImGui::EndDisabled();
     // Font preview
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Preview");
@@ -275,6 +285,17 @@ SettingsPanel::RenderUnitOptions()
             static_cast<TimeFormat>(time_format_index);
         m_settings_changed = true;
     }
+}
+
+void
+SettingsPanel::RenderOtherSettings()
+{
+    ImGui::TextUnformatted("Closing options");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+    ImGui::Checkbox("Don't ask before exiting application", &m_usersettings.dont_ask_before_exit);
+    ImGui::Checkbox("Don't ask before closing tabs", &m_usersettings.dont_ask_before_tab_closing);
+    m_settings_changed = true;
 }
 
 void

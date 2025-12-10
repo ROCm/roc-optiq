@@ -1,5 +1,6 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
-// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_error_handling.h"

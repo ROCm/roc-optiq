@@ -8,6 +8,10 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 std::string
 RocProfVis::View::nanosecond_to_str(double time_point_ns, bool include_units) {
@@ -350,4 +354,27 @@ RocProfVis::View::compact_number_format(double number)
         << number
         << suffixes[magnitude];
     return output.str();
+}
+
+bool RocProfVis::View::open_url(const std::string& url)
+{
+    if (url.empty()) {
+        return false;
+    }
+
+#ifdef _WIN32
+    HINSTANCE result = ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    if ((uintptr_t)result <= 32) {
+        return false;
+    }
+    return true;
+#elif defined(__APPLE__)
+    std::string command = "open " + url;
+    int status = system(command.c_str());
+    return status == 0;
+#else
+    std::string command = "xdg-open " + url;
+    int status = system(command.c_str());
+    return status == 0;
+#endif
 }

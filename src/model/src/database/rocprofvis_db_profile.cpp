@@ -267,6 +267,7 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
         else {
             record.pmc.timestamp = db->Sqlite3ColumnInt64(func, stmt, azColName, 1);
             record.pmc.value = db->Sqlite3ColumnDouble(func, stmt, azColName,2);
+            callback_params->future->SetRuntimeStorageValue(kRPVFutureStorageSampleValue, record.pmc.value);
         }
         if(db->BindObject()->FuncAddRecord(
                (*(slice_array_t*) callback_params->handle)[callback_params->track_id],
@@ -1186,8 +1187,22 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
                         rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[i]);
                         if (props->process.category == kRocProfVisDmPmcTrack)
                         {
+                            future->ResetRowCount();
                             if (BuildCounterSliceRightNeighbourQuery(start, end, tracks[i], query) != kRocProfVisDmResultSuccess) break;
                             if (ExecuteSQLQuery(future, query.c_str(), &slices, &CallbackAddAnyRecord) != kRocProfVisDmResultSuccess) break;
+
+                            if (future->GetProcessedRowsCount() == 0)
+                            {
+                                rocprofvis_db_record_data_t record;                              
+                                record.pmc.timestamp = TraceProperties()->end_time;   
+                                record.pmc.value = future->GetRuntimeStorageValue<double>(kRPVFutureStorageSampleValue,0);
+
+                                for (int i = 0; i < num; i++)
+                                {
+                                    if (BindObject()->FuncAddRecord(slices[tracks[i]], record) != kRocProfVisDmResultSuccess)
+                                        break;
+                                }
+                            }
                         }
                     }
                 }

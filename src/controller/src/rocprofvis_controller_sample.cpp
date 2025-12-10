@@ -15,8 +15,7 @@ typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectType
 Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
 : Handle(__kRPVControllerSamplePropertiesFirst, __kRPVControllerSamplePropertiesLast)
 , m_data(0)
-, m_next_data(0)
-, m_next_timestamp(0)
+, m_end_timestamp(0)
 , m_timestamp(timestamp)
 {}
 
@@ -24,8 +23,7 @@ Sample& Sample::operator=(Sample&& other)
 {
     m_data            = other.m_data;
     m_timestamp       = other.m_timestamp;
-    m_next_data       = other.m_next_data;
-    m_next_timestamp  = other.m_next_timestamp;
+    m_end_timestamp  = other.m_end_timestamp;
     return *this;
 }
 
@@ -137,15 +135,9 @@ rocprofvis_result_t Sample::GetDouble(rocprofvis_property_t property, uint64_t i
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerSampleNextTimestamp:
+            case kRPVControllerSampleEndTimestamp:
             {
-                *value = m_next_timestamp;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerSampleNextValue:
-            {
-                *value = m_next_data;
+                *value = m_end_timestamp;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -243,15 +235,9 @@ rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t i
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerSampleNextValue:
+        case kRPVControllerSampleEndTimestamp:
         {
-            m_next_data = value;
-            result = kRocProfVisResultSuccess;
-            break;
-        }
-        case kRPVControllerSampleNextTimestamp:
-        {
-            m_next_timestamp = value;
+            m_end_timestamp = value;
             result = kRocProfVisResultSuccess;
             break;
         }

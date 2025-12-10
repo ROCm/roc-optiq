@@ -45,8 +45,7 @@ public:
 protected:
     double       m_data;
     double       m_timestamp;
-    double       m_next_data;
-    double       m_next_timestamp;
+    double       m_end_timestamp;
 };
 
 }

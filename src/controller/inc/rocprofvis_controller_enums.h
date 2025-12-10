@@ -546,9 +546,7 @@ typedef enum rocprofvis_controller_sample_properties_t : uint32_t
     // Sample value
     kRPVControllerSampleValue,
     // Sample vector end timestamp
-    kRPVControllerSampleNextTimestamp,
-    // Sample vector end value
-    kRPVControllerSampleNextValue,
+    kRPVControllerSampleEndTimestamp,
 
     // When a LOD is generated the sample will be synthetic and coalesce several real
     // samples These properties allow access to the contains samples.

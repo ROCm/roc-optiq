@@ -79,7 +79,7 @@ By creating a pull request, you agree to the statements made in the [code licens
 Pull requests should:
 
 - ensure code builds successfully.
-- do not break existing test cases.
+- not break existing test cases.
 
 ### Process ###
 

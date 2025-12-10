@@ -1,28 +1,27 @@
-# rocprofiler-visualizer Programming Guide
- This document provides information for how to develop rocprofiler-visualizer. Contibutors should ensure that they have read and understood the contents before attempting to submit code to the project.
+# ROCm Optiq Programming Guide
+ This document provides information for how to develop ROCm Optiq. Contibutors should ensure that they have read and understood the contents before attempting to submit code to the project.
 
 ## Project Structure
-The rocprofiler-visualizer project is built from multiple components, including a number of open-source libraries.
+The ROCm Optiq project is built from multiple components, including a number of open-source libraries.
 
 - .: Project root.
     - CODING.md: This document.
     - CMakeLists.txt: Build file for the project.
     - README.md: Project read me and user documentation.
-    - src: Source directory for all code developed specifically for rocprofiler-visualizer.
-        - app: Application skeleton that provides the infrastructure for rocprofiler-visualizer.
-        - .clang-format: Formatting for rocprofiler-visualizer code.
-        - .clang-tidy: Formatting validation for rocprofiler-visualizer code.
-    - thirdparty: Directory for all external libraries used by rocprofiler-visualizer.
+    - src: Source directory for all code developed specifically for ROCm Optiq.
+        - app: Application skeleton that provides the infrastructure for ROCm Optiq.
+        - .clang-format: Formatting for ROCm Optiq code.
+        - .clang-tidy: Formatting validation for ROCm Optiq code.
+    - thirdparty: Directory for all external libraries used by ROCm Optiq such as the following.
         - glfw: GLFW provides the platform abstraction for window & event handling.
-        - imgui: 'Dear ImGUI' is the user-interface toolkit used to implement rocprofiler-visualizer.
-        - jsoncpp: 'JSON for Classic C++' is the JSON parsing library used in rocprofiler-visualizer.
+        - imgui: 'Dear ImGUI' is the user-interface toolkit used to implement ROCm Optiq.
+        - jsoncpp: 'JSON for Classic C++' is the JSON parsing library used in ROCm Optiq.
         - ImGuiFileDialog: ImGuiFileDialog is a file selection dialog built for (and using only) Dear ImGui.
-        - imgui-flame-graph: A Dear ImGui Widget for displaying Flame Graphs.
         - implot: ImPlot is an immediate mode, GPU accelerated plotting library for Dear ImGui.
         - CMakeLists.txt: Build instructions for thirdparty libraries.
 
 ## Project Requirements
-The rocprofiler-visualizer project is designed to build & run on most desktop operating systems.
+The ROCm Optiq project is designed to build & run on most desktop operating systems.
 
 To build the project the following are required:
 - A C++17 capable compiler & associated stdlib.
@@ -36,7 +35,7 @@ To build the project the following are required:
 - Build the project!
 
 ## Coding Style
-The rocprofiler-visualizer project is part of the broader ROCm software stack and need to appear coherent with the broader SDK coding style. This section gives a brief rundown on the most common aspects of coding style that developers should be mindful of when contributing to rocprofiler-visualizer.
+The ROCm Optiq project is part of the broader ROCm software stack and should be coherent with the broader SDK coding style. This section gives a brief rundown on the most common aspects of coding style that developers should be mindful of when contributing to ROCm Optiq.
 
 ### General
 
@@ -66,10 +65,6 @@ The rocprofiler-visualizer project is part of the broader ROCm software stack an
 - Do not make variables public - declare an accessor for accessing variables.
 - Use fixed-width integers.
 - Prefer a single return statement in functions, but do not overcomplicate control-flow to achieve this.
-- Assume the default is a positive result in control-flow statements,
-    - e.g.:  if (result_ok == true) { // handle the positive case } else { // handle the error }
-    - not: if (!result_ok) { return; }
-    - Why do this? It is easier to read if success and failure conditions are separated like this.
 
 ### Memory Management
 

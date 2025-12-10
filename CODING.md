@@ -35,7 +35,7 @@ To build the project the following are required:
 - Build the project!
 
 ## Coding Style
-The ROCm Optiq project is part of the broader ROCm software stack and should be coherent with the broader SDK coding style. This section gives a brief rundown on the most common aspects of coding style that developers should be mindful of when contributing to ROCm Optiq.
+The ROCm Optiq project is part of the broader ROCm software stack and should adhere to the broader SDK coding style. This section gives a brief rundown on the most common aspects of coding style that developers should be mindful of when contributing to ROCm Optiq.
 
 ### General
 

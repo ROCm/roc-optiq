@@ -15,14 +15,14 @@ ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling
 Traces contain event tracks and counter tracks:
 
 - An event track is a horizontal lane in the profiler's timeline view that displays individual events such as API calls (for example, ROCm functions), kernel dispatches on the GPU, CPU function calls or other execution units. Each event is shown as a bar positioned according to its start and end timestamps, allowing you to visualize execution order and duration.
-- A counter track is a timeline track that displays hardware metrics collected during the application execution. These counters (or telemetry) come from the GPU, CPU, NIC (for host or device, these can also include network traffic), and represent low-level events or states, such as:
+- A counter track is a timeline track that displays the value of a metric that changes over time. These tracks show a sampled scalar value at a specific timestamp. Examples of information shown in a counter track include: 
 
-  - Clock frequency (GPU/CPU operating speed)
-  - Power consumption
+  - Processor frequency
+  - Data traffic (bytes sent/received)
+  - Memory usage
+  - Hardware counter values
   - Thermal readings
-  - Instruction counts (for example, `Vector arithmetic logic unit <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/conceptual/pipeline-descriptions.html#desc-valu>`_ / `Scalar arithmetic logic unit <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/conceptual/pipeline-descriptions.html#desc-salu>`_)
-  - Memory bandwidth and cache hits/misses
-
+  
 .. _trace-file:
 
 Open a trace file

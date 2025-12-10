@@ -10,7 +10,7 @@ namespace RocProfVis
 namespace View
 {
 
-    class VFixedContainer : public RocWidget
+class VFixedContainer : public RocWidget
 {
 public:
     VFixedContainer();

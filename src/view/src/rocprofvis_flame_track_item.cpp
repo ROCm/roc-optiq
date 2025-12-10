@@ -44,11 +44,11 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
     s_max_event_label_width = ImGui::CalcTextSize("W").x * MAX_CHARACTERS_PER_LINE;
 }
 
-FlameTrackItem::FlameTrackItem(DataProvider& dp,
+FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
-                               uint64_t id, std::string name, float level_min, float level_max,
-                               TimePixelTransform* time_to_pixel_manager)
-: TrackItem(dp, id, name, time_to_pixel_manager)
+                               uint64_t id, std::string name, float level_min,
+                               float level_max, TimePixelTransform* tpt)
+: TrackItem(dp, id, name, tpt)
 , m_event_color_mode(EventColorMode::kByEventName)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
@@ -62,7 +62,7 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp,
 , m_tooltip_size(0.0f, 0.0f)
 , m_is_expanded(false)
 , m_compact_mode(false)
-, m_time_to_pixel_manager(time_to_pixel_manager)
+, m_tpt(tpt)
 {
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
@@ -499,8 +499,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         ImGui::PopFont();
 
         std::string label = nanosecond_to_formatted_str(
-            chart_item.event.m_start_ts - m_time_to_pixel_manager->GetMinX(), time_format,
-            true);
+            chart_item.event.m_start_ts - m_tpt->GetMinX(), time_format, true);
         ImGui::Text("Start: %s", label.c_str());
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
@@ -527,8 +526,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         ImGui::PopTextWrapPos();
         ImGui::Separator();
         std::string label = nanosecond_to_formatted_str(
-            chart_item.event.m_start_ts - m_time_to_pixel_manager->GetMinX(), time_format,
-            true);
+            chart_item.event.m_start_ts - m_tpt->GetMinX(), time_format, true);
         ImGui::Text("Start: %s", label.c_str());
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
@@ -568,12 +566,11 @@ FlameTrackItem::RenderChart(float graph_width)
         ImVec2 container_pos = ImGui::GetWindowPos();
 
         double normalized_start =
-            container_pos.x +
-            m_time_to_pixel_manager->RawTimeToPixel(item.event.m_start_ts);
+            container_pos.x + m_tpt->RawTimeToPixel(item.event.m_start_ts);
 
-        double normalized_duration = std::max(
-            item.event.m_duration * m_time_to_pixel_manager->GetPixelsPerNs(), 1.0);
-        double normalized_end      = normalized_start + normalized_duration;
+        double normalized_duration =
+            std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
+        double normalized_end = normalized_start + normalized_duration;
 
         ImVec2 start_position;
 
@@ -611,11 +608,10 @@ FlameTrackItem::RenderChart(float graph_width)
     {
         ImVec2 container_pos = ImGui::GetWindowPos();
         double normalized_start =
-            container_pos.x +
-            m_time_to_pixel_manager->RawTimeToPixel(item.event.m_start_ts);
+            container_pos.x + m_tpt->RawTimeToPixel(item.event.m_start_ts);
 
-        double normalized_duration = std::max(
-            item.event.m_duration * m_time_to_pixel_manager->GetPixelsPerNs(), 1.0);
+        double normalized_duration =
+            std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
 
         ImVec2 start_position;
         float  rounding = 2.0f;

@@ -104,7 +104,7 @@ private:
     bool                     m_show_boxplot_stripes;
     LineTrackProjectSettings m_linetrack_project_settings;
     float                    m_vertical_padding;
-    TimePixelTransform*      m_time_to_pixel_manager;
+    TimePixelTransform*      m_tpt;
 };
 
 }  // namespace View

@@ -21,8 +21,8 @@ constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 constexpr float SCALE_SEPERATOR_WIDTH    = 2.0f;
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float max_meta_area_width,
-                             TimePixelTransform* time_to_pixel_manager)
-: TrackItem(dp, id, name, time_to_pixel_manager)
+                             TimePixelTransform* tpt)
+: TrackItem(dp, id, name, tpt)
 , m_data({})
 , m_highlight_y_limits()
 , m_highlight_y_range(false)
@@ -33,7 +33,7 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 , m_min_y("edit_min")
 , m_max_y("edit_max")
 , m_vertical_padding(DEFAULT_VERTICAL_PADDING)
-, m_time_to_pixel_manager(time_to_pixel_manager)
+, m_tpt(tpt)
 {
     m_meta_area_scale_width = max_meta_area_width;
     UpdateMetadata();
@@ -164,7 +164,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
         auto&       hovered_item = m_data[hovered_idx];
         const auto& time_format  = m_settings.GetUserSettings().unit_settings.time_format;
         std::string start_str    = nanosecond_to_formatted_str(
-            hovered_item.m_start_ts - m_time_to_pixel_manager->GetMinX(), time_format,
+            hovered_item.m_start_ts - m_tpt->GetMinX(), time_format,
             true);
         std::string dur_str = nanosecond_to_formatted_str(
             hovered_item.m_end_ts - hovered_item.m_start_ts, time_format, true);
@@ -400,7 +400,7 @@ LineTrackItem::MapToUI(double x_in, double y_in, ImVec2& cursor_position,
 {
     ImVec2 container_pos = ImGui::GetWindowPos();
 
-    double x = container_pos.x + m_time_to_pixel_manager->RawTimeToPixel(x_in);
+    double x = container_pos.x + m_tpt->RawTimeToPixel(x_in);
     double y = cursor_position.y + content_size.y - (y_in - m_min_y.Value()) * scaleY;
 
     return ImVec2(static_cast<float>(x), static_cast<float>(y));

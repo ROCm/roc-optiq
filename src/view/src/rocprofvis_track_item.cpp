@@ -17,7 +17,7 @@ namespace View
 float            TrackItem::s_metadata_width = 400.0f;
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name,
-                     TimePixelTransform* time_to_pixel_manager)
+                     TimePixelTransform* tpt)
 : m_data_provider(dp)
 , m_id(id)
 , m_name(name)

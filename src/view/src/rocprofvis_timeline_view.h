@@ -69,7 +69,6 @@ public:
     std::shared_ptr<std::vector<rocprofvis_graph_t>> GetGraphs();
     void                                             RenderInteractiveUI();
     void ScrollToTrack(const uint64_t& track_id);
-    void SetViewTimePosition(double time_pos_ns, bool center);
     void SetViewableRangeNS(double start_ns, double end_ns);
     void MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
     void RenderGraphPoints();
@@ -137,7 +136,7 @@ private:
     bool                                m_histogram_pseudo_focus;
     float                               m_max_meta_area_size;
     std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
-    TimePixelTransform                               m_time_to_pixel_manager;
+    TimePixelTransform                               m_tpt;
     struct
     {
         bool     handled;

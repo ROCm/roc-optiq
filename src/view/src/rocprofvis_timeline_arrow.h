@@ -8,6 +8,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_view_structs.h"
 #include <memory>
+#include "rocprofvis_time_to_pixel.h"
 
 namespace RocProfVis
 {
@@ -24,11 +25,13 @@ enum class FlowDisplayMode
 class DataProvider;
 class TimelineSelection;
 struct event_info_t;
+class TimePixelTransform;
 
 class TimelineArrow
 {
 public:
-    enum class RenderStyle {
+    enum class RenderStyle
+    {
         kFan,
         kChain
     };
@@ -42,10 +45,10 @@ public:
     ~TimelineArrow();
     // Draws an arrow from (start_time, y_start) to (end_time, y_end) using the given
     // mapping
-    void Render(ImDrawList* draw_list, const double v_min_x, const double pixels_per_ns,
-                const ImVec2                               window,
-                const std::unordered_map<uint64_t, float>& track_position_y,
-                const std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs) const;
+    void Render(ImDrawList* draw_list, const ImVec2 window,
+                const std::unordered_map<uint64_t, float>&             track_position_y,
+                const std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
+                TimePixelTransform*                                    tpt) const;
 
 private:
     void HandleEventSelectionChanged(std::shared_ptr<RocEvent> e);

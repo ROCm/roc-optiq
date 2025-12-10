@@ -87,5 +87,5 @@ All pull requests will be reviewed by the appropriate code owners.  Please ensur
 
 ## Code License ##
 
-All code contributed to this project will be licensed under the license identified in the [License.md](../LICENSE.md). Your contribution will be accepted under the same license.
+All code contributed to this project will be licensed under the license identified in the [LICENSE.md](../LICENSE.md). Your contribution will be accepted under the same license.
 

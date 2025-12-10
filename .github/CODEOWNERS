@@ -1,0 +1,14 @@
+# Default code owners
+* @ROCm/roc-optiq-reviewers
+
+# Data model
+src/model @vstempen @tomk-amd @drchen-amd
+
+# Controller
+src/controller @vstempen @tomk-amd @drchen-amd
+
+# View
+src/view @tomk-amd @amokiche-amd @Sajeeth-Wimalasuriyan @drchen-amd
+
+# Documentation
+docs/ @tomk-amd @ROCm/rocm-documentation

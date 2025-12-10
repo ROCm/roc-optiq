@@ -83,7 +83,7 @@ Pull requests should:
 
 ### Process ###
 
-All pull requests will be reviewed by the appropriate code owners.  Please ensure code is formatted using this [formmatting style](../.clang-format) file.
+All pull requests will be reviewed by the appropriate code owners.  Please ensure code is formatted using this [formatting style](../.clang-format) file.
 
 ## Code License ##
 

@@ -5,7 +5,7 @@
 
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_split_containers.h"
 
 struct ImPlotStyle;
 

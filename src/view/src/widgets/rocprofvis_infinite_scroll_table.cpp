@@ -560,12 +560,12 @@ InfiniteScrollTable::ProcessSortRequest(rocprofvis_controller_sort_order_t sort_
 
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
-            // Fetch the event table with the updated params
+                // Fetch the event table with the updated params
             m_data_provider.FetchTable(TableRequestParams(
                 m_req_table_type, table_params->m_track_ids, table_params->m_op_types,
                 table_params->m_start_ts, table_params->m_end_ts,
-                table_params->m_filter.c_str(), table_params->m_group.c_str(),
-                table_params->m_group_columns.c_str(),
+                table_params->m_where.c_str(), table_params->m_filter.c_str(),
+                table_params->m_group.c_str(), table_params->m_group_columns.c_str(),
                 table_params->m_string_table_filters, table_params->m_start_row,
                 table_params->m_req_row_count, table_params->m_sort_column_index,
                 table_params->m_sort_order));

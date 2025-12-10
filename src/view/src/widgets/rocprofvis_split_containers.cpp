@@ -149,6 +149,12 @@ void SplitContainerBase::Render()
     }
 }
 
+float
+SplitContainerBase::GetMinSize()
+{
+    return m_first_min_size + m_resize_grip_size + m_second_min_size;
+}
+
 void
 SplitContainerBase::SetFirst(LayoutItem::Ptr first)
 {

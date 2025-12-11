@@ -202,5 +202,5 @@ EditableTextField::SetOnTextCommit(const std::function<void(const std::string&)>
     m_on_text_commit = cb;
 }
 
-}
-}
+}  // namespace View
+}  // namespace RocProfVis

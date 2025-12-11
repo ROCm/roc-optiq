@@ -39,5 +39,5 @@ private:
     std::function<void(const std::string&)> m_on_text_commit;
 };
 
-}
-}
+}  // namespace View
+}  // namespace RocProfVis

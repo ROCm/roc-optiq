@@ -83,6 +83,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_multi_track_table.cpp
     src/view/src/rocprofvis_event_search.cpp
     src/view/src/rocprofvis_summary_view.cpp
+    src/view/src/rocprofvis_minimap.cpp
     src/view/src/widgets/rocprofvis_widget.cpp	
     src/view/src/widgets/rocprofvis_debug_window.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp

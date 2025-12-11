@@ -51,6 +51,7 @@ typedef struct AppWindowSettings
     bool show_sidebar;
     bool show_histogram;
     bool show_summary;
+    bool show_minimap;
 } AppWindowSettings;
 
 enum class Colors
@@ -145,6 +146,7 @@ public:
     // Styling
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel();
+    ImU32                     GetMinimapColor(double normalized_value) const;
     /**
      * Returns the default ImGui style.
      */

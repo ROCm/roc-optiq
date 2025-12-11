@@ -26,6 +26,7 @@ class TraceView;
 class SettingsManager;
 class EventSearch;
 class SummaryView;
+class Minimap;
 
 class SystemTraceProjectSettings : public ProjectSetting
 {
@@ -68,6 +69,7 @@ public:
     void                               SetAnalysisViewVisibility(bool visibility); 
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
+    void                               SetMinimapVisibility(bool visibility);
 
 private:
     void HandleHotKeys();
@@ -86,9 +88,11 @@ private:
     std::shared_ptr<VFixedContainer>   m_timeline_container;
     std::shared_ptr<EventSearch>       m_event_search;
     std::shared_ptr<SummaryView>       m_summary_view;
+    std::shared_ptr<Minimap>           m_minimap;
 
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_analysis_item;
+    LayoutItem::Ptr m_minimap_item;
 
     DataProvider m_data_provider;
     bool         m_view_created;

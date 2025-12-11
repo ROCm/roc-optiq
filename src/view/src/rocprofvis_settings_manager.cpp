@@ -130,6 +130,32 @@ const std::vector<ImU32> FLAME_COLORS = {
     IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
     IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
 };
+
+const std::vector<ImU32> MINIMAP_COLOR_RAMP_DARK = {
+    IM_COL32(38, 40, 44, 255),
+    IM_COL32(60, 80, 120, 255),
+    IM_COL32(30, 0, 40, 255),
+    IM_COL32(60, 0, 80, 255),
+    IM_COL32(100, 0, 120, 255),
+    IM_COL32(140, 20, 40, 255),
+    IM_COL32(200, 50, 0, 255),
+    IM_COL32(240, 120, 0, 255),
+    IM_COL32(255, 180, 60, 255),
+    IM_COL32(255, 240, 180, 255)
+};
+
+const std::vector<ImU32> MINIMAP_COLOR_RAMP_LIGHT = {
+    IM_COL32(250, 245, 240, 255),
+    IM_COL32(180, 200, 220, 255),
+    IM_COL32(200, 180, 200, 255),
+    IM_COL32(150, 100, 180, 255),
+    IM_COL32(180, 60, 140, 255),
+    IM_COL32(220, 80, 80, 255),
+    IM_COL32(240, 120, 40, 255),
+    IM_COL32(255, 160, 60, 255),
+    IM_COL32(255, 200, 120, 255),
+    IM_COL32(255, 245, 200, 255)
+};
 inline constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
 inline constexpr size_t       RECENT_FILES_LIMIT = 5;
 inline constexpr float        EVENT_LEVEL_HEIGHT = 40.0f;
@@ -416,12 +442,48 @@ SettingsManager::GetColorWheel()
     return FLAME_COLORS;
 }
 
+ImU32
+SettingsManager::GetMinimapColor(double normalized_value) const
+{
+    const std::vector<ImU32>& color_ramp = 
+        m_usersettings.display_settings.use_dark_mode 
+            ? MINIMAP_COLOR_RAMP_DARK 
+            : MINIMAP_COLOR_RAMP_LIGHT;
+    
+    if(color_ramp.empty())
+    {
+        return IM_COL32(128, 128, 128, 255);
+    }
+
+    float t = std::clamp(static_cast<float>(normalized_value), 0.0f, 1.0f);
+    float index_float = t * static_cast<float>(color_ramp.size() - 1);
+    size_t index_low = static_cast<size_t>(index_float);
+    size_t index_high = std::min(index_low + 1, color_ramp.size() - 1);
+    float fraction = index_float - static_cast<float>(index_low);
+    
+    ImU32 color_low = color_ramp[index_low];
+    ImU32 color_high = color_ramp[index_high];
+    
+    float r_low = static_cast<float>((color_low >> IM_COL32_R_SHIFT) & 0xFF);
+    float g_low = static_cast<float>((color_low >> IM_COL32_G_SHIFT) & 0xFF);
+    float b_low = static_cast<float>((color_low >> IM_COL32_B_SHIFT) & 0xFF);
+    float r_high = static_cast<float>((color_high >> IM_COL32_R_SHIFT) & 0xFF);
+    float g_high = static_cast<float>((color_high >> IM_COL32_G_SHIFT) & 0xFF);
+    float b_high = static_cast<float>((color_high >> IM_COL32_B_SHIFT) & 0xFF);
+    
+    float r = r_low + (r_high - r_low) * fraction;
+    float g = g_low + (g_high - g_low) * fraction;
+    float b = b_low + (b_high - b_low) * fraction;
+    
+    return IM_COL32(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b), 255);
+}
+
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
       { DisplaySettings{ false, true, 6 }, UnitSettings{ TimeFormat::kTimecode } })
 , m_usersettings(m_usersettings_default)
-, m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
+, m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false, true } })
 , m_display_dpi(1.5f)
 , m_json_path(GetStandardConfigPath())
 {}

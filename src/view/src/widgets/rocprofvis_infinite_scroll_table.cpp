@@ -327,10 +327,7 @@ InfiniteScrollTable::Render()
 
                         if(column == 0)
                         {
-                            std::string selectable_label =
-                                *display_value + "##" + std::to_string(row_n);
-
-                            RenderHeadCell(selectable_label, row_n);
+                            RenderFirstColumnCell(display_value, row_n);
                         }
                         else
                         {
@@ -461,7 +458,7 @@ InfiniteScrollTable::Render()
 
     if(sort_requested || m_filter_requested)
     {
-        ProcessSortRequest(sort_order, sort_column_index, frame_count);
+        ProcessSortOrFilterRequest(sort_order, sort_column_index, frame_count);
     }
 
     m_skip_data_fetch  = false;  // Reset the skip data fetch flag after rendering
@@ -472,7 +469,7 @@ void
 InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int column)
 {
     if(CopyableTextUnformatted(cell_text->c_str(),
-                               std::to_string(row) + std::to_string(column),
+                               std::to_string(row) + ":" + std::to_string(column),
                                true, false))
     {
         m_selected_row    = row;
@@ -497,10 +494,11 @@ InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int colum
 }
 
 void
-InfiniteScrollTable::RenderHeadCell(const std::string& cell_text, int row)
+InfiniteScrollTable::RenderFirstColumnCell(const std::string* cell_text, int row)
 {
+    std::string selectable_label = *cell_text + "##" + std::to_string(row);
     ImGui::TableSetColumnIndex(0);
-    bool row_hovered = ImGui::Selectable(cell_text.c_str(), false,
+    bool row_hovered = ImGui::Selectable(selectable_label.c_str(), false,
                                          ImGuiSelectableFlags_SpanAllColumns |
                                              ImGuiSelectableFlags_AllowOverlap,
                                          ImVec2(0.0f, 0.0f));
@@ -508,7 +506,7 @@ InfiniteScrollTable::RenderHeadCell(const std::string& cell_text, int row)
     {
         m_selected_row = row;
         RowSelected(ImGuiMouseButton_Left);
-        ImGui::SetClipboardText(cell_text.c_str());
+        ImGui::SetClipboardText(cell_text->c_str());
         NotificationManager::GetInstance().Show("Cell value was copied",
                                                 NotificationLevel::Info);
     }
@@ -527,7 +525,8 @@ InfiniteScrollTable::RenderHeadCell(const std::string& cell_text, int row)
 }
 
 void
-InfiniteScrollTable::ProcessSortRequest(rocprofvis_controller_sort_order_t sort_order,
+InfiniteScrollTable::ProcessSortOrFilterRequest(
+    rocprofvis_controller_sort_order_t sort_order,
                                         uint64_t sort_column_index, uint64_t frame_count)
 {
     auto table_params = m_data_provider.GetTableParams(m_table_type);

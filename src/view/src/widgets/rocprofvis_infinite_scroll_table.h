@@ -100,8 +100,8 @@ protected:
 private:
     void RenderLoadingIndicator() const;
     void RenderCell(const std::string* cell_text, int row, int column);
-    void RenderHeadCell(const std::string& cell_text, int row);
-    void ProcessSortRequest(rocprofvis_controller_sort_order_t sort_order,
+    void RenderFirstColumnCell(const std::string* cell_text, int row);
+    void ProcessSortOrFilterRequest(rocprofvis_controller_sort_order_t sort_order,
                             uint64_t sort_column_index, uint64_t frame_count);
 
     int m_fetch_pad_items;

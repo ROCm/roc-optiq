@@ -118,7 +118,7 @@ public:
 private:
     float  GetAvailableSize(const ImVec2& total_size) override;
     void   SetCursor() override;
-    ImVec2 GetFirstChildSize(float available_width) override;
+    ImVec2 GetFirstChildSize(float available_height) override;
     ImVec2 GetSecondChildSize() override;
     void   UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
                             float available_height) override;

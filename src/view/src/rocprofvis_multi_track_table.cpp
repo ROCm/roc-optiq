@@ -408,7 +408,7 @@ MultiTrackTable::RenderContextMenu()
         {
             ExportToFile();
         }
-        else if(ImGui::MenuItem("Copy cell Value", nullptr, false))
+        else if(ImGui::MenuItem("Copy Cell Data", nullptr, false))
         {
             const std::vector<std::vector<std::string>>& table_data =
                 m_data_provider.GetTableData(m_table_type);
@@ -416,11 +416,17 @@ MultiTrackTable::RenderContextMenu()
             {
                 spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
             }
+            else if(m_selected_column < 0 ||
+                    m_selected_column >= (int) table_data[m_selected_row].size())
+            {
+                spdlog::warn("Selected column index out of bounds: {}",
+                             m_selected_column);
+            }   
             else
             {
                 std::string cell_text = table_data[m_selected_row][m_selected_column];
                 ImGui::SetClipboardText(cell_text.c_str());
-                NotificationManager::GetInstance().Show("Cell value was copied",
+                NotificationManager::GetInstance().Show("Cell data was copied",
                                                         NotificationLevel::Info);
             }
 

@@ -120,7 +120,7 @@ CopyableTextUnformatted(const char* text, std::string unique_id, bool one_click_
         if (one_click_copy)
         {
             ImGui::SetClipboardText(text);
-            NotificationManager::GetInstance().Show("Cell value was copied",
+            NotificationManager::GetInstance().Show("Cell data was copied",
                                                     NotificationLevel::Info);
         }
     }
@@ -129,7 +129,7 @@ CopyableTextUnformatted(const char* text, std::string unique_id, bool one_click_
     {
         if(ImGui::BeginPopupContextItem())
         {
-            if(ImGui::MenuItem("Copy cell data"))
+            if(ImGui::MenuItem("Copy Cell Data"))
             {
                 ImGui::SetClipboardText(text);
                 NotificationManager::GetInstance().Show("Cell data was copied",

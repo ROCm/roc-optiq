@@ -343,12 +343,12 @@ VSplitContainer::SetCursor()
 };
 
 ImVec2
-VSplitContainer::GetFirstChildSize(float available_width)
+VSplitContainer::GetFirstChildSize(float available_height)
 {
     float top_row_height = 0.0f;
     if (m_second && m_second->m_visible)
     {
-        float available_size = available_width;
+        float available_size   = available_height;
         top_row_height         = available_size * m_split_ratio;
         top_row_height         = std::clamp(top_row_height, m_first_min_size,
                                        available_size - m_second_min_size);

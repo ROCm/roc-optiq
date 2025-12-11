@@ -41,6 +41,11 @@ namespace DataModel
         std::string parameter;
     } rocprofvis_db_compound_query_command;
 
+    typedef struct rocprofvis_db_compound_query {
+        std::string query;
+        uint32_t track;
+        uint32_t guid_id;
+    } rocprofvis_db_compound_query;
 
     class RestartableTimer {
     public:
@@ -146,12 +151,11 @@ namespace DataModel
 
         };
 
-        static bool IsCompoundQuery(const char* query, std::vector<std::pair<std::string, 
-            uint32_t>>& queries, std::set<uint32_t>& tracks, 
+        static bool IsCompoundQuery(const char* query, std::vector<rocprofvis_db_compound_query>& queries, std::set<uint32_t>& tracks, 
             std::vector<rocprofvis_db_compound_query_command>& commands);
         static std::string QueryWithoutCommands(const char* query);
         rocprofvis_dm_result_t ExecuteCompoundQuery(Future* future, 
-            std::vector<std::pair<std::string, uint32_t>>& queries, 
+            std::vector<rocprofvis_db_compound_query>& queries, 
             std::set<uint32_t>& tracks,
             std::vector<rocprofvis_db_compound_query_command> commands, 
             rocprofvis_dm_handle_t handle, 
@@ -180,7 +184,7 @@ namespace DataModel
         std::string m_last_filter_str;
         std::string m_last_group_str;
         std::unordered_set<uint32_t> m_filter_lookup;
-        bool m_sort_order;
+        bool m_sort_order = true;
         std::string m_sort_column;
         std::mutex m_lock;
         std::string m_current_query;

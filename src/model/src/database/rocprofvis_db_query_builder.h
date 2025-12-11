@@ -126,6 +126,8 @@ typedef struct rocprofvis_db_sqlite_essential_data_query_format
     std::vector<std::string>   where;
 } rocprofvis_db_sqlite_essential_data_query_format;
 
+enum class MultiNode : bool { No = false, Yes = true };
+
 class Builder
 {
     public:
@@ -210,8 +212,11 @@ class Builder
         static constexpr const char* SQL_AS_STATEMENT = " as ";
         static constexpr const char* SQL_ON_STATEMENT = " ON ";
 
-        static constexpr const int  LEVEL_CALCULATION_VERSION  = 3;
+        static constexpr const int  LAST_SINGLE_NODE_LEVEL_CALCULATION_VERSION  = 3;
+        static constexpr const int  FIRST_MULTINODE_NODE_LEVEL_CALCULATION_VERSION  = 4;
+        static constexpr const int  LEVEL_CALCULATION_VERSION  = 4;
         static constexpr const int  TRACKS_CONFIG_VERSION  = 1;
+        static constexpr ColumnType TRACK_ID_TYPE = ColumnType::Word;
 
         inline static std::vector<std::string> mem_alloc_types = {
             "ALLOC", "FREE", "REALLOC", "RECLAIM"
@@ -319,8 +324,8 @@ class Builder
             {COUNTER_ID_SERVICE_NAME,{COUNTER_ID_PUBLIC_NAME, ColumnType::Word,SCHEMA_INDEX_COUNTER_ID}},
             {COUNTER_NAME_REFERENCE_RPD,{COUNTER_ID_PUBLIC_NAME, ColumnType::Word,SCHEMA_INDEX_COUNTER_ID_RPD}},
             {COUNTER_VALUE_SERVICE_NAME,{COUNTER_VALUE_PUBLIC_NAME, ColumnType::Double,SCHEMA_INDEX_COUNTER_VALUE}},
-            {TRACK_ID_PUBLIC_NAME,{TRACK_ID_PUBLIC_NAME, ColumnType::Word,SCHEMA_INDEX_TRACK_ID}},
-            {STREAM_TRACK_ID_PUBLIC_NAME,{STREAM_TRACK_ID_PUBLIC_NAME, ColumnType::Word,SCHEMA_INDEX_STREAM_TRACK_ID}},
+            {TRACK_ID_PUBLIC_NAME,{TRACK_ID_PUBLIC_NAME, TRACK_ID_TYPE,SCHEMA_INDEX_TRACK_ID}},
+            {STREAM_TRACK_ID_PUBLIC_NAME,{STREAM_TRACK_ID_PUBLIC_NAME, TRACK_ID_TYPE,SCHEMA_INDEX_STREAM_TRACK_ID}},
 
         };
 
@@ -359,11 +364,11 @@ class Builder
         static std::string QParam(std::string name);
         static std::string QParamOperation(const rocprofvis_dm_event_operation_t op);
         static std::string QParamCategory(const rocprofvis_dm_track_category_t category);
-        static std::string From(std::string table);
-        static std::string From(std::string table, std::string nick_name);
-        static std::string InnerJoin(std::string table, std::string nick_name, std::string on);
-        static std::string LeftJoin(std::string table, std::string nick_name, std::string on);
-        static std::string RightJoin(std::string table, std::string nick_name, std::string on);
+        static std::string From(std::string table, MultiNode multinode = MultiNode::Yes);
+        static std::string From(std::string table, std::string nick_name, MultiNode multinode = MultiNode::Yes);
+        static std::string InnerJoin(std::string table, std::string nick_name, std::string on, MultiNode multinode = MultiNode::Yes);
+        static std::string LeftJoin(std::string table, std::string nick_name, std::string on, MultiNode multinode = MultiNode::Yes);
+        static std::string RightJoin(std::string table, std::string nick_name, std::string on, MultiNode multinode = MultiNode::Yes);
         static std::string SpaceSaver(int val);
         static std::string THeader(std::string header);
         static std::string TVar(std::string tag, std::string var);
@@ -371,8 +376,8 @@ class Builder
         static std::string Concat(std::vector<std::string> strings);
         static std::string Where(std::string name, std::string condition, std::string value);
         static std::string Union();
-        static std::string LevelTable(std::string operation);
-        static std::vector<std::string> OldLevelTables(std::string operation);
+        static std::string LevelTable(std::string operation, std::string guid="");
+        static void OldLevelTables(std::string operation, std::vector<std::string> & table_list, std::string guid="");
         static std::string StoreConfigVersion();
     private:
         static std::string BuildQuery(int num_params,

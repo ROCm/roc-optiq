@@ -88,6 +88,17 @@ namespace DataModel
             throw std::out_of_range("Column out of range");
     }
 
+    DbInstance* PackedTable::GetDbInstanceForRow(ProfileDatabase * db, int row_index)
+    {
+        auto columns = GetMergedColumns();
+        uint8_t op = GetOperationValue(row_index);
+        auto track_column_it = find_if(columns.begin(), columns.end(), [op](MergedColumnDef& cd) {return cd.m_schema_index[op] == Builder::SCHEMA_INDEX_TRACK_ID; });
+        ROCPROFVIS_ASSERT_MSG_RETURN(track_column_it != columns.end(), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
+        Numeric track = GetMergeTableValue(op, row_index, track_column_it - columns.begin(), db);
+        ROCPROFVIS_ASSERT_MSG_RETURN(db->IsTrackIndexValid(track.data.u64), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
+        return (DbInstance*)db->TrackPropertiesAt(track.data.u64)->db_instance;
+    }
+
     void PackedTable::PlaceValue(size_t col, double value)
     {
         Validate(col);
@@ -154,74 +165,70 @@ namespace DataModel
     }
 
 
-    const char* PackedTable::ConvertTableIndexToString(ProfileDatabase* db, uint32_t column_index, uint64_t  index, bool & numeric_string) {
+    const char* PackedTable::ConvertSqlStringReference(ProfileDatabase* db, uint32_t column_index, uint64_t  value, uint32_t node_id, bool & numeric_string) {
         numeric_string = false;
+        uint64_t string_index = 0;
         if (column_index == Builder::SCHEMA_INDEX_NODE_ID)
         {
             numeric_string = true;
-            return db->CachedTables()->GetTableCell("Node", index, "id");
+            return db->CachedTables(node_id)->GetTableCellByIndex("Node", value, "id");
         } else
-        if (column_index == Builder::SCHEMA_INDEX_CATEGORY || column_index == Builder::SCHEMA_INDEX_CATEGORY_RPD)
+        if (column_index == Builder::SCHEMA_INDEX_CATEGORY || column_index == Builder::SCHEMA_INDEX_CATEGORY_RPD || 
+            column_index == Builder::SCHEMA_INDEX_EVENT_NAME || column_index == Builder::SCHEMA_INDEX_EVENT_NAME_RPD)
         {
-            if (column_index == Builder::SCHEMA_INDEX_CATEGORY_RPD)
+            if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, node_id, string_index))
             {
-                index = db->RemapStringId(index);
+                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, string_index);
             }
-            return db->BindObject()->FuncGetString(db->BindObject()->trace_object, index);
-        } else
-        if (column_index == Builder::SCHEMA_INDEX_EVENT_NAME || column_index == Builder::SCHEMA_INDEX_EVENT_NAME_RPD)
-        {
-            if (column_index == Builder::SCHEMA_INDEX_EVENT_NAME_RPD)
-            {
-                index = db->RemapStringId(index);
-            }
-            return db->BindObject()->FuncGetString(db->BindObject()->trace_object, index);
         } else
         if (column_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD)
         {
-            return db->StringTableReference().ToString(index);
+            return db->StringTableReference().ToString(value);
         } else
         if (column_index == Builder::SCHEMA_INDEX_STREAM_NAME)
         {
-            return db->CachedTables()->GetTableCell("Stream", index, "name");
+            return db->CachedTables(node_id)->GetTableCell("Stream", value, "name");
         } else
         if (column_index == Builder::SCHEMA_INDEX_QUEUE_NAME)
         {
-            return db->CachedTables()->GetTableCell("Queue", index, "name");
+            return db->CachedTables(node_id)->GetTableCell("Queue", value, "name");
         } else
         if (column_index == Builder::SCHEMA_INDEX_EVENT_SYMBOL)
         {
-            return db->BindObject()->FuncGetString(db->BindObject()->trace_object, index+db->SymbolsOffset());
+            if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeKernelSymbol, node_id, string_index))
+            {
+                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, string_index);
+            }
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_ABS_INDEX || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_ABS_INDEX )
         {
             numeric_string = true;
-            return db->CachedTables()->GetTableCell("Agent", index, "absolute_index");
+            return db->CachedTables(node_id)->GetTableCell("Agent", value, "absolute_index");
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_TYPE || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_TYPE)
         {
-            return db->CachedTables()->GetTableCell("Agent", index, "type");
+            return db->CachedTables(node_id)->GetTableCell("Agent", value, "type");
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_TYPE_INDEX || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_TYPE_INDEX)
         {
             numeric_string = true;
-            return db->CachedTables()->GetTableCell("Agent", index, "type_index");
+            return db->CachedTables(node_id)->GetTableCell("Agent", value, "type_index");
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_NAME || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_NAME)
         {
-            return db->CachedTables()->GetTableCell("Agent", index, "name");
+            return db->CachedTables(node_id)->GetTableCell("Agent", value, "name");
         } else
         if (column_index == Builder::SCHEMA_INDEX_COUNTER_ID)
         {
-            return db->CachedTables()->GetTableCell("PMC", index, "symbol");
+            return db->CachedTables(node_id)->GetTableCell("PMC", value, "symbol");
         } else 
         if (column_index == Builder::SCHEMA_INDEX_MEM_TYPE)
         {
-            return Builder::IntToTypeEnum(index,Builder::mem_alloc_types);
+            return Builder::IntToTypeEnum(value,Builder::mem_alloc_types);
         }else
         if (column_index == Builder::SCHEMA_INDEX_LEVEL)
         {
-            return Builder::IntToTypeEnum(index,Builder::mem_alloc_types);
+            return Builder::IntToTypeEnum(value,Builder::mem_alloc_types);
         }
         return nullptr;
     }
@@ -251,6 +258,12 @@ namespace DataModel
                 }
             }
             if (agg_params.size() == 0) return false;
+
+            auto column_it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [](MergedColumnDef& cdef) { return cdef.m_name == Builder::TRACK_ID_PUBLIC_NAME; });
+            if (column_it != m_merged_columns.end())
+            {
+                column_def[Builder::TRACK_ID_PUBLIC_NAME] = *column_it;
+            }
             m_aggregation.agg_params = agg_params;
             m_aggregation.column_def = column_def;
             if (m_aggregation.agg_params[0].command != FilterExpression::SqlCommand::Column) return false;
@@ -362,7 +375,12 @@ namespace DataModel
         uint8_t op = r->Get<uint8_t>(0);
         std::string group_by = m_aggregation.agg_params[0].column;
         MergedColumnDef& group_by_column_info = m_aggregation.column_def[group_by];
-        uint8_t size = ColumnTypeSize(group_by_column_info.m_type[op]);
+        MergedColumnDef& track_column_info = m_aggregation.column_def[Builder::TRACK_ID_PUBLIC_NAME];
+        uint8_t size = ColumnTypeSize(Builder::TRACK_ID_TYPE);
+        uint32_t track = r->Get<uint64_t>(track_column_info.m_offset[op], size);
+        DbInstance* db_instance = (DbInstance*)db->TrackPropertiesAt(track)->db_instance;
+        ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
+        size = ColumnTypeSize(group_by_column_info.m_type[op]);
         double value = 0;
         if (size > 0)
         {
@@ -375,7 +393,7 @@ namespace DataModel
             m_aggregation.aggregation_maps[map_index].insert({ value, {} });
             it = m_aggregation.aggregation_maps[map_index].find(value);
             bool numeric_string = false;
-            const char* str =  PackedTable::ConvertTableIndexToString(db, group_by_column_info.m_schema_index[op], value, numeric_string);
+            const char* str =  PackedTable::ConvertSqlStringReference(db, group_by_column_info.m_schema_index[op], value, db_instance->GuidIndex(), numeric_string);
             if (str == nullptr){
                 if (group_by_column_info.m_type[op] == ColumnType::Double)
                 {
@@ -404,7 +422,7 @@ namespace DataModel
                         value = column_info.m_type[op] == ColumnType::Double ?  r->Get<double>(column_info.m_offset[op]) :  r->Get<uint64_t>(column_info.m_offset[op], size);
                     }
                     bool numeric_string = false;
-                    const char* str =  PackedTable::ConvertTableIndexToString(db, column_info.m_schema_index[op], value, numeric_string);
+                    const char* str =  PackedTable::ConvertSqlStringReference(db, column_info.m_schema_index[op], value, db_instance->GuidIndex(), numeric_string);
                     if (str == nullptr){
                         if (column_info.m_type[op] == ColumnType::Double)
                         {
@@ -523,12 +541,21 @@ namespace DataModel
                 sort_values.reserve(m_rows.size());
                 for (std::unique_ptr<PackedRow> & row : m_rows) {
                     uint8_t op = row->Get<uint8_t>(0);
-                    uint8_t size = ColumnTypeSize(it->m_type[op]);
+                    MergedColumnDef& track_column_info = m_aggregation.column_def[Builder::TRACK_ID_PUBLIC_NAME];
+                    uint8_t size = ColumnTypeSize(Builder::TRACK_ID_TYPE);
+                    uint32_t track = row->Get<uint64_t>(track_column_info.m_offset[op], size);
+                    DbInstance* db_instance = (DbInstance*)db->TrackPropertiesAt(track);
+                    ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
+                    size = ColumnTypeSize(it->m_type[op]);
                     if (size > 0)
                     {
                         uint64_t value = row->Get<uint64_t>(it->m_offset[op], size);
-                        uint64_t string_array_offset = it->m_schema_index[op] == Builder::SCHEMA_INDEX_EVENT_SYMBOL ? db->SymbolsOffset() : 0;
-                        value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, value + string_array_offset);
+                        uint64_t string_index = 0;
+                        if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, db_instance->GuidIndex(), string_index))
+                        {
+                            value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, string_index);
+                        }
+                        
                         sort_values.push_back(value);
                     } else
                         sort_values.push_back(0);
@@ -574,10 +601,7 @@ namespace DataModel
         keys.reserve(m_rows.size());
         for (size_t i = 0; i < m_rows.size(); ++i) {
             auto& row = *m_rows[i];
-            rocprofvis_dm_event_id_t id{};
-            id.bitfield.event_op = row.Get<uint8_t>(0);
-            id.bitfield.event_id = row.Get<uint32_t>(1);
-            keys.push_back({ id.value, i });
+            keys.push_back({ row.Get<uint64_t>(1), i });
         }
 
         std::sort(std::execution::par_unseq, keys.begin(), keys.end(),

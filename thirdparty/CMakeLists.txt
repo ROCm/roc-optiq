@@ -7,6 +7,10 @@ set(VULKAN_LIB "Vulkan::Vulkan")
 add_subdirectory(spdlog)
 add_subdirectory(catch2)
 
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Disable yaml-cpp tests")
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Disable yaml-cpp tools")
+add_subdirectory(yaml-cpp)
+
 add_library(imgui STATIC
     imgui/imgui.cpp
     imgui/imgui_draw.cpp

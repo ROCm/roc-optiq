@@ -105,22 +105,25 @@ namespace DataModel
     {
         return std::to_string((uint32_t) category) + SQL_AS_STATEMENT + TRACK_CATEGORY_SERVICE_NAME;
     }
-    std::string Builder::From(std::string table) { return std::string(" FROM ") + table; }
-    std::string Builder::From(std::string table, std::string nick_name)
-    {
-        return std::string(" FROM ") + table + " " + nick_name;
+    std::string Builder::From(std::string table, MultiNode multinode) 
+    { 
+        return std::string(" FROM ") + table + (multinode == MultiNode::Yes ? "_%GUID% " : " ");
     }
-    std::string Builder::InnerJoin(std::string table, std::string nick_name, std::string on)
+    std::string Builder::From(std::string table, std::string nick_name, MultiNode multinode)
     {
-        return std::string(" INNER JOIN ") + table + " " + nick_name + SQL_ON_STATEMENT + on;
+        return std::string(" FROM ") + table + (multinode == MultiNode::Yes ? "_%GUID% " : " ") + nick_name;
     }
-    std::string Builder::LeftJoin(std::string table, std::string nick_name, std::string on)
+    std::string Builder::InnerJoin(std::string table, std::string nick_name, std::string on, MultiNode multinode)
     {
-        return std::string(" LEFT JOIN ") + table + " " + nick_name + SQL_ON_STATEMENT + on;
+        return std::string(" INNER JOIN ") + table + (multinode == MultiNode::Yes ? "_%GUID% " : " ") + nick_name + SQL_ON_STATEMENT + on;
     }
-    std::string Builder::RightJoin(std::string table, std::string nick_name, std::string on)
+    std::string Builder::LeftJoin(std::string table, std::string nick_name, std::string on, MultiNode multinode)
     {
-        return std::string(" RIGHT JOIN ") + table + " " + nick_name + SQL_ON_STATEMENT + on;
+        return std::string(" LEFT JOIN ") + table + (multinode == MultiNode::Yes ? "_%GUID% " : " ") + nick_name + SQL_ON_STATEMENT + on;
+    }
+    std::string Builder::RightJoin(std::string table, std::string nick_name, std::string on, MultiNode multinode)
+    {
+        return std::string(" RIGHT JOIN ") + table + (multinode == MultiNode::Yes ? "_%GUID% " : " ") + nick_name + SQL_ON_STATEMENT + on;
     }
     std::string Builder::SpaceSaver(int val) { return std::to_string(val) + SQL_AS_STATEMENT + "const"; }
     std::string Builder::THeader(std::string header)
@@ -287,22 +290,30 @@ namespace DataModel
         return query + finalize_with;
     }
 
-    std::string Builder::LevelTable(std::string operation)
+    std::string Builder::LevelTable(std::string operation, std::string guid)
     {
-        return std::string("event_levels_")+ operation + "_v" + std::to_string(LEVEL_CALCULATION_VERSION);
+        return std::string("event_levels_")+ operation + "_v" + std::to_string(LEVEL_CALCULATION_VERSION) + (guid.empty() ? "" : "_" + guid);
     }
 
-    std::vector<std::string>
-    Builder::OldLevelTables(std::string operation)
+
+    void Builder::OldLevelTables(std::string operation, std::vector<std::string> & table_list, std::string guid)
     {
-        std::vector<std::string> v;
         std::string base = std::string("event_levels_");
-        v.push_back(base+operation);
-        for(int i = 1; i < LEVEL_CALCULATION_VERSION; i++)
+        if (guid.empty())
         {
-            v.push_back(base + operation + "_v" + std::to_string(i)); 
+            table_list.push_back(base + operation);
+            for (int i = 1; i <= LAST_SINGLE_NODE_LEVEL_CALCULATION_VERSION; i++)
+            {
+                table_list.push_back(base + operation + "_v" + std::to_string(i));
+            }
         }
-        return v;
+        else
+        {
+            for (int i = FIRST_MULTINODE_NODE_LEVEL_CALCULATION_VERSION; i < LEVEL_CALCULATION_VERSION; i++)
+            {
+                table_list.push_back(base + operation + "_v" + std::to_string(i) + "_" + guid);
+            }
+        }
     }
 
     const char* Builder::IntToTypeEnum(int val, std::vector<std::string>& lookup) {

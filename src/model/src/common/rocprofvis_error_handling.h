@@ -38,6 +38,7 @@ extern const char* ERROR_MEMORY_ALLOCATION_FAILURE;
 extern const char* ERROR_VIRTUAL_METHOD_PROPERTY;
 extern const char* ERROR_INVALID_PROPERTY_GETTER;
 extern const char* ERROR_UNSUPPORTED_PROPERTY;
+extern const char* ERROR_UNSUPPORTED_FEATURE;
 extern const char* ERROR_FLOW_TRACE_CANNOT_BE_NULL;
 extern const char* ERROR_STACK_TRACE_CANNOT_BE_NULL;
 extern const char* ERROR_TABLE_CANNOT_BE_NULL;
@@ -45,6 +46,7 @@ extern const char* ERROR_TABLE_ROW_CANNOT_BE_NULL;
 extern const char* ERROR_EXT_DATA_CANNOT_BE_NULL;
 extern const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL;
 extern const char* ERROR_REFERENCE_POINTER_CANNOT_BE_NULL;
+extern const char* ERROR_NODE_KEY_CANNOT_BE_NULL;
 
 }  // namespace DataModel
 }  // namespace RocProfVis

@@ -51,6 +51,11 @@ public:
     rocprofvis_dm_value_t                               MinValue() { return m_track_params->min_value; }
     // Return track maximum level or value
     rocprofvis_dm_value_t                               MaxValue() { return m_track_params->max_value; }
+    // Database instance (Guid index)
+    rocprofvis_dm_id_t                                  InstanceId() { 
+        return m_track_params->db_instance == nullptr ?
+            0 : ((DbInstance*)m_track_params->db_instance)->GuidIndex();
+    }
     // Returns pointer to category string
     rocprofvis_dm_charptr_t                             CategoryString();
     // Return histogram bucket value per index

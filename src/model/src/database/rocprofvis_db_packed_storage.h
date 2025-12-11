@@ -184,6 +184,7 @@ namespace DataModel
         const std::vector<ColumnDef>& GetColumns() const { return m_columns; }
         const std::vector<FilterExpression::SqlAggregation>& GetAggregationSpec() const { return m_aggregation.agg_params; }
         const std::vector<MergedColumnDef>& GetMergedColumns() const { return m_merged_columns; }
+        DbInstance* GetDbInstanceForRow(ProfileDatabase * db, int row_index);
         uint32_t SortedIndex(uint32_t index) { return m_sort_order[index]; };
 
         void Merge(std::vector<std::unique_ptr<PackedTable>>& tables);
@@ -201,7 +202,7 @@ namespace DataModel
         void SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order);
         void RemoveRowsForSetOfTracks(std::set<uint32_t> tracks, bool remove_all);
 
-        static const char* ConvertTableIndexToString(ProfileDatabase* db, uint32_t column_index, uint64_t index, bool & numeric_string);
+        static const char* ConvertSqlStringReference(ProfileDatabase* db, uint32_t column_index, uint64_t index, uint32_t node_id, bool & numeric_string);
 
     private:
         std::vector<ColumnDef> m_columns;
@@ -212,8 +213,8 @@ namespace DataModel
         size_t m_currentRow = static_cast<size_t>(-1); 
         Aggregation m_aggregation;
     public:
-        int track_id;
-        int stream_track_id;
+        int track_id = -1;
+        int stream_track_id = -1;
     };
 
 

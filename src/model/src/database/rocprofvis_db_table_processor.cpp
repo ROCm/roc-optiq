@@ -61,7 +61,7 @@ namespace DataModel
     }
 
     rocprofvis_dm_result_t TableProcessor::ExecuteCompoundQuery(Future* future, 
-        std::vector<std::pair<std::string, uint32_t>>& queries, 
+        std::vector<rocprofvis_db_compound_query>& queries, 
         std::set<uint32_t>& tracks,
         std::vector<rocprofvis_db_compound_query_command> commands, 
         rocprofvis_dm_handle_t handle, 
@@ -101,13 +101,14 @@ namespace DataModel
             if (!same_queries)
             {
                 m_tables.clear();
-                std::vector<std::string> new_queries;
+                std::vector<std::pair<DbInstance*, std::string>> new_queries;
                 for (int i = 0; i < queries.size(); i++)
                 {
-                    if (added_tracks.find(queries[i].second) != added_tracks.end())
+                    if (added_tracks.find(queries[i].track) != added_tracks.end())
                     {
                         m_tables.push_back(std::make_unique<PackedTable>());
-                        new_queries.push_back(queries[i].first);
+                        DbInstance* db_instance = m_db->DbInstancePtrAt(queries[i].guid_id);
+                        new_queries.push_back({ db_instance, queries[i].query });
                     }
                     
                 }
@@ -172,7 +173,7 @@ namespace DataModel
         return query_without_commands;
     }
 
-    bool TableProcessor::IsCompoundQuery(const char* query, std::vector<std::pair<std::string, uint32_t>>& queries, std::set<uint32_t>& tracks, std::vector<rocprofvis_db_compound_query_command>& commands)
+    bool TableProcessor::IsCompoundQuery(const char* query, std::vector<rocprofvis_db_compound_query>& queries, std::set<uint32_t>& tracks, std::vector<rocprofvis_db_compound_query_command>& commands)
     {
         std::istringstream stream(query);
         std::string line;
@@ -199,13 +200,18 @@ namespace DataModel
                     if (!stmt.empty())
                     {
                         currentSql = Trim(currentSql.substr(pos + 1));
-                        uint32_t track = -1;
-                        if (Database::IsNumber(currentSql))
-                        {
-                            track = std::atol(currentSql.c_str());
-                            tracks.insert(track);
+                        if ((pos = currentSql.find(';')) != std::string::npos) {
+                            auto s_track  = currentSql.substr(0, pos);
+                            auto s_guid_id = currentSql.substr(pos + 1);
+                            if (Database::IsNumber(s_track) && Database::IsNumber(s_guid_id))
+                            {
+                                uint32_t track = std::atol(s_track.c_str());
+                                uint32_t guid_id = std::atoll(s_guid_id.c_str());
+                                tracks.insert(track);
+                                queries.push_back({ stmt,track,guid_id });
+                            }
+                           
                         }
-                        queries.push_back({ stmt,track });
                     }
 
                 }
@@ -231,6 +237,8 @@ namespace DataModel
             auto columns = m_merged_table.GetMergedColumns();
             uint8_t op = m_merged_table.GetOperationValue(row_index);
             int column_counter = 0;
+            DbInstance * db_instance = m_merged_table.GetDbInstanceForRow(m_db, row_index);
+            ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
             for (int column_index = 0; column_index < m_merged_table.MergedColumnCount(); column_index++)
             {
                 if (columns[column_index].m_schema_index[op] == Builder::SCHEMA_INDEX_OPERATION)
@@ -298,7 +306,7 @@ namespace DataModel
                     Numeric val = m_merged_table.GetMergeTableValue(op, row_index, column_index, m_db);
                     bool numeric_string = false;
                     const char* str = columns[column_index].m_type[op] == ColumnType::Null ? "" :
-                        PackedTable::ConvertTableIndexToString(m_db, columns[column_index].m_schema_index[op], val.data.u64, numeric_string);
+                        PackedTable::ConvertSqlStringReference(m_db, columns[column_index].m_schema_index[op], val.data.u64, db_instance->GuidIndex(), numeric_string);
                     std::string output;
                     if (str == nullptr)
                     {
@@ -459,6 +467,8 @@ namespace DataModel
     {
         auto GetRowMap = [&](int row_index, std::unordered_map<std::string, FilterExpression::Value> & map)
             {
+                DbInstance * db_instance = m_merged_table.GetDbInstanceForRow(m_db, row_index);
+                ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
                 if (row_index < m_merged_table.RowCount())
                 {
                     auto columns = m_merged_table.GetMergedColumns();
@@ -482,7 +492,7 @@ namespace DataModel
                                 Numeric val = m_merged_table.GetMergeTableValue(op, row_index, column_index, m_db);
                                 bool numeric_string = false;
                                 const char* str = columns[column_index].m_type[op] == ColumnType::Null ? "" :
-                                    PackedTable::ConvertTableIndexToString(m_db, columns[column_index].m_schema_index[op], val.data.u64, numeric_string);
+                                    PackedTable::ConvertSqlStringReference(m_db, columns[column_index].m_schema_index[op], val.data.u64, db_instance->GuidIndex(), numeric_string);
                                 if (str != nullptr)
                                 {
                                     if (numeric_string)
@@ -593,6 +603,7 @@ namespace DataModel
                                     std::lock_guard<std::mutex> lock(mtx);
                                     m_filter_lookup.insert(row_index);
                                 }
+
                             }
                             };
 
@@ -813,6 +824,7 @@ namespace DataModel
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         rocprofvis_db_sqlite_track_service_data_t service_data{};
         rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+        ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
         ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
         TableProcessor* table_processor = (TableProcessor*)callback_params->handle;
         void* func = (void*)&CallbackRunCompoundQuery;
@@ -848,7 +860,7 @@ namespace DataModel
                 table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, column_index, Builder::table_view_schema.size());
             }
 
-            ProfileDatabase::FindTrackIDs(db, service_data, 
+            ProfileDatabase::FindTrackIDs(db, service_data, callback_params->db_instance,
                 table_processor->m_tables[callback_params->track_id]->track_id, 
                 table_processor->m_tables[callback_params->track_id]->stream_track_id);
 
@@ -886,8 +898,11 @@ namespace DataModel
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_EVENT_ID)
             {
                 uint64_t id = db->Sqlite3ColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
-                uint64_t value = id | (op << 60);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                rocprofvis_dm_event_id_t value;
+                value.bitfield.event_id = id;
+                value.bitfield.event_node = callback_params->db_instance->GuidIndex();
+                value.bitfield.event_op = op;
+                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value.value);
             }
             else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD)
             {

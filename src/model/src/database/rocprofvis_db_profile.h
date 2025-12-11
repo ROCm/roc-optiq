@@ -38,6 +38,7 @@ typedef enum rocprofvis_track_load_params
     kRpvDbTrackLoadNodeTag,
     kRpvDbTrackLoadProcessTag,
     kRpvDbTrackLoadSubprocessTag,
+    kRpvDbTrackLoadGuid,
     kRpvDbTrackLoadNumItems
 } rocprofvis_track_load_params;
 
@@ -67,7 +68,6 @@ class ProfileDatabase : public SqliteDatabase
         // @param path - full path to database file
         ProfileDatabase( rocprofvis_db_filename_t path) : 
                         SqliteDatabase(path), 
-                        m_symbols_offset(0),
             m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)} {};
         // ProfileDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~ProfileDatabase() {}
@@ -95,10 +95,11 @@ class ProfileDatabase : public SqliteDatabase
                         Future* future) override; 
         // method to detect rocpd-based database type (rocpd vs rocprof)
         // @param filename - full path to database file
-        static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
+        // @param multinode_files - detected list of files from multi-node package
+        static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename, std::vector<std::string> & multinode_files);
+        static rocprofvis_dm_result_t  DetectMultiNode(rocprofvis_db_filename_t filename, std::vector<std::string> & db_files);
 
         bool isServiceColumn(const char* name);
-        uint32_t SymbolsOffset() { return m_symbols_offset; }
         StringTable& StringTableReference() { return m_string_table; };
 
         // method to execute table database query with appropriate .CSV writer callback based on existence of GROUP BY clause
@@ -123,7 +124,7 @@ class ProfileDatabase : public SqliteDatabase
        
         static rocprofvis_dm_event_operation_t GetTableQueryOperation(std::string query);
         
-        void BuildSliceQueryMap(slice_query_t& slice_query_map, rocprofvis_dm_track_params_t* props);
+        void BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props);
 
         bool IsEmptyRange(uint64_t start, uint64_t end);
 
@@ -191,9 +192,10 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_charptr_t prefix, 
                             rocprofvis_dm_charptr_t suffix,
                             RpvSqliteExecuteQueryCallback callback, 
-                            std::function<void(rocprofvis_dm_track_params_t*)> func_clear);
+                            std::function<void(rocprofvis_dm_track_params_t*)> func_clear,
+                            guid_list_t run_for_db_instances);
         rocprofvis_dm_result_t ExecuteQueriesAsync(
-                            std::vector<std::string>& queries,
+                            std::vector<std::pair<DbInstance*, std::string>>& queries,
                             std::vector<Future*>& futures,
                             rocprofvis_dm_handle_t handle,
                             RpvSqliteExecuteQueryCallback callback);
@@ -276,23 +278,23 @@ class ProfileDatabase : public SqliteDatabase
         rocprofvis_db_sqlite_track_service_data_t& service_data);
     static void FindTrackIDs(
         ProfileDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
+        DbInstance* db_instance,
         int& trackId, int & streamTrackId);
     rocprofvis_dm_track_category_t TranslateOperationToTrackCategory(rocprofvis_dm_event_operation_t op);
     static const rocprofvis_dm_track_search_id_t GetTrackSearchId(rocprofvis_dm_track_category_t category);
-    rocprofvis_dm_result_t SaveTrackProperties(uint64_t hash);
+    rocprofvis_dm_result_t SaveTrackProperties(Future* future, uint64_t hash);
     rocprofvis_dm_result_t BuildHistogram(Future* future, uint32_t desired_bins);
 
     virtual int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) = 0;
 
     protected:
     // offset of kernel symbols in string table
-        uint32_t m_symbols_offset;
-        std::vector<rocprofvis_db_event_level_t> m_event_levels[kRocProfVisDmNumOperation];
-        std::unordered_map<uint64_t, size_t> m_event_levels_id_to_index[kRocProfVisDmNumOperation];
+        std::unordered_map<uint32_t, std::vector<rocprofvis_db_event_level_t>> m_event_levels[kRocProfVisDmNumOperation];
+        std::unordered_map<uint32_t, std::unordered_map<uint64_t, size_t>> m_event_levels_id_to_index[kRocProfVisDmNumOperation];
         std::mutex   m_level_lock;
         TableProcessor m_table_processor[kRPVTableDataTypesNum];
         StringTable m_string_table;
-
+        OrderedMutex m_add_track_mutex;
 
 };
 

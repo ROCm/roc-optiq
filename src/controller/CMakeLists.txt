@@ -93,4 +93,5 @@ endif()
 add_test(NAME ${PROJECT_NAME}-basic-tests COMMAND ${PROJECT_NAME}-basic-tests)
 set_tests_properties(${PROJECT_NAME}-basic-tests PROPERTIES RUN_SERIAL ON)
 
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/pybind11/include)
 target_link_libraries(${TARGET_NAME} PRIVATE pybind11::embed)

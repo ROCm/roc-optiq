@@ -1579,10 +1579,11 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future, uint
     }
     for (auto it = v.begin(); it != v.end(); ++it)
     {
+        DbInstance db_instance(it->first, 0);
         while (true)
         {
-            std::string name;
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &DbInstance(it->first,0), "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'track_info_%'", &CallbackGetValue, &name)) break;
+            std::string name;           
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &db_instance, "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'track_info_%'", &CallbackGetValue, &name)) break;
             if (name.length() == 0) break;
             DropSQLTable(name.c_str(), it->first);
         }
@@ -1675,17 +1676,17 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
     for (auto& file_node : m_db_nodes)
     {
         std::vector<store_params> v;
-
+        TemporaryDbInstance db_instance(file_node->node_id);
         if (!TraceProperties()->tracks_info_id_mismatch && CheckTableExists(histogram_table_name, file_node->node_id))
         {
-            result = ExecuteSQLQuery(future, &TemporaryDbInstance(file_node->node_id), (std::string("SELECT * FROM ") + histogram_table_name).c_str(), &CallBackLoadHistogram);
+            result = ExecuteSQLQuery(future, &db_instance, (std::string("SELECT * FROM ") + histogram_table_name).c_str(), &CallBackLoadHistogram);
         }
         else
         {
             while (true)
             {
                 std::string name;
-                if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &TemporaryDbInstance(file_node->node_id), "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'histogram_%'", &CallbackGetValue, &name)) break;
+                if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &db_instance, "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'histogram_%'", &CallbackGetValue, &name)) break;
                 if (name.length() == 0) break;
                 DropSQLTable(name.c_str(), file_node->node_id);
             }

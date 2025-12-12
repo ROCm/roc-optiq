@@ -430,8 +430,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(2, "Detect Nodes", kRPVDbBusy, future);
         for (auto& file_node : m_db_nodes)
         {
+            TemporaryDbInstance db_instance(file_node->node_id);
             ExecuteSQLQuery(future,
-                &TemporaryDbInstance(file_node->node_id),
+                &db_instance,
                 (std::string("SELECT ") + std::to_string(file_node->node_id)+" as file_node, name from sqlite_master where type = 'table' and name like 'rocpd_info_node_%'; ").c_str(),
                 "rocpd_info_node_", (rocprofvis_dm_handle_t)&DbInstances(),
                 &CallbackNodeEnumeration);
@@ -968,7 +969,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
     rocprofvis_db_sqlite_trim_parameters trim_tables;
     rocprofvis_db_sqlite_trim_parameters trim_views;
     rocprofvis_db_sqlite_trim_parameters rocpd_trim_views;
-
+    TemporaryDbInstance tmp_db_instance(0);
 
 
     std::filesystem::remove(new_db_path);
@@ -982,13 +983,15 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
 
         for (auto& file_node : m_db_nodes)
         {
-            ShowProgress(1, "Iterate over tables", kRPVDbBusy, future);
-            result = ExecuteSQLQuery(future, &TemporaryDbInstance(file_node->node_id), "SELECT name, sql FROM sqlite_master WHERE type='table';", "", (rocprofvis_dm_handle_t)&trim_tables, &CallbackTrimTableQuery);
+            TemporaryDbInstance db_instance(file_node->node_id);
+
+            ShowProgress(1, "Iterate over tables", kRPVDbBusy, future);            
+            result = ExecuteSQLQuery(future, &db_instance, "SELECT name, sql FROM sqlite_master WHERE type='table';", "", (rocprofvis_dm_handle_t)&trim_tables, &CallbackTrimTableQuery);
 
             if (result != kRocProfVisDmResultSuccess) break;
 
             ShowProgress(1, "Iterate over views", kRPVDbBusy, future);
-            result = ExecuteSQLQuery(future, &TemporaryDbInstance(file_node->node_id), "SELECT name, sql FROM sqlite_master WHERE type='view';", "", (rocprofvis_dm_handle_t)&trim_views, &CallbackTrimTableQuery);
+            result = ExecuteSQLQuery(future, &db_instance, "SELECT name, sql FROM sqlite_master WHERE type='view';", "", (rocprofvis_dm_handle_t)&trim_views, &CallbackTrimTableQuery);
             if (result != kRocProfVisDmResultSuccess) break;
         }
 
@@ -1032,7 +1035,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
             {
                 if(result == kRocProfVisDmResultSuccess)
                 {
-                    result = rpDb.ExecuteSQLQuery(future,&TemporaryDbInstance(0),  table.second.c_str());
+                    result = rpDb.ExecuteSQLQuery(future,&tmp_db_instance,  table.second.c_str());
                 }
                 else
                 {
@@ -1048,7 +1051,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
         {
             ShowProgress(0, "Attaching old DB to new", kRPVDbBusy, future);
 
-            result = rpDb.ExecuteSQLQuery(future, &TemporaryDbInstance(0), (std::string("ATTACH DATABASE '") + file_node->filepath + "' as 'oldDb';").c_str());
+            result = rpDb.ExecuteSQLQuery(future, &tmp_db_instance, (std::string("ATTACH DATABASE '") + file_node->filepath + "' as 'oldDb';").c_str());
 
             if (result != kRocProfVisDmResultSuccess) break;
 
@@ -1101,7 +1104,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                                 query += ";";
                             }
 
-                            result = rpDb.ExecuteSQLQuery(future,&TemporaryDbInstance(0), query.c_str());
+                            result = rpDb.ExecuteSQLQuery(future,&tmp_db_instance, query.c_str());
                         }
                         else
                         {
@@ -1131,11 +1134,11 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                 auto it = rocpd_trim_views.tables.find(view.first);
                 if (it != rocpd_trim_views.tables.end())
                 {
-                    result = rpDb.ExecuteSQLQuery(future,&TemporaryDbInstance(0),  it->second.c_str());
+                    result = rpDb.ExecuteSQLQuery(future,&tmp_db_instance,  it->second.c_str());
                 }
                 else
                 {
-                    result = rpDb.ExecuteSQLQuery(future, &TemporaryDbInstance(0), view.second.c_str());
+                    result = rpDb.ExecuteSQLQuery(future, &tmp_db_instance, view.second.c_str());
                 }
             }
             else

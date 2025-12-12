@@ -106,11 +106,11 @@ EventsView::RenderBasicData(const event_info_t* event_data)
     ImGui::TextUnformatted("ID");
     ImGui::SameLine(160);
     CopyableTextUnformatted(std::to_string(info.m_id).c_str(), "ID",
-                            COPY_DATA_NOTIFICATION, true, true);
+                            DATA_COPIED_NOTIFICATION, true, true);
 
     ImGui::TextUnformatted("Name");
     ImGui::SameLine(160);
-    CopyableTextUnformatted(info.m_name.c_str(), "Name", COPY_DATA_NOTIFICATION, true,
+    CopyableTextUnformatted(info.m_name.c_str(), "Name", DATA_COPIED_NOTIFICATION, true,
                             true);
 
     double      trace_start_time = m_data_provider.GetStartTime();
@@ -120,19 +120,22 @@ EventsView::RenderBasicData(const event_info_t* event_data)
     ImGui::SameLine(160);
     std::string label = nanosecond_to_formatted_str(info.m_start_ts - trace_start_time,
                                                     time_format, true);
-    CopyableTextUnformatted(label.c_str(), "Start_time", COPY_DATA_NOTIFICATION, true,
+    CopyableTextUnformatted(label.c_str(), "Start_time", DATA_COPIED_NOTIFICATION, true,
                             true);
 
 
     ImGui::TextUnformatted("Duration");
     ImGui::SameLine(160);
     label = nanosecond_to_formatted_str(info.m_duration, time_format, true);
-    CopyableTextUnformatted(label.c_str(), "Duration", COPY_DATA_NOTIFICATION, true, true);
+    CopyableTextUnformatted(label.c_str(), "Duration", DATA_COPIED_NOTIFICATION, true,
+                            true);
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     ImGui::TextUnformatted("Level");
     ImGui::SameLine(160);
-    ImGui::Text("%u", info.m_level);
+    CopyableTextUnformatted(std::to_string(info.m_level).c_str(), "Level",
+                            DATA_COPIED_NOTIFICATION,
+                            true, true);
 #endif
 
     ImGui::PopFont();

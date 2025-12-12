@@ -762,24 +762,41 @@ SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries, uint32_t db
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     while (true)
     {
-        if (sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) != SQLITE_OK)
+        if(sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) !=
+           SQLITE_OK)
         {
             result = kRocProfVisDmResultDbAccessFailed;
+            spdlog::error("Failed to start transaction after error {}",
+                          sqlite3_errmsg(conn));
             break;
         }
 
-        for (auto query : queries)
+        for (const auto &query : queries)
         {
-            if (sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
+            if(sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
             {
                 result = kRocProfVisDmResultDbAccessFailed;
+                spdlog::error("Failed to execute query '{}' with error {}", query,
+                              sqlite3_errmsg(conn));
                 break;
             }
+        }
+        // Break out of the outer loop if there was a failure
+        if(result == kRocProfVisDmResultDbAccessFailed) 
+        {
+            // Try to rollback the transaction
+            if(sqlite3_exec(conn, "ROLLBACK;", nullptr, nullptr, nullptr) != SQLITE_OK)
+            {
+                spdlog::error("Failed to rollback transaction after error {}",
+                              sqlite3_errmsg(conn));
+            }
+            break;
         }
 
         if (sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
         {
             result = kRocProfVisDmResultDbAccessFailed;
+            spdlog::error("Failed to commit transaction {}", sqlite3_errmsg(conn));
             break;
         }
         break;

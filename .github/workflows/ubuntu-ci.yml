@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  VISUALIZER_FILE_NAME: "rocprof-visualizer"
+  VISUALIZER_FILE_NAME: "roc-optiq"
 
 jobs:
   set-matrix:
@@ -62,7 +62,7 @@ jobs:
           apt update -y
           apt install -y build-essential cmake git libncurses-dev libwayland-dev \
             libx11-dev libxcursor-dev libxi-dev libxinerama-dev libxkbcommon-dev \
-            libxrandr-dev pkg-config wget xorg-dev
+            libxrandr-dev pkg-config wget xorg-dev libdbus-1-dev
           echo "✅ Dependencies Installed!"
 
       - name: Install Vulkan SDK

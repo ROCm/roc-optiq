@@ -17,7 +17,7 @@ on:
       - '*.md'
 
 env:
-  VISUALIZER_FILE_NAME: "rocprof-visualizer"
+  VISUALIZER_FILE_NAME: "roc-optiq"
 
 jobs:
   ubuntu:

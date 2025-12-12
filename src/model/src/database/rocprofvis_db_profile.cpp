@@ -1233,7 +1233,6 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
                 if (result != kRocProfVisDmResultSuccess) break;
             }
 
-
             if (result == kRocProfVisDmResultSuccess)
             {
                 result = ExecuteSQLQuery(future, (DbInstance*)props->db_instance, slice_query.c_str(), &slices, &CallbackAddAnyRecord);

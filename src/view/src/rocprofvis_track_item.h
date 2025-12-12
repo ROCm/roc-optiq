@@ -8,6 +8,7 @@
 #include "rocprofvis_time_to_pixel.h"
 #include <deque>
 #include <unordered_map>
+#include "rocprofvis_time_to_pixel.h"
 
 namespace RocProfVis
 {
@@ -115,7 +116,7 @@ protected:
     float                 m_meta_area_scale_width;
     bool                  m_selected;
     float                 m_reorder_grip_width;
-
+    std::shared_ptr<TimePixelTransform> m_tpt;
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
     uint8_t  m_group_id_counter;   // Counter for grouping requests
 

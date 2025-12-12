@@ -62,7 +62,6 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_tooltip_size(0.0f, 0.0f)
 , m_is_expanded(false)
 , m_compact_mode(false)
-, m_tpt(tpt)
 {
     if(!m_tpt)
     {

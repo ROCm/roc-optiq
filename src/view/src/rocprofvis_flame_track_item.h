@@ -114,7 +114,6 @@ private:
 
     static float             s_max_event_label_width;
     static const std::string s_child_info_separator;
-    std::shared_ptr<TimePixelTransform> m_tpt;
     bool        m_is_expanded;
     bool        m_compact_mode;
 };

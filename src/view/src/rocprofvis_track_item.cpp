@@ -37,6 +37,8 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name,
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
 , m_group_id_counter(0)
+, m_tpt(tpt)  
+
 , m_chunk_duration_ns(TimeConstants::ns_per_s *
                       30)  // Default chunk duration
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)

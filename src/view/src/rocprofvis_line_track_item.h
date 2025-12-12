@@ -105,8 +105,7 @@ private:
     bool                     m_show_boxplot_stripes;
     LineTrackProjectSettings m_linetrack_project_settings;
     float                    m_vertical_padding;
-    std::shared_ptr<TimePixelTransform> m_tpt;
-};
+ };
 
 }  // namespace View
 }  // namespace RocProfVis

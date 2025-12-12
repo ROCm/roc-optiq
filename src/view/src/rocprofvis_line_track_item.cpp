@@ -34,7 +34,6 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name,
 , m_min_y("edit_min")
 , m_max_y("edit_max")
 , m_vertical_padding(DEFAULT_VERTICAL_PADDING)
-, m_tpt(tpt)
 {
     if(!m_tpt)
     {

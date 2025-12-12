@@ -192,7 +192,7 @@ ImVec2
 TimePixelTransform::GetGraphSize() const
 {
     return ImVec2(m_graph_size_x, m_graph_size_y);
-}       
+}
 
 double
 TimePixelTransform::GetMinX() const

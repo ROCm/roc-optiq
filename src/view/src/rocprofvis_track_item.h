@@ -96,7 +96,6 @@ protected:
 
     void FetchHelper();
 
-     
     uint64_t              m_id;
     float                 m_track_height;
     float                 m_track_content_height;

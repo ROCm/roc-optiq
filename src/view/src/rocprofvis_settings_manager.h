@@ -103,7 +103,7 @@ enum class Colors
     kStickyNote,
     kLineChartColorAlt,
     kTrackColorWarningBand,
-
+    kLoadingScreenColor,
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -205,6 +205,7 @@ private:
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
+
 
     std::filesystem::path m_json_path;
 };

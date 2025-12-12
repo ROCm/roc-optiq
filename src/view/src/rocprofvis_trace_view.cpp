@@ -30,6 +30,7 @@ TraceView::TraceView()
 , m_horizontal_split_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
+, m_is_tab_active(false)
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
@@ -56,6 +57,10 @@ TraceView::TraceView()
             // Only handle the event if the tab source is the main tab source.
             if(ets->GetSourceId() == AppWindow::GetInstance()->GetMainTabSourceName())
             {
+                // Check if this tab is now active
+                std::string trace_path = m_data_provider.GetTraceFilePath();
+                m_is_tab_active = (!trace_path.empty() && ets->GetTabId() == trace_path);
+
                 m_data_provider.SetSelectedState(ets->GetTabId());
             }
         }
@@ -225,7 +230,7 @@ TraceView::CreateView()
         m_settings_manager.GetAppWindowSettings().show_details_panel;
 
     LayoutItem m_histogram_item(0, 80);
-    m_histogram_item.m_item = m_histogram_widget;
+    m_histogram_item.m_item    = m_histogram_widget;
     m_histogram_item.m_visible = m_settings_manager.GetAppWindowSettings().show_histogram;
     LayoutItem timeline_item(0, 0);
     timeline_item.m_item = m_timeline_view;
@@ -279,6 +284,17 @@ TraceView::OpenFile(const std::string& file_path)
 void
 TraceView::Render()
 {
+    // Check if this tab is currently active
+    Project* current_project = AppWindow::GetInstance()->GetCurrentProject();
+    if(current_project && current_project->GetID() == m_data_provider.GetTraceFilePath())
+    {
+        m_is_tab_active = true;
+    }
+    else if(!m_data_provider.GetTraceFilePath().empty())
+    {
+        m_is_tab_active = false;
+    }
+
     if(m_horizontal_split_container &&
        m_data_provider.GetState() == ProviderState::kReady)
     {
@@ -293,63 +309,71 @@ TraceView::Render()
                                                     m_popup_info.message);
     }
 
-    if(m_data_provider.GetState() == ProviderState::kLoading)
+    // Render loading overlay if loading and tab is active
+    if(m_data_provider.GetState() == ProviderState::kLoading && m_is_tab_active)
     {
-        if(m_open_loading_popup)
-        {
-            ImGui::OpenPopup("Loading");
-            m_open_loading_popup = false;
-        }
+        ImVec2 content_region = ImGui::GetContentRegionAvail();
+        ImVec2 window_pos     = ImGui::GetWindowPos();
+        ImVec2 cursor_pos     = ImGui::GetCursorPos();
 
-        ImGui::SetNextWindowSize(ImVec2(300, 200));
-        if(ImGui::BeginPopupModal("Loading"))
-        {
-            const char* label      = "Please wait...";
-            ImVec2      label_size = ImGui::CalcTextSize(label);
+        ImVec2 overlay_min =
+            ImVec2(window_pos.x + cursor_pos.x, window_pos.y + cursor_pos.y);
+        ImVec2 overlay_max =
+            ImVec2(overlay_min.x + content_region.x, overlay_min.y + content_region.y);
 
-            const char* progress_label      = m_data_provider.GetProgressMessage();
-            ImVec2      progress_label_size = ImGui::CalcTextSize(progress_label);
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        draw_list->AddRectFilled(
+            overlay_min, overlay_max,
+            m_settings_manager.GetColor(Colors::kLoadingScreenColor));
 
-            float item_spacing = 10.0f;
+        // Calculate center position for loading indicator
+        ImVec2 center_screen = ImVec2(overlay_min.x + content_region.x * 0.5f,
+                                      overlay_min.y + content_region.y * 0.5f);
 
-            float dot_radius  = 5.0f;
-            int   num_dots    = 3;
-            float dot_spacing = 5.0f;
-            float anim_speed  = 5.0f;
+        const char* label      = "Please wait...";
+        ImVec2      label_size = ImGui::CalcTextSize(label);
 
-            ImVec2 dot_size =
-                MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
+        const char* progress_label      = m_data_provider.GetProgressMessage();
+        ImVec2      progress_label_size = ImGui::CalcTextSize(progress_label);
 
-            ImVec2 available_space = ImGui::GetContentRegionAvail();
-            ImVec2 pos             = ImGui::GetCursorScreenPos();
-            ImVec2 center_pos      = ImVec2(
-                pos.x + (available_space.x - label_size.x) * 0.5f,
-                pos.y + (available_space.y - (label_size.y + dot_size.y +
-                                              progress_label_size.y + item_spacing)) *
-                            0.5f);
-            ImGui::SetCursorScreenPos(center_pos);
+        float item_spacing = 10.0f;
 
-            ImGui::TextUnformatted(label);
+        float dot_radius  = 5.0f;
+        int   num_dots    = 3;
+        float dot_spacing = 5.0f;
+        float anim_speed  = 5.0f;
 
-            pos            = ImGui::GetCursorScreenPos();
-            ImVec2 dot_pos = ImVec2(pos.x + (available_space.x - dot_size.x) * 0.5f,
-                                    pos.y + item_spacing);
-            ImGui::SetCursorScreenPos(dot_pos);
+        ImVec2 dot_size = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
 
-            RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                                       IM_COL32(85, 85, 85, 255), anim_speed);
+        // Calculate total height and starting Y position
+        float total_height =
+            label_size.y + dot_size.y + progress_label_size.y + item_spacing * 2;
+        float start_y = center_screen.y - total_height * 0.5f;
 
-            pos        = ImGui::GetCursorScreenPos();
-            center_pos = ImVec2(
-                pos.x + (available_space.x - progress_label_size.x) * 0.5f,
-                pos.y + (available_space.y - (label_size.y + dot_size.y +
-                                              progress_label_size.y + item_spacing)) *
-                            0.5f);
-            ImGui::SetCursorScreenPos(center_pos);
-            ImGui::TextUnformatted(progress_label);
+        // Draw label centered using ImGui text
+        ImVec2 label_pos = ImVec2(center_screen.x - label_size.x * 0.5f, start_y);
+        ImGui::SetCursorScreenPos(label_pos);
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              m_settings_manager.GetColor(Colors::kTextMain));
+        ImGui::TextUnformatted(label);
+        ImGui::PopStyleColor();
 
-            ImGui::EndPopup();
-        }
+        // Draw dots centered
+        ImVec2 dot_pos = ImVec2(center_screen.x - dot_size.x * 0.5f,
+                                start_y + label_size.y + item_spacing);
+        ImGui::SetCursorScreenPos(dot_pos);
+        RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
+                                   IM_COL32(85, 85, 85, 255), anim_speed);
+
+        // Draw progress label centered using ImGui text
+        ImVec2 progress_pos =
+            ImVec2(center_screen.x - progress_label_size.x * 0.5f,
+                   start_y + label_size.y + dot_size.y + item_spacing * 2);
+        ImGui::SetCursorScreenPos(progress_pos);
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              m_settings_manager.GetColor(Colors::kTextMain));
+        ImGui::TextUnformatted(progress_label);
+        ImGui::PopStyleColor();
     }
 
     if(m_summary_view)
@@ -499,7 +523,8 @@ TraceView::RenderEditMenuOptions()
     {
         if(m_timeline_selection)
         {
-            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs = m_timeline_view->GetGraphs();
+            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs =
+                m_timeline_view->GetGraphs();
             if(graphs)
             {
                 m_timeline_selection->UnselectAllTracks(*graphs);

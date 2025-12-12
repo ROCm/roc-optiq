@@ -1119,7 +1119,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
             }
 
             ShowProgress(0, "Detaching old DB", kRPVDbBusy, future);
-            result = rpDb.ExecuteSQLQuery(future,&TemporaryDbInstance(0), "DETACH oldDb;");
+            result = rpDb.ExecuteSQLQuery(future,&tmp_db_instance, "DETACH oldDb;");
 
             if (result != kRocProfVisDmResultSuccess) break;
 

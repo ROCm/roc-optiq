@@ -1,4 +1,5 @@
-# Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 set(TARGET_NAME roc-optiq)
 
@@ -123,6 +124,7 @@ endif(WIN32)
 add_executable(${TARGET_NAME} 
     src/app/src/rocprofvis_imgui_vulkan.cpp 
     src/app/src/main.cpp
+    src/app/src/glfw_util.cpp
     ${VIEW_FILES})
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
@@ -133,6 +135,7 @@ if(WIN32)
 endif(WIN32)
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
@@ -292,4 +295,3 @@ if(WIN32)
         COMMENT "Copying dependent DLLs to executable directory"
     )
 endif()
-

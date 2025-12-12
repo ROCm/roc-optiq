@@ -50,12 +50,11 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
         m_track_height = m_track_project_settings.Height();
     }
 
-
     // Check if thread is main thread.
 
     const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
 
-     if(track_info->topology.type == track_info_t::Topology::InstrumentedThread)
+    if(track_info->topology.type == track_info_t::Topology::InstrumentedThread)
     {
         const thread_info_t* thread_info =
             m_data_provider.GetInstrumentedThreadInfo(track_info->topology.id);
@@ -267,32 +266,10 @@ TrackItem::RenderMetaArea()
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
 
-        if(m_is_main_thread && m_track_height < m_track_default_height)
-        {
-            // Push the color if the track is shrunk below default size and is main thread
-            ImU32 iconColor = m_settings.GetColor(Colors::kArrowColor);
-            ImGui::PushStyleColor(ImGuiCol_Text, iconColor);
-        }
-
         ImGui::TextUnformatted(ICON_GRID);
 
         float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
         ImGui::PopFont();
-
-        if(m_is_main_thread && m_track_height < m_track_default_height)
-        {
-            ImGui::PopStyleColor();
-        }
-
-        if(m_is_main_thread && m_track_height >= m_track_default_height)
-        {
-            ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall));
-            ImGui::SetCursorPos(
-                ImVec2((m_reorder_grip_width - ImGui::CalcTextSize(ICON_GRID).x) / 2,
-                       (container_size.y - ImGui::GetTextLineHeightWithSpacing())));
-            ImGui::TextUnformatted("(MAIN)");
-            ImGui::PopFont();
-        }
 
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
         // Adjust content size to account for padding
@@ -327,20 +304,13 @@ TrackItem::RenderMetaArea()
 
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
-                                   0));
-        ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-
-        ImGui::Button(ICON_GEAR);
-
-        ImGui::PopFont();
-        ImGui::PopStyleColor(3);
+                                   m_metadata_padding.y));
+        IconButton(ICON_GEAR,
+                   m_settings.GetFontManager().GetIconFont(FontType::kDefault));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             m_settings.GetDefaultStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            m_settings.GetDefaultStyle().FrameRounding);
         if(ImGui::BeginItemTooltip())
         {
             ImGui::TextUnformatted("Track Options");
@@ -356,9 +326,37 @@ TrackItem::RenderMetaArea()
             RenderMetaAreaOptions();
             ImGui::EndPopup();
         }
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
+
+        // Render MAIN pillbox for main thread tracks
+        if(m_is_main_thread)
+        {
+            ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall));
+
+            const char* main_label = "MAIN";
+            ImVec2      text_size  = ImGui::CalcTextSize(main_label);
+            float       padding_x  = 8.0f;
+            float       padding_y  = 2.0f;
+            ImVec2 pillbox_size(text_size.x + 2 * padding_x, text_size.y + 2 * padding_y);
+
+            ImVec2 pillbox_pos(m_reorder_grip_width,
+                               container_size.y - pillbox_size.y - 2.0f);
+
+            ImDrawList* draw_list     = ImGui::GetWindowDrawList();
+            ImU32       pillbox_color = m_settings.GetColor(Colors::kBorderGray);
+
+            draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
+                                     ImGui::GetWindowPos() + pillbox_pos + pillbox_size,
+                                     pillbox_color, pillbox_size.y * 0.5f);
+
+            ImVec2 text_pos = pillbox_pos + ImVec2(padding_x, padding_y);
+            ImGui::SetCursorPos(text_pos);
+            ImGui::TextUnformatted(main_label);
+
+            ImGui::PopFont();
+        }
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();

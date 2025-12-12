@@ -138,8 +138,8 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
 
     // Create Vulkan Instance
     {
-        VkInstanceCreateInfo create_info = {};
-        create_info.sType                = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        VkInstanceCreateInfo instance_create_info = {};
+        instance_create_info.sType                = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 
         // Enumerate available extensions
         uint32_t                        properties_count;
@@ -162,22 +162,22 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
             {
                 instance_extensions.push_back(
                     VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-                create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+                instance_create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
             }
 #endif
 
             // Enabling validation layers
 #ifdef _DEBUG
-            const char* layers[]            = { "VK_LAYER_KHRONOS_validation" };
-            create_info.enabledLayerCount   = 1;
-            create_info.ppEnabledLayerNames = layers;
+            const char* layers[]                    = { "VK_LAYER_KHRONOS_validation" };
+            instance_create_info.enabledLayerCount   = 1;
+            instance_create_info.ppEnabledLayerNames = layers;
             instance_extensions.push_back("VK_EXT_debug_report");
 #endif
 
             // Create Vulkan Instance
-            create_info.enabledExtensionCount   = (uint32_t) instance_extensions.Size;
-            create_info.ppEnabledExtensionNames = instance_extensions.Data;
-            err = vkCreateInstance(&create_info, backend_data->m_allocator,
+            instance_create_info.enabledExtensionCount   = (uint32_t) instance_extensions.Size;
+            instance_create_info.ppEnabledExtensionNames = instance_extensions.Data;
+            err = vkCreateInstance(&instance_create_info, backend_data->m_allocator,
                                    &backend_data->m_instance);
             bResult &= rocprofvis_imgui_backend_vk_success(err);
             if(bResult)
@@ -237,18 +237,18 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
                                 device_extensions.push_back("VK_KHR_swapchain");
 
                                 // Enumerate physical m_device extension
-                                uint32_t                        properties_count;
-                                ImVector<VkExtensionProperties> properties;
+                                uint32_t                        device_properties_count;
+                                ImVector<VkExtensionProperties> device_properties;
                                 vkEnumerateDeviceExtensionProperties(
                                     backend_data->m_physical_device, nullptr,
-                                    &properties_count, nullptr);
-                                properties.resize(properties_count);
+                                    &device_properties_count, nullptr);
+                                device_properties.resize(device_properties_count);
                                 vkEnumerateDeviceExtensionProperties(
                                     backend_data->m_physical_device, nullptr,
-                                    &properties_count, properties.Data);
+                                    &device_properties_count, device_properties.Data);
 #ifdef VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
                                 if(rocprofvis_imgui_backend_vk_has_extension(
-                                       properties,
+                                       device_properties,
                                        VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME))
                                     device_extensions.push_back(
                                         VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
@@ -262,17 +262,17 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
                                     backend_data->m_queue_family;
                                 queue_info[0].queueCount       = 1;
                                 queue_info[0].pQueuePriorities = queue_priority;
-                                VkDeviceCreateInfo create_info = {};
-                                create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-                                create_info.queueCreateInfoCount =
+                                VkDeviceCreateInfo device_create_info = {};
+                                device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+                                device_create_info.queueCreateInfoCount =
                                     sizeof(queue_info) / sizeof(queue_info[0]);
-                                create_info.pQueueCreateInfos = queue_info;
-                                create_info.enabledExtensionCount =
+                                device_create_info.pQueueCreateInfos = queue_info;
+                                device_create_info.enabledExtensionCount =
                                     (uint32_t) device_extensions.Size;
-                                create_info.ppEnabledExtensionNames =
+                                device_create_info.ppEnabledExtensionNames =
                                     device_extensions.Data;
                                 err = vkCreateDevice(
-                                    backend_data->m_physical_device, &create_info,
+                                    backend_data->m_physical_device, &device_create_info,
                                     backend_data->m_allocator, &backend_data->m_device);
                                 bResult &= rocprofvis_imgui_backend_vk_success(err);
                             }
@@ -656,6 +656,7 @@ rocprofvis_imgui_backend_vk_destroy(rocprofvis_imgui_backend_t* backend)
 bool
 rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* window)
 {
+    (void) window;
     bool bOk = false;
     if(backend)
     {

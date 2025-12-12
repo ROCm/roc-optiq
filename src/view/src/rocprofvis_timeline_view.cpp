@@ -150,21 +150,22 @@ void
 TimelineView::RenderInteractiveUI()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                    ImGuiWindowFlags_NoScrollWithMouse |
+                                    ImGuiWindowFlags_NoScrollbar |
                                     ImGuiWindowFlags_NoInputs;
 
-    ImGui::SetNextWindowSize(ImVec2(m_graph_size.x, m_graph_size.y - m_ruler_height -
-                                                        m_artificial_scrollbar_height),
-                             ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    ImGui::BeginChild("UI Interactive Overlay", ImVec2(m_graph_size.x, m_graph_size.y),
-                      false, window_flags);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
+    ImGui::BeginChild(
+        "UI Interactive Overlay",
+        ImVec2(m_graph_size.x - (m_track_height_sum > m_graph_size.y
+                                     ? ImGui::GetStyle().ScrollbarSize
+                                     : 0.0f),
+               m_graph_size.y - m_ruler_height - m_artificial_scrollbar_height),
+        false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
     ImGui::BeginChild("UI Interactive Content",
-                      ImVec2(m_graph_size.x, m_track_height_sum), false,
-                      window_flags | ImGuiWindowFlags_NoScrollbar);
+                      ImVec2(m_graph_size.x, m_track_height_sum), false, window_flags);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
@@ -995,7 +996,8 @@ TimelineView::RenderGraphView()
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
                 ImGui::PushID(i);
                 if(ImGui::BeginChild("", ImVec2(0, track_height), false,
-                                     window_flags | ImGuiWindowFlags_NoScrollbar))
+                                     window_flags | ImGuiWindowFlags_NoScrollbar |
+                                         ImGuiWindowFlags_NoMouseInputs))
                 {
                     // call update function (TODO: move this to timeline's update
                     // function?)
@@ -1447,9 +1449,7 @@ TimelineView::RenderHistogram()
                            vmax_label.c_str());
     }
 
-    m_stop_user_interaction |= !ImGui::IsWindowHovered(
-        ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
-    if(!m_resize_activity && !m_stop_user_interaction)
+    if(!m_resize_activity && !m_stop_user_interaction && ImGui::IsWindowHovered())
     {
         HandleHistogramTouch();
     }
@@ -1503,7 +1503,7 @@ TimelineView::RenderTraceView()
     m_pixels_per_ns = (m_graph_size.x) / (m_v_max_x - m_v_min_x);
 
     m_stop_user_interaction |= !ImGui::IsWindowHovered(
-        ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
+        ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
 
     RenderGrid();
 

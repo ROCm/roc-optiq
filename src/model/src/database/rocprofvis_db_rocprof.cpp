@@ -871,12 +871,14 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                             {
                                 query = "INSERT INTO ";
                                 query += table.first;
-                                query += " SELECT * FROM oldDb.";
+                                query += " SELECT S.* FROM oldDb.";
                                 query += table.first;
-                                query += " WHERE timestamp < ";
+                                query += " S LEFT JOIN rocpd_region R ON  S.event_id = R.event_id AND S.guid = R.guid ";
+                                query += " WHERE (timestamp < ";
                                 query += std::to_string(end);
                                 query += " AND timestamp > ";
                                 query += std::to_string(start);
+                                query += ") OR R.start == S.timestamp";
                                 query += ";";
                             }
                             else

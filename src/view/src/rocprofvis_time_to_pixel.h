@@ -39,8 +39,6 @@ public:
     double PixelToTime(float x_position);
     double NormalizeTime(double time_ns);
     ImVec2 GetGraphSize() const;
-    
-
 private:
     double m_min_x_ns;             // This value is the min value globally across data.
     double m_max_x_ns;             // This value is the max value globally across data.

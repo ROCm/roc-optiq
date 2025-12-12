@@ -57,7 +57,7 @@ TimePixelTransform::PixelToTime(float x_position)
 {
     /*
     This function gets raw time (in ns) from a pixel position in the graph area. It is not
-    accuret to the data and is in screen ns.
+    accurate to the data and is in screen ns.
 
     IMPORTANT: x_position must account for any offsets such as sidebar width.
 
@@ -192,7 +192,7 @@ ImVec2
 TimePixelTransform::GetGraphSize() const
 {
     return ImVec2(m_graph_size_x, m_graph_size_y);
-}       
+}
 
 double
 TimePixelTransform::GetMinX() const

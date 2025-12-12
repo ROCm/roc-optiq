@@ -102,12 +102,13 @@ WithPadding(float left, float right, float top, float bottom,
 }
 
 bool
-CopyableTextUnformatted(const char* text, std::string unique_id, bool one_click_copy,
+CopyableTextUnformatted(const char* text, std::string_view unique_id,
+                        std::string_view notification, bool one_click_copy,
     bool context_menu)
 {
     bool clicked = false;
     if(!unique_id.empty())
-        ImGui::PushID(unique_id.c_str());
+        ImGui::PushID(unique_id.data());
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
@@ -120,8 +121,12 @@ CopyableTextUnformatted(const char* text, std::string unique_id, bool one_click_
         if (one_click_copy)
         {
             ImGui::SetClipboardText(text);
-            NotificationManager::GetInstance().Show("Cell data was copied",
-                                                    NotificationLevel::Info);
+            if(!notification.empty())
+            {
+                NotificationManager::GetInstance().Show(notification.data(),
+                                                        NotificationLevel::Info);
+            }
+            
         }
     }
     
@@ -132,8 +137,11 @@ CopyableTextUnformatted(const char* text, std::string unique_id, bool one_click_
             if(ImGui::MenuItem("Copy Cell Data"))
             {
                 ImGui::SetClipboardText(text);
-                NotificationManager::GetInstance().Show("Cell data was copied",
-                                                        NotificationLevel::Info);
+                if(!notification.empty())
+                {
+                    NotificationManager::GetInstance().Show(notification.data(),
+                                                            NotificationLevel::Info);
+                }
             }
             ImGui::EndPopup();
         }

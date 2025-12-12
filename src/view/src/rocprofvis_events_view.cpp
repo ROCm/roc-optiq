@@ -105,11 +105,13 @@ EventsView::RenderBasicData(const event_info_t* event_data)
 
     ImGui::TextUnformatted("ID");
     ImGui::SameLine(160);
-    CopyableTextUnformatted(std::to_string(info.m_id).c_str(), "ID", true, true);
+    CopyableTextUnformatted(std::to_string(info.m_id).c_str(), "ID",
+                            COPY_DATA_NOTIFICATION, true, true);
 
     ImGui::TextUnformatted("Name");
     ImGui::SameLine(160);
-    CopyableTextUnformatted(info.m_name.c_str(), "Name", true, true);
+    CopyableTextUnformatted(info.m_name.c_str(), "Name", COPY_DATA_NOTIFICATION, true,
+                            true);
 
     double      trace_start_time = m_data_provider.GetStartTime();
     const auto& time_format      = m_settings.GetUserSettings().unit_settings.time_format;
@@ -118,13 +120,14 @@ EventsView::RenderBasicData(const event_info_t* event_data)
     ImGui::SameLine(160);
     std::string label = nanosecond_to_formatted_str(info.m_start_ts - trace_start_time,
                                                     time_format, true);
-    CopyableTextUnformatted(label.c_str(), "Start_time", true, true);
+    CopyableTextUnformatted(label.c_str(), "Start_time", COPY_DATA_NOTIFICATION, true,
+                            true);
 
 
     ImGui::TextUnformatted("Duration");
     ImGui::SameLine(160);
     label = nanosecond_to_formatted_str(info.m_duration, time_format, true);
-    CopyableTextUnformatted(label.c_str(), "Duration", true, true);
+    CopyableTextUnformatted(label.c_str(), "Duration", COPY_DATA_NOTIFICATION, true, true);
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     ImGui::TextUnformatted("Level");
@@ -168,7 +171,8 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     CopyableTextUnformatted(event_data->ext_info[i].name.c_str(),
-                                            std::to_string(i), true,
+                                            std::to_string(i),
+                                            COPY_DATA_NOTIFICATION, true,
                                             true);
                     ImGui::TableSetColumnIndex(1);
 
@@ -183,13 +187,15 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
                                                         event_data->ext_info[i].value,
                                                         offset_ns, time_format, true)
                                                         .c_str(),
-                                                    std::to_string(i), true, true);
+                                                    std::to_string(i),
+                                                    COPY_DATA_NOTIFICATION, true, true);
                             offset_ns = 0;
                             break;
                         }
                         default:
                             CopyableTextUnformatted(event_data->ext_info[i].value.c_str(),
-                                                    std::to_string(i), true, true);
+                                                    std::to_string(i),
+                                                    COPY_DATA_NOTIFICATION, true, true);
                             break;
                     }
                 }
@@ -243,31 +249,36 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                         ImGui::TableSetColumnIndex(0);
                         CopyableTextUnformatted(
                             std::to_string(event_data->flow_info[i].id).c_str(),
-                            "##id_" + std::to_string(i), true, true);
+                            "##id_" + std::to_string(i), COPY_DATA_NOTIFICATION, true,
+                            true);
                         ImGui::TableSetColumnIndex(1);
                         CopyableTextUnformatted(
                             event_data->flow_info[i].name.c_str(),
-                            "##name_" + std::to_string(i), true, true);
+                                                "##name_" + std::to_string(i),
+                                                COPY_DATA_NOTIFICATION, true, true);
                         ImGui::TableSetColumnIndex(2);
                         std::string timestamp_label = nanosecond_to_formatted_str(
                             event_data->flow_info[i].start_timestamp - trace_start_time,
                             time_format, true);
                         CopyableTextUnformatted(timestamp_label.c_str(),
-                                                "##start_timestamp_" + std::to_string(i), true,
+                                                "##start_timestamp_" + std::to_string(i),
+                                                COPY_DATA_NOTIFICATION, true,
                                                 true);
                         ImGui::TableSetColumnIndex(3);
                         CopyableTextUnformatted(
                             std::to_string(event_data->flow_info[i].track_id).c_str(),
-                                                "##track_id_" + std::to_string(i),
-                                                true, true);
+                            "##track_id_" + std::to_string(i),
+                            COPY_DATA_NOTIFICATION, true, true);
                         ImGui::TableSetColumnIndex(4);
                         CopyableTextUnformatted(
                             std::to_string(event_data->flow_info[i].level).c_str(),
-                            "##level_" + std::to_string(i), true, true);
+                            "##level_" + std::to_string(i), COPY_DATA_NOTIFICATION, true,
+                            true);
                         ImGui::TableSetColumnIndex(5);
                         CopyableTextUnformatted(
                             std::to_string(event_data->flow_info[i].direction).c_str(),
-                            "##direction_" + std::to_string(i), true, true);
+                            "##direction_" + std::to_string(i),
+                            COPY_DATA_NOTIFICATION, true, true);
                     }
                 }
                 ImGui::EndTable();
@@ -312,15 +323,18 @@ EventsView::RenderCallStackData(const event_info_t* event_data)
                         ImGui::TableSetColumnIndex(0);
                         CopyableTextUnformatted(
                             event_data->call_stack_info[i].line.c_str(),
-                            "##line_" + std::to_string(i), true, true);
+                            "##line_" + std::to_string(i), COPY_DATA_NOTIFICATION, true,
+                            true);
                         ImGui::TableSetColumnIndex(1);
                         CopyableTextUnformatted(
                             event_data->call_stack_info[i].function.c_str(),
-                            "##function_" + std::to_string(i), true, true);
+                            "##function_" + std::to_string(i),
+                            COPY_DATA_NOTIFICATION, true, true);
                         ImGui::TableSetColumnIndex(2);
                         CopyableTextUnformatted(
                             event_data->call_stack_info[i].arguments.c_str(),
-                            "##arguments_" + std::to_string(i), true, true);
+                            "##arguments_" + std::to_string(i),
+                            COPY_DATA_NOTIFICATION, true, true);
                     }
                 }
                 ImGui::EndTable();

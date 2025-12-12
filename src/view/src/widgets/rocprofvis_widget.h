@@ -88,8 +88,12 @@ WithPadding(float left, float right, float top, float bottom,
 // the caller must provide a unique, stable identifier to avoid ID collisions.
 // For items created in loops, the loop index or iterator is typically sufficient.
 bool
-CopyableTextUnformatted(const char* text, std::string unique_id = "",
+CopyableTextUnformatted(const char* text, std::string_view unique_id = "",
+                        std::string_view notification = "",
                         bool one_click_copy = false, bool context_menu = false);
+
+
+inline constexpr std::string_view COPY_DATA_NOTIFICATION = "Cell data was copied";
 
 }  // namespace View
 }  // namespace RocProfVis

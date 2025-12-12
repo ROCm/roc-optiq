@@ -37,7 +37,7 @@ ConfirmationDialog::Render()
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         
-        ImGui::SetNextWindowSizeConstraints(ImVec2(320, 0), ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::SetNextWindowSize(ImVec2(480, 0));
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 16));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 12));
@@ -144,14 +144,12 @@ MessageDialog::Render()
         SettingsManager& settings = SettingsManager::GetInstance();
         ImGuiStyle& style = ImGui::GetStyle();
         
-        // Always center this window - fixed position, non-moveable
+        // Always center this window (FIXED)
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        
-        // Set minimum width for better appearance
-        ImGui::SetNextWindowSizeConstraints(ImVec2(320, 0), ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::SetNextWindowSize(ImVec2(480, 0));
 
-        // Simplified styling - reduced padding and spacing
+ 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 16));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 12));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
@@ -162,14 +160,12 @@ MessageDialog::Render()
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | 
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove))
         {
-            // Title - simplified, no font scaling
             ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
             ImGui::TextUnformatted(m_title.c_str());
             ImGui::PopStyleColor();
             
             ImGui::Spacing();
 
-            // Message text
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
             ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
             ImGui::TextUnformatted(m_message.c_str());
@@ -179,7 +175,6 @@ MessageDialog::Render()
             ImGui::Spacing();
             ImGui::Spacing();
 
-            // Button area - centered
             float button_width = 100.0f;
             float available_width = ImGui::GetContentRegionAvail().x;
             float button_start_x = (available_width - button_width) * 0.5f;

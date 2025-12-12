@@ -67,10 +67,8 @@ SettingsPanel::Render()
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         
-        // Set size constraints
         ImGui::SetNextWindowSizeConstraints(ImVec2(720, 500), ImVec2(FLT_MAX, FLT_MAX));
 
-        // Modern styling with improved spacing
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 16));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 12));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
@@ -382,7 +380,6 @@ SettingsPanel::ResetButton()
     bool clicked = false;
     ImGuiStyle& style = ImGui::GetStyle();
     
-    // Simplified reset button styling
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_settings.GetColor(Colors::kButtonHovered));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, m_settings.GetColor(Colors::kButtonActive));

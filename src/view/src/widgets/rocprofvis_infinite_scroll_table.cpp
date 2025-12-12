@@ -470,6 +470,7 @@ InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int colum
 {
     if(CopyableTextUnformatted(cell_text->c_str(),
                                std::to_string(row) + ":" + std::to_string(column),
+                               COPY_DATA_NOTIFICATION,
                                true, false))
     {
         m_selected_row    = row;
@@ -507,7 +508,7 @@ InfiniteScrollTable::RenderFirstColumnCell(const std::string* cell_text, int row
         m_selected_row = row;
         RowSelected(ImGuiMouseButton_Left);
         ImGui::SetClipboardText(cell_text->c_str());
-        NotificationManager::GetInstance().Show("Cell value was copied",
+        NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
                                                 NotificationLevel::Info);
     }
     if(row_hovered ||

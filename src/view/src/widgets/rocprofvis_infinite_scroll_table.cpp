@@ -25,7 +25,8 @@ constexpr const char* DURATION_COLUMN_NAME           = "duration";
 constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
-                                         const std::string& no_data_text)
+                                         const std::string& no_data_text,
+                                         bool               copy_by_click)
 : m_data_provider(dp)
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
@@ -44,6 +45,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_pending_filter_options({"", "", "", "" })
 , m_data_changed(true)
 , m_filter_requested(false)
+, m_copy_by_click(copy_by_click)
 , m_selected_row(-1)
 , m_selected_column(-1)
 , m_hovered_row(-1)
@@ -306,7 +308,7 @@ InfiniteScrollTable::Render()
                         (row_n == m_hovered_row)
                             ? m_settings.GetColor(Colors::kAccentRedHover)
                             : 0);
-                     
+
                     // Render actual cells after the row hit-box
                     int column = 0;
                     for(const auto& col : table_data[row_n])
@@ -470,8 +472,7 @@ InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int colum
 {
     if(CopyableTextUnformatted(cell_text->c_str(),
                                std::to_string(row) + ":" + std::to_string(column),
-                               COPY_DATA_NOTIFICATION,
-                               true, false))
+                               COPY_DATA_NOTIFICATION, m_copy_by_click, false))
     {
         m_selected_row    = row;
         m_selected_column = column;

@@ -25,7 +25,7 @@ constexpr const char* NAME_COLUMN_NAME      = "name";
 MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
                                  std::shared_ptr<TimelineSelection> timeline_selection,
                                  TableType                          table_type)
-: InfiniteScrollTable(dp, table_type, NO_DATA_TEXT)
+: InfiniteScrollTable(dp, table_type, NO_DATA_TEXT, true)
 , m_timeline_selection(timeline_selection)
 , m_defer_track_selection_changed(false)
 , m_open_context_menu(false)

@@ -1443,8 +1443,7 @@ TimelineView::RenderTraceView()
 
     m_tpt->SetGraphSizeX(subcomponent_size_main.x - m_sidebar_size,
                          subcomponent_size_main.y);
-    m_tpt->ComputePixelMapping();
-
+ 
     m_stop_user_interaction |= !ImGui::IsWindowHovered(
         ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
 
@@ -1514,7 +1513,7 @@ TimelineView::RenderTraceView()
     ImGui::PopStyleVar(2);
 
     m_stop_user_interaction = false;
-
+    m_tpt->ComputePixelMapping();
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);

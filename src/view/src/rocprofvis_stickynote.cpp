@@ -101,9 +101,9 @@ StickyNote::SetTitle(std::string title)
     m_title = title;
 }
 void
-StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::shared_ptr<TimePixelTransform> conversion_manager)
+StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::shared_ptr<TimePixelTransform> tpt)
 {
-    if(!conversion_manager)
+    if(!tpt)
     {
         spdlog::error("StickyNote::Render: conversion_manager shared_ptr is null, cannot render");
         return;
@@ -118,7 +118,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::sh
     const float header_height = 32.0f;
     const float edit_btn_size = 30.0f;
 
-    float  x           = conversion_manager->TimeToPixel(m_time_ns);
+    float  x           = tpt->TimeToPixel(m_time_ns);
     float  y           = m_y_offset;
     ImVec2 sticky_pos  = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_size = m_size;

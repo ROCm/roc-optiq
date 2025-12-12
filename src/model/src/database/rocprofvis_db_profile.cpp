@@ -1173,7 +1173,6 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
                 }
             }
 
-
             if (result == kRocProfVisDmResultSuccess)
             {
 

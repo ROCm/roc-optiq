@@ -20,6 +20,7 @@
 // Needed for CLI interactions that involve print.
 #ifdef _WIN32
 #    include <windows.h>
+     #include <conio.h>
 #endif
 
 // globals shared with callbacks
@@ -125,9 +126,8 @@ print_version()
         std::cout << "." << ROCPROFVIS_VERSION_BUILD;
     }
     std::cout << std::endl;
-
 #ifdef _WIN32
-    system("pause");  // needed or cli window closes immedietly
+    _getch();  // Replaces system("pause") as that is unsafe.
 #endif
 }
 
@@ -168,7 +168,7 @@ parse_command_line_args(int argc, char** argv)
                 std::cerr << "The file was not specified. Please input file name."
                           << std::endl;
 #ifdef _WIN32
-                system("pause");  // needed or cli window closes immedietly
+                _getch();  // Replaces system("pause") as that is unsafe.
 #endif
                 exit(1);
             }

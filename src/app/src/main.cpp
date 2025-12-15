@@ -1,15 +1,15 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#include "glfw_util.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_imgui_backend.h"
-#include "glfw_util.h"
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
-#include "rocprofvis_view_module.h"
 #include "rocprofvis_version.h"
+#include "rocprofvis_view_module.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -17,18 +17,18 @@
 #include <stdlib.h>
 #include <string>
 
-//Needed for CLI interactions that involve print. 
+// Needed for CLI interactions that involve print.
 #ifdef _WIN32
 #    include <windows.h>
 #endif
 
 // globals shared with callbacks
-static std::vector<std::string> g_dropped_file_paths;
-static bool g_file_was_dropped = false;
+static std::vector<std::string>         g_dropped_file_paths;
+static bool                             g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
 static std::string m_user_file_path_cli;
-static bool m_did_user_add_file = false;
+static bool        m_did_user_add_file = false;
 
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
@@ -36,7 +36,7 @@ static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
 {
-    (void) window; // Unused parameter
+    (void) window;  // Unused parameter
     g_dropped_file_paths.clear();
     for(int i = 0; i < count; i++)
     {
@@ -57,18 +57,23 @@ content_scale_callback(GLFWwindow* window, float xscale, float yscale)
 static void
 close_callback(GLFWwindow* window)
 {
-    g_render_options = rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit;
+    g_render_options =
+        rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit;
     glfwSetWindowShouldClose(window, GLFW_FALSE);
 }
 
 static void
 app_notification_callback(GLFWwindow* window, int notification)
 {
-    if(notification == static_cast<int>(rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App))
+    if(notification ==
+       static_cast<int>(
+           rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App))
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
-    else if(notification == static_cast<int>(rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen))
+    else if(notification ==
+            static_cast<int>(rocprofvis_view_notification_t::
+                                 kRocProfVisViewNotification_Toggle_Fullscreen))
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
@@ -90,11 +95,11 @@ static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     // Unused parameters
-    (void)scancode;
-    (void)mods;
+    (void) scancode;
+    (void) mods;
 
     // Toggle fullscreen with F11
-    if (key == GLFW_KEY_F11 && action == GLFW_PRESS)
+    if(key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
@@ -103,25 +108,27 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 static void
 print_version()
 {
- #ifdef _WIN32
+#ifdef _WIN32
     if(AllocConsole())
     {
-        // Following is needed for windows or print will not show. 
+        // Following is needed for windows or print will not show.
         FILE* pCout;
         freopen_s(&pCout, "CONOUT$", "w", stdout);
         freopen_s(&pCout, "CONOUT$", "w", stderr);
     }
 #endif
 
-    std::cout << "ROCm(TM) Optiq Beta " 
-              << ROCPROFVIS_VERSION_MAJOR << "." 
-              << ROCPROFVIS_VERSION_MINOR << "." 
-              << ROCPROFVIS_VERSION_PATCH;
+    std::cout << "ROCm(TM) Optiq Beta " << ROCPROFVIS_VERSION_MAJOR << "."
+              << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH;
     if(ROCPROFVIS_VERSION_BUILD > 0)
     {
         std::cout << "." << ROCPROFVIS_VERSION_BUILD;
     }
     std::cout << std::endl;
+
+#ifdef _WIN32
+    system("pause");  // needed or cli window closes immedietly
+#endif
 }
 
 static void
@@ -130,27 +137,25 @@ parse_command_line_args(int argc, char** argv)
     for(int i = 1; i < argc; i++)
     {
         std::string arg = argv[i];
-        
+
         // Get verison command line argument
         if(arg == "-v" || arg == "--version")
         {
             print_version();
             exit(0);
         }
-        
+
         // Get file command line argument
         if(arg == "-f" || arg == "--file")
         {
             if(i + 1 < argc)
             {
                 m_user_file_path_cli = argv[i + 1];
-                m_did_user_add_file = true;
+                m_did_user_add_file  = true;
                 i++;
             }
             else
             {
-           
-
 #ifdef _WIN32
                 if(AllocConsole())
                 {
@@ -160,8 +165,11 @@ parse_command_line_args(int argc, char** argv)
                     freopen_s(&pCout, "CONOUT$", "w", stderr);
                 }
 #endif
-                std::cout << "The file was not specified. Please input file name."
+                std::cerr << "The file was not specified. Please input file name."
                           << std::endl;
+#ifdef _WIN32
+                system("pause");  // needed or cli window closes immedietly
+#endif
                 exit(1);
             }
         }
@@ -240,7 +248,7 @@ main(int argc, char** argv)
 
                 if(m_did_user_add_file)
                 {
-                    //If the user inputted a filepath open it here. 
+                    // If the user inputted a filepath open it here.
                     rocprofvis_view_open_files({ m_user_file_path_cli });
                     m_did_user_add_file = false;
                 }

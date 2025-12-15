@@ -134,7 +134,7 @@ CopyableTextUnformatted(const char* text, std::string_view unique_id,
     {
         if(ImGui::BeginPopupContextItem())
         {
-            if(ImGui::MenuItem("Copy Cell Data"))
+            if(ImGui::MenuItem("Copy"))
             {
                 ImGui::SetClipboardText(text);
                 if(!notification.empty())

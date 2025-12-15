@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "widgets/rocprofvis_dialog.h"
 #include "rocprofvis_events.h"
+#include "widgets/rocprofvis_dialog.h"
 
 #include "imgui.h"
 #include <functional>
@@ -34,27 +34,26 @@ protected:
 class LayoutItem
 {
 public:
-    using Ptr = std::shared_ptr<LayoutItem>;
+    using Ptr    = std::shared_ptr<LayoutItem>;
     LayoutItem() = default;
     LayoutItem(float w, float h)
     : m_width(w)
-    , m_height(h)
-    {};
+    , m_height(h) {};
 
     static Ptr CreateFromWidget(std::shared_ptr<RocWidget> widget, float w = 0,
                                 float h = 0);
 
-    std::shared_ptr<RocWidget> m_item = nullptr;  // Widget that this item will render
-    float                      m_height = 0;
-    float                      m_width = 0;
+    std::shared_ptr<RocWidget> m_item    = nullptr;  // Widget that this item will render
+    float                      m_height  = 0;
+    float                      m_width   = 0;
     bool                       m_visible = true;
 
     int32_t m_bg_color = 0;
 
-    ImVec2 m_item_spacing = ImVec2(0, 0);
+    ImVec2 m_item_spacing   = ImVec2(0, 0);
     ImVec2 m_window_padding = ImVec2(0, 0);
 
-    ImGuiChildFlags  m_child_flags = ImGuiChildFlags_Borders;
+    ImGuiChildFlags  m_child_flags  = ImGuiChildFlags_Borders;
     ImGuiWindowFlags m_window_flags = ImGuiWindowFlags_None;
 };
 
@@ -100,12 +99,11 @@ public:
     , m_resize_grip_size(grip_size)
     , m_first_min_size(first_min_size)
     , m_second_min_size(second_min_size)
-    , m_split_ratio(split_ratio)
-    {};
+    , m_split_ratio(split_ratio) {};
     virtual ~SplitContainerBase() = default;
     virtual void Render() override;
 
-    void SetSplit(float ratio) { m_split_ratio = ratio; };
+    void  SetSplit(float ratio) { m_split_ratio = ratio; };
     float GetMinSize();
 
 protected:
@@ -113,8 +111,8 @@ protected:
     virtual void   SetCursor()                                = 0;
     virtual ImVec2 GetFirstChildSize(float available_width)   = 0;
     virtual ImVec2 GetSecondChildSize()                       = 0;
-    virtual void   UpdateSplitRatio(const ImVec2& mouse_pos,
-              const ImVec2& window_pos, float available_size) = 0;
+    virtual void   UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+                                    float available_size)     = 0;
     virtual ImVec2 GetSplitterSize(const ImVec2& total_size)  = 0;
     virtual void   AddSameLine()                              = 0;
     virtual float  GetItemSize()                              = 0;
@@ -153,14 +151,14 @@ public:
     float GetOptimalHeight() const;
 
 private:
-    float GetAvailableSize(const ImVec2& total_size) override;
-    void SetCursor() override;
+    float  GetAvailableSize(const ImVec2& total_size) override;
+    void   SetCursor() override;
     ImVec2 GetFirstChildSize(float available_width) override;
     ImVec2 GetSecondChildSize() override;
-    void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
-                          float available_width) override;
+    void   UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+                            float available_width) override;
     ImVec2 GetSplitterSize(const ImVec2& total_size) override;
-    void AddSameLine() override;
+    void   AddSameLine() override;
     float  GetItemSize() override;
 };
 
@@ -172,20 +170,20 @@ public:
     void SetTop(LayoutItem::Ptr top);
     void SetBottom(LayoutItem::Ptr bottom);
 
-    void SetMinTopHeight(float height);
-    void SetMinBottomHeight(float height);
+    void  SetMinTopHeight(float height);
+    void  SetMinBottomHeight(float height);
     float GetOptimalWidth() const;
 
 private:
-    float GetAvailableSize(const ImVec2& total_size) override;
-    void  SetCursor() override;
+    float  GetAvailableSize(const ImVec2& total_size) override;
+    void   SetCursor() override;
     ImVec2 GetFirstChildSize(float available_width) override;
     ImVec2 GetSecondChildSize() override;
-    void UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
-                          float available_height) override;
+    void   UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
+                            float available_height) override;
 
     ImVec2 GetSplitterSize(const ImVec2& total_size) override;
-    void AddSameLine() override {};  // No same line for vertical split
+    void   AddSameLine() override {};  // No same line for vertical split
     float  GetItemSize() override;
 };
 
@@ -234,7 +232,7 @@ private:
     void                 SendEvent(RocEvents event, const std::string& tab_id);
     std::vector<TabItem> m_tabs;
     int                  m_active_tab_index;  // index of the currently active tab
-    int  m_set_active_tab_index;      // used to programmatically set the active tab
+    int  m_set_active_tab_index;  // used to programmatically set the active tab
     int  m_index_to_remove;
     int  m_pending_to_remove;
     bool m_allow_tool_tips;           // whether to show tooltips for tabs
@@ -253,34 +251,56 @@ void
 WithPadding(float left, float right, float top, float bottom,
             const std::function<void()>& content);
 
-
 class EditableTextField
 {
 public:
     EditableTextField(std::string id);
     ~EditableTextField() = default;
-    void        SetText(std::string text, std::string tooltip = "",
-                        std::string reset_tooltip = "");
-    void        Render();
-    float       ButtonSize() const;
-    void        RevertToDefault();
-    void        ShowResetButton(bool is_button_shown);
-    void        SetOnTextCommit(const std::function<void(const std::string&)>& cb);
+    void  SetText(std::string text, std::string tooltip = "",
+                  std::string reset_tooltip = "");
+    void  Render();
+    float ButtonSize() const;
+    void  RevertToDefault();
+    void  ShowResetButton(bool is_button_shown);
+    void  SetOnTextCommit(const std::function<void(const std::string&)>& cb);
 
 private:
     void DrawPlainText();
     void DrawEditingText();
     void AcceptEdit();
 
-    bool        m_editing_mode = false;
-    bool        m_request_keyboard_focus = false;
-    bool        m_show_reset_button = false;
-    std::string m_id;
-    std::string m_text;
-    std::string m_reset_tooltip;
-    std::string m_tooltip_text;    
-    std::string m_edit_buf;
+    bool                                    m_editing_mode           = false;
+    bool                                    m_request_keyboard_focus = false;
+    bool                                    m_show_reset_button      = false;
+    std::string                             m_id;
+    std::string                             m_text;
+    std::string                             m_reset_tooltip;
+    std::string                             m_tooltip_text;
+    std::string                             m_edit_buf;
     std::function<void(const std::string&)> m_on_text_commit;
+};
+
+class PopUpStyle
+{
+public:
+    PopUpStyle();
+    ~PopUpStyle();
+    
+    // Push all popup style variables (RAII - automatically pops on destruction)
+    void PushPopupStyles();
+    
+    // Center the popup window (call before BeginPopupModal)
+    void CenterPopup();
+    
+    // Push titlebar colors using grey from settings
+    void PushTitlebarColors();
+    
+    // Manually pop styles if needed before destruction
+    void PopStyles();
+
+private:
+    int m_style_var_count = 0;
+    int m_color_count = 0;
 };
 
 }  // namespace View

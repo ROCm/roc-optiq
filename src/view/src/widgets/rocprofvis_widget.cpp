@@ -168,7 +168,8 @@ VFixedContainer::Render()
 }
 
 //------------------------------------------------------------------
-void SplitContainerBase::Render()
+void
+SplitContainerBase::Render()
 {
     ImVec2 total_size = ImGui::GetContentRegionAvail();
     ImVec2 window_pos = ImGui::GetWindowPos();
@@ -181,11 +182,9 @@ void SplitContainerBase::Render()
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_first->m_item_spacing);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_first->m_window_padding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, m_first->m_bg_color);
-        ImGui::BeginChild(m_first_name.c_str(),
-                          GetFirstChildSize(available_size),
+        ImGui::BeginChild(m_first_name.c_str(), GetFirstChildSize(available_size),
                           m_first->m_child_flags, m_first->m_window_flags);
-        if(m_first->m_item)
-            m_first->m_item->Render();
+        if(m_first->m_item) m_first->m_item->Render();
         ImGui::EndChild();
         m_optimal_size = GetItemSize();
         ImGui::PopStyleColor();
@@ -228,8 +227,7 @@ void SplitContainerBase::Render()
         ImGui::PushStyleColor(ImGuiCol_ChildBg, m_second->m_bg_color);
         ImGui::BeginChild(m_second_name.c_str(), GetSecondChildSize(),
                           m_second->m_child_flags, m_second->m_window_flags);
-        if(m_second->m_item)
-            m_second->m_item->Render();
+        if(m_second->m_item) m_second->m_item->Render();
         ImGui::EndChild();
         m_optimal_size = std::max(m_optimal_size, GetItemSize());
         ImGui::PopStyleColor();
@@ -323,20 +321,20 @@ ImVec2
 HSplitContainer::GetFirstChildSize(float available_width)
 {
     float left_col_width = 0.0f;
-    if (m_first && m_first->m_visible)
+    if(m_first && m_first->m_visible)
     {
-        left_col_width = available_width * m_split_ratio;
+        left_col_width           = available_width * m_split_ratio;
         float max_left_col_width = (m_second && m_second->m_visible)
-            ? (available_width - m_second_min_size)
-            : available_width;
+                                       ? (available_width - m_second_min_size)
+                                       : available_width;
         if(m_first_min_size >= max_left_col_width)
         {
             left_col_width = m_first_min_size;
         }
         else
         {
-            left_col_width = std::clamp(left_col_width, m_first_min_size,
-                                        max_left_col_width);
+            left_col_width =
+                std::clamp(left_col_width, m_first_min_size, max_left_col_width);
         }
     }
     return ImVec2(left_col_width, 0);
@@ -350,7 +348,7 @@ HSplitContainer::GetSecondChildSize()
 
 void
 HSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
-                 float available_width)
+                                  float available_width)
 {
     float mouse_x   = mouse_pos.x - window_pos.x;
     float new_ratio = (mouse_x - (m_resize_grip_size / 2)) / available_width;
@@ -434,7 +432,7 @@ ImVec2
 VSplitContainer::GetFirstChildSize(float available_width)
 {
     float top_row_height = 0.0f;
-    if (m_second && m_second->m_visible)
+    if(m_second && m_second->m_visible)
     {
         float available_size = available_width;
         top_row_height       = available_size * m_split_ratio;
@@ -453,12 +451,13 @@ VSplitContainer::GetSecondChildSize()
 
 void
 VSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_pos,
-                 float available_height)
+                                  float available_height)
 {
     float mouse_y   = mouse_pos.y - window_pos.y;
     float new_ratio = (mouse_y - (m_resize_grip_size / 2)) / available_height;
     new_ratio       = std::clamp(new_ratio, m_first_min_size / available_height,
-                                 std::max(m_first_min_size / available_height, 1.0f - m_second_min_size / available_height));
+                                 std::max(m_first_min_size / available_height,
+                                          1.0f - m_second_min_size / available_height));
     m_split_ratio   = new_ratio;
 }
 
@@ -524,11 +523,11 @@ TabContainer::ShowCloseTabConfirm(int removing_tab_index)
     };
     auto cancel = [this]() { m_pending_to_remove = s_invalid_index; };
 
-    m_confirmation_dialog->Show("Confirm Closing tab",
-                                "Are you sure you want to close the tab: " +
-                                m_tabs[removing_tab_index].m_label +
-                                "? Any unsaved data will be lost.",
-                                confirm, cancel);
+    m_confirmation_dialog->Show(
+        "Confirm Closing Tab",
+        "Are you sure you want to close the tab: " + m_tabs[removing_tab_index].m_label +
+            "? Any unsaved data will be lost.",
+        confirm, cancel);
 }
 
 void
@@ -564,7 +563,7 @@ TabContainer::Render()
         {
             for(size_t i = 0; i < m_tabs.size(); ++i)
             {
-                const TabItem&     tab = m_tabs[i];
+                const TabItem&    tab = m_tabs[i];
                 ImGuiTabItemFlags flags =
                     (i == m_set_active_tab_index || i == m_pending_to_remove)
                         ? ImGuiTabItemFlags_SetSelected
@@ -609,9 +608,11 @@ TabContainer::Render()
 
                 if(p_open && !is_open)
                 {
-                    if(SettingsManager::GetInstance().GetUserSettings().dont_ask_before_tab_closing)
+                    if(SettingsManager::GetInstance()
+                           .GetUserSettings()
+                           .dont_ask_before_tab_closing)
                     {
-                        m_index_to_remove   = static_cast<int>(i);
+                        m_index_to_remove = static_cast<int>(i);
                     }
                     else
                     {
@@ -802,7 +803,7 @@ EditableTextField::RevertToDefault()
 {
     // FIXME: Assuming default is an empty string
     // Think about best way to handle revert button pressed
-    m_text   = "";
+    m_text = "";
     if(m_on_text_commit)
     {
         m_on_text_commit(m_text);
@@ -915,8 +916,7 @@ EditableTextField::DrawEditingText()
     {
         AcceptEdit();
     }
-    if(ImGui::IsMouseClicked(ImGuiMouseButton_Left)
-       && !ImGui::IsItemHovered())
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsItemHovered())
     {
         AcceptEdit();
     }
@@ -927,10 +927,11 @@ EditableTextField::DrawEditingText()
 }
 
 void
-EditableTextField::SetText(std::string text, std::string tooltip, std::string reset_tooltip)
+EditableTextField::SetText(std::string text, std::string tooltip,
+                           std::string reset_tooltip)
 {
-    m_text = std::move(text);
-    m_tooltip_text = std::move(tooltip);
+    m_text          = std::move(text);
+    m_tooltip_text  = std::move(tooltip);
     m_reset_tooltip = std::move(reset_tooltip);
 }
 
@@ -961,5 +962,63 @@ EditableTextField::SetOnTextCommit(const std::function<void(const std::string&)>
     m_on_text_commit = cb;
 }
 
-}  // namespace View
+//------------------------------------------------------------------
+PopUpStyle::PopUpStyle()
+: m_style_var_count(0)
+, m_color_count(0)
+{}
+
+PopUpStyle::~PopUpStyle() { PopStyles(); }
+
+void
+PopUpStyle::PushPopupStyles()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 16));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 12));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+
+    m_style_var_count = 6;
 }
+
+void
+PopUpStyle::CenterPopup()
+{
+    
+        ImVec2 center_pos = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    
+}
+
+void
+PopUpStyle::PushTitlebarColors()
+{
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    ImU32            grey_color = settings.GetColor(Colors::kBorderGray);
+
+    ImGui::PushStyleColor(ImGuiCol_TitleBg, grey_color);
+    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, grey_color);
+    ImGui::PushStyleColor(ImGuiCol_TitleBgCollapsed, grey_color);
+
+    m_color_count += 3;
+}
+
+void
+PopUpStyle::PopStyles()
+{
+    if(m_style_var_count > 0)
+    {
+        ImGui::PopStyleVar(m_style_var_count);
+        m_style_var_count = 0;
+    }
+    if(m_color_count > 0)
+    {
+        ImGui::PopStyleColor(m_color_count);
+        m_color_count = 0;
+    }
+}
+
+}  // namespace View
+}  // namespace RocProfVis

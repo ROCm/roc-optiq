@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "widgets/rocprofvis_widget.h"
 
 // Layout constants
 constexpr float kCategorywidth = 150.0f;
@@ -61,61 +62,30 @@ SettingsPanel::Render()
 
     if(ImGui::IsPopupOpen("Settings"))
     {
-        ImGuiStyle& style = ImGui::GetStyle();
-        
-        // Center and fix position - non-moveable
-        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-        ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        
-        ImGui::SetNextWindowSizeConstraints(ImVec2(720, 500), ImVec2(FLT_MAX, FLT_MAX));
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+        popup_style.CenterPopup();
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 16));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 12));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
-
-        if(ImGui::BeginPopupModal("Settings", nullptr, 
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize | 
-            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove))
+        if(ImGui::BeginPopupModal("Settings", nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize |
+                                      ImGuiWindowFlags_NoMove))
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
-
-            ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kLarge));
-            ImGui::TextUnformatted("Settings");
-            ImGui::PopStyleColor();
-            ImGui::PopFont();
-            
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
             ImGui::BeginChild("SettingsCategories",
                               ImVec2(kCategorywidth, kContentHeight),
                               ImGuiChildFlags_Borders);
-            
-            // Style category selectables
-            ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
-            ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kAccentRed));
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, m_settings.GetColor(Colors::kAccentRedHover));
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, m_settings.GetColor(Colors::kAccentRedActive));
-            
-            if(ImGui::Selectable("Display", m_category == Display, 0, ImVec2(0, 0)))
+            if(ImGui::Selectable("Display", m_category == Display))
             {
                 m_category = Display;
             }
-            if(ImGui::Selectable("Units", m_category == Units, 0, ImVec2(0, 0)))
+            if(ImGui::Selectable("Units", m_category == Units))
             {
                 m_category = Units;
             }
-            if(ImGui::Selectable("Other", m_category == Other, 0, ImVec2(0, 0)))
+            if(ImGui::Selectable("Other", m_category == Other))
             {
                 m_category = Other;
             }
-            
-            ImGui::PopStyleColor(3);
-            ImGui::PopStyleVar();
             ImGui::EndChild();
 
             ImGui::SameLine();
@@ -142,15 +112,11 @@ SettingsPanel::Render()
             }
             ImGui::EndChild();
 
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            // Bottom bar with Reset, Cancel, and OK buttons
-            float button_width = 100.0f;
-            float available_width = ImGui::GetContentRegionAvail().x;
-            
-            // Reset button (left side)
+            ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                                 ImGui::CalcTextSize("O").x -
+                                 2 * ImGui::GetStyle().FramePadding.x);
+            ImGui::SetCursorPosY(ImGui::GetCursorPos().y -
+                                 ImGui::GetFrameHeightWithSpacing());
             if(ResetButton())
             {
                 switch(m_category)
@@ -169,26 +135,11 @@ SettingsPanel::Render()
                 }
             }
 
-            float button_start_x = available_width - (button_width * 2 + style.ItemSpacing.x);
-            ImGui::SetCursorPosX(button_start_x);
-
-            if(ImGui::Button("Cancel", ImVec2(button_width, 0)))
-            {
-                auto temp_currentsettings = m_usersettings;
-                m_usersettings            = m_usersettings_initial;
-                m_settings.ApplyUserSettings(temp_currentsettings, false);
-                m_settings_changed = true;
-                m_should_open      = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::SameLine();
-
-            ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kAccentRed));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_settings.GetColor(Colors::kAccentRedHover));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, m_settings.GetColor(Colors::kAccentRedActive));
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255));
-            
+            // Bottom bar for Ok/Cancel
+            float button_width =
+                ImGui::CalcTextSize("Cancel").x + 2 * ImGui::GetStyle().FramePadding.x;
+            ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                                 ImGui::GetStyle().ItemSpacing.x - 2 * button_width);
             if(ImGui::Button("OK", ImVec2(button_width, 0)))
             {
                 m_usersettings.display_settings.dpi_based_scaling =
@@ -201,21 +152,28 @@ SettingsPanel::Render()
                 m_should_open        = false;
                 ImGui::CloseCurrentPopup();
             }
-            
-            ImGui::PopStyleColor(4);
-            ImGui::SetItemDefaultFocus();
-
+            ImGui::SameLine();
+            if(ImGui::Button("Cancel", ImVec2(button_width, 0)))
+            {
+                auto temp_currentsettings = m_usersettings;
+                m_usersettings            = m_usersettings_initial;
+                m_settings.ApplyUserSettings(temp_currentsettings, false);
+                m_settings_changed = true;
+                m_should_open      = false;
+                ImGui::CloseCurrentPopup();
+            }
             ImGui::EndPopup();
         }
-        ImGui::PopStyleVar(6);
 
         if(m_settings_changed)
         {
             m_settings.ApplyUserSettings(m_usersettings_previous, m_settings_confirmed);
             m_usersettings_previous = m_settings.GetUserSettings();
-            m_settings_changed   = false;
-            m_settings_confirmed = false;
+            m_settings_changed      = false;
+            m_settings_confirmed    = false;
         }
+        popup_style.PopStyles();
+
     }
 }
 
@@ -242,10 +200,8 @@ SettingsPanel::RenderDisplayOptions()
     }
 
     ImGui::Spacing();
-    ImGui::Spacing();
     ImGui::TextUnformatted("Fonts");
     ImGui::Separator();
-    ImGui::Spacing();
 
     // DPI-based scaling toggle
     ImGui::Checkbox("DPI-based Font Scaling", &m_font_settings.dpi_scaling);
@@ -253,8 +209,6 @@ SettingsPanel::RenderDisplayOptions()
     {
         ImGui::SetTooltip("Automatically scale font size based on display DPI.");
     }
-
-    ImGui::Spacing();
 
     // Font size section
     float button_width = ImGui::CalcTextSize("+").x + 2 * style.FramePadding.x;
@@ -274,7 +228,8 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::Combo("##font_size", &m_font_settings.size_index, m_font_sizes_ptr.data(),
                  static_cast<int>(m_font_sizes_ptr.size()));
     ImGui::SameLine();
-    ImGui::BeginDisabled(m_font_settings.size_index > m_fonts.GetAvailableFonts().size() - 2);
+    ImGui::BeginDisabled(m_font_settings.size_index >
+                         m_fonts.GetAvailableFonts().size() - 2);
     if(ImGui::Button("+", ImVec2(button_width, 0)))
     {
         m_font_settings.size_index++;
@@ -285,10 +240,6 @@ SettingsPanel::RenderDisplayOptions()
         ImGui::SetTooltip("Increase or decrease the font size for the UI.");
     }
     ImGui::EndDisabled();
-    
-    ImGui::Spacing();
-    ImGui::Spacing();
-    
     // Font preview
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Preview");
@@ -317,10 +268,9 @@ SettingsPanel::RenderUnitOptions()
 {
     ImGuiStyle& style = ImGui::GetStyle();
 
+    // Theme selection
     ImGui::TextUnformatted("Time");
     ImGui::Separator();
-    ImGui::Spacing();
-    
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Time Format");
     ImGui::SameLine();
@@ -328,14 +278,14 @@ SettingsPanel::RenderUnitOptions()
                             2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
-    //Options must match TimeFormat enum
-    if(ImGui::Combo("##time_format", &time_format_index, 
-        "Timecode\0"
-        "Condensed Timecode\0"
-        "Seconds\0"
-        "Milliseconds\0"
-        "Microseconds\0"
-        "Nanoseconds\0\0"))
+    // Options must match TimeFormat enum
+    if(ImGui::Combo("##time_format", &time_format_index,
+                    "Timecode\0"
+                    "Condensed Timecode\0"
+                    "Seconds\0"
+                    "Milliseconds\0"
+                    "Microseconds\0"
+                    "Nanoseconds\0\0"))
     {
         m_usersettings.unit_settings.time_format =
             static_cast<TimeFormat>(time_format_index);
@@ -348,11 +298,11 @@ SettingsPanel::RenderOtherSettings()
 {
     ImGui::TextUnformatted("Closing options");
     ImGui::Separator();
-    ImGui::Spacing();
-    
     ImGui::AlignTextToFramePadding();
-    ImGui::Checkbox("Don't ask before exiting application", &m_usersettings.dont_ask_before_exit);
-    ImGui::Checkbox("Don't ask before closing tabs", &m_usersettings.dont_ask_before_tab_closing);
+    ImGui::Checkbox("Don't ask before exiting application",
+                    &m_usersettings.dont_ask_before_exit);
+    ImGui::Checkbox("Don't ask before closing tabs",
+                    &m_usersettings.dont_ask_before_tab_closing);
     m_settings_changed = true;
 }
 
@@ -377,29 +327,32 @@ SettingsPanel::ResetUnitOptions()
 bool
 SettingsPanel::ResetButton()
 {
-    bool clicked = false;
-    ImGuiStyle& style = ImGui::GetStyle();
-    
+    bool        clicked = false;
+    ImGuiStyle& style   = ImGui::GetStyle();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::BeginChild("reset_button",
+                      ImGui::CalcTextSize("O") + style.FramePadding + style.FramePadding);
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_settings.GetColor(Colors::kButtonHovered));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, m_settings.GetColor(Colors::kButtonActive));
-    ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
-    
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          m_settings.GetColor(Colors::kTransparent));
     ImGui::PushFont(m_fonts.GetIconFont(FontType::kDefault));
-    clicked = ImGui::Button(ICON_ARROWS_CYCLE, ImVec2(0, 0));
+    clicked = ImGui::Button(ICON_ARROWS_CYCLE);
     ImGui::PopFont();
-    
-    ImGui::PopStyleColor(4);
-    
-    if(ImGui::IsItemHovered())
+    ImGui::PopStyleColor(3);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultStyle().WindowPadding);
+    if(ImGui::BeginItemTooltip())
     {
-        if(ImGui::BeginItemTooltip())
-        {
-            ImGui::TextUnformatted("Restore defaults");
-            ImGui::EndTooltip();
-        }
+        ImGui::TextUnformatted("Restore defaults");
+        ImGui::EndTooltip();
     }
-    
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
     return clicked;
 }
 

@@ -146,6 +146,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
     FlameTrackItem::CalculateMaxEventLabelWidth();
 }
 
+ 
 void
 TimelineView::RenderInteractiveUI()
 {
@@ -1512,6 +1513,8 @@ TimelineView::RenderTraceView()
     RenderInteractiveUI();
 
     RenderScrubber(screen_pos);
+
+  
 
     if(!m_resize_activity && !m_stop_user_interaction)
     {

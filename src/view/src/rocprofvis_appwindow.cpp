@@ -618,6 +618,16 @@ AppWindow::RenderViewMenu(Project* project)
                     trace_view_tab->SetHistogramVisibility(settings.show_histogram);
             }
         }
+        if(ImGui::MenuItem("Show Minimap", nullptr, &settings.show_minimap))
+        {
+            for(const auto& tab : m_tab_container->GetTabs())
+            {
+                auto trace_view_tab =
+                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
+                if(trace_view_tab)
+                    trace_view_tab->SetMinimapVisibility(settings.show_minimap);
+            }
+        }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
         
         ImGui::Separator();

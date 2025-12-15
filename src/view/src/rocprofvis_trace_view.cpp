@@ -9,6 +9,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_event_search.h"
+#include "rocprofvis_minimap.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_summary_view.h"
@@ -41,6 +42,7 @@ TraceView::TraceView()
 , m_settings_manager(SettingsManager::GetInstance())
 , m_event_search(nullptr)
 , m_summary_view(nullptr)
+, m_minimap(nullptr)
 {
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
@@ -194,6 +196,11 @@ TraceView::Update()
     {
         m_summary_view->Update();
     }
+
+    if(m_minimap)
+    {
+        m_minimap->UpdateData();
+    }
 }
 
 void
@@ -224,6 +231,24 @@ TraceView::CreateView()
     m_analysis_item->m_visible =
         m_settings_manager.GetAppWindowSettings().show_details_panel;
 
+            // Create minimap widget
+            m_minimap = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
+            auto minimap_widget = std::make_shared<RocCustomWidget>(
+                [this]() {
+                    if(m_minimap)
+                    {
+                        m_minimap->Render();
+                    }
+                });
+    m_minimap_item = LayoutItem::CreateFromWidget(minimap_widget, 200, 200);
+    m_minimap_item->m_visible = m_settings_manager.GetAppWindowSettings().show_minimap;
+
+    // Split sidebar vertically: sidebar (top) | minimap (bottom)
+    auto sidebar_vsplit = std::make_shared<VSplitContainer>(m_sidebar_item, m_minimap_item);
+    sidebar_vsplit->SetSplit(0.75f);
+    sidebar_vsplit->SetMinBottomHeight(150);
+    auto sidebar_with_minimap = LayoutItem::CreateFromWidget(sidebar_vsplit);
+
     LayoutItem m_histogram_item(0, 80);
     m_histogram_item.m_item = m_histogram_widget;
     m_histogram_item.m_visible = m_settings_manager.GetAppWindowSettings().show_histogram;
@@ -244,7 +269,7 @@ TraceView::CreateView()
     trace_area->m_item = m_vertical_split_container;
 
     m_horizontal_split_container =
-        std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);
+        std::make_shared<HSplitContainer>(sidebar_with_minimap, trace_area);
     m_horizontal_split_container->SetSplit(0.2f);
     m_horizontal_split_container->SetMinRightWidth(400);
 }
@@ -256,6 +281,7 @@ TraceView::DestroyView()
     m_sidebar_item->m_item       = nullptr;
     m_horizontal_split_container = nullptr;
     m_analysis_item->m_item      = nullptr;
+    m_minimap                     = nullptr;
     m_view_created               = false;
 }
 
@@ -545,6 +571,15 @@ TraceView::SetHistogramVisibility(bool visibility)
         {
             histogram_item->m_visible = visibility;
         }
+    }
+}
+
+void
+TraceView::SetMinimapVisibility(bool visibility)
+{
+    if(m_minimap_item)
+    {
+        m_minimap_item->m_visible = visibility;
     }
 }
 

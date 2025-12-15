@@ -17,6 +17,11 @@
 #include <stdlib.h>
 #include <string>
 
+//Needed for CLI interactions that involve print. 
+#ifdef _WIN32
+#    include <windows.h>
+#endif
+
 // globals shared with callbacks
 static std::vector<std::string> g_dropped_file_paths;
 static bool g_file_was_dropped = false;
@@ -98,6 +103,16 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 static void
 print_version()
 {
+ #ifdef _WIN32
+    if(AllocConsole())
+    {
+        // Following is needed for windows or print will not show. 
+        FILE* pCout;
+        freopen_s(&pCout, "CONOUT$", "w", stdout);
+        freopen_s(&pCout, "CONOUT$", "w", stderr);
+    }
+#endif
+
     std::cout << "ROCm(TM) Optiq Beta " 
               << ROCPROFVIS_VERSION_MAJOR << "." 
               << ROCPROFVIS_VERSION_MINOR << "." 
@@ -134,6 +149,17 @@ parse_command_line_args(int argc, char** argv)
             }
             else
             {
+           
+
+#ifdef _WIN32
+                if(AllocConsole())
+                {
+                    // Following is needed for windows or print will not show.
+                    FILE* pCout;
+                    freopen_s(&pCout, "CONOUT$", "w", stdout);
+                    freopen_s(&pCout, "CONOUT$", "w", stderr);
+                }
+#endif
                 std::cout << "The file was not specified. Please input file name."
                           << std::endl;
                 exit(1);

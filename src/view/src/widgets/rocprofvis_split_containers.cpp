@@ -268,7 +268,8 @@ HSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_
     float mouse_x   = mouse_pos.x - window_pos.x;
     float new_ratio = (mouse_x - (m_resize_grip_size / 2)) / available_width;
     new_ratio       = std::clamp(new_ratio, m_first_min_size / available_width,
-                                 1.0f - m_second_min_size / available_width);
+                                 std::max(m_first_min_size / available_width,
+                                          1.0f - m_second_min_size / available_width));
     m_split_ratio   = new_ratio;
 }
 
@@ -346,12 +347,13 @@ ImVec2
 VSplitContainer::GetFirstChildSize(float available_height)
 {
     float top_row_height = 0.0f;
-    if (m_second && m_second->m_visible)
+    if(m_second && m_second->m_visible)
     {
-        float available_size   = available_height;
-        top_row_height         = available_size * m_split_ratio;
-        top_row_height         = std::clamp(top_row_height, m_first_min_size,
-                                       available_size - m_second_min_size);
+        float available_size = available_height;
+        top_row_height       = available_size * m_split_ratio;
+        top_row_height =
+            std::clamp(top_row_height, m_first_min_size,
+                       std::max(m_first_min_size, available_size - m_second_min_size));
     }
     return ImVec2(0, top_row_height);
 }
@@ -369,7 +371,8 @@ VSplitContainer::UpdateSplitRatio(const ImVec2& mouse_pos, const ImVec2& window_
     float mouse_y   = mouse_pos.y - window_pos.y;
     float new_ratio = (mouse_y - (m_resize_grip_size / 2)) / available_height;
     new_ratio       = std::clamp(new_ratio, m_first_min_size / available_height,
-                                 1.0f - m_second_min_size / available_height);
+                                 std::max(m_first_min_size / available_height,
+                                          1.0f - m_second_min_size / available_height));
     m_split_ratio   = new_ratio;
 }
 

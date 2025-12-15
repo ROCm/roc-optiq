@@ -488,8 +488,8 @@ InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int colum
                             ImGuiHoveredFlags_AllowWhenOverlappedByItem))
     {
         m_hovered_row = row;
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
-                               m_settings.GetColor(Colors::kAccentRedActive));
+        //ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
+        //                       m_settings.GetColor(Colors::kAccentRedActive));
     }
 }
 
@@ -519,8 +519,8 @@ InfiniteScrollTable::RenderFirstColumnCell(const std::string* cell_text, int row
                             ImGuiHoveredFlags_AllowWhenOverlappedByItem))
     {
         m_hovered_row = row;
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
-                               m_settings.GetColor(Colors::kAccentRedActive));
+        //ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
+        //                       m_settings.GetColor(Colors::kAccentRedActive));
 
     }
     if(ImGui::IsItemClicked(ImGuiMouseButton_Right))

@@ -24,7 +24,7 @@ class InfiniteScrollTable : public RocWidget
 {
 public:
     InfiniteScrollTable(DataProvider& dp, TableType table_type,
-                        const std::string& no_data_text = "", bool copy_by_click = false);
+                        const std::string& no_data_text = "");
     virtual ~InfiniteScrollTable();
 
     virtual void Update() override;
@@ -109,7 +109,6 @@ private:
 
     // Internal state flags below
     bool     m_skip_data_fetch;
-    bool     m_copy_by_click;
     uint64_t m_last_total_row_count;
     ImVec2   m_last_table_size;
 

@@ -25,8 +25,7 @@ constexpr const char* DURATION_COLUMN_NAME           = "duration";
 constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
-                                         const std::string& no_data_text,
-                                         bool               copy_by_click)
+                                         const std::string& no_data_text)
 : m_data_provider(dp)
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
@@ -45,7 +44,6 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_pending_filter_options({"", "", "", "" })
 , m_data_changed(true)
 , m_filter_requested(false)
-, m_copy_by_click(copy_by_click)
 , m_selected_row(-1)
 , m_selected_column(-1)
 , m_hovered_row(-1)
@@ -472,7 +470,7 @@ InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int colum
 {
     if(CopyableTextUnformatted(cell_text->c_str(),
                                std::to_string(row) + ":" + std::to_string(column),
-                               COPY_DATA_NOTIFICATION, m_copy_by_click, false))
+                               COPY_DATA_NOTIFICATION, false, false))
     {
         m_selected_row    = row;
         m_selected_column = column;
@@ -500,6 +498,12 @@ InfiniteScrollTable::RenderFirstColumnCell(const std::string* cell_text, int row
 {
     std::string selectable_label = *cell_text + "##" + std::to_string(row);
     ImGui::TableSetColumnIndex(0);
+
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+
+
     bool row_hovered = ImGui::Selectable(selectable_label.c_str(), false,
                                          ImGuiSelectableFlags_SpanAllColumns |
                                              ImGuiSelectableFlags_AllowOverlap,
@@ -508,15 +512,16 @@ InfiniteScrollTable::RenderFirstColumnCell(const std::string* cell_text, int row
     {
         m_selected_row = row;
         RowSelected(ImGuiMouseButton_Left);
-        ImGui::SetClipboardText(cell_text->c_str());
-        NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
-                                                NotificationLevel::Info);
+
     }
     if(row_hovered ||
        ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
                             ImGuiHoveredFlags_AllowWhenOverlappedByItem))
     {
         m_hovered_row = row;
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
+                               m_settings.GetColor(Colors::kAccentRedActive));
+
     }
     if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
     {
@@ -524,6 +529,7 @@ InfiniteScrollTable::RenderFirstColumnCell(const std::string* cell_text, int row
         m_selected_column = 0;
         RowSelected(ImGuiMouseButton_Right);
     }
+    ImGui::PopStyleColor(3);
 }
 
 void

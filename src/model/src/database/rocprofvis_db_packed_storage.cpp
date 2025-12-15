@@ -341,6 +341,17 @@ namespace DataModel
         std::iota(m_aggregation.sort_order.begin(), m_aggregation.sort_order.end(), 0);
     }
 
+    void
+    PackedTable::ClearAggregation()
+    {
+        m_aggregation.column_def.clear();
+        m_aggregation.agg_params.clear();
+        m_aggregation.aggregation_maps.clear();
+        m_aggregation.result.clear();
+        m_aggregation.sort_order.clear();
+        m_aggregation.m_string_data.Clear();
+    }
+
     void PackedTable::SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order) {
 
 
@@ -772,6 +783,12 @@ namespace DataModel
         std::shared_lock lock(m_mutex);
         if (id >= m_id_to_str.size()) return "";
         return m_id_to_str[id].c_str();
+    }
+
+    void StringTable::Clear() {
+        std::unique_lock lock(m_mutex);
+        m_id_to_str.clear();
+        m_str_to_id.clear();
     }
 
 }  // namespace DataModel

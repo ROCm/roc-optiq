@@ -691,7 +691,10 @@ namespace DataModel
                             t.join();
                         m_merged_table.FinalizeAggregation();
                     }
-                   
+                    else
+                    {
+                        m_merged_table.ClearAggregation();
+                    }                    
                 }
             }
 

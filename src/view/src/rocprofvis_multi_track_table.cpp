@@ -421,7 +421,7 @@ MultiTrackTable::RenderContextMenu()
             {
                 spdlog::warn("Selected column index out of bounds: {}",
                              m_selected_column);
-            }   
+            }
             else
             {
                 std::string cell_text = table_data[m_selected_row][m_selected_column];

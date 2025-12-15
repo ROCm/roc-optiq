@@ -40,7 +40,7 @@ public:
     , m_resize_grip_size(grip_size)
     , m_first_min_size(first_min_size)
     , m_second_min_size(second_min_size)
-    , m_split_ratio(split_ratio) {};
+    , m_split_ratio(split_ratio) {}
     virtual ~SplitContainerBase() = default;
     virtual void Render() override;
 

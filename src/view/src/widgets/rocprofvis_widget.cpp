@@ -118,7 +118,7 @@ CopyableTextUnformatted(const char* text, std::string_view unique_id,
     if(ImGui::Button(text, ImVec2(0, 0)))
     {
         clicked = true;
-        if (one_click_copy)
+        if(one_click_copy)
         {
             ImGui::SetClipboardText(text);
             if(!notification.empty())
@@ -126,7 +126,6 @@ CopyableTextUnformatted(const char* text, std::string_view unique_id,
                 NotificationManager::GetInstance().Show(notification.data(),
                                                         NotificationLevel::Info);
             }
-            
         }
     }
     

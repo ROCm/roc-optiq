@@ -123,7 +123,6 @@ EventsView::RenderBasicData(const event_info_t* event_data)
     CopyableTextUnformatted(label.c_str(), "Start_time", DATA_COPIED_NOTIFICATION, false,
                             true);
 
-
     ImGui::TextUnformatted("Duration");
     ImGui::SameLine(160);
     label = nanosecond_to_formatted_str(info.m_duration, time_format, true);

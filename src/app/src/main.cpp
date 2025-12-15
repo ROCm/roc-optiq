@@ -9,17 +9,21 @@
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
 #include "rocprofvis_view_module.h"
+#include "rocprofvis_version.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 
 // globals shared with callbacks
 static std::vector<std::string> g_dropped_file_paths;
 static bool g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
+static std::string m_user_file_path_cli;
+static bool m_did_user_add_file = false;
 
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
@@ -91,10 +95,59 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
     }
 }
 
+static void
+print_version()
+{
+    std::cout << "ROCm(TM) Optiq Beta " 
+              << ROCPROFVIS_VERSION_MAJOR << "." 
+              << ROCPROFVIS_VERSION_MINOR << "." 
+              << ROCPROFVIS_VERSION_PATCH;
+    if(ROCPROFVIS_VERSION_BUILD > 0)
+    {
+        std::cout << "." << ROCPROFVIS_VERSION_BUILD;
+    }
+    std::cout << std::endl;
+}
+
+static void
+parse_command_line_args(int argc, char** argv)
+{
+    for(int i = 1; i < argc; i++)
+    {
+        std::string arg = argv[i];
+        
+        // Get verison command line argument
+        if(arg == "-v" || arg == "--version")
+        {
+            print_version();
+            exit(0);
+        }
+        
+        // Get file command line argument
+        if(arg == "-f" || arg == "--file")
+        {
+            if(i + 1 < argc)
+            {
+                m_user_file_path_cli = argv[i + 1];
+                m_did_user_add_file = true;
+                i++;
+            }
+            else
+            {
+                std::cout << "The file was not specified. Please input file name."
+                          << std::endl;
+                exit(1);
+            }
+        }
+    }
+}
+
 int
-main(int, char**)
+main(int argc, char** argv)
 {
     int resultCode = 0;
+
+    parse_command_line_args(argc, argv);
 
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
@@ -158,6 +211,13 @@ main(int, char**)
                 });
 
                 backend.m_config(&backend, window);
+
+                if(m_did_user_add_file)
+                {
+                    //If the user inputted a filepath open it here. 
+                    rocprofvis_view_open_files({ m_user_file_path_cli });
+                    m_did_user_add_file = false;
+                }
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 

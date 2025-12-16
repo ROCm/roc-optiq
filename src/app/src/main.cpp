@@ -1,6 +1,11 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#ifdef _WIN32
+#    define NOMINMAX
+#    include <conio.h>
+#    include <windows.h>
+#endif
 #include "glfw_util.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -17,12 +22,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
-
-// Needed for CLI interactions that involve print.
-#ifdef _WIN32
-#    include <conio.h>
-#    include <windows.h>
-#endif
 
 const char* APP_NAME = "ROCm(TM) Optiq Beta";
 

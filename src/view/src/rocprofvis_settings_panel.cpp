@@ -69,7 +69,7 @@ SettingsPanel::Render()
 
         if(ImGui::BeginPopupModal("Settings", nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize |
-                                      ImGuiWindowFlags_NoMove))
+                                      ImGuiWindowFlags_NoSavedSettings))
         {
             ImGui::BeginChild("SettingsCategories",
                               ImVec2(kCategorywidth, kContentHeight),
@@ -173,7 +173,6 @@ SettingsPanel::Render()
             m_settings_confirmed    = false;
         }
         popup_style.PopStyles();
-
     }
 }
 

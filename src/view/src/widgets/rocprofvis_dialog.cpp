@@ -30,8 +30,7 @@ ConfirmationDialog::Render()
         m_should_open = false;
     }
 
-    if(ImGui::IsPopupOpen(m_title.c_str(),
-                          ImGuiPopupFlags_None))
+    if(ImGui::IsPopupOpen(m_title.c_str(), ImGuiPopupFlags_None))
     {
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
@@ -41,19 +40,16 @@ ConfirmationDialog::Render()
 
         if(ImGui::BeginPopupModal(m_title.c_str(), NULL,
                                   ImGuiWindowFlags_AlwaysAutoResize |
-                                      ImGuiWindowFlags_NoMove))
+                                      ImGuiWindowFlags_NoSavedSettings))
         {
             ImGui::NewLine();
 
-            // Add message text with padding
-            ImGui::Dummy(ImVec2(5.0f, 0.0f));
-            ImGui::SameLine();
+            // Add message text
+
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() +
                                    ImGui::GetContentRegionAvail().x);
             ImGui::TextUnformatted(m_message.c_str());
             ImGui::PopTextWrapPos();
-            ImGui::SameLine();
-            ImGui::Dummy(ImVec2(5.0f, 0.0f));
 
             ImGui::NewLine();
             ImGui::Separator();

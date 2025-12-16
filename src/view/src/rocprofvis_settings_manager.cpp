@@ -121,7 +121,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
     IM_COL32(20, 30, 50, 140),     // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
-    IM_COL32(0, 0, 0, 120),        //Colors::kLoadingScreenColor
+    IM_COL32(0, 0, 0, 60),        //Colors::kLoadingScreenColor
 
 
     // This must follow the ordering of Colors enum.

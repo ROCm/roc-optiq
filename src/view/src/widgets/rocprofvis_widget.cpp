@@ -986,10 +986,8 @@ PopUpStyle::PushPopupStyles()
 void
 PopUpStyle::CenterPopup()
 {
-    
-        ImVec2 center_pos = ImGui::GetMainViewport()->GetCenter();
-        ImGui::SetNextWindowPos(center_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    
+    ImVec2 center_pos = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center_pos, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 }
 
 void

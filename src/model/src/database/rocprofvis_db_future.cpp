@@ -3,6 +3,7 @@
 
 #include "rocprofvis_db_future.h"
 #include "rocprofvis_db.h"
+#include "rocprofvis_c_interface.h"
 
 namespace RocProfVis
 {
@@ -28,6 +29,38 @@ Future::~Future(){
         m_worker.join();
     }
 }
+
+Future* Future::AddSubFuture() {
+    Future* sub_feature = (Future*)rocprofvis_db_future_alloc(nullptr);
+    std::unique_lock lock(m_mutex);
+    m_sub_futures.push_back(sub_feature);
+    return sub_feature;
+}
+
+void   
+Future::DeleteSubFuture(Future* sub_future) {
+
+    std::unique_lock lock(m_mutex);
+    auto it = std::find_if(m_sub_futures.begin(), m_sub_futures.end(), [&](Future* f) { return f == sub_future; });
+    if (it != m_sub_futures.end())
+    {
+        m_sub_futures.erase(it);
+        rocprofvis_db_future_free(sub_future);
+    }
+}
+
+rocprofvis_dm_result_t   
+Future::WaitAndDeleteSubFuture(Future* sub_future) {
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    if(kRocProfVisDmResultSuccess !=
+        rocprofvis_db_future_wait(sub_future, UINT64_MAX))
+    {
+        result = kRocProfVisDmResultUnknownError;
+    }
+    DeleteSubFuture(sub_future);
+    return result;
+}
+
 
 void
 Future::SetInterrupted()

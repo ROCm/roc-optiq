@@ -17,7 +17,7 @@ class RocpdDatabase : public ProfileDatabase
 {
     // type of map array for string indexes remapping
     typedef std::unordered_map<uint64_t, uint32_t> string_index_map_t;
-    typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_dm_id_t>> string_id_map_t;
+    typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_db_string_id_t>> string_id_map_t;
 
     // map array for fast non-PMC track ID search
     typedef std::map<uint32_t, uint32_t> sub_process_map_t;
@@ -31,7 +31,9 @@ public:
     // class constructor
     // @param path - database file path
     RocpdDatabase(rocprofvis_db_filename_t path) :
-        ProfileDatabase(path) {}
+        ProfileDatabase(path) {
+        CreateDbNode(path);
+    }
     // class destructor, not really required, unless declared as virtual
     ~RocpdDatabase()override{};
     // worker method to read trace metadata
@@ -70,7 +72,7 @@ public:
                                            rocprofvis_dm_charptr_t new_db_path,
                                            Future* future) override;
 
-    uint64_t RemapStringId(uint64_t index) override;
+    rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) override;
 
     rocprofvis_dm_result_t BuildTableStringIdFilter(
                                     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
@@ -81,7 +83,7 @@ public:
                                         const rocprofvis_dm_event_operation_t operation) override;
 
     rocprofvis_dm_result_t StringIndexToId(
-                                        rocprofvis_dm_index_t index, std::vector<rocprofvis_dm_id_t>& id) override;
+                                        rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) override;
 
     rocprofvis_dm_string_t GetEventTrackQuery( const rocprofvis_dm_track_category_t category);
 

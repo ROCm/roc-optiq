@@ -1838,6 +1838,8 @@ namespace DataModel
                 { Builder::Where("R.id", "==", std::to_string(event_id)) } }));
         }
     }
+
+
     std::string QueryFactory::GetRocprofEssentialInfoQueryForKernelDispatchEvent(uint64_t event_id) {
         if (IsVersionGreaterOrEqual("4"))
         {

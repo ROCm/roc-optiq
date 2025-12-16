@@ -14,6 +14,49 @@ namespace DataModel
 
 class Trace;
 
+class InfoTable : public DmBase
+{
+public:
+    InfoTable(Trace* ctx, uint32_t id, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t name, rocprofvis_dm_table_t handle);
+    Trace* GetCtx() { return m_ctx; }
+    std::string GetName() { return m_name; }
+    uint32_t GetNode() { return m_node; }
+    // Method to read Table object property as uint64
+    // @param property - property enumeration rocprofvis_dm_table_property_t
+    // @param index - index of any indexed property
+    // @param value - pointer reference to uint64_t return value
+    // @return status of operation   
+    rocprofvis_dm_result_t                  GetPropertyAsUint64(rocprofvis_dm_property_t property, 
+        rocprofvis_dm_property_index_t index, 
+        uint64_t* value) override;  
+    // Method to read Table object property as char*
+    // @param property - property enumeration rocprofvis_dm_table_property_t
+    // @param index - index of any indexed property
+    // @param value - pointer reference to char* return value
+    // @return status of operation  
+    rocprofvis_dm_result_t                  GetPropertyAsCharPtr(rocprofvis_dm_property_t property, 
+        rocprofvis_dm_property_index_t index, 
+        char** value) override;
+    // Method to read Table object property as handle (aka void*)
+    // @param property - property enumeration rocprofvis_dm_table_property_t
+    // @param index - index of any indexed property
+    // @param value - pointer reference to handle (aka void*) return value
+    // @return status of operation
+    rocprofvis_dm_result_t                  GetPropertyAsHandle(rocprofvis_dm_property_t property, 
+        rocprofvis_dm_property_index_t index, 
+        rocprofvis_dm_handle_t* value) override;
+    
+private :
+
+    Trace* m_ctx;
+    uint32_t m_node;
+    uint32_t m_id;
+    std::string m_name;
+    rocprofvis_dm_table_t m_handle;
+    std::vector<std::unique_ptr<InfoTableRow>> m_row_wrappers;
+
+};
+
 // Table is class of table object, container of TableRow objects
 class Table : public DmBase {
     public:

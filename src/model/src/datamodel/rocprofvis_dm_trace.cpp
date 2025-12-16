@@ -48,6 +48,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncMetadataLoaded = MetadataLoaded;
     m_binding_info.FuncGetStringOrder = GetStringOrder;
     m_binding_info.FuncGetStringIndices = GetStringIndices;
+    m_binding_info.FuncAddInfoTable = AddInfoTable;
     bind_data = &m_binding_info;
     m_db = db;
     return kRocProfVisDmResultSuccess;
@@ -436,6 +437,21 @@ rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t ob
 }
 
 
+rocprofvis_dm_table_t Trace::AddInfoTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_node_id_t node,  rocprofvis_dm_charptr_t name, rocprofvis_dm_table_t handle){
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
+    Trace* trace = (Trace*) object;
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
+    try{
+        uint32_t id = trace->m_info_tables.size();
+        trace->m_info_tables.push_back(std::make_unique<InfoTable>(trace, id, node, name, handle));
+    }
+    catch(std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating table object", nullptr);
+    }
+    return trace->m_info_tables.back().get();
+}
+
 rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*) object;
@@ -670,6 +686,9 @@ rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t prop
         case kRPVDMHistogramBucketSize:
             *value = HistogramBucketsSize();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMNumberOfNodesUint64:
+            *value = NumberOfDbInstances();
+            return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -694,6 +713,26 @@ rocprofvis_dm_result_t    Trace::GetPropertyAsHandle(rocprofvis_dm_property_t pr
             return GetExtInfoHandle(*(rocprofvis_dm_event_id_t*)&index, *value);
         case kRPVDMTableHandleByID:
             return GetTableHandle(*(rocprofvis_dm_table_id_t*) &index, *value);
+        case kRPVDNodeInfoTableHandleIndexed:
+            return GetInfoTableHandle("Node",index, *value);
+        case kRPVDAgentInfoTableHandleIndexed:
+            return GetInfoTableHandle("Agent",index, *value);
+        case kRPVDQueueInfoTableHandleIndexed:
+            return GetInfoTableHandle("Queue",index, *value);
+        case kRPVDProcessInfoTableHandleIndexed:
+            return GetInfoTableHandle("Process",index, *value);
+        case kRPVDThreadInfoTableHandleIndexed:
+            return GetInfoTableHandle("Thread",index, *value);
+        case kRPVDStreamInfoTableHandleIndexed:
+            return GetInfoTableHandle("Stream",index, *value);
+        case kRPVDPmcInfoTableHandleIndexed:
+            return GetInfoTableHandle("PMC",index, *value);
+        case kRPVDAgentQueueMappingInfoTableHandleIndexed:
+            return GetInfoTableHandle("AgentToQueue",index, *value);
+        case kRPVDAgentStreamMappingInfoTableHandleIndexed:
+            return GetInfoTableHandle("AgentToStream",index, *value);
+        case kRPVDStreamQueueMappingInfoTableHandleIndexed:
+            return GetInfoTableHandle("StreamToQueue",index, *value);
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -787,6 +826,21 @@ rocprofvis_dm_result_t Trace::GetTableHandle(rocprofvis_dm_table_id_t id, rocpro
                           return x.get()->Id() == id;
                       });
     if(it != m_tables.end())
+    {
+        table = it->get();
+        return kRocProfVisDmResultSuccess;
+    }
+    return kRocProfVisDmResultNotLoaded;
+
+}
+
+rocprofvis_dm_result_t Trace::GetInfoTableHandle(const char* name, rocprofvis_dm_index_t index, rocprofvis_dm_table_t & table){
+    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
+    auto  it = find_if(m_info_tables.begin(), m_info_tables.end(),
+        [&](std::unique_ptr<InfoTable>& x) {
+            return x.get()->GetName() == name && x.get()->GetNode() == index;
+        });
+    if(it != m_info_tables.end())
     {
         table = it->get();
         return kRocProfVisDmResultSuccess;

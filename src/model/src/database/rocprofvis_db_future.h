@@ -103,6 +103,10 @@ class Future
 
         void                               ResetRowCount() { m_processed_rows = 0; }
 
+        Future*                             AddSubFuture();
+        void                                DeleteSubFuture(Future* sub_future);
+        rocprofvis_dm_result_t              WaitAndDeleteSubFuture(Future* sub_future);
+
     private:
         // stdlib promise object
         std::promise<rocprofvis_dm_result_t> m_promise;

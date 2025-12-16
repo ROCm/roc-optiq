@@ -10,6 +10,21 @@ namespace RocProfVis
 namespace DataModel
 {
 
+void SqliteDatabase::CreateDbNodes(std::vector<std::string>& multinode_files) {
+    uint32_t node_id = 0;
+    for (auto file : multinode_files)
+    {
+        m_db_nodes.push_back(std::make_unique<rocprofvis_db_sqlite_db_node_t>());
+        m_db_nodes.back()->node_id = node_id++;
+        m_db_nodes.back()->filepath = file;
+    }
+}
+void SqliteDatabase::CreateDbNode(rocprofvis_db_filename_t filepath) {
+    m_db_nodes.push_back(std::make_unique<rocprofvis_db_sqlite_db_node_t>());
+    m_db_nodes.back()->node_id = 0;
+    m_db_nodes.back()->filepath = filepath;
+}
+
 int SqliteDatabase::CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, char** azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
@@ -167,24 +182,26 @@ int SqliteDatabase::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, c
 rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQueryStatic(
                                     SqliteDatabase* db, 
                                     Future* future,
+                                    DbInstance* db_instance,
                                     const char* query,
                                     RpvSqliteExecuteQueryCallback callback)
 {
     return future->SetPromise(
-        db->ExecuteSQLQuery(future, query, callback)
+        db->ExecuteSQLQuery(future, db_instance, query, callback)
     );
 }
 
 rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQueryStaticWithHandle(
     SqliteDatabase* db, 
     Future* future,
+    DbInstance* db_instance,
     const char* query,
     rocprofvis_dm_handle_t handle,
     uint32_t query_index,
     RpvSqliteExecuteQueryCallback callback)
 {
     return future->SetPromise(
-        db->ExecuteSQLQuery(future, query, handle, query_index, callback)
+        db->ExecuteSQLQuery(future, db_instance, query, handle, query_index, callback)
     );
 }
 
@@ -226,19 +243,22 @@ SqliteDatabase::DetectTable(sqlite3* conn, const char* table, bool is_view)
 
 rocprofvis_dm_result_t SqliteDatabase::Open()
 {
-    sqlite3* conn = GetConnection();
-    if(nullptr == conn)
+    for (auto & node : m_db_nodes)
     {
-        spdlog::debug("Can't open database:");
-        return kRocProfVisDmResultDbAccessFailed;
+        sqlite3* conn = GetConnection(node->node_id);
+        if (nullptr == conn)
+        {
+            spdlog::debug("Can't open database:");
+            return kRocProfVisDmResultDbAccessFailed;
+        }
     }
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t SqliteDatabase::OpenConnection(sqlite3** connection)
+rocprofvis_dm_result_t SqliteDatabase::OpenConnection(uint32_t db_node_id, sqlite3** connection)
 {
     *connection = nullptr;
-    if(sqlite3_open(Path(), connection) != SQLITE_OK)
+    if(sqlite3_open(m_db_nodes[db_node_id]->filepath.c_str(), connection) != SQLITE_OK)
     {
         spdlog::debug("Cannot open database connection - {}",
                       sqlite3_errmsg(*connection));
@@ -257,22 +277,25 @@ rocprofvis_dm_result_t SqliteDatabase::OpenConnection(sqlite3** connection)
 rocprofvis_dm_result_t SqliteDatabase::Close()
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    if (m_connections_inuse.size() != 1)
+    for (auto & node : m_db_nodes)
     {
-        spdlog::debug("Error : At the time of closing only one active connection should remain!");
-        result = kRocProfVisDmResultUnknownError;
-    }
-    ReleaseConnection(*m_connections_inuse.begin());
-
-    for (auto it = m_available_connections.begin(); it != m_available_connections.end(); ++it)
-    {
-        if(sqlite3_close(*it) != SQLITE_OK)
+        if (node->m_connections_inuse.size() != 1)
         {
-            spdlog::debug("Can't close database connection:");
-            spdlog::debug(sqlite3_errmsg(*it));
+            spdlog::debug("Error : At the time of closing only one active connection should remain!");
             result = kRocProfVisDmResultUnknownError;
         }
-    }  
+        ReleaseConnection(*node->m_connections_inuse.begin());
+
+        for (auto it = node->m_available_connections.begin(); it != node->m_available_connections.end(); ++it)
+        {
+            if (sqlite3_close(*it) != SQLITE_OK)
+            {
+                spdlog::debug("Can't close database connection:");
+                spdlog::debug(sqlite3_errmsg(*it));
+                result = kRocProfVisDmResultUnknownError;
+            }
+        }
+    }
     return result;
 }
 
@@ -284,16 +307,17 @@ SqliteDatabase::InterruptQuery(void* connection) {
     }
 }
 
-sqlite3* SqliteDatabase::GetConnection() 
+sqlite3* SqliteDatabase::GetConnection(uint32_t db_node_id) 
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
-    if(!m_available_connections.empty())
+    ROCPROFVIS_ASSERT_MSG_RETURN(db_node_id < m_db_nodes.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
+    std::unique_lock<std::mutex> lock(m_db_nodes[db_node_id]->m_mutex);
+    if(!m_db_nodes[db_node_id]->m_available_connections.empty())
     {
 
-        auto it = std::prev(m_available_connections.end());
-        m_connections_inuse.insert(*it);
+        auto it = std::prev(m_db_nodes[db_node_id]->m_available_connections.end());
+        m_db_nodes[db_node_id]->m_connections_inuse.insert(*it);
         sqlite3* conn = *it;
-        m_available_connections.erase(it);
+        m_db_nodes[db_node_id]->m_available_connections.erase(it);
         return conn;
     }
     else
@@ -301,49 +325,61 @@ sqlite3* SqliteDatabase::GetConnection()
         
         sqlite3* conn;
         size_t   thread_count = std::thread::hardware_concurrency();
-        if(m_connections_inuse.size() > thread_count ||
-           kRocProfVisDmResultSuccess != OpenConnection(&conn))
+        if(m_db_nodes[db_node_id]->m_connections_inuse.size() > thread_count ||
+           kRocProfVisDmResultSuccess != OpenConnection(db_node_id, &conn))
         {
-           m_inuse_cv.wait(lock, [&] { return !m_available_connections.empty(); });
+            m_db_nodes[db_node_id]->m_inuse_cv.wait(lock, [&] { return !m_db_nodes[db_node_id]->m_available_connections.empty(); });
            
-           auto it = std::prev(m_available_connections.end());
-           m_connections_inuse.insert(*it);
+           auto it = std::prev(m_db_nodes[db_node_id]->m_available_connections.end());
+           m_db_nodes[db_node_id]->m_connections_inuse.insert(*it);
            sqlite3* conn = *it;
-           m_available_connections.erase(it);
+           m_db_nodes[db_node_id]->m_available_connections.erase(it);
            return conn;
         }
         else
         {
-            m_connections_inuse.insert(conn);
+            m_db_nodes[db_node_id]->m_connections_inuse.insert(conn);
             return conn;
         }
     }
 }
 
 sqlite3*
-SqliteDatabase::GetServiceConnection()
+SqliteDatabase::GetServiceConnection(uint32_t db_node_id)
 {
-    if (!m_connections_inuse.empty())
+    ROCPROFVIS_ASSERT_MSG_RETURN(db_node_id < m_db_nodes.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
+    if (!m_db_nodes[db_node_id]->m_connections_inuse.empty())
     {
-        return *m_connections_inuse.begin();
+        return *m_db_nodes[db_node_id]->m_connections_inuse.begin();
     }
     return nullptr;
 }
 
-void SqliteDatabase::ReleaseConnection(sqlite3* conn)
+void SqliteDatabase::ReleaseConnection(sqlite3* conn, uint32_t db_node_id)
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
-    auto it = m_connections_inuse.find(conn);
-    if (it != m_connections_inuse.end())
+    std::unique_lock<std::mutex> lock(m_db_nodes[db_node_id]->m_mutex);
+    auto it = m_db_nodes[db_node_id]->m_connections_inuse.find(conn);
+    if (it != m_db_nodes[db_node_id]->m_connections_inuse.end())
     {
-        m_available_connections.insert(*it);
-        m_connections_inuse.erase(it);
-        m_inuse_cv.notify_one();
+        m_db_nodes[db_node_id]->m_available_connections.insert(*it);
+        m_db_nodes[db_node_id]->m_connections_inuse.erase(it);
+        m_db_nodes[db_node_id]->m_inuse_cv.notify_one();
     }
 }
 
+void SqliteDatabase::ReleaseConnection(sqlite3* conn)
+{
+    for (int i = 0; i < m_db_nodes.size(); i++)
+    {
+        ReleaseConnection(conn, i);
+    }
+}
 
-rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query){
+rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
+    Future* future, 
+    DbInstance* db_instance,
+    const char* query
+){
     rocprofvis_db_sqlite_callback_parameters params = {
         this,
         future,
@@ -352,11 +388,15 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const cha
         { query },
         static_cast<rocprofvis_dm_track_id_t>(-1)
     };
-    return SqliteDatabase::ExecuteSQLQuery(query, &params);
+    return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
 
-rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query, 
-                                                        RpvSqliteExecuteQueryCallback callback){
+rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(
+                                               Future* future, 
+                                               DbInstance* db_instance,
+                                               const char* query,
+                                               RpvSqliteExecuteQueryCallback callback)
+{
     rocprofvis_db_sqlite_callback_parameters params = {
         this,
         future,
@@ -365,11 +405,14 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future, const ch
         { query },
         static_cast<rocprofvis_dm_track_id_t>(-1)
     };
-    return SqliteDatabase::ExecuteSQLQuery(query, &params);
+    return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
 
 
-rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query, 
+rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
+                                                Future* future,
+                                                DbInstance* db_instance,
+                                                const char* query, 
                                                 RpvSqliteExecuteQueryCallback callback,
                                                 rocprofvis_dm_string_t* value){
     rocprofvis_db_sqlite_callback_parameters params = {
@@ -380,14 +423,17 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const cha
         { query },
         static_cast<rocprofvis_dm_track_id_t>(-1)
     };
-    return SqliteDatabase::ExecuteSQLQuery(query, &params);
+    return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
 
-rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query, 
-                                                RpvSqliteExecuteQueryCallback callback,
-                                                uint64_t & value){
+rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
+                                               Future* future, 
+                                               DbInstance* db_instance,
+                                               const char* query, 
+                                               RpvSqliteExecuteQueryCallback callback,
+                                               uint64_t & value){
     std::string str_value;
-    rocprofvis_dm_result_t result = ExecuteSQLQuery(future, query, callback, &str_value);
+    rocprofvis_dm_result_t result = ExecuteSQLQuery(future, db_instance, query, callback, &str_value);
     if (result == kRocProfVisDmResultSuccess)
     {
         value = std::stoll(str_value);
@@ -395,11 +441,14 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const cha
     return result;
 }
 
-rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query, 
-                                                RpvSqliteExecuteQueryCallback callback,
-                                                uint32_t & value){
+rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
+                                               Future* future,
+                                               DbInstance* db_instance,
+                                               const char* query, 
+                                               RpvSqliteExecuteQueryCallback callback,
+                                               uint32_t & value){
     std::string str_value;
-    rocprofvis_dm_result_t result = ExecuteSQLQuery(future, query, callback, &str_value);
+    rocprofvis_dm_result_t result = ExecuteSQLQuery(future, db_instance, query, callback, &str_value);
     if (result == kRocProfVisDmResultSuccess)
     {
         value = std::stol(str_value);
@@ -407,10 +456,12 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, const cha
     return result;
 }
 
-rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, 
-                                                        const char* query,
-                                                        rocprofvis_dm_handle_t handle, 
-                                                        RpvSqliteExecuteQueryCallback callback){
+rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
+                                               Future* future,
+                                               DbInstance* db_instance,
+                                               const char* query,
+                                               rocprofvis_dm_handle_t handle, 
+                                               RpvSqliteExecuteQueryCallback callback){
     rocprofvis_db_sqlite_callback_parameters params = {
         this,
         future,
@@ -419,14 +470,16 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future,
         { query },
         static_cast<rocprofvis_dm_track_id_t>(-1)
     };
-    return SqliteDatabase::ExecuteSQLQuery(query, &params);
+    return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
 
-rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, 
-                                                        const char* query,
-                                                        rocprofvis_dm_handle_t handle, 
-                                                        uint32_t index,
-                                                        RpvSqliteExecuteQueryCallback callback){
+rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
+                                               Future* future, 
+                                               DbInstance* db_instance,
+                                               const char* query,
+                                               rocprofvis_dm_handle_t handle, 
+                                               uint32_t index,
+                                               RpvSqliteExecuteQueryCallback callback){
     rocprofvis_db_sqlite_callback_parameters params = {
         this,
         future,
@@ -435,15 +488,17 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future,
         { query },
         static_cast<rocprofvis_dm_track_id_t>(index)
     };
-    return SqliteDatabase::ExecuteSQLQuery(query, &params);
+    return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
 
-rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future, 
-                                                        const char* query,
-                                                        const char* cache_table_name,
-                                                        rocprofvis_dm_handle_t handle,
-                                                        rocprofvis_dm_event_operation_t op,
-                                                        RpvSqliteExecuteQueryCallback callback){
+rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
+                                              Future* future,
+                                              DbInstance* db_instance,
+                                              const char* query,
+                                              const char* cache_table_name,
+                                              rocprofvis_dm_handle_t handle,
+                                              rocprofvis_dm_event_operation_t op,
+                                              RpvSqliteExecuteQueryCallback callback){
     rocprofvis_db_sqlite_callback_parameters params = {
         this,
         future,
@@ -453,15 +508,17 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(Future* future,
         static_cast<rocprofvis_dm_track_id_t>(-1),
         op
     };
-    return SqliteDatabase::ExecuteSQLQuery(query, &params);
+    return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
 
 
-rocprofvis_dm_result_t
-SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query,
-                                const char*                     cache_table_name,
-                                rocprofvis_dm_handle_t          handle,
-                                RpvSqliteExecuteQueryCallback   callback)
+rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
+                                              Future* future, 
+                                              DbInstance* db_instance,
+                                              const char* query,
+                                              const char* cache_table_name,
+                                              rocprofvis_dm_handle_t handle,
+                                              RpvSqliteExecuteQueryCallback   callback)
 {
     rocprofvis_db_sqlite_callback_parameters params = {
         this,
@@ -471,11 +528,12 @@ SqliteDatabase::ExecuteSQLQuery(Future* future, const char* query,
         { query, cache_table_name },
         static_cast<rocprofvis_dm_track_id_t>(-1),
     };
-    return SqliteDatabase::ExecuteSQLQuery(query, &params);
+    return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
 
 
 rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
+                                                        DbInstance* db_instance,
                                                         uint64_t load_hash,
                                                         uint32_t load_id,
                                                         std::vector<std::string> query,
@@ -499,21 +557,27 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
     rocprofvis_dm_result_t result  = kRocProfVisDmResultSuccess;
     std::string load_table_name = std::string("track_info_")+std::to_string(load_hash);
     
-
-    if (CheckTableExists(load_table_name))
+    if (CheckTableExists(load_table_name, db_instance->FileIndex()))
     {
         std::string load_query = std::string("SELECT * FROM ") + load_table_name + " WHERE load_id = " + std::to_string(load_id);
-        result = SqliteDatabase::ExecuteSQLQuery(load_query.c_str(), &params);
+        std::string guid = GuidAt(db_instance->GuidIndex());
+        if (!guid.empty())
+        {
+            load_query += " AND guid = '" + guid+"'";
+        }
+        result = ExecuteSQLQuery(db_instance, load_query.c_str(), &params);
     } else
     {
         TraceProperties()->tracks_info_restored = false;
         params.callback = find_callback;
-        result = SqliteDatabase::ExecuteSQLQuery(
+        result = ExecuteSQLQuery(
+            db_instance,
             query[kRPVSourceQueryTrackByQueue].c_str(), &params);
         if (result == kRocProfVisDmResultSuccess &&
             query[kRPVSourceQueryTrackByStream].length() > 0)
         {
-            result = SqliteDatabase::ExecuteSQLQuery(
+            result = ExecuteSQLQuery(
+                db_instance,
                 query[kRPVSourceQueryTrackByStream].c_str(),
                 &params);
         }
@@ -588,12 +652,30 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
     return rc;
 }
 
-rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(const char* query, rocprofvis_db_sqlite_callback_parameters * params)
+void SqliteDatabase::ReplaceAllSubstrings(std::string& str, const std::string& from, const std::string& to)
+{
+    if (from.empty())
+        return;
+
+    size_t start = 0;
+    while ((start = str.find(from, start)) != std::string::npos) {
+        str.replace(start, from.length(), to);
+        start += to.length(); 
+    }
+}
+
+rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(DbInstance* db_instance, const char* query, rocprofvis_db_sqlite_callback_parameters * params)
 {
     PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_result_t result  = kRocProfVisDmResultSuccess;
     char *zErrMsg = 0;
-    sqlite3* conn = GetConnection();
+    params->db_instance = db_instance;
+    sqlite3* conn = GetConnection(db_instance->FileIndex());
+    std::string query_str = query;
+    std::string guid_str = GuidAt(db_instance->GuidIndex());
+    ReplaceAllSubstrings(query_str, "%GUID%", guid_str);
+    query = query_str.c_str();
     int   rc = Sqlite3Exec(conn, query, params->callback, params);       
     if(rc != SQLITE_OK)
     {
@@ -612,8 +694,8 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(const char* query, rocpr
     return result;
 }
 
-bool SqliteDatabase::CheckTableExists(const std::string& table_name) {
-    sqlite3* conn = GetConnection();
+bool SqliteDatabase::CheckTableExists(const std::string& table_name, uint32_t db_node_id) {
+    sqlite3* conn = GetConnection(db_node_id);
     if (!conn || table_name.empty())
     {
         if (conn)
@@ -642,9 +724,9 @@ bool SqliteDatabase::CheckTableExists(const std::string& table_name) {
 }
 
 rocprofvis_dm_result_t
-SqliteDatabase::DropSQLTable(const char* table_name)
+SqliteDatabase::DropSQLTable(const char* table_name, uint32_t db_node_id)
 {
-    sqlite3* conn = GetConnection();
+    sqlite3* conn = GetConnection(db_node_id);
     sqlite3_mutex_enter(sqlite3_db_mutex(conn));
 
     std::string query = "DROP TABLE IF EXISTS ";
@@ -653,14 +735,14 @@ SqliteDatabase::DropSQLTable(const char* table_name)
     sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr);
 
     sqlite3_mutex_leave(sqlite3_db_mutex(conn));
-    ReleaseConnection(conn);
+    ReleaseConnection(conn, db_node_id);
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t
-SqliteDatabase::DropSQLIndex(const char* index_name)
+SqliteDatabase::DropSQLIndex(const char* index_name, uint32_t db_node_id)
 {
-    sqlite3* conn = GetConnection();
+    sqlite3* conn = GetConnection(db_node_id);
     sqlite3_mutex_enter(sqlite3_db_mutex(conn));
 
     std::string query = "DROP INDEX IF EXISTS ";
@@ -669,14 +751,14 @@ SqliteDatabase::DropSQLIndex(const char* index_name)
     sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr);
 
     sqlite3_mutex_leave(sqlite3_db_mutex(conn));
-    ReleaseConnection(conn);
+    ReleaseConnection(conn, db_node_id);
     return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t
-SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries)
+SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries, uint32_t db_node_id)
 {
-    sqlite3* conn = GetConnection();
+    sqlite3* conn = GetConnection(db_node_id);
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     while (true)
     {
@@ -719,7 +801,7 @@ SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries)
         }
         break;
     }
-    ReleaseConnection(conn);
+    ReleaseConnection(conn, db_node_id);
     return result;
 }
 
@@ -729,9 +811,10 @@ SqliteDatabase::CreateSQLTable(
                                 SQLInsertParams* parameters, 
                                 uint8_t num_cols, 
                                 size_t num_row,
-                                std::function<void(sqlite3_stmt* stmt, int index)> insert_func)
+                                std::function<void(sqlite3_stmt* stmt, int index)> insert_func,
+                                uint32_t db_node_id)
 {
-    sqlite3* conn = GetConnection();
+    sqlite3* conn = GetConnection(db_node_id);
     sqlite3_mutex_enter(sqlite3_db_mutex(conn));
     while(true)
     {
@@ -814,7 +897,7 @@ SqliteDatabase::CreateSQLTable(
         break;
     }
     sqlite3_mutex_leave(sqlite3_db_mutex(conn));
-    ReleaseConnection(conn);
+    ReleaseConnection(conn,db_node_id);
     return kRocProfVisDmResultSuccess;
 }
 

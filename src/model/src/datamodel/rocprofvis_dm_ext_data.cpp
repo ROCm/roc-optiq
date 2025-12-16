@@ -17,7 +17,7 @@ rocprofvis_dm_size_t  ExtData::GetMemoryFootprint(){
 
 rocprofvis_dm_result_t  ExtData::AddRecord( rocprofvis_db_ext_data_t & data){
     try{
-        m_extdata_records.push_back(ExtDataRecord(data.category, data.name, data.data, data.type, data.category_enum));
+        m_extdata_records.push_back(ExtDataRecord(data.category, data.name, data.data, data.type, data.category_enum, data.db_instance));
     }
     catch(std::exception ex)
     {
@@ -41,7 +41,7 @@ rocprofvis_dm_result_t ExtData::GetRecordDataAt(const rocprofvis_dm_property_ind
     else
     {
         rocprofvis_dm_id_t id  = std::stoll(m_extdata_records[index].Data());
-        return m_ctx->BindingInfo()->FuncFindCachedTableValue(m_ctx->Database(), m_extdata_records[index].Category(), id, m_extdata_records[index].Name(), &data);
+        return m_ctx->BindingInfo()->FuncFindCachedTableValue(m_ctx->Database(), m_extdata_records[index].Category(), id, m_extdata_records[index].Name(), m_extdata_records[index].DbInstance(), &data);
     }
 }
 

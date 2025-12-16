@@ -40,6 +40,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 target_link_libraries(${PROJECT_NAME} roc-optiq-core)
 target_link_libraries(${PROJECT_NAME} sqlite3)
 target_link_libraries(${PROJECT_NAME} spdlog)
+target_link_libraries(${PROJECT_NAME} yaml-cpp)
+
 
 add_executable(${PROJECT_NAME}-test ${MAIN_SRC} )
 target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)

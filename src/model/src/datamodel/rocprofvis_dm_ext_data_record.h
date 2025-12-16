@@ -20,9 +20,10 @@ class ExtDataRecord
         // @param data - extended data string
         ExtDataRecord(rocprofvis_dm_charptr_t category, rocprofvis_dm_charptr_t name,
                       rocprofvis_dm_charptr_t data, rocprofvis_db_data_type_t type,
-                      rocprofvis_event_data_category_enum_t category_enum)
+                      rocprofvis_event_data_category_enum_t category_enum,
+                      rocprofvis_dm_node_id_t db_instance)
         :
-            m_category(category), m_name(name), m_data(data), m_type(type), m_category_enum(category_enum) {};
+            m_category(category), m_name(name), m_data(data), m_type(type), m_category_enum(category_enum), m_db_instance(db_instance) {};
         // Returns pointer to extended data category string 
         rocprofvis_dm_charptr_t        Category() {return m_category.c_str();}
         // Returns pointer to extended data name string 
@@ -32,6 +33,7 @@ class ExtDataRecord
         // Returns pointer to extended data string
         uint64_t                       Type() { return m_type; }
         uint64_t                       CategoryEnum() { return m_category_enum; }
+        rocprofvis_dm_node_id_t        DbInstance() { return m_db_instance; }
         // Checks if category and name tags are equal to the ones stored in record
         // @param category - pointer to category string to compare
         // @param name - pointer to name string to compare
@@ -49,6 +51,8 @@ class ExtDataRecord
         rocprofvis_db_data_type_t           m_type;
         // data category enumeration
         rocprofvis_event_data_category_enum_t m_category_enum;
+        // data node id
+        rocprofvis_dm_node_id_t             m_db_instance;
         
 };
 

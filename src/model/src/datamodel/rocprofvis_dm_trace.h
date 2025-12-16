@@ -50,6 +50,7 @@ class Trace : public DmBase{
 
         rocprofvis_dm_size_t                            NumberOfHistogramBuckets() {return m_parameters.histogram_bucket_count;}
         rocprofvis_dm_size_t                            HistogramBucketsSize() {return m_parameters.histogram_bucket_size;}
+        rocprofvis_dm_size_t                            NumberOfDbInstances() {return m_parameters.num_db_instances;}
 
         // Method to bind database object
         // @param db - pointer to database
@@ -135,6 +136,12 @@ class Trace : public DmBase{
         // @param extinfo - reference to table handle
         // @return status of operation  
         rocprofvis_dm_result_t                          GetTableHandle(rocprofvis_dm_table_id_t id, rocprofvis_dm_table_t & table);
+        // Method to get queried table handle at specified index  
+        // @param name - info table name
+        // @param index - node index
+        // @param table - reference to info table handle
+        // @return status of operation 
+        rocprofvis_dm_result_t                          GetInfoTableHandle(const char* name, rocprofvis_dm_index_t index, rocprofvis_dm_table_t& table);
         // Method to get amount of memory used by Trace object, includes memory footprint of all other data model objects
         // @return used memory size        
         rocprofvis_dm_size_t                            GetMemoryFootprint();
@@ -207,6 +214,13 @@ class Trace : public DmBase{
         // @param description - pointer to table description string
         // @return status of operation           
         static rocprofvis_dm_table_t                    AddTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description);
+        // Static method to add new table. Used by database component via binding interface
+        // @param object - trace object handle to add table object to.
+        // @param node - node index
+        // @param name - name of the table
+        // @param handle - handle to the table
+        // @return status of operation  
+        static rocprofvis_dm_table_t                    AddInfoTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t name, rocprofvis_dm_table_t handle);
         // Static method to add new empty row to table object. Used by database component via binding interface
         // @param object - table object handle to add new row to.
         // @return status of operation  
@@ -256,6 +270,8 @@ class Trace : public DmBase{
         std::vector<std::shared_ptr<ExtData>>           m_ext_data;
         // vector array of Table objects
         std::vector<std::shared_ptr<Table>>             m_tables;
+        // vector array of Table objects
+        std::vector<std::unique_ptr<InfoTable>>         m_info_tables;
         // vector array of strings
         std::vector<std::string>                        m_strings;
         // vector array of sorted lookup indeces to string array

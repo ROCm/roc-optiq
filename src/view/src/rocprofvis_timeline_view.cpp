@@ -1443,7 +1443,7 @@ TimelineView::RenderTraceView()
 
     m_tpt->SetGraphSizeX(subcomponent_size_main.x - m_sidebar_size,
                          subcomponent_size_main.y);
- 
+
     m_stop_user_interaction |= !ImGui::IsWindowHovered(
         ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
 
@@ -1662,10 +1662,7 @@ TimelineView::HandleTopSurfaceTouch()
             float new_zoom = m_tpt->GetZoom();
             if(scroll_wheel > 0)
             {
-                if(m_tpt->GetPixelsPerNs() < 1.0)
-                {
-                    new_zoom *= 1.0f + zoom_speed;
-                }
+                new_zoom *= 1.0f + zoom_speed;
             }
             else
             {

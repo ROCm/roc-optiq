@@ -86,6 +86,13 @@ TimePixelTransform::ValidateAndFixState()
     m_zoom = std::max(m_zoom, MAX_ZOOM_OUT_EXTENT);
     m_zoom = std::max(m_zoom, MIN_ZOOM_DIVISOR);
 
+    // Validate maximum zoom - ensure pixels_per_ns stays below 1.0 (same as scroll wheel
+    if(m_range_x_ns > 0.0 && m_graph_size_x > 0.0f)
+    {
+        double max_zoom_from_pixels = m_range_x_ns / m_graph_size_x;
+        m_zoom = std::min(m_zoom, static_cast<float>(max_zoom_from_pixels));
+    }
+
     // Validate graph sizes
     if(m_graph_size_x <= 0.0f)
     {

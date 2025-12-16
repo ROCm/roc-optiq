@@ -41,27 +41,14 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
 , m_group_id_counter(0)
-, m_is_main_thread(false)
+, m_pill_label("")
+, m_show_pill_label(false)
 , m_chunk_duration_ns(TimeConstants::ns_per_s * 30)  // Default chunk duration
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
     if(m_track_project_settings.Valid())
     {
         m_track_height = m_track_project_settings.Height();
-    }
-
-    // Check if thread is main thread.
-
-    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
-
-    if(track_info->topology.type == track_info_t::Topology::InstrumentedThread)
-    {
-        const thread_info_t* thread_info =
-            m_data_provider.GetInstrumentedThreadInfo(track_info->topology.id);
-        if(thread_info->tid == track_info->topology.process_id)
-        {
-            m_is_main_thread = true;
-        }
     }
 }
 
@@ -331,32 +318,7 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaExpand();
 
         // Render MAIN pillbox for main thread tracks
-        if(m_is_main_thread)
-        {
-            ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall));
-
-            const char* main_label = "MAIN";
-            ImVec2      text_size  = ImGui::CalcTextSize(main_label);
-            float       padding_x  = 8.0f;
-            float       padding_y  = 2.0f;
-            ImVec2 pillbox_size(text_size.x + 2 * padding_x, text_size.y + 2 * padding_y);
-
-            ImVec2 pillbox_pos(m_reorder_grip_width,
-                               container_size.y - pillbox_size.y - 2.0f);
-
-            ImDrawList* draw_list     = ImGui::GetWindowDrawList();
-            ImU32       pillbox_color = m_settings.GetColor(Colors::kBorderGray);
-
-            draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
-                                     ImGui::GetWindowPos() + pillbox_pos + pillbox_size,
-                                     pillbox_color, pillbox_size.y * 0.5f);
-
-            ImVec2 text_pos = pillbox_pos + ImVec2(padding_x, padding_y);
-            ImGui::SetCursorPos(text_pos);
-            ImGui::TextUnformatted(main_label);
-
-            ImGui::PopFont();
-        }
+        RenderPillLabel(content_size);
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();
@@ -369,6 +331,36 @@ TrackItem::RenderMetaArea()
     {
         m_meta_area_clicked = false;
     }
+}
+void
+TrackItem::RenderPillLabel(ImVec2 container_size)
+{
+    if(m_show_pill_label == false)
+    {
+        return;
+    }
+    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall));
+
+    const char* main_label = "MAIN";
+    ImVec2      text_size  = ImGui::CalcTextSize(main_label);
+    float       padding_x  = 8.0f;
+    float       padding_y  = 2.0f;
+    ImVec2      pillbox_size(text_size.x + 2 * padding_x, text_size.y + 2 * padding_y);
+
+    ImVec2 pillbox_pos(m_reorder_grip_width, container_size.y - pillbox_size.y - 2.0f);
+
+    ImDrawList* draw_list     = ImGui::GetWindowDrawList();
+    ImU32       pillbox_color = m_settings.GetColor(Colors::kBorderGray);
+
+    draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
+                             ImGui::GetWindowPos() + pillbox_pos + pillbox_size,
+                             pillbox_color, pillbox_size.y * 0.5f);
+
+    ImVec2 text_pos = pillbox_pos + ImVec2(padding_x, padding_y);
+    ImGui::SetCursorPos(text_pos);
+    ImGui::TextUnformatted(main_label);
+
+    ImGui::PopFont();
 }
 
 void

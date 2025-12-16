@@ -24,6 +24,8 @@
 #    include <windows.h>
 #endif
 
+const char* APP_NAME = "ROCm(TM) Optiq Beta";
+
 // globals shared with callbacks
 static std::vector<std::string>         g_dropped_file_paths;
 static bool                             g_file_was_dropped = false;
@@ -109,7 +111,7 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 static void
 print_version()
 {
-    std::cout << "ROCm(TM) Optiq version: " << ROCPROFVIS_VERSION_MAJOR << "."
+    std::cout << APP_NAME << " version: " << ROCPROFVIS_VERSION_MAJOR << "."
               << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
               << ROCPROFVIS_VERSION_BUILD << std::endl;
 }
@@ -127,7 +129,7 @@ parse_command_line_args(int argc, char** argv)
         freopen_s(&pCout, "CONOUT$", "w", stderr);
     }
 #endif
-    CLI::App app{ "ROCm(TM) Optiq - A visualizer for the ROCm Profiler Tools" };
+    CLI::App app(APP_NAME + std::string(": A visualizer for the ROCm Profiler Tools"));
 
     // Version option
     bool version_flag = false;
@@ -204,7 +206,7 @@ main(int argc, char** argv)
 #endif
         GLFWwindow* window = glfwCreateWindow(RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
                                               RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
-                                              "ROCm(TM) Optiq Beta", nullptr, nullptr);
+                                              APP_NAME, nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
         // Initialize fullscreen state with actual window position and size

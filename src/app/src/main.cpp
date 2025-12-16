@@ -134,7 +134,8 @@ parse_command_line_args(int argc, char** argv)
     app.add_flag("-v,--version", version_flag, "Print version information");
 
     // File option
-    app.add_option("-f,--file", g_user_file_path_cli, "Path to the file to open");
+    app.add_option("-f,--file", g_user_file_path_cli, "Path to the file to open")
+        ->type_name("PATH");
 
     int  exit_code = 0;
     bool do_exit   = false;

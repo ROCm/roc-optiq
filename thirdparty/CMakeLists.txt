@@ -87,3 +87,5 @@ include_directories(${GLFW_DIR}/deps)
 if(COMPUTE_UI_SUPPORT)
 add_subdirectory(csv-parser)
 endif(COMPUTE_UI_SUPPORT)
+
+add_subdirectory(CLI11)

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_db_sqlite.h"
+#include "rocprofvis_db_table_processor.h"
 
 namespace RocProfVis
 {
@@ -11,6 +12,7 @@ namespace DataModel
 {
 
 #define SINGLE_THREAD_RECORDS_COUNT_LIMIT 50000
+#define NO_THREAD_RECORDS_COUNT_LIMIT 1000
 
 typedef enum rocprofvis_db_async_tracks_flags_t
 {
@@ -18,6 +20,26 @@ typedef enum rocprofvis_db_async_tracks_flags_t
     kRocProfVisDmIncludeStreamTracks = 2,
     kRocProfVisDmTrySplitTrack = 4
 } rocprofvis_db_async_tracks_flags_t;
+
+typedef enum rocprofvis_track_load_params
+{
+    kRpvDbTrackLoadId=1,
+    kRpvDbTrackLoadTrackId,
+    kRpvDbTrackLoadCategory,
+    kRpvDbTrackLoadOp,
+    kRpvDbTrackLoadRecordCount,
+    kRpvDbTrackLoadMinTs,
+    kRpvDbTrackLoadMaxTs,
+    kRpvDbTrackLoadMinValue,
+    kRpvDbTrackLoadMaxValue,
+    kRpvDbTrackLoadNodeId,
+    kRpvDbTrackLoadProcessId,
+    kRpvDbTrackLoadSubprocessId,
+    kRpvDbTrackLoadNodeTag,
+    kRpvDbTrackLoadProcessTag,
+    kRpvDbTrackLoadSubprocessTag,
+    kRpvDbTrackLoadNumItems
+} rocprofvis_track_load_params;
 
 typedef struct rocprofvis_db_event_level_t
 {
@@ -38,13 +60,15 @@ typedef std::map<uint64_t, std::map<std::string, rocprofvis_event_data_category_
 // class for methods and members common for all RocPd-based schemas
 class ProfileDatabase : public SqliteDatabase
 {
+    friend class TableProcessor;
     
     public:
         // Database constructor
         // @param path - full path to database file
         ProfileDatabase( rocprofvis_db_filename_t path) : 
                         SqliteDatabase(path), 
-                        m_symbols_offset(0){};
+                        m_symbols_offset(0),
+            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)} {};
         // ProfileDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~ProfileDatabase() {}
         // worker method to read time slice
@@ -72,15 +96,20 @@ class ProfileDatabase : public SqliteDatabase
         // method to detect rocpd-based database type (rocpd vs rocprof)
         // @param filename - full path to database file
         static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
+
+        bool isServiceColumn(const char* name);
+        uint32_t SymbolsOffset() { return m_symbols_offset; }
+        StringTable& StringTableReference() { return m_string_table; };
+
         // method to execute table database query with appropriate .CSV writer callback based on existence of GROUP BY clause
         // @param query - database query 
         // @param file_path output path to write .CSV
         // @param future - future object providing asynchronous execution mechanism 
         // @return status of operation
         rocprofvis_dm_result_t ExportTableCSV(
-                                    rocprofvis_dm_charptr_t query,
-                                    rocprofvis_dm_charptr_t file_path,
-                                    Future* future) override;
+            rocprofvis_dm_charptr_t query,
+            rocprofvis_dm_charptr_t file_path,
+            Future* future) override;
 
     private:
 
@@ -91,8 +120,12 @@ class ProfileDatabase : public SqliteDatabase
     // @param azColName - pointer to column names  
     // @return SQLITE_OK if successful
         static int CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
-
+       
+        static rocprofvis_dm_event_operation_t GetTableQueryOperation(std::string query);
+        
         void BuildSliceQueryMap(slice_query_t& slice_query_map, rocprofvis_dm_track_params_t* props);
+
+        bool IsEmptyRange(uint64_t start, uint64_t end);
 
     protected:
 
@@ -133,7 +166,6 @@ class ProfileDatabase : public SqliteDatabase
             rocprofvis_dm_timestamp_t end, 
             rocprofvis_dm_index_t track_index, 
             rocprofvis_dm_string_t& query);
-
         rocprofvis_dm_result_t BuildTableQuery(
                             rocprofvis_dm_timestamp_t start, 
                             rocprofvis_dm_timestamp_t end,
@@ -160,8 +192,27 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_charptr_t suffix,
                             RpvSqliteExecuteQueryCallback callback, 
                             std::function<void(rocprofvis_dm_track_params_t*)> func_clear);
+        rocprofvis_dm_result_t ExecuteQueriesAsync(
+                            std::vector<std::string>& queries,
+                            std::vector<Future*>& futures,
+                            rocprofvis_dm_handle_t handle,
+                            RpvSqliteExecuteQueryCallback callback);
 
     protected:
+    // sqlite3_exec callback to process track information query and add track object to Trace container
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallBackAddTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+    // sqlite3_exec callback to load saved track information and add track object to Trace container
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallBackLoadTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
     // sqlite3_exec callback to add flowtrace record to FlowTrace container.
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
@@ -211,11 +262,27 @@ class ProfileDatabase : public SqliteDatabase
                                           char** azColName);
         static int CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_stmt* stmt,
             char** azColName);
+        static int CallBackLoadHistogram(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+
         static rocprofvis_event_data_category_enum_t GetColumnDataCategory(
             const rocprofvis_event_data_category_map_t category_map,
             rocprofvis_dm_event_operation_t op, std::string column);
 
     virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
+    virtual const rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
+
+    static void CollectTrackServiceData(ProfileDatabase* db,
+        sqlite3_stmt* stmt, int column_index, char** azColName,
+        rocprofvis_db_sqlite_track_service_data_t& service_data);
+    static void FindTrackIDs(
+        ProfileDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
+        int& trackId, int & streamTrackId);
+    rocprofvis_dm_track_category_t TranslateOperationToTrackCategory(rocprofvis_dm_event_operation_t op);
+    static const rocprofvis_dm_track_search_id_t GetTrackSearchId(rocprofvis_dm_track_category_t category);
+    rocprofvis_dm_result_t SaveTrackProperties(uint64_t hash);
+    rocprofvis_dm_result_t BuildHistogram(Future* future, uint32_t desired_bins);
+
+    virtual int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) = 0;
 
     protected:
     // offset of kernel symbols in string table
@@ -223,6 +290,10 @@ class ProfileDatabase : public SqliteDatabase
         std::vector<rocprofvis_db_event_level_t> m_event_levels[kRocProfVisDmNumOperation];
         std::unordered_map<uint64_t, size_t> m_event_levels_id_to_index[kRocProfVisDmNumOperation];
         std::mutex   m_level_lock;
+        TableProcessor m_table_processor[kRPVTableDataTypesNum];
+        StringTable m_string_table;
+
+
 };
 
 }  // namespace DataModel

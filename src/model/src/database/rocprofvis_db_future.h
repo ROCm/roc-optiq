@@ -79,6 +79,7 @@ class Future
 
         const char*                         GetAsyncQueryPtr(){return m_async_query.c_str(); }
 
+        std::vector<Future*>&               SubFeatures() { return m_sub_futures; }
         template <typename T> 
         void                                SetRuntimeStorageValue(rocprofvis_db_future_runtime_storage_t key, T&& value) 
         {
@@ -122,6 +123,7 @@ class Future
         void*                 m_user_data;
         std::mutex            m_mutex;
         std::string           m_async_query;
+        std::vector<Future*>  m_sub_futures;
         std::array<RuntimeValue, static_cast<size_t>(kRPVFutureRuntimeStorageSize)> m_runtime_storage;
 };
 

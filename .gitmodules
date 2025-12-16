@@ -32,3 +32,6 @@
 [submodule "thirdparty/CLI11"]
 	path = thirdparty/CLI11
 	url = https://github.com/CLIUtils/CLI11.git
+[submodule "thirdparty/yaml-cpp"]
+	path = thirdparty/yaml-cpp
+	url = https://github.com/jbeder/yaml-cpp.git

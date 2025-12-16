@@ -100,6 +100,7 @@ namespace DataModel
     public:        
         uint32_t ToInt(const char* s);
         const char* ToString(uint32_t id) const;
+        void Clear();
 
     private:
         mutable std::shared_mutex m_mutex;
@@ -198,6 +199,7 @@ namespace DataModel
         void SortByColumn(ProfileDatabase * db, std::string column, bool ascending);
         bool SetupAggregation(std::string agg_spec, int num_threads);
         void FinalizeAggregation();
+        void ClearAggregation();
         void AggregateRow(ProfileDatabase * db, int row_index, int map_index);
         void SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order);
         void RemoveRowsForSetOfTracks(std::set<uint32_t> tracks, bool remove_all);

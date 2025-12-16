@@ -7,7 +7,7 @@
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_editable_textfield.h"
 
 #include <string>
 #include <vector>

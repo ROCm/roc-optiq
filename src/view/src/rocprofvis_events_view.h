@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_split_containers.h"
 #include <string>
 #include <list>
 
@@ -47,11 +47,12 @@ private:
     void RenderCallStackData(const event_info_t* event_data);
     bool XButton();
 
-    DataProvider&                      m_data_provider;
-    SettingsManager&                   m_settings;
-    std::shared_ptr<TimelineSelection> m_timeline_selection;
-    std::list<EventItem>               m_event_items;
-    int                                m_event_item_id;
+    DataProvider&                            m_data_provider;
+    SettingsManager&                         m_settings;
+    std::shared_ptr<TimelineSelection>       m_timeline_selection;
+    std::list<EventItem>                     m_event_items;
+    int                                      m_event_item_id;
+    const std::string_view DATA_COPIED_NOTIFICATION = "Data was copied";
 };
 
 }  // namespace View

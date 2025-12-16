@@ -5,7 +5,7 @@
 #include "rocprofvis_annotation_view.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_event_manager.h"
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
 {

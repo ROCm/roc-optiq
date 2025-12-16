@@ -117,7 +117,8 @@ typedef enum rocprofvis_dm_event_operation_t {
     // Memory copy event
     kRocProfVisDmOperationLaunchSample = 5,
     // Number of operations
-    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1
+    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1,
+    kRocProfVisDmMultipleOperations,
 } rocprofvis_dm_event_operation_t;
 
 // Database type

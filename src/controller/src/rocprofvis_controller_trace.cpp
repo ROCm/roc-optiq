@@ -2389,7 +2389,8 @@ rocprofvis_result_t Trace::Load(char const* const filename, RocProfVis::Controll
             (void) future;
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos || 
-                filepath.find(".db", filepath.size() - 3) != std::string::npos)
+                filepath.find(".db", filepath.size() - 3) != std::string::npos ||
+                filepath.find(".yaml", filepath.size() - 5) != std::string::npos)
             {
 
                 result = LoadRocpd(filepath.c_str());

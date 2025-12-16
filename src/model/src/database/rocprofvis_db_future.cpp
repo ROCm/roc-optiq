@@ -33,6 +33,13 @@ void
 Future::SetInterrupted()
 {
     std::unique_lock lock(m_mutex);
+    if (m_sub_futures.size() > 0)
+    {
+        for (auto future : m_sub_futures)
+        {
+            future->SetInterrupted();
+        }
+    }
     if (m_db != nullptr && m_connection != nullptr)
     {
         m_db->InterruptQuery(m_connection);
@@ -51,7 +58,6 @@ Future::LinkDatabase(Database* db, void* connection)
 rocprofvis_dm_result_t Future::WaitForCompletion(rocprofvis_db_timeout_ms_t timeout_ms) {
     rocprofvis_dm_result_t result = kRocProfVisDmResultTimeout;
     std::future_status     status;
-    m_processed_rows = 0;
     if(timeout_ms == UINT64_MAX)
     {
         m_future.wait();

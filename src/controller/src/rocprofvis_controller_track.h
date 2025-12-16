@@ -74,7 +74,7 @@ private:
 private:
     rocprofvis_result_t FetchFromDataModel(double start, double end, Future* future);
 
-    inline static std::atomic<uint32_t> s_data_model_load;
+    uint32_t GetNumberOfEventsForTimeRange(double start, double end);
 };
 
 }

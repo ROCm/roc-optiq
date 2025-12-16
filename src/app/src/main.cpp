@@ -10,6 +10,7 @@
 #include "AMD_LOGO.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
+#include <CLI/CLI.hpp>
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -19,8 +20,8 @@
 
 // Needed for CLI interactions that involve print.
 #ifdef _WIN32
+#    include <conio.h>
 #    include <windows.h>
-     #include <conio.h>
 #endif
 
 // globals shared with callbacks
@@ -134,45 +135,60 @@ print_version()
 static void
 parse_command_line_args(int argc, char** argv)
 {
-    for(int i = 1; i < argc; i++)
+    CLI::App app{ "ROCm(TM) Optiq Beta - A visualizer for the ROCm Profiler Tools" };
+
+    // Version option
+    bool version_flag = false;
+    app.add_flag("-v,--version", version_flag, "Print version information");
+
+    // File option
+    app.add_option("-f,--file", m_user_file_path_cli, "Path to the file to open");
+
+    try
     {
-        std::string arg = argv[i];
-
-        // Get verison command line argument
-        if(arg == "-v" || arg == "--version")
+        app.parse(argc, argv);
+    } catch(const CLI::ParseError& e)
+    {
+#ifdef _WIN32
+        if(AllocConsole())
         {
-            print_version();
-            exit(0);
+            // Following is needed for windows or print will not show.
+            FILE* pCout;
+            freopen_s(&pCout, "CONOUT$", "w", stdout);
+            freopen_s(&pCout, "CONOUT$", "w", stderr);
+        }
+#endif
+        std::cerr << app.exit(e) << std::endl;
+#ifdef _WIN32
+        _getch();  // Replaces system("pause") as that is unsafe.
+#endif
+        exit(1);
+    }
+
+    // Handle version flag
+    if(version_flag)
+    {
+        print_version();
+    }
+
+    // Check if file was provided
+    if(!m_user_file_path_cli.empty())
+    {
+        // Debug: Check what was actually parsed
+        if(!m_user_file_path_cli.empty())
+        {
+            // For some reason windows leaves trailing spaces in the filepath, so trim
+            // them.
+            size_t start = m_user_file_path_cli.find_first_not_of(" \t\r\n");
+            if(start != std::string::npos)
+            {
+                size_t end = m_user_file_path_cli.find_last_not_of(" \t\r\n");
+                m_user_file_path_cli =
+                    m_user_file_path_cli.substr(start, end - start + 1);
+            }
         }
 
-        // Get file command line argument
-        if(arg == "-f" || arg == "--file")
-        {
-            if(i + 1 < argc)
-            {
-                m_user_file_path_cli = argv[i + 1];
-                m_did_user_add_file  = true;
-                i++;
-            }
-            else
-            {
-#ifdef _WIN32
-                if(AllocConsole())
-                {
-                    // Following is needed for windows or print will not show.
-                    FILE* pCout;
-                    freopen_s(&pCout, "CONOUT$", "w", stdout);
-                    freopen_s(&pCout, "CONOUT$", "w", stderr);
-                }
-#endif
-                std::cerr << "The file was not specified. Please input file name."
-                          << std::endl;
-#ifdef _WIN32
-                _getch();  // Replaces system("pause") as that is unsafe.
-#endif
-                exit(1);
-            }
-        }
+        m_did_user_add_file = true;
     }
 }
 

@@ -29,8 +29,7 @@ static std::vector<std::string>         g_dropped_file_paths;
 static bool                             g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
-static std::string m_user_file_path_cli;
-static bool        m_did_user_add_file = false;
+static std::string g_user_file_path_cli;
 
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
@@ -110,85 +109,70 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 static void
 print_version()
 {
-#ifdef _WIN32
-    if(AllocConsole())
-    {
-        // Following is needed for windows or print will not show.
-        FILE* pCout;
-        freopen_s(&pCout, "CONOUT$", "w", stdout);
-        freopen_s(&pCout, "CONOUT$", "w", stderr);
-    }
-#endif
-
-    std::cout << "ROCm(TM) Optiq Beta " << ROCPROFVIS_VERSION_MAJOR << "."
-              << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH;
-    if(ROCPROFVIS_VERSION_BUILD > 0)
-    {
-        std::cout << "." << ROCPROFVIS_VERSION_BUILD;
-    }
-    std::cout << std::endl;
-#ifdef _WIN32
-    _getch();  // Replaces system("pause") as that is unsafe.
-#endif
+    std::cout << "ROCm(TM) Optiq version: " << ROCPROFVIS_VERSION_MAJOR << "."
+              << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
+              << ROCPROFVIS_VERSION_BUILD << std::endl;
 }
 
 static void
 parse_command_line_args(int argc, char** argv)
 {
-    CLI::App app{ "ROCm(TM) Optiq Beta - A visualizer for the ROCm Profiler Tools" };
+#ifdef _WIN32
+    // Attach to parent console if present. If already attached, ERROR_ACCESS_DENIED is
+    // expected, so still wire stdout/stderr to the console handles.
+    if(AttachConsole(ATTACH_PARENT_PROCESS) || GetLastError() == ERROR_ACCESS_DENIED)
+    {
+        FILE* pCout;
+        freopen_s(&pCout, "CONOUT$", "w", stdout);
+        freopen_s(&pCout, "CONOUT$", "w", stderr);
+    }
+#endif
+    CLI::App app{ "ROCm(TM) Optiq - A visualizer for the ROCm Profiler Tools" };
 
     // Version option
     bool version_flag = false;
     app.add_flag("-v,--version", version_flag, "Print version information");
 
     // File option
-    app.add_option("-f,--file", m_user_file_path_cli, "Path to the file to open");
+    app.add_option("-f,--file", g_user_file_path_cli, "Path to the file to open");
 
+    int  exit_code = 0;
+    bool do_exit   = false;
     try
     {
         app.parse(argc, argv);
     } catch(const CLI::ParseError& e)
     {
-#ifdef _WIN32
-        if(AllocConsole())
+        // app.exit() handles printing the error message
+        exit_code = app.exit(e);
+
+        // Help option --help is handled by throwing exception so check
+        // error code before logging as an error
+        if(exit_code != static_cast<int>(CLI::ExitCodes::Success))
         {
-            // Following is needed for windows or print will not show.
-            FILE* pCout;
-            freopen_s(&pCout, "CONOUT$", "w", stdout);
-            freopen_s(&pCout, "CONOUT$", "w", stderr);
+            spdlog::error("Failed to parse command line arguments.");
         }
-#endif
-        std::cerr << app.exit(e) << std::endl;
-#ifdef _WIN32
-        _getch();  // Replaces system("pause") as that is unsafe.
-#endif
-        exit(1);
+        do_exit = true;
     }
 
-    // Handle version flag
-    if(version_flag)
+    // Handle version
+    if(!do_exit && version_flag)
     {
         print_version();
+        // exit if version was the only argument
+        if(argc == 2)
+        {
+            do_exit = true;
+        }
     }
 
-    // Check if file was provided
-    if(!m_user_file_path_cli.empty())
+    if(do_exit)
     {
-        // Debug: Check what was actually parsed
-        if(!m_user_file_path_cli.empty())
-        {
-            // For some reason windows leaves trailing spaces in the filepath, so trim
-            // them.
-            size_t start = m_user_file_path_cli.find_first_not_of(" \t\r\n");
-            if(start != std::string::npos)
-            {
-                size_t end = m_user_file_path_cli.find_last_not_of(" \t\r\n");
-                m_user_file_path_cli =
-                    m_user_file_path_cli.substr(start, end - start + 1);
-            }
-        }
-
-        m_did_user_add_file = true;
+        std::cout.flush();
+        std::cerr.flush();
+        fflush(stdout);
+        fflush(stderr);
+        exit(exit_code);
     }
 }
 
@@ -262,11 +246,10 @@ main(int argc, char** argv)
 
                 backend.m_config(&backend, window);
 
-                if(m_did_user_add_file)
+                if(!g_user_file_path_cli.empty())
                 {
                     // If the user inputted a filepath open it here.
-                    rocprofvis_view_open_files({ m_user_file_path_cli });
-                    m_did_user_add_file = false;
+                    rocprofvis_view_open_files({ g_user_file_path_cli });
                 }
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);

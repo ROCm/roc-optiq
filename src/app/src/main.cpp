@@ -183,9 +183,6 @@ int
 main(int argc, char** argv)
 {
     int resultCode = 0;
-
-    parse_command_line_args(argc, argv);
-
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
@@ -196,6 +193,8 @@ main(int argc, char** argv)
         std::filesystem::path(config_path) / "visualizer.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
+
+    parse_command_line_args(argc, argv);
 
     glfwSetErrorCallback(glfw_error_callback);
     if(glfwInit())
